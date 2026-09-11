@@ -12,7 +12,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 // at the engine's derivation boundary (length-capped, control characters flattened). These
 // components put them in `textContent` only — never in a style string, never in markup.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
@@ -174,10 +174,20 @@ function SearchBox({
   clearLabel: string;
   autoFocus?: boolean;
 }): ReactElement {
+  // The find panel stays mounted (hidden or inert) so a typed query survives a close.
+  // HTML `autoFocus` only runs on first mount, which is the closed pane — focus when
+  // the field actually becomes the visible target.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    inputRef.current?.focus();
+  }, [autoFocus]);
+
   return (
     <div className="docx-nav__searchbox">
       <MaterialSymbol name="search" size={18} className="docx-nav__search-icon" />
       <input
+        ref={inputRef}
         type="search"
         className="docx-nav__search-input"
         value={value}
@@ -315,6 +325,7 @@ export function NavigationFind({ className, style }: NavigationPartProps): React
   const { pane, search, t } = useNavigationContext('Find');
   const hidden = pane.tab !== 'find';
   const hasQuery = search.query.trim().length > 0;
+  const autoFocus = pane.open && !hidden;
 
   // Before any navigation nothing is selected, so the readout is a TOTAL, not a position:
   // saying "Result 1 of 7" while the caret has not moved claims a selection that is not
@@ -347,6 +358,7 @@ export function NavigationFind({ className, style }: NavigationPartProps): React
         placeholder={t('navigation.find.placeholder')}
         label={t('navigation.find.inputAriaLabel')}
         clearLabel={t('navigation.find.clearAriaLabel')}
+        autoFocus={autoFocus}
       />
 
       <div

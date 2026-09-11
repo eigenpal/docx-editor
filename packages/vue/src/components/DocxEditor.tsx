@@ -24,6 +24,7 @@ import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorNavigation, Navigation } from '../editor/navigation';
+import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
@@ -193,7 +194,10 @@ const docxEditorFrameProps = {
     type: [Boolean, Object] as PropType<boolean | DocxEditorContextMenuProps>,
     default: undefined,
   },
-  navigation: { type: Boolean, default: undefined },
+  navigation: {
+    type: [Boolean, Object] as PropType<boolean | DocxEditorNavigationProps>,
+    default: undefined,
+  },
   rulers: { type: Boolean, default: undefined },
   mode: { type: String as PropType<DocxEditorProps['mode']>, default: undefined },
   zoom: { type: Number, default: undefined },
@@ -402,7 +406,12 @@ const DocxEditorFrame = defineComponent({
                 : null,
               h(DocxEditorFontNotice, { t }),
               h('div', { style: WORKSPACE_STYLE }, [
-                navigation.value ? h(DocxEditorNavigation, { t }) : null,
+                navigation.value === false
+                  ? null
+                  : h(DocxEditorNavigation, {
+                      t,
+                      ...(typeof navigation.value === 'object' ? navigation.value : {}),
+                    }),
                 viewport,
                 h(DocxEditorPageNumber),
                 h(DocxEditorLoading, { overlay: true }),

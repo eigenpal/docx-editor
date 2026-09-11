@@ -20,6 +20,7 @@ import type {
 import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
+import type { DocxEditorNavigationProps } from './editor/navigation';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -167,8 +168,15 @@ export interface DocxEditorProps {
    * space that is already empty, and only moves the page when the window is genuinely too
    * narrow to hold both. Compose `DocxEditor.Navigation` yourself, or build on
    * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
+   *
+   * An object is `DocxEditorNavigationProps`, passed straight through, so a host can drive
+   * the pane from its own chrome without giving up the packaged one:
+   * `navigation={{ open, onOpenChange }}` toggles it, `navigation={{ tab: 'find', onTabChange }}`
+   * opens Find. Before this took an object the only way to change any of that was
+   * `navigation={false}` plus rebuilding the pane. `true`/undefined keep the packaged
+   * defaults.
    */
-  navigation?: boolean;
+  navigation?: boolean | DocxEditorNavigationProps;
   /**
    * Horizontal and vertical rulers, on by default with the packaged chrome.
    *

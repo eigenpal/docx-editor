@@ -303,6 +303,30 @@ describe('DocxEditorNavigation composition', () => {
     expect(view.container.querySelector('.docx-nav')).not.toBeNull();
     view.unmount();
   });
+
+  test('`<DocxEditor navigation={{...}}>` forwards pane props instead of forcing navigation={false}', async () => {
+    const seen: boolean[] = [];
+    const view = await mountSugarAsync({
+      navigation: { open: false, onOpenChange: (next: boolean) => seen.push(next), tab: 'find' },
+    });
+    await view.flush();
+    expect(view.container.querySelector('.docx-nav')).not.toBeNull();
+    expect(view.container.querySelector('.docx-nav')?.getAttribute('data-open')).toBe('false');
+    expect(view.container.querySelector('#docx-nav-tab-find')?.getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    (view.container.querySelector('.docx-nav__toggle') as HTMLButtonElement).click();
+    expect(seen).toEqual([true]);
+    expect(view.container.querySelector('.docx-nav')?.getAttribute('data-open')).toBe('false');
+    view.unmount();
+  });
+
+  test('navigation={false} removes the packaged pane', async () => {
+    const view = await mountSugarAsync({ navigation: false });
+    await view.flush();
+    expect(view.container.querySelector('.docx-nav')).toBeNull();
+    view.unmount();
+  });
 });
 
 describe('DocxEditorLoading composition', () => {

@@ -48,7 +48,7 @@ so they stay explicit instead of accidental.
 | `onTitleChange`                              | `(title: string) => void`               | Makes the title editable.                              |
 | `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title-bar slots.                            |
 | `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.             |
-| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.                   |
+| `navigation`                                 | `boolean \| DocxEditorNavigationProps`  | Toggle or customize the packaged navigation pane.      |
 | `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                      |
 | `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.         |
 | `children`                                   | `ReactNode`                             | Render host chrome inside the viewport.                |

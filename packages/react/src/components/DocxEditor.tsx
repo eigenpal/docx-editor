@@ -390,7 +390,12 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
           leaves the page alone until the window is too narrow to hold both. Without a
           pane this wrapper is an inert flex row around the same viewport. */}
         <div style={WORKSPACE_STYLE}>
-          {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
+          {navigation === false ? null : (
+            <DocxEditorNavigationCompound
+              t={translate}
+              {...(typeof navigation === 'object' ? navigation : {})}
+            />
+          )}
           {viewport}
           <PageNumberTranslationContext.Provider value={translate}>
             <DocxEditorPageNumber />
