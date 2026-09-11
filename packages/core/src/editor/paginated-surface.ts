@@ -2208,9 +2208,52 @@ export function mountPaginatedSurface(
     if (controlId) setContentControlWidgetOpen(controlId, false);
   }
 
-  function removeExistingContentControlMenu(): void {
+  function removeExistingContentControlMenu(): HTMLElement | null {
     const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
     if (existing) closeContentControlMenu(existing);
+    return existing;
+  }
+
+  /**
+   * Dismiss a widget menu on an outside press or Escape.
+   *
+   * `pointerdown`, not `mousedown`: the surface prevents the default on every page press,
+   * which suppresses the compatibility `mousedown` — a `mousedown` listener never fires for
+   * document clicks and the menu stands. The opening press cannot self-dismiss: it already
+   * passed document capture before this attached. A press on the owning widget is left for
+   * the opener, which toggles instead. Stale listeners (the menu closed through a commit)
+   * clean up silently so a later Escape still reaches the rest of the UI.
+   */
+  function armContentControlMenuDismiss(menu: HTMLElement, onOutsidePress: () => void): void {
+    const controlId = menu.dataset.docxCcId;
+    const cleanup = (): void => {
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    const onOutside = (event: Event): void => {
+      if (menu.parentNode === null) {
+        cleanup();
+        return;
+      }
+      const target = event.target as Element | null;
+      const widget = target instanceof Element ? target.closest('[data-docx-cc-widget]') : null;
+      if (
+        target &&
+        (menu.contains(target) || widget?.getAttribute('data-docx-cc-id') === controlId)
+      )
+        return;
+      cleanup();
+      onOutsidePress();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      cleanup();
+      if (menu.parentNode === null) return;
+      event.stopPropagation();
+      closeContentControlMenu(menu);
+    };
+    document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('keydown', onKey, true);
   }
 
   /**
@@ -2282,7 +2325,8 @@ export function mountPaginatedSurface(
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
       // Engine-level menu: no hardcoded English — displayText comes from the file.
-      removeExistingContentControlMenu();
+      // Re-pressing the owning widget toggles shut instead of reopening.
+      if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
@@ -2339,16 +2383,11 @@ export function mountPaginatedSurface(
       }
       pagesLayer.append(menu);
       setContentControlWidgetOpen(controlId, true);
-      const dismiss = (event: Event): void => {
-        if (menu.contains(event.target as Node)) return;
-        closeContentControlMenu(menu);
-        document.removeEventListener('mousedown', dismiss, true);
-      };
-      document.addEventListener('mousedown', dismiss, true);
+      armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
       return;
     }
     if (kind === 'date') {
-      removeExistingContentControlMenu();
+      if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
@@ -2500,12 +2539,9 @@ export function mountPaginatedSurface(
       renderCalendar();
       pagesLayer.append(menu);
       setContentControlWidgetOpen(controlId, true);
-      const dismiss = (event: Event): void => {
-        if (menu.contains(event.target as Node)) return;
+      armContentControlMenuDismiss(menu, () => {
         if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
-        document.removeEventListener('mousedown', dismiss, true);
-      };
-      document.addEventListener('mousedown', dismiss, true);
+      });
       menu
         .querySelector<HTMLElement>(
           '[data-selected], [data-today], .docx-content-control-calendar-day'
