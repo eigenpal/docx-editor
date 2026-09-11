@@ -204,9 +204,10 @@ receive its configured image. Do not use review styling as identity proof.
 `data-review-author-slot` wraps to `0` through `7`. Calculate it as `slot % 8`
 when you build selectors from `useReviewAuthors()`.
 
-Painted spans use an inline ink color. CSS cannot override that color or its text
-decoration. Use a declaration or ramp token for ink. Use `currentColor` for
-metric-safe span effects.
+Painted spans use inline ink and text decoration. CSS selectors cannot override
+those properties. Use a declaration or ramp token for ink. Use the insertion
+decoration tokens for insertion underlines. Use `currentColor` for metric-safe
+span effects.
 
 ```css
 .docx-editor [data-review-author='Jess Lin'] {
