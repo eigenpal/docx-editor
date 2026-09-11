@@ -1,5 +1,17 @@
 # @docx-editor.dev/vue
 
+## 2.17.0
+
+### Minor Changes
+
+- d1d8043: Let `navigation` on `<DocxEditor>` pass through pane props so hosts can control open state and the active tab, and focus the find input when that tab is shown.
+
+### Patch Changes
+
+- Updated dependencies [332494b]
+  - @docx-editor.dev/core@2.17.0
+  - @docx-editor.dev/i18n@2.17.0
+
 ## 2.16.2
 
 ### Patch Changes

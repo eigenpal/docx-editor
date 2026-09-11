@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.17.0
+
+### Patch Changes
+
+- 332494b: Dismiss content-control dropdown and date menus on outside press or Escape; re-pressing the widget toggles the menu shut.
+- @docx-editor.dev/i18n@2.17.0
+
 ## 2.16.2
 
 ### Patch Changes
