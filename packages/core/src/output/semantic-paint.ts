@@ -909,6 +909,7 @@ function applyRevisionPresentation(
         element.style.textDecorationStyle = 'var(--doc-revision-insertion-decoration-style)';
         element.style.textDecorationThickness =
           'var(--doc-revision-insertion-decoration-thickness)';
+        element.style.textUnderlineOffset = 'var(--doc-revision-insertion-underline-offset)';
       } else {
         element.style.textDecorationStyle = presentation.decorationStyle;
       }
