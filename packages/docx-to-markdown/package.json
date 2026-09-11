@@ -37,7 +37,7 @@
     "@docx-editor.dev/core": "~2.16.0"
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.16.1"
+    "@docx-editor.dev/fonts": "~2.16.2"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.3",

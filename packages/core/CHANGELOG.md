@@ -1,5 +1,13 @@
 # @docx-editor.dev/core
 
+## 2.16.2
+
+### Patch Changes
+
+- d8c40b2: Set tracked insertion underlines slightly below the text like Word, with a CSS token for the gap.
+- 02b77f6: Use a thin solid underline for tracked insertions and add CSS tokens for its style and thickness.
+- @docx-editor.dev/i18n@2.16.2
+
 ## 2.16.1
 
 ### Patch Changes
