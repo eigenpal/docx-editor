@@ -1,4 +1,12 @@
-import { computed, defineComponent, ref, type CSSProperties, type PropType } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onMounted,
+  ref,
+  watch,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
 import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
@@ -159,10 +167,20 @@ const SearchBox = defineComponent({
     autoFocus: { type: Boolean, default: undefined },
   },
   setup(props) {
+    // The find panel stays mounted (hidden or inert) so a typed query survives a close.
+    // HTML autofocus only runs on first mount, which is the closed pane — focus when
+    // the field actually becomes the visible target.
+    const inputRef = ref<HTMLInputElement | null>(null);
+    const focusIfRequested = () => {
+      if (props.autoFocus) inputRef.value?.focus();
+    };
+    onMounted(focusIfRequested);
+    watch(() => props.autoFocus, focusIfRequested, { flush: 'post' });
     return () => (
       <div class="docx-nav__searchbox">
         <MaterialSymbol name="search" size={18} className="docx-nav__search-icon" />
         <input
+          ref={inputRef}
           type="search"
           class="docx-nav__search-input"
           value={props.value}
@@ -294,6 +312,7 @@ export const NavigationFind = defineComponent({
     const { pane, search, t } = useNavigationContext('Find');
     return () => {
       const hidden = pane.tab.value !== 'find';
+      const autoFocus = pane.open.value && !hidden;
       const hasQuery = search.query.value.trim().length > 0;
       const counter =
         search.matches.value.length === 0
@@ -330,6 +349,7 @@ export const NavigationFind = defineComponent({
             placeholder={t('navigation.find.placeholder')}
             label={t('navigation.find.inputAriaLabel')}
             clearLabel={t('navigation.find.clearAriaLabel')}
+            autoFocus={autoFocus}
           />
           <div
             class="docx-nav__options"

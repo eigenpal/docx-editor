@@ -17,6 +17,7 @@ import type {
 import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
+import type { DocxEditorNavigationProps } from './editor/navigation';
 
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -41,7 +42,7 @@ export interface DocxEditorProps {
   menu?: boolean | DocxEditorMenuProps;
   hyperlinkPopup?: boolean;
   contextMenu?: boolean | DocxEditorContextMenuProps;
-  navigation?: boolean;
+  navigation?: boolean | DocxEditorNavigationProps;
   rulers?: boolean;
   document?: DocumentSource;
   /** Live host mode. */

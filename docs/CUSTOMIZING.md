@@ -52,25 +52,30 @@ can.
 
 Where a sub-element is rendered outside `children` and so cannot be composed — the
 navigation toggle, which has to stay clickable while the panel is `inert` — the prop takes
-props: `toggle={{ className }}`. `menu` and `contextMenu` on `<DocxEditor>` accept
-`boolean | Props` the same way.
+props: `toggle={{ className }}`. `menu`, `contextMenu` and `navigation` on `<DocxEditor>`
+accept `boolean | Props` the same way.
 
 **What you can pass**
 
-| Prop | Where | Notes |
-| --- | --- | --- |
-| `icon` | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls |
-| `t` | any compound | Your i18n resolver. Without it the raw keys render, never English |
-| `preset={false}` | any compound | Renders your children verbatim, in your order |
-| `hidden` | any packaged part | Removes it from the default arrangement |
-| `className` | every part | Appended after the load-bearing classes |
-| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row` | Host-owned actions |
+| Prop                                              | Where                                                                     | Notes                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `icon`                                            | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls   |
+| `t`                                               | any compound                                                              | Your i18n resolver. Without it the raw keys render, never English |
+| `preset={false}`                                  | any compound                                                              | Renders your children verbatim, in your order                     |
+| `hidden`                                          | any packaged part                                                         | Removes it from the default arrangement                           |
+| `className`                                       | every part                                                                | Appended after the load-bearing classes                           |
+| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row`                          | Host-owned actions                                                |
 
 **Host actions still ask the engine.** A control the registry does not describe has no
 enabled state of its own — but you can borrow the engine's:
 
 ```tsx
-const { isEnabled, disabledReason } = useEditorCommand({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'cyan' });
+const { isEnabled, disabledReason } = useEditorCommand({
+  type: 'setMarkAttr',
+  mark: 'highlight',
+  attr: 'val',
+  value: 'cyan',
+});
 ```
 
 `useEditorCommand` takes a `ChromeSlotId` **or** a raw `EditorCommand`, so your own action
@@ -99,23 +104,23 @@ pane alone, and nothing else in the app changes.
 
 ### The palette
 
-| Token | Paints |
-| --- | --- |
-| `--doc-surface` | Panels, menus, dropdowns, cards |
-| `--doc-card` | Comment and suggestion cards |
-| `--doc-bg` | The workspace behind the page |
-| `--doc-bg-subtle`, `--doc-bg-input` | Section backgrounds, input fields |
-| `--doc-bg-hover` | Hover states — **and** the navigation toggle's resting plate |
-| `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light` | Accent, selected states |
-| `--doc-accent`, `--doc-accent-bg` | Secondary accent |
-| `--doc-on-primary` | Text on an accent fill |
-| `--doc-text`, `--doc-text-muted`, `--doc-text-subtle`, `--doc-text-placeholder` | Text ramp. The rulers draw their ticks in the last two |
-| `--doc-border`, `--doc-border-light`, `--doc-border-dark`, `--doc-border-input` | Rules and outlines |
-| `--doc-link` | Hyperlinks in chrome |
-| `--doc-error`, `--doc-success`, `--doc-warning` (+ `-bg`) | Status |
-| `--doc-focus-ring`, `--doc-selection` | Focus and selection |
-| `--doc-shadow`, `--doc-shadow-strong`, `--doc-shadow-subtle`, `--doc-shadow-lg` | Elevation |
-| `--doc-overlay` | Modal backdrops |
+| Token                                                                           | Paints                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `--doc-surface`                                                                 | Panels, menus, dropdowns, cards                              |
+| `--doc-card`                                                                    | Comment and suggestion cards                                 |
+| `--doc-bg`                                                                      | The workspace behind the page                                |
+| `--doc-bg-subtle`, `--doc-bg-input`                                             | Section backgrounds, input fields                            |
+| `--doc-bg-hover`                                                                | Hover states — **and** the navigation toggle's resting plate |
+| `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light`                   | Accent, selected states                                      |
+| `--doc-accent`, `--doc-accent-bg`                                               | Secondary accent                                             |
+| `--doc-on-primary`                                                              | Text on an accent fill                                       |
+| `--doc-text`, `--doc-text-muted`, `--doc-text-subtle`, `--doc-text-placeholder` | Text ramp. The rulers draw their ticks in the last two       |
+| `--doc-border`, `--doc-border-light`, `--doc-border-dark`, `--doc-border-input` | Rules and outlines                                           |
+| `--doc-link`                                                                    | Hyperlinks in chrome                                         |
+| `--doc-error`, `--doc-success`, `--doc-warning` (+ `-bg`)                       | Status                                                       |
+| `--doc-focus-ring`, `--doc-selection`                                           | Focus and selection                                          |
+| `--doc-shadow`, `--doc-shadow-strong`, `--doc-shadow-subtle`, `--doc-shadow-lg` | Elevation                                                    |
+| `--doc-overlay`                                                                 | Modal backdrops                                              |
 
 Dark mode is the same list re-declared under `.docx-editor.dark`.
 
@@ -129,7 +134,7 @@ Dark mode is the same list re-declared under `.docx-editor.dark`.
 ### What is deliberately not themeable
 
 **The document canvas.** Painter output stays Word-faithful — a page that matched your brand
-would be a lie about what the file contains. Theme the space *around* the page instead; Igloo
+would be a lie about what the file contains. Theme the space _around_ the page instead; Igloo
 puts the page on an iceberg rather than tinting it.
 
 ---
@@ -166,7 +171,7 @@ Both cost real debugging time in Igloo, and both are ordinary CSS a host would w
 **`backdrop-filter` captures `position: fixed` children.** An element with
 `backdrop-filter` (or `filter`, or `transform`) becomes the containing block for every fixed
 descendant. A frosted header containing the menu bar makes the Page Setup dialog's
-`inset: 0` overlay resolve against the *header*, so the dialog centres inside a 120px strip.
+`inset: 0` overlay resolve against the _header_, so the dialog centres inside a 120px strip.
 Put the effect on a `::before` pseudo-element instead.
 
 **`z-index` traps popovers.** A `z-index` on the wrapper around `Viewport` opens a stacking

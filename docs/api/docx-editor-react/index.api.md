@@ -739,7 +739,7 @@ export interface DocxEditorProps {
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
     modules?: readonly EditorModule[];
-    navigation?: boolean;
+    navigation?: boolean | DocxEditorNavigationProps;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onOpen?: () => void;

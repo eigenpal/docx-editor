@@ -2874,7 +2874,7 @@ export interface DocxEditorProps {
     mode?: EditorMode;
     modules?: readonly EditorModule[];
     // (undocumented)
-    navigation?: boolean;
+    navigation?: boolean | DocxEditorNavigationProps;
     // (undocumented)
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
