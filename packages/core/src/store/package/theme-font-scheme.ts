@@ -27,10 +27,13 @@ export interface ThemeSchemeFaces {
   readonly majorEastAsia?: string | null;
   /** `a:minorFont` east asian typeface (`a:ea`). */
   readonly minorEastAsia?: string | null;
+  /** Language-specific theme faces, keyed by ISO 15924 script. */
+  readonly majorSupplemental?: Readonly<Record<string, string>>;
+  readonly minorSupplemental?: Readonly<Record<string, string>>;
 }
 
 /** The theme's font slots, fully resolved, for resolving `w:rFonts` theme attributes. */
-export interface DocumentThemeFonts {
+export interface DocumentThemeFonts extends ThemeSchemeFaces {
   /** `a:majorFont` latin typeface — headings. */
   readonly major: string | null;
   /** `a:minorFont` latin typeface — body text. */
@@ -79,9 +82,7 @@ function schemeTypeface(
 }
 
 /** Collect every font face consumed by live and headless layout from one canonical theme tree. */
-export function collectThemeSchemeFaces(
-  themeRoot: OoxmlElement | null
-): Required<ThemeSchemeFaces> {
+export function collectThemeSchemeFaces(themeRoot: OoxmlElement | null): DocumentThemeFonts {
   const scheme = themeRoot ? firstDescendant(themeRoot, 'fontScheme') : null;
   if (!scheme) {
     return { major: null, minor: null, majorEastAsia: null, minorEastAsia: null };
@@ -91,6 +92,7 @@ export function collectThemeSchemeFaces(
     minor: schemeTypeface(scheme, 'minorFont', 'latin'),
     majorEastAsia: schemeTypeface(scheme, 'majorFont', 'ea'),
     minorEastAsia: schemeTypeface(scheme, 'minorFont', 'ea'),
+    ...supplementalFaces(scheme),
   };
 }
 
@@ -114,8 +116,65 @@ const TOKEN_FACE: ReadonlyMap<string, (faces: ThemeSchemeFaces) => string | null
 /** A `w:rFonts` theme token resolved to its theme face, or null when it names none we hold. */
 export function themeFontFamilyOf(
   token: string | undefined,
-  faces: ThemeSchemeFaces
+  faces: ThemeSchemeFaces,
+  eastAsiaLanguage?: string
 ): string | null {
   if (token === undefined) return null;
-  return TOKEN_FACE.get(token)?.(faces) ?? null;
+  const face = TOKEN_FACE.get(token)?.(faces) ?? null;
+  if (face !== null) return face;
+  const script = eastAsianScript(eastAsiaLanguage);
+  if (!script) return null;
+  const supplemental =
+    token === 'majorEastAsia'
+      ? faces.majorSupplemental
+      : token === 'minorEastAsia'
+        ? faces.minorSupplemental
+        : undefined;
+  return supplemental?.[script] ?? null;
+}
+
+/** Only CJK scripts participate in the East Asian slot. Explicit script beats region. */
+export function eastAsianScript(language: string | undefined): string | null {
+  if (!language || language.length > 85) return null;
+  const parts = language.toLowerCase().split('-');
+  if (parts[0] === 'ja') return 'Jpan';
+  if (parts[0] === 'ko') return 'Hang';
+  if (parts[0] !== 'zh') return null;
+  if (parts.includes('hant')) return 'Hant';
+  if (parts.includes('hans')) return 'Hans';
+  return parts.some((part) => ['tw', 'hk', 'mo'].includes(part)) ? 'Hant' : 'Hans';
+}
+
+const EAST_ASIAN_DEFAULTS = new Map([
+  ['Hans', 'SimSun'],
+  ['Hant', 'PMingLiU'],
+  ['Jpan', 'MS Mincho'],
+  ['Hang', 'Batang'],
+]);
+
+/** Last-resort named CJK face; an unavailable face takes the CJK-aware measurer fallback. */
+export function eastAsianDefaultFamily(language: string | undefined): string | null {
+  return EAST_ASIAN_DEFAULTS.get(eastAsianScript(language) ?? '') ?? null;
+}
+
+function supplementalFaces(scheme: OoxmlElement): Partial<ThemeSchemeFaces> {
+  const result: {
+    majorSupplemental?: Record<string, string>;
+    minorSupplemental?: Record<string, string>;
+  } = {};
+  for (const [slot, key] of [
+    ['majorFont', 'majorSupplemental'],
+    ['minorFont', 'minorSupplemental'],
+  ] as const) {
+    const faces: Record<string, string> = Object.create(null);
+    for (const node of child(scheme, slot)?.children ?? []) {
+      if (!isElement(node) || node.localName !== 'font') continue;
+      const script = node.attributes.find((a) => a.localName === 'script')?.value;
+      const face = node.attributes.find((a) => a.localName === 'typeface')?.value;
+      if (script && EAST_ASIAN_DEFAULTS.has(script) && face && FONT_NAME.test(face))
+        faces[script] = face;
+    }
+    if (Object.keys(faces).length) result[key] = Object.freeze(faces);
+  }
+  return result;
 }

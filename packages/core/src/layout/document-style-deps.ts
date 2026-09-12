@@ -25,6 +25,8 @@ export function createDocumentStyleDependencies(
   let styleThemeMinor: string | null | undefined;
   let styleThemeMajorEastAsia: string | null | undefined;
   let styleThemeMinorEastAsia: string | null | undefined;
+  let majorSupplemental: Readonly<Record<string, string>> | undefined;
+  let minorSupplemental: Readonly<Record<string, string>> | undefined;
   let styles: StyleCascadeTable | undefined;
   let typographyRoot: OoxmlElement | null | undefined;
   let settingsRoot: OoxmlElement | null | undefined;
@@ -43,13 +45,17 @@ export function createDocumentStyleDependencies(
         theme.major !== styleThemeMajor ||
         theme.minor !== styleThemeMinor ||
         theme.majorEastAsia !== styleThemeMajorEastAsia ||
-        theme.minorEastAsia !== styleThemeMinorEastAsia
+        theme.minorEastAsia !== styleThemeMinorEastAsia ||
+        theme.majorSupplemental !== majorSupplemental ||
+        theme.minorSupplemental !== minorSupplemental
       ) {
         stylesRoot = current;
         styleThemeMajor = theme.major;
         styleThemeMinor = theme.minor;
         styleThemeMajorEastAsia = theme.majorEastAsia;
         styleThemeMinorEastAsia = theme.minorEastAsia;
+        majorSupplemental = theme.majorSupplemental;
+        minorSupplemental = theme.minorSupplemental;
         typographyRoot = currentSettings;
         styles = buildStyleCascadeTable(current, theme, currentSettings);
       }

@@ -290,3 +290,80 @@ describe('style equality drives span merging', () => {
     expect(runStylesEqual(resolve('strike'), resolve('dstrike'))).toBe(false);
   });
 });
+
+describe('empty East Asian theme faces use the final run language (#787)', () => {
+  const emptyTheme = {
+    major: 'Cambria',
+    minor: 'Calibri',
+    majorEastAsia: null,
+    minorEastAsia: null,
+  };
+  test.each([
+    ['zh-CN', 'SimSun'],
+    ['ZH-sg', 'SimSun'],
+    ['zh-TW', 'PMingLiU'],
+    ['zh-HK', 'PMingLiU'],
+    ['zh-MO', 'PMingLiU'],
+    ['zh-Hans-TW', 'SimSun'],
+    ['zh-Hant-CN', 'PMingLiU'],
+    ['ja-JP', 'MS Mincho'],
+    ['ko-KR', 'Batang'],
+    ['en-US', null],
+    ['und', null],
+    ['', null],
+  ])('%s selects %s without changing Latin', (language, family) => {
+    const style = resolveRunStyle(
+      [
+        {
+          localName: 'rFonts',
+          attributes: { asciiTheme: 'minorHAnsi', eastAsiaTheme: 'minorEastAsia' },
+        },
+        { localName: 'lang', attributes: { val: 'en-US', eastAsia: language } },
+      ],
+      emptyTheme
+    );
+    expect(style.fontFamilyEastAsia).toBe(family);
+    expect(style.fontFamily).toBe('Calibri');
+  });
+  test('language overrides cross rFonts order and preserve an inherited eastAsia attribute', () => {
+    const props = [
+      { localName: 'rFonts', attributes: { eastAsiaTheme: 'minorEastAsia' } },
+      { localName: 'lang', attributes: { eastAsia: 'zh-CN' } },
+      { localName: 'lang', attributes: { eastAsia: 'ja-JP' } },
+      { localName: 'lang', attributes: { val: 'en-US' } },
+      { localName: 'rFonts', attributes: { ascii: 'Arial' } },
+    ];
+    const theme = {
+      ...emptyTheme,
+      minorSupplemental: { Hans: 'Chinese Body', Jpan: 'Japanese Body' },
+    };
+    expect(resolveRunStyle(props, theme).fontFamilyEastAsia).toBe('Japanese Body');
+    expect(
+      resolveRunStyle(
+        [...props, { localName: 'rFonts', attributes: { eastAsia: 'Explicit' } }],
+        theme
+      ).fontFamilyEastAsia
+    ).toBe('Explicit');
+  });
+  test('named theme and explicit faces win over language defaults', () => {
+    const lang = { localName: 'lang', attributes: { eastAsia: 'zh-CN' } };
+    expect(
+      resolveRunStyle(
+        [lang, { localName: 'rFonts', attributes: { eastAsia: 'Named' } }],
+        emptyTheme
+      ).fontFamilyEastAsia
+    ).toBe('Named');
+    expect(
+      resolveRunStyle(
+        [
+          lang,
+          {
+            localName: 'rFonts',
+            attributes: { eastAsiaTheme: 'majorEastAsia', eastAsia: 'Named' },
+          },
+        ],
+        { ...emptyTheme, majorEastAsia: 'Theme', majorSupplemental: { Hans: 'Supplemental' } }
+      ).fontFamilyEastAsia
+    ).toBe('Theme');
+  });
+});

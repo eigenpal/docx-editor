@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, zipSync, unzipSync } from 'fflate';
+import { defineFontResolver } from '../../layout/font-resolver.ts';
+import { openFontBackedDocumentForExport } from '../document-export-shaping.ts';
 import { forEachSemanticSpan } from '../../layout/export-traversal.ts';
 import { openDocumentForExport } from '../export-session.ts';
 
@@ -76,4 +78,93 @@ test('invalid display modes never enter export-session caches', async () => {
   } finally {
     opened.session.dispose();
   }
+});
+
+test('empty theme faces select and request the inherited language face before export layout', async () => {
+  const files = unzipSync(themedBytes());
+  files['word/theme/theme1.xml'] = strToU8(
+    `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="Empty">` +
+      '<a:majorFont><a:latin typeface="Major Latin"/><a:ea typeface=""/><a:font script="Hans" typeface="Chinese Heading"/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="Minor Latin"/><a:ea typeface=""/><a:font script="Hans" typeface="Chinese Body"/><a:font script="Jpan" typeface="Japanese Body"/></a:minorFont>' +
+      '</a:fontScheme></a:themeElements></a:theme>'
+  );
+  files['word/styles.xml'] = strToU8(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+      '<w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorEastAsia"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/>' +
+      '</w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:style w:type="character" w:styleId="Japanese"><w:rPr><w:lang w:eastAsia="ja-JP"/></w:rPr></w:style></w:styles>'
+  );
+  files['word/document.xml'] = strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>中文</w:t></w:r>` +
+      '<w:r><w:rPr><w:rStyle w:val="Japanese"/></w:rPr><w:t>日本語</w:t></w:r></w:p></w:body></w:document>'
+  );
+  let requested: readonly string[] = [];
+  const opened = await openFontBackedDocumentForExport(zipSync(files), {
+    fonts: defineFontResolver((request) => {
+      requested = request.families;
+      return { sources: [], defaultFont: { family: 'Minor Latin', sizeHalfPoints: 22 } };
+    }),
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    expect(requested).toContain('Chinese Body');
+    expect(requested).toContain('Japanese Body');
+    expect(requested).not.toContain('Chinese Heading');
+    expect(requested).not.toContain('SimSun');
+    const faces: Array<string | null> = [];
+    forEachSemanticSpan(await opened.session.layout(), ({ span }) =>
+      faces.push(span.style.fontFamilyEastAsia)
+    );
+    expect(faces).toContain('Chinese Body');
+    expect(faces).toContain('Japanese Body');
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('empty theme mixed Chinese and Latin wraps exactly like an explicit CJK face', async () => {
+  const files = unzipSync(themedBytes());
+  files['word/styles.xml'] = strToU8(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+      '<w:rFonts w:ascii="Latin Face" w:eastAsiaTheme="minorEastAsia"/><w:lang w:eastAsia="zh-CN"/>' +
+      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>'
+  );
+  files['word/document.xml'] = strToU8(
+    `<w:document xmlns:w="${W}"><w:body>` +
+      Array.from(
+        { length: 40 },
+        () => '<w:p><w:r><w:t>中文測試 ABC 中文測試 ABC 中文測試 ABC 中文測試 ABC</w:t></w:r></w:p>'
+      ).join('') +
+      '<w:sectPr><w:pgSz w:w="5940" w:h="16840"/><w:pgMar w:left="720" w:right="720" w:top="720" w:bottom="720"/></w:sectPr>' +
+      '</w:body></w:document>'
+  );
+  const signature = async (face: string) => {
+    files['word/theme/theme1.xml'] = strToU8(
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="Mixed"><a:minorFont><a:latin typeface="Latin Face"/><a:ea typeface="${face}"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>`
+    );
+    const measuredCjk = new Set<string | null>();
+    const opened = openDocumentForExport(zipSync(files), {
+      measurer: {
+        measure(text, style) {
+          if (/[\u4e00-\u9fff]/u.test(text)) measuredCjk.add(style.fontFamily);
+          return [...text].length * (style.fontFamily === 'SimSun' ? 11 : 5.5);
+        },
+        lineMetrics: () => ({ height: 14, baseline: 11 }),
+      },
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) throw new Error('fixture rejected');
+    try {
+      const spans: unknown[] = [];
+      forEachSemanticSpan(await opened.session.layout(), ({ span }) =>
+        spans.push([span.text, span.box])
+      );
+      expect([...measuredCjk]).toEqual(['SimSun']);
+      return spans;
+    } finally {
+      opened.session.dispose();
+    }
+  };
+  expect(await signature('')).toEqual(await signature('SimSun'));
 });

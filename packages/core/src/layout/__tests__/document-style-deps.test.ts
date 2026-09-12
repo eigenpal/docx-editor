@@ -60,3 +60,23 @@ describe('document style dependencies', () => {
     expect(dependencies.defaultTabStopPt()).toBe(1134 / 20);
   });
 });
+
+test('supplemental theme changes invalidate the style cascade independently of a:ea', () => {
+  let theme: HeadlessThemeFonts = {
+    major: null,
+    minor: null,
+    minorSupplemental: { Hans: 'First' },
+  };
+  const dependencies = createDocumentStyleDependencies({
+    stylesRoot: () => null,
+    settingsRoot: () => null,
+    numberingRoot: () => null,
+    documentThemeFonts: () => theme,
+  } as unknown as HeadlessDocumentView);
+  const first = dependencies.styleCascade();
+  theme = { ...theme, minorSupplemental: { Hans: 'Second' } };
+  const second = dependencies.styleCascade();
+  expect(second).not.toBe(first);
+  expect(second?.themeFonts.minorSupplemental?.Hans).toBe('Second');
+  expect(dependencies.styleCascade()).toBe(second);
+});
