@@ -1,0 +1,58 @@
+{
+  "Word.run": {
+    "status": "different",
+    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run."
+  },
+  "Word.SearchOptions#ignorePunct": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.SearchOptions#ignoreSpace": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.SearchOptions#matchWildcards": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.Range#select": {
+    "status": "partial",
+    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported."
+  },
+  "Word.ContentControl#id": {
+    "status": "different",
+    "notes": "The file id is a string rather than a number. DOCX ids can be missing or repeated; do not use this value as unique identity."
+  },
+  "Word.Font#bold": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean."
+  },
+  "Word.Font#italic": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean."
+  },
+  "Word.Font#color": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string."
+  },
+  "Word.Font#name": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string."
+  },
+  "Word.Font#size": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number."
+  },
+  "Word.Range#insertComment": {
+    "status": "partial",
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document."
+  },
+  "Word.Section#getHeader": {
+    "status": "different",
+    "notes": "Returns existing or inherited parts only. A missing header returns ItemNotFound; a read never creates a part."
+  },
+  "Word.Section#getFooter": {
+    "status": "different",
+    "notes": "Returns existing or inherited parts only. A missing footer returns ItemNotFound; a read never creates a part."
+  }
+}

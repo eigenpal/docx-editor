@@ -36,6 +36,10 @@ Extend the pinned Office.js reference, conformance fixtures, and runtime tests w
 Keep host creation, collaboration transport, and job orchestration separate from the Office-shaped document model.
 These infrastructure APIs have no Office.js equivalent. Do not claim full Office.js compatibility from subset conformance.
 
+Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` for the exhaustive pinned Word/OfficeExtension signature report.
+CI reports signature percentages without blocking merges. Full results are in `packages/editor-api/compat/reports/`.
+Record per-endpoint runtime differences in `packages/editor-api/compat/runtime-notes.json`; signature matches do not prove runtime equivalence.
+
 ### Office.js developer experience
 
 - Load only the properties needed. Use explicit property names in examples.

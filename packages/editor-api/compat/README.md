@@ -1,5 +1,77 @@
 # DocxEditor / Word JavaScript API compatibility
 
+## Exhaustive informational report
+
+From the repository root, run:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:report
+```
+
+Read `packages/editor-api/compat/reports/report.md` for all endpoints and runtime notes.
+`report.json` includes the expected and actual signatures for each endpoint.
+`summary.md` contains the percentages shown in CI. Use `--output <directory>`
+with the package command to change the output directory.
+
+The report compares `src/index.ts` exports, following re-exports and inheritance,
+against `reference/word.full-inventory.json`. It does not compare the hand-authored
+subset in `docxeditor/declarations.ts`. The full reference includes all public
+Word and OfficeExtension members in the pinned stable declaration package,
+including desktop requirement sets, enums, constructors, functions, and nested
+support types. Excel, PowerPoint, Outlook, and the Office add-in host APIs are
+outside this document editor's scope. Word, OfficeExtension, and nested support
+types have separate percentages so these denominators remain visible.
+
+Each member counts once. Inherited members count on each exposing type. An exact
+match requires all overloads, parameter types, optional/rest parameters, generic
+constraints/defaults, return types, and property read/write types and modifiers
+to match. Enum constants retain their values. The normalizer removes the host
+namespace and normalizes whitespace, quotes, and union order. It
+preserves enum alternatives and inline object types. Types with the same exported
+name remain named references; their members are checked separately. This is a
+signature-shape metric, not recursive structural assignability. Equivalent
+overload spellings or differently named aliases can appear as `different`.
+
+Signature statuses are `match`, `different`, and `missing`. A missing member is
+absent from the public surface; a different signature can still support some
+calls. Neither a matching signature nor its percentage proves runtime behavior.
+The JSON report includes matched-overload counts for partial inspection.
+
+Add runtime observations to `runtime-notes.json`, keyed by exact upstream UID:
+
+```json
+{
+  "Word.Range#select": {
+    "status": "partial",
+    "notes": "Selection requires an attached browser editor."
+  }
+}
+```
+
+Runtime statuses are `equivalent`, `partial`, `different`, `unsupported`, and
+`unverified`. Missing notes default to `unverified`, including matching signatures.
+Use `equivalent` only after reviewing runtime behavior and its tests. Notes never
+override signature results. Unknown UIDs and invalid notes are tooling errors.
+
+CI runs the report as an independent, non-blocking job. It writes a step summary
+and uploads an `office-js-compatibility` artifact. Signature differences do not
+fail the command. Tooling errors exit nonzero and show an unavailable report;
+CI still does not block merges. Existing subset conformance checks remain gates.
+
+To refresh the full inventory after reviewing the pin in `provenance.json`, run:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:fetch-inventory
+```
+
+This explicit maintenance command downloads the pinned npm tarball and verifies
+its integrity. It records normalized facts and source provenance, not upstream
+declaration files. Commit the generated inventory with the change. Its version
+is pinned independently from the subset fixture and appears in every report.
+Reports and tests use the committed inventory without network access.
+
+## Selected subset conformance
+
 This directory freezes a checked-in, versioned subset of the _shape_ of the
 stable Microsoft Word JavaScript API (`Word.*`), so that
 `compat/docxeditor/declarations.ts` — DocxEditor's own, independently
@@ -31,8 +103,9 @@ and never depended on by the published package.
 ## The offline-CI guarantee
 
 `bun test`, `bun run typecheck`, `bun run build`, and `bun install` never
-touch the network. The **only** script in this task that does is
-`scripts/fetch-office-reference.mjs` — it is invoked by the scheduled
+touch the network. Explicit reference maintenance uses
+`scripts/fetch-signature-inventory.mjs` or `scripts/fetch-office-reference.mjs`.
+The latter is invoked by the scheduled
 `.github/workflows/office-compat-drift.yml` workflow, or manually by a
 maintainer, never by any of the checks above. Everything `bun test` gates on
 (reference-fixture validity, manifest/reference consistency, the generated

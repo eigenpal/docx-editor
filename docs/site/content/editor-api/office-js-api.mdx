@@ -118,6 +118,20 @@ The repository keeps a reviewed manifest of supported Word API symbols.
 CI compares the authored TypeScript declarations with a pinned `@types/office-js` reference.
 CI also compiles representative Word code against the DocxEditor declarations.
 
+For an exhaustive signature report, run this command from the repository root:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:report
+```
+
+The report compares the pinned Word and OfficeExtension inventory with actual
+public source exports. It lists matching, differing, and missing signatures,
+with separate runtime notes from `packages/editor-api/compat/runtime-notes.json`.
+Read `packages/editor-api/compat/reports/report.md` for all endpoints, or
+`report.json` for expected and actual signatures. CI shows signature percentages
+and uploads the full report as an informational artifact. These percentages do
+not measure runtime equivalence or include other Office hosts.
+
 The package does not include Microsoft's declarations.
 Installation, tests, and builds do not fetch them.
 

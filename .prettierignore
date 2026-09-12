@@ -8,6 +8,7 @@ docs/api/**/*.api.md
 # byte-exact against a fresh regeneration (see conformance-live.test.ts);
 # reformatting here would make that comparison flag drift that isn't real.
 packages/editor-api/compat/generated/**
+packages/editor-api/compat/reference/word.full-inventory.json
 
 # License texts are legal documents, reproduced verbatim. Prettier reflows the
 # indentation of their numbered clauses, which edits the licence a consumer
