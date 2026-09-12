@@ -2,6 +2,7 @@ import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import {
   cloneVNode,
+  createVNode,
   defineComponent,
   h,
   inject,
@@ -113,9 +114,11 @@ export function createDialogComposition<
             };
             if (p.asChild) return h(Slot, merged, { default: () => children });
             if (original) {
-              const node = cloneVNode(original, merged);
-              if (children) node.children = children;
-              return node;
+              // Recreate the node so Vue derives the child type from the replacement slot.
+              // Mutating a clone retains the default text-child flag for VNode arrays.
+              return children
+                ? createVNode(original.type, merged, children)
+                : cloneVNode(original, merged);
             }
             if (partName === 'Error' && !Object.keys(ctx.errors.value).length && !children)
               return null;

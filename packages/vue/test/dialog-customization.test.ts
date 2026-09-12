@@ -1,6 +1,6 @@
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
-import { createApp, h, nextTick } from 'vue';
+import { createApp, h, nextTick, ref, type VNodeChild } from 'vue';
 import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { DocxEditorTextFormFieldDialog } from '../src/editor/DocxEditorTextFormFieldDialog';
 
@@ -11,7 +11,8 @@ afterEach(() => {
 
 function mount(
   accept: boolean,
-  presentation: { asChild?: boolean; class?: unknown; className?: string } = {}
+  presentation: { asChild?: boolean; class?: unknown; className?: string } = {},
+  content?: () => VNodeChild
 ) {
   const controller = new AbortController();
   const saved: { text: string; maxLength: number }[] = [];
@@ -49,10 +50,12 @@ function mount(
               DocxEditorTextFormFieldDialog.Apply,
               { asChild: true, ...presentation },
               {
-                default: () =>
-                  presentation.asChild === false
-                    ? 'Save field'
-                    : h('button', { 'data-save': '' }, 'Save field'),
+                default:
+                  content ??
+                  (() =>
+                    presentation.asChild === false
+                      ? 'Save field'
+                      : h('button', { 'data-save': '' }, 'Save field')),
               }
             ),
           ],
@@ -103,6 +106,7 @@ for (const asChild of [false, true]) {
     });
     await nextTick();
     const button = container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
+    expect(button.textContent).toBe('Save field');
     for (const name of ['docx-dialog__button', 'app-action', 'app-active', 'paired-class']) {
       expect(button.classList.contains(name)).toBe(true);
     }
@@ -137,4 +141,24 @@ test('forwarding optional SFC children does not expose a readonly DOM property',
   await nextTick();
   expect(warnings.filter((message) => message.includes('children'))).toEqual([]);
   expect(container.querySelector('dialog')?.hasAttribute('children')).toBe(false);
+});
+
+test('replacement action slots preserve markup, reactive labels, and command wiring', async () => {
+  const label = ref('Save');
+  const { container, saved } = mount(false, { asChild: false }, () => [
+    h('strong', label.value),
+    ' field',
+  ]);
+  await nextTick();
+  const button = container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
+  expect(button.textContent).toBe('Save field');
+  expect(button.querySelector('strong')?.textContent).toBe('Save');
+  label.value = 'Update';
+  await nextTick();
+  expect(container.querySelector('[data-docx-part="apply"]')).toBe(button);
+  expect(button.textContent).toBe('Update field');
+  button.click();
+  await nextTick();
+  expect(saved).toHaveLength(1);
+  expect(container.querySelector('[role="alert"]')?.textContent).not.toBe('');
 });

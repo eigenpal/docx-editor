@@ -146,6 +146,85 @@ Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-se
 See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 
+## Connect a custom input
+
+Put the input inside a named `Field`. Call the draft hook in the input component,
+which renders under the dialog's provider. This example edits the top margin in inches.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { usePageSetupDialog } from '@docx-editor.dev/react';
+
+function TopMargin() {
+  const { values, setValue, isEnabled } = usePageSetupDialog();
+  return (
+    <label>
+      Top margin (inches)
+      <input
+        type="number"
+        step="0.1"
+        value={values.marginTop / 1440}
+        disabled={!isEnabled}
+        onChange={(event) => setValue('marginTop', Math.round(Number(event.target.value) * 1440))}
+      />
+    </label>
+  );
+}
+```
+
+Add this named child inside your `PageSetupDialog`:
+
+```tsx
+<DocxEditor.PageSetupDialog.Field name="marginTop">
+  <TopMargin />
+</DocxEditor.PageSetupDialog.Field>
+```
+
+</Framework>
+<Framework value="vue">
+
+Create `TopMargin.vue`:
+
+```vue
+<script setup lang="ts">
+import { usePageSetupDialog } from '@docx-editor.dev/vue';
+
+const { values, setValue, isEnabled } = usePageSetupDialog();
+function update(event: Event) {
+  const input = event.target as HTMLInputElement;
+  setValue('marginTop', Math.round(Number(input.value) * 1440));
+}
+</script>
+
+<template>
+  <label>
+    Top margin (inches)
+    <input
+      type="number"
+      step="0.1"
+      :value="values.marginTop / 1440"
+      :disabled="!isEnabled"
+      @input="update"
+    />
+  </label>
+</template>
+```
+
+Import `TopMargin` in `PageSetup.vue` and declare `const Field = Dialog.Field`.
+Add this named child inside `Dialog`:
+
+```vue
+<Field name="marginTop"><TopMargin /></Field>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Keep the default Apply and Error parts. Invalid margins keep the dialog open and
+show an error; Cancel discards the draft. No separate session or opening state is needed.
+
 ## Style and accessibility
 
 Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors.

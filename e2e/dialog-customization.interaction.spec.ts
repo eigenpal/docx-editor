@@ -97,3 +97,26 @@ for (const [adapter, port] of [
     }
   });
 }
+
+test('Vue: template text slots preserve Paragraph action labels and commands', async ({ page }) => {
+  await page.goto('http://localhost:5274/?dialogs=1');
+  const editor = page.locator('.dialog-demo-editors > .docx-editor').first();
+  await editor.locator('.docx-pages').click({ position: { x: 120, y: 110 } });
+  await page.keyboard.type('A paragraph');
+  const format = editor.locator('[data-menu="format"] > [role="menuitem"]');
+  const open = async () => {
+    await format.click();
+    await editor.getByRole('menuitem', { name: /Line spacing options/ }).click();
+  };
+  await open();
+  const dialog = page.locator('dialog[data-docx-dialog="paragraph"]');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save settings', exact: true })).toBeVisible();
+  await dialog.locator('[data-docx-field="spaceAfter"] input').fill('12');
+  await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(format).toBeFocused();
+  await open();
+  await expect(dialog.locator('[data-docx-field="spaceAfter"] input')).toHaveValue('12');
+  await page.keyboard.press('Escape');
+});

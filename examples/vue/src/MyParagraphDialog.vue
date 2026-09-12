@@ -9,6 +9,6 @@ const Apply = DocxEditorParagraphDialog.Apply;
 
 <template>
   <DocxEditorParagraphDialog v-bind="props">
-    <Apply as-child><button class="brand-dialog-button">Save settings</button></Apply>
+    <Apply class-name="brand-dialog-button">Save settings</Apply>
   </DocxEditorParagraphDialog>
 </template>
