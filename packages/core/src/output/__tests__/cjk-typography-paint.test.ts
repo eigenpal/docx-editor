@@ -52,7 +52,7 @@ test('CJK compression uses the same spacing in layout and DOM paint', () => {
     '/word/settings.xml'
   );
   const styleCascade = buildStyleCascadeTable(null, undefined, settings.root);
-  const layout = layoutSemanticDocument(documentPart('天。地。', ''), 0, {
+  const layout = layoutSemanticDocument(documentPart('天地。。', ''), 0, {
     measurer,
     geometry,
     styleCascade,
@@ -61,15 +61,15 @@ test('CJK compression uses the same spacing in layout and DOM paint', () => {
   const container = document.createElement('div');
   paintSemanticLayout(container, layout, { scale: 1 });
   const punctuation = [...container.querySelectorAll<HTMLElement>('[data-start]')].filter(
-    (element) => element.textContent === '。'
+    (element) => element.textContent === '。。'
   );
-  expect(punctuation).toHaveLength(2);
-  expect(punctuation.map((element) => element.style.letterSpacing)).toEqual(['-3px', '-3px']);
+  expect(punctuation).toHaveLength(1);
+  expect(punctuation.map((element) => element.style.letterSpacing)).toEqual(['-3px']);
   expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width - line.spans[0]!.box.x).toBe(18);
 });
 
 test('typography settings invalidate cached layout without a text edit', () => {
-  const document = documentPart('天地玄黄。人', '');
+  const document = documentPart('天地玄黄。人。', '');
   const session = createLayoutSession();
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
@@ -101,14 +101,14 @@ test('headers and table cells consume the same document typography settings', ()
   );
   const styleCascade = buildStyleCascadeTable(null, undefined, settings.root);
   const p =
-    '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>天。地。</w:t></w:r></w:p>';
+    '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>天地。。</w:t></w:r></w:p>';
   const header = part(`<w:hdr xmlns:w="${W}">${p}</w:hdr>`, '/word/header1.xml');
   const story = layoutHeaderFooterStory(header, 18, measurer, 'cjk-test', undefined, styleCascade);
   const headerParagraph = story.fragments[0]!;
   expect(headerParagraph.kind).toBe('paragraph');
   if (headerParagraph.kind !== 'paragraph') throw new Error('expected header paragraph');
   expect(headerParagraph.lines).toHaveLength(1);
-  expect(headerParagraph.lines[0]!.spans.map((span) => span.text).join('')).toBe('天。地。');
+  expect(headerParagraph.lines[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
   const table = part(
     `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="360" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="360"/></w:tblGrid><w:tr><w:tc>${p}</w:tc></w:tr></w:tbl></w:body></w:document>`
   );
@@ -119,5 +119,35 @@ test('headers and table cells consume the same document typography settings', ()
   const cell = tableFragment.rows[0]!.cells[0]!.blocks[0]!;
   if (cell.kind !== 'paragraph') throw new Error('expected cell paragraph');
   expect(cell.lines).toHaveLength(1);
-  expect(cell.lines[0]!.spans.map((span) => span.text).join('')).toBe('天。地。');
+  expect(cell.lines[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
+});
+
+test('compressed opening punctuation translates only ink and retains layout caret boundaries', () => {
+  const settings = part(
+    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
+  );
+  const layout = layoutSemanticDocument(documentPart('（（甲）', ''), 0, {
+    measurer,
+    geometry,
+    styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+  });
+  const line = layout.pages[0]!.fragments[0]!.lines[0]!;
+  const container = document.createElement('div');
+  paintSemanticLayout(container, layout, { scale: 2 });
+  const openings = [...container.querySelectorAll<HTMLElement>('[data-start]')].filter(
+    (element) => element.textContent === '（'
+  );
+  expect(openings).toHaveLength(2);
+  expect(openings.map((element) => element.style.width)).toEqual(['6px', '6px']);
+  expect(openings.map((element) => element.firstElementChild?.getAttribute('style'))).toEqual([
+    'position: relative; left: -6px;',
+    'position: relative; left: -6px;',
+  ]);
+  for (const span of line.spans) {
+    expect(
+      caretAt(layout, { paragraphId: span.range.paragraphId, offset: span.range.start }, measurer)!
+        .x
+    ).toBeCloseTo(span.box.x, 5);
+  }
+  expect(line.spans.slice(0, 2).map((span) => span.glyphOffsetPt)).toEqual([-3, -3]);
 });

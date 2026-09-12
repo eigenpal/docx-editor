@@ -214,9 +214,9 @@ describe('CJK follow-up: document and paragraph policy', () => {
     expect(textLines(['天地。。人'], 12, '<w:overflowPunct/>')).toEqual(['天', '地。。', '人']);
   });
   test('compression changes advances, keeps text and model ranges, and respects dont-compress', () => {
-    const ordinary = layout(['天。地。'], 18);
+    const ordinary = layout(['天地。。'], 18);
     const compressed = layout(
-      ['天。地。'],
+      ['天地。。'],
       18,
       '',
       '',
@@ -225,11 +225,11 @@ describe('CJK follow-up: document and paragraph policy', () => {
     expect(ordinary.length).toBe(2);
     expect(compressed.length).toBe(1);
     expect(compressed[0]!.width).toBe(18);
-    expect(compressed[0]!.spans.map((span) => span.text).join('')).toBe('天。地。');
+    expect(compressed[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
     expect(compressed[0]!.end).toBe(4);
     expect(
-      textLines(['天。地。'], 18, '', '', '<w:characterSpacingControl w:val="doNotCompress"/>')
-    ).toEqual(['天。', '地。']);
+      textLines(['天地。。'], 18, '', '', '<w:characterSpacingControl w:val="doNotCompress"/>')
+    ).toEqual(['天', '地。。']);
     expect(
       layout(
         ['アイ'],
@@ -239,6 +239,18 @@ describe('CJK follow-up: document and paragraph policy', () => {
         '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>'
       )[0]!.width
     ).toBe(10.5);
+  });
+  test('contextual compression preserves the explicit hanging punctuation switch', () => {
+    const settings = '<w:characterSpacingControl w:val="compressPunctuation"/>';
+    expect(textLines(['天地。人'], 12, '<w:overflowPunct/>', '', settings)).toEqual([
+      '天地。',
+      '人',
+    ]);
+    expect(textLines(['天地。人'], 12, '<w:overflowPunct w:val="0"/>', '', settings)).toEqual([
+      '天',
+      '地。',
+      '人',
+    ]);
   });
   test('compression preserves grapheme geometry across every formatting seam', () => {
     const settings = '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>';

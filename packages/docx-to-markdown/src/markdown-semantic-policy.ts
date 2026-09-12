@@ -66,6 +66,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     equation: 'represented',
     noteNav: 'represented',
     fontSlot: 'layout-only',
+    glyphOffsetPt: 'layout-only',
   } satisfies Record<keyof StyleSpanRecord, MarkdownFieldPolicy>,
   sourceRange: {
     paragraphId: 'represented',

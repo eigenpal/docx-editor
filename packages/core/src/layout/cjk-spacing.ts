@@ -9,6 +9,10 @@ import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
+// Only these classes have a half-em side bearing. Centred punctuation (！：；？)
+// must retain its natural advance; treating it as a closing bracket clips ink.
+const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
+const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
 const compressible = (piece: FieldAwarePiece): boolean =>
@@ -23,6 +27,7 @@ interface CompressionSlice {
   readonly from: number;
   readonly to: number;
   readonly reduction: number;
+  readonly glyphOffset: number;
 }
 
 function compressionSlices(
@@ -42,24 +47,37 @@ function compressionSlices(
     .join('');
   const slices = new Map<FieldAwarePiece, CompressionSlice[]>();
   let pieceIndex = 0;
-  for (const cluster of segmentGraphemes(text)) {
-    const fraction = FULLWIDTH_PUNCTUATION.test(cluster.text)
-      ? 0.5
-      : includeKana && KANA.test(cluster.text)
-        ? 0.125
-        : 0;
+  const clusters = segmentGraphemes(text);
+  for (let clusterIndex = 0; clusterIndex < clusters.length; clusterIndex++) {
+    const cluster = clusters[clusterIndex]!;
+    const previous = clusters[clusterIndex - 1]?.text;
+    const next = clusters[clusterIndex + 1]?.text;
+    // Remove one shared half-em at a punctuation seam, not both neighbours'
+    // bearings. Ordinary text and authored spaces are never compression triggers.
+    const trimLeft =
+      OPENING.test(cluster.text) &&
+      (previous === undefined || previous === '\n' || OPENING.test(previous));
+    const trimRight =
+      CLOSING.test(cluster.text) &&
+      (next === undefined || next === '\n' || OPENING.test(next) || CLOSING.test(next));
+    const fraction =
+      trimLeft || trimRight ? 0.5 : includeKana && KANA.test(cluster.text) ? 0.125 : 0;
     if (!fraction) continue;
     while (pieceIndex + 1 < pieces.length && starts[pieceIndex + 1]! <= cluster.utf16From)
       pieceIndex++;
     const base = pieces[pieceIndex]!;
     // Measure the complete cluster with its base character's font. Apply the
     // same per-unit reduction to every fragment, including split combining marks.
-    const advance = measureDisplayText(
-      cluster.text,
-      styleForFontSlot(base.style, base.fontSlot),
-      measurer
-    );
-    const reduction = Math.max(0, advance * fraction) / cluster.text.length;
+    const face = styleForFontSlot(base.style, base.fontSlot);
+    const advance = measureDisplayText(cluster.text, face, measurer);
+    // Authored tracking is not part of a glyph's side bearing. Do not remove half
+    // of that tracking, or let compression turn an advance negative.
+    const naturalAdvance =
+      trimLeft || trimRight
+        ? measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
+        : advance;
+    const reduction =
+      Math.max(0, Math.min(advance, naturalAdvance * fraction)) / cluster.text.length;
     for (
       let index = pieceIndex;
       index < pieces.length && starts[index]! < cluster.utf16To;
@@ -74,7 +92,7 @@ function compressionSlices(
         list = [];
         slices.set(piece, list);
       }
-      list.push({ from, to, reduction });
+      list.push({ from, to, reduction, glyphOffset: trimLeft ? -reduction : 0 });
     }
   }
   return slices;
@@ -128,6 +146,7 @@ export function compressCjkPieces(
         start: piece.start + slice.from,
         end: piece.start + slice.to,
         style: compressed,
+        ...(slice.glyphOffset ? { glyphOffsetPt: slice.glyphOffset } : {}),
       });
       from = slice.to;
     }

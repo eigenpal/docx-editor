@@ -10,6 +10,24 @@ export function prepareTextPaintHost(
   span: StyleSpanRecord,
   scale: number
 ): HTMLElement {
+  if (span.glyphOffsetPt) {
+    // Translate ink independently of the advance/highlight/selection box. Moving
+    // the whole run would move its native hit target as well as its glyph.
+    element.style.width = `${span.box.width * scale}px`;
+    const glyph = document.createElement('span');
+    glyph.dataset.docxGlyphOffset = '';
+    glyph.style.position = 'relative';
+    glyph.style.left = `${span.glyphOffsetPt * scale}px`;
+    if (span.style.horizontalScalePercent !== 100) {
+      glyph.style.display = 'inline-block';
+      glyph.style.transform = element.style.transform;
+      glyph.style.transformOrigin = element.style.transformOrigin;
+      element.style.removeProperty('transform');
+      element.style.removeProperty('transform-origin');
+    }
+    element.append(glyph);
+    return glyph;
+  }
   const clippedLineEndWhitespace = span.lineEndWhitespace === true;
   if (span.style.horizontalScalePercent !== 100 || span.text === '\t' || clippedLineEndWhitespace) {
     element.style.width = `${span.box.width * scale}px`;

@@ -94,6 +94,8 @@ export interface FieldAtomMarker {
  * stays canonical-aligned for layout consumers.
  */
 export interface FieldAwarePiece {
+  /** Layout-only displacement of punctuation ink within its compressed advance. */
+  readonly glyphOffsetPt?: number;
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
   readonly style: ResolvedRunStyle;
