@@ -13,6 +13,9 @@ const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
 const compressible = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
+  // Mirroring changes which glyph side owns the bearing. Keep RTL ink uncompressed
+  // until compression can resolve the mirrored glyph's physical bearings.
+  piece.style.shaping?.direction !== 'rtl' &&
   piece.measureText === undefined &&
   !piece.positionalTab &&
   !piece.equation &&

@@ -1405,7 +1405,8 @@ function paintLine(
     if (bidi) {
       painted.style.position = 'relative';
       painted.style.left = `${(span.box.x - line.contentX - logicalAdvance) * scale}px`;
-      painted.style.width = `${span.box.width * scale}px`;
+      // Paint hosts may reserve a pre-scaled width plus a compensating margin.
+      if (!painted.style.width) painted.style.width = `${span.box.width * scale}px`;
       painted.style.direction = span.style.shaping?.direction ?? 'ltr';
       painted.style.unicodeBidi = 'isolate';
       if (span.style.shaping?.wordSpacingPt)
