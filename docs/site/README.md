@@ -101,10 +101,14 @@ never hand-write support claims in prose.
 
 ## Conventions
 
-Write instructions, not essays. Lead with what the reader does; state facts
-flat (sentence or table); no conceptual framing headings ("The trust
-model"), no enumerated abstractions ("Two corollaries"), no aphorisms.
-Shorter is better.
+Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights).
+Lead with the task or behavior. Use active voice, address the reader as "you,"
+and use sentence case for headings. Keep paragraphs short and remove repeated
+explanations. Format identifiers as code and UI labels in bold.
+
+Check feature claims and examples against the public API. State prerequisites,
+defaults, and limits where readers need them. Link to detailed references
+instead of repeating them in overview pages.
 
 - Links between docs pages are root-relative with the version prefix:
   `[React props](/docs/2.x/react/props)`.

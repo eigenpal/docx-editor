@@ -3364,7 +3364,7 @@ export const DocxEditorParagraphDialog: {
     preset: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Title" | "Cancel" | "Apply" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "alignment" | "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "lineRule" | "tabStops" | "special" | "spaceBefore" | "spaceAfter" | "indentLeft" | "indentRight" | "specialBy" | "lineValue";
+        name: "alignment" | "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue";
     }>;
 };
 
@@ -3437,7 +3437,7 @@ export interface DocxEditorProps {
     mode?: EditorMode;
     modules?: readonly EditorModule[];
     // (undocumented)
-    navigation?: boolean;
+    navigation?: boolean | DocxEditorNavigationProps;
     // (undocumented)
     popups?: DocxEditorPopups;
     // (undocumented)
@@ -5066,7 +5066,6 @@ export interface PaginatedDocxEditorHandle {
     navigate(command: NavigationCommand, extend?: boolean): void;
     // (undocumented)
     redo(): void;
-    // (undocumented)
     save(): Uint8Array | null;
     // (undocumented)
     sectionProperties(): SectionProperties | null;

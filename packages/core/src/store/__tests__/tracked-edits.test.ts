@@ -6,8 +6,20 @@
 // the cases where a naive implementation still produces valid XML that says the wrong thing.
 
 import { describe, expect, test } from 'bun:test';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { revisionItemsOf } from '../store/review-reads.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
 import { ADA, apply, paragraphId, part, xml } from './tracked-edit-fixture.ts';
+
+function paragraphIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') ids.push(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
+}
 
 describe('a tracked insertion', () => {
   test('splits the run and lands between the halves as w:ins', () => {
@@ -233,6 +245,61 @@ describe('a tracked paragraph mark', () => {
       revision: ADA,
     });
     expect(xml(twice).match(/<w:ins\b/g)?.length).toBe(1);
+  });
+
+  test('adjacent marks reuse the first timestamp across the grouping window', () => {
+    const before = part(
+      '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>three</w:t></w:r></w:p>'
+    );
+    const [first, second, third] = paragraphIds(before);
+    const once = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: first!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:00:00Z' },
+    });
+    const twice = apply(once, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:01:00Z' },
+    });
+    const thrice = apply(twice, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: third!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:01:01Z' },
+    });
+    const marks = revisionItemsOf(thrice).filter((item) => item.revisionKind === 'paragraphMark');
+    expect(marks).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:00:00Z')?.ranges).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:01:01Z')?.ranges).toHaveLength(1);
+  });
+
+  test('a paired mark coalesces against the matching revision kind', () => {
+    const before = part(
+      '<w:p><w:pPr><w:rPr>' +
+        '<w:ins w:id="1" w:author="Ada" w:date="2026-09-09T08:00:00Z"/>' +
+        '<w:del w:id="2" w:author="Bob" w:date="2026-09-09T08:00:00Z"/>' +
+        '</w:rPr></w:pPr></w:p><w:p/>'
+    );
+    const [, second] = paragraphIds(before);
+    const after = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'del',
+      revision: { author: 'Bob', date: '2026-09-09T08:00:05Z' },
+    });
+    const deletions = revisionItemsOf(after).filter(
+      (item) =>
+        item.revisionKind === 'paragraphMark' &&
+        item.markDirection === 'delete' &&
+        item.author === 'Bob'
+    );
+    expect(deletions).toHaveLength(1);
+    expect(deletions[0]!.ranges).toHaveLength(2);
   });
 });
 

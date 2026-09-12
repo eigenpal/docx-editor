@@ -11,7 +11,13 @@ import {
 } from '../package/ooxml-shared.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { createNodeIdAllocator, replaceChildren, type EditOptions } from '../package/ooxml-edit.ts';
+import {
+  createNodeIdAllocator,
+  findNode,
+  replaceChildren,
+  type EditOptions,
+} from '../package/ooxml-edit.ts';
+import { isFldSimple } from '../package/field-nodes.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
@@ -90,7 +96,21 @@ export function applyDeleteTracked(
   for (const segment of offsets.segments) {
     if (!segment.removeNodeIds || segment.removeNodeIds.length === 0) continue;
     if (segment.start < start || segment.end > end) continue;
-    for (const id of segment.removeNodeIds) struck.add(id);
+    for (const id of segment.removeNodeIds) {
+      const node = findNode(part, id);
+      // Simple fields are struck through their direct result runs. Nested fields and
+      // wrappers need their own deletion semantics; leaving them intact would turn a
+      // replacement into an insertion. Refuse before rebuilding any selected content.
+      if (
+        node &&
+        isFldSimple(node) &&
+        node.kind !== 'textValue' &&
+        node.children.some((child) => child.kind !== 'run')
+      ) {
+        return { ok: false, reason: 'unsupported', detail: 'tracked-simple-field-result' };
+      }
+      struck.add(id);
+    }
   }
   /** A run carrying part of a struck atom, whether or not it carries the offset itself. */
   const carriesStruckAtom = (node: OoxmlNode): boolean =>

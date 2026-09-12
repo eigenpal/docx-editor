@@ -55,6 +55,8 @@ export function chopOversizedWord(
     readonly appendPrefix: (prefix: OversizedWordPrefix) => void;
     readonly closeLine: () => void;
     readonly overflowTolerancePt: number;
+    /** Keep the leading fragment with the preceding text when their seam is protected. */
+    readonly keepWithPrevious?: boolean;
     /**
      * Whether the cut at a UTF-16 index is allowed on top of grapheme safety — the kinsoku
      * sets, for CJK text. A rejected cut shrinks to the nearest accepted one; when none is
@@ -78,7 +80,7 @@ export function chopOversizedWord(
   ) {
     const graphemesLeft = graphemes.length - graphemeFrom;
     if (graphemesLeft === 1) {
-      if (options.lineHasText()) {
+      if (options.lineHasText() && !(utf16From === 0 && options.keepWithPrevious)) {
         options.closeLine();
         brokeLine = true;
         continue;
@@ -103,13 +105,17 @@ export function chopOversizedWord(
       }
     }
 
-    if (fitTo === graphemeFrom && options.lineHasText()) {
+    if (
+      fitTo === graphemeFrom &&
+      options.lineHasText() &&
+      !(utf16From === 0 && options.keepWithPrevious)
+    ) {
       options.closeLine();
       brokeLine = true;
       continue;
     }
-    // An empty line that cannot fit one grapheme must overflow by that whole grapheme, never
-    // by one UTF-16 code unit (which could split a surrogate pair or combining sequence).
+    // Overflow by one whole grapheme when none fits an empty line or a protected seam
+    // prevents moving it. The accepted cut also preserves clusters split across pieces.
     if (fitTo === graphemeFrom) fitTo += 1;
     fitTo = acceptedCut(text, graphemes, graphemeFrom, fitTo, options.cutAllowedAt);
     // The final group may continue in the next run. Keep it on the pending line;

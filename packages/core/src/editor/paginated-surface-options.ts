@@ -74,6 +74,9 @@ export interface PaginatedSurfaceOptions {
    * without remeasuring a single line.
    */
   readonly fieldShading?: FieldShadingMode;
+  /** Show paragraph-end furniture without changing document content. */
+  readonly showParagraphMarks?: boolean;
+  readonly onToggleParagraphMarks?: () => void;
   /**
    * How tracked changes are coloured: by AUTHOR (the default), by kind, or by author with
    * host-pinned colours. A paint-level option like {@link fieldShading}: it changes no

@@ -22,6 +22,7 @@ import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { contentControlContentOf } from '../store/package/content-control-walk.ts';
+import { isFldSimple } from '../store/package/field-nodes.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
@@ -529,7 +530,7 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
  *  balance probe from the render pass and blank everything after it. */
 function advanceFieldState(node: OoxmlElement, fields: FieldState, depth = 0): void {
   if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
-  const childDepth = nextInlineContainerDepth(node, depth);
+  const childDepth = isFldSimple(node) ? depth + 1 : nextInlineContainerDepth(node, depth);
   for (const child of node.children) {
     if (!isElement(child)) continue;
     if (child.kind === 'drawing') continue;
@@ -639,7 +640,7 @@ function renderInline(
   let out = '';
   for (const child of children) {
     if (!isElement(child)) continue;
-    switch (child.kind) {
+    switch (isFldSimple(child) ? 'fldSimple' : child.kind) {
       case 'run':
         out += renderRun(ctx, child, paragraphPPr, fields);
         break;
@@ -671,8 +672,8 @@ function renderInline(
         break;
       }
       case 'fldSimple':
-        // The cached result runs are the visible value.
-        out += renderInline(ctx, child.children, paragraphPPr, fields, depth);
+        // Cached results remain visible when nested simple fields become generic.
+        out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         break;
       case 'contentControl': {
         const content = child.children.find((inner) => inner.kind === 'contentControlContent');
@@ -699,8 +700,6 @@ function renderInline(
           const content = contentControlContentOf(child);
           if (content) out += renderInline(ctx, content, paragraphPPr, fields, depth + 1);
         }
-        break;
-      default:
         break;
     }
   }

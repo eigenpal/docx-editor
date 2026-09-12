@@ -18,7 +18,8 @@ import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
 import { NavigationHeadings } from '../src/editor/navigation/parts.tsx';
@@ -238,6 +239,53 @@ describe('DocxEditor.Navigation', () => {
     expect(seen).toEqual([true]);
     // Controlled: the pane does not move itself.
     expect(container.querySelector('.docx-nav')?.getAttribute('data-open')).toBe('false');
+  });
+
+  test('`<DocxEditor navigation={{...}}>` forwards pane props instead of forcing navigation={false}', () => {
+    const seen: boolean[] = [];
+    const { container } = render(
+      <DocxEditor
+        navigation={{ open: false, onOpenChange: (next) => seen.push(next), tab: 'find' }}
+      />
+    );
+    expect(container.querySelector('.docx-nav')).not.toBeNull();
+    expect(container.querySelector('.docx-nav')?.getAttribute('data-open')).toBe('false');
+    expect(container.querySelector('#docx-nav-tab-find')?.getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    (container.querySelector('.docx-nav__toggle') as HTMLButtonElement).click();
+    expect(seen).toEqual([true]);
+    expect(container.querySelector('.docx-nav')?.getAttribute('data-open')).toBe('false');
+  });
+
+  test('navigation={false} removes the packaged pane', () => {
+    const { container } = render(<DocxEditor navigation={false} />);
+    expect(container.querySelector('.docx-nav')).toBeNull();
+  });
+
+  test('the find input is focused when the find tab is shown', () => {
+    const { container } = render(
+      <DocxEditorRoot>
+        <DocxEditorNavigation open tab="find" />
+      </DocxEditorRoot>
+    );
+    expect(document.activeElement).toBe(
+      container.querySelector('#docx-nav-panel-find .docx-nav__search-input')
+    );
+  });
+
+  test('switching to the find tab focuses the query input', () => {
+    const { container } = render(
+      <DocxEditorRoot>
+        <DocxEditorNavigation defaultOpen />
+      </DocxEditorRoot>
+    );
+    const input = container.querySelector('#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).not.toBe(input);
+    act(() => {
+      fireEvent.click(container.querySelector('#docx-nav-tab-find')!);
+    });
+    expect(document.activeElement).toBe(input);
   });
 
   test('a part outside its compound root fails loudly rather than rendering nothing', () => {

@@ -3,9 +3,15 @@ import {
   contentControlWidgetItems,
   contentControlWidgetDate,
 } from './content-control-widget-session.ts';
-import { applyTextFormOperation } from './surface-text-form-apply.ts';
+import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
+import { saveSurfaceDocument } from './docx-editor-save.ts';
+import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
+import { beginSurfaceCommit } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
-import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
+import {
+  createTextFormFieldInteraction,
+  type PendingTextFormInput,
+} from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
@@ -315,6 +321,7 @@ export function mountPaginatedSurface(
     readonly initialDrawingSelectionIntent?: DrawingSelectionIntent;
     /** Restore the model range on a font remount without claiming DOM selection/focus. */
     readonly initialSelection?: SemanticSelection;
+    readonly initialTextFormInput?: PendingTextFormInput;
   };
   const opened = openTreeSession(
     bytes,
@@ -837,16 +844,9 @@ export function mountPaginatedSurface(
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
   });
-  /**
-   * Which revision halves this surface is SHOWING — the one answer every lane asks for.
-   *
-   * Layout, furniture and the FORMATTING walks read it: a write must not restyle text the
-   * view hides, because the store offsets cover every revision half whatever the view does
-   * with them (#497). A function rather than a constant so a future
-   * `setRevisionDisplayMode` moves every reader at once.
-   */
-  const revisionDisplayMode = (): RevisionDisplayMode =>
-    options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  // Layout, furniture, and formatting writes share the view's current projection (#497).
+  let displayMode = options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const revisionDisplayMode = (): RevisionDisplayMode => displayMode;
   const revisionAuthorVisibility =
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
@@ -968,6 +968,11 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
+  const paragraphMarks = createParagraphMarkVisibility(
+    options.showParagraphMarks ?? false,
+    flushPendingInputAndLayout,
+    () => render(false)
+  );
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
@@ -2180,10 +2185,53 @@ export function mountPaginatedSurface(
     if (controlId) setContentControlWidgetOpen(controlId, false);
   }
 
-  function removeExistingContentControlMenu(): void {
+  function removeExistingContentControlMenu(): HTMLElement | null {
     widgetSessions.cancel();
     const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
     if (existing) closeContentControlMenu(existing);
+    return existing;
+  }
+
+  /**
+   * Dismiss a widget menu on an outside press or Escape.
+   *
+   * `pointerdown`, not `mousedown`: the surface prevents the default on every page press,
+   * which suppresses the compatibility `mousedown` — a `mousedown` listener never fires for
+   * document clicks and the menu stands. The opening press cannot self-dismiss: it already
+   * passed document capture before this attached. A press on the owning widget is left for
+   * the opener, which toggles instead. Stale listeners (the menu closed through a commit)
+   * clean up silently so a later Escape still reaches the rest of the UI.
+   */
+  function armContentControlMenuDismiss(menu: HTMLElement, onOutsidePress: () => void): void {
+    const controlId = menu.dataset.docxCcId;
+    const cleanup = (): void => {
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    const onOutside = (event: Event): void => {
+      if (menu.parentNode === null) {
+        cleanup();
+        return;
+      }
+      const target = event.target as Element | null;
+      const widget = target instanceof Element ? target.closest('[data-docx-cc-widget]') : null;
+      if (
+        target &&
+        (menu.contains(target) || widget?.getAttribute('data-docx-cc-id') === controlId)
+      )
+        return;
+      cleanup();
+      onOutsidePress();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      cleanup();
+      if (menu.parentNode === null) return;
+      event.stopPropagation();
+      closeContentControlMenu(menu);
+    };
+    document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('keydown', onKey, true);
   }
 
   /**
@@ -2251,14 +2299,13 @@ export function mountPaginatedSurface(
       contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
       return;
     }
-    const existingWidget = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
-    if (existingWidget) closeContentControlMenu(existingWidget);
+    // Re-pressing the native widget toggles its current menu shut.
+    if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
     if (widgetSessions.open(controlId, kind)) return;
     if (kind === 'dropdown' || kind === 'comboBox') {
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
       // Engine-level menu: no hardcoded English — displayText comes from the file.
-      removeExistingContentControlMenu();
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
@@ -2315,16 +2362,10 @@ export function mountPaginatedSurface(
       }
       pagesLayer.append(menu);
       setContentControlWidgetOpen(controlId, true);
-      const dismiss = (event: Event): void => {
-        if (menu.contains(event.target as Node)) return;
-        closeContentControlMenu(menu);
-        document.removeEventListener('mousedown', dismiss, true);
-      };
-      document.addEventListener('mousedown', dismiss, true);
+      armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
       return;
     }
     if (kind === 'date') {
-      removeExistingContentControlMenu();
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
@@ -2476,12 +2517,9 @@ export function mountPaginatedSurface(
       renderCalendar();
       pagesLayer.append(menu);
       setContentControlWidgetOpen(controlId, true);
-      const dismiss = (event: Event): void => {
-        if (menu.contains(event.target as Node)) return;
+      armContentControlMenuDismiss(menu, () => {
         if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
-        document.removeEventListener('mousedown', dismiss, true);
-      };
-      document.addEventListener('mousedown', dismiss, true);
+      });
       menu
         .querySelector<HTMLElement>(
           '[data-selected], [data-today], .docx-content-control-calendar-day'
@@ -2728,6 +2766,7 @@ export function mountPaginatedSurface(
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         shadeFormFields: shadeFormFields(),
+        showParagraphMarks: paragraphMarks.get(),
         ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
         ...(activeHf
           ? {
@@ -3195,7 +3234,15 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  function commit(
+  function commit(...args: Parameters<typeof commitNow>): void {
+    const finish = beginSurfaceCommit(container);
+    try {
+      commitNow(...args);
+    } finally {
+      finish();
+    }
+  }
+  function commitNow(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
     selectionAfter?: () => SemanticSelection | null,
     options:
@@ -3822,13 +3869,12 @@ export function mountPaginatedSurface(
     readonly anchor: SemanticPosition;
     readonly head: SemanticPosition;
   } | null = null;
-
   /**
    * Set only while {@link activateReview} installs its own caret, so the write below does
    * not retire the pin it was just asked to raise.
    */
   let activationSelectionWrite = false;
-
+  let allowExcludedReviewPin = false;
   /** Any selection the reader (or an edit) moves retires the pin. See {@link activatedReview}. */
   function retireActivationPin(): void {
     if (!activationSelectionWrite) activatedReview = null;
@@ -3848,7 +3894,8 @@ export function mountPaginatedSurface(
     if (
       found.kind === 'revision' &&
       reviewActivationExclusions !== null &&
-      reviewActivationExclusions.has(found.revisionKind)
+      reviewActivationExclusions.has(found.revisionKind) &&
+      !allowExcludedReviewPin
     ) {
       return null;
     }
@@ -4474,6 +4521,7 @@ export function mountPaginatedSurface(
     options.onChange?.(currentState());
   }
 
+  let destroyed = false;
   const surface: ScaleMutableSurface = {
     session,
     // The internal gated write — see the `ScaleMutableSurface` note. The content-control
@@ -5085,6 +5133,7 @@ export function mountPaginatedSurface(
     editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
     refreshRefFieldResults,
+    save: () => saveSurfaceDocument(surface, container, () => destroyed),
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>
@@ -5343,6 +5392,12 @@ export function mountPaginatedSurface(
     },
 
     revisionAuthors: () => reviewAuthors.get().value,
+    setRevisionDisplayMode(mode) {
+      if (destroyed || mode === displayMode) return;
+      flushPendingInputAndLayout();
+      displayMode = mode;
+      applyRevisionAuthorVisibility(true);
+    },
     hiddenRevisionAuthors: () => revisionAuthorVisibility.hiddenAuthors,
     setRevisionAuthorVisible(author, visible) {
       applyRevisionAuthorVisibility(revisionAuthorVisibility.setVisible(author, visible));
@@ -5360,6 +5415,7 @@ export function mountPaginatedSurface(
     },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
+    setShowParagraphMarks: paragraphMarks.set,
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;
       revisionStyles = colors;
@@ -5396,7 +5452,7 @@ export function mountPaginatedSurface(
       const active = activeReviewAtCaret();
       return active ? reviewItemKey(active) : null;
     },
-    activateReview: (key, next) => {
+    activateReview: (key, next, activationOptions) => {
       // Reopening a card the reader dismissed has to clear the dismissal: activation can leave
       // the caret exactly where it already was, so nothing else would take it down and the card
       // would refuse to reopen however many times it was clicked.
@@ -5406,6 +5462,7 @@ export function mountPaginatedSurface(
       // way round, `setSelection` repainted the bands and fired `onChange` while the caret was
       // still the only evidence — so a host saw the WRONG twin reported active for one frame
       // and then a correction. One publish, one answer.
+      allowExcludedReviewPin = activationOptions?.allowExcluded ?? false;
       activatedReview = next
         ? { key, anchor: next.anchor, head: next.head }
         : { key, anchor: selection.anchor, head: selection.head };
@@ -5480,7 +5537,9 @@ export function mountPaginatedSurface(
         if (collaborationSession.undo()) restoreSelection(null);
         return;
       }
-      restoreSelection(session.undo());
+      const revision = session.packageRevision();
+      const mark = session.undo();
+      if (session.packageRevision() !== revision) restoreSelection(mark);
     },
     redo: () => {
       if (editingMode === 'view') {
@@ -5493,7 +5552,9 @@ export function mountPaginatedSurface(
         if (collaborationSession.redo()) restoreSelection(null);
         return;
       }
-      restoreSelection(session.redo());
+      const revision = session.packageRevision();
+      const mark = session.redo();
+      if (session.packageRevision() !== revision) restoreSelection(mark);
     },
     sectionAtPage,
     activeScope: () => {
@@ -5680,53 +5741,58 @@ export function mountPaginatedSurface(
       tableInteraction.refreshLabels();
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
       // flow keeps the last keystrokes — all the way to a paint and its state
       // report: the final commit's `onChange` used to come from the synchronous
       // commit tail, and a deferral swallowed by `scheduler.cancel()` below
       // would silence the last keystrokes for an onChange-driven host.
-      flushToPaint();
-      document.removeEventListener('selectionchange', onSelectionChange);
-      pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
-      pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
-      pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
-      pagesLayer.removeEventListener('keydown', onKeyDown);
-      pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
-      pagesLayer.removeEventListener('copy', onCopy as EventListener);
-      pagesLayer.removeEventListener('cut', onCut as EventListener);
-      pagesLayer.removeEventListener('paste', onPaste as EventListener);
-      pagesLayer.removeEventListener('compositionstart', onCompositionStart);
-      pagesLayer.removeEventListener('compositionend', onCompositionEnd);
-      document.removeEventListener('scroll', onScroll, { capture: true });
-      container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
-      viewportObserver?.disconnect();
-      observedScroller = null;
-      widgetSessions.destroy();
-      textFormInteraction?.destroy();
-      pointer?.destroy();
-      tableInteraction.destroy();
-      navigation.destroy();
-      equationInteraction.destroy();
-      selectionSync.destroy();
-      pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
-      pagesLayer.removeEventListener('click', onTocRowClick);
-      pagesLayer.removeEventListener('pointermove', onTocPointerMove);
-      pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
-      // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
-      // another editor sharing this store would paint into a detached container.
-      scheduler.cancel();
-      if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
-      deferredPublishRender = null;
-      if (cancelDerivationPrewarm) cancelDerivationPrewarm();
-      cancelDerivationPrewarm = null;
-      drawingBundle.dispose();
-      detachDrawingUrlRegistry(pagesLayer);
-      caret.destroy();
-      unsubscribeRemoteSelections();
-      unsubscribeCollaborationStatus();
-      detachCollaboration();
-      unsubscribe();
-      container.replaceChildren();
+      try {
+        flushToPaint();
+      } finally {
+        document.removeEventListener('selectionchange', onSelectionChange);
+        pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onKeyDown);
+        pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
+        pagesLayer.removeEventListener('copy', onCopy as EventListener);
+        pagesLayer.removeEventListener('cut', onCut as EventListener);
+        pagesLayer.removeEventListener('paste', onPaste as EventListener);
+        pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+        pagesLayer.removeEventListener('compositionend', onCompositionEnd);
+        document.removeEventListener('scroll', onScroll, { capture: true });
+        container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
+        viewportObserver?.disconnect();
+        observedScroller = null;
+        widgetSessions.destroy();
+        textFormInteraction?.destroy();
+        pointer?.destroy();
+        tableInteraction.destroy();
+        navigation.destroy();
+        equationInteraction.destroy();
+        selectionSync.destroy();
+        pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
+        pagesLayer.removeEventListener('click', onTocRowClick);
+        pagesLayer.removeEventListener('pointermove', onTocPointerMove);
+        pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
+        // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
+        // another editor sharing this store would paint into a detached container.
+        scheduler.cancel();
+        if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
+        deferredPublishRender = null;
+        if (cancelDerivationPrewarm) cancelDerivationPrewarm();
+        cancelDerivationPrewarm = null;
+        drawingBundle.dispose();
+        detachDrawingUrlRegistry(pagesLayer);
+        caret.destroy();
+        unsubscribeRemoteSelections();
+        unsubscribeCollaborationStatus();
+        detachCollaboration();
+        unsubscribe();
+        container.replaceChildren();
+      }
     },
   };
 
@@ -5742,7 +5808,8 @@ export function mountPaginatedSurface(
     // History restores text, input locale, and selection together. Retire pending typing
     // formats so the restored caret cannot inherit formatting armed against the old tree.
     pendingFormats = null;
-    textFormInteraction?.restoreAfterHistory();
+    const formSelection = textFormInteraction?.restoreAfterHistory();
+    if (!mark && formSelection) selection = formSelection;
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
@@ -5854,27 +5921,36 @@ export function mountPaginatedSurface(
   // The selection mirror checks this handle to avoid adopting browser selection mid-drag.
   // It is assigned once the surface exists.
   let pointer: PointerController | null = null;
-  textFormInteraction = createTextFormFieldInteraction({
-    onRequest: options.onRequestTextFormField,
-    onInvalidRequest: options.onRequestInvalidTextFormField,
-    locale: dateLocale.get,
-    translate: (key, params) => translate?.(key, params) ?? key,
-    pagesLayer,
-    container,
-    part: (paragraphId?: string) =>
-      partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
-    protected: (paragraphId = selection.head.paragraphId) =>
-      formsProtectionEnabled(session.settingsRoot()) &&
-      sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
-    selection: () => selection,
-    select: (next) => setSelection(next),
-    editable: () => editingMode === 'edit',
-    apply: (op) => applyTextFormOperation(op, commit, applyOps),
-  });
-  const dispatchKeyDown = createKeyDownHandler(
-    surface,
-    options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
+  textFormInteraction = createTextFormFieldInteraction(
+    {
+      onRequest: options.onRequestTextFormField,
+      onInvalidRequest: options.onRequestInvalidTextFormField,
+      locale: dateLocale.get,
+      translate: (key, params) => translate?.(key, params) ?? key,
+      pagesLayer,
+      container,
+      part: (paragraphId?: string) =>
+        partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
+      parts: () => session.storyParts(),
+      protected: (paragraphId = selection.head.paragraphId) =>
+        formsProtectionEnabled(session.settingsRoot()) &&
+        sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+      selection: () => selection,
+      select: (next) => setSelection(next),
+      editable: () => editingMode === 'edit',
+      apply: (op) => applyTextFormOperation(op, commit, applyOps),
+      save: (ops, next) =>
+        applyTextFormSave(ops, next, {
+          session,
+          commit,
+          refusal: () => writeRefusal(true, ops, false),
+          gate: (values, scope) => collaborationSession?.gateOperations(values, scope) ?? null,
+          collaborationActive: collaborationSession !== undefined,
+        }),
+    },
+    runtimeOptions.initialTextFormInput
   );
+  const dispatchKeyDown = createKeyDownHandler(surface, options);
   const onKeyDown = (event: KeyboardEvent): void => {
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.

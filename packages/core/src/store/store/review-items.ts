@@ -84,6 +84,30 @@ export interface ReviewRevisionItem {
   /** The words a replacement removes. Empty for every other kind. */
   readonly replacedText: string;
   readonly revisionKind: ReviewRevisionKind;
+  /** OOXML property-change element, used to resolve independently numbered formatting kinds. */
+  readonly formattingKind?: string;
+  /** Changed direct formatting values, ready for localized review summaries. */
+  readonly formattingChanges?: readonly {
+    readonly property:
+      | 'bold'
+      | 'italic'
+      | 'underline'
+      | 'strike'
+      | 'fontFamily'
+      | 'fontSize'
+      | 'color'
+      | 'alignment'
+      | 'leftIndent'
+      | 'rightIndent'
+      | 'firstLineIndent'
+      | 'hangingIndent'
+      | 'spaceBefore'
+      | 'spaceAfter';
+    /** New direct value; null means inherit. Sizes and distances are in points. */
+    readonly value: string | null;
+  }[];
+  /** Newly applied proofing language codes in a tracked formatting change. */
+  readonly formattingLanguages?: readonly string[];
   /**
    * WHICH decision a `paragraphMark` records, absent for every other kind.
    *

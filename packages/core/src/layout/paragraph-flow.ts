@@ -1340,6 +1340,7 @@ export function breakParagraph(
       continue;
     }
     if (piece.text === '\n') {
+      if (piece.breakKind === 'line') line.manualBreakAfter = true;
       // A hard break ends the line without ending the paragraph — and it OCCUPIES a model
       // offset. Emitting no span for it meant the text reconstructed from the records was
       // shorter than the model: Select All stopped short and left residue, a copied break
@@ -1525,12 +1526,8 @@ export function breakParagraph(
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
         if (openDecision === 'forbidden' && wordStartSpan <= 0) {
-          // The group starts this line and a rule forbids opening before it: a kinsoku seam,
-          // or one inside a grapheme cluster split across pieces. There is nothing to carry
-          // down, and chopping is the very break the rule forbids, so it is pushed out past
-          // the measure — Word's kinsoku push-out, and what the chop below reaches by itself
-          // when no accepted cut is left. `wordBoundaries` already cut at the next legal seam
-          // inside the piece, so what overflows is one protected group, not the clause.
+          // Keep the protected seam on this line. The chop below may still use later safe
+          // cuts inside an oversized Latin word; only its leading fragment must stay here.
         } else if (!opensWord && wordStartSpan === 0) {
           // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
           tryAdvanceToNextPassage();
@@ -1588,8 +1585,7 @@ export function breakParagraph(
       if (
         canChopWord &&
         !hangs &&
-        (line.spans.length === 0 ||
-          (!opensWord && wordStartSpan === 0 && openDecision !== 'forbidden')) &&
+        (line.spans.length === 0 || (!opensWord && wordStartSpan === 0)) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
       ) {
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
@@ -1624,6 +1620,7 @@ export function breakParagraph(
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
+          keepWithPrevious: openDecision === 'forbidden',
           // The measured fit knows nothing about kinsoku: at a one-character measure
           // 天。地。人。 chopped every other line onto a leading 。.
           cutAllowedAt: cjkBreaks

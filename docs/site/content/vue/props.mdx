@@ -75,16 +75,16 @@ Pro entry also exports custom-node chip and context-menu chrome.
 
 These props control the packaged frame:
 
-| Prop             | Type                                    | Description                              |
-| ---------------- | --------------------------------------- | ---------------------------------------- |
-| `chrome`         | `boolean`                               | Toggles the packaged frame.              |
-| `menu`           | `boolean \| DocxEditorMenuProps`        | Toggles or configures the menu bar.      |
-| `navigation`     | `boolean`                               | Toggles the navigation pane.             |
-| `rulers`         | `boolean`                               | Toggles both packaged rulers.            |
-| `hyperlinkPopup` | `boolean`                               | Toggles the hyperlink popover.           |
-| `contextMenu`    | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu.  |
-| `t`              | `(key, params?) => string`              | Resolves live chrome and drawing labels. |
-| `i18n`           | `Translations`                          | Supplies a live catalog to this editor.  |
+| Prop             | Type                                    | Description                                |
+| ---------------- | --------------------------------------- | ------------------------------------------ |
+| `chrome`         | `boolean`                               | Toggles the packaged frame.                |
+| `menu`           | `boolean \| DocxEditorMenuProps`        | Toggles or configures the menu bar.        |
+| `navigation`     | `boolean \| DocxEditorNavigationProps`  | Toggles or configures the navigation pane. |
+| `rulers`         | `boolean`                               | Toggles both packaged rulers.              |
+| `hyperlinkPopup` | `boolean`                               | Toggles the hyperlink popover.             |
+| `contextMenu`    | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu.    |
+| `t`              | `(key, params?) => string`              | Resolves live chrome and drawing labels.   |
+| `i18n`           | `Translations`                          | Supplies a live catalog to this editor.    |
 
 Set `chrome` to `false` for the document surface without packaged chrome. You can
 then build the frame from the [composition primitives](/docs/2.x/vue/composition).

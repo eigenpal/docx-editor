@@ -566,6 +566,15 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (address.date !== undefined && typeof address.date !== 'string') {
         return 'invalid-property-value';
       }
+      if (
+        op.siteNodeIds !== undefined &&
+        (!Array.isArray(op.siteNodeIds) ||
+          op.siteNodeIds.length === 0 ||
+          op.siteNodeIds.length > 50_000 ||
+          op.siteNodeIds.some((nodeId) => typeof nodeId !== 'string' || nodeId.length === 0))
+      ) {
+        return 'invalid-property-value';
+      }
     } else if (op.scopeRootId !== undefined) {
       if (typeof op.scopeRootId !== 'string' || op.scopeRootId.length === 0) {
         return 'invalid-property-value';

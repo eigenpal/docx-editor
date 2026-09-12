@@ -3,12 +3,14 @@ import {
   applyTreeOp,
   paragraphTextOf,
   readOoxmlPart,
+  serializeOoxmlPart,
   textFormFieldsOf,
   validateTreeOp,
   type OoxmlParagraphNode,
 } from '../index.ts';
 
 import { parseTextFormDate } from '../store/text-form-date-format.ts';
+import { formatTextFormValue, textFormInputLength } from '../store/text-form-field-options.ts';
 function dateField(value: string, format: string) {
   const opened = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="DateInput"/><w:textInput><w:type w:val="date"/><w:default w:val="7"/><w:format w:val="${format}"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${value}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:body></w:document>`,
@@ -65,6 +67,85 @@ test('date input supports ISO and the two-digit year cutoff', () => {
   expect(parseTextFormDate('2030-02-01', 'en-GB')).toEqual({ year: 2030, month: 2, day: 1 });
   expect(parseTextFormDate('1/2/29', 'en-GB')).toEqual({ year: 2029, month: 2, day: 1 });
   expect(parseTextFormDate('1/2/30', 'en-GB')).toEqual({ year: 1930, month: 2, day: 1 });
+});
+
+for (const year of ['0100', '0400', '0999', '1000', '9999']) {
+  test(`date pictures retain all four digits of year ${year}`, () => {
+    for (const [format, expected] of [
+      ['M/d/yyyy', `1/2/${year}`],
+      ['MM/dd/yyyy', `01/02/${year}`],
+      ['d/M/yyyy', `2/1/${year}`],
+      ['dd/MM/yyyy', `02/01/${year}`],
+      ['yyyy-MM-dd', `${year}-01-02`],
+      ['d MMMM yyyy', `2 January ${year}`],
+      ['MMMM d, yyyy', `January 2, ${year}`],
+    ] as const) {
+      expect(formatTextFormValue(`${year}-01-02`, { type: 'date', format }, 'fill')).toBe(expected);
+      expect(parseTextFormDate(expected, format.startsWith('d') ? 'en-GB' : 'en-US')).toEqual({
+        year: Number(year),
+        month: 1,
+        day: 2,
+      });
+    }
+    expect(
+      textFormInputLength(
+        `January 2, ${year}`,
+        { type: 'date', format: 'MMMM d, yyyy' },
+        `January 1, ${year}`
+      )
+    ).toBe(8);
+  });
+
+  test(`saved year ${year} remains editable after changing the locale and date picture`, () => {
+    const { part, paragraph, field } = dateField(`${year}-01-02`, 'MM/dd/yyyy');
+    const initial = applyTreeOp(part, {
+      op: 'setTextFormFieldDefault',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+      text: `${year}-01-02`,
+    });
+    expect(initial.ok).toBe(true);
+    if (!initial.ok) return;
+    const reopened = readOoxmlPart(serializeOoxmlPart(initial.part), {
+      name: part.name,
+      contentType: part.contentType,
+    });
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const reopenedBody = reopened.part.root.children[0]!;
+    if (reopenedBody.kind === 'textValue') throw new Error('body');
+    const reopenedParagraph = reopenedBody.children[0] as OoxmlParagraphNode;
+    const saved = textFormFieldsOf(reopenedParagraph)[0]!;
+    expect(saved.defaultText).toBe(`01/02/${year}`);
+    for (const [format, expected] of [
+      ['MM/dd/yyyy', `01/02/${year}`],
+      ['dd/MM/yyyy', `02/01/${year}`],
+      ['yyyy-MM-dd', `${year}-01-02`],
+      ['MMMM d, yyyy', `January 2, ${year}`],
+    ] as const) {
+      const op = {
+        op: 'setTextFormFieldDefault',
+        paragraphId: reopenedParagraph.id,
+        fieldNodeId: saved.fieldNodeId,
+        text: saved.defaultText,
+        locale: 'ja-JP',
+        options: { type: 'date', format, maxLength: 0, enabled: true },
+      } as const;
+      expect(validateTreeOp(reopened.part, op)).toBeNull();
+      const edited = applyTreeOp(reopened.part, op);
+      expect(edited.ok).toBe(true);
+      if (edited.ok) expect(paragraphTextOf(edited.part, reopenedParagraph.id)).toBe(expected);
+    }
+  });
+}
+
+test('padding preserves the supported year range and Gregorian leap-day rules', () => {
+  for (const value of ['0099-01-02', '10000-01-02', '0100-02-29']) {
+    expect(formatTextFormValue(value, { type: 'date', format: 'yyyy-MM-dd' }, 'fill')).toBeNull();
+  }
+  expect(formatTextFormValue('0400-02-29', { type: 'date', format: 'yyyy-MM-dd' }, 'fill')).toBe(
+    '0400-02-29'
+  );
 });
 test('date input defaults to en-US and rejects malformed operation locales', () => {
   const { part, paragraph, field } = dateField('1/2/2030', 'dd/MM/yyyy');

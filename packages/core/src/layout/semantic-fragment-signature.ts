@@ -65,6 +65,8 @@ const PARAGRAPH_FIELDS = {
   // The revisions on the paragraph MARK. Accepting or rejecting a tracked pilcrow rewrites
   // `w:pPr/w:rPr/w:ins|w:del` and moves no geometry at all, so nothing else here moves with
   // them: paint kept drawing the attribution of a decision the document no longer records.
+  paragraphEnd: 'hashed',
+  emptyParagraphStyle: 'hashed',
   markRevisions: 'hashed',
   // Derived from `markRevisions` at publish time by one shared function, so it cannot move
   // without the list moving first.

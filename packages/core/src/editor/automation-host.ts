@@ -79,6 +79,10 @@ function automationCommentIntent(
  *
  * The editor keeps its own lifetime: `dispose()` on the returned host releases the change
  * subscription this adapter took and leaves the editor mounted and editable.
+ *
+ * `save()` validates pending form input. Invalid values and saves during an active edit
+ * return `transaction-refused`. For autosaving from change callbacks, use the asynchronous
+ * `editor.save()`, which waits for the active edit to finish.
  */
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost {
   const host = createAutomationHost({
@@ -88,6 +92,19 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Automat
   let disposed = false;
   return {
     ...host,
+    save: () => {
+      try {
+        return host.save();
+      } catch (error) {
+        return {
+          ok: false,
+          error: {
+            code: 'transaction-refused',
+            message: error instanceof Error ? error.message : 'Cannot save the document.',
+          },
+        };
+      }
+    },
     dispose: () => {
       disposed = true;
       host.dispose();
@@ -273,7 +290,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       }, 'package-scoped');
       return outcome;
     },
-    save: () => sync()?.save() ?? null,
+    save: () => (sync() ? (editor.surface?.save() ?? null) : null),
     // The one genuinely browser-only operation, and the reason the port declares it optional:
     // a headless host has no caret. Positions arrive as canonical paragraph ids and model
     // offsets — the same vocabulary `SemanticSelection` already uses — so nothing is translated

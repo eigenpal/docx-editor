@@ -119,6 +119,7 @@ export function createKeyDownHandler(
      * rather than doing something surprising.
      */
     readonly onRequestHyperlink?: () => void;
+    readonly onToggleParagraphMarks?: () => void;
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
@@ -130,6 +131,20 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
+    if (
+      !event.altKey &&
+      !event.isComposing &&
+      ((event.metaKey && !event.ctrlKey && !event.shiftKey && event.key === '8') ||
+        (event.ctrlKey &&
+          !event.metaKey &&
+          event.shiftKey &&
+          (event.code === 'Digit8' || event.key === '*'))) &&
+      hooks.onToggleParagraphMarks
+    ) {
+      event.preventDefault();
+      hooks.onToggleParagraphMarks();
+      return;
+    }
     // Escape releases the transient modes, innermost first. The format painter is the
     // innermost of all: it is armed ON TOP of whatever scope is open, so a press that closed
     // a header instead would leave the painter armed with no way left to release it.

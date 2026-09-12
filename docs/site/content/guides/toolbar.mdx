@@ -46,7 +46,7 @@ Use these root props to configure the packaged frame:
 | `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title bar slots.                        |
 | `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
 | `chrome`                                     | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.               |
+| `navigation`                                 | `boolean \| DocxEditorNavigationProps`  | Toggle or customize the packaged navigation pane.  |
 | `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                  |
 | `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
 
@@ -60,7 +60,7 @@ Use these root props to configure the packaged frame:
 | `#titleBarLeft` / `#titleBarRight` | slot                                    | Host-owned title bar slots.                        |
 | `menu`                             | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
 | `chrome`                           | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                       | `boolean`                               | Toggle the packaged navigation pane.               |
+| `navigation`                       | `boolean \| DocxEditorNavigationProps`  | Toggle or customize the packaged navigation pane.  |
 | `hyperlinkPopup`                   | `boolean`                               | Toggle the packaged link popover.                  |
 | `contextMenu`                      | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
 

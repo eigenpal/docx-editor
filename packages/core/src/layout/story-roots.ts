@@ -28,6 +28,7 @@ import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
+import { projectRevisionFormatting } from './revision-formatting-projection.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
 
@@ -192,7 +193,11 @@ export function mergedFlowBlocks(
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
-  const merged = withMergedParagraphs(flowBlocksWithParent(children), displayMode, authorFilter);
+  const blocks = flowBlocksWithParent(children).map((entry) => ({
+    ...entry,
+    block: projectRevisionFormatting(entry.block, displayMode, authorFilter),
+  }));
+  const merged = withMergedParagraphs(blocks, displayMode, authorFilter);
   return merged.filter((block) => acceptStoryBlock(block, displayMode, authorFilter));
 }
 

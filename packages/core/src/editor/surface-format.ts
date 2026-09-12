@@ -423,7 +423,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           },
           deps.selectedCells?.(),
           deps.defaultParagraphStyleId?.() ?? null,
-          deps.paragraphOrder()
+          deps.paragraphOrder(),
+          deps.defaultFontFamily?.() ?? null
         ),
         deps.pendingFormats()
       ),

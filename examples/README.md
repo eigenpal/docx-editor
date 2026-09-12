@@ -27,12 +27,16 @@ bun run dev:astro           # Astro
 bun run dev:agent           # Document review agent
 bun run dev:write-agent     # Document writing agent
 bun run dev:collaboration   # Peer-to-peer collaboration
+bun run dev:server-agent-review # Server agent and shared review room
 ```
 
 Set `OPENAI_API_KEY` as described in each agent example before you run `dev:agent` or
 `dev:write-agent`.
 
-Install Node 22.18 or later for the Hocuspocus server. Run the server and app in
+The [server agent review example](server-agent-review/README.md) requires Node.js 22.18 or later.
+It starts the app, Hocuspocus, and a worker together. Scripted review works without a model API key.
+
+Install Node.js 22.18 or later for the standalone Hocuspocus server. Run the server and app in
 separate terminals:
 
 ```bash
@@ -83,6 +87,8 @@ Stop one server before you start the other.
 - `astro/` shows an Astro page with a React island.
 - `agent/` uses an AI agent to read and comment on an open document.
 - `write-agent/` uses an AI agent to create a document and propose tracked changes.
+- [server-agent-review/](server-agent-review/README.md) runs a background agent that proposes
+  tracked changes in a shared Hocuspocus room. Browser peers review the suggestions.
 - `automation/` fills a DOCX template with `@docx-editor.dev/editor-api`.
 - `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application
   server.

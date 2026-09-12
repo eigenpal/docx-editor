@@ -55,8 +55,8 @@ can.
 
 Where a sub-element is rendered outside `children` and so cannot be composed — the
 navigation toggle, which has to stay clickable while the panel is `inert` — the prop takes
-props: `toggle={{ className }}`. `menu` and `contextMenu` on `<DocxEditor>` accept
-`boolean | Props` the same way.
+props: `toggle={{ className }}`. `menu`, `contextMenu` and `navigation` on `<DocxEditor>`
+accept `boolean | Props` the same way.
 
 **What you can pass**
 

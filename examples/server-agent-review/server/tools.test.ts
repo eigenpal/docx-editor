@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createReviewTools } from './tools.ts';
 import { sampleDocument } from './sample.ts';
 
-async function setup() {
-  const runtime = await DocxEditor.createServer(sampleDocument(), {
+async function setup(bytes = sampleDocument()) {
+  const runtime = await DocxEditor.createServer(bytes, {
     author: 'Review agent',
     revisionTextView: 'original',
   });
@@ -80,6 +81,134 @@ describe('server review tools', () => {
     }
   });
 });
+
+for (const wrapper of ['fldSimple', 'hyperlink', 'smartTag', 'sdt'] as const) {
+  for (const kind of ['deletion', 'replacement'] as const) {
+    test(`${kind} refuses a complete field quote with a ${wrapper} result without writes`, async () => {
+      const cached = '<w:r><w:t>cached</w:t></w:r>';
+      const wrapped =
+        wrapper === 'fldSimple'
+          ? `<w:fldSimple w:instr=" REF inner ">${cached}</w:fldSimple>`
+          : wrapper === 'sdt'
+            ? `<w:sdt><w:sdtPr/><w:sdtContent>${cached}</w:sdtContent></w:sdt>`
+            : `<w:${wrapper}>${cached}</w:${wrapper}>`;
+      const files = unzipSync(sampleDocument());
+      files['word/document.xml'] = strToU8(
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+          '<w:body><w:p><w:r><w:t xml:space="preserve">Date: </w:t></w:r>' +
+          '<w:fldSimple w:instr=" DATE "><w:r><w:t xml:space="preserve">plain </w:t></w:r>' +
+          wrapped +
+          '</w:fldSimple><w:r><w:t>.</w:t></w:r></w:p></w:body></w:document>'
+      );
+      const s = await setup(zipSync(files));
+      try {
+        const snapshot = (await s.adapter.read()).paragraphs[0]!;
+        expect(snapshot.text).toBe('Date: plain cached.');
+        const before = await s.runtime.save();
+        expect(
+          await s.adapter.apply(kind, {
+            snapshot: snapshot.snapshot,
+            quote: 'plain cached',
+            ...(kind === 'replacement' ? { text: 'NEW' } : {}),
+          })
+        ).toMatchObject({ ok: false, code: 'GeneralException' });
+        expect(s.committed()).toBe(0);
+        expect(await s.runtime.save()).toEqual(before);
+        await s.runtime.run(async (context) => {
+          context.document.load('changeTrackingMode');
+          context.document.revisions.load('items');
+          await context.sync();
+          expect(context.document.changeTrackingMode).toBe('Off');
+          expect(context.document.revisions.items).toHaveLength(0);
+        });
+        // Refusal preserves the snapshot and permits a supported edit beside the field.
+        expect(
+          await s.adapter.apply('replacement', {
+            snapshot: snapshot.snapshot,
+            quote: 'Date: ',
+            text: 'Value: ',
+          })
+        ).toEqual({ ok: true });
+      } finally {
+        s.runtime.dispose();
+      }
+    });
+  }
+}
+
+for (const fieldType of ['simple', 'complex'] as const) {
+  for (const operation of [
+    { kind: 'replacement', text: 'February 3, 2031', expected: 'Date: February 3, 2031.' },
+    { kind: 'deletion', expected: 'Date: .' },
+    {
+      kind: 'insertion',
+      where: 'Before',
+      text: 'about ',
+      expected: 'Date: about January 2, 2030.',
+    },
+    { kind: 'insertion', where: 'After', text: ' noon', expected: 'Date: January 2, 2030 noon.' },
+  ] as const) {
+    const action = operation.kind + ('where' in operation ? ` ${operation.where}` : '');
+    test(`${action} refuses a partial ${fieldType} field quote without writes`, async () => {
+      const fieldResult = '<w:r><w:t>January 2, 2030</w:t></w:r>';
+      const field =
+        fieldType === 'simple'
+          ? `<w:fldSimple w:instr="DATE">${fieldResult}</w:fldSimple>`
+          : '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+            '<w:r><w:instrText>DATE</w:instrText></w:r>' +
+            '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+            fieldResult +
+            '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+      const files = unzipSync(sampleDocument());
+      files['word/document.xml'] = strToU8(
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+          '<w:body><w:p><w:r><w:t xml:space="preserve">Date: </w:t></w:r>' +
+          field +
+          '<w:r><w:t>.</w:t></w:r></w:p></w:body></w:document>'
+      );
+      const s = await setup(zipSync(files));
+      try {
+        const snapshot = (await s.adapter.read()).paragraphs[0]!;
+        expect(snapshot.text).toBe('Date: January 2, 2030.');
+        const before = await s.runtime.save();
+        const input = {
+          snapshot: snapshot.snapshot,
+          ...('text' in operation ? { text: operation.text } : {}),
+          ...('where' in operation ? { where: operation.where } : {}),
+        };
+        expect(
+          await s.adapter.apply(operation.kind, {
+            ...input,
+            quote: operation.kind === 'insertion' ? '2,' : 'January',
+          })
+        ).toMatchObject({ ok: false, code: 'invalid-proposal' });
+        expect(s.committed()).toBe(0);
+        expect(await s.runtime.save()).toEqual(before);
+        await s.runtime.run(async (context) => {
+          context.document.load('changeTrackingMode');
+          context.document.revisions.load('items');
+          await context.sync();
+          expect(context.document.changeTrackingMode).toBe('Off');
+          expect(context.document.revisions.items).toHaveLength(0);
+        });
+        // A refused quote preserves its snapshot, and a complete field remains editable.
+        expect(
+          await s.adapter.apply(operation.kind, { ...input, quote: 'January 2, 2030' })
+        ).toEqual({ ok: true });
+        expect(s.committed()).toBe(1);
+        await s.runtime.run(async (context) => {
+          context.document.revisions.acceptAll();
+          await context.sync();
+          context.document.body.load('text');
+          await context.sync();
+          expect(context.document.body.text).toBe(operation.expected);
+        });
+      } finally {
+        s.runtime.dispose();
+      }
+    });
+  }
+}
 
 test('three stale tool calls abort the job and latch a refusal for later reads and writes', async () => {
   const runtime = await DocxEditor.createServer(sampleDocument(), { author: 'Agent' });

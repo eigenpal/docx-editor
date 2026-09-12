@@ -239,6 +239,8 @@ export interface StyleSpanRecord {
  * the DOM, which is what lets an empty paragraph still get a caret.
  */
 export interface LineRecord {
+  /** An authored manual line break ends this line; optional display furniture can show ↵. */
+  readonly manualBreakAfter?: true;
   readonly id: string;
   readonly range: SourceRange;
   readonly spans: readonly StyleSpanRecord[];
@@ -342,6 +344,10 @@ export interface ParagraphFragmentRecord {
   readonly paragraphId: string;
   /** 0 for the first fragment of the paragraph, 1 for its continuation, and so on. */
   readonly fragmentIndex: number;
+  /** This fragment contains the visible paragraph end. */
+  readonly paragraphEnd?: true;
+  /** Resolved paragraph-mark style when this fragment has no text or inline drawings. */
+  readonly emptyParagraphStyle?: ResolvedRunStyle;
   /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
   readonly clipToBox?: true;
   /** A positioned text frame retains its source identity without consuming body flow height. */

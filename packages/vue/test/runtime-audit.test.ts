@@ -187,6 +187,56 @@ describe('controlled navigation props', () => {
     app.unmount();
     container.remove();
   });
+
+  test('the find input is focused when the find tab is shown', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () =>
+              h(DocxEditorNavigation, {
+                open: true,
+                tab: 'find',
+              }),
+          }
+        ),
+    });
+    app.mount(container);
+    await flush();
+    expect(document.activeElement).toBe(
+      container.querySelector('#docx-nav-panel-find .docx-nav__search-input')
+    );
+    app.unmount();
+    container.remove();
+  });
+
+  test('switching to the find tab focuses the query input', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () => h(DocxEditorNavigation, { open: true }),
+          }
+        ),
+    });
+    app.mount(container);
+    await flush();
+    const input = container.querySelector('#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).not.toBe(input);
+    (container.querySelector('#docx-nav-tab-find') as HTMLButtonElement).click();
+    await flush();
+    expect(document.activeElement).toBe(input);
+    app.unmount();
+    container.remove();
+  });
 });
 
 describe('useDocxSource stale clearing', () => {

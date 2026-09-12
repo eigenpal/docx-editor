@@ -334,7 +334,11 @@ export interface Editor {
    * `save`, `exec` and `selectMatch` complete a scheduled open before they run.
    */
   load(document: DocumentSource): void;
-  /** Serialize the current canonical document to DOCX bytes — on demand, never per keystroke. */
+  /**
+   * Serialize the current document, finalizing pending text form values first.
+   * Invalid input rejects with `EditorError.code === 'invalidArgs'` and remains editable.
+   * Validation does not open a dialog. Other write refusals also reject the save.
+   */
   save(): Promise<ArrayBuffer>;
   /** An opaque handle to the current document (identity + revision). Replaces the former
    *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */
@@ -1023,6 +1027,14 @@ export interface EditorCommands
    * adapters and any host chrome read one answer.
    */
   toggleReviewPane: Record<never, never>;
+  /** Word's Show/Hide paragraph marks; presentation only. */
+  toggleParagraphMarks: Record<never, never>;
+  /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
+  navigateReviewChange: { direction: 'next' | 'previous' };
+  /** Resolve all document changes, including hidden authors and other stories, in one undo step. */
+  resolveAllReviewChanges: { action: 'accept' | 'reject' };
+  /** Change the review projection without accepting or rejecting document revisions. */
+  setReviewDisplayMode: { mode: 'all-markup' | 'proposed' | 'original' };
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
@@ -1590,6 +1602,10 @@ export interface EditorSnapshot {
    * value-equal snapshot correctly refuses to re-render.
    */
   readonly reviewPaneOpen?: boolean;
+  /** Whether Show/Hide paragraph marks is enabled. */
+  readonly showParagraphMarks?: boolean;
+  /** The displayed revision projection. The document and its revision history stay unchanged. */
+  readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
   /**
    * Whether the document carries review content — tracked changes or comment
    * anchors — independent of any registered review module.

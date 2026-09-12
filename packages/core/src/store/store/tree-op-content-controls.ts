@@ -221,6 +221,7 @@ export type TreeOpReach =
       readonly action: RevisionOpAction;
       readonly revision?: RevisionAddress;
       readonly localName?: string;
+      readonly siteNodeIds?: readonly string[];
       readonly scopeRootId?: string;
     };
 
@@ -398,12 +399,14 @@ const TREE_OP_REACH: {
     action: 'accept',
     revision: op.revision,
     ...(op.localName === undefined ? {} : { localName: op.localName }),
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
   }),
   rejectRevision: (op) => ({
     kind: 'revisions',
     action: 'reject',
     revision: op.revision,
     ...(op.localName === undefined ? {} : { localName: op.localName }),
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
   }),
   acceptAllRevisions: (op) => ({
     kind: 'revisions',
@@ -652,6 +655,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
       reach.action,
       reach.revision,
       reach.localName,
+      reach.siteNodeIds,
       reach.scopeRootId
     );
   }
@@ -855,10 +859,12 @@ function resolveRevisionReach(
   action: RevisionOpAction,
   revision: RevisionAddress | undefined,
   localName: string | undefined,
+  siteNodeIds: readonly string[] | undefined,
   scopeRootId?: string
 ): ResolvedReach {
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
+  const siteNodeIdSet = siteNodeIds === undefined ? undefined : new Set(siteNodeIds);
   const root = scopeRootId === undefined ? part.root : scopedRevisionRoot(part, scopeRootId);
   // Reach runs before validation. An invalid scoped root must fail closed here; validation then
   // reports the malformed canonical address without granting it a narrower protection reach.
@@ -868,7 +874,7 @@ function resolveRevisionReach(
   let seen = 0;
   const walk = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
     if (node.kind === 'textValue' || seen > MAX_REVISION_NODES) return;
-    if (isRevisionNode(node, revision, localName)) {
+    if (isRevisionNode(node, revision, localName, siteNodeIdSet)) {
       seen += 1;
       if (controls.length === 0) unprotected.push(node.id);
       for (let index = 0; index < controls.length; index += 1) {
@@ -909,6 +915,7 @@ function resolveRevisionReach(
   const removedRowIds = new Set(
     removedRowsForRevisionDecision(part, action, revision, {
       ...(localName === undefined ? {} : { localName }),
+      ...(siteNodeIds === undefined ? {} : { siteNodeIds }),
       ...(scopeRootId === undefined ? {} : { scopeRootId }),
     }).map((row) => row.id)
   );
@@ -957,9 +964,11 @@ const REVISION_LOCAL_NAMES: ReadonlySet<string> = new Set([
 function isRevisionNode(
   node: OoxmlNode,
   revision: RevisionAddress | undefined,
-  localName?: string
+  localName?: string,
+  siteNodeIds?: ReadonlySet<string>
 ): boolean {
   if (node.kind === 'textValue') return false;
+  if (siteNodeIds !== undefined && !siteNodeIds.has(node.id)) return false;
   if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
   if (!REVISION_LOCAL_NAMES.has(node.localName)) return false;
   if (localName !== undefined && node.localName !== localName) return false;

@@ -41,6 +41,9 @@ export const GENERATED_ICON_PATHS: Readonly<Record<string, readonly string[]>> =
   format_clear: [
     'm528-546-93-93-121-121h486v120H568l-40 94ZM792-56 460-388l-80 188H249l119-280L56-792l56-56 736 736-56 56Z',
   ],
+  format_paragraph: [
+    'M360-160v-240q-83 0-141.5-58.5T160-600q0-83 58.5-141.5T360-800h360v80h-80v560h-80v-560H440v560h-80Z',
+  ],
   format_align_left: [
     'M120-120v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Z',
   ],

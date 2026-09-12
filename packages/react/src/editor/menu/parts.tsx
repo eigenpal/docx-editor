@@ -244,7 +244,9 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
   // does not, and the format painter does even though no single command describes its press.
   const isToggle = chromeSlotIsToggle(slot);
   // The four alignments are one-of-four, not four independent toggles.
-  const isRadio = commandForSlot(slot)?.type === 'setAlignment';
+  const isRadio = ['setAlignment', 'setReviewDisplayMode'].includes(
+    commandForSlot(slot)?.type ?? ''
+  );
   return (
     <MenuRow
       slot={slot}

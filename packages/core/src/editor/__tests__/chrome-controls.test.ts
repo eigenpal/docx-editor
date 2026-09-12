@@ -88,6 +88,14 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'list.lineSpacing',
   'format.painter',
   'format.clear',
+  'review.allMarkup',
+  'review.noMarkup',
+  'review.original',
+  'review.previousChange',
+  'review.nextChange',
+  'review.acceptAllChanges',
+  'review.rejectAllChanges',
+  'review.paragraphMarks',
   'review.comments',
   'review.authors',
   'review.editingMode',
@@ -302,7 +310,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(57);
+    expect(chromeControlCount()).toBe(65);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {
@@ -371,6 +379,8 @@ describe('legacy chrome descriptor', () => {
       group.controls.map((control) => chromeSlotId(group, control))
     );
     expect(defaults).not.toContain('review.authors');
+    expect(defaults).not.toContain('review.paragraphMarks');
+    expect(chromeMenuSlots()).toContain('review.paragraphMarks');
     expect(allSlots()).toContain('review.authors');
   });
 

@@ -639,12 +639,9 @@ export function revisionPresentationOf(
     // A deletion nested in an insertion still reads as removed: the strike wins over the
     // underline its container would have drawn.
     line: deleted && line === 'underline' ? 'line-through' : line,
-    // An insertion's rule is DASHED. A solid one is hard to tell from an authored `w:u`, which
-    // underlines plenty of ordinary text in a contract, so two different statements would be
-    // drawn identically. A strike has no such clash and stays solid; a move stays double,
-    // because it is one decision with two halves.
-    decorationStyle:
-      kind === 'moveFrom' || kind === 'moveTo' ? 'double' : kind === 'insert' ? 'dashed' : 'solid',
+    // An insertion follows Word with a solid rule. Colour and the revision wash distinguish it
+    // from an authored `w:u`; a move stays double because it is one decision with two halves.
+    decorationStyle: kind === 'moveFrom' || kind === 'moveTo' ? 'double' : 'solid',
     // Coloured by KIND, not by author: a reader scanning a page needs "added" and "removed"
     // to be the two things they can tell apart at a glance, and Word's own default view draws
     // them that way. The per-author ramp stays available for the review cards, where the

@@ -419,10 +419,13 @@ function elementById(part: OoxmlPart, nodeId: string): OoxmlElement | null {
 function matchingRevisionSites(
   sites: readonly RevisionSite[],
   address: RevisionAddress | undefined,
-  localName?: string
+  localName?: string,
+  siteNodeIds?: ReadonlySet<string>
 ): RevisionSite[] {
-  if (address === undefined) return [...sites];
+  if (address === undefined && siteNodeIds === undefined) return [...sites];
   return sites.filter((site) => {
+    if (siteNodeIds !== undefined && !siteNodeIds.has(site.node.id)) return false;
+    if (address === undefined) return true;
     const own = addressOf(site.node);
     if (own === null || !sameRevision(own, address)) return false;
     return localName === undefined || site.node.localName === localName;
@@ -493,7 +496,11 @@ export function removedRowsForRevisionDecision(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: { readonly localName?: string; readonly scopeRootId?: string }
+  options?: {
+    readonly localName?: string;
+    readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
+  }
 ): readonly OoxmlElement[] {
   if (
     options?.scopeRootId !== undefined &&
@@ -504,7 +511,8 @@ export function removedRowsForRevisionDecision(
   const matched = matchingRevisionSites(
     collectRevisionSitesIn(part, options?.scopeRootId),
     address,
-    options?.localName
+    options?.localName,
+    options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
   );
   const revisions = trackedRowRevisions(part, matched);
   if (typeof revisions === 'string') return [];
@@ -780,6 +788,28 @@ export interface RevisionResolveResult {
   readonly effect?: TreeOpEffect;
 }
 
+interface RevisionResolutionOperation {
+  readonly revision?: RevisionAddress;
+  readonly localName?: string;
+  readonly siteNodeIds?: readonly string[];
+  readonly scopeRootId?: string;
+}
+
+/** Adapt one revision tree operation to the shared resolver. */
+export function resolveRevisionOperation(
+  part: OoxmlPart,
+  action: RevisionOpAction,
+  operation: RevisionResolutionOperation,
+  options?: EditOptions
+): RevisionResolveResult {
+  return resolveRevisions(part, action, operation.revision, {
+    ...options,
+    ...(operation.localName === undefined ? {} : { localName: operation.localName }),
+    ...(operation.siteNodeIds === undefined ? {} : { siteNodeIds: operation.siteNodeIds }),
+    ...(operation.scopeRootId === undefined ? {} : { scopeRootId: operation.scopeRootId }),
+  });
+}
+
 /**
  * Resolve every site carrying `address` (or every revision in the part, when `address` is
  * absent) in one transaction.
@@ -793,7 +823,11 @@ export function resolveRevisions(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: EditOptions & { readonly localName?: string; readonly scopeRootId?: string }
+  options?: EditOptions & {
+    readonly localName?: string;
+    readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
+  }
 ): RevisionResolveResult {
   const scopeRoot =
     options?.scopeRootId === undefined ? part.root : scopedRevisionRoot(part, options.scopeRootId);
@@ -801,7 +835,12 @@ export function resolveRevisions(
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
-  const matched = matchingRevisionSites(sites, address, options?.localName);
+  const matched = matchingRevisionSites(
+    sites,
+    address,
+    options?.localName,
+    options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
+  );
   if (matched.length === 0) return { ok: false, reason: 'unknown-revision' };
   if (matched.some((site) => site.refused)) return { ok: false, reason: 'unsupported-revision' };
 

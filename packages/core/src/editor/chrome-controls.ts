@@ -1,3 +1,4 @@
+import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
 // M6V.1 reproduces the complete user-visible legacy chrome from archaeology ref
@@ -421,37 +422,7 @@ export const CHROME_GROUPS = [
       },
     ],
   },
-  {
-    id: 'review',
-    labelKey: 'formattingBar.commentsAndChanges',
-    controls: [
-      {
-        id: 'comments',
-        shape: 'icon',
-        labelKey: 'formattingBar.commentsAndChanges',
-        paths: GENERATED_ICON_PATHS['comment'],
-        state: { kind: 'command' },
-      },
-      {
-        // Packaged under Review > Markup Options > Reviewers; hosts may compose a shortcut.
-        id: 'authors',
-        shape: 'dropdown',
-        labelKey: 'reviewers.label',
-        paths: GENERATED_ICON_PATHS['visibility'],
-        defaultToolbar: false,
-        state: { kind: 'command' },
-      },
-      {
-        // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
-        id: 'editingMode',
-        shape: 'dropdown',
-        labelKey: 'editingMode.label',
-        valueKey: 'editingMode.editing',
-        paths: GENERATED_ICON_PATHS['edit_note'],
-        state: { kind: 'command' },
-      },
-    ],
-  },
+  REVIEW_CHROME_GROUP,
   {
     // Content-control authoring chrome (typed-content-controls). Show-all and form-fill are
     // surface toggles; inspector and remove are contextual to the caret control. Slot ids are
@@ -785,6 +756,14 @@ export type ChromeSlotId =
   | 'format.painter'
   | 'format.clear'
   | 'review.comments'
+  | 'review.paragraphMarks'
+  | 'review.allMarkup'
+  | 'review.noMarkup'
+  | 'review.original'
+  | 'review.previousChange'
+  | 'review.nextChange'
+  | 'review.acceptAllChanges'
+  | 'review.rejectAllChanges'
   | 'review.authors'
   | 'review.editingMode'
   | 'contentControl.showAll'
@@ -1052,7 +1031,26 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
     // The adapters supply the document-dependent reviewer rows beneath Markup Options.
     id: 'review',
     labelKey: 'toolbar.review',
-    entries: [],
+    entries: [
+      {
+        kind: 'submenu',
+        labelKey: 'review.displayForReview',
+        paths: GENERATED_ICON_PATHS['visibility'],
+        items: [
+          { kind: 'item', slot: 'review.allMarkup' },
+          { kind: 'item', slot: 'review.noMarkup' },
+          { kind: 'item', slot: 'review.original' },
+        ],
+      },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.previousChange' },
+      { kind: 'item', slot: 'review.nextChange' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.acceptAllChanges' },
+      { kind: 'item', slot: 'review.rejectAllChanges' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.paragraphMarks' },
+    ],
   },
   {
     // Help is host territory — a product's own docs, its own support channel. The one row
