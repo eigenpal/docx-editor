@@ -226,4 +226,30 @@ describe('w:bidiVisual table grid', () => {
       });
     }
   });
+  test.each([false, true])(
+    'merged tables do not expose unsupported column resize handles (RTL=%s)',
+    (rtl) => {
+      const result = layout(
+        table(
+          row(cell('merged', '<w:gridSpan w:val="2"/>') + cell('tail')) +
+            row(cell('a') + cell('b') + cell('c')),
+          rtl ? '<w:bidiVisual/><w:jc w:val="right"/>' : ''
+        )
+      );
+      const t = tables(result)[0]!;
+      const index = tableInteractionIndex(result);
+      for (const r of t.rows) {
+        for (const edge of t.columnEdges!.slice(1)) {
+          const hit = findTableInteractionAt(
+            index,
+            10 + t.box.x + edge,
+            10 + r.box.y + r.box.height / 2,
+            result
+          );
+          expect(hit?.kind).not.toBe('columnDivider');
+          expect(hit?.kind).not.toBe('rightEdge');
+        }
+      }
+    }
+  );
 });
