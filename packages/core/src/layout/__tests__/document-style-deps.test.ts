@@ -5,6 +5,7 @@ import {
   type HeadlessThemeFonts,
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
+import { collectThemeSchemeFaces } from '../../store/package/theme-font-scheme.ts';
 import { createDocumentStyleDependencies } from '../document-style-deps.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -79,4 +80,24 @@ test('supplemental theme changes invalidate the style cascade independently of a
   expect(second).not.toBe(first);
   expect(second?.themeFonts.minorSupplemental?.Hans).toBe('Second');
   expect(dependencies.styleCascade()).toBe(second);
+});
+
+test('recollecting the unchanged theme after a body edit retains the style cascade', () => {
+  const themeRoot = root(
+    '/word/theme/theme1.xml',
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:fontScheme name="CJK"><a:minorFont><a:ea typeface=""/><a:font script="Hans" typeface="SimSun"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>'
+  );
+  const view = {
+    stylesRoot: () => null,
+    settingsRoot: () => null,
+    numberingRoot: () => null,
+    // Mirrors a package-scoped reader: body transactions can recollect the same root.
+    documentThemeFonts: () => collectThemeSchemeFaces(themeRoot),
+  } as unknown as HeadlessDocumentView;
+  const dependencies = createDocumentStyleDependencies(view);
+  const firstFonts = view.documentThemeFonts();
+  const first = dependencies.styleCascade();
+  expect(view.documentThemeFonts()).toBe(firstFonts);
+  expect(dependencies.styleCascade()).toBe(first);
+  expect(first?.themeFonts.minorSupplemental?.Hans).toBe('SimSun');
 });

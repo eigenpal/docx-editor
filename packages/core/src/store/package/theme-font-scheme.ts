@@ -81,19 +81,27 @@ function schemeTypeface(
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
 }
 
+// Canonical trees are immutable. Keep script maps stable when a body edit changes
+// the package identity without changing its theme part.
+const schemeFacesMemo = new WeakMap<OoxmlElement, DocumentThemeFonts>();
+
 /** Collect every font face consumed by live and headless layout from one canonical theme tree. */
 export function collectThemeSchemeFaces(themeRoot: OoxmlElement | null): DocumentThemeFonts {
+  const cached = themeRoot ? schemeFacesMemo.get(themeRoot) : undefined;
+  if (cached) return cached;
   const scheme = themeRoot ? firstDescendant(themeRoot, 'fontScheme') : null;
   if (!scheme) {
     return { major: null, minor: null, majorEastAsia: null, minorEastAsia: null };
   }
-  return {
+  const faces = Object.freeze({
     major: schemeTypeface(scheme, 'majorFont', 'latin'),
     minor: schemeTypeface(scheme, 'minorFont', 'latin'),
     majorEastAsia: schemeTypeface(scheme, 'majorFont', 'ea'),
     minorEastAsia: schemeTypeface(scheme, 'minorFont', 'ea'),
     ...supplementalFaces(scheme),
-  };
+  });
+  if (themeRoot) schemeFacesMemo.set(themeRoot, faces);
+  return faces;
 }
 
 // A Map, not an object literal: the token is file content, and `__proto__` must answer
