@@ -1611,7 +1611,7 @@ export function breakParagraph(
               ...(piece.link ? { link: piece.link } : {}),
               ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
               ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
-              ...(piece.glyphOffsetPt ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
+              ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
               ...revisionsOf(piece),
             });
             line.width += prefix.width;
@@ -1657,7 +1657,7 @@ export function breakParagraph(
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
           ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
-          ...(piece.glyphOffsetPt ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
+          ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
           ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
           ...revisionsOf(piece),
         };

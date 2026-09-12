@@ -17,6 +17,8 @@ const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
 const compressible = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
+  // Outlined ink extends into the nominal bearing; keep its complete advance.
+  !piece.style.textOutline &&
   piece.measureText === undefined &&
   !piece.positionalTab &&
   !piece.equation &&
@@ -27,7 +29,7 @@ interface CompressionSlice {
   readonly from: number;
   readonly to: number;
   readonly reduction: number;
-  readonly glyphOffset: number;
+  readonly glyphOffset: number | undefined;
 }
 
 function compressionSlices(
@@ -92,7 +94,12 @@ function compressionSlices(
         list = [];
         slices.set(piece, list);
       }
-      list.push({ from, to, reduction, glyphOffset: trimLeft ? -reduction : 0 });
+      list.push({
+        from,
+        to,
+        reduction,
+        glyphOffset: trimLeft ? -reduction : trimRight ? 0 : undefined,
+      });
     }
   }
   return slices;
@@ -146,7 +153,7 @@ export function compressCjkPieces(
         start: piece.start + slice.from,
         end: piece.start + slice.to,
         style: compressed,
-        ...(slice.glyphOffset ? { glyphOffsetPt: slice.glyphOffset } : {}),
+        ...(slice.glyphOffset !== undefined ? { glyphOffsetPt: slice.glyphOffset } : {}),
       });
       from = slice.to;
     }

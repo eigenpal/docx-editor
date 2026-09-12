@@ -10,20 +10,29 @@ export function prepareTextPaintHost(
   span: StyleSpanRecord,
   scale: number
 ): HTMLElement {
-  if (span.glyphOffsetPt) {
-    // Translate ink independently of the advance/highlight/selection box. Moving
-    // the whole run would move its native hit target as well as its glyph.
-    element.style.width = `${span.box.width * scale}px`;
+  if (span.glyphOffsetPt !== undefined) {
+    // Keep native text selection and caret advances in the published box. Relative
+    // positioning would move those DOM ranges into the preceding character. Draw
+    // only the ink at its offset, using the inherited colour (including revisions).
+    const horizontalScale = span.style.horizontalScalePercent / 100;
+    const advance = span.box.width * scale;
+    element.style.width = `${advance / horizontalScale}px`;
+    if (horizontalScale !== 1) {
+      // The transform scales the band, while width + margin reserve its final advance.
+      element.style.marginRight = `${advance - advance / horizontalScale}px`;
+    }
     const glyph = document.createElement('span');
     glyph.dataset.docxGlyphOffset = '';
-    glyph.style.position = 'relative';
-    glyph.style.left = `${span.glyphOffsetPt * scale}px`;
-    if (span.style.horizontalScalePercent !== 100) {
-      glyph.style.display = 'inline-block';
-      glyph.style.transform = element.style.transform;
-      glyph.style.transformOrigin = element.style.transformOrigin;
-      element.style.removeProperty('transform');
-      element.style.removeProperty('transform-origin');
+    // Measurement scales the glyph advance before adding tracking. CSS scales both,
+    // so convert tracking back to the glyph's local coordinates first.
+    if (horizontalScale !== 1)
+      glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / horizontalScale}px`;
+    if (span.glyphOffsetPt) {
+      // Keep the shadow in forced-colour modes, but inherit their accessible ink
+      // colour from the parent instead of retaining an authored document colour.
+      glyph.style.setProperty('forced-color-adjust', 'preserve-parent-color');
+      glyph.style.setProperty('-webkit-text-fill-color', 'transparent');
+      glyph.style.textShadow = `${(span.glyphOffsetPt * scale) / horizontalScale}px 0 currentColor`;
     }
     element.append(glyph);
     return glyph;

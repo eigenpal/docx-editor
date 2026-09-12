@@ -90,3 +90,14 @@ test('punctuation compression removes natural bearings, not authored tracking', 
     expect(style.characterSpacingPt).toBe(tracking);
   }
 });
+
+test('outlined punctuation retains its bearing for the extended ink', () => {
+  const piece: FieldAwarePiece = {
+    text: '（甲）',
+    start: 0,
+    end: 3,
+    props: [],
+    style: { ...DEFAULT_RUN_STYLE, textOutline: { widthPt: 1, color: 'FF0000' } },
+  };
+  expect(compressCjkPieces([piece], policy, measurer)).toEqual([piece]);
+});

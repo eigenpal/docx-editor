@@ -140,8 +140,8 @@ test('compressed opening punctuation translates only ink and retains layout care
   expect(openings).toHaveLength(2);
   expect(openings.map((element) => element.style.width)).toEqual(['6px', '6px']);
   expect(openings.map((element) => element.firstElementChild?.getAttribute('style'))).toEqual([
-    'position: relative; left: -6px;',
-    'position: relative; left: -6px;',
+    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; text-shadow: -6px 0 currentColor;',
+    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; text-shadow: -6px 0 currentColor;',
   ]);
   for (const span of line.spans) {
     expect(
@@ -150,4 +150,33 @@ test('compressed opening punctuation translates only ink and retains layout care
     ).toBeCloseTo(span.box.x, 5);
   }
   expect(line.spans.slice(0, 2).map((span) => span.glyphOffsetPt)).toEqual([-3, -3]);
+});
+
+test('scaled compressed punctuation keeps revision decoration and native text flow', () => {
+  const settings = part(
+    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
+  );
+  for (const revision of ['ins', 'del']) {
+    const textTag = revision === 'del' ? 'delText' : 't';
+    const doc = part(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:${revision} w:id="1" w:author="QA"><w:r><w:rPr><w:sz w:val="22"/><w:w w:val="200"/></w:rPr><w:${textTag}>（甲）</w:${textTag}></w:r></w:${revision}></w:p></w:body></w:document>`
+    );
+    const layout = layoutSemanticDocument(doc, 0, {
+      measurer,
+      styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+    });
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 2 });
+    const glyph = container.querySelector<HTMLElement>('[data-docx-glyph-offset]')!;
+    const run = glyph.parentElement!;
+    expect(run.style.textDecorationLine).toBe(revision === 'del' ? 'line-through' : 'underline');
+    expect(run.style.transform).toBe('scaleX(2)');
+    expect(run.style.width).toBe('6px');
+    expect(run.style.marginRight).toBe('6px');
+    expect(glyph.style.letterSpacing).toBe('-6px');
+    expect(glyph.style.display).toBe('');
+    expect(glyph.style.position).toBe('');
+    expect(glyph.style.getPropertyValue('-webkit-text-fill-color')).toBe('transparent');
+    expect(glyph.style.textShadow).toBe('-6px 0 currentColor');
+  }
 });
