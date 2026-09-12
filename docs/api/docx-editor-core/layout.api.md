@@ -2831,6 +2831,13 @@ export interface ResolvedRunStyle {
     readonly italic: boolean;
     readonly kerningMinPt: number;
     readonly shading: string | null;
+    readonly shaping?: {
+        readonly baseLevel: number;
+        readonly direction: 'ltr' | 'rtl';
+        readonly level: number;
+        readonly script: string;
+        readonly wordSpacingPt?: number;
+    };
     // (undocumented)
     readonly smallCaps: boolean;
     // (undocumented)
@@ -4258,6 +4265,7 @@ export type TextDirection = 'ltr' | 'rtl';
 
 // @public
 export interface TextMeasurer {
+    caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     lineMetrics(style: ResolvedRunStyle): {
         baseline: number;
         height: number;

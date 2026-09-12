@@ -2,6 +2,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { readOoxmlPart } from '../../store/index.ts';
+import { linesOf } from '../semantic-records.ts';
+import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { hitTestPage, spanOffsetX } from '../semantic-hit-test.ts';
+import type { StyleSpanRecord, TextMeasurer } from '../semantic-records.ts';
 import {
   DEFAULT_RUN_STYLE,
   FontResolutionError,
@@ -638,4 +643,151 @@ describe('an unavailable font falls back rather than failing (task 7.7)', () => 
     expect(hostile.measure('abc', style())).toBe(fallback.measure('abc', style()));
     expect(hostile.lineMetrics(style())).toEqual(fallback.lineMetrics(style()));
   });
+});
+
+test('Arabic shaping uses resolved script/direction and isolates its width cache', () => {
+  const m = measurer();
+  const text = 'سلام';
+  const rtl = style({ shaping: { script: 'Arab', direction: 'rtl', level: 1, baseLevel: 1 } });
+  const plain = m.measure(text, style());
+  const joined = m.measure(text, rtl);
+  expect(joined).toBeLessThan(plain);
+  expect(m.measure(text, style())).toBe(plain);
+  expect(m.measure(text, rtl)).toBe(joined);
+});
+
+test('missing glyph boxes use host fallback measurement instead of .notdef advances', () => {
+  const m = measurer();
+  const missing = '\u{20000}\u{20001}';
+  expect(m.measure(missing, style())).toBe(fallback.measure(missing, style()));
+});
+
+test.each([false, true])(
+  'direction cache cannot collide with authored text (reverse=%s)',
+  (reverse) => {
+    const m = measurer();
+    const shaped = style({ shaping: { script: 'Latn', direction: 'ltr', level: 2, baseLevel: 1 } });
+    const original = 'Latn:ltr:hello';
+    const expected = measurer().measure('hello', shaped);
+    if (reverse) m.measure('hello', shaped);
+    m.measure(original, style());
+    expect(m.measure('hello', shaped)).toBe(expected);
+    expect(m.measure(original, style())).toBe(measurer().measure(original, style()));
+  }
+);
+
+describe('whole-span Arabic caret advances', () => {
+  const arabic = style({ shaping: { script: 'Arab', direction: 'rtl', level: 1, baseLevel: 1 } });
+  const spanFor = (text: string, resolved: ResolvedRunStyle, width: number): StyleSpanRecord => ({
+    range: { paragraphId: 'arabic-caret', start: 0, end: text.length },
+    text,
+    props: [],
+    style: resolved,
+    box: { x: 20, y: 0, width, height: 14 },
+  });
+
+  test.each(['لا', 'سلام', 'العالم'])(
+    'uses complete clusters for %s instead of isolated prefix forms',
+    (text) => {
+      const m = measurer();
+      const width = m.measure(text, arabic);
+      const advances = m.caretAdvances!(text, arabic)!;
+      expect(advances).toHaveLength(text.length + 1);
+      expect(advances[0]).toBe(0);
+      expect(advances.at(-1)).toBeCloseTo(width, 6);
+      expect(advances).toEqual([...advances].sort((a, b) => a - b));
+      if (text === 'لا') {
+        expect(m.measure('ل', arabic)).toBeGreaterThan(width);
+        expect(advances[1]).toBe(0);
+      }
+      const span = spanFor(text, arabic, width);
+      // Prefix interaction must never call the public independent-prefix measure path.
+      const caretMeasurer: TextMeasurer = {
+        ...m,
+        measure: () => {
+          throw new Error('reshaped a prefix');
+        },
+      };
+      const xs = Array.from({ length: text.length + 1 }, (_, i) =>
+        spanOffsetX(span, i, caretMeasurer)
+      );
+      expect(xs).toEqual([...xs].sort((a, b) => b - a));
+      for (const x of xs) {
+        expect(x).toBeGreaterThanOrEqual(span.box.x);
+        expect(x).toBeLessThanOrEqual(span.box.x + width);
+      }
+    }
+  );
+
+  test('one missing glyph keeps every caret on the whole-span fallback source', () => {
+    const text = 'ش'.repeat(10) + '\u08a0';
+    const m = measurer();
+    const width = m.measure(text, arabic);
+    expect(width).toBe(fallback.measure(text, arabic));
+    expect(m.measure(text.slice(0, -1), arabic)).toBeGreaterThan(width);
+    const advances = m.caretAdvances!(text, arabic)!;
+    expect(advances[10]).toBeCloseTo(fallback.measure(text.slice(0, -1), arabic), 6);
+    const span = spanFor(text, arabic, width);
+    for (let offset = 0; offset <= text.length; offset++) {
+      expect(spanOffsetX(span, offset, m)).toBeCloseTo(20 + width - advances[offset]!, 6);
+    }
+  });
+
+  test.each([false, true])(
+    'includes justification spaces after natural widths (fallback=%s)',
+    (missing) => {
+      const text = missing ? 'لا \u08a0' : 'لا لا';
+      const m = measurer();
+      const justified = style({ shaping: { ...arabic.shaping!, wordSpacingPt: 9 } });
+      expect(m.measure(text, justified)).toBeCloseTo(m.measure(text, arabic) + 9, 6);
+      const base = m.caretAdvances!(text, arabic)!;
+      const expanded = m.caretAdvances!(text, justified)!;
+      expect(expanded[2]).toBeCloseTo(base[2]!, 6);
+      expect(expanded[3]).toBeCloseTo(base[3]! + 9, 6);
+      expect(expanded.at(-1)).toBeCloseTo(m.measure(text, justified), 6);
+    }
+  );
+
+  test('negative tracking stays monotone and long fallback spans avoid eager vectors', () => {
+    const m = measurer();
+    const tracked = { ...arabic, characterSpacingPt: -2 };
+    const advances = m.caretAdvances!('العالم', tracked)!;
+    expect(advances).toEqual([...advances].sort((a, b) => a - b));
+    expect(advances.at(-1)).toBeCloseTo(Math.max(0, m.measure('العالم', tracked)), 6);
+    const unavailable = measurer(() => null);
+    const text = 'ش'.repeat(65_537);
+    expect(unavailable.caretAdvances!(text, arabic)).toBeUndefined();
+    const span = spanFor(text, arabic, unavailable.measure(text, arabic));
+    expect(spanOffsetX(span, text.length, unavailable)).toBe(20);
+  });
+  test.each(['لا', 'ش'.repeat(10) + '\u08a0'])(
+    'hit testing stays on full-span edges for %s',
+    (text) => {
+      const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const parsed = readOoxmlPart(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
+        { name: '/word/document.xml', contentType: 'app/xml' }
+      );
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const m = measurer();
+      const layout = layoutSemanticDocument(parsed.part, 0, { measurer: m });
+      const line = linesOf(layout)[0]!;
+      const span = line.spans[0]!;
+      let previousOffset = text.length;
+      for (let step = 0; step <= 16; step++) {
+        const x = span.box.x + (span.box.width * step) / 16;
+        const hit = hitTestPage(
+          layout,
+          0,
+          { x, y: line.box.y + line.box.height / 2 },
+          { measurer: m }
+        )!;
+        expect(hit.position.offset).toBeLessThanOrEqual(previousOffset);
+        previousOffset = hit.position.offset;
+        const caretX = spanOffsetX(span, hit.position.offset, m);
+        expect(caretX).toBeGreaterThanOrEqual(span.box.x);
+        expect(caretX).toBeLessThanOrEqual(span.box.x + span.box.width);
+      }
+    }
+  );
 });

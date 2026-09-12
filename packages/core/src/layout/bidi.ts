@@ -19,6 +19,7 @@ export interface BidiEmbeddingLevels {
 }
 
 export interface BidiAlgorithm {
+  getBidiCharTypeName(character: string): string;
   getEmbeddingLevels(text: string, explicitDirection?: 'ltr' | 'rtl'): BidiEmbeddingLevels;
   getReorderSegments(
     text: string,

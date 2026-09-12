@@ -1,9 +1,12 @@
-// Paragraph measuring and breaking, shared between the body flow and table cells.
-//
-// Extracted from `semantic-layout.ts` so a cell paragraph breaks exactly like a body
-// paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
-// position-independent — span x offsets are relative to the paragraph origin — which is
-// what lets one cached break serve the same content at any x (body or any cell).
+import type { Alignment } from './paragraph-alignment.ts';
+export { paragraphAlignment, type Alignment } from './paragraph-alignment.ts';
+import {
+  bidiPieces,
+  paragraphIsRtl,
+  reorderBidiSpans,
+  splitBidiTrailingWhitespace,
+} from './rtl-paragraph.ts';
+// Body and table paragraphs share line breaking and its position-independent cache.
 
 import {
   PAGE_BREAK_CHAR,
@@ -105,6 +108,7 @@ const OVERFLOW_TOLERANCE_PT = 0.001;
  * cache key — a paragraph re-broken at a different line spacing is a different break.
  */
 export interface ParagraphFlowOptions {
+  readonly paragraphRtl?: boolean;
   readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
@@ -413,46 +417,20 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
 } {
   let left = 0;
   let right = 0;
+  const rtl = paragraphIsRtl(props);
   for (const property of props) {
     if (property.localName !== 'ind') continue;
-    // `w:start`/`w:end` are the ISO 29500 Strict spellings of `w:left`/`w:right`; the
-    // physical name wins where a producer writes both.
-    const rawLeft = property.attributes?.left ?? property.attributes?.start;
-    const rawRight = property.attributes?.right ?? property.attributes?.end;
+    // Logical indents follow paragraph direction; explicit physical sides win.
+    const rawLeft =
+      property.attributes?.left ?? (rtl ? property.attributes?.end : property.attributes?.start);
+    const rawRight =
+      property.attributes?.right ?? (rtl ? property.attributes?.start : property.attributes?.end);
     const twipsLeft = indentTwips(rawLeft);
     const twipsRight = indentTwips(rawRight);
     if (twipsLeft !== null) left = twipsToPoints(twipsLeft);
     if (twipsRight !== null) right = twipsToPoints(twipsRight);
   }
   return { left, right };
-}
-
-/** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
-export type Alignment = 'left' | 'center' | 'right' | 'both';
-
-export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
-  let alignment: Alignment = 'left';
-  for (const property of props) {
-    if (property.localName !== 'jc') continue;
-    switch (property.attributes?.val) {
-      // `start`/`end` are the direction-relative spellings; this lane is left-to-right only,
-      // so they resolve to left/right rather than being ignored as unknown.
-      case 'center':
-        alignment = 'center';
-        break;
-      case 'right':
-      case 'end':
-        alignment = 'right';
-        break;
-      case 'both':
-      case 'distribute':
-        alignment = 'both';
-        break;
-      default:
-        alignment = 'left';
-    }
-  }
-  return alignment;
 }
 
 /**
@@ -478,7 +456,7 @@ function endsWithExpandableSpace(text: string): boolean {
  * A line with NO spans returns unchanged; its alignment is published as `contentX` by the
  * callers, which is the only place an empty paragraph's caret x can come from.
  */
-export function alignSpans(
+function alignLogicalSpans(
   spans: readonly StyleSpanRecord[],
   measurer: TextMeasurer,
   indentLeft: number,
@@ -625,7 +603,7 @@ export function breakParagraph(
   // from the emitted spans, because in the proposed result a deletion produces no span at all
   // and its offsets would otherwise look like ordinary empty positions.
   const deletedRanges: { start: number; end: number }[] = [];
-  const allPieces = piecesOfParagraph(
+  const rawPieces = piecesOfParagraph(
     paragraph,
     inheritedRunProperties,
     pageContext,
@@ -641,6 +619,17 @@ export function breakParagraph(
     flow?.bodyPageFields ?? false,
     flow?.refFields,
     flow?.revisionAuthorFilter
+  );
+  const allPieces = bidiPieces(
+    rawPieces,
+    flow?.paragraphRtl ??
+      paragraphIsRtl(
+        propertiesOf(
+          'children' in paragraph
+            ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
+            : undefined
+        )
+      )
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const visiblePieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
@@ -1682,4 +1671,30 @@ export function breakParagraph(
   if (cacheKey !== null && cache)
     cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
   return lines;
+}
+
+export function alignSpans(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  indentLeft: number,
+  available: number,
+  alignment: Alignment,
+  isLastLine: boolean,
+  lineUsedWidth?: number
+): readonly StyleSpanRecord[] {
+  const effective =
+    alignment === 'both' && isLastLine && spans.some((span) => span.style.shaping?.baseLevel === 1)
+      ? 'right'
+      : alignment;
+  return reorderBidiSpans(
+    alignLogicalSpans(
+      splitBidiTrailingWhitespace(spans, measurer),
+      measurer,
+      indentLeft,
+      available,
+      effective,
+      isLastLine,
+      lineUsedWidth
+    )
+  );
 }

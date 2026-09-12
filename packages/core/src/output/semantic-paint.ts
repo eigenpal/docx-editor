@@ -1393,13 +1393,25 @@ function paintLine(
 
   // Each boundary's gap is computed ONCE and carried into the next iteration, so a gap is
   // painted exactly once — as a stretch or as a margin, never both, never neither.
+  const bidi = line.spans.some((span) => span.style.shaping !== undefined);
+  let logicalAdvance = 0;
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
   for (const [spanIndex, span] of line.spans.entries()) {
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
-    appendWrapAdvance(span);
+    if (!bidi) appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
+    if (bidi) {
+      painted.style.position = 'relative';
+      painted.style.left = `${(span.box.x - line.contentX - logicalAdvance) * scale}px`;
+      painted.style.width = `${span.box.width * scale}px`;
+      painted.style.direction = span.style.shaping?.direction ?? 'ltr';
+      painted.style.unicodeBidi = 'isolate';
+      if (span.style.shaping?.wordSpacingPt)
+        painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
+      logicalAdvance += span.box.width;
+    }
     if (pendingGap > 0 && !previousSpanAbsorbedGap) {
       painted.style.marginLeft = `${pendingGap * scale}px`;
     }
@@ -1407,7 +1419,7 @@ function paintLine(
     // trailing space: the browser highlights a space's advance but never a margin, so a
     // margin gap broke the selection band into one block per word on justified lines.
     const next = line.spans[spanIndex + 1];
-    const gapAfter = interSpanGapBefore(line, spanIndex + 1, rankOf);
+    const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     previousSpanAbsorbedGap = gapAfter > 0 && next !== undefined && absorbsFollowingGap(span, next);
     if (previousSpanAbsorbedGap) painted.style.wordSpacing = `${gapAfter * scale}px`;
     pendingGap = gapAfter;

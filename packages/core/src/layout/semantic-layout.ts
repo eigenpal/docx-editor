@@ -1,3 +1,4 @@
+import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 import {
@@ -2150,6 +2151,7 @@ function layoutBlocksPass(
       keeps,
     } = entry;
     let { indent, alignment, markRunProperties } = entry;
+    const rtl = paragraphIsRtl(entry.props);
     let available = entry.available;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
@@ -2760,12 +2762,16 @@ function layoutBlocksPass(
       const columnX = columnOffsetX();
       appliedSkipByLineIndex.set(lineIndex, skipBefore);
       cursorY += skipBefore;
-      const lineIndent = columnX + indent.left + (lineIndex === 0 ? firstLineOffset : 0);
+      const lineIndent = columnX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
       const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
       const placedSpans = pendingLine.spans.map((span) => ({
         ...span,
         range: { ...span.range, paragraphId },
-        box: { ...span.box, x: span.box.x + columnX, y: cursorY },
+        box: {
+          ...span.box,
+          x: span.box.x + columnX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
+          y: cursorY,
+        },
       }));
       const alignedSpans = alignSpans(
         placedSpans,
@@ -2814,7 +2820,7 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
-        contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
+        contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,

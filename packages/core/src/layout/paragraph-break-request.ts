@@ -1,3 +1,4 @@
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 /** Internal contract shared by body flow and bounded/table stories. */
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldPageContext } from './field-projection.ts';
@@ -137,6 +138,7 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
       : undefined,
     {
       ...request.flow,
+      paragraphRtl: paragraphIsRtl(formatting.props),
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
       equationCacheToken: request.producer,

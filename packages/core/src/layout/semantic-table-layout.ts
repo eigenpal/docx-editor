@@ -1,3 +1,4 @@
+import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
@@ -421,6 +422,7 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
+  const rtl = paragraphIsRtl(props);
   // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
   // bordered block — the box opens above the first and closes below the last, and each
   // interior boundary carries `w:between` or nothing. This is the cell twin of the body
@@ -598,12 +600,16 @@ function placeCellParagraph(
       break;
     }
     y += skipBefore;
-    const lineIndent = originX + indent.left + (lineIndex === 0 ? firstLineOffset : 0);
+    const lineIndent = originX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
     const placedSpans = pendingLine.spans.map((span) => ({
       ...span,
       range: { ...span.range, paragraphId },
-      box: { ...span.box, x: span.box.x + originX, y },
+      box: {
+        ...span.box,
+        x: span.box.x + originX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
+        y,
+      },
     }));
     const alignedSpans = alignSpans(
       placedSpans,
@@ -658,7 +664,7 @@ function placeCellParagraph(
         // caret until something is typed into it, which un-collapses it.
         height: collapseHeight ? 0 : pendingLine.height,
       },
-      contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
+      contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
       baseline: collapseHeight
         ? Math.max(0, Math.min(pendingLine.baseline, options?.collapseBandAbove ?? 0))
         : pendingLine.baseline,

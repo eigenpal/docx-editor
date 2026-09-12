@@ -47,6 +47,14 @@ export interface ResolvedRunStyle {
    * slot-homogeneous pieces happens downstream (`piecesOfParagraph`).
    */
   readonly fontFamilyEastAsia: string | null;
+  /** Script and paragraph-resolved direction for shaping and visual placement. */
+  readonly shaping?: {
+    readonly script: string;
+    readonly direction: 'ltr' | 'rtl';
+    readonly level: number;
+    readonly baseLevel: number;
+    readonly wordSpacingPt?: number;
+  };
   /** Points. `w:sz` is half-points, so 22 becomes 11. */
   readonly fontSizePt: number;
   /** RRGGBB, or null for the inherited/automatic colour. */
@@ -347,6 +355,11 @@ export function measureDisplayText(
 /** Whether two resolved styles are identical, for span merging and cache keys. */
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (
+    a.shaping?.script === b.shaping?.script &&
+    a.shaping?.direction === b.shaping?.direction &&
+    a.shaping?.level === b.shaping?.level &&
+    a.shaping?.baseLevel === b.shaping?.baseLevel &&
+    a.shaping?.wordSpacingPt === b.shaping?.wordSpacingPt &&
     a.fontFamily === b.fontFamily &&
     a.fontFamilyEastAsia === b.fontFamilyEastAsia &&
     a.fontSizePt === b.fontSizePt &&

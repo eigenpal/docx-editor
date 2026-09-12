@@ -155,11 +155,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'text.rtl',
     name: 'Right-to-left & bidirectional text',
     category: 'text',
-    editing: 'full',
-    rendering: 'full',
+    editing: 'partial',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Bidi layout with mirrored alignment; Hebrew locale ships in @docx-editor.dev/i18n.',
+    notes:
+      'Text paragraphs resolve inherited bidi direction, script shaping, visual word order, and caret direction. Tabs and inline atoms retain the existing placement path. Complex-script font selection and shaping across formatting boundaries remain partial. Hebrew locale ships in @docx-editor.dev/i18n.',
   },
   {
     id: 'text.effects',

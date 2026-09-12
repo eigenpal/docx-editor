@@ -2379,6 +2379,7 @@ export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertCol
 
 // @public
 export interface TextMeasurer {
+    caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     lineMetrics(style: ResolvedRunStyle): {
         baseline: number;
         height: number;

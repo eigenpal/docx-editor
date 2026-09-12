@@ -14,8 +14,9 @@ export function prepareTextPaintHost(
   if (span.style.horizontalScalePercent !== 100 || span.text === '\t' || clippedLineEndWhitespace) {
     element.style.width = `${span.box.width * scale}px`;
   }
-  if (!clippedLineEndWhitespace) return element;
-  element.style.clipPath = 'inset(-1em 0)';
+  const scaledBidi = span.style.shaping !== undefined && span.style.horizontalScalePercent !== 100;
+  if (!clippedLineEndWhitespace && !scaledBidi) return element;
+  if (clippedLineEndWhitespace) element.style.clipPath = 'inset(-1em 0)';
   if (span.style.horizontalScalePercent === 100) return element;
 
   const glyph = document.createElement('span');
@@ -23,6 +24,15 @@ export function prepareTextPaintHost(
   glyph.style.display = 'inline-block';
   glyph.style.transform = element.style.transform;
   glyph.style.transformOrigin = element.style.transformOrigin;
+  if (scaledBidi) {
+    const factor = span.style.horizontalScalePercent / 100;
+    glyph.style.width = `${(span.box.width * scale) / factor}px`;
+    glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / factor}px`;
+    if (span.style.shaping?.wordSpacingPt)
+      glyph.style.wordSpacing = `${(span.style.shaping.wordSpacingPt * scale) / factor}px`;
+    glyph.style.direction = span.style.shaping?.direction ?? 'ltr';
+    glyph.style.transformOrigin = glyph.style.direction === 'rtl' ? 'right' : 'left';
+  }
   glyph.style.textDecorationLine = element.style.textDecorationLine;
   glyph.style.textDecorationStyle = element.style.textDecorationStyle;
   glyph.style.textDecorationColor = element.style.textDecorationColor;

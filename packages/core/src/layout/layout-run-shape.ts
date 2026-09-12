@@ -58,13 +58,15 @@ export function shapeLayoutStyleRun(
   return shaper.shape({
     text,
     fontSizeHalfPoints: layoutRunHalfPointsOf(style),
-    // The semantic paragraph lane is left-to-right; bidi resolution is its own task, and
-    // claiming a level here would be asserting an analysis that has not run.
-    bidiLevel: 0,
+    bidiLevel: style.shaping?.direction === 'rtl' ? 1 : 0,
     environment: createShapingEnvironment({
       ...environment,
       font,
-      direction: 'ltr',
+      direction: style.shaping?.direction ?? 'ltr',
+      script:
+        style.shaping?.script === 'Zyyy'
+          ? environment.script
+          : (style.shaping?.script ?? environment.script),
       // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
       // feature, so shaping must reserve those glyph advances instead of lowercase advances.
       features: style.smallCaps ? { ...environment.features, smcp: 1 } : environment.features,

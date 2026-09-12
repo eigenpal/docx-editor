@@ -255,7 +255,7 @@ export interface LineRecord {
    * the caret each fell back to `box.x` and drew a centred empty paragraph's caret hard
    * against the left margin, where it stayed until the first character was typed.
    *
-   * Equal to the first span's x whenever there is one, so it is the single origin every
+   * Equal to the leftmost span's x whenever there is one, so it is the single origin every
    * consumer can read without a spans-or-box fallback of its own.
    */
   readonly contentX: number;
@@ -924,6 +924,12 @@ export const DEFAULT_PAGE_GEOMETRY: PageGeometry = Object.freeze({
 export interface TextMeasurer {
   /** Advance width of `text` in the resolved style. */
   measure(text: string, style: ResolvedRunStyle): number;
+  /**
+   * Optional whole-span logical caret advances, indexed by UTF-16 offset. Values
+   * are nondecreasing, start at zero, and end at the measured advance. Ligature
+   * interiors may share an edge. Undefined selects a bounded approximate fallback.
+   */
+  caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
   /** Line height and baseline for the resolved style. */
   lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
 }

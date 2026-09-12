@@ -1,3 +1,8 @@
+import {
+  countAsciiSpaces,
+  fallbackCaretAdvances,
+  shapedCaretAdvances,
+} from './shaped-caret-advances.ts';
 // Exact line metrics and advances, from the font itself (task 7.7).
 //
 // Every host-side measurement is a fraction out, and the fraction is not cosmetic. Word
@@ -224,14 +229,57 @@ export function createShapedMeasurer(
     return byText;
   };
 
+  const fallbackStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
+  const withoutWordSpacing = (style: ResolvedRunStyle): ResolvedRunStyle => {
+    if (!style.shaping?.wordSpacingPt) return style;
+    let natural = fallbackStyles.get(style);
+    if (!natural) {
+      natural = { ...style, shaping: { ...style.shaping, wordSpacingPt: undefined } };
+      fallbackStyles.set(style, natural);
+    }
+    return natural;
+  };
+  const wordSpacingAdvance = (text: string, style: ResolvedRunStyle): number =>
+    style.shaping?.wordSpacingPt ? countAsciiSpaces(text) * style.shaping.wordSpacingPt : 0;
+  const fallbackWidth = (text: string, style: ResolvedRunStyle): number =>
+    fallback.measure(text, withoutWordSpacing(style)) + wordSpacingAdvance(text, style);
+
+  const fallbackAdvances = (
+    text: string,
+    style: ResolvedRunStyle
+  ): readonly number[] | undefined => {
+    const naturalWidth = Math.max(0, fallback.measure(text, withoutWordSpacing(style)));
+    const source =
+      fallback.caretAdvances?.(text, withoutWordSpacing(style)) ??
+      fallbackCaretAdvances(text, naturalWidth);
+    if (!source || source.length !== text.length + 1)
+      return fallbackCaretAdvances(text, fallbackWidth(text, style));
+    const total = Math.max(0, fallbackWidth(text, style));
+    let previous = 0;
+    let spaces = 0;
+    return source.map((advance, offset) => {
+      if (offset === 0) return 0;
+      if (text[offset - 1] === ' ') spaces++;
+      const adjusted = advance + spaces * (style.shaping?.wordSpacingPt ?? 0);
+      previous = Math.max(
+        previous,
+        Math.min(total, Number.isFinite(adjusted) ? adjusted : previous)
+      );
+      return offset === text.length ? total : previous;
+    });
+  };
+
   return {
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = resolveFontCached(style);
-      if (!font) return fallback.measure(text, style);
+      if (!font) return fallbackWidth(text, style);
 
       const byText = widthsFor(font, layoutRunHalfPointsOf(style), style.smallCaps);
-      let advance = byText.get(text);
+      const widthKey = style.shaping
+        ? `1:${JSON.stringify([style.shaping.script, style.shaping.direction, text])}`
+        : `0:${text}`;
+      let advance = byText.get(widthKey);
       if (advance === undefined) {
         let total = 0;
         try {
@@ -240,24 +288,62 @@ export function createShapedMeasurer(
             style.smallCaps &&
             !layoutFaceHasSmallCaps(shaper, baseEnvironment, font, style, smallCapsSupportByFont)
           ) {
-            return fallback.measure(text, style);
+            return fallbackWidth(text, style);
           }
           const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
+          // Missing-glyph advances do not describe the browser's fallback ink.
+          if (shaped.glyphs.some((glyph) => glyph.id === 0)) return fallbackWidth(text, style);
           for (const glyph of shaped.glyphs) total += glyph.advanceX;
         } catch {
           // Shaping refuses malformed or oversized input by design. Falling back keeps a
           // hostile font from taking the document down with it.
-          return fallback.measure(text, style);
+          return fallbackWidth(text, style);
         }
         advance = total / baseEnvironment.fixedPointScale;
-        cacheWidth(byText, text, advance);
+        cacheWidth(byText, widthKey, advance);
       }
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.
       return (
         advance * sizeFactorOf(style) * (style.horizontalScalePercent / 100) +
-        text.length * style.characterSpacingPt
+        text.length * style.characterSpacingPt +
+        wordSpacingAdvance(text, style)
       );
+    },
+
+    caretAdvances(text, style) {
+      const font = resolveFontCached(style);
+      if (!font) return fallbackAdvances(text, style);
+      try {
+        if (
+          style.smallCaps &&
+          !layoutFaceHasSmallCaps(shaper, baseEnvironment, font, style, smallCapsSupportByFont)
+        )
+          return fallbackAdvances(text, style);
+        const run = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
+        if (run.glyphs.some((glyph) => glyph.id === 0)) return fallbackAdvances(text, style);
+        return (
+          shapedCaretAdvances(
+            text,
+            run,
+            (sizeFactorOf(style) * (style.horizontalScalePercent / 100)) /
+              baseEnvironment.fixedPointScale,
+            style.characterSpacingPt,
+            style.shaping?.wordSpacingPt ?? 0
+          ) ??
+          fallbackCaretAdvances(
+            text,
+            (run.glyphs.reduce((sum, glyph) => sum + glyph.advanceX, 0) *
+              sizeFactorOf(style) *
+              (style.horizontalScalePercent / 100)) /
+              baseEnvironment.fixedPointScale +
+              text.length * style.characterSpacingPt +
+              wordSpacingAdvance(text, style)
+          )
+        );
+      } catch {
+        return fallbackAdvances(text, style);
+      }
     },
 
     lineMetrics(style) {

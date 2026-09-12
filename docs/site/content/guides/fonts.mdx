@@ -544,6 +544,22 @@ The shaper rejects a missing, stale, or version-mismatched binary. An npm
 For engine implementation details, see
 [Architecture](/docs/2.x/core/architecture).
 
+## Arabic and bidirectional paragraphs
+
+Text paragraphs use the inherited `w:bidi` setting for default alignment and
+visual order. Arabic and Latin text keep their logical document offsets when
+the editor places words from right to left.
+
+The shaper uses the resolved script and direction. When a font lacks a glyph,
+browser layout uses host fallback measurement instead of the missing-glyph box.
+Supply an Arabic-capable font for consistent browser and server metrics.
+Caret movement uses whole-run cluster advances when font bytes are available.
+Without cluster data, caret placement uses a bounded approximation within the text band.
+
+Bidirectional paragraphs with tabs or inline atoms retain the existing placement
+path. Complex-script font selection and joining across formatting boundaries
+remain partial.
+
 ## Next steps
 
 - [React font props](/docs/2.x/react/props#fonts): Configure React roots.
