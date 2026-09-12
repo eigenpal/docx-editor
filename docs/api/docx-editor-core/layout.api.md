@@ -3575,6 +3575,7 @@ export interface SemanticTableCell {
     // (undocumented)
     readonly id: string;
     readonly legacyContentAlignment?: true;
+    readonly logicalGridColumn?: number;
     readonly margins: CellMarginsPt;
     readonly preferredWidth: PreferredWidth;
     readonly shading?: string;
@@ -3604,6 +3605,7 @@ export interface SemanticTableRow {
 // @public
 export interface SemanticTableStructure {
     readonly alignment: TableAlignment;
+    readonly bidiVisual?: true;
     readonly cellSpacingPt: number;
     // (undocumented)
     readonly columnWidthsPt: readonly number[];
@@ -4137,6 +4139,7 @@ export interface TableCellFragmentRecord {
     readonly gridColumnId?: string;
     readonly gridSpan: number;
     readonly id: string;
+    readonly logicalGridColumn?: number;
     readonly paintInert?: boolean;
     readonly rowSpan?: number;
     readonly shading?: string;

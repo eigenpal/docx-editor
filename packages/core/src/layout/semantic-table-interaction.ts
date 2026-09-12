@@ -442,6 +442,9 @@ function dividerHit(
     const lastCol = table.columnEdges.length - 2;
     const gridColumnId = gridColumnIdAt(occ.row, lastCol);
     if (!gridColumnId) return null;
+    // The store's outer-edge operation resizes the last STORED column. In RTL that
+    // is the left edge. Do not offer a right-edge handle that edits the wrong cell.
+    if (occ.row.cells.some((cell) => cell.logicalGridColumn !== undefined)) return null;
     return {
       kind: 'rightEdge',
       pageIndex: occ.pageIndex,

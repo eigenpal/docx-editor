@@ -186,6 +186,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
   tableCell: {
     id: 'layout-only',
     gridColumn: 'represented',
+    logicalGridColumn: 'represented',
     gridColumnId: 'layout-only',
     gridSpan: 'represented',
     vMergeContinue: 'represented',

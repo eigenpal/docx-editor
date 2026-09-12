@@ -595,6 +595,8 @@ export interface TableCellFragmentRecord {
   readonly id: string;
   /** First grid column this cell occupies. */
   readonly gridColumn: number;
+  /** Stored grid index for an RTL cell; gridColumn indexes physical columnEdges. */
+  readonly logicalGridColumn?: number;
   /** Canonical `w:gridCol` node id for this cell's start column, when authored. */
   readonly gridColumnId?: string;
   /** Grid columns spanned, already clamped at read time. */

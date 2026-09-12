@@ -264,19 +264,24 @@ describe('repeated-header shared horizontal border measurement', () => {
     }
   });
 
-  test('an unrelated thick column does not enlarge its thin neighbours', () => {
-    const header = row(
-      cell('H0', 0.5, 1) + cell('H1', 0.5, 1) + cell('H2', 0.5, 6),
-      '<w:tblHeader/>'
-    );
-    const body = Array.from({ length: 18 }, (_, index) =>
-      row(cell(`B${index}`, 0.5, 0.5, '<w:gridSpan w:val="2"/>') + cell('side', 0.5))
-    ).join('');
-    for (const fragment of repeated(layout(fixture({ header, body, columns: 3 })))) {
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(1, 6);
-      expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(6, 6);
+  test.each(['', '<w:bidiVisual/>'])(
+    'an unrelated thick column does not enlarge its thin neighbours (%s)',
+    (tableProperties) => {
+      const header = row(
+        cell('H0', 0.5, 1) + cell('H1', 0.5, 1) + cell('H2', 0.5, 6),
+        '<w:tblHeader/>'
+      );
+      const body = Array.from({ length: 18 }, (_, index) =>
+        row(cell(`B${index}`, 0.5, 0.5, '<w:gridSpan w:val="2"/>') + cell('side', 0.5))
+      ).join('');
+      for (const fragment of repeated(
+        layout(fixture({ header, body, columns: 3, tableProperties }))
+      )) {
+        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(1, 6);
+        expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(6, 6);
+      }
     }
-  });
+  );
 
   for (const align of ['center', 'bottom']) {
     test(`the repeated header keeps its ${align} alignment after a body edge wins`, () => {

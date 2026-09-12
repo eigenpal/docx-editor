@@ -71,6 +71,7 @@ export interface PlacedCell {
 }
 
 interface TableIndex {
+  readonly columnCount: number;
   /** Every painted cell of a table, in document order, repeats included. */
   readonly placed: readonly PlacedCell[];
   /** The authored rows once each, in order, keyed by ordinal. */
@@ -94,6 +95,7 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
   const placed = new Map<string, PlacedCell[]>();
   const rows = new Map<string, Map<number, readonly TableCellFragmentRecord[]>>();
   const ordinals = new Map<string, Map<string, number>>();
+  const columnCounts = new Map<string, number>();
 
   const visit = (
     blocks: readonly BlockFragmentRecord[],
@@ -104,6 +106,10 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
     for (const block of blocks) {
       if (block.kind === 'paragraph') continue;
       const id = block.tableId;
+      columnCounts.set(
+        id,
+        Math.max(columnCounts.get(id) ?? 0, (block.columnEdges?.length ?? 1) - 1)
+      );
       let rowOrdinals = ordinals.get(id);
       if (!rowOrdinals) {
         rowOrdinals = new Map();
@@ -166,7 +172,11 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
 
   const index = new Map<string, TableIndex>();
   for (const [id, cells] of placed) {
-    index.set(id, { placed: cells, rows: rows.get(id) ?? new Map() });
+    index.set(id, {
+      placed: cells,
+      rows: rows.get(id) ?? new Map(),
+      columnCount: columnCounts.get(id) ?? 0,
+    });
   }
   tableIndexCache.set(layout, index);
   return index;
@@ -174,7 +184,7 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
 
 /** The number of grid columns a table spans, from the widest row. */
 function columnCountOf(table: TableIndex): number {
-  let columns = 0;
+  let columns = table.columnCount;
   for (const cells of table.rows.values()) {
     for (const cell of cells) columns = Math.max(columns, spans(cell).to + 1);
   }
@@ -485,6 +495,7 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
   const table = tableIndex(layout).get(selection.tableId);
   if (!table) return '';
   const wanted = new Set(selection.cellIds);
+  const rtl = table.placed.some((entry) => entry.cell.logicalGridColumn !== undefined);
   const rows = new Map<number, Map<number, string>>();
   const seen = new Set<string>();
   for (const entry of table.placed) {
@@ -497,8 +508,10 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
       .map((id) => paragraphTextFromLayout(layout, id))
       .join('\n');
     const row = rows.get(entry.rowIndex);
-    if (row) row.set(entry.cell.gridColumn, text);
-    else rows.set(entry.rowIndex, new Map([[entry.cell.gridColumn, text]]));
+    // Merged text starts at the logical leading slot, which is physically rightmost in RTL.
+    const column = entry.cell.gridColumn + (rtl ? Math.max(1, entry.cell.gridSpan) - 1 : 0);
+    if (row) row.set(column, text);
+    else rows.set(entry.rowIndex, new Map([[column, text]]));
   }
   return [...rows.keys()]
     .sort((left, right) => left - right)
@@ -508,7 +521,8 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
       // One field per GRID COLUMN, not per present cell. A row with `w:gridBefore`, or any
       // interior gap, otherwise shifts every later column one place left and the grid no
       // longer lines up when it is pasted.
-      for (let column = selection.columns.from; column <= selection.columns.to; column += 1) {
+      for (let offset = 0; offset <= selection.columns.to - selection.columns.from; offset += 1) {
+        const column = rtl ? selection.columns.to - offset : selection.columns.from + offset;
         fields.push(row.get(column) ?? '');
       }
       return fields.join('\t');
@@ -557,7 +571,7 @@ export function tableContextAt(
         rows: table.rows.size,
         columns: columnCountOf(table),
         rowIndex: entry.rowIndex,
-        columnIndex: entry.cell.gridColumn,
+        columnIndex: entry.cell.logicalGridColumn ?? entry.cell.gridColumn,
       };
     }
   }
@@ -591,7 +605,7 @@ export function tableAnchorAt(
         rowId: entry.row.id,
         cellId: firstCellId,
         cellIds: cellSelection.cellIds,
-        gridColumnIndex: entry.cell.gridColumn,
+        gridColumnIndex: entry.cell.logicalGridColumn ?? entry.cell.gridColumn,
         isHeaderRepeat: entry.isHeaderRepeat,
       };
     }
@@ -611,7 +625,7 @@ export function tableAnchorAt(
       rowId: entry.row.id,
       cellId: entry.cell.id,
       cellIds: [entry.cell.id],
-      gridColumnIndex: entry.cell.gridColumn,
+      gridColumnIndex: entry.cell.logicalGridColumn ?? entry.cell.gridColumn,
       isHeaderRepeat: entry.row.isHeaderRepeat,
     };
   }

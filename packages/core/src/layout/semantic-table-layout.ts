@@ -1424,6 +1424,9 @@ export function layoutRowFragmentBounded(
     return {
       id: entry.cell.id,
       gridColumn: entry.gridColumn,
+      ...(entry.cell.logicalGridColumn === undefined
+        ? {}
+        : { logicalGridColumn: entry.cell.logicalGridColumn }),
       ...(entry.cell.gridColumnId ? { gridColumnId: entry.cell.gridColumnId } : {}),
       gridSpan: entry.cell.gridSpan,
       vMergeContinue: entry.cell.vMergeContinue,

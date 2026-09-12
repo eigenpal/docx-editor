@@ -384,6 +384,17 @@ export const wordFeatures: WordFeature[] = [
       'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
   },
   {
+    id: 'tables.rtl',
+    name: 'Visually right-to-left tables',
+    category: 'tables',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Authored w:bidiVisual tables display logical cells from right to left, including merged cells and repeated headers. Table styles can supply the property; a direct false value overrides it. Borders, margins, alignment, selection, column insertion, and divider resizing follow the visual grid. Changing table direction and resizing the outer right edge of an RTL table are not supported.',
+  },
+  {
     id: 'tables.rows-columns',
     name: 'Row/column insert, delete, resize',
     category: 'tables',
