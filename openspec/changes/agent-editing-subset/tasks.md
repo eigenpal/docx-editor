@@ -148,4 +148,4 @@ Each item requires implementation, positive behavior, refusal/preservation check
 - [x] 5.6 Cover contract/template review, report authoring with lists/tables/images, and page layout/fields across those apps. Save/reopen outputs and record concrete failures and awkward API gaps.
 - [x] 5.7 Combine feedback in one issue log with reproduction, expected/actual behavior, severity, source fix, and regression evidence. Fix required workflow failures in the API; do not hide them with private imports or browser fallbacks.
 - [x] 5.8 Rerun consumer apps after fixes, then run an independent reviewer loop over implementation, public contract, preservation, and evidence. Repeat until required findings are resolved.
-- [ ] 5.9 Run final gates, reconcile all evidence/checklists, and open the single PR only when ready.
+- [x] 5.9 Run final gates, reconcile all evidence/checklists, and open the single PR only when ready. Delivered in [PR #811](https://github.com/eigenpal/docx-editor/pull/811).
