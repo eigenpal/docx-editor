@@ -550,6 +550,7 @@ Text paragraphs use the inherited `w:bidi` setting for default alignment and
 visual order. Arabic and Latin text keep their logical document offsets when
 the editor places words from right to left.
 List markers and suffix spacing follow the paragraph direction in body text and table cells.
+Logical list indents resolve after inherited and direct paragraph direction.
 
 The shaper uses the resolved script and direction. Adjacent source runs with
 identical formatting and metadata shape together, preserving Arabic joining.

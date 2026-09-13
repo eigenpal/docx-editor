@@ -1,6 +1,7 @@
 // Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
 // layout inputs (marker text, effective indent, marker face) for one story walk.
 
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { flattenContentControls } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './layout-cache.ts';
@@ -316,19 +317,21 @@ function firstLineOffsetOf(
 }
 
 /** Whether any `w:ind` in the list states left (or its `w:start` spelling). */
-function statesLeft(props: readonly OoxmlProperty[]): boolean {
+function statesLeft(props: readonly OoxmlProperty[], rtl = false): boolean {
   return props.some(
     (property) =>
       property.localName === 'ind' &&
-      (property.attributes?.left !== undefined || property.attributes?.start !== undefined)
+      (property.attributes?.left !== undefined ||
+        property.attributes?.[rtl ? 'end' : 'start'] !== undefined)
   );
 }
 
-function statesRight(props: readonly OoxmlProperty[]): boolean {
+function statesRight(props: readonly OoxmlProperty[], rtl = false): boolean {
   return props.some(
     (property) =>
       property.localName === 'ind' &&
-      (property.attributes?.right !== undefined || property.attributes?.end !== undefined)
+      (property.attributes?.right !== undefined ||
+        property.attributes?.[rtl ? 'start' : 'end'] !== undefined)
   );
 }
 
@@ -351,6 +354,23 @@ export function mergeListIndent(
   inherited: readonly OoxmlProperty[],
   direct: readonly OoxmlProperty[] = []
 ): NumberingLevelIndent {
+  const rtl = paragraphIsRtl([...inherited, ...direct]);
+  const direction: OoxmlProperty = { localName: 'bidi', attributes: { val: rtl ? '1' : '0' } };
+  if (levelIndent.authored) {
+    const sides = levelIndent.authored;
+    const left = sides.left ?? (rtl ? sides.end : sides.start);
+    const right = sides.right ?? (rtl ? sides.start : sides.end);
+    levelIndent = {
+      ...levelIndent,
+      left: left ?? 0,
+      right: right ?? 0,
+      stated: {
+        left: left !== undefined,
+        right: right !== undefined,
+        firstLineOffset: levelIndent.stated?.firstLineOffset ?? false,
+      },
+    };
+  }
   // A level built by hand (a unit test, not a file) carries no presence record; it then
   // states nothing and the style still wins, which is the behaviour those callers had.
   const levelStates = levelIndent.stated ?? {
@@ -358,22 +378,22 @@ export function mergeListIndent(
     right: false,
     firstLineOffset: false,
   };
-  const inheritedIndent = paragraphIndent(inherited);
-  const directIndent = paragraphIndent(direct);
+  const inheritedIndent = paragraphIndent([...inherited, direction]);
+  const directIndent = paragraphIndent([...direct, direction]);
   const levelOffset = { hanging: levelIndent.hanging, firstLine: levelIndent.firstLine };
 
-  const left = statesLeft(direct)
+  const left = statesLeft(direct, rtl)
     ? directIndent.left
     : levelStates.left
       ? levelIndent.left
-      : statesLeft(inherited)
+      : statesLeft(inherited, rtl)
         ? inheritedIndent.left
         : levelIndent.left;
-  const right = statesRight(direct)
+  const right = statesRight(direct, rtl)
     ? directIndent.right
     : levelStates.right
       ? levelIndent.right
-      : statesRight(inherited)
+      : statesRight(inherited, rtl)
         ? inheritedIndent.right
         : levelIndent.right;
   const firstLineOffset =

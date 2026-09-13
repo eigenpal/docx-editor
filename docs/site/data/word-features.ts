@@ -160,7 +160,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text paragraphs resolve inherited bidi direction, script shaping, visual word order, caret direction, and disjoint selection bands. Equivalent source runs preserve contextual joining. List markers and suffix spacing follow paragraph direction in body text and table cells. Tabs and inline atoms retain the existing placement path. Complex-script font selection and shaping across formatting boundaries remain partial. Hebrew locale ships in @docx-editor.dev/i18n.',
+      'Text paragraphs resolve inherited bidi direction, script shaping, visual word order, caret direction, and disjoint selection bands. Equivalent source runs preserve contextual joining. List markers, suffix spacing, and logical list indents follow resolved paragraph direction in body text and table cells. Tabs and inline atoms retain the existing placement path. Complex-script font selection and shaping across formatting boundaries remain partial. Hebrew locale ships in @docx-editor.dev/i18n.',
   },
   {
     id: 'text.effects',

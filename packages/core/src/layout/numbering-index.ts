@@ -40,6 +40,13 @@ export type ListMarkerAlign = 'left' | 'center' | 'right';
  * must not overwrite an inherited `hanging` with a synthesized zero.
  */
 export interface NumberingLevelIndent {
+  /** Authored physical/logical sides, in points, before paragraph direction resolves them. */
+  readonly authored?: {
+    readonly left?: number;
+    readonly right?: number;
+    readonly start?: number;
+    readonly end?: number;
+  };
   readonly left: number;
   readonly right: number;
   readonly hanging: number;
@@ -196,6 +203,11 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   if (!pPr) return empty;
   const ind = child(pPr, 'ind');
   if (!ind) return empty;
+  const authored: { left?: number; right?: number; start?: number; end?: number } = {};
+  for (const side of ['left', 'right', 'start', 'end'] as const) {
+    const value = integerAttr(attr(ind, side), true);
+    if (value !== null) authored[side] = clampSignedPt(value);
+  }
   const leftTwips = integerAttr(attr(ind, 'left') ?? attr(ind, 'start'), true);
   const rightTwips = integerAttr(attr(ind, 'right') ?? attr(ind, 'end'), true);
   // `w:hanging` is unsigned in the schema, and a negative one is meaningless: the hanging
@@ -206,6 +218,7 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   // A negative one is therefore read as authored rather than flattened to zero.
   const firstLineTwips = integerAttr(attr(ind, 'firstLine'), true);
   return {
+    ...(authored.start !== undefined || authored.end !== undefined ? { authored } : {}),
     left: leftTwips === null ? 0 : clampSignedPt(leftTwips),
     right: rightTwips === null ? 0 : clampSignedPt(rightTwips),
     hanging: hangingTwips === null ? 0 : clampNonNegativePt(hangingTwips),
