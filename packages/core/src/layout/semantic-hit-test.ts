@@ -1073,17 +1073,11 @@ export function caretBoxOnLine(
     // paragraph they cannot see. The ascent the line was measured at is what a caret in it
     // should be, and it survives the collapse for exactly this.
     //
-    // Drawn ENDING at the collapse point, not starting from it. The line sits on the cell's
-    // content bottom, so growing downward puts the whole caret outside the row and over
-    // whatever block follows the table. Growing upward puts it inside the row that owns the
-    // paragraph, which is the invariant worth having and the one the tests pin.
+    // End at the collapse point so the caret remains inside the owning row.
+    // Growing downward would paint over the following table or paragraph.
     //
-    // It does land in the band the preceding table occupies, and horizontally wherever the
-    // terminator's OWN `w:ind` and `w:jc` put it — so a centred or indented terminator puts
-    // the caret over that table's text. That is not a placement bug to route around: it is
-    // where the text a keystroke produces will appear. Neither alternative is available
-    // either, because the paragraph's own band is empty by construction and a table that
-    // fills the cell leaves no column beside it.
+    // The terminator keeps its own authored horizontal alignment, even over a preceding
+    // table: this is where subsequent typed text will appear.
     //
     // Restricted to a zero box on purpose. A spanless line whose `leading` and
     // `trailingSpacing` happen to consume it is an ordinary spaced empty paragraph that
@@ -1103,6 +1097,11 @@ export function caretBoxOnLine(
     }
     if (offset === span.range.end) {
       const next = spans[index + 1];
+      // Shaped caret stops use downstream affinity at a shared logical boundary.
+      if (next?.range.start === offset && span.style.shaping && next.style.shaping) {
+        chosen = next;
+        break;
+      }
       // Trailing edge of a tab/field: downstream affinity — same model offset as the next
       // span's start, but the visual insertion point belongs with the following text.
       if (next && next.range.start === offset && usesPublishedAdvance(span)) {
