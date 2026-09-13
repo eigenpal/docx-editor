@@ -12,7 +12,7 @@ import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts'
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { hardBreakAttributes } from '../package/hard-break.ts';
+import { simpleElement, textElement } from './tree-op-inline-elements.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
   isContentRevisionKind,
@@ -160,51 +160,6 @@ import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 import { fnv1a32 } from '../package/para-id.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
-
-/**
- * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
- *
- * SPLITTING a run must not change what the run is. This built a `w:t` unconditionally, so
- * every ordinary gesture that splits a run inside a `w:del` — commenting on struck text,
- * bolding across it — silently re-labelled the deletion as live text (§17.3.3.7 requires
- * `w:delText` there), and the damage only showed when the file reached Word.
- */
-function textElement(
-  nextId: () => string,
-  text: string,
-  kind: 'text' | 'deletedText' = 'text'
-): OoxmlNode {
-  const valueId = nextId();
-  return {
-    id: nextId(),
-    kind,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: kind === 'deletedText' ? 'delText' : 't',
-    prefix: 'w',
-    namespaceBindings: [],
-    // `xml:space="preserve"` is not added here: the serializer owns lexical form, and a
-    // leading/trailing space is preserved by the tree regardless of the attribute.
-    attributes: [],
-    children: [{ id: valueId, kind: 'textValue', value: text }],
-  } as unknown as OoxmlNode;
-}
-
-function simpleElement(
-  nextId: () => string,
-  localName: 'tab' | 'br',
-  breakKind: 'line' | 'page' = 'line'
-): OoxmlNode {
-  return {
-    id: nextId(),
-    kind: localName === 'tab' ? 'tab' : 'hardBreak',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
-    children: [],
-  } as unknown as OoxmlNode;
-}
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
