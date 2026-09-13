@@ -4,9 +4,11 @@
 // position, selection rectangles ask it for the ends of a range. Both must ask it about ONE
 // paragraph's share of the line, which is what the segment argument is for.
 
+import { segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
+import { MAX_CARET_ADVANCE_UTF16 } from './shaped-caret-advances.ts';
 import { spanOffsetX } from './semantic-hit-test.ts';
 import type { LineSegment } from './line-segments.ts';
-import type { LineRecord, TextMeasurer } from './semantic-records.ts';
+import type { LineRecord, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 export /** The x offset of `offset` within a line, by walking its spans. */
 function xWithinLine(
@@ -63,6 +65,64 @@ export function mergeLineRangeBands(bands: LineRangeBand[]): LineRangeBand[] {
   return merged;
 }
 
+const selectionGraphemes = new WeakMap<StyleSpanRecord, readonly GraphemeSegment[]>();
+const CONTROL_ONLY = /^[\p{Control}\p{Default_Ignorable_Code_Point}]+$/u;
+const VISIBLE_BASE = /[\p{Letter}\p{Number}\p{Punctuation}\p{Symbol}]/u;
+
+/** Highlight ink for partial clusters without inventing new insertion positions. */
+function selectionSpanEdges(
+  span: StyleSpanRecord,
+  from: number,
+  to: number,
+  measurer?: TextMeasurer
+): readonly [number, number] | null {
+  if (CONTROL_ONLY.test(span.text.slice(from - span.range.start, to - span.range.start)))
+    return null;
+  if (
+    span.style.shaping &&
+    measurer &&
+    span.text.length <= MAX_CARET_ADVANCE_UTF16 &&
+    span.text.length === span.range.end - span.range.start
+  ) {
+    let graphemes = selectionGraphemes.get(span);
+    if (!graphemes) {
+      graphemes = segmentGraphemes(span.text);
+      selectionGraphemes.set(span, graphemes);
+    }
+    const at = (offset: number) => {
+      let low = 0;
+      let high = graphemes.length;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (graphemes[middle]!.utf16To <= offset) low = middle + 1;
+        else high = middle;
+      }
+      return graphemes[low];
+    };
+    const first = at(from - span.range.start);
+    const last = at(to - span.range.start - 1);
+    if (first && last) {
+      from = span.range.start + first.utf16From;
+      to = span.range.start + last.utf16To;
+      const leading = spanOffsetX(span, span.range.start + last.utf16From, measurer);
+      // Whole-run caret vectors collapse ligature interiors to their leading edge.
+      // Expand a selected base's flat trailing edge to the next cluster edge. Marks
+      // inherit their grapheme's base; isolated marks and controls never borrow ink.
+      if (VISIBLE_BASE.test(last.text) && spanOffsetX(span, to, measurer) === leading) {
+        let low = to + 1;
+        let high = span.range.end;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          if (spanOffsetX(span, middle, measurer) === leading) low = middle + 1;
+          else high = middle;
+        }
+        to = Math.min(low, span.range.end);
+      }
+    }
+  }
+  return [spanOffsetX(span, from, measurer), spanOffsetX(span, to, measurer)];
+}
+
 /** A logical range can occupy several disjoint physical bands in a bidi line. */
 export function rangeBandsWithinLine(
   line: LineRecord,
@@ -82,8 +142,9 @@ export function rangeBandsWithinLine(
     const from = Math.max(start, span.range.start);
     const to = Math.min(end, span.range.end);
     if (from >= to) continue;
-    const a = spanOffsetX(span, from, measurer);
-    const b = spanOffsetX(span, to, measurer);
+    const edges = selectionSpanEdges(span, from, to, measurer);
+    if (!edges) continue;
+    const [a, b] = edges;
     bands.push({ x: Math.min(a, b), width: Math.abs(b - a) });
   }
   return mergeLineRangeBands(bands);
