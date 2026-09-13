@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import type { AutomationHost, AutomationBatchRequest } from '@docx-editor.dev/core/automation';
-import { DocxEditor, type RequestContext } from '@docx-editor.dev/editor-api';
+import { DocxEditor, type RequestContext } from '../../index.ts';
 import { createRuntime } from '../runtime.ts';
 import { openHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';

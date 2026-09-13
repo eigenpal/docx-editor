@@ -70,3 +70,11 @@ The final source adds 95 regression cases across four new test files.
 This result does not guarantee the absence of undiscovered defects.
 Signature coverage remains informational: 81/81 fixed-profile members and 88/969 broad editing members.
 Signature equality does not establish behavioral compatibility.
+
+## Clean CI follow-up
+
+The first CI run exposed a test-only import that resolved to unbuilt package output.
+Runtime tests use a nested TypeScript configuration without the package self-alias.
+The new cross-review test now imports the public source entry point by relative path.
+All 95 new regressions pass with editor-api build output temporarily removed.
+The built-package consumer apps retain their package imports and still run after builds in CI.
