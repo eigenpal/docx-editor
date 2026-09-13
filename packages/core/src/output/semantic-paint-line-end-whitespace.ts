@@ -35,6 +35,8 @@ export function prepareTextPaintHost(
       glyph.style.setProperty('-webkit-text-fill-color', 'transparent');
       const inkOffset = `${(span.glyphOffsetPt * scale) / horizontalScale}px`;
       glyph.style.setProperty('--docx-glyph-ink-offset', inkOffset);
+      if (element.style.color && element.style.color !== 'inherit')
+        glyph.style.setProperty('--docx-glyph-ink-color', element.style.color);
       glyph.style.textShadow = `${inkOffset} 0 currentColor`;
     }
     element.append(glyph);

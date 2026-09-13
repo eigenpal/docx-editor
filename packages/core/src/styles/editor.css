@@ -633,7 +633,7 @@
 .docx-line [data-docx-shifted-ink]::selection {
   background-color: rgba(26, 115, 232, 0.3) !important;
   color: transparent !important;
-  text-shadow: var(--docx-glyph-ink-offset, 0px) 0 CanvasText;
+  text-shadow: var(--docx-glyph-ink-offset, 0px) 0 var(--docx-glyph-ink-color, CanvasText);
 }
 
 @media (forced-colors: active) {
