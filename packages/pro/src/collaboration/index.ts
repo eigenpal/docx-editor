@@ -41,3 +41,8 @@ export {
   SCHEMA_VERSION,
   CollaborationSchemaError,
 } from './schema.ts';
+export {
+  DOCUMENT_COLLABORATION_VERSIONS,
+  assertDocumentCollaborationCompatibility,
+  type DocumentCollaborationVersions,
+} from './document-compatibility.ts';

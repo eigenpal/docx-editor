@@ -30,7 +30,6 @@ import type {
   UseCollaborationStatusReturn,
 } from '@docx-editor.dev/pro/react';
 import { useHocuspocusCollaboration } from '@docx-editor.dev/pro/react/hocuspocus';
-import type { CollaborationFailure } from '@docx-editor.dev/core/collaboration';
 import {
   createCollaborationRoomId,
   validateRoomId,
@@ -38,6 +37,8 @@ import {
 import { CollaboratorCaret, PersonAvatar } from './CollaboratorCaret';
 import { useColorMode, type ColorMode } from './useColorMode';
 import { actorIdFor, PEOPLE, type Person } from './people';
+import { encodeDemoToken } from '../shared/admission';
+import { failureMessage } from '../shared/failure-message';
 
 /**
  * Comments and tracked changes. Read once, when the instance is built, so it must not be
@@ -55,7 +56,7 @@ const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';
  * instead of a string and the provider re-evaluates it on every reconnect, which is how an
  * expiring token renews.
  */
-const TOKEN = import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token';
+const TOKEN = encodeDemoToken(import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token');
 
 /**
  * Give up on the first sync after eight seconds rather than the default thirty.
@@ -265,6 +266,10 @@ function RoomBar({
   // Either way the failure has to land where the user can act on it, not in the console.
   const [copyFailed, setCopyFailed] = useState(false);
   const state = transportState(status);
+  const recovery =
+    status.diverged && status.reason
+      ? failureMessage(status.reason, { serverUrl: SERVER_URL, serverCommand: SERVER_COMMAND })
+      : null;
 
   useEffect(() => {
     if (!copied) return undefined;
@@ -284,106 +289,89 @@ function RoomBar({
   }, [roomId]);
 
   return (
-    <header
-      className="collab-bar"
-      style={{ '--collab-you': person.color } as CSSProperties}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <span className={`collab-state ${state.tone}`} role="status">
-        <span className="collab-state__glyph" aria-hidden="true">
-          {state.glyph}
-        </span>
-        {state.label}
-      </span>
-
-      {session ? (
-        <button
-          type="button"
-          className={`collab-room${copied ? ' is-copied' : ''}`}
-          onClick={copyInvite}
-          title={copyFailed ? inviteUrl(roomId) : 'Copy the invite link'}
-        >
-          <span className="collab-room__label">Room</span>
-          <span className="collab-room__id">{shortRoomId(roomId)}</span>
-          <span aria-hidden="true">
-            {copied ? '✓ copied' : copyFailed ? '— copy it from the address bar' : '⧉'}
+    <>
+      <header
+        className="collab-bar"
+        style={{ '--collab-you': person.color } as CSSProperties}
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        <span className={`collab-state ${state.tone}`} role="status" title={recovery?.body}>
+          <span className="collab-state__glyph" aria-hidden="true">
+            {state.glyph}
           </span>
-        </button>
-      ) : (
-        <span className="collab-bar__note">This browser only. Nothing leaves it.</span>
-      )}
+          {state.label}
+        </span>
 
-      <span className="collab-bar__spacer" />
+        {session ? (
+          <button
+            type="button"
+            className={`collab-room${copied ? ' is-copied' : ''}`}
+            onClick={copyInvite}
+            title={copyFailed ? inviteUrl(roomId) : 'Copy the invite link'}
+          >
+            <span className="collab-room__label">Room</span>
+            <span className="collab-room__id">{shortRoomId(roomId)}</span>
+            <span aria-hidden="true">
+              {copied ? '✓ copied' : copyFailed ? '— copy it from the address bar' : '⧉'}
+            </span>
+          </button>
+        ) : (
+          <span className="collab-bar__note">This browser only. Nothing leaves it.</span>
+        )}
 
-      {session ? (
-        <span className="collab-here">
-          {/*
+        <span className="collab-bar__spacer" />
+
+        {session ? (
+          <span className="collab-here">
+            {/*
             The packaged avatar stack. It needs no render prop to show the photos: the declared
             `avatarUrl` reaches it the same way it reaches a comment card. The override here is
             only for the overlap this bar wants, and `announced` keeps the name the packaged
             disc carries — this is chrome, not furniture, so unlike a caret label it IS
             announced.
           */}
-          <DocxEditorCollaboration.Avatars max={5}>
-            {({ participant, color, avatarUrl }) => (
-              <span className="collab-bar__person" title={participant.name}>
-                <PersonAvatar
-                  avatarUrl={avatarUrl}
-                  name={participant.name}
-                  color={color}
-                  announced
-                />
-              </span>
-            )}
-          </DocxEditorCollaboration.Avatars>
-          <span className="collab-count">
-            {participants.length < 2 ? 'only you — share the room' : `${participants.length} here`}
+            <DocxEditorCollaboration.Avatars max={5}>
+              {({ participant, color, avatarUrl }) => (
+                <span className="collab-bar__person" title={participant.name}>
+                  <PersonAvatar
+                    avatarUrl={avatarUrl}
+                    name={participant.name}
+                    color={color}
+                    announced
+                  />
+                </span>
+              )}
+            </DocxEditorCollaboration.Avatars>
+            <span className="collab-count">
+              {participants.length < 2
+                ? 'only you — share the room'
+                : `${participants.length} here`}
+            </span>
           </span>
-        </span>
-      ) : null}
+        ) : null}
 
-      <ThemeSwitch mode={theme.mode} toggle={theme.toggle} />
+        <ThemeSwitch mode={theme.mode} toggle={theme.toggle} />
 
-      {session ? (
-        <button
-          type="button"
-          className="collab-button"
-          onClick={() => {
-            void editor?.save().then((bytes) => onLeave(new Uint8Array(bytes)));
-          }}
-        >
-          Leave room
-        </button>
+        {session ? (
+          <button
+            type="button"
+            className="collab-button"
+            onClick={() => {
+              void editor?.save().then((bytes) => onLeave(new Uint8Array(bytes)));
+            }}
+          >
+            Leave room
+          </button>
+        ) : null}
+      </header>
+      {recovery ? (
+        <aside className="collab-recovery" role="alert">
+          <strong>{recovery.title}</strong>
+          <p>{recovery.body}</p>
+        </aside>
       ) : null}
-    </header>
+    </>
   );
-}
-
-/** A failure code turned into something a person can act on. */
-function failureMessage(failure: CollaborationFailure): {
-  readonly title: string;
-  readonly body: string;
-  readonly command?: string;
-} {
-  if (failure.code === 'initialization-timeout') {
-    return {
-      title: 'No answer from the room server.',
-      body: `Nothing is listening on ${SERVER_URL}. Start it in a second terminal, then reload this page.`,
-      command: SERVER_COMMAND,
-    };
-  }
-  if (failure.code === 'initialization-aborted') {
-    return {
-      title: 'The room server refused the connection.',
-      body:
-        failure.detail ??
-        'It rejected the token this demo sends. Check COLLAB_TOKEN on the server against VITE_COLLAB_TOKEN here.',
-    };
-  }
-  return {
-    title: 'Could not join the room.',
-    body: failure.detail ?? `The room reported ${failure.code}. Reload to try again.`,
-  };
 }
 
 export function App() {
@@ -456,7 +444,10 @@ export function App() {
   if (!joined) return <SignIn ready={bytes !== undefined} onJoin={join} />;
 
   if (collaboration.error) {
-    const message = failureMessage(collaboration.error);
+    const message = failureMessage(collaboration.error, {
+      serverUrl: SERVER_URL,
+      serverCommand: SERVER_COMMAND,
+    });
     return (
       <div className="collab-message" role="alert">
         <div className="collab-message__inner">

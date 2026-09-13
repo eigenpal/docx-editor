@@ -305,8 +305,15 @@ class DocumentSession implements DocumentCollaborationSession {
    * do. Only the host can show an offline indicator, so it opts in. `initializing` stays
    * refused (the bootstrap has not published a first revision) and `error` stays terminal.
    */
+  private hasCompatibleSharedSchema(): boolean {
+    const failure = packageVersionFailure(this.registry.schema.meta);
+    if (!failure) return true;
+    this.setStatus('error', failure.code, failure.detail);
+    return false;
+  }
+
   private canWriteSharedState(): boolean {
-    if (this.destroyed) return false;
+    if (this.destroyed || !this.hasCompatibleSharedSchema()) return false;
     const status = this.statusState.status();
     return status === 'ready' || (this.offlineEditing && status === 'disconnected');
   }
@@ -504,6 +511,9 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private applyJournal(journal: CanonicalPrimitiveJournal): void {
+    // Custom ports and headless stores can publish without the editor's operation gate.
+    // Enforce admission here too, before minting identities or publishing document/blob data.
+    if (!this.canWriteSharedState()) return;
     const projected = projectJournalToShared(this.registry, this.identityMap.translate(journal));
     if (!projected.ok) {
       this.refuseLocalJournal({
@@ -518,6 +528,8 @@ class DocumentSession implements DocumentCollaborationSession {
       this.refuseLocalJournal(blobs.failure);
       return;
     }
+    // A custom blob reader can run host code; recheck after that callback before writing.
+    if (!this.canWriteSharedState()) return;
     const refusal = this.ydoc.transact((): CollaborationFailure | null => {
       if (blobs !== null) {
         const published = this.putJournalBlobs(blobs.payloads);
@@ -622,7 +634,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
-    if (this.destroyed || !this.port) return;
+    if (this.destroyed || !this.hasCompatibleSharedSchema() || !this.port) return;
     // The canonical store already holds a local commit. Its journal translates visible
     // positions before writing shared state, so no local materialization is necessary.
     if (transaction.origin === this.localOrigin) return;
@@ -640,11 +652,7 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!port || this.applyingRemote) return;
     this.applyingRemote = true;
     try {
-      const versionFailure = packageVersionFailure(this.registry.schema.meta);
-      if (versionFailure) {
-        this.setStatus('error', versionFailure);
-        return;
-      }
+      if (!this.hasCompatibleSharedSchema()) return;
       const exceeded = limitFailure(this.registry, this.blobs);
       if (exceeded) {
         this.setStatus('error', exceeded.code, exceeded.detail);
@@ -905,7 +913,8 @@ async function bootstrapDocumentReplica(
       }
       // Same rebuild as the join path: shared state arrived before this registry existed.
       const versionFailure = packageVersionFailure(registry.schema.meta);
-      if (versionFailure) throw new CollaborationSchemaError(versionFailure);
+      if (versionFailure)
+        throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
       registry.rebuildDerivedIndexes();
     }
   } else {
@@ -922,7 +931,8 @@ async function bootstrapDocumentReplica(
     // built from child-array EVENTS. Without one rebuild here a joiner materializes a
     // document with no known parents.
     const versionFailure = packageVersionFailure(registry.schema.meta);
-    if (versionFailure) throw new CollaborationSchemaError(versionFailure);
+    if (versionFailure)
+      throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
     registry.rebuildDerivedIndexes();
   }
 

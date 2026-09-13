@@ -1,7 +1,5 @@
 ---
-'@docx-editor.dev/pro': patch
+'@docx-editor.dev/pro': major
 ---
 
-Preserve text and run formatting after repeated concurrent formatting, typing, deletion, and undo. Translate edits through hidden split branches and retain shared character identities across replacement runs.
-
-Full-document collaboration now uses shared schema version 3. Upgrade all participants together. Export older persisted rooms to DOCX with the previous release, then seed new rooms after upgrading. New clients reject incompatible room schemas.
+Preserve text across repeated concurrent formatting, typing, deletion, and undo; expose full-document compatibility checks and reject incompatible rooms. Shared schema version 3 requires coordinated upgrades: export older rooms with the previous release, then seed new rooms with fresh collaboration history. Fixes #592.

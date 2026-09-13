@@ -16,6 +16,8 @@ import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
 import * as Y from 'yjs';
+import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
+import { loadStoredDemoDocument } from './stored-room.ts';
 
 const PORT = Number(process.env.PORT ?? 1234);
 
@@ -51,14 +53,16 @@ const server = new Server({
    * Every connection is queued until this resolves, so nothing reaches a document before the
    * server has admitted the client.
    *
-   * The demo checks one shared secret. A real deployment verifies a signed token and returns
+   * The demo checks a shared secret and compatible versions before sync. Version claims
+   * prevent accidental mixed-client rooms; they do not authenticate the client build.
+   * A real deployment verifies a signed token and returns
    * the user it names as the connection context. Do that and the client's display name stops
    * being the authority on who someone is — this demo trusts it, because there is nobody to
    * ask.
    */
   async onAuthenticate({ token, documentName }) {
     if (!ROOM_ID.test(documentName)) throw new Error('unknown room');
-    if (token !== TOKEN) throw new Error('invalid token');
+    authenticateDemoToken(token, TOKEN);
     return { room: documentName };
   },
 
@@ -66,8 +70,12 @@ const server = new Server({
   async onLoadDocument({ documentName, document }) {
     const file = roomFile(documentName);
     if (!file) return document;
-    const stored = await readFile(file).catch(() => null);
-    if (stored) Y.applyUpdate(document, new Uint8Array(stored));
+    const stored = await readFile(file).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      console.warn(`[room ${documentName}] saved room unavailable: ${error.message}`);
+      throw admissionError('saved-room-unavailable');
+    });
+    if (stored) loadStoredDemoDocument(document, new Uint8Array(stored));
     return document;
   },
 

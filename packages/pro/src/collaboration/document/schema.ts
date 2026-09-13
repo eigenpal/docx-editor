@@ -8,11 +8,17 @@ import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaborat
 import { rejectDangerousKey, rejectString } from './limits.ts';
 import type { LogicalId } from './identity.ts';
 
-export const PACKAGE_PROTOCOL_VERSION = 1;
-// Version 3 retains split character identities and immutable split ancestry.
-export const PACKAGE_SHARED_SCHEMA_VERSION = 3;
-export const PACKAGE_REPAIR_VERSION = 1;
-export const PACKAGE_CANONICAL_MODEL_VERSION = 1;
+import {
+  DOCUMENT_COLLABORATION_VERSIONS,
+  documentCompatibilityFailure,
+  type DocumentCollaborationVersions,
+} from '../document-compatibility.ts';
+
+export const PACKAGE_PROTOCOL_VERSION = DOCUMENT_COLLABORATION_VERSIONS.protocolVersion;
+export const PACKAGE_SHARED_SCHEMA_VERSION = DOCUMENT_COLLABORATION_VERSIONS.sharedSchemaVersion;
+export const PACKAGE_REPAIR_VERSION = DOCUMENT_COLLABORATION_VERSIONS.repairVersion;
+export const PACKAGE_CANONICAL_MODEL_VERSION =
+  DOCUMENT_COLLABORATION_VERSIONS.canonicalModelVersion;
 
 export const PACKAGE_META_KEY = 'docx-package-meta-v1';
 export const PACKAGE_NODES_KEY = 'docx-package-nodes-v1';
@@ -57,19 +63,9 @@ export const EMPTY_NAMESPACE_ID = '-';
 export const BOOTSTRAP_ORIGIN = Object.freeze({ kind: 'docx-package-bootstrap' });
 export const JOURNAL_ORIGIN = Object.freeze({ kind: 'docx-package-journal' });
 
-export interface PackageSchemaVersions {
-  readonly protocolVersion: number;
-  readonly sharedSchemaVersion: number;
-  readonly repairVersion: number;
-  readonly canonicalModelVersion: number;
-}
+export type PackageSchemaVersions = DocumentCollaborationVersions;
 
-export const PACKAGE_SCHEMA_VERSIONS: PackageSchemaVersions = Object.freeze({
-  protocolVersion: PACKAGE_PROTOCOL_VERSION,
-  sharedSchemaVersion: PACKAGE_SHARED_SCHEMA_VERSION,
-  repairVersion: PACKAGE_REPAIR_VERSION,
-  canonicalModelVersion: PACKAGE_CANONICAL_MODEL_VERSION,
-});
+export const PACKAGE_SCHEMA_VERSIONS: PackageSchemaVersions = DOCUMENT_COLLABORATION_VERSIONS;
 
 export interface EncodedAttribute {
   readonly namespaceUri: string;
@@ -453,17 +449,13 @@ export function makeBinaryEntry(descriptor: CanonicalBinaryDescriptor): Y.Map<un
 }
 
 /** Refuse incompatible persisted rooms before interpreting their split metadata. */
-export function packageVersionFailure(
-  meta: Y.Map<unknown>
-): 'protocol-version-mismatch' | 'schema-version-mismatch' | null {
-  if (meta.get('protocolVersion') !== PACKAGE_PROTOCOL_VERSION) return 'protocol-version-mismatch';
-  if (
-    meta.get('sharedSchemaVersion') !== PACKAGE_SHARED_SCHEMA_VERSION ||
-    meta.get('repairVersion') !== PACKAGE_REPAIR_VERSION ||
-    meta.get('canonicalModelVersion') !== PACKAGE_CANONICAL_MODEL_VERSION
-  )
-    return 'schema-version-mismatch';
-  return null;
+export function packageVersionFailure(meta: Y.Map<unknown>) {
+  return documentCompatibilityFailure({
+    protocolVersion: meta.get('protocolVersion'),
+    sharedSchemaVersion: meta.get('sharedSchemaVersion'),
+    repairVersion: meta.get('repairVersion'),
+    canonicalModelVersion: meta.get('canonicalModelVersion'),
+  });
 }
 
 export function writeSchemaVersions(meta: Y.Map<unknown>): void {

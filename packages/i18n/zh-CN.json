@@ -850,7 +850,16 @@
     "you": null,
     "outOfSync": null,
     "outOfSyncShort": null,
-    "caretPages": null
+    "caretPages": null,
+    "serverRecovery": {
+      "timeoutBody": null,
+      "timeoutTitle": null,
+      "tokenBody": null,
+      "versionBody": null,
+      "versionTitle": null,
+      "savedRoomBody": null,
+      "savedRoomTitle": null
+    }
   },
   "collaboration": {
     "moreParticipants": null,

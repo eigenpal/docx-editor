@@ -8,6 +8,9 @@ import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 // @public
+export function assertDocumentCollaborationCompatibility(versions: unknown): void;
+
+// @public
 export type CollaborationBootstrap = {
     readonly document: Uint8Array;
     readonly kind: 'create';
@@ -148,12 +151,23 @@ export interface CreateTextCollaborationOptions {
 }
 
 // @public
+export const DOCUMENT_COLLABORATION_VERSIONS: DocumentCollaborationVersions;
+
+// @public
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
 // @public
 export interface DocumentCollaborationSession extends TextCollaborationSession {
     resourceUsage(): CollaborationResourceUsage;
     setIdentity(update: CollaborationIdentityUpdate): void;
+}
+
+// @public
+export interface DocumentCollaborationVersions {
+    readonly canonicalModelVersion: number;
+    readonly protocolVersion: number;
+    readonly repairVersion: number;
+    readonly sharedSchemaVersion: number;
 }
 
 // @public

@@ -34,10 +34,41 @@ Single text edits do not traverse historical split branches. Structural and
 provenance changes invalidate the split visibility cache. Boundary edits avoid
 rewriting unchanged anchors, including source start and end sentinels.
 
-Shared schema version 3 requires a coordinated participant upgrade. New clients
-reject incompatible persisted rooms. Export older rooms with their existing
-release, then seed new rooms from DOCX after upgrading. This starts new shared
-undo history.
+Compatibility is the full tuple `(protocolVersion, sharedSchemaVersion,
+repairVersion, canonicalModelVersion)`, currently `(1, 3, 1, 1)`. The public
+`DOCUMENT_COLLABORATION_VERSIONS` descriptor exposes the installed package's
+supported tuple. The legacy `SCHEMA_VERSION` and `PROTOCOL_VERSION` exports belong
+to experimental text-only collaboration and must not be used for full-document
+room admission. Compatibility does not require identical package release numbers
+when the declared tuple matches.
+
+Join, receive, and server-side export check the room's tuple before interpreting
+its shared representation. In particular, a v3 exporter must refuse v2 state:
+v2 concurrent text overlays are not v3 source ranges, and treating them as such
+can omit characters. These checks are not transport admission control. The host
+must reject incompatible participants before accepting their Yjs updates, and
+must apply the same policy to export jobs and returning offline clients.
+
+Upgrade persisted rooms through a verified DOCX rather than relabeling Yjs state:
+
+1. Freeze old-room writes and drain accepted updates. Back up its authoritative
+   persisted Yjs state, external blobs if applicable, and readable version tuple.
+   Resolve outstanding offline work before selecting the migration snapshot.
+2. Export with the runtime compatible with that snapshot. Reopen the DOCX and
+   verify expected text and document structures before using it as a baseline.
+3. Deploy compatible participants and workers, then seed an empty Yjs document
+   under a new provider room/storage key. Route the application document to that
+   room. Do not rewrite version fields or replay old updates into it.
+4. Verify the new room and export, then admit writes. Retain the old room and
+   backup read-only. Keep stale clients and queued offline updates out; local
+   persistence keys must distinguish the old and new room generations.
+
+This transfers document content and starts new shared undo history. Before new
+edits, rollback restores the old runtime and old snapshot together. After new
+edits, first freeze and export or reconcile that work; v3 updates cannot be
+replayed into a v2 room. A schema-mismatch error needs a compatible runtime or
+this migration, not a reconnect to the same incompatible persisted room.
+The public collaboration guide contains the host-facing upgrade procedure.
 
 Regression coverage includes multiple formatting rounds, concurrent typing and
 deletion, both replica winner orders, undo/redo, cold joins, saved package

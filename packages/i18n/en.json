@@ -825,7 +825,16 @@
     "connectFailed": "Could not connect to the room.",
     "leaveFailed": "Could not leave the room.",
     "guest": "Guest",
-    "caretPages": "{count, plural, one {# page} other {# pages}}"
+    "caretPages": "{count, plural, one {# page} other {# pages}}",
+    "serverRecovery": {
+      "versionTitle": "This room needs a compatible app version.",
+      "versionBody": "Update the app and room server to compatible builds, then reload every open tab. For an older saved room, export its DOCX using the matching older build and open that file in a new room. Keep the saved room until its content has been recovered.",
+      "timeoutTitle": "Room synchronization did not finish.",
+      "timeoutBody": "Check the server at {serverUrl}, your network connection, and the configured URL, then reload this page. If the demo server is not running, start it in a second terminal.",
+      "tokenBody": "Check COLLAB_TOKEN on the server against VITE_COLLAB_TOKEN here, then reconnect.",
+      "savedRoomTitle": "The saved room could not be opened.",
+      "savedRoomBody": "Ask the room owner to check the saved files and server storage access. Keep the existing files; restore a working backup or recover a DOCX into a new room before trying again."
+    }
   },
   "review": {
     "displayForReview": "Display for Review",
