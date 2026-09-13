@@ -59,7 +59,6 @@ export class Field extends ModelObject implements PromisedItem {
     this.commandAnswering(
       this.path.label,
       () => {
-        this.#pendingCode = undefined;
         return { op: 'setFieldCode', field: this.#handle(), code: pending.code };
       },
       (value) => hydratedApplied(value, this.path.label),

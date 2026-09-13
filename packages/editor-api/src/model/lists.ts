@@ -263,7 +263,6 @@ export class List extends ModelObject implements PromisedItem {
     this.commandAnswering(
       target,
       () => {
-        this.#formats.delete(chosen);
         return { op: 'setListLevelFormat', list: this.#handle(), level: chosen, format: merged };
       },
       (value) => {

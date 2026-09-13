@@ -464,7 +464,6 @@ export class ContentControl extends ModelObject implements PromisedItem {
     this.command(
       axis,
       () => {
-        this.#pendingLocks = undefined;
         return { op: 'setContentControlProperties', contentControl: this.#handle(), ...pending };
       },
       () => {

@@ -67,7 +67,8 @@ Sync before using that returned range.
 
 For an existing placeholder, prefer replacing the control value.
 For untracked range edits, a range covering the complete prompt can also replace it.
-Partial prompt replacements and insertions away from the prompt start refuse with `NotSupported`.
+Replacements that would consume untargeted prompt text refuse with `NotSupported`.
+Insertions away from the prompt start also refuse with `NotSupported`.
 The first insertion at the prompt start consumes the placeholder text.
 
 ## Edit metadata and locks

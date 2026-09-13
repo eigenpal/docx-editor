@@ -263,6 +263,12 @@ export function planTableMutation(
   const current = initial.topology;
   const cols = current.gridColumns.length || current.rows[0]?.cells.length || 0;
   if (
+    current.gridColumns.length === 0 &&
+    (mutation.kind === 'addColumns' ||
+      (mutation.kind === 'deleteColumns' && mutation.count !== cols))
+  )
+    return { ok: false, reason: 'unsupported-table-topology' };
+  if (
     mutation.kind !== 'delete' &&
     mutation.kind !== 'properties' &&
     current.rows.some(({ cells }) => cells.length !== cols)

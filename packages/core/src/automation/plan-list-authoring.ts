@@ -1,24 +1,24 @@
 import { withPart } from '../store/package/ooxml-package.ts';
+import {
+  WML_NAMESPACE_URI as W,
+  type OoxmlPart,
+  type OoxmlNode,
+} from '../store/package/ooxml-tree.ts';
 import { applyTreeOp } from '../store/store/tree-ops.ts';
 import type { PlannedOperation } from './plan.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { resolveParagraphHandle } from './spans.ts';
-import { listReads } from './lists.ts';
+import { listMembershipOf, listReads } from './lists.ts';
 import {
   createAutomationList,
   formatAutomationListLevel,
   validAutomationListFormat,
   automationListLevelExists,
 } from './list-authoring.ts';
-import {
-  effectiveContentLockAt,
-  isBoundAt,
-  namedChild,
-  paragraphPropertiesNodeOf,
-} from '../store/store/tree-op-nodes.ts';
-import { storyParagraphs } from '../store/package/story-blocks.ts';
+import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
+import { storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
 
 type ListOperation = Extract<
   AutomationOperation,
@@ -28,6 +28,27 @@ const refuse = (message: string): PlannedOperation => ({
   ok: false,
   error: { code: 'unsupported-content', message },
 });
+
+/** Direct style references can affect inherited, protected paragraphs absent from list reads. */
+function styleUsesList(part: OoxmlPart, numId: string): boolean {
+  if (part.root.namespaceUri !== W || part.root.localName !== 'styles') return false;
+  const pending: OoxmlNode[] = [part.root];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (
+      node.namespaceUri === W &&
+      node.localName === 'numId' &&
+      node.attributes.some(
+        (attribute) =>
+          attribute.namespaceUri === W && attribute.localName === 'val' && attribute.value === numId
+      )
+    )
+      return true;
+    for (const child of node.children) pending.push(child);
+  }
+  return false;
+}
 
 export function planListAuthoring(
   operation: ListOperation,
@@ -52,11 +73,15 @@ export function planListAuthoring(
     // A definition affects every paragraph using this instance. Refuse cross-story sharing
     // until one transaction can check all affected stories against the same admission policy.
     for (const part of pkg.parts.values()) {
-      for (const paragraph of storyParagraphs(part.root)) {
-        const numPr = namedChild(paragraphPropertiesNodeOf(paragraph), 'numPr');
-        const id = namedChild(numPr, 'numId')?.attributes.find((a) => a.localName === 'val')?.value;
-        if (id === target.numId && !story.has(paragraph.id))
-          return refuse('list is shared across stories');
+      // The ordinary subset reads direct membership. Refuse shared style references
+      // until admission can enumerate every effective member and its locks.
+      if (styleUsesList(part, target.numId)) return refuse('list is referenced by a style');
+      for (const root of storyRootsOf(part)) {
+        for (const paragraph of storyParagraphs(root.root)) {
+          const id = listMembershipOf(paragraph)?.numId;
+          if (id === target.numId && !story.has(paragraph.id))
+            return refuse('list is shared across stories');
+        }
       }
     }
     for (const id of list.paragraphIds) {

@@ -195,7 +195,6 @@ export class PageSetup extends ModelObject {
     this.commandAnswering(
       `${this.path.label}.pageSetup`,
       () => {
-        this.#pending = undefined;
         return { op: 'setPageSetup', section: this.#section(), setup: pending };
       },
       (answer) => {

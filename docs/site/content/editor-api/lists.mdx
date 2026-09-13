@@ -97,6 +97,9 @@ Sync list creation before attaching paragraphs or changing level properties.
 
 List authoring is a structural edit. Runtime-local tracking mode refuses it.
 Protected paragraphs and unsupported numbering structures can also refuse.
+List formatting refuses numbering instances shared across separate stories, including the main body and notes.
+It also refuses instances referenced by styles because inherited membership can affect protected paragraphs.
+This conservative refusal includes references in unused styles.
 On a conflict, read the document again before separating the proposed operations.
 Do not remove existing numbering structure to force a write.
 

@@ -117,7 +117,6 @@ export class InlinePicture extends ModelObject implements PromisedItem {
     this.commandAnswering(
       this.path.label,
       () => {
-        this.#pending = undefined;
         return { op: 'setInlinePicture', picture: this.#handle(), properties: pending };
       },
       (answer) => hydratedApplied(answer, this.path.label),

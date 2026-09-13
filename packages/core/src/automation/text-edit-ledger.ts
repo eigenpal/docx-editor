@@ -225,8 +225,10 @@ export function planSingleTextReplacement(
     return {
       ok: false,
       error: {
-        code: 'unsupported-content',
-        message: 'that replacement changes the expected text positions',
+        code: prompt ? 'unsupported-capability' : 'unsupported-content',
+        message: prompt
+          ? 'replace the complete placeholder prompt to avoid consuming unrelated text'
+          : 'that replacement changes the expected text positions',
         detail: paragraphId,
       },
     };

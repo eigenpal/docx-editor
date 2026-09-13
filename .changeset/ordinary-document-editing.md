@@ -3,14 +3,5 @@
 '@docx-editor.dev/editor-api': minor
 ---
 
-Add an Office.js-shaped document-editing profile with list and table authoring,
-inline pictures, page fields, formatting, content-control creation, and missing
-header/footer creation through canonical transactions on server and browser hosts.
-Support read-derived object dependencies within one sync and runtime-local browser
-tracked text edits. Document bounded behavior and report pinned signature coverage
-for both the exhaustive editing inventory and the fixed 81-member profile in CI.
-
-Add dedicated guides for every editing API domain and a public member directory.
-Fix targeted replacement offsets and formatting, partial hyperlink changes,
-nullable/deferred reads, control metadata preservation, nested table navigation,
-and table value formatting found by independent consumer applications.
+Add an Office.js-shaped document-editing profile, dedicated API guides, and informational signature coverage for ordinary document workflows.
+Fix batching, text preservation, structural editing, and stable refusals found through independent consumer applications and Word round-trip review.

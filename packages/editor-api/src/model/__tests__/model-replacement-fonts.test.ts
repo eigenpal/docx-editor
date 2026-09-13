@@ -55,7 +55,7 @@ test('partial prompt replacement refuses before consuming unrelated prompt text'
         context.document.body.search('name').getFirst().insertText('Ada', 'Replace');
         await context.sync();
       })
-    ).rejects.toMatchObject({ code: 'InvalidArgument' });
+    ).rejects.toMatchObject({ code: 'NotSupported' });
     await runtime.run(async (context) => {
       context.document.body.load('text');
       await context.sync();

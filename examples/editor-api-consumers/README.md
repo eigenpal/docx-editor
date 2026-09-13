@@ -47,3 +47,20 @@ package consumer receives. It also runs in CI after the build. Node ignores work
 TypeScript aliases. Ordinary Bun execution in this workspace resolves source aliases.
 See `fresh-contract-feedback.md` and `fresh-tables-feedback.md` for the blind findings,
 fixes, remaining explicit batching limits, and the scope of the developer-experience score.
+
+## Manual Microsoft Word round trip
+
+Generate the fresh contract fixture with `test:published` first.
+Copy its `contract-pending.docx` into a disposable directory.
+Open that copy in local Word, append ` — WORD CHECK` to `SERVICE AGREEMENT`, and verify undo and redo.
+Save the document in Word, leaving its tracked changes pending.
+Then run the checker against built package exports:
+
+```sh
+node examples/editor-api-consumers/word-roundtrip-check.ts /path/to/disposable-directory
+```
+
+It verifies preserved controls, locks, hyperlinks, comments, replies, and revisions after Word serialization.
+It then accepts revisions through editor-api and checks save/reopen.
+Open `contract-word-then-api-accepted.docx` in Word to verify the final layout and accepted text.
+This manual check does not run in CI or execute native Office.js calls.

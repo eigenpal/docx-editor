@@ -120,6 +120,8 @@ await context.sync();
 ## Handle unsupported structures
 
 Structural mutations can refuse merged grids, protected content, nested preserved structures, and pending revisions.
+Adding columns or deleting some columns requires an existing table grid.
+Deleting all columns can still remove a table without a grid.
 A matching TypeScript signature does not guarantee an edit works on every table.
 Table value replacement does not silently discard unsupported cell content.
 Inspect and edit a smaller cell-body range when that preserves the intended structure.

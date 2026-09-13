@@ -54,7 +54,7 @@ export abstract class ModelObject extends ClientObject {
       label,
       plan,
       settle: (value) => hydratedApplied(value, label),
-      ...(dispose ? { dispose } : {}),
+      ...(dispose ? { capture: dispose, dispose } : {}),
     });
   }
 
@@ -77,7 +77,13 @@ export abstract class ModelObject extends ClientObject {
     settle: (value: AutomationValue) => void,
     dispose?: () => void
   ): void {
-    this.enqueue({ sort: 'write', label, plan, settle, ...(dispose ? { dispose } : {}) });
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan,
+      settle,
+      ...(dispose ? { capture: dispose, dispose } : {}),
+    });
   }
 
   /** Queue a read whose answer is hydrated by the caller. */

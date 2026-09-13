@@ -153,7 +153,7 @@
   },
   "Word.Table#addColumns": {
     "status": "partial",
-    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. This structural mutation must be alone in its sync. Merged topology refuses."
+    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. This structural mutation must be alone in its sync. Merged topology refuses. Tables without an explicit grid refuse with InvalidArgument."
   },
   "Word.Table#deleteRows": {
     "status": "partial",
@@ -161,7 +161,7 @@
   },
   "Word.Table#deleteColumns": {
     "status": "partial",
-    "notes": "Deletes count columns from a zero-based index; default count is one. Deleting every column removes the table. Invalid bounds and merged topology refuse. Structural mutations are solitary."
+    "notes": "Deletes count columns from a zero-based index; default count is one. Deleting every column removes the table. Invalid bounds and merged topology refuse. Structural mutations are solitary. Partial deletion without an explicit grid refuses with InvalidArgument; deleting every column still removes the table."
   },
   "Word.Table#delete": {
     "status": "partial",
@@ -205,19 +205,19 @@
   },
   "Word.List#setLevelBullet": {
     "status": "partial",
-    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse."
+    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
   },
   "Word.List#setLevelNumbering": {
     "status": "partial",
-    "notes": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse."
+    "notes": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
   },
   "Word.List#setLevelStartingNumber": {
     "status": "partial",
-    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters."
+    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
   },
   "Word.List#setLevelIndents": {
     "status": "partial",
-    "notes": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive."
+    "notes": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
   },
   "Word.Range#insertField": {
     "status": "partial",
@@ -477,7 +477,7 @@
   },
   "Word.Range#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; partial prompt replacement or insertion away from the prompt start refuses. Insertion at the prompt start consumes the prompt."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt."
   },
   "Word.Range#delete": {
     "status": "partial",

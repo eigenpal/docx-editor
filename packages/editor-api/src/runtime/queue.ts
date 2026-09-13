@@ -32,6 +32,8 @@ export interface QueuedAction {
   readonly nullableLoad?: ObjectPath;
   /** The consumer-facing name of what this action is for, for errors. Never a handle. */
   readonly label: string;
+  /** Detach coalesced setters when sync captures this action, before asynchronous reads. */
+  capture?(): void;
   /** Release coalesced state when a batch completes or is discarded. */
   dispose?(): void;
   /**
@@ -66,6 +68,7 @@ export class ActionQueue {
   take(): readonly QueuedAction[] {
     const taken = this.#actions;
     this.#actions = [];
+    for (const action of taken) action.capture?.();
     return taken;
   }
 

@@ -259,9 +259,8 @@ export class Font extends ModelObject {
     this.commandAnswering(
       this.path.label,
       () => {
-        // Snapshotted and cleared AT DISPATCH: whatever else was assigned before this sync is in
-        // the bag, and whatever is assigned after it belongs to the next batch.
-        this.#pending = undefined;
+        // Queue capture detaches this bag before prerequisite reads can yield.
+        // Later assignments belong to the next sync, even while this one waits.
         return { op: 'setFont', span: this.#span(), font: pending };
       },
       (answer) => {

@@ -432,8 +432,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    *
    * Same reason as `Font`: a paragraph-property op carries the paragraph's whole authored bag so it
    * can replace the container, and the host refuses a second one in the same batch because it would
-   * have been built from the tree the first already changed. The bag is snapshotted and cleared at
-   * dispatch, so what is assigned after a sync belongs to the next one.
+   * have been built from the tree the first already changed. The bag is detached when sync captures
+   * the queue, so later assignments belong to the next sync.
    */
   #authorFormat(field: FormatField, value: unknown): void {
     this.requireUsablePath();
@@ -447,7 +447,6 @@ export class Paragraph extends ModelObject implements PromisedItem {
     this.commandAnswering(
       `${this.path.label}.paragraphFormat`,
       () => {
-        this.#format = undefined;
         return {
           op: 'setParagraphFormat',
           paragraph: { paragraph: this.#handle() },

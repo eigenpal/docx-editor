@@ -158,3 +158,12 @@ Each item requires implementation, positive behavior, refusal/preservation check
 - [x] 6.4 Complete cross-review of the final text, placeholder, and runtime fixes with no open concrete P2-or-higher finding in the reviewed scope.
 - [x] 6.5 Run both fresh apps under Node against built package exports and keep them in CI after the build. Keep signature percentages informational.
 - [x] 6.6 Run final repository gates and update PR #811 with the reviewed fixes, docs, and evidence.
+
+## 7. Second extensive review
+
+- [x] 7.1 Independently review structural preservation, protection, malformed topology, and browser undo/redo.
+- [x] 7.2 Review text and Unicode edits with exact preservation and save/reopen assertions.
+- [x] 7.3 Fix sync capture timing and independently test delayed setters and failed-batch recovery.
+- [x] 7.4 Extend local Word checks to report layout, landscape sections, page fields, and review objects.
+- [x] 7.5 Complete native Word edit/undo/redo/save, then API edit/save and Word reopen.
+- [x] 7.6 Complete final repository gates and update PR #811 with the second review evidence.

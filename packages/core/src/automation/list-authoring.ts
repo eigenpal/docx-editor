@@ -276,8 +276,23 @@ export function formatAutomationListLevel(
     const index = children.findIndex(
       (n) => n.kind !== 'textValue' && n.namespaceUri === W && n.localName === name
     );
-    if (index >= 0) children.splice(index, 1, node);
-    else {
+    if (index >= 0) {
+      const previous = children[index] as OoxmlElement;
+      children.splice(index, 1, {
+        ...previous,
+        attributes: [
+          ...previous.attributes.filter(
+            (attribute) =>
+              !node.attributes.some(
+                (authored) =>
+                  authored.namespaceUri === attribute.namespaceUri &&
+                  authored.localName === attribute.localName
+              )
+          ),
+          ...node.attributes,
+        ],
+      } as OoxmlElement);
+    } else {
       const at = children.findIndex(
         (n) =>
           n.kind !== 'textValue' &&
@@ -410,11 +425,13 @@ export function formatAutomationListLevel(
   }
   const authoredLevel = fresh({ ...base, children } as OoxmlElement);
   const startOverride =
-    format.startingNumber === undefined
-      ? (override?.children.filter(
-          (n) => n.kind === 'textValue' || n.namespaceUri !== W || n.localName !== 'lvl'
-        ) ?? [])
-      : [];
+    override?.children.filter(
+      (node) =>
+        node.kind === 'textValue' ||
+        node.namespaceUri !== W ||
+        (node.localName !== 'lvl' &&
+          (format.startingNumber === undefined || node.localName !== 'startOverride'))
+    ) ?? [];
   const shell = override ?? element(`<w:lvlOverride w:ilvl="${level}"/>`);
   if (!shell) return null;
   const updatedOverride = { ...shell, children: [...startOverride, authoredLevel] } as OoxmlElement;
