@@ -2186,6 +2186,12 @@ export interface NumberingLevel {
 
 // @public
 export interface NumberingLevelIndent {
+    readonly authored?: {
+        readonly end?: number;
+        readonly left?: number;
+        readonly right?: number;
+        readonly start?: number;
+    };
     // (undocumented)
     readonly firstLine: number;
     // (undocumented)
