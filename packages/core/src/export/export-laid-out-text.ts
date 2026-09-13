@@ -22,6 +22,8 @@ import { ExportResourceError } from './export-session.ts';
  *
  * The run is shaped at the base size measurement uses. Callers apply the span's drawn-size
  * factor, horizontal scale, and character spacing from {@link StyleSpanRecord.style}.
+ * The glyph origin is `span.box.x + (span.glyphOffsetPt ?? 0)`; the offset is
+ * already in layout points and must not be scaled a second time by horizontal scale.
  * `font` is a frozen byte-free descriptor; obtain bytes from the session font capability.
  * @public
  */

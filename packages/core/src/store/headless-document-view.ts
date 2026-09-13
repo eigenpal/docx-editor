@@ -31,6 +31,9 @@ export interface HeadlessThemeFonts {
   readonly majorEastAsia?: string | null;
   /** East Asian body face; optional for backwards-compatible custom views. */
   readonly minorEastAsia?: string | null;
+  /** Language-specific theme faces, keyed by ISO 15924 script. */
+  readonly majorSupplemental?: Readonly<Record<string, string>>;
+  readonly minorSupplemental?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -121,6 +124,11 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
   }
 
   const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  return { ok: true, view: headlessViewOfStore(store) };
+}
+
+/** Internal live read view over the canonical store, preserving node identities for field pagination. */
+export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView {
   const currentPackage = (): OoxmlPackage => store.currentPackage();
   const mainPart = (): OoxmlPart => store.bodyStore().part;
   const rootOf = (relationshipType: string, fallbackName: string): OoxmlElement | null =>
@@ -143,7 +151,10 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
       const pkg = currentPackage();
       if (themeFontsPackage !== pkg) {
         themeFonts = Object.freeze(
-          collectThemeSchemeFaces(rootOf(REL.theme, '/word/theme/theme1.xml'))
+          collectThemeSchemeFaces(
+            rootOf(REL.theme, '/word/theme/theme1.xml'),
+            rootOf(REL.settings, '/word/settings.xml')
+          )
         );
         themeFontsPackage = pkg;
       }
@@ -164,5 +175,5 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     relationshipTarget: (relationshipId: string) =>
       relationshipTargetIn(currentPackage(), mainPart().name, relationshipId),
   });
-  return { ok: true, view };
+  return view;
 }

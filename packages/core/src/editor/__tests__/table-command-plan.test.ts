@@ -1215,3 +1215,69 @@ describe('tables on the paginated surface', () => {
     expect(paragraphTextOf(surface.session.part(), a2)).toBe('A2');
   });
 });
+
+describe('visually RTL table edit targets', () => {
+  const rtl = TABLE_2X2.replace('<w:tbl>', '<w:tbl><w:tblPr><w:bidiVisual/></w:tblPr>');
+  test('divider resize writes widths to the physical neighbors in canonical order', () => {
+    const editor = mount(rtl);
+    const surface = editor.surface!;
+    const table = tableFragment(surface);
+    const [first, second] = table.rows[0]!.cells;
+    const target = tableColumnDividerResizeTargetOf(
+      surface.layout(),
+      surface.layout().revision,
+      table.tableId,
+      table.rows[0]!.id,
+      false,
+      second!.gridColumnId!,
+      first!.gridColumnId!
+    )!;
+    const command = {
+      type: 'commitTableColumnDividerResize' as const,
+      target,
+      leftWidthTwips: 4000,
+      rightWidthTwips: 2000,
+    };
+    expect(editor.can(command).ok).toBe(true);
+    expect(editor.exec(command).ok).toBe(true);
+    const cells = tableFragment(surface).rows[0]!.cells;
+    expect(cells[0]!.box.width).toBe(100);
+    expect(cells[1]!.box.width).toBe(200);
+    editor.destroy();
+  });
+  test('insert right and delete column use the selected logical cell', () => {
+    const editor = mount(rtl);
+    const surface = editor.surface!;
+    caret(surface, paragraphByText('A1', surface));
+    expect(editor.exec({ type: 'insertColumn', where: 'right' }).ok).toBe(true);
+    let table = tableFragment(surface);
+    const original = table.rows[0]!.cells.find((c) =>
+      c.blocks.some(
+        (b) => b.kind === 'paragraph' && b.lines.some((l) => l.spans.some((s) => s.text === 'A1'))
+      )
+    )!;
+    expect(table.rows[0]!.cells[0]!.box.x).toBeGreaterThan(original.box.x);
+    caret(surface, paragraphByText('A1', surface));
+    expect(editor.exec({ type: 'deleteColumn' }).ok).toBe(true);
+    table = tableFragment(surface);
+    expect(table.rows[0]!.cells).toHaveLength(2);
+    expect(table.rows[0]!.cells.some((c) => c.id === original.id)).toBe(false);
+    editor.destroy();
+  });
+  test('border commands set and clear the requested visual side', () => {
+    const editor = mount(rtl);
+    const surface = editor.surface!;
+    caret(surface, paragraphByText('A1', surface));
+    expect(
+      editor.exec({
+        type: 'setTableBorders',
+        scope: 'right',
+        spec: { style: 'single', size: 8, color: { kind: 'hex', value: 'AA0000' } },
+      }).ok
+    ).toBe(true);
+    expect(tableFragment(surface).rows[0]!.cells[0]!.borders?.right?.color).toBe('AA0000');
+    expect(editor.exec({ type: 'setTableBorders', scope: 'none', target: 'right' }).ok).toBe(true);
+    expect(tableFragment(surface).rows[0]!.cells[0]!.borders?.right).toBeUndefined();
+    editor.destroy();
+  });
+});

@@ -116,7 +116,7 @@ describe('inserting text at a position', () => {
     expect(paragraphTexts(host, body)).toEqual(['AnewZ']);
   });
 
-  test('two inserts into one paragraph shift each other, as two sequential edits would', () => {
+  test('two inserts retain their positions in the batch snapshot', () => {
     const host = open(docx(p('abcd')));
     const body = bodyOf(host);
     const [first] = paragraphsOf(host, body) as [AutomationHandle];
@@ -127,9 +127,9 @@ describe('inserting text at a position', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    // Both offsets were planned against `abcd`; applied in order, the second lands after the
-    // first has already shifted it. That is one transaction, not two independent writes.
-    expect(paragraphTexts(host, body)).toEqual(['1abc2d']);
+    // Both offsets address `abcd`. Rebase the later operation so its source end
+    // remains the end after the first insertion changes the live paragraph.
+    expect(paragraphTexts(host, body)).toEqual(['1abcd2']);
   });
 
   test('refuses text carrying a paragraph mark rather than writing a character that lies', () => {

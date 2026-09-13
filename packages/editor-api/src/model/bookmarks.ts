@@ -103,14 +103,13 @@ export class Bookmark extends ModelObject implements PromisedItem {
   select(selectionMode_?: SelectionMode): void {
     const target = `${this.path.label}.select`;
     const mode = selectionMode(selectionMode_, target);
-    this.requireAddressable();
+    this.requireUsablePath();
     if (!this.internals.capabilities.selection) fail({ code: 'NotSupported', target });
-    const bookmark = this.#handle();
     // One canonical operation: resolving the bookmark and moving the reader belong to the same
     // batch. A pending Range cannot be targeted until a previous sync makes it addressable.
     this.command('select', () => ({
       op: 'selectBookmark',
-      bookmark,
+      bookmark: this.#handle(),
       mode: mode === 'Select' ? 'select' : mode === 'Start' ? 'start' : 'end',
     }));
   }
@@ -119,10 +118,9 @@ export class Bookmark extends ModelObject implements PromisedItem {
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['name']).includes('name')) return;
     const label = `${this.path.label}.name`;
-    const bookmark = this.#handle();
     this.read(
       label,
-      () => ({ op: 'getBookmarkName', bookmark }),
+      () => ({ op: 'getBookmarkName', bookmark: this.#handle() }),
       (value) => {
         this.setLoadedProperty('name', hydratedText(value, label));
       }
@@ -130,11 +128,10 @@ export class Bookmark extends ModelObject implements PromisedItem {
   }
 
   #rangeAt(label: string): Range {
-    const bookmark = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getBookmarkRange', bookmark }),
+      () => ({ op: 'getBookmarkRange', bookmark: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }

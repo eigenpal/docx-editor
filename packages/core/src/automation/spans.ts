@@ -1,3 +1,5 @@
+import { scopedStoryReads } from './reads.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
 // Turning the protocol's positions into positions in a document.
 //
 // INTERNAL. A caller says "the paragraph behind this handle, sixteen UTF-16 units in", or "the
@@ -75,6 +77,11 @@ export function storyOfHandle(
     return fail('invalid-handle', `not-a-${kind}-handle`);
   const story = reads.story(resolved.story);
   if (!story) return fail('invalid-handle', `no-such-story:${storyKey(resolved.story)}`);
+  if (resolved.kind === 'body' && resolved.rootNodeId) {
+    const root = findNode(story.part, resolved.rootNodeId);
+    if (!root || root.kind !== 'tableCell') return fail('invalid-handle', 'cell no longer exists');
+    return ok(scopedStoryReads(story, root));
+  }
   return ok(story);
 }
 
@@ -132,13 +139,18 @@ export function resolvePoint(
   const ids = story.value.paragraphIds;
   if (ids.length === 0) return fail('invalid-offset', 'empty-story');
   if (point.at === 'start')
-    return ok({ story: story.value.story, paragraphId: ids[0] as string, index: 0, offset: 0 });
+    return ok({
+      story: story.value.story,
+      paragraphId: ids[0] as string,
+      index: story.value.indexOf(ids[0]!),
+      offset: 0,
+    });
   const index = ids.length - 1;
   const paragraphId = ids[index] as string;
   return ok({
     story: story.value.story,
     paragraphId,
-    index,
+    index: story.value.indexOf(paragraphId),
     offset: (story.value.rawText(paragraphId) ?? '').length,
   });
 }
@@ -155,11 +167,16 @@ function wholeStory(reads: AutomationStoryReads): ResolvedSpan {
   const lastIndex = ids.length - 1;
   const lastId = ids[lastIndex] as string;
   return {
-    start: { story: reads.story, paragraphId: ids[0] as string, index: 0, offset: 0 },
+    start: {
+      story: reads.story,
+      paragraphId: ids[0] as string,
+      index: reads.indexOf(ids[0]!),
+      offset: 0,
+    },
     end: {
       story: reads.story,
       paragraphId: lastId,
-      index: lastIndex,
+      index: reads.indexOf(lastId),
       offset: (reads.rawText(lastId) ?? '').length,
     },
   };
@@ -242,7 +259,18 @@ export function spanParagraphIds(
   reads: AutomationStoryReads
 ): readonly string[] {
   if (!span) return [];
-  return reads.paragraphIds.slice(span.start.index, span.end.index + 1);
+  const ids = reads.paragraphIds;
+  // Resolved positions use whole-story indexes. A cell-scoped read exposes only
+  // its own paragraphs, so those positions need indexes within this array.
+  const start =
+    ids[span.start.index] === span.start.paragraphId
+      ? span.start.index
+      : ids.indexOf(span.start.paragraphId);
+  const end =
+    ids[span.end.index] === span.end.paragraphId
+      ? span.end.index
+      : ids.indexOf(span.end.paragraphId);
+  return start < 0 || end < start ? [] : ids.slice(start, end + 1);
 }
 
 /** One paragraph's share of a span: the offsets inside it the span actually reaches. */

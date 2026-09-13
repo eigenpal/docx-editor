@@ -3,6 +3,9 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { observeDirtyPaths } from './registry-dirty-paths.ts';
+import { captureInsertionBoundary } from './split-text-boundaries.ts';
+import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
@@ -32,7 +35,6 @@ import {
   makePartEntry,
   makeRelationshipEntry,
   makeTextRecord,
-  namespaceUriOf,
   nodeRecordReplacedBy,
   nodeRecordSplitFrom,
   nodeRecordTombstoned,
@@ -40,7 +42,6 @@ import {
   packageSchemaOf,
   parseAttributeMapKey,
   parseBindingMapKey,
-  unpackNodeShell,
   type DirtyPaths,
   type ElementRecord,
   type EncodedAttribute,
@@ -67,7 +68,13 @@ import {
   writeSharedAttribute,
   writeSharedBinding,
 } from './registry-side-maps.ts';
-import { nodeKindOf, nodeShapeOf, sameChildOrder, type NodeShape } from './registry-node-reads.ts';
+import {
+  elementRecordOf,
+  nodeKindOf,
+  nodeShapeOf,
+  sameChildOrder,
+  type NodeShape,
+} from './registry-node-reads.ts';
 import {
   readBinaries,
   readContentTypeDefaults,
@@ -107,6 +114,7 @@ export class DocumentRegistry {
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
   /** Deterministic dedup of concurrent format splits (#581). */
   private readonly splitDedup: SplitDedupIndex;
+  private readonly splitTextSources: SplitTextSources;
   private bulkLoad = 0;
   private unobservedWrites = 0;
   /** Node total as of the last observed event batch. Negative means "not counted yet". */
@@ -126,7 +134,8 @@ export class DocumentRegistry {
   ) {
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
-    this.splitDedup = new SplitDedupIndex(this.schema.nodes, this.limits);
+    this.splitDedup = new SplitDedupIndex(this.schema.nodes);
+    this.splitTextSources = new SplitTextSources(this.schema.nodes, this.doc, this.limits);
     this.stopObserving = observeRegistrySchema(this.schema, {
       onNodeEvents: (events) => {
         if (this.bulkLoad > 0) return;
@@ -249,7 +258,13 @@ export class DocumentRegistry {
       const value = text instanceof Y.Text ? text.toString() : '';
       return { logicalId, kind: 'textValue', value } satisfies TextRecord;
     }
-    return this.elementRecord(logicalId, rec);
+    return elementRecordOf(
+      logicalId,
+      rec,
+      this.schema,
+      [...(this.attributesByNode.get(logicalId)?.values() ?? [])],
+      [...(this.bindingsByNode.get(logicalId)?.values() ?? [])]
+    );
   }
 
   parentOf(logicalId: LogicalId): LogicalId | null {
@@ -432,9 +447,20 @@ export class DocumentRegistry {
   }
 
   spliceText(logicalId: LogicalId, utf16Start: number, deleteCount: number, insert: string): void {
-    const text = this.textOf(logicalId);
-    if (deleteCount > 0) text.delete(utf16Start, deleteCount);
-    if (insert.length > 0) text.insert(utf16Start, insert);
+    const range = this.splitTextSources.range(logicalId);
+    const restoreBoundary = captureInsertionBoundary(
+      this.schema.nodes,
+      this.splitTextSources,
+      logicalId,
+      range,
+      utf16Start,
+      insert
+    );
+    const text = range?.text ?? this.textOf(logicalId);
+    const start = (range?.start ?? 0) + utf16Start;
+    if (deleteCount > 0) text.delete(start, deleteCount);
+    if (insert.length > 0) text.insert(start, insert);
+    restoreBoundary?.();
   }
 
   setAttribute(
@@ -496,21 +522,28 @@ export class DocumentRegistry {
 
   /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
   replacementLoserRuns(): ReadonlySet<LogicalId> {
+    if (this.hasUnobservedWrites()) this.splitDedup.invalidate();
     return this.splitDedup.loserRuns({ isPresent: (id) => runIsPresent(this, id) });
   }
 
-  concurrentSplitTextOverlays(): SplitTextOverlays {
-    return this.splitDedup.concurrentTextOverlays((id) => runIsPresent(this, id));
+  splitTextRange(id: LogicalId): SplitTextRange | null {
+    return this.splitTextSources.range(id);
   }
 
-  /**
-   * How many times a local edit re-split a run a concurrent split produced — a tangle the dedup
-   * declines, leaving the materialized tree different from what the author authored (#581). The
-   * session reconciles the author's store when this rises, so every replica stays on one tree
-   * without a per-keystroke cost once the document is tangled.
-   */
-  declinedSplitTangleEvents(): number {
-    return this.splitDedup.declinedTangleEvents();
+  projectedTextValue(id: LogicalId): string | null {
+    return this.splitTextSources.value(id);
+  }
+
+  registerSplitText(product: LogicalId, source: LogicalId, start: number, end: number): void {
+    this.splitTextSources.register(product, source, start, end);
+  }
+
+  normalizeRestoredSplitTextAnchors(): void {
+    this.splitTextSources.normalizeRestoredAnchors();
+  }
+
+  concurrentSplitTextOverlays(): SplitTextOverlays {
+    return this.splitTextSources.overlays();
   }
 
   /**
@@ -624,62 +657,7 @@ export class DocumentRegistry {
   }
 
   observeDirty(onDirty: (paths: DirtyPaths) => void): () => void {
-    const handler = (events: Y.YEvent<Y.AbstractType<unknown>>[]): void => {
-      const logicalIds = new Set<LogicalId>();
-      let membershipChanged = false;
-      for (const event of events) {
-        const path = event.path;
-        if (path.length === 0) {
-          for (const key of event.changes.keys.keys()) logicalIds.add(String(key));
-          membershipChanged = true;
-          continue;
-        }
-        logicalIds.add(String(path[0]));
-        if (event.target instanceof Y.Array) membershipChanged = true;
-        if (
-          event.target instanceof Y.Map &&
-          (event.changes.keys.has(NODE_DELETED_FIELD) ||
-            event.changes.keys.has(NODE_REPLACED_BY_FIELD))
-        ) {
-          membershipChanged = true;
-        }
-      }
-      if (logicalIds.size > 0 || membershipChanged) {
-        onDirty({ logicalIds, membershipChanged, packageChanged: false });
-      }
-    };
-    const sideMapHandler = (event: Y.YMapEvent<string>): void => {
-      const logicalIds = new Set<LogicalId>();
-      for (const key of event.changes.keys.keys()) {
-        const parsed = parseAttributeMapKey(String(key)) ?? parseBindingMapKey(String(key));
-        if (!parsed || rejectDangerousKey(parsed.logicalId)) continue;
-        logicalIds.add(parsed.logicalId);
-      }
-      if (logicalIds.size > 0) {
-        onDirty({ logicalIds, membershipChanged: false, packageChanged: false });
-      }
-    };
-    const packageHandler = (): void => {
-      onDirty({ logicalIds: new Set(), membershipChanged: false, packageChanged: true });
-    };
-    this.schema.nodes.observeDeep(handler);
-    this.schema.attributes.observe(sideMapHandler);
-    this.schema.bindings.observe(sideMapHandler);
-    this.schema.parts.observeDeep(packageHandler);
-    this.schema.relationships.observeDeep(packageHandler);
-    this.schema.overrides.observe(packageHandler);
-    this.schema.defaults.observe(packageHandler);
-    this.schema.binaries.observeDeep(packageHandler);
-    return () => {
-      this.schema.nodes.unobserveDeep(handler);
-      this.schema.attributes.unobserve(sideMapHandler);
-      this.schema.bindings.unobserve(sideMapHandler);
-      this.schema.parts.unobserveDeep(packageHandler);
-      this.schema.relationships.unobserveDeep(packageHandler);
-      this.schema.overrides.unobserve(packageHandler);
-      this.schema.defaults.unobserve(packageHandler);
-      this.schema.binaries.unobserveDeep(packageHandler);
-    };
+    return observeDirtyPaths(this.schema, onDirty);
   }
 
   rebuildDerivedIndexes(): void {
@@ -697,6 +675,7 @@ export class DocumentRegistry {
     this.attributesByNode = new Map();
     this.bindingsByNode = new Map();
     this.splitDedup.reset();
+    this.splitTextSources.reset();
     this.schema.nodes.forEach((rec, parentId) => {
       if (rejectDangerousKey(parentId)) return;
       const children = childArrayOf(rec);
@@ -755,7 +734,20 @@ export class DocumentRegistry {
     this.pendingNodeAdds = 0;
     const changed = new Set<LogicalId>();
     for (const event of events) {
-      if (event.path.length > 0) this.splitDedup.noteChanged(String(event.path[0]));
+      // Text and boundary metadata do not change which split branches are reachable.
+      if (
+        !(event.target instanceof Y.Text) &&
+        (event.path.length === 0 ||
+          event.target instanceof Y.Array ||
+          (event.target instanceof Y.Map &&
+            [...event.changes.keys.keys()].some((key) =>
+              ['deleted', 'replacedBy', 'splitFrom', 'splitLineage', 'children'].includes(
+                String(key)
+              )
+            )))
+      )
+        this.splitDedup.invalidate();
+      if (event.path.length > 0) this.splitTextSources.noteChanged(String(event.path[0]));
       // A remote applyUpdate delivers a new element record with its children already filled.
       // Yjs does not emit a child-array event for that initial fill. Skipping it left
       // `parentOf` null, so an attribute-only journal could not dirty the part root and the
@@ -769,9 +761,19 @@ export class DocumentRegistry {
           // A run a peer split off carries its origin; index it so the loser-dedup sees the
           // concurrent split the moment the remote record arrives, not only after a rebuild.
           this.splitDedup.indexExisting(String(key));
+          this.splitTextSources.indexExisting(String(key));
           for (const childId of this.syncChildListings(String(key))) changed.add(childId);
         }
         continue;
+      }
+      // Undo retains record containers. Redo restores scalar provenance on those existing
+      // maps, so a late joiner must index field changes as well as new map entries.
+      if (
+        event.target instanceof Y.Map &&
+        event.path.length === 1 &&
+        (event.changes.keys.has('splitFrom') || event.changes.keys.has('splitLineage'))
+      ) {
+        this.splitDedup.indexExisting(String(event.path[0]));
       }
       if (event.target instanceof Y.Array && event.path.length > 0) {
         const parentId = String(event.path[0]);
@@ -956,24 +958,6 @@ export class DocumentRegistry {
     for (let index = array.length - 1; index >= 0; index -= 1) {
       if (array.get(index) === id) array.delete(index, 1);
     }
-  }
-
-  private elementRecord(logicalId: LogicalId, rec: Y.Map<unknown>): ElementRecord {
-    const shell = unpackNodeShell(readString(rec.get(NODE_SHELL_FIELD)));
-    const attributes = [...(this.attributesByNode.get(logicalId)?.values() ?? [])];
-    const bindings = [...(this.bindingsByNode.get(logicalId)?.values() ?? [])];
-    return {
-      logicalId,
-      kind: shell.kind,
-      namespaceUri: namespaceUriOf(this.schema.namespaces, shell.namespaceId),
-      localName: shell.localName,
-      prefix: shell.prefix.length > 0 ? shell.prefix : undefined,
-      attributes,
-      bindings,
-      // A peer can plant a map record whose `children` is missing or not a Y.Array; degrade
-      // to an empty list rather than reaching the throwing `childArray` (see #567).
-      childIds: childArrayOf(rec)?.toArray() ?? [],
-    };
   }
 
   textOf(logicalId: LogicalId): Y.Text {

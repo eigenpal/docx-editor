@@ -14,9 +14,9 @@ import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collabora
 import type { CollaborationFailureCode } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationParagraph } from '@docx-editor.dev/core/collaboration/replication';
 
-/** Wire protocol version a replica writes into shared metadata and refuses to mismatch. @public */
+/** Wire protocol for experimental text-only collaboration. Full-document clients use DOCUMENT_COLLABORATION_VERSIONS. @public */
 export const PROTOCOL_VERSION = 1;
-/** Shared Yjs schema version a replica writes into shared metadata and refuses to mismatch. @public */
+/** Schema for experimental text-only collaboration. Full-document clients use DOCUMENT_COLLABORATION_VERSIONS. @public */
 export const SCHEMA_VERSION = 1;
 /** Maximum accepted creator baseline size in bytes. @public */
 export const MAX_BASELINE_BYTES = 20 * 1024 * 1024;

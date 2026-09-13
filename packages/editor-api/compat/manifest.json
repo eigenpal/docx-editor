@@ -219,26 +219,6 @@
       "reason": "Upstream answers the glossary entry's text. Placeholder STATE is implemented (the prompt is replaced on the first write and restored when the value is cleared) but the glossary part is preserved rather than read, and a zero-click load of a document part to answer a property is exactly what the file-safety rules forbid."
     },
     {
-      "uid": "Word.Table",
-      "reason": "Tables are omitted from the published subset until the table engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
-    },
-    {
-      "uid": "Word.TableCollection",
-      "reason": "Depends on Word.Table; omitted for the same reason."
-    },
-    {
-      "uid": "Word.TableCell",
-      "reason": "Depends on Word.Table; omitted for the same reason."
-    },
-    {
-      "uid": "Word.InlinePicture",
-      "reason": "Images are omitted from the published subset until the image engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
-    },
-    {
-      "uid": "Word.InlinePictureCollection",
-      "reason": "Depends on Word.InlinePicture; omitted for the same reason."
-    },
-    {
       "uid": "Word.Shape",
       "reason": "Floating shapes/canvases are out of scope for the published subset; no engine lane targets them yet."
     },
@@ -273,10 +253,6 @@
     {
       "uid": "Word.HyperlinkCollection",
       "reason": "Depends on Word.Hyperlink; omitted for the same reason."
-    },
-    {
-      "uid": "Word.Font#underline",
-      "reason": "Upstream type is Word.UnderlineType | <21 string literals>. Deferred pending a deliberate decision on modeling the full UnderlineType union; bold/italic/color/highlightColor/name/size cover this slice's font-formatting needs."
     },
     {
       "uid": "Word.Style",
@@ -352,11 +328,7 @@
     },
     {
       "uid": "Word.ParagraphFormat",
-      "reason": "The formatting VALUES are implemented; the wrapper object around them is not, because in the selected subset nothing owns one. Upstream reaches a ParagraphFormat through Table/TableRow/TableCell/ContentControl#paragraphFormat, and tables are omitted here, while Paragraph declares the same eight values as its own members \u2014 which is the form this implementation backs (Paragraph#alignment, the indents, lineSpacing, spaceBefore/spaceAfter, and style). A selected class no object model member returns would be reachable only by a caller writing the type name, so it is de-selected rather than declared and left unreachable. `widowControl` leaves the subset with it: it is the one value Paragraph does not also declare."
-    },
-    {
-      "uid": "Word.Font#highlightColor",
-      "reason": "De-selected because it cannot be answered honestly at this engine's property boundary. Upstream's type is a `#RRGGBB` string, and Word writes an arbitrary highlight as run shading (`w:shd`); the property this engine authors is `w:highlight`, whose value is one of a fixed set of NAMES (`yellow`, `cyan`, ...). So a selected `highlightColor` would either accept a hex value and drop it, or answer a name where a caller's own code expects a hex string. The other five Font members are implemented."
+      "reason": "The paragraph formatting values are implemented on Paragraph. The ParagraphFormat wrapper returned by some upstream objects is not published; table-cell paragraph formatting is available through cell.body.paragraphs. widowControl remains omitted."
     },
     {
       "uid": "Word.ListItem#listString",
@@ -478,15 +450,155 @@
     },
     {
       "uid": "Word.Section#getHeader / #getFooter",
-      "note": "A section that declares no header of its own INHERITS the previous section's, which is what Word paints, and this is what these members answer. Upstream's own behaviour additionally MINTS an empty header part when none exists anywhere; this subset refuses instead (ItemNotFound), because a read that adds a part to the package is a write, and a getter that writes cannot be batched with reads under one transaction. Shape conformance is unaffected; the divergence is behavioural and recorded here."
+      "note": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: text and paragraph/list collections read empty without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Unsupported virtual-body operations refuse until content exists."
     },
     {
       "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
-      "note": "The object an item accessor answers needs ONE await context.sync() before it can be loaded, written to or passed anywhere — upstream's needs none. Which object the accessor names is the answer to a read, a host handle is DATA in the batch request, and so an operation targeting that object cannot be in the same batch that resolves it. Resolving it in place would mean sending several batches per sync() and giving up 'one sync is one atomic batch', which is the property this runtime exists to guarantee. Source compatibility is unaffected and is held in place by src/runtime/__tests__/runtime-examples.test.ts, which runs a Word sample's own statements and names the extra sync as the only added line; what differs is the number of round trips at runtime. Using the object early is refused (InvalidObjectPath) rather than guessed, and the message names the sync."
+      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
     },
     {
       "uid": "OfficeExtension.LoadOption#expand",
       "note": "The expand query property remains in DocxEditor's public type for source compatibility, but navigation-property expansion is not implemented. Every non-empty value is rejected synchronously as InvalidArgument targeting the loaded object's .expand option; omitted and empty-array values preserve ordinary load behavior. This is explicit rather than accepting a request no model loader consumes."
+    },
+    {
+      "uid": "Word.Font#underline",
+      "note": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting."
+    },
+    {
+      "uid": "Word.Font#highlightColor",
+      "note": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration."
+    },
+    {
+      "uid": "Word.Font#strikeThrough",
+      "note": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved."
+    },
+    {
+      "uid": "Word.Font#subscript",
+      "note": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    },
+    {
+      "uid": "Word.Font#superscript",
+      "note": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    },
+    {
+      "uid": "Word.Range#insertInlinePictureFromBase64",
+      "note": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse."
+    },
+    {
+      "uid": "Word.InlinePicture#width",
+      "note": "Points. Under an aspect lock, changing one dimension updates the other proportionally. Simultaneous contradictory width/height writes refuse; unlock first for independent dimensions. Writes coalesce per proxy. Existing unrelated drawing settings survive."
+    },
+    {
+      "uid": "Word.InlinePicture#height",
+      "note": "See InlinePicture#width. Finite positive dimensions must fit OOXML coordinate limits."
+    },
+    {
+      "uid": "Word.InlinePicture#lockAspectRatio",
+      "note": "Writes the canonical noChangeAspect drawing lock and preserves other drawing locks. Disable the aspect lock to set independent width and height."
+    },
+    {
+      "uid": "Word.InlinePicture#altTextDescription",
+      "note": "Reads/writes drawing description; accepts empty text to clear. Preserves title and hyperlink. Invalid XML text and descriptions above 32767 characters refuse."
+    },
+    {
+      "uid": "Word.InlinePicture#delete",
+      "note": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use."
+    },
+    {
+      "uid": "Word.Range#insertTable",
+      "note": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy."
+    },
+    {
+      "uid": "Word.Table#values",
+      "note": "Reads a row-major matrix. Writes require exactly the current rectangular dimensions. Values replace plain cell text while preserving cell properties. Multiline values, nested blocks, merged tables, and complex cell contents refuse. Cells remain reachable through getCell(), rows/cells, and cell.body."
+    },
+    {
+      "uid": "Word.Table#addRows",
+      "note": "Start/End insert rectangular rows with optional row-major values. Returns the inserted rows. This structural mutation must be alone in its sync. Merged topology refuses."
+    },
+    {
+      "uid": "Word.Table#addColumns",
+      "note": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. This structural mutation must be alone in its sync. Merged topology refuses."
+    },
+    {
+      "uid": "Word.Table#deleteRows",
+      "note": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Invalid bounds refuse atomically. Structural mutations are solitary."
+    },
+    {
+      "uid": "Word.Table#deleteColumns",
+      "note": "Deletes count columns from a zero-based index; default count is one. Deleting every column removes the table. Invalid bounds and merged topology refuse. Structural mutations are solitary."
+    },
+    {
+      "uid": "Word.Table#delete",
+      "note": "Removes the table and its contents, including an existing merged table. Untouched neighboring blocks survive. Protected controls refuse. Deleted table/cell proxies become invalid."
+    },
+    {
+      "uid": "Word.Table#headerRowCount",
+      "note": "Authors contiguous repeated header rows from the first row. Zero clears header flags. Values must be an integer between zero and the row count. Other row properties survive."
+    },
+    {
+      "uid": "Word.Table#style",
+      "note": "Accepts the table style display name defined in the document, case-insensitively. Reads return that display name; OOXML stores the style ID. Unknown names and non-table styles refuse; no unformatted style definitions are invented."
+    },
+    {
+      "uid": "Word.TableCell#value",
+      "note": "Replaces ordinary single-paragraph cell text. Complex or multiline cell content refuses; use the cell body for supported targeted edits. Same-sync overlapping range/cell replacements refuse atomically."
+    },
+    {
+      "uid": "Word.TableCell#columnWidth",
+      "note": "Points. Changes the entire rectangular grid column, updates matching cell widths and total table width, and authors fixed table layout. Widths must meet canonical bounds. Merged or absent-grid topology refuses."
+    },
+    {
+      "uid": "Word.TableCell#shadingColor",
+      "note": "Reads/writes direct cell shading. Writes accept six-digit hexadecimal RGB, optional #, or auto to remove direct shading. Other cell properties survive. Named and theme colors are not resolved by this subset."
+    },
+    {
+      "uid": "Word.TableCell#verticalAlignment",
+      "note": "Top, Center, and Bottom write direct cell alignment. Mixed is a read-shape token and refuses as a setter. Other cell properties survive."
+    },
+    {
+      "uid": "Word.Paragraph#startNewList",
+      "note": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected or tracked structural edits refuse."
+    },
+    {
+      "uid": "Word.Paragraph#attachToList",
+      "note": "Joins a list already present in the same story, at a defined zero-based level from 0 through 8. Configure an undefined imported level before attaching to it. Returns the joined list. Unknown IDs, protected targets, and tracked structural edits refuse."
+    },
+    {
+      "uid": "Word.Paragraph#detachFromList",
+      "note": "Writes explicit numId 0 to suppress direct and style-inherited numbering while preserving other paragraph properties. It does not delete shared numbering definitions."
+    },
+    {
+      "uid": "Word.List#setLevelBullet",
+      "note": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse."
+    },
+    {
+      "uid": "Word.List#setLevelNumbering",
+      "note": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse."
+    },
+    {
+      "uid": "Word.List#setLevelStartingNumber",
+      "note": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters."
+    },
+    {
+      "uid": "Word.List#setLevelIndents",
+      "note": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive."
+    },
+    {
+      "uid": "Word.Range#insertField",
+      "note": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute it. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy."
+    },
+    {
+      "uid": "Word.Field#code",
+      "note": "Reads the raw inert instruction. Writes support PAGE and NUMPAGES on existing supported page fields, preserving field identity, result runs, run formatting, and unrelated fields. Simple fields and ordinary complex fields with sibling runs are supported; unsupported field shapes/code, protected fields, and tracked mutations refuse. Code writes do not compute cached results; call updateResult explicitly."
+    },
+    {
+      "uid": "Word.Field#updateResult",
+      "note": "Computes PAGE/NUMPAGES cached text from actual semantic pagination, including section page numbering formats. Headless runtimes require explicit pagination measurement options; browser runtimes use the current surface layout. Missing pagination, unsupported instructions or non-rewritable results refuse with NotSupported. Multiple result updates can share one sync, including one paragraph; mixing with other writes refuses atomically. Save/reopen retains computed cache text. Synthetic fixed measurers are used only in deterministic tests, not as a default capability claim."
+    },
+    {
+      "uid": "Word.Field#delete",
+      "note": "Deletes the addressed field atom and its cached result, preserving neighboring content and unrelated fields. Protected fields refuse. Deleted handles become stale. Fields inside unsupported structures remain preserved."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."

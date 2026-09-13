@@ -8,10 +8,17 @@ import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaborat
 import { rejectDangerousKey, rejectString } from './limits.ts';
 import type { LogicalId } from './identity.ts';
 
-export const PACKAGE_PROTOCOL_VERSION = 1;
-export const PACKAGE_SHARED_SCHEMA_VERSION = 2;
-export const PACKAGE_REPAIR_VERSION = 1;
-export const PACKAGE_CANONICAL_MODEL_VERSION = 1;
+import {
+  DOCUMENT_COLLABORATION_VERSIONS,
+  documentCompatibilityFailure,
+  type DocumentCollaborationVersions,
+} from '../document-compatibility.ts';
+
+export const PACKAGE_PROTOCOL_VERSION = DOCUMENT_COLLABORATION_VERSIONS.protocolVersion;
+export const PACKAGE_SHARED_SCHEMA_VERSION = DOCUMENT_COLLABORATION_VERSIONS.sharedSchemaVersion;
+export const PACKAGE_REPAIR_VERSION = DOCUMENT_COLLABORATION_VERSIONS.repairVersion;
+export const PACKAGE_CANONICAL_MODEL_VERSION =
+  DOCUMENT_COLLABORATION_VERSIONS.canonicalModelVersion;
 
 export const PACKAGE_META_KEY = 'docx-package-meta-v1';
 export const PACKAGE_NODES_KEY = 'docx-package-nodes-v1';
@@ -25,6 +32,8 @@ export const PACKAGE_ATTRIBUTES_KEY = 'docx-package-attributes-v1';
 export const PACKAGE_BINDINGS_KEY = 'docx-package-bindings-v1';
 
 export const NODE_SHELL_FIELD = 's';
+/** Immutable descriptor fallback for a container retained through creation undo. */
+export const NODE_INITIAL_SHELL_FIELD = 'b';
 export const NODE_TEXT_FIELD = 't';
 export const NODE_CHILDREN_FIELD = 'children';
 export const NODE_DELETED_FIELD = 'deleted';
@@ -39,6 +48,8 @@ export const NODE_REPLACED_BY_FIELD = 'replacedBy';
  * Internal shared state, never serialized to the `.docx`.
  */
 export const NODE_SPLIT_FROM_FIELD = 'splitFrom';
+/** Immutable ancestry survives undo when another author still owns descendant splits. */
+export const NODE_SPLIT_LINEAGE_FIELD = 'splitLineage';
 /** Source text when a run split, used to rebase a concurrent text edit onto its products. */
 export const NODE_SPLIT_BASE_TEXT_FIELD = 'splitBaseText';
 /** UTF-16 start of one split product in {@link NODE_SPLIT_BASE_TEXT_FIELD}. */
@@ -52,19 +63,9 @@ export const EMPTY_NAMESPACE_ID = '-';
 export const BOOTSTRAP_ORIGIN = Object.freeze({ kind: 'docx-package-bootstrap' });
 export const JOURNAL_ORIGIN = Object.freeze({ kind: 'docx-package-journal' });
 
-export interface PackageSchemaVersions {
-  readonly protocolVersion: number;
-  readonly sharedSchemaVersion: number;
-  readonly repairVersion: number;
-  readonly canonicalModelVersion: number;
-}
+export type PackageSchemaVersions = DocumentCollaborationVersions;
 
-export const PACKAGE_SCHEMA_VERSIONS: PackageSchemaVersions = Object.freeze({
-  protocolVersion: PACKAGE_PROTOCOL_VERSION,
-  sharedSchemaVersion: PACKAGE_SHARED_SCHEMA_VERSION,
-  repairVersion: PACKAGE_REPAIR_VERSION,
-  canonicalModelVersion: PACKAGE_CANONICAL_MODEL_VERSION,
-});
+export const PACKAGE_SCHEMA_VERSIONS: PackageSchemaVersions = DOCUMENT_COLLABORATION_VERSIONS;
 
 export interface EncodedAttribute {
   readonly namespaceUri: string;
@@ -337,6 +338,14 @@ export function unpackNodeShell(packed: string): UnpackedNodeShell {
   };
 }
 
+/** Mutable renames undo normally; retained records fall back to their creation descriptor. */
+export function readNodeShell(record: Y.Map<unknown>): UnpackedNodeShell {
+  const shell = record.has(NODE_SHELL_FIELD)
+    ? record.get(NODE_SHELL_FIELD)
+    : record.get(NODE_INITIAL_SHELL_FIELD);
+  return unpackNodeShell(typeof shell === 'string' ? shell : '');
+}
+
 export function attributeMapKey(logicalId: string, namespaceId: string, localName: string): string {
   return `${logicalId}${FIELD_SEP}${namespaceId}${FIELD_SEP}${localName}`;
 }
@@ -388,10 +397,13 @@ export function makeElementRecord(
   }
 ): Y.Map<unknown> {
   const rec = new Y.Map<unknown>();
-  rec.set(
-    NODE_SHELL_FIELD,
-    packNodeShell(record.kind, record.namespaceId, record.localName, record.prefix ?? '')
+  const shell = packNodeShell(
+    record.kind,
+    record.namespaceId,
+    record.localName,
+    record.prefix ?? ''
   );
+  rec.set(NODE_INITIAL_SHELL_FIELD, shell);
   const children = new Y.Array<string>();
   if (record.childIds && record.childIds.length > 0) children.push([...record.childIds]);
   rec.set(NODE_CHILDREN_FIELD, children);
@@ -434,6 +446,16 @@ export function makeBinaryEntry(descriptor: CanonicalBinaryDescriptor): Y.Map<un
   rec.set('mediaType', descriptor.mediaType);
   rec.set('storageKey', descriptor.storageKey);
   return rec;
+}
+
+/** Refuse incompatible persisted rooms before interpreting their split metadata. */
+export function packageVersionFailure(meta: Y.Map<unknown>) {
+  return documentCompatibilityFailure({
+    protocolVersion: meta.get('protocolVersion'),
+    sharedSchemaVersion: meta.get('sharedSchemaVersion'),
+    repairVersion: meta.get('repairVersion'),
+    canonicalModelVersion: meta.get('canonicalModelVersion'),
+  });
 }
 
 export function writeSchemaVersions(meta: Y.Map<unknown>): void {
@@ -480,6 +502,12 @@ export function nodeRecordSplitFrom(record: unknown): string | null {
   if (!isNodeMap(record)) return null;
   const value = record.get(NODE_SPLIT_FROM_FIELD);
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+export function nodeRecordSplitLineage(record: unknown): string | null {
+  if (!isNodeMap(record)) return null;
+  const value = record.get(NODE_SPLIT_LINEAGE_FIELD);
+  return typeof value === 'string' && value.length > 0 ? value : nodeRecordSplitFrom(record);
 }
 
 export function nodeRecordSplitBaseText(record: unknown, maxLength: number): string | null {

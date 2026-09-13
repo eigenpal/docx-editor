@@ -20,7 +20,7 @@ export function trackingStep(
     },
   });
   if (operation.op === 'getChangeTrackingMode' || operation.op === 'setChangeTrackingMode') {
-    if (!supported) return refused('Office-shaped tracking mode is supported by server hosts only');
+    if (!supported) return refused('this host does not support runtime-local change tracking');
     if (operation.op === 'getChangeTrackingMode')
       return {
         state,
@@ -45,24 +45,28 @@ export function trackingStep(
       step: { ok: true, kind: 'query', value: { kind: 'applied' } },
     };
   }
-  if (state.mode === 'Off' || !isAutomationCommand(operation)) return null;
-  if (operation.op === 'insertText') return null;
-  if (operation.op === 'replaceSpan' && !('body' in operation.span)) return null;
-  // Decisions and annotations do not author tracked document content.
-  if (
-    [
-      'insertComment',
-      'replyToComment',
-      'deleteComment',
-      'setCommentResolved',
-      'acceptRevision',
-      'rejectRevision',
-      'acceptAllRevisions',
-      'rejectAllRevisions',
-      'selectSpan',
-      'selectBookmark',
-    ].includes(operation.op)
-  )
-    return null;
+  if (state.mode === 'Off' || supportsTrackedAutomationOperation(operation)) return null;
   return refused(`${operation.op} does not support TrackMineOnly; no permanent edit was applied`);
+}
+
+/** The editing profile only authors tracked inline text; annotations and decisions remain available. */
+export function supportsTrackedAutomationOperation(operation: AutomationOperation): boolean {
+  if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') return true;
+  if (operation.op === 'insertText') return true;
+  if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
+  return [
+    'proposeInsertion',
+    'proposeDeletion',
+    'proposeReplacement',
+    'insertComment',
+    'replyToComment',
+    'deleteComment',
+    'setCommentResolved',
+    'acceptRevision',
+    'rejectRevision',
+    'acceptAllRevisions',
+    'rejectAllRevisions',
+    'selectSpan',
+    'selectBookmark',
+  ].includes(operation.op);
 }

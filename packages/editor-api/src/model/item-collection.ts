@@ -120,17 +120,21 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
     selectedProperties(request, ['items'], this.path.label);
-    const listing = this.listing();
+    const listing = this.path.isPending ? undefined : this.listing();
     // Already answered by the command that made this collection: there is nothing to ask for, and
     // asking anyway would send a second operation the consumer did not write.
-    if (!listing) return;
+    if (listing === null) return;
     const label = `${this.path.label}.items`;
     const skip = request.skip ?? 0;
     const top = request.top;
     this.enqueue({
       sort: 'read',
       label,
-      plan: () => listing,
+      plan: () => {
+        const resolved = listing ?? this.listing();
+        if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
+        return resolved;
+      },
       settle: (value) => {
         this.setLoadedProperty('items', this.#members(value, label, skip, top));
       },
@@ -141,12 +145,12 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
   protected edge(edge: 'first' | 'last', accessor: string, nullable: boolean): T {
     const target = `${this.path.label}.${accessor}()`;
     const item = this.promised(target, nullable);
-    const listing = this.listing();
+    const listing = this.path.isPending ? undefined : this.listing();
     // NO LISTING MEANS THE MEMBERS ARE AN ANSWER, NOT A QUESTION — the ranges a split produced.
     // The edge is taken from that same answer: sending a listing instead would read the document
     // the split had already made, where the split's first piece need not be the first paragraph,
     // and it would turn one atomic call into two.
-    if (!listing) {
+    if (listing === null) {
       const pending: PendingEdge = { edge, target, nullable, item };
       if (this.#answer) this.#settleEdge(pending, this.#answer.value);
       else this.#pending.push(pending);
@@ -155,7 +159,11 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     this.enqueue({
       sort: 'read',
       label: target,
-      plan: () => listing,
+      plan: () => {
+        const resolved = listing ?? this.listing();
+        if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
+        return resolved;
+      },
       settle: (value) => {
         this.#settleEdge({ edge, target, nullable, item }, value);
       },

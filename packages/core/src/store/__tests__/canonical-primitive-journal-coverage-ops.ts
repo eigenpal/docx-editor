@@ -408,6 +408,38 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       op: 'deleteBlock',
       blockId: firstParagraphId(store),
     })),
+    story('authorTable', plainDoc(), (store) => ({
+      op: 'authorTable',
+      action: {
+        kind: 'insert',
+        paragraphId: firstParagraphId(store),
+        offset: 5,
+        rowCount: 2,
+        columnCount: 2,
+        values: [
+          ['Metric', 'Value'],
+          ['Coverage', '81'],
+        ],
+      },
+    })),
+    story('setTableProperties', zipDoc({ body: TABLE }), (store) => ({
+      op: 'setTableProperties',
+      tableId: tableIds(store).tableId,
+      headerRowCount: 1,
+      columnWidthsTwips: [1800, 3200],
+    })),
+    story(
+      'setFieldCode',
+      plainDoc(
+        '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:fldSimple></w:p><w:sectPr/>'
+      ),
+      (store) => ({
+        op: 'setFieldCode',
+        paragraphId: firstParagraphId(store),
+        fieldNodeId: findKind(store.bodyStore().part, 'fldSimple').id,
+        code: 'NUMPAGES',
+      })
+    ),
     story('insertTable', plainDoc(), (store) => ({
       op: 'insertTable',
       beforeParagraphId: paragraphIds(store)[1]!,

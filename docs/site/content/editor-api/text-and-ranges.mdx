@@ -1,0 +1,155 @@
+---
+title: 'Text and ranges'
+description: 'Read document text and insert, replace, clear, or delete content through bodies, paragraphs, and ranges.'
+category: 'Editing API'
+order: 53
+---
+
+Use `Body` for a story, `Paragraph` for a paragraph, and `Range` for an addressed span.
+`context.document.body` is the main story.
+`document.paragraphs` and `document.body.paragraphs` cover its paragraphs, including table cells and nested controls.
+They do not aggregate headers, footers, or notes.
+See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) for those bodies.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Refresh ranges after edits
+
+A `Range` stores paragraph identities and UTF-16 offsets from the moment it was found.
+It does not follow later edits inside those paragraphs.
+For example, a range over `alpha` still names offsets zero through five after text is inserted before it.
+A later load can therefore read different text at those positions.
+Deleting an endpoint paragraph invalidates the range.
+
+After a successful edit, search again before acting on another target in that paragraph.
+For the inserted text itself, use the `Range` returned by `insertText()` after sync.
+Tracking a proxy across runs preserves its lifetime; it does not turn its range into a live text region.
+This differs from Word's moving range behavior.
+
+## Read text without exporting proxies
+
+Load text before reading it:
+
+```ts
+const text = await runtime.run(async (context) => {
+  const body = context.document.body;
+  body.load('text');
+  await context.sync();
+  return body.text;
+});
+```
+
+`Body.text` joins paragraphs with carriage returns (`\r`).
+`Paragraph.text` reads paragraph text; `Range.text` reads the addressed content.
+Text reads follow the runtime's `revisionTextView` option.
+The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets.
+`Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading.
+Do not use it as a permanent identifier across separately opened files.
+
+## Choose an insertion location
+
+The location types describe the supported call shapes:
+
+| Receiver    | `insertText(text, location)`                 | `insertParagraph(text, location)` |
+| ----------- | -------------------------------------------- | --------------------------------- |
+| `Body`      | `Replace`, `Start`, `End`                    | `Start`, `End`                    |
+| `Paragraph` | `Replace`, `Start`, `End`                    | `Before`, `After`                 |
+| `Range`     | `Replace`, `Start`, `End`, `Before`, `After` | `Before`, `After`                 |
+
+The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`,
+`ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`.
+`InsertLocation` provides matching enum values, such as `InsertLocation.replace`.
+A method only accepts the locations shown in its signature.
+
+`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`.
+Sync before configuring or reading the returned object.
+Use one paragraph insertion per new paragraph; newline-containing insertion text is refused.
+
+This example appends a paragraph and configures it after creation:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.insertParagraph('Review complete.', 'End');
+  await context.sync();
+  paragraph.spaceAfter = 12;
+  const range = paragraph.getRange('Content');
+  range.load('text');
+  await context.sync();
+  console.log(range.text);
+});
+```
+
+## Address existing content
+
+`Body.getRange(location?)` and `Paragraph.getRange(location?)` accept
+`Whole`, `Content`, `Start`, `End`, `Before`, and `After`.
+The default is `Whole`.
+Use `Content` when you want the owner's text, and an endpoint for an insertion point.
+Sync before using the returned range for dependent work.
+`Range.paragraphs` enumerates paragraphs intersecting the span.
+
+For an exact replacement, use search and verify the match count:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one clause');
+  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+  replacement.load('text');
+  await context.sync();
+  console.log(replacement.text);
+});
+```
+
+See [Search and navigation](/docs/2.x/editor-api/search-and-navigation) for search options and bookmarks.
+
+## Batch plain-text replacements
+
+Disjoint text replacements and insertions can share one sync in ordinary paragraphs with direct text runs.
+The batch interprets their targets using its initial snapshot coordinates.
+Returned inserted ranges account for all supported text edits in that batch.
+Multiple insertions at one explicit snapshot point keep their call order.
+`Paragraph.insertText(..., 'Start')` and `Body.insertText(..., 'Start')` prepend on each call;
+`'End'` appends on each call.
+This behavior does not make old ranges follow later batches.
+
+Overlapping edits refuse atomically.
+Text edits mixed with formatting, hyperlink, or structural changes in the same paragraph also refuse.
+Use separate syncs, then obtain fresh ranges before the dependent operation.
+Rich paragraphs and browser suggesting edits support one text edit per paragraph per sync.
+On `ConflictingChanges`, read again and reconsider the batch instead of blindly replaying it.
+
+## Clear or delete content
+
+| Member                              | Effect                                                        |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `Body.clear()`                      | Clears supported story content and leaves one empty paragraph |
+| `Paragraph.clear()`                 | Clears paragraph content while retaining the paragraph        |
+| `Paragraph.delete()`                | Deletes the addressed paragraph                               |
+| `Range.clear()` or `Range.delete()` | Deletes the addressed range content                           |
+
+A body without any paragraph refuses `clear()` with `InvalidArgument`.
+These methods do not flatten protected or unsupported structures to force an edit.
+Cross-cell boundaries, pending revisions, and preserved structures can cause atomic refusal.
+Read the target again before choosing another edit.
+
+Structural edits sharing a paragraph can conflict within one sync.
+Separate dependent edits and reconsider their targets after each successful transaction.
+For tracked replacements or deletions, use [Tracked changes](/docs/2.x/editor-api/revisions).
+Tracked text edits support one paragraph, including table-cell text.
+Whole-body replacement and paragraph deletion are outside that tracked subset.
+
+## Reach other document objects
+
+`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `fields`, `contentControls`, `bookmarks`, and `revisions`.
+`Body.getComments()` returns story comments.
+`Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, and `bookmarks`.
+A range can create a table, picture, field, content control, comment, or break through its insertion methods.
+`Paragraph` exposes `font`, `style`, `list`, and `listItem`.
+Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.

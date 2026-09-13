@@ -586,7 +586,10 @@ export interface PaginatedSurface {
    */
   applyAutomationOps(
     staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null,
-    scope?: StoryScope
+    scope?: StoryScope,
+    packageEdits?: readonly ((
+      pkg: import('../store/package/ooxml-package.ts').OoxmlPackage
+    ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[]
   ): TreeApplyResult;
   /**
    * Which revision halves this surface is SHOWING.

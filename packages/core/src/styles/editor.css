@@ -627,6 +627,22 @@
   color: inherit !important;
 }
 
+/* Native selection suppresses ordinary text shadows and restores the unshifted glyph.
+   Keep compressed punctuation at its ink origin while retaining the native range band.
+   Use the system selection ink colour when forced colours replace the highlight. */
+.docx-line [data-docx-shifted-ink]::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: transparent !important;
+  text-shadow: var(--docx-glyph-ink-offset, 0px) 0 var(--docx-glyph-ink-color, CanvasText);
+}
+
+@media (forced-colors: active) {
+  .docx-line [data-docx-shifted-ink]::selection {
+    background-color: Highlight !important;
+    text-shadow: var(--docx-glyph-ink-offset, 0px) 0 HighlightText;
+  }
+}
+
 /* Firefox selection */
 .docx-run-editable::-moz-selection,
 .docx-run-editable *::-moz-selection,

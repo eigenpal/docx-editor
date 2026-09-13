@@ -45,12 +45,17 @@ const CONTENT_ELEMENTS = new Set([
   'rPr',
 ]);
 
+// Boundary sweeps run in physical grid order; RTL row arrays retain document order.
+function physicalCells(row: SemanticTableRow): SemanticTableRow['cells'] {
+  return row.cells[0]?.logicalGridColumn === undefined ? row.cells : [...row.cells].reverse();
+}
+
 /** Text-only rows keep the candidate probe independent of drawing and note publication. */
 function simpleRows(rows: readonly SemanticTableRow[], columns: number): boolean {
   let visited = 0;
   for (const row of rows) {
     let end = 0;
-    for (const cell of row.cells) {
+    for (const cell of physicalCells(row)) {
       if (cell.vMergeContinue || cell.textDirection !== 'horizontal' || cell.gridColumn !== end)
         return false;
       end += cell.gridSpan;
@@ -140,16 +145,18 @@ export function prepareRepeatedHeaderBorderPlan(
     return undefined;
 
   const lastHeader = headers[headers.length - 1]!;
+  const headerCells = physicalCells(lastHeader);
+  const bodyCells = physicalCells(body);
   // The existing resolver owns fallback, explicit nil and style/color tie rules.
   // This two-row view is safe only because merges and sparse ownership were excluded.
   const resolved = resolveTableCellBorderGrid(
-    [lastHeader.cells, body.cells],
+    [headerCells, bodyCells],
     structure.tableBorders,
     structure.columnWidthsPt.length
   )[0]!;
   const insets = new Map<string, CellContentInsets>();
   const intervals: { start: number; end: number; extent: number }[] = [];
-  for (const [index, cell] of lastHeader.cells.entries()) {
+  for (const [index, cell] of headerCells.entries()) {
     let extent = 0;
     for (const segment of resolved[index]!.edgeSegments ?? []) {
       if (segment.side !== 'bottom') continue;
@@ -163,7 +170,7 @@ export function prepareRepeatedHeaderBorderPlan(
     });
   }
   let intervalIndex = 0;
-  for (const cell of body.cells) {
+  for (const cell of bodyCells) {
     let extent = 0;
     const end = cell.gridColumn + cell.gridSpan;
     while (intervalIndex < intervals.length && intervals[intervalIndex]!.end <= cell.gridColumn)

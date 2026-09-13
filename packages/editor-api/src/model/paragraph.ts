@@ -21,6 +21,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // touches it is refused with `ConflictingChanges` rather than planned against coordinates that have
 // stopped describing it. Two syncs get both edits, each exactly as asked.
 
+import { InsertLocation, Alignment } from './editing-enums.ts';
 import {
   ObjectPath,
   fail,
@@ -45,7 +46,14 @@ import { Range } from './range.ts';
 const MAX_DELIMITERS = 16;
 
 /** Paragraph alignment values readable and writable through this object model. */
-export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+export type ParagraphAlignment =
+  | Alignment
+  | 'Mixed'
+  | 'Unknown'
+  | 'Left'
+  | 'Centered'
+  | 'Right'
+  | 'Justified';
 
 /**
  * One paragraph: what it says, what it is, and the ways it can be changed.
@@ -216,6 +224,73 @@ export class Paragraph extends ModelObject implements PromisedItem {
     return this.#list;
   }
 
+  /** Address this paragraph's content or an endpoint. Sync before using the returned range. */
+  getRange(
+    rangeLocation: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After' = 'Whole'
+  ): Range {
+    const target = `${this.path.label}.getRange`;
+    if (!['Whole', 'Content', 'Start', 'End', 'Before', 'After'].includes(rangeLocation))
+      fail({ code: 'InvalidArgument', target });
+    const found = Range.promised(this.context, target, false);
+    this.read(
+      target,
+      () => ({ op: 'getRange', span: { paragraph: this.#handle() }, location: rangeLocation }),
+      (value) => {
+        found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return found;
+  }
+
+  /** Start a new independent bullet list with this paragraph. Sync before using the returned list. */
+  startNewList(): List {
+    const target = `${this.path.label}.startNewList`;
+    const created = List.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'startNewList', paragraph: this.#handle() }),
+      (value) => {
+        created.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
+      }
+    );
+    return created;
+  }
+
+  /** Join an existing list at a zero-based nesting level. */
+  attachToList(listId: number, level: number): List {
+    const target = `${this.path.label}.attachToList`;
+    if (
+      !Number.isSafeInteger(listId) ||
+      listId <= 0 ||
+      !Number.isInteger(level) ||
+      level < 0 ||
+      level > 8
+    ) {
+      fail({ code: 'InvalidArgument', target });
+    }
+    const joined = List.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'attachToList', paragraph: this.#handle(), listId, level }),
+      (value) => {
+        joined.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
+      }
+    );
+    return joined;
+  }
+
+  /** Remove numbering while preserving the paragraph's text and other formatting. */
+  detachFromList(): void {
+    const target = `${this.path.label}.detachFromList`;
+    this.commandAnswering(
+      target,
+      () => ({ op: 'detachFromList', paragraph: this.#handle() }),
+      (value) => {
+        hydratedApplied(value, target);
+      }
+    );
+  }
+
   /** Where this paragraph sits in its list. Reading `level` on a paragraph in none refuses. */
   get listItem(): ListItem {
     this.#listItem ??= ListItem.of(this.context, `${this.path.label}.listItem`, this.path);
@@ -224,35 +299,41 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   /** Empty this paragraph's text, leaving the paragraph itself where it is. */
   clear(): void {
-    const handle = this.#handle();
     this.commandDiscarding('clear', () => ({
       op: 'replaceSpan',
-      span: { paragraph: handle },
+      span: { paragraph: this.#handle() },
       text: '',
     }));
   }
 
   /** Remove this paragraph and everything in it. */
   delete(): void {
-    const handle = this.#handle();
-    this.command('delete', () => ({ op: 'deleteParagraph', paragraph: handle }));
+    this.command('delete', () => ({ op: 'deleteParagraph', paragraph: this.#handle() }));
   }
 
   /** Write text over this paragraph or at either edge of it. Answers the written text's range. */
-  insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
+  insertText(
+    text: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
     const where = paragraphTextLocation(insertLocation, target);
-    const handle = this.#handle();
     const created = Range.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () =>
         where === 'Replace'
-          ? { op: 'replaceSpan', span: { paragraph: handle }, text: written }
+          ? { op: 'replaceSpan', span: { paragraph: this.#handle() }, text: written }
           : {
               op: 'insertText',
-              at: { paragraph: handle, at: where === 'Start' ? 'start' : 'end' },
+              at: { paragraph: this.#handle(), at: where === 'Start' ? 'start' : 'end' },
               text: written,
             },
       (value) => {
@@ -267,13 +348,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);
     const where = besideLocation(insertLocation, target);
-    const handle = this.#handle();
     const created = Paragraph.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () => ({
         op: 'insertParagraph',
-        anchor: { paragraph: handle },
+        anchor: { paragraph: this.#handle() },
         where: where === 'Before' ? 'before' : 'after',
         text: written,
       }),
@@ -298,13 +378,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const chosen = requireDelimiters(delimiters, target);
     const dropDelimiters = requireFlag(trimDelimiters, `${target}.trimDelimiters`);
     const dropSpacing = requireFlag(trimSpacing, `${target}.trimSpacing`);
-    const handle = this.#handle();
     const pieces = RangeCollection.answered(this.context, target, this.path);
     this.commandAnswering(
       target,
       () => ({
         op: 'splitParagraph',
-        paragraph: handle,
+        paragraph: this.#handle(),
         delimiters: chosen,
         ...(dropDelimiters ? { trimDelimiters: true } : {}),
         ...(dropSpacing ? { trimSpacing: true } : {}),
@@ -319,16 +398,18 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'uniqueLocalId', ...FORMAT_FIELDS]);
-    const handle = this.#handle();
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({
         op: 'getText',
-        target: handle,
+        target: this.#handle(),
         projection: this.revisionTextView(),
       }));
     }
     if (selected.includes('uniqueLocalId')) {
-      this.loadTextInto('uniqueLocalId', () => ({ op: 'getParagraphId', paragraph: handle }));
+      this.loadTextInto('uniqueLocalId', () => ({
+        op: 'getParagraphId',
+        paragraph: this.#handle(),
+      }));
     }
     const format = FORMAT_FIELDS.filter((field) => selected.includes(field));
     if (format.length === 0) return;
@@ -338,7 +419,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const label = `${this.path.label}.paragraphFormat`;
     this.read(
       label,
-      () => ({ op: 'getParagraphFormat', paragraph: { paragraph: handle } }),
+      () => ({ op: 'getParagraphFormat', paragraph: { paragraph: this.#handle() } }),
       (value) => {
         const read = hydratedParagraphFormat(value, label);
         for (const field of format) this.setLoadedProperty(field, read[field]);
@@ -351,37 +432,41 @@ export class Paragraph extends ModelObject implements PromisedItem {
    *
    * Same reason as `Font`: a paragraph-property op carries the paragraph's whole authored bag so it
    * can replace the container, and the host refuses a second one in the same batch because it would
-   * have been built from the tree the first already changed. The bag is snapshotted and cleared at
-   * dispatch, so what is assigned after a sync belongs to the next one.
+   * have been built from the tree the first already changed. The bag is detached when sync captures
+   * the queue, so later assignments belong to the next sync.
    */
   #authorFormat(field: FormatField, value: unknown): void {
-    this.requireAddressable();
+    this.requireUsablePath();
     if (this.#format) {
       this.#format[field] = value;
       return;
     }
     const pending: Record<string, unknown> = { [field]: value };
     this.#format = pending;
-    const handle = this.#handle();
     const label = `${this.path.label}.${field}`;
     this.commandAnswering(
       `${this.path.label}.paragraphFormat`,
       () => {
-        this.#format = undefined;
-        return { op: 'setParagraphFormat', paragraph: { paragraph: handle }, format: pending };
+        return {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: this.#handle() },
+          format: pending,
+        };
       },
       (answer) => {
         hydratedApplied(answer, label);
+      },
+      () => {
+        if (this.#format === pending) this.#format = undefined;
       }
     );
   }
 
   #listAt(label: string): List {
-    const handle = this.#handle();
     const found = List.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getParagraphList', paragraph: handle }),
+      () => ({ op: 'getParagraphList', paragraph: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, label) });
       }

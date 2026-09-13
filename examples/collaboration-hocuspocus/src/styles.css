@@ -649,3 +649,18 @@ body,
   height: 22px;
   box-shadow: 0 0 0 2px #ffffff59;
 }
+
+/* Keep recovery guidance visible without squeezing the fixed-height room bar. */
+.collab-recovery {
+  flex: none;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--collab-line);
+  background: var(--collab-panel);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.collab-recovery p {
+  margin: 4px 0 0;
+  color: var(--collab-dim);
+}

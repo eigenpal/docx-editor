@@ -115,7 +115,7 @@ describe('a refused batch', () => {
   });
 
   test('a batch that cannot even be planned sends nothing', async () => {
-    // A lookup that found nothing never became addressable, so an action against it cannot be
+    // A lookup that found nothing never became addressable, so a write against it cannot be
     // planned. That refusal happens at the call, before anything is dispatched, so it is not a
     // document failure at all — and the live object's read still goes out as one batch.
     const spy = spyHost(openHost(docx('')));
@@ -127,7 +127,7 @@ describe('a refused batch', () => {
       expect(missing.isNullObject).toBe(true);
       spy.reset();
       body.load('text');
-      expect(() => missing.load('text')).toThrow();
+      expect(() => missing.insertText('x', 'End')).toThrow();
       await context.sync();
       expect(spy.requests).toHaveLength(1);
     });

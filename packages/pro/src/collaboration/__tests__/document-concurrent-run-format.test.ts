@@ -13,9 +13,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // converge (fingerprint + save/reopen digest), a mark from the winner survives, and the
 // mechanism does not misfire on independent or single-author edits.
 //
-// The dedup claims ONE round of concurrent splitting on a run. A later round tangles the runs
-// below what a projection repairs (issue #592); the dedup declines it and the session keeps
-// every replica on the same tree, duplicated but convergent — never divergent.
+// Later rounds preserve source character identities and translate visible journal
+// coordinates into shared positions (issue #592). Every round
+// must preserve the text while keeping peers and cold joins on the same tree.
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { OoxmlNode, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
@@ -158,12 +158,7 @@ describe('concurrent run-format convergence (#581)', () => {
   });
 
   test('a further edit after a concurrent split still converges on every replica', async () => {
-    // One round of concurrent splitting dedups to one text. A SECOND round — a peer splitting a
-    // run the first round made — tangles the runs below what this projection repairs, so the
-    // dedup declines it and every run materializes (issue #592). The point this pins is the
-    // no-regression guarantee: the editor, its collaborator, and a fresh join AGREE, so no
-    // replica saves a document another replica would not. Duplication is allowed here;
-    // divergence is not.
+    // A later split must preserve text as well as convergence (#592).
     const { alice, bob } = await race(
       (peer) => runProps(peer, 0, 0, 5, 'b'),
       (peer) => runProps(peer, 0, 3, 9, 'i')
@@ -173,6 +168,7 @@ describe('concurrent run-format convergence (#581)', () => {
     harness.expectConverged(alice, bob);
     const carol = await harness.join(bob, 'carol');
     harness.expectConverged(bob, carol);
+    for (const peer of [alice, bob, carol]) expect(bodyText(peer)).toBe(PARA0 + PARA1);
   });
 
   test('concurrent typing survives formatting the same run', async () => {

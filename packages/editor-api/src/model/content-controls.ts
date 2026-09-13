@@ -26,6 +26,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the control's properties rather than from a stored chrome colour. Answering them would mean
 // declaring a w15 binding whose only consumer is a value nothing renders. Recorded as omissions.
 
+import { InsertLocation } from './editing-enums.ts';
 import {
   ObjectPath,
   fail,
@@ -106,6 +107,7 @@ const MAX_METADATA = 4_096;
  * @public
  */
 export class ContentControl extends ModelObject implements PromisedItem {
+  #pendingLocks: { cannotEdit?: boolean; cannotDelete?: boolean } | undefined;
   readonly #range = new Map<AutomationContentControlRangeLocation, Range>();
   #paragraphs: ParagraphCollection | undefined;
   #contentControls: ContentControlCollection | undefined;
@@ -194,7 +196,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   set cannotDelete(value: boolean) {
-    this.#writeLock(value, this.cannotEdit, `${this.path.label}.cannotDelete`);
+    this.#writeLockAxis('cannotDelete', value);
   }
 
   /** Whether the control's contents refuse to be edited. Resolved like `cannotDelete`. */
@@ -204,7 +206,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   set cannotEdit(value: boolean) {
-    this.#writeLock(this.cannotDelete, value, `${this.path.label}.cannotEdit`);
+    this.#writeLockAxis('cannotEdit', value);
   }
 
   /**
@@ -278,10 +280,9 @@ export class ContentControl extends ModelObject implements PromisedItem {
   setValue(value: ContentControlValue): void {
     const target = `${this.path.label}.setValue`;
     const checked = contentControlValue(value, target);
-    const contentControl = this.#handle();
     this.command('setValue', () => ({
       op: 'setContentControlValue',
-      contentControl,
+      contentControl: this.#handle(),
       value: checked,
     }));
   }
@@ -294,7 +295,16 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * back from the WRITE and not from a read beside it: reads answer the document as it is when
    * the batch is planned, so a read here would name the text the write was about to replace.
    */
-  insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
+  insertText(
+    text: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
     const at =
@@ -305,11 +315,10 @@ export class ContentControl extends ModelObject implements PromisedItem {
           : insertLocation === 'End'
             ? 'end'
             : fail({ code: 'InvalidArgument', target });
-    const contentControl = this.#handle();
     const made = Range.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () => ({ op: 'insertContentControlText', contentControl, text: written, at }),
+      () => ({ op: 'insertContentControlText', contentControl: this.#handle(), text: written, at }),
       (value) => {
         made.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
       }
@@ -326,8 +335,11 @@ export class ContentControl extends ModelObject implements PromisedItem {
   delete(keepContent: boolean): void {
     const target = `${this.path.label}.delete`;
     if (typeof keepContent !== 'boolean') fail({ code: 'InvalidArgument', target });
-    const contentControl = this.#handle();
-    this.command('delete', () => ({ op: 'deleteContentControl', contentControl, keepContent }));
+    this.command('delete', () => ({
+      op: 'deleteContentControl',
+      contentControl: this.#handle(),
+      keepContent,
+    }));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
@@ -344,24 +356,35 @@ export class ContentControl extends ModelObject implements PromisedItem {
       'placeholderShown',
       'temporary',
     ]);
-    const contentControl = this.#handle();
     if (selected.includes('id')) {
-      this.loadTextInto('id', () => ({ op: 'getContentControlFileId', contentControl }));
+      this.loadTextInto('id', () => ({
+        op: 'getContentControlFileId',
+        contentControl: this.#handle(),
+      }));
     }
     if (selected.includes('tag')) {
-      this.loadTextInto('tag', () => ({ op: 'getContentControlTag', contentControl }));
+      this.loadTextInto('tag', () => ({
+        op: 'getContentControlTag',
+        contentControl: this.#handle(),
+      }));
     }
     if (selected.includes('title')) {
-      this.loadTextInto('title', () => ({ op: 'getContentControlTitle', contentControl }));
+      this.loadTextInto('title', () => ({
+        op: 'getContentControlTitle',
+        contentControl: this.#handle(),
+      }));
     }
     if (selected.includes('subtype')) {
-      this.loadTextInto('subtype', () => ({ op: 'getContentControlSubtype', contentControl }));
+      this.loadTextInto('subtype', () => ({
+        op: 'getContentControlSubtype',
+        contentControl: this.#handle(),
+      }));
     }
     if (selected.includes('isBound')) {
       const label = `${this.path.label}.isBound`;
       this.read(
         label,
-        () => ({ op: 'getContentControlIsBound', contentControl }),
+        () => ({ op: 'getContentControlIsBound', contentControl: this.#handle() }),
         (value) => {
           this.setLoadedProperty('isBound', hydratedFlag(value, label));
         }
@@ -370,7 +393,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({
         op: 'getContentControlText',
-        contentControl,
+        contentControl: this.#handle(),
         projection: this.revisionTextView(),
       }));
     }
@@ -381,7 +404,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
       const label = `${this.path.label}.lock`;
       this.read(
         label,
-        () => ({ op: 'getContentControlLock', contentControl }),
+        () => ({ op: 'getContentControlLock', contentControl: this.#handle() }),
         (value) => {
           this.setLoadedProperty('lock', hydratedText(value, label));
         }
@@ -391,7 +414,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
       const label = `${this.path.label}.placeholderShown`;
       this.read(
         label,
-        () => ({ op: 'getContentControlPlaceholderShown', contentControl }),
+        () => ({ op: 'getContentControlPlaceholderShown', contentControl: this.#handle() }),
         (value) => {
           this.setLoadedProperty('placeholderShown', hydratedFlag(value, label));
         }
@@ -401,7 +424,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     const label = `${this.path.label}.temporary`;
     this.read(
       label,
-      () => ({ op: 'getContentControlTemporary', contentControl }),
+      () => ({ op: 'getContentControlTemporary', contentControl: this.#handle() }),
       (value) => {
         this.setLoadedProperty('temporary', hydratedFlag(value, label));
       }
@@ -409,11 +432,10 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   #rangeAt(label: string, location: AutomationContentControlRangeLocation): Range {
-    const contentControl = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getContentControlRange', contentControl, location }),
+      () => ({ op: 'getContentControlRange', contentControl: this.#handle(), location }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }
@@ -422,34 +444,32 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   #writeMetadata(name: string, fields: { readonly tag?: string; readonly title?: string }): void {
-    const contentControl = this.#handle();
     this.command(name, () => ({
       op: 'setContentControlProperties',
-      contentControl,
+      contentControl: this.#handle(),
       ...fields,
     }));
   }
 
-  /**
-   * Write the two flags back as the single `ST_Lock` they are.
-   *
-   * A caller setting `cannotEdit` alone must not clear `cannotDelete`, so the other half is read
-   * from the loaded lock and written with it — which is why both setters go through here.
-   */
-  #writeLock(cannotDelete: boolean, cannotEdit: boolean, target: string): void {
-    if (typeof cannotDelete !== 'boolean' || typeof cannotEdit !== 'boolean') {
-      fail({ code: 'InvalidArgument', target });
+  #writeLockAxis(axis: 'cannotDelete' | 'cannotEdit', value: boolean): void {
+    const target = `${this.path.label}.${axis}`;
+    if (typeof value !== 'boolean') fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    if (this.#pendingLocks) {
+      this.#pendingLocks[axis] = value;
+      return;
     }
-    const lock: ContentControlLockState =
-      cannotDelete && cannotEdit
-        ? 'sdtContentLocked'
-        : cannotDelete
-          ? 'sdtLocked'
-          : cannotEdit
-            ? 'contentLocked'
-            : 'unlocked';
-    const contentControl = this.#handle();
-    this.command(target, () => ({ op: 'setContentControlProperties', contentControl, lock }));
+    const pending = { [axis]: value };
+    this.#pendingLocks = pending;
+    this.command(
+      axis,
+      () => {
+        return { op: 'setContentControlProperties', contentControl: this.#handle(), ...pending };
+      },
+      () => {
+        if (this.#pendingLocks === pending) this.#pendingLocks = undefined;
+      }
+    );
   }
 
   #handle(): AutomationHandle {

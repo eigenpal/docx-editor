@@ -694,6 +694,96 @@ codes:
 - `protocol-version-mismatch`: The room uses a different protocol version.
 - `schema-version-mismatch`: The room uses a different schema version.
 
+### Version compatibility
+
+Full-document collaboration compares four version fields: `protocolVersion`,
+`sharedSchemaVersion`, `repairVersion`, and `canonicalModelVersion`. Participants,
+export workers, and persisted rooms must use a compatible tuple. Matching editor
+release numbers alone is not the compatibility check; releases with the same tuple
+use the same declared collaboration format.
+
+Read the tuple supported by the installed package from the public entry:
+
+```ts
+import { DOCUMENT_COLLABORATION_VERSIONS } from '@docx-editor.dev/pro/collaboration';
+
+// { protocolVersion: 1, sharedSchemaVersion: 3,
+//   repairVersion: 1, canonicalModelVersion: 1 }
+const supportedVersions = DOCUMENT_COLLABORATION_VERSIONS;
+```
+
+The older `SCHEMA_VERSION` and `PROTOCOL_VERSION` exports describe the experimental
+`createTextCollaboration` protocol. In particular, `SCHEMA_VERSION === 1` does not
+mean full-document rooms use schema 1. Use `DOCUMENT_COLLABORATION_VERSIONS` for
+`createDocumentCollaboration` and `readCollaborationDocument`.
+
+Shared schema 3 preserves character identities across repeated formatting,
+concurrent plain-text typing, and undo. Joining and exporting an incompatible
+persisted room refuses with `schema-version-mismatch` or
+`protocol-version-mismatch`. Reconnecting cannot convert that room.
+
+Your host must also prevent incompatible clients from sending updates. Compare
+its supported version tuple during your application's connection/admission flow,
+before accepting Yjs updates. The library's mismatch checks do not configure a
+WebSocket or Hocuspocus server to reject older clients. Include background workers
+and offline clients in this policy.
+
+Use the public assertion inside your server's admission hook, after verifying
+access credentials and before allowing synchronization:
+
+```ts
+import { assertDocumentCollaborationCompatibility } from '@docx-editor.dev/pro/collaboration';
+
+// `clientVersions` comes from your application's handshake.
+// The server must separately authorize the user and document access.
+assertDocumentCollaborationCompatibility(clientVersions);
+```
+
+The assertion requires all four fields and ignores additional fields. It throws
+`CollaborationSchemaError` with a stable failure `code`. Its `detail` identifies
+the mismatched field and expected/received version, for example
+`sharedSchemaVersion: expected 3, received 2`. Use `code` for application logic;
+`detail` is diagnostic text. A missing or malformed descriptor also refuses.
+The assertion does not inspect a `Y.Doc`, migrate data, or authenticate a client.
+Validate persisted rooms separately before admitting writes.
+
+The Hocuspocus example demonstrates version checks in `onAuthenticate` and
+validates persisted documents before loading them. Its demo credentials do not
+replace production authorization. See
+[Hocuspocus authentication hooks](https://tiptap.dev/docs/hocuspocus/server/hooks#onauthenticate).
+
+### Upgrade a persisted room
+
+A schema upgrade transfers a verified DOCX into a new collaboration room. It does
+not migrate Yjs history in place.
+
+1. Stop writes to the old room, including client connections and background jobs.
+   Drain already accepted updates, then back up the authoritative persisted Yjs
+   state, any separately stored blobs, and the version tuple that can read them.
+   Resolve any outstanding offline work before choosing this snapshot.
+2. Export that snapshot with a release that supports its existing tuple. For a
+   schema 2 room, use the previous compatible runtime's
+   `readCollaborationDocument`; a schema 3 runtime will refuse it.
+3. Save the DOCX and verify it before proceeding: reopen it and check the expected
+   text, formatting, tables, fields, headers/footers, notes, and media. Exporting
+   faithfully preserves existing document state; it does not repair earlier corruption.
+4. Deploy compatible clients and export workers. Create an empty Yjs document and
+   a new provider room and storage key, then seed it from the verified DOCX. Use a
+   new application document identity or explicitly map the old identity to the new
+   room. Never change version metadata on the old Yjs state to make it pass checks.
+5. Verify the new room and its exported DOCX before reopening writes. Keep the old
+   room and backup read-only. Redirect users to the new room, and prevent stale
+   tabs or queued offline updates from reaching it. Version any local persistence
+   key as well; a new client must not load an old room's IndexedDB/Yjs state into
+   the new room.
+
+DOCX content transfers, but shared undo history and presence start afresh. Keep
+both the original snapshot and verified DOCX until the migration is accepted.
+Before new edits begin, rollback can restore the old application/runtime and old
+room together. After users edit the new room, freeze it and export or reconcile
+that work before rolling back; replaying its Yjs updates into the old schema is
+not a supported recovery path.
+
 Use Yjs 13 on the server. The `y-websocket` server (`bin/server.cjs`) and
 Hocuspocus support it. `@y/websocket-server` targets the Yjs 14 release
 candidate. It synchronizes initial state and presence, but not live Yjs 13
@@ -701,9 +791,23 @@ updates. This incompatibility makes the document appear frozen.
 
 ### Recover from an error
 
-An `error` session cannot repair itself. Recover it as follows:
+An `error` session cannot repair itself. First inspect the failure code.
+For `schema-version-mismatch` or `protocol-version-mismatch`, stop reconnect
+attempts: connect a compatible application version to that room, or follow the
+persisted-room upgrade procedure above. A fresh `Y.Doc` joining the same
+incompatible persisted room will fail again. Never relabel its version metadata.
 
-1. Save the editor bytes with `await editor.save()`.
+Custom ports and direct store integrations must call
+`room.session.gateOperations(ops, scope)` before committing edits and stop when it
+returns a refusal code. A store transaction can succeed locally even after the
+session becomes incompatible: the final journal check blocks replication, but
+retains the local document for recovery. Treat the session's terminal error as
+unsynchronized local work, and preserve those bytes before replacing the store.
+Do not infer successful synchronization from the store's transaction result.
+
+For another error, once the host has resolved its cause, recreate the session:
+
+1. If the editor mounted successfully, preserve local work with `await editor.save()`.
 2. Call `room.destroy()`, then destroy the provider.
 3. Create a new `Y.Doc`, `Awareness`, and provider.
 4. Connect the provider.
@@ -711,7 +815,8 @@ An `error` session cannot repair itself. Recover it as follows:
    `bootstrap: { kind: 'join' }`.
 
 Keep the editor mounted with the saved bytes until the room is ready. If the
-join fails, the saved bytes preserve the local work.
+join fails, retain the saved DOCX for recovery. Rejoining does not automatically
+merge those local bytes into the room; reconcile outstanding changes separately.
 
 The same entry exports the experimental `createTextCollaboration`. It only
 replicates paragraph text and rejects structural edits. Use

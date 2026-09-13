@@ -228,7 +228,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Protects graphemes, punctuation, and full-width number groups across run boundaries. East Asian font hints cover supported punctuation, symbols, Greek, and Cyrillic ranges while preserving explicit symbol fonts. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions. Mirrored RTL punctuation retains its full advance; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. Document theme language selects supplemental East Asian faces. Without that setting, empty East Asian theme faces use inherited Chinese, Japanese, or Korean language hints, with named CJK defaults when no face resolves. Live and export font resolvers receive the selected faces. East Asian font hints cover supported punctuation, symbols, Greek, and Cyrillic ranges while preserving explicit symbol fonts. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression removes one shared side bearing between adjacent punctuation. Paragraph and explicit line-break boundaries retain their advances. Colons can compress before opening brackets, bounded by the following bracket bearing. If wrapping separates the pair, the paragraph retains natural colon advances. Highlighted and shaded colons retain their advances. Opening glyphs carry an explicit ink offset that native text selection preserves. Ordinary text, authored spaces, other centered punctuation, outlined text, decorated text, and tracked changes retain their advances. Mirrored RTL punctuation retains its full advance. Kana uses deterministic advance reductions. Soft-wrap edge compression, font-specific optical compression, and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',
@@ -383,6 +383,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
+  },
+  {
+    id: 'tables.rtl',
+    name: 'Visually right-to-left tables',
+    category: 'tables',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Authored w:bidiVisual tables display logical cells from right to left, including merged cells and repeated headers. Table styles can supply the property; a direct false value overrides it. Borders, margins, alignment, selection, column insertion, and divider resizing follow the visual grid. HTML copy and paste preserve explicit table direction and physical cell borders and margins. Changing table direction and resizing the outer right edge of an RTL table are not supported.',
   },
   {
     id: 'tables.rows-columns',

@@ -20,9 +20,9 @@ export {
   type ContentControlSubtype,
   type ContentControlValue,
 } from './content-controls.ts';
-export { Document, type ChangeTrackingMode } from './document.ts';
-export { Font } from './font.ts';
-export { List, ListCollection, ListItem } from './lists.ts';
+export { Document } from './document.ts';
+export { Font, UnderlineType } from './font.ts';
+export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
 export {
   Comment,
@@ -33,18 +33,11 @@ export {
   RevisionCollection,
   type RevisionType,
 } from './review.ts';
-export {
-  PageSetup,
-  Section,
-  SectionCollection,
-  type HeaderFooterType,
-  type PageOrientation,
-} from './sections.ts';
+export { PageSetup, Section, SectionCollection, type HeaderFooterType } from './sections.ts';
 export type {
   BesideLocation,
   BodyInsertParagraphLocation,
   BodyInsertTextLocation,
-  InsertLocation,
   ParagraphInsertTextLocation,
   RangeInsertTextLocation,
   SelectionMode,
@@ -52,3 +45,27 @@ export type {
 export { Paragraph, type ParagraphAlignment } from './paragraph.ts';
 export { Range } from './range.ts';
 export type { SearchOptions } from './search-options.ts';
+
+export {
+  Table,
+  TableRow,
+  TableCell,
+  TableCollection,
+  TableRowCollection,
+  TableCellCollection,
+} from './tables.ts';
+
+export { InlinePicture, InlinePictureCollection } from './pictures.ts';
+
+export { Field, FieldCollection } from './fields.ts';
+export { FieldType, type FieldTypeLiteral } from './field-types.ts';
+
+export {
+  InsertLocation,
+  Alignment,
+  PageOrientation,
+  ChangeTrackingMode,
+  VerticalAlignment,
+  BreakType,
+  ContentControlType,
+} from './editing-enums.ts';

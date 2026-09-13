@@ -40,7 +40,11 @@ import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
 import { cjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
-import { compressCjkPieces, canHangCjkPunctuation } from './cjk-spacing.ts';
+import {
+  compressCjkPieces,
+  canHangCjkPunctuation,
+  colonLostOpeningBearing,
+} from './cjk-spacing.ts';
 import { resolveCjkTypography, type CjkParagraphTypography } from './cjk-typography.ts';
 import {
   EMPTY_TAB_STOPS,
@@ -91,23 +95,12 @@ import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 
 /**
- * How far past the line's right edge a span may reach before it counts as overflow.
- *
- * A right/centre/decimal tab computes its advance in ABSOLUTE x — `destination - currentX -
- * segmentWidth` — while wrapping is decided in line-local width. Converting between the two
- * subtracts and re-adds the paragraph origin, so a segment the tab placed to end EXACTLY at
- * the edge lands a fraction of an ulp beyond it. Without a tolerance that hairline decides a
- * line break, and a right-aligned tab is built to reach the edge exactly. A thousandth of a
- * point is far below one device pixel, so nothing a reader could see wraps because of this.
+ * Ignore subpixel rounding from absolute tab positions converted to line-local widths.
+ * A tab ending exactly at the margin must not wrap because of floating-point error.
  */
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
-/**
- * Per-paragraph geometry the BREAK depends on, beyond width.
- *
- * Both change where lines start and how tall they are, so both belong in the caller's
- * cache key — a paragraph re-broken at a different line spacing is a different break.
- */
+/** Paragraph geometry affects line starts and heights, so callers must include it in cache keys. */
 export interface ParagraphFlowOptions {
   readonly paragraphRtl?: boolean;
   readonly typography?: CjkParagraphTypography;
@@ -566,11 +559,7 @@ export function alignDrawings(
 
 /**
  * Measure and break one paragraph into pending lines at `available` width.
- *
- * Verbatim behaviour of the pre-extraction main-loop body: cache hit short-circuits the
- * measurement entirely; a miss measures pieces, breaks greedily at word boundaries, and
- * stores the frozen result under `cacheKey`. Span x offsets are relative to the paragraph
- * origin (`indentLeft` from the paragraph's own properties), never to the page.
+ * Cache hits skip measurement. Span x offsets are paragraph-relative, never page-relative.
  */
 export function breakParagraph(
   paragraph: OoxmlNode,
@@ -584,7 +573,8 @@ export function breakParagraph(
   tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
   pageContext?: FieldPageContext,
   cascadeRuns?: RunPropertyCascader,
-  flow?: ParagraphFlowOptions
+  flow?: ParagraphFlowOptions,
+  preserveColonAdvances = false
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;
   if (cached) return cached;
@@ -649,7 +639,7 @@ export function breakParagraph(
           : undefined
       )
     );
-  const pieces = compressCjkPieces(visiblePieces, typography, measurer);
+  const pieces = compressCjkPieces(visiblePieces, typography, measurer, preserveColonAdvances);
   const placeableSuffixes = placeableContentSuffixes(pieces);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
@@ -1596,6 +1586,7 @@ export function breakParagraph(
               ...(piece.link ? { link: piece.link } : {}),
               ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
               ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+              ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
               ...revisionsOf(piece),
             });
             line.width += prefix.width;
@@ -1641,6 +1632,7 @@ export function breakParagraph(
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
           ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+          ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
           ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
           ...revisionsOf(piece),
         };
@@ -1654,16 +1646,28 @@ export function breakParagraph(
       consumed = boundary;
     }
   }
-  // An empty paragraph still occupies one line, or it would have no caret target. So does
-  // the line a TRAILING hard break opens: Shift+Enter at the end of a paragraph moves the
-  // caret onto a new, empty line in Word, and without this the break closed the only line
-  // there was and left nothing after it — the caret fell back to the end of the line the
-  // break had just terminated, sitting a break's width to the right of the last glyph,
-  // and the new line only appeared once something was typed into it.
-  // Only this final close includes the paragraph mark: intermediate wraps must not inherit
-  // a tall mark size onto every line of a multi-line paragraph.
+  // Empty paragraphs and trailing hard breaks retain a line for their caret.
+  // Only the final close inherits paragraph-mark metrics; intermediate wraps do not.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
     closeLine({ includeParagraphMark: true });
+  // A centred colon can use the next opening bracket's bearing only on the same line.
+  // Retry once with natural colon advances instead of forcing a new unbreakable group.
+  if (!preserveColonAdvances && colonLostOpeningBearing(lines))
+    return breakParagraph(
+      paragraph,
+      paragraphId,
+      indentLeft,
+      available,
+      measurer,
+      cache,
+      cacheKey,
+      inheritedRunProperties,
+      tabStops,
+      pageContext,
+      cascadeRuns,
+      flow,
+      true
+    );
   if (cacheKey !== null && cache)
     cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
   return lines;

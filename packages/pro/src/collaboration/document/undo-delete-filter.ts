@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
+import { NODE_INITIAL_SHELL_FIELD, NODE_SPLIT_LINEAGE_FIELD } from './schema.ts';
 
 /** Read the item that holds a type, which Yjs keeps off the public surface. */
 function itemOf(type: unknown): Y.Item | null {
@@ -26,18 +27,21 @@ function carriesType(item: Y.Item): boolean {
  * coming. Afterwards the characters are unreachable through any API: no tombstone to audit,
  * nothing to rescue. Repair cannot help here; only prevention can.
  *
- * So two things are held back, and only these two: the record entry in `nodes`, and a record
+ * Retain the record entry in `nodes`, and a record
  * field that carries a shared type — `children` and `t`. Those are the containers a peer's write
  * can land inside, and the schema only ever writes them when it builds the record, so pinning one
  * can never strand a replaced container either.
  *
- * A record's PLAIN fields are left alone, and that distinction is the whole correctness of this.
+ * Mutable flags undo normally.
  * Holding them back too was the first attempt, and it broke undo of a paragraph split: the split
  * supersedes the original run by setting `deleted` on it, pinning that flag kept the run
  * tombstoned, and the registry then re-unlisted the run that the undo had just restored — the
  * paragraph came back empty, its text gone from the document. `deleted`, `replacedBy` and the
- * packed shell hold no one else's content, so undoing them destroys nothing and skipping them
+ * subsequent shell updates hold no one else's content, so undoing them destroys nothing and skipping them
  * corrupts the record.
+ *
+ * Initial shells and immutable split ancestry also survive: foreign descendants can reuse
+ * these retained containers after their original author undoes a split.
  *
  * Everything deeper undoes normally: characters inside a `Y.Text`, ids inside a child listing.
  * Those items belong to the author running the undo, and removing them is what undo means. The
@@ -56,6 +60,12 @@ export function nodeRecordDeleteFilter(nodes: unknown): (item: Y.Item) => boolea
     // A field of a record: its holder sits directly in `nodes`.
     const holder = itemOf(parent);
     if (holder === null || (holder.parent as unknown) !== nodes) return true;
+    // A descendant created by another author still needs its origin's ancestry after undo.
+    // Unlike splitFrom (which records the active split), this lineage is immutable evidence.
+    if (item.parentSub === NODE_SPLIT_LINEAGE_FIELD) return false;
+    // Retain the immutable fallback, not mutable shell items: a rename back to the initial
+    // QName must still undo, even though its value equals the creation descriptor.
+    if (item.parentSub === NODE_INITIAL_SHELL_FIELD) return false;
     return !carriesType(item);
   };
 }

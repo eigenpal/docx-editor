@@ -8,25 +8,46 @@ import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
 import { AutomationHandle } from '@docx-editor.dev/core/automation';
 import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
+import { AutomationPaginationOptions } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
+import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 
 // @public
-export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
+export enum Alignment {
+    // (undocumented)
+    centered = "Centered",
+    // (undocumented)
+    justified = "Justified",
+    // (undocumented)
+    left = "Left",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    right = "Right",
+    // (undocumented)
+    unknown = "Unknown"
+}
+
+// @public
+export type BesideLocation = Extract<RangeInsertTextLocation, 'Before' | 'After'>;
 
 // @public
 class Body_2 extends ModelObject {
     get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
+    get fields(): FieldCollection;
     get font(): Font;
     getComments(): CommentCollection;
+    getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
-    insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    get inlinePictures(): InlinePictureCollection;
+    insertParagraph(paragraphText: string, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'): Paragraph;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get lists(): ListCollection;
     // @internal
     static main(context: RequestContext, label: string): Body_2;
@@ -41,15 +62,16 @@ class Body_2 extends ModelObject {
     search(searchText: string, options?: SearchOptions): RangeCollection;
     get style(): string;
     set style(value: string);
+    get tables(): TableCollection;
     get text(): string;
 }
 export { Body_2 as Body }
 
 // @public
-export type BodyInsertParagraphLocation = Extract<InsertLocation, 'Start' | 'End'>;
+export type BodyInsertParagraphLocation = Extract<RangeInsertTextLocation, 'Start' | 'End'>;
 
 // @public
-export type BodyInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type BodyInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 // @public
 export class Bookmark extends ModelObject implements PromisedItem {
@@ -81,7 +103,32 @@ export class BookmarkCollection extends HandleCollection<Bookmark> {
 }
 
 // @public
-export type ChangeTrackingMode = 'Off' | 'TrackAll' | 'TrackMineOnly';
+export enum BreakType {
+    // (undocumented)
+    line = "Line",
+    // (undocumented)
+    next = "Next",
+    // (undocumented)
+    page = "Page",
+    // (undocumented)
+    sectionContinuous = "SectionContinuous",
+    // (undocumented)
+    sectionEven = "SectionEven",
+    // (undocumented)
+    sectionNext = "SectionNext",
+    // (undocumented)
+    sectionOdd = "SectionOdd"
+}
+
+// @public
+export enum ChangeTrackingMode {
+    // (undocumented)
+    off = "Off",
+    // (undocumented)
+    trackAll = "TrackAll",
+    // (undocumented)
+    trackMineOnly = "TrackMineOnly"
+}
 
 // @public
 export abstract class ClientObject implements RuntimeManagedObject {
@@ -108,6 +155,7 @@ export abstract class ClientObject implements RuntimeManagedObject {
     // @internal
     protected get path(): ObjectPath;
     protected requireAddressable(): void;
+    protected requireUsablePath(): void;
     // @internal
     protected setLoadedProperty(name: string, value: unknown): void;
 }
@@ -191,7 +239,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     hydrateNull(): void;
     get id(): string;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get isBound(): boolean;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
@@ -233,6 +281,46 @@ export type ContentControlLockState = 'unlocked' | 'sdtLocked' | 'contentLocked'
 export type ContentControlSubtype = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';
 
 // @public
+export enum ContentControlType {
+    // (undocumented)
+    buildingBlockGallery = "BuildingBlockGallery",
+    // (undocumented)
+    checkBox = "CheckBox",
+    // (undocumented)
+    comboBox = "ComboBox",
+    // (undocumented)
+    datePicker = "DatePicker",
+    // (undocumented)
+    dropDownList = "DropDownList",
+    // (undocumented)
+    group = "Group",
+    // (undocumented)
+    picture = "Picture",
+    // (undocumented)
+    plainText = "PlainText",
+    // (undocumented)
+    plainTextInline = "PlainTextInline",
+    // (undocumented)
+    plainTextParagraph = "PlainTextParagraph",
+    // (undocumented)
+    repeatingSection = "RepeatingSection",
+    // (undocumented)
+    richText = "RichText",
+    // (undocumented)
+    richTextInline = "RichTextInline",
+    // (undocumented)
+    richTextParagraphs = "RichTextParagraphs",
+    // (undocumented)
+    richTextTable = "RichTextTable",
+    // (undocumented)
+    richTextTableCell = "RichTextTableCell",
+    // (undocumented)
+    richTextTableRow = "RichTextTableRow",
+    // (undocumented)
+    unknown = "Unknown"
+}
+
+// @public
 export type ContentControlValue = {
     readonly kind: 'text';
     readonly text: string;
@@ -257,14 +345,15 @@ export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
     readonly modules?: readonly EditorModule[];
+    readonly pagination?: ServerPaginationOptions;
     readonly revisionTextView?: RevisionTextView;
 }
 
 // @public
 class Document_2 extends ModelObject {
     get body(): Body_2;
-    get changeTrackingMode(): ChangeTrackingMode;
-    set changeTrackingMode(mode: ChangeTrackingMode);
+    get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly';
+    set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly');
     get comments(): CommentCollection;
     get contentControls(): ContentControlCollection;
     get endnotes(): NoteItemCollection;
@@ -412,11 +501,243 @@ export interface EditorModule {
 }
 
 // @public
+export class Field extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Field;
+    // (undocumented)
+    get code(): string;
+    set code(value: string);
+    delete(): void;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): Field;
+    updateResult(): void;
+}
+
+// @public
+export class FieldCollection extends ItemCollection<Field> {
+    // (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    // (undocumented)
+    getFirst(): Field;
+    // (undocumented)
+    getFirstOrNullObject(): Field;
+    // (undocumented)
+    getLast(): Field;
+    // (undocumented)
+    getLastOrNullObject(): Field;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Field;
+    // (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): FieldCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): Field & PromisedItem;
+    // (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum FieldType {
+    // (undocumented)
+    addin = "Addin",
+    // (undocumented)
+    addressBlock = "AddressBlock",
+    // (undocumented)
+    advance = "Advance",
+    // (undocumented)
+    ask = "Ask",
+    // (undocumented)
+    author = "Author",
+    // (undocumented)
+    autoText = "AutoText",
+    // (undocumented)
+    autoTextList = "AutoTextList",
+    // (undocumented)
+    barCode = "BarCode",
+    // (undocumented)
+    bibliography = "Bibliography",
+    // (undocumented)
+    bidiOutline = "BidiOutline",
+    // (undocumented)
+    citation = "Citation",
+    // (undocumented)
+    comments = "Comments",
+    // (undocumented)
+    compare = "Compare",
+    // (undocumented)
+    createDate = "CreateDate",
+    // (undocumented)
+    data = "Data",
+    // (undocumented)
+    database = "Database",
+    // (undocumented)
+    date = "Date",
+    // (undocumented)
+    displayBarcode = "DisplayBarcode",
+    // (undocumented)
+    docProperty = "DocProperty",
+    // (undocumented)
+    docVariable = "DocVariable",
+    // (undocumented)
+    editTime = "EditTime",
+    // (undocumented)
+    embedded = "Embedded",
+    // (undocumented)
+    empty = "Empty",
+    // (undocumented)
+    eq = "EQ",
+    // (undocumented)
+    expression = "Expression",
+    // (undocumented)
+    fileName = "FileName",
+    // (undocumented)
+    fileSize = "FileSize",
+    // (undocumented)
+    fillIn = "FillIn",
+    // (undocumented)
+    formCheckbox = "FormCheckbox",
+    // (undocumented)
+    formDropdown = "FormDropdown",
+    // (undocumented)
+    formText = "FormText",
+    // (undocumented)
+    gotoButton = "GotoButton",
+    // (undocumented)
+    greetingLine = "GreetingLine",
+    // (undocumented)
+    hyperlink = "Hyperlink",
+    // (undocumented)
+    if = "If",
+    // (undocumented)
+    import = "Import",
+    // (undocumented)
+    include = "Include",
+    // (undocumented)
+    includePicture = "IncludePicture",
+    // (undocumented)
+    includeText = "IncludeText",
+    // (undocumented)
+    index = "Index",
+    // (undocumented)
+    info = "Info",
+    // (undocumented)
+    keywords = "Keywords",
+    // (undocumented)
+    lastSavedBy = "LastSavedBy",
+    // (undocumented)
+    link = "Link",
+    // (undocumented)
+    listNum = "ListNum",
+    // (undocumented)
+    macroButton = "MacroButton",
+    // (undocumented)
+    mergeBarcode = "MergeBarcode",
+    // (undocumented)
+    mergeField = "MergeField",
+    // (undocumented)
+    mergeRec = "MergeRec",
+    // (undocumented)
+    mergeSeq = "MergeSeq",
+    // (undocumented)
+    next = "Next",
+    // (undocumented)
+    nextIf = "NextIf",
+    // (undocumented)
+    noteRef = "NoteRef",
+    // (undocumented)
+    numChars = "NumChars",
+    // (undocumented)
+    numPages = "NumPages",
+    // (undocumented)
+    numWords = "NumWords",
+    // (undocumented)
+    ocx = "OCX",
+    // (undocumented)
+    others = "Others",
+    // (undocumented)
+    page = "Page",
+    // (undocumented)
+    pageRef = "PageRef",
+    // (undocumented)
+    print = "Print",
+    // (undocumented)
+    printDate = "PrintDate",
+    // (undocumented)
+    private = "Private",
+    // (undocumented)
+    quote = "Quote",
+    // (undocumented)
+    rd = "RD",
+    // (undocumented)
+    ref = "Ref",
+    // (undocumented)
+    revNum = "RevNum",
+    // (undocumented)
+    saveDate = "SaveDate",
+    // (undocumented)
+    section = "Section",
+    // (undocumented)
+    sectionPages = "SectionPages",
+    // (undocumented)
+    seq = "Seq",
+    // (undocumented)
+    set = "Set",
+    // (undocumented)
+    shape = "Shape",
+    // (undocumented)
+    skipIf = "SkipIf",
+    // (undocumented)
+    styleRef = "StyleRef",
+    // (undocumented)
+    subject = "Subject",
+    // (undocumented)
+    subscriber = "Subscriber",
+    // (undocumented)
+    symbol = "Symbol",
+    // (undocumented)
+    ta = "TA",
+    // (undocumented)
+    tc = "TC",
+    // (undocumented)
+    template = "Template",
+    // (undocumented)
+    time = "Time",
+    // (undocumented)
+    title = "Title",
+    // (undocumented)
+    toa = "TOA",
+    // (undocumented)
+    toc = "TOC",
+    // (undocumented)
+    undefined = "Undefined",
+    // (undocumented)
+    userAddress = "UserAddress",
+    // (undocumented)
+    userInitials = "UserInitials",
+    // (undocumented)
+    userName = "UserName",
+    // (undocumented)
+    xe = "XE"
+}
+
+// @public
+export type FieldTypeLiteral = `${FieldType}`;
+
+// @public
 export class Font extends ModelObject {
     get bold(): boolean | null;
     set bold(value: boolean);
     get color(): string | null;
     set color(value: string);
+    get highlightColor(): string | null;
+    set highlightColor(value: string);
     get italic(): boolean | null;
     set italic(value: boolean);
     get name(): string | null;
@@ -426,13 +747,86 @@ export class Font extends ModelObject {
     protected onLoad(request: ResolvedLoadOptions): void;
     get size(): number | null;
     set size(value: number);
+    // (undocumented)
+    get strikeThrough(): boolean | null;
+    set strikeThrough(value: boolean);
+    // (undocumented)
+    get subscript(): boolean | null;
+    set subscript(value: boolean);
+    // (undocumented)
+    get superscript(): boolean | null;
+    set superscript(value: boolean);
+    get underline(): string | null;
+    set underline(value: UnderlineType | 'Mixed' | 'None' | 'Hidden' | 'DotLine' | 'Single' | 'Word' | 'Double' | 'Thick' | 'Dotted' | 'DottedHeavy' | 'DashLine' | 'DashLineHeavy' | 'DashLineLong' | 'DashLineLongHeavy' | 'DotDashLine' | 'DotDashLineHeavy' | 'TwoDotDashLine' | 'TwoDotDashLineHeavy' | 'Wave' | 'WaveHeavy' | 'WaveDouble');
 }
 
 // @public
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
 // @public
-export type InsertLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+export class InlinePicture extends ModelObject implements PromisedItem {
+    // (undocumented)
+    get altTextDescription(): string;
+    set altTextDescription(value: string);
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): InlinePicture;
+    delete(): void;
+    // (undocumented)
+    get height(): number;
+    set height(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    get lockAspectRatio(): boolean;
+    set lockAspectRatio(value: boolean);
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): InlinePicture;
+    // (undocumented)
+    get width(): number;
+    set width(value: number);
+}
+
+// @public
+export class InlinePictureCollection extends ItemCollection<InlinePicture> {
+    // (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    // (undocumented)
+    getFirst(): InlinePicture;
+    // (undocumented)
+    getFirstOrNullObject(): InlinePicture;
+    // (undocumented)
+    getLast(): InlinePicture;
+    // (undocumented)
+    getLastOrNullObject(): InlinePicture;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): InlinePicture;
+    // (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): InlinePictureCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): InlinePicture & PromisedItem;
+    // (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum InsertLocation {
+    // (undocumented)
+    after = "After",
+    // (undocumented)
+    before = "Before",
+    // (undocumented)
+    end = "End",
+    // (undocumented)
+    replace = "Replace",
+    // (undocumented)
+    start = "Start"
+}
 
 // @public
 export function isDocxEditorError(value: unknown): value is DocxEditorError;
@@ -453,6 +847,32 @@ export class List extends ModelObject implements PromisedItem {
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): List;
+    setLevelBullet(level: number, listBullet: ListBullet, charCode?: number, fontName?: string): void;
+    // (undocumented)
+    setLevelBullet(level: number, listBullet: 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark', charCode?: number, fontName?: string): void;
+    setLevelIndents(level: number, textIndent: number, bulletNumberPictureIndent: number): void;
+    setLevelNumbering(level: number, listNumbering: ListNumbering, formatString?: (string | number)[]): void;
+    // (undocumented)
+    setLevelNumbering(level: number, listNumbering: 'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter', formatString?: (string | number)[]): void;
+    setLevelStartingNumber(level: number, startingNumber: number): void;
+}
+
+// @public
+export enum ListBullet {
+    // (undocumented)
+    arrow = "Arrow",
+    // (undocumented)
+    checkmark = "Checkmark",
+    // (undocumented)
+    custom = "Custom",
+    // (undocumented)
+    diamonds = "Diamonds",
+    // (undocumented)
+    hollow = "Hollow",
+    // (undocumented)
+    solid = "Solid",
+    // (undocumented)
+    square = "Square"
 }
 
 // @public
@@ -477,6 +897,22 @@ export class ListItem extends ModelObject {
     static of(context: RequestContext, label: string, owner: ObjectPath): ListItem;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
+}
+
+// @public
+export enum ListNumbering {
+    // (undocumented)
+    arabic = "Arabic",
+    // (undocumented)
+    lowerLetter = "LowerLetter",
+    // (undocumented)
+    lowerRoman = "LowerRoman",
+    // (undocumented)
+    none = "None",
+    // (undocumented)
+    upperLetter = "UpperLetter",
+    // (undocumented)
+    upperRoman = "UpperRoman"
 }
 
 // @public
@@ -526,7 +962,12 @@ export class NoteItemCollection extends HandleCollection<NoteItem> {
 export type NoteItemType = 'Footnote' | 'Endnote';
 
 // @public
-export type PageOrientation = 'Portrait' | 'Landscape';
+export enum PageOrientation {
+    // (undocumented)
+    landscape = "Landscape",
+    // (undocumented)
+    portrait = "Portrait"
+}
 
 // @public
 export class PageSetup extends ModelObject {
@@ -538,8 +979,8 @@ export class PageSetup extends ModelObject {
     static of(context: RequestContext, label: string, owner: ObjectPath): PageSetup;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
-    get orientation(): PageOrientation;
-    set orientation(value: PageOrientation);
+    get orientation(): PageOrientation | 'Portrait' | 'Landscape';
+    set orientation(value: PageOrientation | 'Portrait' | 'Landscape');
     get pageHeight(): number;
     set pageHeight(value: number);
     get pageWidth(): number;
@@ -556,17 +997,20 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set alignment(value: ParagraphAlignment);
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph;
+    attachToList(listId: number, level: number): List;
     clear(): void;
     delete(): void;
+    detachFromList(): void;
     get firstLineIndent(): number;
     set firstLineIndent(value: number);
     get font(): Font;
+    getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
     hydrateNull(): void;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get leftIndent(): number;
     set leftIndent(value: number);
     get lineSpacing(): number;
@@ -584,6 +1028,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     get spaceBefore(): number;
     set spaceBefore(value: number);
     split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection;
+    startNewList(): List;
     get style(): string;
     set style(value: string);
     get text(): string;
@@ -591,7 +1036,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
 }
 
 // @public
-export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+export type ParagraphAlignment = Alignment | 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 // @public
 export class ParagraphCollection extends ItemCollection<Paragraph> {
@@ -616,7 +1061,7 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 }
 
 // @public
-export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {
@@ -625,6 +1070,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     get bookmarks(): BookmarkCollection;
     clear(): void;
     delete(): void;
+    get fields(): FieldCollection;
     get font(): Font;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
@@ -632,9 +1078,18 @@ class Range_2 extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get hyperlink(): string;
     set hyperlink(value: string);
+    get inlinePictures(): InlinePictureCollection;
+    insertBreak(breakType: BreakType | 'Page' | 'SectionNext' | 'Next' | 'Line' | 'SectionContinuous' | 'SectionEven' | 'SectionOdd', insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): void;
     insertComment(commentText: string): Comment_2;
-    insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
+    insertContentControl(contentControlType?: ContentControlType.richText | ContentControlType.plainText | ContentControlType.buildingBlockGallery | ContentControlType.checkBox | ContentControlType.comboBox | ContentControlType.datePicker | ContentControlType.dropDownList | ContentControlType.group | ContentControlType.picture | ContentControlType.repeatingSection | 'RichText' | 'PlainText' | 'BuildingBlockGallery' | 'CheckBox' | 'ComboBox' | 'DatePicker' | 'DropDownList' | 'Group' | 'Picture' | 'RepeatingSection'): ContentControl;
+    // (undocumented)
+    insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldType, text?: string, removeFormatting?: boolean): Field;
+    // (undocumented)
+    insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldTypeLiteral, text?: string, removeFormatting?: boolean): Field;
+    insertInlinePictureFromBase64(base64EncodedImage: string, insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'): InlinePicture;
+    insertParagraph(paragraphText: string, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): Paragraph;
+    insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', values?: string[][]): Table;
+    insertText(text: string, insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
@@ -644,6 +1099,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     select(selectionMode_?: SelectionMode_2): void;
     get style(): string;
     set style(value: string);
+    get tables(): TableCollection;
     get text(): string;
 }
 export { Range_2 as Range }
@@ -670,7 +1126,7 @@ export class RangeCollection extends ItemCollection<Range_2> {
 }
 
 // @public
-export type RangeInsertTextLocation = InsertLocation;
+export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
 
 // @public
 export class RequestContext {
@@ -777,11 +1233,182 @@ type SelectionMode_2 = 'Select' | 'Start' | 'End';
 export { SelectionMode_2 as SelectionMode }
 
 // @public
+export interface ServerPaginationOptions extends AutomationPaginationOptions {
+}
+
+// @public
+export class Table extends ModelObject implements PromisedItem {
+    addColumns(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', columnCount: number, values?: string[][]): void;
+    addRows(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', rowCount: number, values?: string[][]): TableRowCollection;
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Table;
+    get columnCount(): number;
+    delete(): void;
+    deleteColumns(columnIndex: number, columnCount?: number): void;
+    deleteRows(rowIndex: number, rowCount?: number): void;
+    getCell(rowIndex: number, cellIndex: number): TableCell;
+    get headerRowCount(): number;
+    set headerRowCount(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): Table;
+    get rowCount(): number;
+    get rows(): TableRowCollection;
+    get style(): string;
+    set style(value: string);
+    get values(): string[][];
+    set values(value: string[][]);
+}
+
+// @public
+export class TableCell extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): TableCell;
+    get body(): Body_2;
+    get columnWidth(): number;
+    set columnWidth(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): TableCell;
+    get shadingColor(): string;
+    set shadingColor(value: string);
+    get value(): string;
+    set value(value: string);
+    get verticalAlignment(): VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed';
+    set verticalAlignment(value: VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed');
+}
+
+// @public
+export class TableCellCollection extends HandleCollection<TableCell> {
+    getFirst(): TableCell;
+    getFirstOrNullObject(): TableCell;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): TableCell;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCellCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): TableCell & PromisedItem;
+}
+
+// @public
+export class TableCollection extends HandleCollection<Table> {
+    getFirst(): Table;
+    getFirstOrNullObject(): Table;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Table;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCollection;
+    // @internal (undocumented)
+    static over(context: RequestContext, label: string, owner: ObjectPath, scope: () => AutomationSpanRef): TableCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): Table & PromisedItem;
+}
+
+// @public
+export class TableRow extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): TableRow;
+    get cells(): TableCellCollection;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): TableRow;
+}
+
+// @public
+export class TableRowCollection extends HandleCollection<TableRow> {
+    getFirst(): TableRow;
+    getFirstOrNullObject(): TableRow;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): TableRow;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableRowCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): TableRow & PromisedItem;
+}
+
+// @public
 export class TrackedObjects {
     // @internal
     constructor(internals: ContextInternals, owns: (object: ClientObject) => boolean);
     add(object: ClientObject | readonly ClientObject[]): void;
     remove(object: ClientObject | readonly ClientObject[]): void;
+}
+
+// @public
+export enum UnderlineType {
+    // (undocumented)
+    dashLine = "DashLine",
+    // (undocumented)
+    dashLineHeavy = "DashLineHeavy",
+    // (undocumented)
+    dashLineLong = "DashLineLong",
+    // (undocumented)
+    dashLineLongHeavy = "DashLineLongHeavy",
+    // (undocumented)
+    dotDashLine = "DotDashLine",
+    // (undocumented)
+    dotDashLineHeavy = "DotDashLineHeavy",
+    // (undocumented)
+    dotLine = "DotLine",
+    // (undocumented)
+    dotted = "Dotted",
+    // (undocumented)
+    dottedHeavy = "DottedHeavy",
+    // (undocumented)
+    double = "Double",
+    // (undocumented)
+    hidden = "Hidden",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    none = "None",
+    // (undocumented)
+    single = "Single",
+    // (undocumented)
+    thick = "Thick",
+    // (undocumented)
+    twoDotDashLine = "TwoDotDashLine",
+    // (undocumented)
+    twoDotDashLineHeavy = "TwoDotDashLineHeavy",
+    // (undocumented)
+    wave = "Wave",
+    // (undocumented)
+    waveDouble = "WaveDouble",
+    // (undocumented)
+    waveHeavy = "WaveHeavy",
+    // (undocumented)
+    word = "Word"
+}
+
+// @public
+export enum VerticalAlignment {
+    // (undocumented)
+    bottom = "Bottom",
+    // (undocumented)
+    center = "Center",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    top = "Top"
 }
 
 ```

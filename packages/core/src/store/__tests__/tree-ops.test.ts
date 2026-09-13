@@ -174,7 +174,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 4, text: 'xx' });
     expect(paragraphTextOf(typed, id!)).toBe('wordxx next');
     // The characters joined "word", which authors no spacing — not the tracked space run.
-    expect(serializeOoxmlPart(typed)).toContain('<w:r><w:t>word</w:t><w:t>xx</w:t></w:r>');
+    expect(serializeOoxmlPart(typed)).toContain('<w:r><w:t>wordxx</w:t></w:r>');
   });
 
   test('typing at the START of a paragraph takes the run to its right', () => {
@@ -183,9 +183,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 0, text: 'X' });
     expect(paragraphTextOf(typed, id!)).toBe('Xbold');
     // No run to the left, so the bold run to the right owns it — Word's rule at offset 0.
-    expect(serializeOoxmlPart(typed)).toContain(
-      '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t><w:t>bold</w:t></w:r>'
-    );
+    expect(serializeOoxmlPart(typed)).toContain('<w:r><w:rPr><w:b/></w:rPr><w:t>Xbold</w:t></w:r>');
   });
 
   test('typing at the end of a hyperlink stays OUTSIDE the link', () => {
@@ -213,9 +211,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
       bias: 'right',
     });
     expect(paragraphTextOf(typed, id!)).toBe('plainXbold');
-    expect(serializeOoxmlPart(typed)).toContain(
-      '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t><w:t>bold</w:t></w:r>'
-    );
+    expect(serializeOoxmlPart(typed)).toContain('<w:r><w:rPr><w:b/></w:rPr><w:t>Xbold</w:t></w:r>');
   });
 
   test('insertText at boundaries emits xml:space preserve on save/reopen', () => {
@@ -225,8 +221,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     const both = apply(leading, { op: 'insertText', paragraphId: id!, offset: 6, text: ' ' });
     expect(paragraphTextOf(both, id!)).toBe(' Hello ');
     const saved = serializeOoxmlPart(both);
-    expect(saved).toContain('<w:t xml:space="preserve"> </w:t>');
-    expect(saved).toContain('<w:t>Hello</w:t>');
+    expect(saved).toContain('<w:t xml:space="preserve"> Hello </w:t>');
     const reopened = load(saved);
     const [reopenedId] = paragraphIds(reopened);
     expect(paragraphTextOf(reopened, reopenedId!)).toBe(' Hello ');
@@ -262,7 +257,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     const next = apply(part, { op: 'insertText', paragraphId: id!, offset: 5, text: '  ' });
     expect(paragraphTextOf(next, id!)).toBe('Hello  world');
     const saved = serializeOoxmlPart(next);
-    expect(saved).toContain('<w:t xml:space="preserve">  </w:t>');
+    expect(saved).toContain('<w:t>Hello  world</w:t>');
     const reopened = load(saved);
     expect(paragraphTextOf(reopened, paragraphIds(reopened)[0]!)).toBe('Hello  world');
   });

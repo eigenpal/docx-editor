@@ -5,13 +5,13 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertTable", "updateTable", "updateTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getChangeTrackingMode", "getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getChangeTrackingMode", "getDocument", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
-export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
+export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
 
 // @public
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
@@ -138,9 +138,19 @@ export interface AutomationFontRead {
     readonly bold: boolean | null;
     readonly color: string | null;
     // (undocumented)
+    readonly highlightColor: string | null;
+    // (undocumented)
     readonly italic: boolean | null;
     readonly name: string | null;
     readonly size: number | null;
+    // (undocumented)
+    readonly strikeThrough: boolean | null;
+    // (undocumented)
+    readonly subscript: boolean | null;
+    // (undocumented)
+    readonly superscript: boolean | null;
+    // (undocumented)
+    readonly underline: string | null;
 }
 
 // @public
@@ -150,11 +160,21 @@ export interface AutomationFontWrite {
     // (undocumented)
     readonly color?: string;
     // (undocumented)
+    readonly highlightColor?: string | null;
+    // (undocumented)
     readonly italic?: boolean;
     // (undocumented)
     readonly name?: string;
     // (undocumented)
     readonly size?: number;
+    // (undocumented)
+    readonly strikeThrough?: boolean;
+    // (undocumented)
+    readonly subscript?: boolean;
+    // (undocumented)
+    readonly superscript?: boolean;
+    // (undocumented)
+    readonly underline?: string;
 }
 
 // @public
@@ -176,16 +196,17 @@ export interface AutomationHost {
     readonly capabilities: AutomationCapabilities;
     dispose(): void;
     execute(request: AutomationBatchRequest): AutomationBatchResponse;
+    prepare?(request: AutomationBatchRequest): Promise<void>;
     revision(): number;
     save(): AutomationSaveResult;
     subscribe(listener: (event: AutomationChangeEvent) => void): AutomationUnsubscribe;
 }
 
 // @public
-export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl';
+export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture';
 
 // @public
-export type AutomationOperation = {
+export type AutomationOperation = AutomationAuthoringOperation | {
     readonly op: 'getChangeTrackingMode';
 } | {
     readonly author?: string;
@@ -919,6 +940,8 @@ export type AutomationOperation = {
 }
 /** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
 | {
+    readonly cannotDelete?: boolean;
+    readonly cannotEdit?: boolean;
     readonly contentControl: AutomationHandle;
     readonly lock?: AutomationContentControlLock;
     readonly op: 'setContentControlProperties';
@@ -947,6 +970,7 @@ export type AutomationOperation = {
 /** Wrap a span in a new control of the named type. */
 | {
     readonly op: 'insertContentControl';
+    readonly returnHandle?: boolean;
     readonly span: AutomationSpanRef;
     readonly subtype: AutomationContentControlSubtype;
     readonly tag?: string;
@@ -1040,6 +1064,31 @@ export interface AutomationPageSetupWrite {
     readonly rightMargin?: number;
     // (undocumented)
     readonly topMargin?: number;
+}
+
+// @public
+export interface AutomationPaginationOptions {
+    // (undocumented)
+    readonly measurer: TextMeasurer;
+    // (undocumented)
+    readonly producer?: string;
+}
+
+// @public
+export type AutomationPaginationProvider = (view: HeadlessDocumentView) => Promise<AutomationPaginationSnapshot>;
+
+// @public
+export interface AutomationPaginationSnapshot {
+    // (undocumented)
+    readonly pageCount: number;
+    // (undocumented)
+    readonly ranges: readonly {
+        readonly end: number;
+        readonly pageNumber: number;
+        readonly pageNumberText: string;
+        readonly paragraphId: string;
+        readonly start: number;
+    }[];
 }
 
 // @public
@@ -1165,6 +1214,31 @@ export type AutomationUnsubscribe = () => void;
 
 // @public
 export type AutomationValue = {
+    readonly field: {
+        readonly code: string;
+    };
+    readonly kind: 'field';
+} | {
+    readonly kind: 'table';
+    readonly table: {
+        readonly columnCount: number;
+        readonly headerRowCount: number;
+        readonly rowCount: number;
+        readonly style: string;
+        readonly values: readonly (readonly string[])[];
+    };
+} | {
+    readonly cell: {
+        readonly columnWidth: number;
+        readonly shadingColor: string;
+        readonly value: string;
+        readonly verticalAlignment: 'Top' | 'Center' | 'Bottom';
+    };
+    readonly kind: 'tableCell';
+} | {
+    readonly kind: 'inlinePicture';
+    readonly picture: AutomationInlinePictureRead;
+} | {
     readonly handle: AutomationHandle;
     readonly kind: 'handle';
 } | {
@@ -1228,6 +1302,9 @@ export type AutomationValue = {
 };
 
 // @public
+export function createAutomationPaginationProvider(options: AutomationPaginationOptions): AutomationPaginationProvider;
+
+// @public
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
 
 // @public
@@ -1240,12 +1317,16 @@ export function isAutomationCommand(operation: AutomationOperation): boolean;
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean;
 
 // @public
+export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginationSnapshot;
+
+// @public
 export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
 export interface ServerAutomationHostOptions {
     readonly collaborationModel?: CollaborationModuleContribution;
     readonly limits?: OoxmlPackageLimits;
+    readonly pagination?: AutomationPaginationProvider;
 }
 
 // @public

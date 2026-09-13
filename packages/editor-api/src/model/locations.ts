@@ -15,22 +15,25 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { fail } from '../runtime/model-support.ts';
 
 /** Every place this API can insert at. Individual members accept a subset. */
-export type InsertLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+export { InsertLocation } from './editing-enums.ts';
 
 /** Where a story accepts text: over all of it, or at either edge. */
-export type BodyInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type BodyInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 /** Where a story accepts a paragraph. `Start`/`End` mean "before the first"/"after the last". */
-export type BodyInsertParagraphLocation = Extract<InsertLocation, 'Start' | 'End'>;
+export type BodyInsertParagraphLocation = Extract<RangeInsertTextLocation, 'Start' | 'End'>;
 
 /** Where a paragraph accepts text: over all of it, or at either edge of it. */
-export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type ParagraphInsertTextLocation = Extract<
+  RangeInsertTextLocation,
+  'Replace' | 'Start' | 'End'
+>;
 
 /** Which side of a paragraph or a range a new paragraph goes on. */
-export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
+export type BesideLocation = Extract<RangeInsertTextLocation, 'Before' | 'After'>;
 
 /** Where a range accepts text. See `Range#insertText` for what `Before`/`Start` mean here. */
-export type RangeInsertTextLocation = InsertLocation;
+export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
 
 /** Where a selection lands: over the range, or collapsed to one of its edges. */
 export type SelectionMode = 'Select' | 'Start' | 'End';

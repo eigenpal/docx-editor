@@ -55,6 +55,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   props: true,
   style: true,
   fontSlot: true,
+  glyphOffsetPt: true,
   caretEdges: true,
   tabLeader: true,
   tabLeaderAdvancePt: true,
@@ -88,6 +89,7 @@ function decorationsMatch(previous: StyleSpanRecord, current: StyleSpanRecord): 
 
 /** Whether one ideographic seam between two closed spans carries no information. */
 function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): boolean {
+  if (previous.glyphOffsetPt || current.glyphOffsetPt) return false;
   // `caretEdges` is measured against a span's own text, so a merge would invalidate it.
   // Placement attaches it AFTER this runs; the guard keeps that ordering from being load-bearing.
   if (previous.caretEdges !== undefined || current.caretEdges !== undefined) return false;

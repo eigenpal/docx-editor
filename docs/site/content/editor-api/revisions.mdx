@@ -1,0 +1,135 @@
+---
+title: 'Tracked changes'
+description: 'Create server redlines, inspect revisions by story, accept or reject changes, and handle unsupported review markup.'
+category: 'Editing API'
+order: 63
+---
+
+Set `Document.changeTrackingMode` to create server-side text suggestions through standard editing methods.
+Read existing revisions through `RevisionCollection`.
+The runtime supports a defined review subset, not every Word revision type or tracking mode.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Create a tracked replacement
+
+Configure a non-empty `author` with `createServer()` or `createCollaborative()`.
+Then enable `TrackMineOnly` and use an ordinary range edit:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one deadline');
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+});
+```
+
+Use `insertText(text, 'Before' | 'After')` for insertion suggestions.
+Use `range.delete()` or `range.clear()` for deletion suggestions.
+Inserted ranges require sync before dependent use.
+Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
+
+| `ChangeTrackingMode` value | Runtime behavior                                                            |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `Off`                      | Initial mode; ordinary permanent edits                                      |
+| `TrackMineOnly`            | Server or collaborative runtime-local text tracking with an explicit author |
+| `TrackAll`                 | Refuses with `NotSupported`                                                 |
+
+Browser tracking-mode control refuses with `NotSupported`.
+Read `document.changeTrackingMode` only after loading it.
+The mode persists across runs on that runtime.
+It does not change peers' tracking settings or save a document-wide tracking policy.
+Set `Off` explicitly only when your application intends permanent edits.
+
+## Stay within the tracked text domain
+
+Tracked text edits support one paragraph, including table-cell text.
+They refuse targets touching pending revisions.
+A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables.
+Formatting, lists, tables, pictures, breaks, control changes, and other structural mutations refuse under tracking.
+Comments and supported revision decisions remain available.
+
+Never turn tracking off automatically to make an unsupported operation succeed.
+Report the limit or ask your application to choose a separately authorized permanent edit.
+For a multi-stage review, each successful sync becomes a separately committed suggestion.
+A later refusal does not roll back earlier suggestions.
+
+## Choose the revision text view
+
+The runtime option `revisionTextView` affects ordinary text loads and search.
+`allMarkup` is the default. `original` retains pending deletions and hides pending insertions.
+This is a DocxEditor host option, not a Word document-model property.
+It does not accept or reject revisions.
+
+Use plain text and explicit revision information when preparing a model prompt.
+Do not pass live proxies into a model or job queue.
+See [Runtime and setup](/docs/2.x/editor-api/runtime).
+
+## Inspect revisions by story
+
+`Document.revisions` addresses the main story.
+`Body.revisions` addresses that body's story, including a header, footer, or note.
+It never merges all stories into one collection.
+
+Load collection membership, then load `author`, `date`, and `type`:
+
+```ts
+const pending = await runtime.run(async (context) => {
+  const revisions = context.document.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) {
+    revision.load(['author', 'date', 'type']);
+  }
+  await context.sync();
+  return revisions.items.map((revision) => ({
+    author: revision.author,
+    date: revision.date?.toISOString() ?? null,
+    type: revision.type,
+  }));
+});
+```
+
+`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods.
+`Revision.type` uses the exported `RevisionType` vocabulary.
+`Revision.range` returns a range for the addressed revision.
+Resolve the range before reading or selecting its content.
+`RevisionCollection` exposes `items`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
+
+## Accept or reject changes
+
+`Revision.accept()` and `Revision.reject()` decide one supported revision.
+Use `RevisionCollection.acceptAll()` or `rejectAll()` for the story-wide decision set.
+A browser decision requires the review module and editable document, and joins the Undo history.
+A collection decision is one browser Undo unit.
+
+For example, accept all resolvable revisions in the main story:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.revisions.acceptAll();
+  await context.sync();
+});
+```
+
+Collection membership and the collection decision set differ.
+`items` publishes only revisions that the API can represent as typed objects.
+Some structural records remain preserved but do not appear in `items`.
+`acceptAll()` and `rejectAll()` still address every store-resolvable revision in the story, including complete tracked rows.
+They never silently decide only the listed subset.
+
+If unsupported or read-only markup remains, a collection decision refuses atomically, including `NotImplemented` refusals.
+Preserve the document and let a reviewer resolve the remaining markup in Word when needed.
+On `StaleDocument`, start a fresh run, read again, and reconsider the decision.
+Never blindly replay a previously chosen change.
+
+See the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md),
+[Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines), and
+[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

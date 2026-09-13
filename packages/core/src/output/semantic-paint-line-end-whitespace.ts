@@ -10,6 +10,38 @@ export function prepareTextPaintHost(
   span: StyleSpanRecord,
   scale: number
 ): HTMLElement {
+  if (span.glyphOffsetPt !== undefined) {
+    // Keep native text selection and caret advances in the published box. Relative
+    // positioning would move those DOM ranges into the preceding character. Draw
+    // only the ink at its offset, using the inherited colour (including revisions).
+    const horizontalScale = span.style.horizontalScalePercent / 100;
+    const advance = span.box.width * scale;
+    element.style.width = `${advance / horizontalScale}px`;
+    if (horizontalScale !== 1) {
+      // The transform scales the band, while width + margin reserve its final advance.
+      element.style.marginRight = `${advance - advance / horizontalScale}px`;
+    }
+    const glyph = document.createElement('span');
+    glyph.dataset.docxGlyphOffset = '';
+    // Measurement scales the glyph advance before adding tracking. CSS scales both,
+    // so convert tracking back to the glyph's local coordinates first.
+    if (horizontalScale !== 1)
+      glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / horizontalScale}px`;
+    if (span.glyphOffsetPt) {
+      glyph.dataset.docxShiftedInk = '';
+      // Keep the shadow in forced-colour modes, but inherit their accessible ink
+      // colour from the parent instead of retaining an authored document colour.
+      glyph.style.setProperty('forced-color-adjust', 'preserve-parent-color');
+      glyph.style.setProperty('-webkit-text-fill-color', 'transparent');
+      const inkOffset = `${(span.glyphOffsetPt * scale) / horizontalScale}px`;
+      glyph.style.setProperty('--docx-glyph-ink-offset', inkOffset);
+      if (element.style.color && element.style.color !== 'inherit')
+        glyph.style.setProperty('--docx-glyph-ink-color', element.style.color);
+      glyph.style.textShadow = `${inkOffset} 0 currentColor`;
+    }
+    element.append(glyph);
+    return glyph;
+  }
   const clippedLineEndWhitespace = span.lineEndWhitespace === true;
   if (span.style.horizontalScalePercent !== 100 || span.text === '\t' || clippedLineEndWhitespace) {
     element.style.width = `${span.box.width * scale}px`;

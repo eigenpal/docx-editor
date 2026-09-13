@@ -38,9 +38,9 @@ test('LTR CJK punctuation still compresses when another piece has odd direction'
     },
   };
   const ltr = {
-    ...piece('（甲）'),
+    ...piece('（（甲））'),
     start: 1,
-    end: 4,
+    end: 6,
     style: {
       ...DEFAULT_RUN_STYLE,
       shaping: { script: 'Hani', direction: 'ltr' as const, level: 2, baseLevel: 1 },

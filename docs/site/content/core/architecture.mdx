@@ -55,6 +55,8 @@ The pass is incremental: per-block cache keys and flow checkpoints mean a keystr
 
 The painted pages are `contenteditable`, but the DOM is a non-authoritative rendering. Browser mutations are prevented and re-expressed as tree operations, so the browser cannot insert markup inside your document.
 
+HTML copy preserves right-to-left table columns without changing cell text direction. Nested tables keep their own direction. HTML paste reads explicit table direction and maps physical borders and margins back to the document grid.
+
 The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret. On failure it falls back: range selection, IME composition, or a position it cannot place all restore the native caret instead of showing no caret.
 
 Selection maps through paragraph identity and offsets. It does not use DOM

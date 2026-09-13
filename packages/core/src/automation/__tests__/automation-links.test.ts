@@ -333,3 +333,98 @@ describe('a bookmark is a name over a range', () => {
     expect(refusal(response)).toBe('invalid-handle');
   });
 });
+
+describe('partial hyperlink writes preserve unselected text', () => {
+  function textLink(extra = ''): AutomationHost {
+    return open(
+      docx(
+        `<w:p><w:hyperlink r:id="rId9" w:history="0" w:tgtFrame="_blank" w:tooltip="Original tip">${extra}<w:r><w:rPr><w:b/></w:rPr><w:t>alpha beta gamma</w:t></w:r></w:hyperlink></w:p>`,
+        undefined,
+        {
+          rels: `<Relationship Id="rId9" Type="${R}/hyperlink" Target="https://example.com/original" TargetMode="External"/>`,
+        }
+      )
+    );
+  }
+
+  test('retargeting and unlinking middle text preserve wrapper metadata and formatting after reopen', () => {
+    const host = textLink();
+    const { body } = roots(host);
+    expect(
+      host.execute({
+        operations: [
+          {
+            op: 'setHyperlink',
+            span: spanOfWords(host, body, 'beta'),
+            target: 'https://example.com/updated',
+          },
+        ],
+      }).ok
+    ).toBe(true);
+    const next = reopen(host);
+    expect(hyperlinkOf(next.host, spanOfWords(next.host, next.body, 'alpha'))).toBe(
+      'https://example.com/original'
+    );
+    expect(hyperlinkOf(next.host, spanOfWords(next.host, next.body, 'beta'))).toBe(
+      'https://example.com/updated'
+    );
+    expect(hyperlinkOf(next.host, spanOfWords(next.host, next.body, 'gamma'))).toBe(
+      'https://example.com/original'
+    );
+    const xml = savedMainXml(next.host);
+    expect(xml.match(/w:tgtFrame="_blank"/g)).toHaveLength(3);
+    expect(xml.match(/w:tooltip="Original tip"/g)).toHaveLength(3);
+    expect(xml.match(/<w:b\//g)).toHaveLength(3);
+    expect(
+      next.host.execute({
+        operations: [
+          { op: 'setHyperlink', span: spanOfWords(next.host, next.body, 'et'), target: '' },
+        ],
+      }).ok
+    ).toBe(true);
+    const final = reopen(next.host);
+    expect(storyText(final.host, final.body)).toBe('alpha beta gamma');
+    expect(hyperlinkOf(final.host, spanOfWords(final.host, final.body, 'alpha'))).toBe(
+      'https://example.com/original'
+    );
+    expect(hyperlinkOf(final.host, spanOfWords(final.host, final.body, 'et'))).toBe('');
+    expect(hyperlinkOf(final.host, spanOfWords(final.host, final.body, 'gamma'))).toBe(
+      'https://example.com/original'
+    );
+    expect(savedMainXml(final.host).match(/w:tgtFrame="_blank"/g)).toHaveLength(4);
+  });
+
+  test('complex partial wrappers refuse without changing their text, targets, or relationships', () => {
+    const host = textLink('<w:bookmarkStart w:id="1" w:name="inside"/><w:bookmarkEnd w:id="1"/>');
+    const { body } = roots(host);
+    const before = savedMainXml(host);
+    const rels = savedPartBytes(host, 'word/_rels/document.xml.rels');
+    for (const target of ['https://example.com/updated', '']) {
+      const result = host.execute({
+        operations: [{ op: 'setHyperlink', span: spanOfWords(host, body, 'beta'), target }],
+      });
+      expect(result.ok).toBe(false);
+      expect(refusal(result)).toBe('unsupported-capability');
+      expect(savedMainXml(host)).toBe(before);
+      expect(savedPartBytes(host, 'word/_rels/document.xml.rels')).toBe(rels);
+    }
+  });
+
+  test('collapsed positions inside a link refuse without changing the containing link', () => {
+    const host = textLink();
+    const { body } = roots(host);
+    const span = spanOfWords(host, body, 'beta');
+    const before = savedMainXml(host);
+    const result = host.execute({
+      operations: [
+        {
+          op: 'setHyperlink',
+          span: { start: span.start, end: span.start },
+          target: 'https://example.com/updated',
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    expect(savedMainXml(host)).toBe(before);
+  });
+});

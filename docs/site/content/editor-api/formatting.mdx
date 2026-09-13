@@ -1,0 +1,143 @@
+---
+title: 'Formatting and styles'
+description: 'Set font, paragraph, style, and hyperlink properties while preserving authored and inherited formatting.'
+category: 'Editing API'
+order: 55
+---
+
+Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`.
+Set paragraph formatting directly on `Paragraph`.
+The API does not provide a `ParagraphFormat` object or a style-creation API.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Format an exact phrase
+
+Find the target, then batch related assignments on the same proxy:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('Confidential', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  for (const match of matches.items) {
+    const font = match.font;
+    font.bold = true;
+    font.color = '#A00000';
+    font.highlightColor = 'Yellow';
+    font.underline = 'Single';
+  }
+  await context.sync();
+});
+```
+
+Assignments on one `Font` proxy coalesce within a sync.
+Different proxies that address overlapping content can still conflict.
+Tracking mode does not support these formatting writes; it refuses them atomically.
+Never switch tracking off automatically to bypass that refusal.
+
+## Read authored font values
+
+Load only the properties you need:
+
+```ts
+await runtime.run(async (context) => {
+  const font = context.document.body.font;
+  font.load(['bold', 'name', 'size']);
+  await context.sync();
+  if (font.size !== null) console.log(`Authored size: ${font.size} pt`);
+});
+```
+
+Every font getter can return `null`.
+That means mixed values, no authored value, or formatting supplied through inheritance.
+These reads do not calculate the rendered style cascade.
+Do not convert `null` into a formatting write.
+
+| `Font` property                   | Write domain                                                      |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `bold`, `italic`, `strikeThrough` | Boolean                                                           |
+| `name`                            | Font family name; your rendering host supplies its font resources |
+| `size`                            | Positive finite point size within the supported OOXML range       |
+| `color`                           | Concrete `#RRGGBB` color                                          |
+| `underline`                       | Supported `UnderlineType` value or matching string                |
+| `highlightColor`                  | Exact Word palette name or its hexadecimal color                  |
+| `subscript`, `superscript`        | Boolean; both cannot be `true` in the same write                  |
+
+Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`,
+`DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`,
+`TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`.
+The exported enum also includes `Mixed`, `Hidden`, and `DotLine`; those writes refuse.
+For example, `UnderlineType.single` has the value `Single`.
+
+Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`,
+`Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`.
+Reads return `#RRGGBB` or `null`.
+Arbitrary colors outside that palette refuse.
+The getter accepts a nullable result, but the public setter type accepts `string`.
+A nullable read is not a valid typed setter argument.
+
+## Format paragraphs
+
+Paragraph measurements use points:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  paragraph.alignment = 'Left';
+  paragraph.leftIndent = 18;
+  paragraph.firstLineIndent = -9;
+  paragraph.lineSpacing = 14;
+  paragraph.spaceAfter = 6;
+  await context.sync();
+});
+```
+
+`leftIndent`, `rightIndent`, `firstLineIndent`, `lineSpacing`, `spaceBefore`, and `spaceAfter`
+accept finite values within their supported bounds.
+A negative first-line indent creates a hanging indent.
+`ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes.
+`Mixed` and `Unknown` describe reads and refuse on writes.
+Assignments on one paragraph proxy coalesce per sync.
+
+## Apply an existing style
+
+`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name.
+The name must already exist in the document's styles part.
+An unknown style refuses; assignment does not create a style.
+A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs.
+Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
+
+Use a template with known styles, then assign its exact style name:
+
+```ts
+paragraph.style = 'Heading 1'; // The template must define this display name.
+await context.sync();
+```
+
+`Table.style` is separate. See [Tables and cells](/docs/2.x/editor-api/tables).
+
+## Set a hyperlink
+
+`Range.hyperlink` reads or writes a hyperlink for supported text spans.
+Load `hyperlink` before reading it.
+For a write, assign a permitted URL and sync:
+
+```ts
+range.hyperlink = 'https://example.com/terms';
+await context.sync();
+```
+
+Assign an empty string to remove a hyperlink from an eligible text span.
+Ordinary partial spans inside an existing hyperlink support retargeting and unlinking.
+The unaffected linked text keeps its metadata and formatting.
+Collapsed ranges and complex or nested hyperlink wrappers refuse.
+The runtime validates the URL and content boundaries.
+Unsupported or protected targets refuse without replacing their structure.
+There is no standalone `Hyperlink` or `HyperlinkCollection` object.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for selecting the text target.

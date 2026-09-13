@@ -1,0 +1,132 @@
+---
+title: 'Page layout and stories'
+description: 'Edit section page setup, address headers and footers, insert breaks, and traverse footnotes and endnotes.'
+category: 'Editing API'
+order: 60
+---
+
+A story is a text container, such as the main body, a header, a footer, or a note.
+A section controls page layout for part of the main story.
+These concepts do not define interchangeable text scopes.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Inspect sections and page setup
+
+`Document.sections` returns `SectionCollection` with `items` and `getFirst()`.
+`Section.getNext()` returns the next section and fails with `ItemNotFound` at the end.
+`Section.body` returns the shared main body, not a section-limited text slice.
+`Section.pageSetup` addresses that section's page properties.
+
+Resolve a section before loading or changing its page setup:
+
+```ts
+await runtime.run(async (context) => {
+  const section = context.document.sections.getFirst();
+  await context.sync();
+  const setup = section.pageSetup;
+  setup.load(['pageWidth', 'pageHeight', 'orientation']);
+  await context.sync();
+  console.log(setup.pageWidth, setup.pageHeight);
+  setup.orientation = 'Landscape';
+  setup.leftMargin = 54;
+  setup.rightMargin = 54;
+  await context.sync();
+});
+```
+
+| `PageSetup` property                                     | Unit or domain                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------- |
+| `pageWidth`, `pageHeight`                                | Positive supported dimensions in points                             |
+| `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | Supported finite margin values in points                            |
+| `orientation`                                            | `Portrait` or `Landscape`, also available through `PageOrientation` |
+
+Assignments on one page-setup proxy coalesce per sync.
+The engine validates dimensions, margins, and the resulting page geometry.
+Runtime-local tracking refuses page-layout mutations.
+After layout changes, update page fields separately using [Fields and pagination](/docs/2.x/editor-api/fields).
+
+## Address headers and footers
+
+`Section.getHeader(type)` and `getFooter(type)` return `Body` proxies.
+`HeaderFooterType` accepts `Primary`, `FirstPage`, or `EvenPages`.
+Each variant is its own story scope.
+A missing header or footer returns a deferred empty body.
+Its first supported content insertion creates the missing story.
+
+This example writes a primary footer after resolving its body:
+
+```ts
+await runtime.run(async (context) => {
+  const section = context.document.sections.getFirst();
+  await context.sync();
+  const footer = section.getFooter('Primary');
+  footer.load('text');
+  await context.sync();
+  footer.insertText('Internal document', 'End');
+  await context.sync();
+});
+```
+
+Use the returned body's paragraph, search, bookmark, field, and review accessors for that story.
+`Body.bookmarks` and `Body.revisions` do not combine separate stories.
+Creating a variant does not add an API for every Word header/footer option.
+The public surface does not expose header/footer linkage or first-page layout toggles.
+
+## Insert page and section breaks
+
+`Range.insertBreak(breakType, insertLocation)` supports `Page` and `SectionNext`.
+The insertion location must be `Before` or `After`.
+A next-page section break requires a main-body paragraph outside a table.
+The exported `BreakType` also names unsupported kinds; `Line`, `Next`, and other section break kinds refuse.
+
+Queue break insertion alone in its write transaction:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  const anchor = paragraph.getRange('End');
+  await context.sync();
+  anchor.insertBreak('Page', 'After');
+  await context.sync();
+});
+```
+
+Read affected sections again after a section break changes their structure.
+Do not reuse old indexes as permanent section identities.
+
+## Read footnotes and endnotes
+
+`Document.footnotes` and `Document.endnotes` are DocxEditor extensions.
+Each returns `NoteItemCollection`, which exposes `items` and `getFirst()`.
+A `NoteItem` has loaded `type` and `text`, plus its own `body`.
+`NoteItemType` is `Footnote` or `Endnote`.
+`NoteItem.text` reads the same plain text as the note body's text.
+
+Read note text in two batches:
+
+```ts
+const notes = await runtime.run(async (context) => {
+  const collection = context.document.footnotes;
+  collection.load('items');
+  await context.sync();
+  for (const note of collection.items) note.load(['type', 'text']);
+  await context.sync();
+  return collection.items.map((note) => ({ type: note.type, text: note.text }));
+});
+```
+
+`NoteItem.getNext()` advances within the same note kind.
+It fails with `ItemNotFound` after the last note.
+Use `note.body` for supported structured reading and editing within that note story.
+
+`NoteItem.delete()` removes the note and its references.
+It is a package transaction and must run alone in its sync.
+Sync all pending reads or writes before queuing note deletion.
+Note creation and reference-number formatting are not exposed by this subset.
+
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
+[Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).

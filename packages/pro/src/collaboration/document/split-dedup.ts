@@ -17,459 +17,101 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import * as Y from 'yjs';
 import { replicaOfLogicalId, type LogicalId } from './identity.ts';
-import type { DocumentLimits } from './limits.ts';
 import {
-  NODE_SPLIT_BASE_TEXT_FIELD,
   NODE_SPLIT_FROM_FIELD,
-  NODE_SPLIT_START_FIELD,
-  NODE_SHELL_FIELD,
-  NODE_TEXT_FIELD,
-  childArrayOf,
+  NODE_SPLIT_LINEAGE_FIELD,
   isNodeMap,
-  isTextNodeMap,
-  nodeRecordSplitBaseText,
   nodeRecordSplitFrom,
-  nodeRecordSplitStart,
-  nodeRecordTombstoned,
-  unpackNodeShell,
+  nodeRecordSplitLineage,
 } from './schema.ts';
-import { nodeKindOf } from './registry-node-reads.ts';
 
-/**
- * What the dedup reads about the tree it is projecting, injected so the index stays free of the
- * record walk. `isPresent` is true only for a run that still hangs off its parent — a
- * multi-boundary split leaves an intermediate run detached but neither tombstoned nor deleted,
- * and materializing it would double the paragraph's text.
- */
 export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
 }
-
 export interface SplitTextOverlays {
   readonly values: ReadonlyMap<LogicalId, string>;
   readonly changedIds: ReadonlySet<LogicalId>;
 }
 
-interface RunText {
-  readonly parts: readonly { readonly id: LogicalId; readonly value: string }[];
-  readonly witnessIds: readonly LogicalId[];
-  readonly value: string;
-}
-
-interface SplitProduct {
-  readonly id: LogicalId;
-  readonly start: number | null;
-  readonly text: RunText | null;
-}
-
-/** Cap on the `splitFrom` walk that classifies a re-split; stops a peer-crafted chain or cycle. */
-const RE_SPLIT_WALK_LIMIT = 256;
-
 export class SplitDedupIndex {
-  /** Root origin run id → the runs split off from it, across all replicas. */
-  private runsBySplitOrigin = new Map<LogicalId, Set<LogicalId>>();
-  /** Root origin run id → the distinct replicas that minted a run split off from it. */
-  private replicasByOrigin = new Map<LogicalId, Set<string>>();
-  /** Origins that more than one replica split — the only ones a dedup pass has to examine. */
-  private contestedOrigins = new Set<LogicalId>();
-  /** Text witness id → split origins whose derived text can change when that record changes. */
-  private originsByTextWitness = new Map<LogicalId, Set<LogicalId>>();
-  /** Split origins whose source text changed since the last repair pass. */
-  private pendingTextRepairOrigins = new Set<LogicalId>();
-  /** Product text id → derived value that rebases a concurrent edit without shared writes. */
-  private textOverlays = new Map<LogicalId, string>();
-  /** Split origin → product text ids carrying its current derived overlay. */
-  private overlayIdsByOrigin = new Map<LogicalId, Set<LogicalId>>();
-  /**
-   * Origins that are live again while products still point at them — an undo restored the origin.
-   * A cold rebuild reads this straight from current state, so a peer joining after the undo drops
-   * the stale products the same way the peer that undid does through its sticky contested set.
-   */
-  private liveRootedOrigins = new Set<LogicalId>();
-  /**
-   * A monotonic marker bumped whenever a local edit re-splits a run inside a contested lineage —
-   * the declined tangle (#581). It rises by however many product runs that one edit mints, so it
-   * is a CHANGE signal, not a tangle count. NOT cleared by `reset()`: the session compares it
-   * against its last-seen value and reconciles the author's store once per tangle-creating edit,
-   * never on the steady keystrokes in between.
-   */
-  private declinedTangleCount = 0;
+  private cachedLosers: ReadonlySet<LogicalId> | null = null;
 
-  constructor(
-    private readonly nodes: Y.Map<Y.Map<unknown>>,
-    private readonly limits: Pick<DocumentLimits, 'maxTextLength' | 'maxTreeDepth'>
-  ) {}
+  invalidate(): void {
+    this.cachedLosers = null;
+  }
+
+  private runsBySplitOrigin = new Map<LogicalId, Set<LogicalId>>();
+  private liveRootedOrigins = new Set<LogicalId>();
+
+  constructor(private readonly nodes: Y.Map<Y.Map<unknown>>) {}
 
   reset(): void {
-    this.runsBySplitOrigin = new Map();
-    this.replicasByOrigin = new Map();
-    this.contestedOrigins = new Set();
-    this.liveRootedOrigins = new Set();
-    this.originsByTextWitness = new Map();
-    this.pendingTextRepairOrigins = new Set();
-    this.textOverlays = new Map();
-    this.overlayIdsByOrigin = new Map();
+    this.invalidate();
+    this.runsBySplitOrigin.clear();
+    this.liveRootedOrigins.clear();
   }
 
-  /**
-   * Stamp `runId` as split off from `root`, the run the whole op superseded.
-   *
-   * The caller resolves the root, because only the journal knows which intermediate runs this
-   * same op created and removed (a multi-boundary split) versus a run split in an earlier round.
-   * Both concurrent splits of one run must reach the SAME root, or their products land in
-   * separate groups and both survive.
-   */
-  record(root: LogicalId, replacedRunId: LogicalId, runIds: readonly LogicalId[]): void {
-    const rootRecord = this.nodes.get(root);
-    const replacedRecord = this.nodes.get(replacedRunId);
-    if (!isNodeMap(rootRecord) || !isNodeMap(replacedRecord)) return;
-    const baseline =
-      nodeRecordSplitBaseText(rootRecord, this.limits.maxTextLength) ?? this.runText(root)?.value;
-    const start = nodeRecordSplitStart(replacedRecord) ?? 0;
-    const products = runIds.map((id) => ({ id, text: this.runText(id) }));
-    const canRepair =
-      baseline !== undefined &&
-      baseline.length <= this.limits.maxTextLength &&
-      products.every((product) => product.text !== null);
-    if (canRepair) {
-      rootRecord.set(NODE_SPLIT_BASE_TEXT_FIELD, baseline);
-      this.indexTextWitnesses(root, this.runText(root));
-    }
-    let cursor = start;
-    for (const product of products) {
-      const rec = this.nodes.get(product.id);
-      if (!isNodeMap(rec)) return;
-      // A run is not split from itself. Wrapping a run (a TOC bookmark, a hyperlink) removes and
-      // reinserts the SAME node, which looks like a replacement but partitions nothing.
-      if (root === product.id) continue;
-      rec.set(NODE_SPLIT_FROM_FIELD, root);
-      if (canRepair) rec.set(NODE_SPLIT_START_FIELD, cursor);
-      this.index(root, product.id);
-      if (canRepair) this.indexTextWitnesses(root, product.text);
-      cursor += product.text?.value.length ?? 0;
-    }
-    // A later round re-split a run an earlier round produced, and the shared origin was split by
-    // two replicas — the tangle the dedup declines. Count it, so the session reconciles the
-    // author's store only on the edit that creates the tangle, not on every keystroke while it
-    // persists. A single author re-formatting a paragraph re-splits products too, but its origin
-    // is never contested, so this ignores it — no wasted reconcile without a real conflict.
-    if (this.reSplitOfContestedOrigin(root)) this.declinedTangleCount += products.length;
-  }
-
-  /**
-   * Rebase text written concurrently to a split source onto the winning split products.
-   *
-   * The overlay is derived from shared state and never writes to Yjs. Every live peer and late
-   * joiner therefore computes the same result without requiring the split author to stay online.
-   * The baseline proves the product text has not changed since the split, so a later sequential
-   * edit is never overwritten.
-   */
-  concurrentTextOverlays(isPresent: SplitDedupContext['isPresent']): SplitTextOverlays {
-    const changedIds = new Set<LogicalId>();
-    const pending = this.pendingTextRepairOrigins;
-    this.pendingTextRepairOrigins = new Set();
-    for (const root of pending) {
-      for (const id of this.overlayIdsByOrigin.get(root) ?? []) {
-        if (this.textOverlays.delete(id)) changedIds.add(id);
-      }
-      this.overlayIdsByOrigin.delete(root);
-      const runs = this.runsBySplitOrigin.get(root);
-      if (!runs) continue;
-      if (this.isReSplit(root) || isPresent(root)) continue;
-      const base = nodeRecordSplitBaseText(this.nodes.get(root), this.limits.maxTextLength);
-      const source = this.runText(root);
-      if (base === null || !source || source.value === base) continue;
-      const presentReplicas = new Set<string>();
-      for (const runId of runs) {
-        if (isPresent(runId)) presentReplicas.add(replicaOfLogicalId(runId) ?? '');
-      }
-      const winner = [...presentReplicas].sort()[0];
-      if (winner === undefined) continue;
-      const products = [...runs]
-        .filter((runId) => isPresent(runId) && replicaOfLogicalId(runId) === winner)
-        .map((runId) => ({
-          id: runId,
-          start: nodeRecordSplitStart(this.nodes.get(runId)),
-          text: this.runText(runId),
-        }))
-        .sort(
-          (left, right) => (left.start ?? 0) - (right.start ?? 0) || left.id.localeCompare(right.id)
-        );
-      if (!this.productsCoverBaseline(products, base)) continue;
-      const merged = mergeSourceEditIntoProducts(base, source.value, products);
-      const overlayIds = new Set<LogicalId>();
-      for (let index = 0; index < products.length; index += 1) {
-        const product = products[index]!;
-        const values = partitionRunText(product.text!, merged[index]!);
-        for (let textIndex = 0; textIndex < product.text!.parts.length; textIndex += 1) {
-          const id = product.text!.parts[textIndex]!.id;
-          const overlay = values[textIndex]!;
-          if (this.textOverlays.get(id) !== overlay) changedIds.add(id);
-          this.textOverlays.set(id, overlay);
-          overlayIds.add(id);
-        }
-      }
-      this.overlayIdsByOrigin.set(root, overlayIds);
-    }
-    return { values: this.textOverlays, changedIds };
-  }
-
-  noteChanged(logicalId: LogicalId): void {
-    for (const root of this.originsByTextWitness.get(logicalId) ?? []) {
-      this.pendingTextRepairOrigins.add(root);
+  record(root: LogicalId, _replaced: LogicalId, products: readonly LogicalId[]): void {
+    this.invalidate();
+    for (const id of products) {
+      if (id === root) continue;
+      const record = this.nodes.get(id);
+      if (!isNodeMap(record)) continue;
+      record.set(NODE_SPLIT_FROM_FIELD, root);
+      record.set(NODE_SPLIT_LINEAGE_FIELD, root);
+      this.indexExisting(id);
     }
   }
 
-  private productsCoverBaseline(products: readonly SplitProduct[], baseline: string): boolean {
-    if (products.length === 0 || products[0]?.start !== 0) return false;
-    for (let index = 0; index < products.length; index += 1) {
-      const product = products[index]!;
-      if (product.start === null || !product.text) return false;
-      const end = products[index + 1]?.start ?? baseline.length;
-      if (end < product.start || end > baseline.length) return false;
-    }
-    return true;
-  }
-
-  private runText(runId: LogicalId): RunText | null {
-    if (nodeKindOf(this.nodes, runId) !== 'run') return null;
-    const parts: { id: LogicalId; value: string }[] = [];
-    const witnessIds: LogicalId[] = [];
-    let value = '';
-    const seen = new Set<LogicalId>();
-    const visit = (id: LogicalId, depth: number): boolean => {
-      if (depth > this.limits.maxTreeDepth || seen.has(id)) return false;
-      seen.add(id);
-      witnessIds.push(id);
-      const rec = this.nodes.get(id);
-      if (!isNodeMap(rec)) return false;
-      if (isTextNodeMap(rec)) {
-        const text = rec.get(NODE_TEXT_FIELD);
-        if (!(text instanceof Y.Text)) return false;
-        const part = text.toString();
-        value += part;
-        if (value.length > this.limits.maxTextLength) return false;
-        parts.push({ id, value: part });
-        return true;
-      }
-      const shell = rec.get(NODE_SHELL_FIELD);
-      const decoded = unpackNodeShell(typeof shell === 'string' ? shell : '');
-      if (depth > 0 && decoded.kind === 'runProperties') return true;
-      if (depth > 0 && decoded.localName !== 't') return false;
-      for (const childId of childArrayOf(rec)?.toArray() ?? []) {
-        if (!visit(childId, depth + 1)) return false;
-      }
-      return true;
-    };
-    return visit(runId, 0) && parts.length > 0 ? { parts, witnessIds, value } : null;
-  }
-
-  /**
-   * True if `root` is itself a split product whose shared origin two replicas split.
-   *
-   * Walks `splitFrom` from `root` to the run the rounds share. A `root` that is an original run
-   * (no `splitFrom`) is a first round, not a re-split. The bound stops a peer-crafted cycle.
-   */
-  private reSplitOfContestedOrigin(root: LogicalId): boolean {
-    if (nodeRecordSplitFrom(this.nodes.get(root)) === null) return false;
-    let current = root;
-    for (let depth = 0; depth < RE_SPLIT_WALK_LIMIT; depth += 1) {
-      if (this.contestedOrigins.has(current) || this.liveRootedOrigins.has(current)) return true;
-      const parent = nodeRecordSplitFrom(this.nodes.get(current));
-      if (parent === null || parent === current) return false;
-      current = parent;
-    }
-    return false;
-  }
-
-  /** Index a run that already carries a `splitFrom` (a rebuild scan, or a remote arrival). */
-  indexExisting(runId: LogicalId): void {
-    const root = nodeRecordSplitFrom(this.nodes.get(runId));
-    if (root !== null && root !== runId) {
-      this.index(root, runId);
-      this.indexTextWitnesses(root, this.runText(root));
-      this.indexTextWitnesses(root, this.runText(runId));
-      const base = nodeRecordSplitBaseText(this.nodes.get(root), this.limits.maxTextLength);
-      const source = this.runText(root);
-      if (base !== null && source && source.value !== base) {
-        this.pendingTextRepairOrigins.add(root);
-      }
-    }
-  }
-
-  private indexTextWitnesses(root: LogicalId, text: RunText | null): void {
-    if (!text) return;
-    for (const witnessId of text.witnessIds) {
-      const origins = this.originsByTextWitness.get(witnessId) ?? new Set<LogicalId>();
-      origins.add(root);
-      this.originsByTextWitness.set(witnessId, origins);
-    }
-  }
-
-  private index(root: LogicalId, runId: LogicalId): void {
+  indexExisting(id: LogicalId): void {
+    const root = nodeRecordSplitLineage(this.nodes.get(id));
+    if (root === null || root === id) return;
+    this.invalidate();
     const runs = this.runsBySplitOrigin.get(root) ?? new Set<LogicalId>();
-    runs.add(runId);
+    runs.add(id);
     this.runsBySplitOrigin.set(root, runs);
-    const replicas = this.replicasByOrigin.get(root) ?? new Set<string>();
-    replicas.add(replicaOfLogicalId(runId) ?? '');
-    this.replicasByOrigin.set(root, replicas);
-    // Only an origin two replicas split can produce a loser, so the dedup pass examines just
-    // these — a document that only ever split runs single-author keeps this set empty and the
-    // pass does no work.
-    if (replicas.size > 1) this.contestedOrigins.add(root);
-    // A live origin with products means the split was undone; a cold rebuild has no other trace
-    // of it, so record it here off current state. Empty in normal use — splits tombstone the
-    // origin, so this only fills after an undo.
-    const rec = this.nodes.get(root);
-    if (isNodeMap(rec) && !nodeRecordTombstoned(rec)) this.liveRootedOrigins.add(root);
+    // Include single-author origins too: undo can restore an ancestor while another
+    // author's later descendants still refer to its immutable lineage.
+    this.liveRootedOrigins.add(root);
   }
 
-  /**
-   * Runs a concurrent split superseded and a replica must not materialize.
-   *
-   * An origin split by MORE THAN ONE replica was split by two peers at once. The winner is the
-   * replica whose identity sorts first — every replica reads the same shared state and picks the
-   * same winner — so every other replica's products are dropped and the origin's text is kept
-   * once. If the origin run is live again — an undo restored it — it represents the text on its
-   * own, so every product is dropped instead.
-   *
-   * The dedup only claims ONE round of concurrent splitting on a run. A second round — a peer
-   * splitting a run the first round produced — tangles the winning replica's runs at the merge
-   * layer, below what a projection can repair (see the split-replication follow-up). So when a
-   * product of an origin was itself split again, this leaves the whole origin alone: every run
-   * materializes, exactly as it would without this feature. The result stays consistent across
-   * peers — a duplicated but CONVERGENT tree, never one replica disagreeing with another.
-   */
-  /**
-   * How many declined tangles this replica's local edits have created (#581).
-   *
-   * The session reconciles the author's store to the materialized tree when this rises, because
-   * the edit that creates a tangle leaves the author with a clean view while every other replica
-   * converges on the duplicated one. It rises only on the tangle-creating edit, so steady typing
-   * in an already-tangled document costs nothing.
-   */
-  declinedTangleEvents(): number {
-    return this.declinedTangleCount;
+  /** Current provenance, rather than the sticky index, decides undo and late-join winners. */
+  private productsOf(root: LogicalId): readonly LogicalId[] {
+    return [...(this.runsBySplitOrigin.get(root) ?? [])].filter(
+      (id) => nodeRecordSplitLineage(this.nodes.get(id)) === root
+    );
   }
 
-  private isReSplit(root: LogicalId): boolean {
-    const runs = this.runsBySplitOrigin.get(root);
-    if (!runs) return false;
-    for (const id of runs) if ((this.runsBySplitOrigin.get(id)?.size ?? 0) > 0) return true;
-    return false;
-  }
-
+  /** Resolve each split generation separately and suppress every losing branch's descendants. */
   loserRuns(ctx: SplitDedupContext): ReadonlySet<LogicalId> {
+    if (this.cachedLosers) return this.cachedLosers;
     const losers = new Set<LogicalId>();
-    const examine = new Set<LogicalId>([...this.contestedOrigins, ...this.liveRootedOrigins]);
-    for (const root of examine) {
-      const runs = this.runsBySplitOrigin.get(root);
-      if (!runs) continue;
-      // No-regression guard: a single round collapses every product's origin to `root`, so no
-      // product is itself a split origin. If one is, a later round re-split it — hand the whole
-      // origin back to the plain projection rather than risk a divergent partial drop.
-      if (this.isReSplit(root)) continue;
-      const present = new Set<string>();
-      for (const runId of runs) {
-        if (ctx.isPresent(runId)) present.add(replicaOfLogicalId(runId) ?? '');
+    const excluded = new Set<LogicalId>();
+    const dropBranch = (first: LogicalId): void => {
+      const pending = [first];
+      while (pending.length > 0) {
+        const id = pending.pop()!;
+        if (excluded.has(id)) continue;
+        excluded.add(id);
+        if (ctx.isPresent(id)) losers.add(id);
+        for (const child of this.productsOf(id)) pending.push(child);
       }
-      const originLive = ctx.isPresent(root);
-      if (!originLive && present.size <= 1) continue;
-      // A live origin beats every product; otherwise the first-sorting present replica wins.
-      const winner = originLive ? null : [...present].sort()[0]!;
-      for (const runId of runs) {
-        if (!originLive && (replicaOfLogicalId(runId) ?? '') === winner) continue;
-        if (ctx.isPresent(runId)) losers.add(runId);
+    };
+    for (const root of this.liveRootedOrigins) {
+      const products = this.productsOf(root);
+      // A deleted winner still owns its branch. Choosing by visible leaves would resurrect
+      // the losing text when an author deletes or re-splits the entire winning branch.
+      const winner = ctx.isPresent(root)
+        ? null
+        : products
+            .filter((id) => nodeRecordSplitFrom(this.nodes.get(id)) === root)
+            .map((id) => replicaOfLogicalId(id) ?? '')
+            .sort()[0];
+      for (const id of products) {
+        if ((replicaOfLogicalId(id) ?? '') !== winner) dropBranch(id);
       }
     }
+    this.cachedLosers = losers;
     return losers;
   }
-}
-
-function mapBaseOffset(base: string, next: string, offset: number): number {
-  let prefix = 0;
-  const shared = Math.min(base.length, next.length);
-  while (prefix < shared && base.charCodeAt(prefix) === next.charCodeAt(prefix)) prefix += 1;
-  let suffix = 0;
-  while (
-    suffix < base.length - prefix &&
-    suffix < next.length - prefix &&
-    base.charCodeAt(base.length - suffix - 1) === next.charCodeAt(next.length - suffix - 1)
-  ) {
-    suffix += 1;
-  }
-  const baseEnd = base.length - suffix;
-  const nextEnd = next.length - suffix;
-  if (offset <= prefix) return offset;
-  if (offset >= baseEnd) return nextEnd + offset - baseEnd;
-  return prefix;
-}
-
-function mergeSourceEditIntoProducts(
-  base: string,
-  source: string,
-  products: readonly SplitProduct[]
-): readonly string[] {
-  const edit = textSplice(base, source);
-  const owner = products.findIndex((product, index) => {
-    const end = products[index + 1]?.start ?? base.length;
-    return product.start !== null && edit.start >= product.start && edit.start <= end;
-  });
-  return products.map((product, index) => {
-    const start = product.start!;
-    const end = products[index + 1]?.start ?? base.length;
-    const basePart = base.slice(start, end);
-    const current = product.text!.value;
-    const deleteStart = Math.max(edit.start, start);
-    const deleteEnd = Math.min(edit.end, end);
-    const ownsInsert = index === owner && edit.insert.length > 0;
-    if (deleteStart >= deleteEnd && !ownsInsert) return current;
-    const localStart = Math.max(0, (ownsInsert ? edit.start : deleteStart) - start);
-    const localEnd = Math.max(localStart, deleteEnd - start);
-    const mappedStart = mapBaseOffset(basePart, current, localStart);
-    const mappedEnd = mapBaseOffset(basePart, current, localEnd);
-    if (
-      mappedStart === mappedEnd &&
-      ownsInsert &&
-      current.slice(mappedStart, mappedStart + edit.insert.length) === edit.insert
-    ) {
-      return current;
-    }
-    return (
-      current.slice(0, mappedStart) + (ownsInsert ? edit.insert : '') + current.slice(mappedEnd)
-    );
-  });
-}
-
-function partitionRunText(run: RunText, merged: string): readonly string[] {
-  const boundaries = [0];
-  for (const part of run.parts) boundaries.push(boundaries.at(-1)! + part.value.length);
-  const mapped = boundaries.map((offset) => mapBaseOffset(run.value, merged, offset));
-  return run.parts.map((_, index) => merged.slice(mapped[index]!, mapped[index + 1]!));
-}
-
-function textSplice(
-  base: string,
-  next: string
-): {
-  readonly start: number;
-  readonly end: number;
-  readonly insert: string;
-} {
-  let start = 0;
-  const shared = Math.min(base.length, next.length);
-  while (start < shared && base.charCodeAt(start) === next.charCodeAt(start)) start += 1;
-  let suffix = 0;
-  while (
-    suffix < base.length - start &&
-    suffix < next.length - start &&
-    base.charCodeAt(base.length - suffix - 1) === next.charCodeAt(next.length - suffix - 1)
-  ) {
-    suffix += 1;
-  }
-  return {
-    start,
-    end: base.length - suffix,
-    insert: next.slice(start, next.length - suffix),
-  };
 }

@@ -48,8 +48,11 @@ import type { DocumentThemeFonts } from '../store/package/theme-font-scheme.ts';
  * is answered even when the major is missing or invalid, unlike the colour scheme's
  * all-or-nothing rule, because each resolves a different `w:rFonts` attribute.
  */
-export function collectDocumentThemeFonts(themeRoot: OoxmlElement | null): DocumentThemeFonts {
-  return collectThemeSchemeFaces(themeRoot);
+export function collectDocumentThemeFonts(
+  themeRoot: OoxmlElement | null,
+  settingsRoot: OoxmlElement | null = null
+): DocumentThemeFonts {
+  return collectThemeSchemeFaces(themeRoot, settingsRoot);
 }
 
 /**

@@ -282,7 +282,7 @@ export function contentControlPropertiesNodeOf(
  * accepts either shape (`isContentControlPropertiesNode`); this keeps the projection saying
  * the same thing about the same document.
  */
-function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement | undefined {
+export function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement | undefined {
   if (control.kind !== 'contentControl') return undefined;
   const children: readonly OoxmlNode[] = control.children;
   return children.find(

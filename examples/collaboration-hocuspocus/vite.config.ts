@@ -91,6 +91,10 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/hocuspocus.ts'),
           },
           {
+            find: /^@docx-editor\.dev\/pro\/collaboration$/,
+            replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
+          },
+          {
             find: '@docx-editor.dev/pro/react/hocuspocus',
             replacement: path.join(monorepoRoot, 'packages/pro/src/react/hocuspocus.ts'),
           },

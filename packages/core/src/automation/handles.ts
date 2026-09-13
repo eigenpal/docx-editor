@@ -62,8 +62,24 @@ function hostToken(): string {
 }
 
 export type AutomationHandleTarget =
+  | {
+      readonly kind: 'field';
+      readonly paragraphId: string;
+      readonly fieldNodeId: string;
+      readonly story: AutomationStoryId;
+    }
   | { readonly kind: 'document' }
-  | { readonly kind: 'body'; readonly story: AutomationStoryId }
+  | { readonly kind: 'body'; readonly story: AutomationStoryId; readonly rootNodeId?: string }
+  | {
+      readonly kind: 'table' | 'tableRow' | 'tableCell';
+      readonly nodeId: string;
+      readonly story: AutomationStoryId;
+    }
+  | {
+      readonly kind: 'inlinePicture';
+      readonly drawingNodeId: string;
+      readonly story: AutomationStoryId;
+    }
   | {
       readonly kind: 'paragraph';
       readonly paragraphId: string;
@@ -115,7 +131,16 @@ export interface AutomationHandleTable {
   /** The document handle. One per host, minted on first ask. */
   document(): AutomationHandle<'document'>;
   /** The handle for one STORY's body — the main body, a header/footer variant, or a note. */
-  body(story: AutomationStoryId): AutomationHandle<'body'>;
+  body(story: AutomationStoryId, rootNodeId?: string): AutomationHandle<'body'>;
+  table(nodeId: string, story: AutomationStoryId): AutomationHandle<'table'>;
+  tableRow(nodeId: string, story: AutomationStoryId): AutomationHandle<'tableRow'>;
+  tableCell(nodeId: string, story: AutomationStoryId): AutomationHandle<'tableCell'>;
+  field(
+    paragraphId: string,
+    fieldNodeId: string,
+    story: AutomationStoryId
+  ): AutomationHandle<'field'>;
+  inlinePicture(drawingNodeId: string, story: AutomationStoryId): AutomationHandle<'inlinePicture'>;
   /** The handle for a canonical paragraph id, minted once and reused thereafter. */
   paragraph(paragraphId: string, story: AutomationStoryId): AutomationHandle<'paragraph'>;
   section(index: number): AutomationHandle<'section'>;
@@ -189,8 +214,40 @@ export function createHandleTable(): AutomationHandleTable {
       documentHandle ??= mint('document', { kind: 'document' });
       return documentHandle;
     },
-    body(story) {
-      return named('body', storyKey(story), { kind: 'body', story });
+    body(story, rootNodeId) {
+      return named('body', `${storyKey(story)}:${rootNodeId ?? ''}`, {
+        kind: 'body',
+        story,
+        ...(rootNodeId ? { rootNodeId } : {}),
+      });
+    },
+    table(nodeId, story) {
+      return named('table', `${storyKey(story)}:${nodeId}`, { kind: 'table', nodeId, story });
+    },
+    tableRow(nodeId, story) {
+      return named('tableRow', `${storyKey(story)}:${nodeId}`, { kind: 'tableRow', nodeId, story });
+    },
+    tableCell(nodeId, story) {
+      return named('tableCell', `${storyKey(story)}:${nodeId}`, {
+        kind: 'tableCell',
+        nodeId,
+        story,
+      });
+    },
+    field(paragraphId, fieldNodeId, story) {
+      return named('field', `${storyKey(story)}:${fieldNodeId}`, {
+        kind: 'field',
+        paragraphId,
+        fieldNodeId,
+        story,
+      });
+    },
+    inlinePicture(drawingNodeId, story) {
+      return named('inlinePicture', `${storyKey(story)}:${drawingNodeId}`, {
+        kind: 'inlinePicture',
+        drawingNodeId,
+        story,
+      });
     },
     paragraph(paragraphId, story) {
       const existing = refByParagraph.get(paragraphId);

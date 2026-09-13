@@ -47,9 +47,15 @@ export abstract class ModelObject extends ClientObject {
   }
 
   /** Queue a command with nothing to answer. Nothing is written until `sync()`. */
-  protected command(name: string, plan: () => AutomationOperation): void {
+  protected command(name: string, plan: () => AutomationOperation, dispose?: () => void): void {
     const label = `${this.path.label}.${name}`;
-    this.enqueue({ sort: 'write', label, plan, settle: (value) => hydratedApplied(value, label) });
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan,
+      settle: (value) => hydratedApplied(value, label),
+      ...(dispose ? { capture: dispose, dispose } : {}),
+    });
   }
 
   /**
@@ -68,9 +74,16 @@ export abstract class ModelObject extends ClientObject {
   protected commandAnswering(
     label: string,
     plan: () => AutomationOperation,
-    settle: (value: AutomationValue) => void
+    settle: (value: AutomationValue) => void,
+    dispose?: () => void
   ): void {
-    this.enqueue({ sort: 'write', label, plan, settle });
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan,
+      settle,
+      ...(dispose ? { capture: dispose, dispose } : {}),
+    });
   }
 
   /** Queue a read whose answer is hydrated by the caller. */

@@ -181,8 +181,7 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
    * `sync()` commit atomically as one undo unit.
    */
   delete(): void {
-    const comment = this.commentHandle();
-    this.command('delete', () => ({ op: 'deleteComment', comment }));
+    this.command('delete', () => ({ op: 'deleteComment', comment: this.commentHandle() }));
   }
 
   protected loadCommentFields(request: ResolvedLoadOptions, extra: readonly string[]): void {
@@ -193,21 +192,23 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
       'text',
       ...extra,
     ]);
-    const comment = this.commentHandle();
     if (selected.includes('authorName')) {
-      this.loadTextInto('authorName', () => ({ op: 'getCommentAuthor', comment }));
+      this.loadTextInto('authorName', () => ({
+        op: 'getCommentAuthor',
+        comment: this.commentHandle(),
+      }));
     }
     if (selected.includes('text')) {
-      this.loadTextInto('text', () => ({ op: 'getCommentText', comment }));
+      this.loadTextInto('text', () => ({ op: 'getCommentText', comment: this.commentHandle() }));
     }
     if (selected.includes('id')) {
-      this.loadTextInto('id', () => ({ op: 'getCommentId', comment }));
+      this.loadTextInto('id', () => ({ op: 'getCommentId', comment: this.commentHandle() }));
     }
     if (selected.includes('creationDate')) {
       const label = `${this.path.label}.creationDate`;
       this.read(
         label,
-        () => ({ op: 'getCommentDate', comment }),
+        () => ({ op: 'getCommentDate', comment: this.commentHandle() }),
         (value) => {
           this.setLoadedProperty('creationDate', stamp(hydratedText(value, label)));
         }
@@ -217,7 +218,7 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
     const label = `${this.path.label}.resolved`;
     this.read(
       label,
-      () => ({ op: 'getCommentResolved', comment }),
+      () => ({ op: 'getCommentResolved', comment: this.commentHandle() }),
       (value) => {
         this.setLoadedProperty('resolved', hydratedFlag(value, label));
       }
@@ -351,10 +352,9 @@ export class Comment extends CommentBase {
   set resolved(value: boolean) {
     const target = `${this.path.label}.resolved`;
     if (typeof value !== 'boolean') fail({ code: 'InvalidArgument', target });
-    const comment = this.commentHandle();
     this.commandAnswering(
       target,
-      () => ({ op: 'setCommentResolved', comment, resolved: value }),
+      () => ({ op: 'setCommentResolved', comment: this.commentHandle(), resolved: value }),
       (answer) => {
         hydratedApplied(answer, target);
       }
@@ -375,11 +375,10 @@ export class Comment extends CommentBase {
   /** The words the comment is about. */
   getRange(): Range {
     const target = `${this.path.label}.getRange`;
-    const comment = this.commentHandle();
     const found = Range.promised(this.context, target, false);
     this.read(
       target,
-      () => ({ op: 'getCommentRange', comment }),
+      () => ({ op: 'getCommentRange', comment: this.commentHandle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
       }
@@ -403,11 +402,10 @@ export class Comment extends CommentBase {
     if (typeof author !== 'string' || author.trim().length === 0) {
       fail({ code: 'NotSupported', target });
     }
-    const comment = this.commentHandle();
     const created = CommentReply.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () => ({ op: 'replyToComment', comment, text: replyText, author }),
+      () => ({ op: 'replyToComment', comment: this.commentHandle(), text: replyText, author }),
       (value) => {
         // The reply's own id is minted INSIDE the package transaction, so the host answers it and
         // the proxy is bound to it — a caller can read the reply back without asking the thread.
@@ -521,11 +519,10 @@ export class Revision extends ModelObject implements PromisedItem {
   /** The words the change covers. */
   get range(): Range {
     const label = `${this.path.label}.range`;
-    const revision = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getRevisionRange', revision }),
+      () => ({ op: 'getRevisionRange', revision: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }
@@ -535,31 +532,28 @@ export class Revision extends ModelObject implements PromisedItem {
 
   /** Keep the change, resolving every site that carries its identity in one transaction. */
   accept(): void {
-    const revision = this.#handle();
-    this.command('accept', () => ({ op: 'acceptRevision', revision }));
+    this.command('accept', () => ({ op: 'acceptRevision', revision: this.#handle() }));
   }
 
   /** Undo the change, likewise in one transaction. */
   reject(): void {
-    const revision = this.#handle();
-    this.command('reject', () => ({ op: 'rejectRevision', revision }));
+    this.command('reject', () => ({ op: 'rejectRevision', revision: this.#handle() }));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['author', 'date', 'type']);
-    const revision = this.#handle();
     if (selected.includes('author')) {
-      this.loadTextInto('author', () => ({ op: 'getRevisionAuthor', revision }));
+      this.loadTextInto('author', () => ({ op: 'getRevisionAuthor', revision: this.#handle() }));
     }
     if (selected.includes('type')) {
-      this.loadTextInto('type', () => ({ op: 'getRevisionType', revision }));
+      this.loadTextInto('type', () => ({ op: 'getRevisionType', revision: this.#handle() }));
     }
     if (!selected.includes('date')) return;
     const label = `${this.path.label}.date`;
     this.read(
       label,
-      () => ({ op: 'getRevisionDate', revision }),
+      () => ({ op: 'getRevisionDate', revision: this.#handle() }),
       (value) => {
         this.setLoadedProperty('date', stamp(hydratedText(value, label)));
       }

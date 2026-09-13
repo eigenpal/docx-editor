@@ -342,3 +342,25 @@ export async function mainXmlOf(runtime: DocxEditorServerRuntime): Promise<strin
 export function orNull<T>(read: T): T | null {
   return read;
 }
+
+/** Add complete real numbering definitions to a list fixture. */
+export function withNumbering(bytes: Uint8Array, ids: readonly string[]): Uint8Array {
+  const files = unzipSync(bytes);
+  files['word/numbering.xml'] = strToU8(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">${Array.from({ length: 9 }, (_, level) => `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%${level + 1}."/></w:lvl>`).join('')}</w:abstractNum>${ids.map((id) => `<w:num w:numId="${id}"><w:abstractNumId w:val="0"/></w:num>`).join('')}</w:numbering>`
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>'
+    )
+  );
+  const rels = files['word/_rels/document.xml.rels'];
+  files['word/_rels/document.xml.rels'] = strToU8(
+    (rels ? strFromU8(rels) : `<Relationships xmlns="${REL}"></Relationships>`).replace(
+      '</Relationships>',
+      '<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>'
+    )
+  );
+  return zipSync(files);
+}

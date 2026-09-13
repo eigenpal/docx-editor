@@ -1,3 +1,6 @@
+import { applySetFieldCode } from './tree-op-field-code.ts';
+import { applyTableAuthoring } from './tree-op-table-batch.ts';
+import { applyTableProperties } from './tree-op-table-authoring.ts';
 import { mintCheckboxRun } from './content-control-run.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
@@ -9,7 +12,7 @@ import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts'
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { hardBreakAttributes } from '../package/hard-break.ts';
+import { simpleElement, textElement } from './tree-op-inline-elements.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
   isContentRevisionKind,
@@ -158,51 +161,6 @@ import { fnv1a32 } from '../package/para-id.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 
-/**
- * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
- *
- * SPLITTING a run must not change what the run is. This built a `w:t` unconditionally, so
- * every ordinary gesture that splits a run inside a `w:del` — commenting on struck text,
- * bolding across it — silently re-labelled the deletion as live text (§17.3.3.7 requires
- * `w:delText` there), and the damage only showed when the file reached Word.
- */
-function textElement(
-  nextId: () => string,
-  text: string,
-  kind: 'text' | 'deletedText' = 'text'
-): OoxmlNode {
-  const valueId = nextId();
-  return {
-    id: nextId(),
-    kind,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: kind === 'deletedText' ? 'delText' : 't',
-    prefix: 'w',
-    namespaceBindings: [],
-    // `xml:space="preserve"` is not added here: the serializer owns lexical form, and a
-    // leading/trailing space is preserved by the tree regardless of the attribute.
-    attributes: [],
-    children: [{ id: valueId, kind: 'textValue', value: text }],
-  } as unknown as OoxmlNode;
-}
-
-function simpleElement(
-  nextId: () => string,
-  localName: 'tab' | 'br',
-  breakKind: 'line' | 'page' = 'line'
-): OoxmlNode {
-  return {
-    id: nextId(),
-    kind: localName === 'tab' ? 'tab' : 'hardBreak',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
-    children: [],
-  } as unknown as OoxmlNode;
-}
-
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
   Record<'insertTab' | 'insertHardBreak' | 'insertPageBreak', (nextId: () => string) => OoxmlNode>
@@ -285,6 +243,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
   }
 
+  if (op.op === 'authorTable') return applyTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return applyTableProperties(part, op, options);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
   if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
@@ -312,9 +272,13 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
+  if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
   if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if ((op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') && op.range) {
+    return applyPartialHyperlink(part, op, options);
+  }
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
   if (op.op === 'setMathEquation' || op.op === 'removeMathEquation') {
@@ -650,6 +614,42 @@ function applyInsertContent(
   // of this rule is how a lock came to be resolved against a different place than the write.
   const site = insertionDestination(paragraph, offset, owner, bias).site;
 
+  // Plain typing changes the existing leaf, rather than copying its text into newly
+  // minted containers. Shared split ranges address that leaf, including after formatting
+  // has replaced its run. Tabs, breaks, atoms, and deleted text keep their structural paths.
+  const insertIntoText = (segment: Segment | undefined): TreeOpResult | null => {
+    const content = nodes.length === 1 ? nodes[0] : undefined;
+    const text =
+      content?.kind === 'text' && content.children.length === 1 ? content.children[0] : undefined;
+    if (
+      !segment ||
+      segment.removeNodeIds ||
+      segment.node.kind !== 'textValue' ||
+      text?.kind !== 'textValue'
+    )
+      return null;
+    const owner = findTextParent(paragraph, segment.node.id);
+    if (owner?.kind !== 'text' || owner.children.length !== 1) return null;
+    const local = offset - segment.start;
+    return finishContentEdit(
+      fromEdit(
+        replaceNode(
+          part,
+          segment.node.id,
+          {
+            ...segment.node,
+            value:
+              segment.node.value.slice(0, local) + text.value + segment.node.value.slice(local),
+          },
+          deferOptions(options, control)
+        ),
+        effect
+      ),
+      control,
+      options
+    );
+  };
+
   let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
   if (site.kind === 'withinValue') {
@@ -674,6 +674,8 @@ function applyInsertContent(
       });
       if (relocated) return relocated;
     }
+    const plain = insertIntoText(segment);
+    if (plain) return plain;
     const kind = textNode.kind === 'deletedText' ? 'deletedText' : 'text';
     const head = textElement(nextId, value.slice(0, local), kind);
     const tail = textElement(nextId, value.slice(local), kind);
@@ -689,6 +691,8 @@ function applyInsertContent(
 
   if (inside !== undefined) {
     if (site.kind === 'atBoundary') {
+      const plain = insertIntoText(site.segment);
+      if (plain) return plain;
       const run = findNode(part, site.segment.runId);
       if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
       const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
@@ -699,6 +703,10 @@ function applyInsertContent(
       return finishContentEdit(inserted, control, options);
     }
     if (site.kind === 'appendToRun') {
+      const plain = insertIntoText(
+        findLast(segments, (segment) => segment.runId === site.run.id && segment.end === offset)
+      );
+      if (plain) return plain;
       inserted = fromEdit(
         insertChildren(
           part,
@@ -784,6 +792,8 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(before);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, before.node.id));
     inserted = fromEdit(
       insertChildren(
@@ -834,6 +844,8 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(after);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, after.node.id));
     inserted = fromEdit(
       insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
@@ -1140,7 +1152,6 @@ function applyDeleteText(
     impact: 'text-local',
   };
   let current = part;
-  const nextId = createNodeIdAllocator(part);
 
   const fieldsRemoved = removeCoveredTextFormDefinitions(
     current,
@@ -1177,17 +1188,16 @@ function applyDeleteText(
     const value = segment.node.value.slice(0, from) + segment.node.value.slice(to);
     const owner = findTextParent(paragraph, segment.node.id);
     if (!owner) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
-    const edited =
-      value.length === 0
-        ? removeNode(current, owner.id, editOptions)
-        : replaceNode(
-            current,
-            owner.id,
-            textElement(nextId, value, owner.kind === 'deletedText' ? 'deletedText' : 'text'),
-            editOptions
-          );
+    const edited = replaceNode(current, segment.node.id, { ...segment.node, value }, editOptions);
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
+    if (value.length === 0) {
+      // Publish the source deletion before removing its container. Concurrent formatting
+      // may still reference this leaf through a split range after the owner disappears.
+      const removed = removeNode(current, owner.id, editOptions);
+      if (!removed.ok) return fromEdit(removed, effect);
+      current = removed.part;
+    }
   }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would
@@ -1758,6 +1768,43 @@ function inlineContentControlElement(
     attributes: [],
     children: [properties, content],
   } as unknown as OoxmlNode;
+}
+
+/** Split only the requested text while retaining each unaffected wrapper's metadata. */
+function applyPartialHyperlink(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'setHyperlinkTarget' | 'removeHyperlink' }>,
+  options?: EditOptions
+): TreeOpResult {
+  const link = findNode(part, op.linkId);
+  const paragraph = link && parentOf(part, link.id);
+  if (!link || paragraph?.kind !== 'paragraph' || !op.range)
+    return { ok: false, reason: 'tree-invariant' };
+  const pieces = distributeInline(
+    link,
+    [op.range.start, op.range.end],
+    3,
+    segmentsOf(paragraph),
+    createNodeIdAllocator(part)
+  );
+  const selected = pieces[1]?.[0];
+  if (selected?.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
+  const replacements = pieces.flat();
+  const children = paragraph.children.flatMap((child) =>
+    child.id === link.id ? replacements : [child]
+  );
+  const split = replaceChildren(part, paragraph.id, children, options);
+  if (!split.ok)
+    return fromEdit(split, {
+      dirty: [paragraph.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'paragraph-local',
+    });
+  return op.op === 'removeHyperlink'
+    ? applyRemoveHyperlink(split.part, selected.id, options)
+    : applySetHyperlinkTarget(split.part, { ...op, linkId: selected.id }, options);
 }
 
 /** Re-aim a link: one target attribute replaces the other, and the tooltip follows. */
@@ -3368,6 +3415,10 @@ export function splitRunsAt(
   // three characters.
   const runIds: string[] = [];
   for (const segment of segments) {
+    // Simple fields are paragraph children: their atom has no owning run. Grouping
+    // their empty run IDs invents one run spanning every simple field, then attempts
+    // to split that nonexistent run at an otherwise valid boundary between fields.
+    if (!segment.runId) continue;
     if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
   }
   const straddling = runIds.find((runId) => {

@@ -16,6 +16,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // malformed input comes back as `InvalidArgument`. Resource refusals use a stable API limit
 // name without forwarding file-controlled details or internal parser messages.
 
+import { serverPagination, type ServerPaginationOptions } from './pagination.ts';
+export type { ServerPaginationOptions } from './pagination.ts';
 import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
@@ -92,6 +94,8 @@ export interface DocumentLimits {
  * @public
  */
 export interface CreateServerOptions {
+  /** Font-aware pagination required to calculate PAGE/NUMPAGES fields headlessly. */
+  readonly pagination?: ServerPaginationOptions;
   /**
    * Capability modules to register. Collaboration attaches only through a
    * collaboration contribution on this list.
@@ -147,6 +151,7 @@ export async function createServer(
   validateDocumentLimits(options.limits);
   const collaborationModel = collaborationModelOf(options.modules);
   const opened = createServerAutomationHost(bytes, {
+    ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
     ...(options.limits === undefined ? {} : { limits: options.limits }),
     ...(collaborationModel === undefined ? {} : { collaborationModel }),
   });
