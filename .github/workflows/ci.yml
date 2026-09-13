@@ -32,7 +32,7 @@ jobs:
           bun-version: latest
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Office.js signature report (informational)
+      - name: Office.js editing report (informational)
         id: report
         run: bun run --filter '@docx-editor.dev/editor-api' compat:report
       - name: Report unavailable

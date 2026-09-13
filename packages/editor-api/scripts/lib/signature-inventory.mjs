@@ -133,7 +133,49 @@ function requirementSet(symbol) {
   return /\[Api set:\s*([^\]]+)\]/.exec(text)?.[1]?.trim() ?? null;
 }
 
-function memberShape(checker, symbol) {
+function setterType(checker, setter, ownerType) {
+  const parameter = setter.parameters[0];
+  const declaringType = checker.getTypeAtLocation(setter.parent);
+  const visited = new Set();
+  function find(type) {
+    if (!type || visited.has(type)) return undefined;
+    visited.add(type);
+    if (type.symbol === declaringType.symbol) return type;
+    return type.isClassOrInterface?.() || type.objectFlags & ts.ObjectFlags.Reference
+      ? (checker.getBaseTypes(type) ?? []).map(find).find(Boolean)
+      : undefined;
+  }
+  const base = find(ownerType);
+  const parameters = base?.target?.typeParameters ?? [];
+  if (!parameters.length || !parameter.type)
+    return typeText(checker, checker.getTypeAtLocation(parameter));
+  const arguments_ = checker.getTypeArguments(base);
+  const replacements = new Map(parameters.map((type, index) => [type.symbol, arguments_[index]]));
+  const transformed = ts.transform(parameter.type, [
+    (context) => {
+      const visit = (node) => {
+        if (ts.isTypeReferenceNode(node)) {
+          const replacement = replacements.get(checker.getSymbolAtLocation(node.typeName));
+          if (replacement)
+            return checker.typeToTypeNode(replacement, undefined, ts.NodeBuilderFlags.NoTruncation);
+        }
+        return ts.visitEachChild(node, visit, context);
+      };
+      return visit;
+    },
+  ]);
+  try {
+    return normalizeSignatureText(
+      ts
+        .createPrinter()
+        .printNode(ts.EmitHint.Unspecified, transformed.transformed[0], setter.getSourceFile())
+    );
+  } finally {
+    transformed.dispose();
+  }
+}
+
+function memberShape(checker, symbol, ownerType) {
   const node = symbol.valueDeclaration ?? symbol.declarations?.[0];
   const type = checker.getTypeOfSymbolAtLocation(symbol, node);
   const calls = signatures(checker, type, ts.SignatureKind.Call);
@@ -150,7 +192,7 @@ function memberShape(checker, symbol) {
   const writeType = readonly
     ? null
     : setter?.parameters[0]
-      ? typeText(checker, checker.getTypeAtLocation(setter.parameters[0]), setter.parameters[0])
+      ? setterType(checker, setter, ownerType)
       : typeText(checker, type, node);
   const readable = !setter || declarations.some(ts.isGetAccessorDeclaration);
   return {
@@ -210,11 +252,15 @@ export function inventoryModule(checker, moduleSymbol, prefix, { recurse = true 
         });
         continue;
       }
-      if (symbol.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface)) {
+      if (
+        symbol.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface) ||
+        (symbol.flags & ts.SymbolFlags.TypeAlias &&
+          checker.getDeclaredTypeOfSymbol(symbol).flags & ts.TypeFlags.Object)
+      ) {
         const type = checker.getDeclaredTypeOfSymbol(symbol);
         const members = checker.getPropertiesOfType(type).filter(publicSymbol);
         for (const member of members)
-          add(`${uid}#${memberName(member)}`, memberShape(checker, member), member);
+          add(`${uid}#${memberName(member)}`, memberShape(checker, member, type), member);
         for (const index of checker.getIndexInfosOfType(type)) {
           add(`${uid}#index:${typeText(checker, index.keyType)}`, {
             kind: 'index',

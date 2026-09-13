@@ -11,12 +11,38 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const shape = ({ uid, scope, requirementSet, ...value }) => value;
 const same = isDeepStrictEqual;
 
-export function createCompatibilityReport(reference, actual, notes = {}) {
+function editingShape(entry, expected) {
+  if (expected.kind !== 'property') return shape(entry);
+  return {
+    kind: 'property-write',
+    writeType: entry.readonly ? null : entry.writeType,
+    ...(entry.ownerTypeParameters ? { ownerTypeParameters: entry.ownerTypeParameters } : {}),
+  };
+}
+
+export function createCompatibilityReport(reference, actual, notes = {}, scope) {
   if (reference.schemaVersion !== 1 || !reference.endpoints?.length)
     throw new Error('Invalid signature inventory');
   const referenceIds = new Set(reference.endpoints.map((entry) => entry.uid));
   if (referenceIds.size !== reference.endpoints.length)
     throw new Error('Duplicate reference endpoint');
+  if (scope?.schemaVersion !== 1 || !scope.endpoints?.length)
+    throw new Error('Missing editing scope');
+  const selected = new Set(scope.endpoints);
+  if (selected.size !== scope.endpoints.length) throw new Error('Duplicate editing endpoint');
+  const references = new Map(reference.endpoints.map((entry) => [entry.uid, entry]));
+  for (const uid of selected) {
+    const entry = references.get(uid);
+    if (!entry) throw new Error(`Unknown editing endpoint: ${uid}`);
+    if (
+      !uid.startsWith('Word.') ||
+      !uid.includes('#') ||
+      entry.scope !== 'api' ||
+      !(entry.kind === 'method' || (entry.kind === 'property' && !entry.readonly))
+    ) {
+      throw new Error(`Not an editing method or property write: ${uid}`);
+    }
+  }
   for (const [uid, note] of Object.entries(notes)) {
     if (!referenceIds.has(uid)) throw new Error(`Unknown runtime note endpoint: ${uid}`);
     if (
@@ -27,27 +53,30 @@ export function createCompatibilityReport(reference, actual, notes = {}) {
       throw new Error(`Invalid runtime note: ${uid}`);
   }
   const byId = new Map(actual.map((entry) => [entry.uid, entry]));
-  const endpoints = reference.endpoints.map((expected) => {
-    const localUid = expected.uid.replace(/^(Word|OfficeExtension)\./, 'DocxEditor.');
-    const local = byId.get(localUid);
-    const expectedShape = shape(expected);
-    const actualShape = local ? shape(local) : null;
-    const matchedOverloads =
-      expectedShape.overloads?.filter((overload) =>
-        actualShape?.overloads?.some((candidate) => same(overload, candidate))
-      ).length ?? 0;
-    const status = !local ? 'missing' : same(expectedShape, actualShape) ? 'match' : 'different';
-    return {
-      ...expected,
-      status,
-      actual: actualShape,
-      matchedOverloads,
-      runtime: notes[expected.uid] ?? {
-        status: 'unverified',
-        notes: 'Runtime behavior has not been reviewed.',
-      },
-    };
-  });
+  const endpoints = reference.endpoints
+    .filter((entry) => selected.has(entry.uid))
+    .map((expected) => {
+      const localUid = expected.uid.replace(/^(Word|OfficeExtension)\./, 'DocxEditor.');
+      const local = byId.get(localUid);
+      const expectedShape = editingShape(expected, expected);
+      const actualShape = local ? editingShape(local, expected) : null;
+      const matchedOverloads =
+        expectedShape.overloads?.filter((overload) =>
+          actualShape?.overloads?.some((candidate) => same(overload, candidate))
+        ).length ?? 0;
+      const status = !local ? 'missing' : same(expectedShape, actualShape) ? 'match' : 'different';
+      return {
+        ...expected,
+        expected: expectedShape,
+        status,
+        actual: actualShape,
+        matchedOverloads,
+        runtime: notes[expected.uid] ?? {
+          status: 'unverified',
+          notes: 'Runtime behavior has not been reviewed.',
+        },
+      };
+    });
   function summarize(entries) {
     const count = (status) => entries.filter((entry) => entry.status === status).length;
     const total = entries.length;
@@ -62,20 +91,18 @@ export function createCompatibilityReport(reference, actual, notes = {}) {
   return {
     schemaVersion: 1,
     upstream: reference.upstream,
+    scope: {
+      description: scope.description,
+      excluded: reference.endpoints.length - endpoints.length,
+    },
     metric:
-      'Exact normalized signature shapes; not runtime equivalence or TypeScript assignability.',
+      'Exact editing-method signatures and property-write types; not runtime equivalence or TypeScript assignability.',
     summary: summarize(endpoints),
     groups: Object.fromEntries(
-      ['Word', 'OfficeExtension'].flatMap((namespace) =>
-        ['api', 'supporting-types'].map((scope) => [
-          `${namespace}/${scope}`,
-          summarize(
-            endpoints.filter(
-              (entry) => entry.uid.startsWith(`${namespace}.`) && entry.scope === scope
-            )
-          ),
-        ])
-      )
+      [
+        ['Editing methods', 'method'],
+        ['Property writes', 'property'],
+      ].map(([label, kind]) => [label, summarize(endpoints.filter((entry) => entry.kind === kind))])
     ),
     endpoints,
   };
@@ -110,9 +137,10 @@ export function extractActualInventory(packageRoot = root) {
 
 export function renderSummary(report) {
   const lines = [
-    '## Office.js signature compatibility (informational)',
+    '## Office.js document editing compatibility (informational)',
     '',
     `Reference: \`${report.upstream.name}@${report.upstream.version}\`.`,
+    `Editing signature match: **${report.summary.percent}% (${report.summary.match}/${report.summary.total})**.`,
     '',
     '| Scope | Exact matches | Different | Missing | Signature match % |',
     '| --- | ---: | ---: | ---: | ---: |',
@@ -122,7 +150,8 @@ export function renderSummary(report) {
     ),
     '',
     report.metric,
-    'The inventory covers Word and OfficeExtension, including nested support types. Other Office hosts are outside this report.',
+    'Scope: direct document editing methods and property writes, selected in compat/editing-scope.json.',
+    'Reads, navigation, selection movement, host setup, enums, and support types are excluded. Setter checks ignore getter types.',
     'Each method counts once; all overloads must match. Runtime notes do not change the signature percentage.',
     'Download the office-js-compatibility artifact for every endpoint, expected/actual signatures, and runtime notes.',
     '',
@@ -155,7 +184,8 @@ async function main() {
   }
   const reference = readJson(path.join(root, 'compat/reference/word.full-inventory.json'));
   const notes = readJson(path.join(root, 'compat/runtime-notes.json'));
-  const report = createCompatibilityReport(reference, extractActualInventory(), notes);
+  const scope = readJson(path.join(root, 'compat/editing-scope.json'));
+  const report = createCompatibilityReport(reference, extractActualInventory(), notes, scope);
   fs.mkdirSync(output, { recursive: true });
   fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   fs.writeFileSync(path.join(output, 'report.md'), renderDetails(report));

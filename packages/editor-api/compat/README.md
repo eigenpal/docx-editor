@@ -1,6 +1,6 @@
 # DocxEditor / Word JavaScript API compatibility
 
-## Exhaustive informational report
+## Informational document editing report
 
 From the repository root, run:
 
@@ -8,67 +8,69 @@ From the repository root, run:
 bun run --filter '@docx-editor.dev/editor-api' compat:report
 ```
 
-Read `packages/editor-api/compat/reports/report.md` for all endpoints and runtime notes.
-`report.json` includes the expected and actual signatures for each endpoint.
-`summary.md` contains the percentages shown in CI. Use `--output <directory>`
-with the package command to change the output directory.
+The report checks only document editing methods and property writes selected in
+`editing-scope.json`. It covers content insertion/deletion, formatting, tables,
+images, lists, comments, revisions, and document metadata. Read-only APIs,
+navigation, selection changes, host setup, lifecycle methods, enums, and option
+objects do not enter the denominator. Text replacement through the selection is
+an edit; moving the selection is not.
 
-The report compares `src/index.ts` exports, following re-exports and inheritance,
-against `reference/word.full-inventory.json`. It does not compare the hand-authored
-subset in `docxeditor/declarations.ts`. The full reference includes all public
-Word and OfficeExtension members in the pinned stable declaration package,
-including desktop requirement sets, enums, constructors, functions, and nested
-support types. Excel, PowerPoint, Outlook, and the Office add-in host APIs are
-outside this document editor's scope. Word, OfficeExtension, and nested support
-types have separate percentages so these denominators remain visible.
+The explicit upstream UID list defines scope independently from our implemented
+subset. Unsupported editing calls stay in the denominator. Review this list when
+adopting a new upstream pin or changing the intended editing scope. A missing UID
+is an error; it never silently reduces the denominator. The full pinned inventory
+remains reference input so scope changes do not require a network fetch.
 
-Each member counts once. Inherited members count on each exposing type. An exact
-match requires all overloads, parameter types, optional/rest parameters, generic
-constraints/defaults, return types, and property read/write types and modifiers
-to match. Enum constants retain their values. The normalizer removes the host
-namespace and normalizes whitespace, quotes, and union order. It
-preserves enum alternatives and inline object types. Types with the same exported
-name remain named references; their members are checked separately. This is a
-signature-shape metric, not recursive structural assignability. Equivalent
-overload spellings or differently named aliases can appear as `different`.
+The checker reads actual `src/index.ts` exports, following re-exports and
+inheritance. Methods compare all overloads, parameters, and return signatures.
+Property writes compare setter types only. For example, a nullable `font.bold`
+getter does not reduce write compatibility if the setter accepts `boolean`.
+Read differences can still appear in runtime notes.
 
-Signature statuses are `match`, `different`, and `missing`. A missing member is
-absent from the public surface; a different signature can still support some
-calls. Neither a matching signature nor its percentage proves runtime behavior.
-The JSON report includes matched-overload counts for partial inspection.
+Read `packages/editor-api/compat/reports/report.md` for editing endpoints and
+runtime notes. `report.json` includes the comparison shapes under `expected` and
+`actual`, along with upstream metadata. `summary.md` contains the overall editing
+percentage and separate method/property-write percentages shown in CI.
+Use `--output <directory>` with the package command to change the output directory.
 
-Add runtime observations to `runtime-notes.json`, keyed by exact upstream UID:
+Signature statuses are `match`, `different`, and `missing`. Each editing member
+counts once. An exact method match requires all overloads to match. Namespace,
+whitespace, quote, and union-order normalization preserve enum alternatives and
+inline object types. Named references remain named; this is not recursive
+structural assignability. Equivalent overload spellings or differently named
+aliases can appear as `different`. No percentage proves runtime equivalence.
+
+Add per-endpoint observations to `runtime-notes.json`:
 
 ```json
 {
-  "Word.Range#select": {
+  "Word.Range#insertComment": {
     "status": "partial",
-    "notes": "Selection requires an attached browser editor."
+    "notes": "Writes require an explicit author."
   }
 }
 ```
 
 Runtime statuses are `equivalent`, `partial`, `different`, `unsupported`, and
-`unverified`. Missing notes default to `unverified`, including matching signatures.
-Use `equivalent` only after reviewing runtime behavior and its tests. Notes never
-override signature results. Unknown UIDs and invalid notes are tooling errors.
+`unverified`. Missing notes default to `unverified`. Use `equivalent` only after
+reviewing runtime behavior and tests. Notes never change signature scores. Notes
+outside the editing scope remain stored but do not appear in the editing report.
 
 CI runs the report as an independent, non-blocking job. It writes a step summary
 and uploads an `office-js-compatibility` artifact. Signature differences do not
-fail the command. Tooling errors exit nonzero and show an unavailable report;
-CI still does not block merges. Existing subset conformance checks remain gates.
+fail the command. Tooling errors exit nonzero and show an unavailable report.
+Existing subset conformance checks remain unchanged.
 
-To refresh the full inventory after reviewing the pin in `provenance.json`, run:
+To refresh the full reference after reviewing the pin in `provenance.json`, run:
 
 ```bash
 bun run --filter '@docx-editor.dev/editor-api' compat:fetch-inventory
 ```
 
-This explicit maintenance command downloads the pinned npm tarball and verifies
-its integrity. It records normalized facts and source provenance, not upstream
-declaration files. Commit the generated inventory with the change. Its version
-is pinned independently from the subset fixture and appears in every report.
-Reports and tests use the committed inventory without network access.
+This maintenance command downloads the pinned npm tarball and verifies its
+integrity. It records normalized facts and source provenance, not upstream
+declaration files. Commit the generated inventory with the change. Reports and
+tests use committed reference data without network access.
 
 ## Selected subset conformance
 

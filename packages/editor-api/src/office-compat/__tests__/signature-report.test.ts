@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import ts from 'typescript';
 import {
-  createCompatibilityReport,
+  createCompatibilityReport as buildReport,
   extractActualInventory,
   renderDetails,
 } from '../../../scripts/compat-report.mjs';
@@ -17,6 +17,27 @@ import {
 } from '../../../scripts/lib/signature-inventory.mjs';
 import reference from '../../../compat/reference/word.full-inventory.json';
 import notes from '../../../compat/runtime-notes.json';
+import editingScope from '../../../compat/editing-scope.json';
+
+function createCompatibilityReport(
+  reference,
+  actual,
+  notes = {},
+  scope = {
+    schemaVersion: 1,
+    endpoints: reference.endpoints
+      .filter(
+        (entry) =>
+          entry.uid.startsWith('Word.') &&
+          entry.uid.includes('#') &&
+          entry.scope === 'api' &&
+          (entry.kind === 'method' || (entry.kind === 'property' && !entry.readonly))
+      )
+      .map((entry) => entry.uid),
+  }
+) {
+  return buildReport(reference, actual, notes, scope);
+}
 
 const upstream = `
 declare namespace OfficeExtension {
@@ -155,7 +176,57 @@ describe('exhaustive signature inventory', () => {
 });
 
 describe('informational report', () => {
-  test('a removed overload, changed return, optionality or readonly modifier lowers coverage', () => {
+  test('property writes ignore getter nullability but detect a refused or narrower setter', () => {
+    const endpoints = extractUpstreamInventory(
+      'declare namespace OfficeExtension {} declare namespace Word { class Font { bold: boolean; } }'
+    );
+    const fixture = { schemaVersion: 1, upstream: {}, endpoints };
+    const actual = localInventory(
+      'export class Font { get bold(): boolean | null { return null; } set bold(value: boolean) {} }'
+    );
+    const report = createCompatibilityReport(fixture, actual);
+    expect(report.summary.percent).toBe(100);
+    actual.find((row) => row.uid === 'DocxEditor.Font#bold').readonly = true;
+    expect(createCompatibilityReport(fixture, actual).summary.percent).toBe(0);
+  });
+
+  test('object aliases expose editing members and inherited setters resolve generic arguments', () => {
+    const alias = localInventory(
+      'export type Range = { insert(value: string): Range; text: string };'
+    );
+    expect(alias.some((row) => row.uid === 'DocxEditor.Range#insert')).toBe(true);
+    expect(alias.some((row) => row.uid === 'DocxEditor.Range#text')).toBe(true);
+    const inherited = localInventory(
+      'class Base<T> { get value(): T | null { return null; } set value(value: T) {} } export class Range extends Base<string> {}'
+    );
+    expect(inherited.find((row) => row.uid === 'DocxEditor.Range#value').writeType).toBe('string');
+  });
+
+  test('the editing scope excludes reads, navigation, infrastructure and option objects', () => {
+    for (const uid of [
+      'Word.run',
+      'Word.Range#text',
+      'Word.Range#getText',
+      'Word.Range#select',
+      'Word.Range#split',
+      'Word.Paragraph#split',
+      'Word.Selection#calculate',
+      'Word.Range#load',
+      'Word.Range#context',
+      'Word.Range#isNullObject',
+      'Word.SearchOptions#matchCase',
+      'Word.Document#body',
+    ]) {
+      expect(editingScope.endpoints).not.toContain(uid);
+    }
+    expect(() =>
+      buildReport(reference, [], {}, { schemaVersion: 1, endpoints: ['Word.run'] })
+    ).toThrow('Not an editing');
+    expect(() =>
+      buildReport(reference, [], {}, { schemaVersion: 1, endpoints: ['Word.Missing#edit'] })
+    ).toThrow('Unknown editing');
+  });
+  test('a removed overload, changed return or setter type lowers editing coverage', () => {
     const endpoints = extractUpstreamInventory(upstream);
     const fixture = { schemaVersion: 1, upstream: {}, endpoints };
     const actual = endpoints.map((row) => ({
@@ -165,10 +236,9 @@ describe('informational report', () => {
     expect(createCompatibilityReport(fixture, actual).summary.percent).toBe(100);
     actual.find((row) => row.uid === 'DocxEditor.Range#insert').overloads.pop();
     actual.find((row) => row.uid === 'DocxEditor.Range#generic').overloads[0].returns = 'number';
-    actual.find((row) => row.uid === 'DocxEditor.Range#text').optional = true;
-    actual.find((row) => row.uid === 'DocxEditor.Range#context').readonly = false;
+    actual.find((row) => row.uid === 'DocxEditor.Range#text').writeType = 'number';
     const report = createCompatibilityReport(fixture, actual);
-    expect(report.summary.different).toBe(4);
+    expect(report.summary.different).toBe(3);
     expect(report.summary.percent).toBeLessThan(100);
     expect(report.endpoints.find((row) => row.uid === 'Word.Range#insert').matchedOverloads).toBe(
       1
@@ -182,15 +252,17 @@ describe('informational report', () => {
       endpoints: extractUpstreamInventory(upstream),
     };
     const report = createCompatibilityReport(fixture, [], {
-      'Word.run': { status: 'different', notes: 'Use runtime.run instead.' },
+      'Word.Range#insert': { status: 'different', notes: 'Insertion differs.' },
     });
     expect(report.summary.percent).toBe(0);
-    expect(report.summary.missing).toBe(fixture.endpoints.length);
-    expect(report.endpoints.find((row) => row.uid === 'Word.run').runtime.status).toBe('different');
+    expect(report.summary.missing).toBe(report.summary.total);
+    expect(report.endpoints.find((row) => row.uid === 'Word.Range#insert').runtime.status).toBe(
+      'different'
+    );
     expect(report.endpoints.find((row) => row.uid === 'Word.Range#text').runtime.status).toBe(
       'unverified'
     );
-    expect(renderDetails(report)).toContain('Use runtime.run instead.');
+    expect(renderDetails(report)).toContain('Insertion differs.');
     expect(() =>
       createCompatibilityReport(fixture, [], { 'Word.typo': { status: 'partial', notes: 'Oops' } })
     ).toThrow('Unknown runtime note');
@@ -201,13 +273,13 @@ describe('informational report', () => {
 
   test('the full pin measures actual exports, beyond the selected conformance fixture', () => {
     const actual = extractActualInventory();
-    const report = createCompatibilityReport(reference, actual, notes);
-    expect(report.summary.total).toBeGreaterThan(10_000);
+    const report = createCompatibilityReport(reference, actual, notes, editingScope);
+    expect(report.summary.total).toBe(editingScope.endpoints.length);
     expect(report.summary.total).toBe(
       report.summary.match + report.summary.different + report.summary.missing
     );
     // Support can grow or shrink without a coverage gate. Only the inventory is exhaustive.
-    for (const uid of ['Word.Document#body', 'Word.Font#bold', 'Word.Table#rows', 'Word.run']) {
+    for (const uid of ['Word.Body#insertText', 'Word.Font#bold', 'Word.Table#addRows']) {
       expect(report.endpoints.some((row) => row.uid === uid)).toBe(true);
     }
     expect(JSON.stringify(actual)).not.toContain(process.cwd());
