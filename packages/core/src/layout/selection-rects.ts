@@ -5,7 +5,8 @@
 // the one part of both that has to know a line can carry more than one paragraph.
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
-import { xWithinLine } from './line-geometry.ts';
+import { xWithinLine, rangeBandsWithinLine, mergeLineRangeBands } from './line-geometry.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type {
@@ -20,7 +21,7 @@ import type { SemanticPosition, SemanticSelection, SelectionRect } from './seman
 import { bottomToTopRectInLayout } from './table-cell-text-direction.ts';
 
 /**
- * The rectangles covering a selection, one per line it spans.
+ * The physical rectangles covering a selection, including disjoint bands within bidi lines.
  *
  * BODY fragments only, and a selection outside the body paints nothing. That is a real gap —
  * a retained pin in a header shows no highlight, and a comment anchored in one draws no band
@@ -150,37 +151,41 @@ function rangeRects(
             terminal.start === segment.start &&
             segmentIndex === segments.length - 1;
           if ((!includeText || !overlap) && !markSelected) continue;
-          const textStartX =
-            includeText && overlap ? xWithinLine(line, overlap.start, measurer, segment) : null;
-          const textEndX =
-            includeText && overlap ? xWithinLine(line, overlap.end, measurer, segment) : null;
-          const markStartX = markSelected
-            ? xWithinLine(line, segment.end, measurer, segment)
-            : null;
-          const markEndX =
-            markStartX !== null
-              ? markStartX +
-                paragraphMarkWidth(
-                  Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0))
-                )
-              : null;
-          const edges = [textStartX, textEndX, markStartX, markEndX].filter(
-            (edge): edge is number => edge !== null
-          );
-          const startX = Math.min(...edges);
-          const endX = Math.max(...edges);
-          const clipped = clipParagraphBox(
-            {
-              pageIndex: page.index,
-              x: startX,
-              y: line.box.y,
-              width: endX - startX,
-              height: line.box.height,
-            },
-            fragment.clipToBox ? fragment.box : undefined
-          );
-          if (!clipped) continue;
-          rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
+          const bands =
+            includeText && overlap
+              ? rangeBandsWithinLine(line, overlap.start, overlap.end, measurer, segment)
+              : [];
+          if (markSelected) {
+            const width = paragraphMarkWidth(
+              Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0))
+            );
+            const baseLevel = segment.spans[0]?.style.shaping?.baseLevel;
+            const rtl =
+              baseLevel === undefined ? paragraphIsRtl(fragment.props) : baseLevel % 2 === 1;
+            // The paragraph mark follows the base-direction visual edge, even when
+            // the final logical run has the opposite direction.
+            let markX = xWithinLine(line, segment.end, measurer, segment);
+            if (segment.spans.some((span) => span.style.shaping !== undefined)) {
+              markX = rtl ? Infinity : -Infinity;
+              for (const span of segment.spans)
+                markX = rtl
+                  ? Math.min(markX, span.box.x)
+                  : Math.max(markX, span.box.x + span.box.width);
+            }
+            bands.push({ x: rtl ? markX - width : markX, width });
+          }
+          for (const band of mergeLineRangeBands(bands)) {
+            const clipped = clipParagraphBox(
+              {
+                pageIndex: page.index,
+                ...band,
+                y: line.box.y,
+                height: line.box.height,
+              },
+              fragment.clipToBox ? fragment.box : undefined
+            );
+            if (clipped) rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
+          }
         }
       }
     }
@@ -228,22 +233,27 @@ export function keyedRangeRects(
           for (const range of ranges) {
             const overlap = segmentOverlap(layout, segment, range.from, range.to);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, measurer, segment);
-            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            const clipped = clipParagraphBox(
-              {
-                pageIndex: page.index,
-                x: Math.min(startX, endX),
-                y: line.box.y,
-                width: Math.abs(endX - startX),
-                height: line.box.height,
-              },
-              fragment.clipToBox ? fragment.box : undefined
-            );
-            if (!clipped) continue;
-            rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
-            found.set(range.key, rects);
+            for (const band of rangeBandsWithinLine(
+              line,
+              overlap.start,
+              overlap.end,
+              measurer,
+              segment
+            )) {
+              const clipped = clipParagraphBox(
+                {
+                  pageIndex: page.index,
+                  ...band,
+                  y: line.box.y,
+                  height: line.box.height,
+                },
+                fragment.clipToBox ? fragment.box : undefined
+              );
+              if (!clipped) continue;
+              rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
+              found.set(range.key, rects);
+            }
           }
       }
     }
@@ -402,22 +412,27 @@ export function presenceRangeRects(
           for (const range of ordered) {
             const overlap = segmentOverlap(layout, segment, range.from, range.to, orderIndex);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, measurer, segment);
-            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            const clipped = clipParagraphBox(
-              {
-                pageIndex,
-                x: Math.min(startX, endX),
-                y: line.box.y,
-                width: Math.abs(endX - startX),
-                height: line.box.height,
-              },
-              fragment.clipToBox ? fragment.box : undefined
-            );
-            if (!clipped) continue;
-            rects.push({ ...clipped, x: clipped.x + offsetX, y: clipped.y + offsetY });
-            found.set(range.key, rects);
+            for (const band of rangeBandsWithinLine(
+              line,
+              overlap.start,
+              overlap.end,
+              measurer,
+              segment
+            )) {
+              const clipped = clipParagraphBox(
+                {
+                  pageIndex,
+                  ...band,
+                  y: line.box.y,
+                  height: line.box.height,
+                },
+                fragment.clipToBox ? fragment.box : undefined
+              );
+              if (!clipped) continue;
+              rects.push({ ...clipped, x: clipped.x + offsetX, y: clipped.y + offsetY });
+              found.set(range.key, rects);
+            }
           }
         }
       }

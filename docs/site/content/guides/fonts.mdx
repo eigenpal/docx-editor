@@ -557,6 +557,7 @@ browser layout uses host fallback measurement instead of the missing-glyph box.
 Supply an Arabic-capable font for consistent browser and server metrics.
 Caret movement uses whole-run cluster advances when font bytes are available.
 Without cluster data, caret placement uses a bounded approximation within the text band.
+Comment, search, and remote selection highlights follow separate visual bands in mixed-direction text.
 
 Bidirectional paragraphs with tabs or inline atoms retain the existing placement
 path. Complex-script font selection and joining across formatting boundaries
