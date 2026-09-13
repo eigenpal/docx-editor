@@ -156,8 +156,9 @@ language-specific break restrictions, Korean character wrapping, punctuation
 overflow, and punctuation or kana compression. Compression uses deterministic
 advance reductions. Font-specific optical compression is not modeled.
 
-When the theme leaves its East Asian face empty, the run's inherited `w:lang/@w:eastAsia`
-selects the theme's language-specific face. Chinese, Japanese, and Korean use named
+The document's `w:themeFontLang/@w:eastAsia` selects its language-specific theme face.
+When that setting is absent and the East Asian theme face is empty, inherited
+`w:lang/@w:eastAsia` selects the supplemental face. Chinese, Japanese, and Korean use named
 CJK defaults when neither the theme nor the run supplies a face. Font origins receive
 these candidates before shaping. Supply suitable CJK fonts for exact glyph metrics.
 

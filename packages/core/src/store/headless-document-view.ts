@@ -146,7 +146,10 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
       const pkg = currentPackage();
       if (themeFontsPackage !== pkg) {
         themeFonts = Object.freeze(
-          collectThemeSchemeFaces(rootOf(REL.theme, '/word/theme/theme1.xml'))
+          collectThemeSchemeFaces(
+            rootOf(REL.theme, '/word/theme/theme1.xml'),
+            rootOf(REL.settings, '/word/settings.xml')
+          )
         );
         themeFontsPackage = pkg;
       }

@@ -375,9 +375,7 @@ export function openTreeSession(
     return numberingRoot;
   };
 
-  // The settings part, resolved like the styles part. Word writes document-wide layout
-  // constants here — `w:defaultTabStop` among them — that no paragraph property chain can
-  // see, so layout has to be handed them separately.
+  // Settings supply document-wide layout constants and theme font languages.
   const SETTINGS_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
   let settingsRootPackage: OoxmlPackage | null = null;
@@ -397,7 +395,13 @@ export function openTreeSession(
       }
     }
     part ??= live.parts.get('/word/settings.xml');
-    settingsRoot = part?.root ?? null;
+    const next = part?.root ?? null;
+    if (next !== settingsRoot) {
+      settingsRoot = next;
+      themeFontsCache = null;
+      stylesCache = null;
+      runDefaultsResolver = null;
+    }
     return settingsRoot;
   };
 
@@ -814,8 +818,7 @@ export function openTreeSession(
       headerFooterResolutionBySection: () => resolvedHeaderFooterBySection().resolution,
 
       documentFonts() {
-        // Keyed on the package revision: body or header/footer edits can add or remove a
-        // run-level `w:rFonts`.
+        // Body and furniture edits can change font declarations.
         if (fontsCache && fontsCache.revision === packageStore.packageRevision) {
           return fontsCache.fonts;
         }
@@ -823,7 +826,7 @@ export function openTreeSession(
           revision: packageStore.packageRevision,
           fonts: collectDocumentFonts(
             catalogRoots(),
-            collectDocumentThemeFonts(resolveThemeRoot())
+            collectDocumentThemeFonts(resolveThemeRoot(), resolveSettingsRoot())
           ),
         };
         return fontsCache.fonts;
@@ -842,9 +845,7 @@ export function openTreeSession(
       },
 
       renderedFontFamilies() {
-        // Keyed on the package revision AND the styles root: `resolveStylesRoot` swaps the
-        // root by identity when the styles part is repaired or replaced, and the style
-        // chains this derivation walks live there.
+        // Replacing styles or editing any story can change rendered font families.
         const styles = resolveStylesRoot();
         if (
           renderedFontsCache &&
@@ -859,7 +860,7 @@ export function openTreeSession(
           families: collectRenderedFontFamilies(
             storyCatalogRoots(),
             styles,
-            collectDocumentThemeFonts(resolveThemeRoot())
+            collectDocumentThemeFonts(resolveThemeRoot(), resolveSettingsRoot())
           ),
         };
         return renderedFontsCache.families;
@@ -879,17 +880,14 @@ export function openTreeSession(
       },
 
       documentStyles() {
-        // Both resolvers invalidate `stylesCache`/`runDefaultsResolver` as a side effect of
-        // being CALLED after their part changes. Resolve them before the `??=` short-circuit,
-        // or a theme/styles part swap keeps serving previews through the replaced faces.
+        // Resolve all dependencies before cached defaults can short-circuit their invalidation.
         const stylesRootNow = resolveStylesRoot();
         const themeRootNow = resolveThemeRoot();
-        // Font and size for each style's PREVIEW come from the run-defaults resolver, which
-        // already owns the basedOn chain, `docDefaults` and the theme font scheme — a
-        // picker showing every row in the UI font is the thing this avoids.
+        const settingsRootNow = resolveSettingsRoot();
+        // Style previews use the same basedOn/defaults/theme cascade as runs.
         runDefaultsResolver ??= createRunDefaultsResolver(
           stylesRootNow,
-          collectDocumentThemeFonts(themeRootNow)
+          collectDocumentThemeFonts(themeRootNow, settingsRootNow)
         );
         const resolve = runDefaultsResolver;
         stylesCache ??= collectDocumentStyles(stylesRootNow, (styleId) => resolve(styleId));
@@ -900,7 +898,8 @@ export function openTreeSession(
 
       documentThemeFonts() {
         const root = resolveThemeRoot();
-        themeFontsCache ??= collectDocumentThemeFonts(root);
+        const settings = resolveSettingsRoot();
+        themeFontsCache ??= collectDocumentThemeFonts(root, settings);
         return themeFontsCache;
       },
 
@@ -920,9 +919,10 @@ export function openTreeSession(
         // Same rule as `documentStyles`: resolving runs the invalidation side effects.
         const stylesRootNow = resolveStylesRoot();
         const themeRootNow = resolveThemeRoot();
+        const settingsRootNow = resolveSettingsRoot();
         runDefaultsResolver ??= createRunDefaultsResolver(
           stylesRootNow,
-          collectDocumentThemeFonts(themeRootNow)
+          collectDocumentThemeFonts(themeRootNow, settingsRootNow)
         );
         const store = bodyStore();
         if (!pStyleCache || pStyleCache.revision !== store.revision) {

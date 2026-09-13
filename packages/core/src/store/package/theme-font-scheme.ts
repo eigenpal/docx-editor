@@ -86,12 +86,12 @@ function schemeTypeface(
 const schemeFacesMemo = new WeakMap<OoxmlElement, DocumentThemeFonts>();
 
 /** Collect every font face consumed by live and headless layout from one canonical theme tree. */
-export function collectThemeSchemeFaces(themeRoot: OoxmlElement | null): DocumentThemeFonts {
+function collectRawThemeSchemeFaces(themeRoot: OoxmlElement | null): DocumentThemeFonts {
   const cached = themeRoot ? schemeFacesMemo.get(themeRoot) : undefined;
   if (cached) return cached;
   const scheme = themeRoot ? firstDescendant(themeRoot, 'fontScheme') : null;
   if (!scheme) {
-    return { major: null, minor: null, majorEastAsia: null, minorEastAsia: null };
+    return EMPTY_THEME_FACES;
   }
   const faces = Object.freeze({
     major: schemeTypeface(scheme, 'majorFont', 'latin'),
@@ -102,6 +102,47 @@ export function collectThemeSchemeFaces(themeRoot: OoxmlElement | null): Documen
   });
   if (themeRoot) schemeFacesMemo.set(themeRoot, faces);
   return faces;
+}
+
+// Settings and theme roots are immutable. Body edits reuse this resolved answer.
+const languageFacesMemo = new WeakMap<
+  OoxmlElement,
+  WeakMap<DocumentThemeFonts, DocumentThemeFonts>
+>();
+const EMPTY_THEME_FACES: DocumentThemeFonts = Object.freeze({
+  major: null,
+  minor: null,
+  majorEastAsia: null,
+  minorEastAsia: null,
+});
+
+/** Resolve document theme languages before run-language fallback is considered. */
+export function collectThemeSchemeFaces(
+  themeRoot: OoxmlElement | null,
+  settingsRoot: OoxmlElement | null = null
+): DocumentThemeFonts {
+  const faces = themeRoot ? collectRawThemeSchemeFaces(themeRoot) : EMPTY_THEME_FACES;
+  const language =
+    settingsRoot &&
+    child(settingsRoot, 'themeFontLang')?.attributes.find(
+      (attribute) => attribute.localName === 'eastAsia'
+    )?.value;
+  if (language == null || !settingsRoot) return faces;
+  let byTheme = languageFacesMemo.get(settingsRoot);
+  if (!byTheme) languageFacesMemo.set(settingsRoot, (byTheme = new WeakMap()));
+  const cached = byTheme.get(faces);
+  if (cached) return cached;
+  const script = eastAsianScript(language);
+  // themeFontLang selects the supplemental face for the entire document. Do not
+  // let a run's proofing language select a different supplemental face afterward.
+  const resolved = Object.freeze({
+    major: faces.major,
+    minor: faces.minor,
+    majorEastAsia: (script && faces.majorSupplemental?.[script]) || faces.majorEastAsia,
+    minorEastAsia: (script && faces.minorSupplemental?.[script]) || faces.minorEastAsia,
+  });
+  byTheme.set(faces, resolved);
+  return resolved;
 }
 
 // A Map, not an object literal: the token is file content, and `__proto__` must answer
