@@ -29,7 +29,7 @@ import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { logicalLineSegments } from '../layout/line-segments.ts';
 
 export const SCOPE_BODY: ViewScope = Object.freeze({ kind: 'body' as const });
 
@@ -581,7 +581,7 @@ export function scopedDocumentOrder(
       // from this order compares as before every other one — which would put a selection
       // anchored in it at the top of the story.
       for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
+        for (const segment of logicalLineSegments(line)) {
           if (seen.has(segment.paragraphId)) continue;
           seen.add(segment.paragraphId);
           order.push(segment.paragraphId);

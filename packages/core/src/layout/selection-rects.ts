@@ -4,7 +4,7 @@
 // this answers "which pixels does this range cover". They meet at `segmentOverlap`, which is
 // the one part of both that has to know a line can carry more than one paragraph.
 
-import { lineSegments, segmentOverlap } from './line-segments.ts';
+import { lineSegments, logicalLineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine, rangeBandsWithinLine, mergeLineRangeBands } from './line-geometry.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
@@ -134,7 +134,7 @@ function rangeRects(
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
-        const segments = lineSegments(line);
+        const segments = logicalLineSegments(line);
         for (const [segmentIndex, segment] of segments.entries()) {
           const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
           const paragraphIndex = orderIndex.get(segment.paragraphId);

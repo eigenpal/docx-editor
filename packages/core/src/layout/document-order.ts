@@ -1,12 +1,11 @@
 // Paragraph order across the laid-out document.
 //
-// Ordering paragraphs is not a tree walk here: what a reader means by "before" is where the
-// text SITS, and the layout is the only thing that knows that. It is taken from the LINES for
+// Paragraphs follow source order, independent of physical bidi positions, taken from the LINES for
 // the same reason — a resolved display mode can lay several paragraphs out as one fragment,
 // and a paragraph missing from this order compares as before every other one, which would put
 // a selection anchored in it at the top of the document.
 
-import { lineSegments } from './line-segments.ts';
+import { logicalLineSegments } from './line-segments.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type { BlockFragmentRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
@@ -39,7 +38,7 @@ function pageOrder(page: PageRecord): readonly string[] {
     // carries several, and a paragraph missing from this order compares as before every
     // other one — which would put a selection anchored in it at the top of the document.
     for (const line of fragment.lines) {
-      for (const segment of lineSegments(line)) {
+      for (const segment of logicalLineSegments(line)) {
         if (seen.has(segment.paragraphId)) continue;
         seen.add(segment.paragraphId);
         order.push(segment.paragraphId);
@@ -107,7 +106,7 @@ export function everyStoryOrder(layout: SemanticLayout): string[] {
   const take = (blocks: readonly BlockFragmentRecord[]): void => {
     for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
       for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
+        for (const segment of logicalLineSegments(line)) {
           if (seen.has(segment.paragraphId)) continue;
           seen.add(segment.paragraphId);
           order.push(segment.paragraphId);

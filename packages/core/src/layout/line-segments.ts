@@ -69,6 +69,23 @@ export function lineSegments(line: LineRecord): readonly LineSegment[] {
   return segments;
 }
 
+/** Source member order is independent of the physical order used by hit testing. */
+export function logicalLineSegments(line: LineRecord): readonly LineSegment[] {
+  const segments = lineSegments(line);
+  if (segments.length < 2 || !line.spans.some((span) => span.style.shaping)) return segments;
+  const remaining = new Map(segments.map((segment) => [segment.paragraphId, segment]));
+  const result: LineSegment[] = [];
+  // Bidi layout retains span arrays in canonical order. Atom-only lines use the old path.
+  for (const span of line.spans) {
+    const segment = remaining.get(span.range.paragraphId);
+    if (segment) {
+      result.push(segment);
+      remaining.delete(segment.paragraphId);
+    }
+  }
+  return [...result, ...remaining.values()];
+}
+
 function splitLineByParagraph(line: LineRecord): readonly LineSegment[] {
   const visualOwners = [
     ...line.spans.map((span, index) => ({
@@ -177,7 +194,7 @@ export function mergedPredecessorsOf(
 const fragmentParagraphsCache = new WeakMap<ParagraphFragmentRecord, readonly string[]>();
 
 /**
- * Every paragraph a fragment DRAWS, in visual order.
+ * Every paragraph a fragment DRAWS, in canonical member order.
  *
  * `[fragment.paragraphId]` for an ordinary one, which is what it has always been. A resolved
  * display mode publishes a merged run as one fragment under the SURVIVOR's identity, so the
@@ -192,7 +209,7 @@ export function fragmentParagraphs(fragment: ParagraphFragmentRecord): readonly 
   // name last if no line named it — an empty paragraph has no span to speak for it.
   const held: string[] = [];
   for (const line of fragment.lines ?? []) {
-    for (const segment of lineSegments(line)) {
+    for (const segment of logicalLineSegments(line)) {
       if (!held.includes(segment.paragraphId)) held.push(segment.paragraphId);
     }
   }
