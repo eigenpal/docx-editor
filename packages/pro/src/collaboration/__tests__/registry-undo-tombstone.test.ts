@@ -6,7 +6,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { DocumentRegistry } from '../document/registry.ts';
-import { NODE_DELETED_FIELD, NODE_SHELL_FIELD } from '../document/schema.ts';
+import {
+  NODE_DELETED_FIELD,
+  NODE_INITIAL_SHELL_FIELD,
+  NODE_SHELL_FIELD,
+  NODE_SPLIT_LINEAGE_FIELD,
+} from '../document/schema.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LOCAL_ORIGIN = Object.freeze({ kind: 'test-local' });
@@ -154,12 +159,75 @@ describe('undo keeps node records out of the delete set', () => {
     }
   });
 
-  test('the filter holds back record containers only, not their plain fields', () => {
-    // The plain fields are the line between closing the hazard and breaking everyday undo. A
-    // container can hold a peer's write, so pinning it prevents loss; `deleted` and the packed
-    // shell hold nobody else's content, and pinning those strands a superseded node instead.
+  test('a rename undoes and redoes without losing the retained initial shell', () => {
+    const { aliceDoc, alice, undo } = pairWithInsertedParagraph();
+    const name = () => (alice.record('run') as { localName?: string } | null)?.localName;
+    aliceDoc.transact(
+      () =>
+        alice.updateElementShell('run', { kind: 'generic', namespaceUri: W, localName: 'renamed' }),
+      LOCAL_ORIGIN
+    );
+    expect(name()).toBe('renamed');
+    undo.undo();
+    expect(name()).toBe('r');
+    undo.redo();
+    expect(name()).toBe('renamed');
+    undo.undo();
+    expect(name()).toBe('r');
+    // Undo the original insertion after undo restored the earlier shell version.
+    undo.undo();
+    expect(name()).toBe('r');
+    expect(alice.childArray('body').toArray()).toEqual([]);
+    undo.redo();
+    expect(name()).toBe('r');
+    expect(alice.childArray('body').toArray()).toEqual(['para']);
+  });
+
+  test('a deliberate rename back to the initial QName remains undoable', () => {
+    const { aliceDoc, alice, undo } = pairWithInsertedParagraph();
+    const rename = (localName: string) =>
+      aliceDoc.transact(
+        () => alice.updateElementShell('run', { kind: 'generic', namespaceUri: W, localName }),
+        LOCAL_ORIGIN
+      );
+    const name = () => (alice.record('run') as { localName?: string } | null)?.localName;
+    rename('renamed');
+    rename('r');
+    expect(name()).toBe('r');
+    undo.undo();
+    expect(name()).toBe('renamed');
+    undo.redo();
+    expect(name()).toBe('r');
+  });
+
+  test('foreign reuse retains an element descriptor after its author undoes creation', () => {
+    const { aliceDoc, alice, bobDoc, bob, undo } = pairWithInsertedParagraph();
+    bobDoc.transact(() => {
+      element(bob, 'foreign', 'foreign');
+      bob.spliceChildren('foreign', 0, 0, ['run']);
+    }, 'bob-local');
+    undo.undo();
+    exchange(aliceDoc, bobDoc);
+    for (const registry of [alice, bob]) {
+      expect((registry.record('run') as { localName?: string } | null)?.localName).toBe('r');
+      expect(registry.childArray('foreign').toArray()).toEqual(['run']);
+    }
+    undo.redo();
+    exchange(aliceDoc, bobDoc);
+    for (const registry of [alice, bob]) {
+      expect((registry.record('run') as { localName?: string } | null)?.localName).toBe('r');
+      expect(registry.childArray('foreign').toArray()).toEqual(['run']);
+    }
+  });
+
+  test('the filter retains containers and initial identity but allows mutable fields to undo', () => {
+    // Retained records need an initial shell and split ancestry to remain usable by foreign
+    // descendants. Mutable flags and subsequent renames must still undo normally.
     const doc = new Y.Doc();
     const registry = new DocumentRegistry(doc);
+    const undo = new Y.UndoManager([...registry.trackedTypes()], {
+      deleteFilter: registry.undoDeleteFilter(),
+    });
     doc.transact(() => {
       element(registry, 'body', 'body');
       registry.putText('text', 'ab');
@@ -179,8 +247,23 @@ describe('undo keeps node records out of the delete set', () => {
     expect(filter(textFieldItem)).toBe(false);
     expect(filter(childrenFieldItem)).toBe(false);
     expect(filter(fieldItemOf(nodes, 'body', NODE_DELETED_FIELD))).toBe(true);
-    expect(filter(fieldItemOf(nodes, 'body', NODE_SHELL_FIELD))).toBe(true);
+    expect(filter(fieldItemOf(nodes, 'body', NODE_INITIAL_SHELL_FIELD))).toBe(false);
+    nodes.get('body')!.set(NODE_SPLIT_LINEAGE_FIELD, 'origin');
+    expect(filter(fieldItemOf(nodes, 'body', NODE_SPLIT_LINEAGE_FIELD))).toBe(false);
+    doc.transact(() => element(registry, 'mutable', 'original'));
+    undo.stopCapturing();
+    doc.transact(() =>
+      registry.updateElementShell('mutable', {
+        kind: 'generic',
+        namespaceUri: W,
+        localName: 'renamed',
+      })
+    );
+    expect(filter(fieldItemOf(nodes, 'mutable', NODE_SHELL_FIELD))).toBe(true);
     expect(filter(characterItem)).toBe(true);
     expect(filter(childIdItem)).toBe(true);
+    undo.destroy();
+    registry.destroy();
+    doc.destroy();
   });
 });

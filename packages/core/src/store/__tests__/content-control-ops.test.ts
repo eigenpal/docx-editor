@@ -626,7 +626,7 @@ describe('an insertion can name the control it belongs to', () => {
     });
     // One bold run holding both, rather than the content rebuilt as plain text.
     expect(serializeOoxmlPart(next)).toContain('<w:b/>');
-    expect(serializeOoxmlPart(next)).toMatch(/<w:b\/><\/w:rPr><w:t>MID<\/w:t><w:t>#<\/w:t>/);
+    expect(serializeOoxmlPart(next)).toMatch(/<w:b\/><\/w:rPr><w:t>MID#<\/w:t>/);
   });
 
   test('the leading edge lands where it already landed', () => {

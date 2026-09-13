@@ -694,6 +694,12 @@ codes:
 - `protocol-version-mismatch`: The room uses a different protocol version.
 - `schema-version-mismatch`: The room uses a different schema version.
 
+Full-document rooms use shared schema version 3. All room participants must run the same editor release.
+Version 3 preserves shared character identities across repeated formatting, concurrent typing, and undo.
+Earlier releases cannot interpret these text ranges. New clients reject older persisted rooms with `schema-version-mismatch`.
+To upgrade a persisted room, export its DOCX with the previous release. Upgrade every participant, then seed a new room from that DOCX.
+This transfer preserves document content, but starts new collaboration history.
+
 Use Yjs 13 on the server. The `y-websocket` server (`bin/server.cjs`) and
 Hocuspocus support it. `@y/websocket-server` targets the Yjs 14 release
 candidate. It synchronizes initial state and presence, but not live Yjs 13

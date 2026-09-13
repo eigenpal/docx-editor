@@ -16,12 +16,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import {
-  NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
+  namespaceUriOf,
+  type ElementRecord,
+  type PackageSchema,
+  type EncodedAttribute,
+  type EncodedBinding,
   childArrayOf,
   isNodeMap,
   isTextNodeMap,
-  unpackNodeShell,
+  readNodeShell,
 } from './schema.ts';
 
 /** What a bound check reads. Mutable, because the journal projection replays onto it. */
@@ -49,8 +53,7 @@ export function nodeKindOf(nodes: Y.Map<Y.Map<unknown>>, logicalId: string): str
   const rec = nodes.get(logicalId);
   if (!isNodeMap(rec)) return null;
   if (isTextNodeMap(rec)) return 'textValue';
-  const shell = rec.get(NODE_SHELL_FIELD);
-  return unpackNodeShell(typeof shell === 'string' ? shell : '').kind;
+  return readNodeShell(rec).kind;
 }
 
 /** True when two child listings hold the same ids in the same order. */
@@ -60,4 +63,26 @@ export function sameChildOrder(left: readonly LogicalId[], right: readonly Logic
     if (left[index] !== right[index]) return false;
   }
   return true;
+}
+
+/** A complete element view; mutable property maps remain indexed by the registry. */
+export function elementRecordOf(
+  logicalId: LogicalId,
+  rec: Y.Map<unknown>,
+  schema: PackageSchema,
+  attributes: readonly EncodedAttribute[],
+  bindings: readonly EncodedBinding[]
+): ElementRecord {
+  const shell = readNodeShell(rec);
+  return {
+    logicalId,
+    kind: shell.kind,
+    namespaceUri: namespaceUriOf(schema.namespaces, shell.namespaceId),
+    localName: shell.localName,
+    prefix: shell.prefix.length > 0 ? shell.prefix : undefined,
+    attributes,
+    bindings,
+    // Malformed peer records degrade to an empty listing, rather than throwing (#567).
+    childIds: childArrayOf(rec)?.toArray() ?? [],
+  };
 }

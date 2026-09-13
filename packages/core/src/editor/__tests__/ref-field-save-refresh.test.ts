@@ -175,7 +175,7 @@ describe('save() refreshes stale REF results', () => {
     // transaction ran for a document whose only REF result is revision content.
     expect(xml).toContain('<w:ins');
     expect(xml).toContain('<w:t>Closing Date</w:t>');
-    expect(xml).toContain('<w:t>s</w:t>');
+    expect(xml).toContain('<w:t>Closing Dates</w:t>');
     expect(editor.getDocumentHandle().revision).toBe(revisionAfterEdit);
     editor.destroy();
   });

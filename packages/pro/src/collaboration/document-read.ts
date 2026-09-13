@@ -13,6 +13,7 @@ import { DocumentRegistry, PackageMaterializer } from './document/index.ts';
 import { seedRecordCount } from './document-bootstrap.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore, limitFailure } from './shared-blob-store.ts';
 import { CollaborationSchemaError } from './schema.ts';
+import { packageVersionFailure } from './document/schema.ts';
 
 /**
  * Read the document a synchronized `Y.Doc` holds, as `.docx` bytes.
@@ -47,12 +48,16 @@ export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array {
   // export on a document that lives as long as the room, so a leaked observer would make
   // every later transaction in the room pay for every export ever taken from it.
   try {
-    // Shared state arrived before this registry existed and the parent index is built from
-    // child-array EVENTS — the same rebuild a joiner performs, for the same reason.
-    registry.rebuildDerivedIndexes();
     if (typeof registry.schema.meta.get('documentId') !== 'string') {
       throw new CollaborationSchemaError('not-initialized');
     }
+    // Export jobs interpret the same shared schema as joining peers. Refuse incompatible
+    // split metadata before indexing it; treating v2 overlays as v3 ranges loses text.
+    const versionFailure = packageVersionFailure(registry.schema.meta);
+    if (versionFailure) throw new CollaborationSchemaError(versionFailure);
+    // Shared state arrived before this registry existed and the parent index is built from
+    // child-array EVENTS — the same rebuild a joiner performs, for the same reason.
+    registry.rebuildDerivedIndexes();
     // Two merged seeds duplicate the whole document and no reader can pick a side, so an
     // export refuses rather than writing a file with everything in it twice.
     if (seedRecordCount(ydoc) > 1) throw new CollaborationSchemaError('concurrent-seed');

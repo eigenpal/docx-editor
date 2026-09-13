@@ -17,6 +17,7 @@ import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration, readCollaborationDocument } from '../document-session.ts';
 import { CollaborationSchemaError } from '../schema.ts';
 import { SEED_RECORDS_KEY } from '../document-bootstrap.ts';
+import { PACKAGE_META_KEY, PACKAGE_NODES_KEY } from '../document/schema.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -76,6 +77,40 @@ async function seededRoom(text: string): Promise<{ ydoc: Y.Doc; destroy: () => v
 }
 
 describe('readCollaborationDocument', () => {
+  for (const [field, version, code] of [
+    ['sharedSchemaVersion', 2, 'schema-version-mismatch'],
+    ['sharedSchemaVersion', 4, 'schema-version-mismatch'],
+    ['protocolVersion', 0, 'protocol-version-mismatch'],
+    ['repairVersion', 2, 'schema-version-mismatch'],
+    ['canonicalModelVersion', 2, 'schema-version-mismatch'],
+  ] as const) {
+    test(`refuses ${field} ${version} before interpreting persisted split metadata`, async () => {
+      const host = await seededRoom('shared text');
+      const observer = new Y.Doc();
+      try {
+        Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+        observer.getMap(PACKAGE_META_KEY).set(field, version);
+        // Incompatible schemas may encode this field differently. The version refusal
+        // must happen before a v3 parser tries to interpret those persisted records.
+        const record = new Y.Map<unknown>();
+        record.set('splitTextSource', 'legacy encoding');
+        observer.getMap(PACKAGE_NODES_KEY).set('legacy-node', record);
+        const before = Y.encodeStateVector(observer);
+        try {
+          readCollaborationDocument(observer);
+          throw new Error('export unexpectedly accepted an incompatible schema');
+        } catch (error) {
+          expect(error).toBeInstanceOf(CollaborationSchemaError);
+          expect((error as CollaborationSchemaError).code).toBe(code);
+        }
+        expect(Y.encodeStateVector(observer)).toEqual(before);
+      } finally {
+        host.destroy();
+        observer.destroy();
+      }
+    });
+  }
+
   test('returns the room document from a replica that never joined', async () => {
     const host = await seededRoom('shared text');
 

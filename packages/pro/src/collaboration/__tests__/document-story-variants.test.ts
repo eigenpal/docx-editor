@@ -181,11 +181,11 @@ describe('property variants replicate in non-body stories', () => {
       const received = storyPartFromPackage(bob, testCase.scope);
       expect(containsLocalName(received, testCase.expectLocalName)).toBe(true);
 
-      // Known limitation (#580): the received story part lacks `w14:paraId` until bob opens
-      // the store, so a peer that saves a story it never opened loses paragraph identity.
-      // Pinned here so a fix visibly flips it; the author's part keeps its paraId.
+      // Headers/footers seed paragraph identity before either peer opens the story.
+      // Notes still have the lazy identity limitation (#580): only opening the receiving
+      // notes store adds paraId. Keep that remaining limitation explicit.
       expect(containsParaId(storyPartFromPackage(alice, testCase.scope))).toBe(true);
-      expect(containsParaId(received)).toBe(false);
+      expect(containsParaId(received)).toBe(testCase.scope.kind === 'headerFooter');
 
       // Once the receiver opens the story — the ordinary "view the header/note" flow — the
       // two packages fully converge, identity included.

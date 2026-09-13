@@ -16,6 +16,7 @@ import { strToU8, zipSync } from 'fflate';
 import { CT, R, REL, createPeerHarness, type Peer } from './document-peer-support.ts';
 import {
   NODE_CHILDREN_FIELD,
+  NODE_INITIAL_SHELL_FIELD,
   NODE_SHELL_FIELD,
   PACKAGE_NODES_KEY,
   PACKAGE_PARTS_KEY,
@@ -99,7 +100,7 @@ function imageDocx(): Uint8Array {
 function anyParagraphLogicalId(ydoc: Y.Doc): string {
   const nodes = ydoc.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
   for (const [logicalId, record] of nodes) {
-    const shell = record.get(NODE_SHELL_FIELD);
+    const shell = record.get(NODE_SHELL_FIELD) ?? record.get(NODE_INITIAL_SHELL_FIELD);
     if (typeof shell === 'string' && unpackNodeShell(shell).localName === 'p') return logicalId;
   }
   throw new Error('no paragraph in shared state');

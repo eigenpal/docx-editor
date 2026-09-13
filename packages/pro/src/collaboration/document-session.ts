@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * other, because a remote publication deliberately emits no journal.
  */
 
+import { projectJournalToShared } from './document/projected-journal.ts';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
@@ -50,7 +51,7 @@ import {
   publishBinaryPayloads,
   type BinaryPayload,
 } from './document/seed.ts';
-import { droppedContentDetail } from './document/schema.ts';
+import { droppedContentDetail, packageVersionFailure } from './document/schema.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore, limitFailure } from './shared-blob-store.ts';
 import {
   DEFAULT_INITIALIZATION_TIMEOUT_MS,
@@ -125,8 +126,6 @@ class DocumentSession implements DocumentCollaborationSession {
   private readonly journalsHeldDuringRemote: CanonicalPrimitiveJournal[] = [];
   private drainingHeldJournals = false;
   private remoteCounter = 0;
-  /** Declined-tangle events already reconciled into the author's store (#581). */
-  private seenDeclinedTangles = 0;
   private destroyed = false;
   private refusedInARow = 0;
   private readonly stopBlobWatch: () => void;
@@ -343,6 +342,7 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.undoStack.length === 0) return false;
     this.undoManager.undo();
+    this.registry.normalizeRestoredSplitTextAnchors();
     return true;
   }
 
@@ -352,6 +352,7 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.redoStack.length === 0) return false;
     this.undoManager.redo();
+    this.registry.normalizeRestoredSplitTextAnchors();
     return true;
   }
 
@@ -503,7 +504,15 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private applyJournal(journal: CanonicalPrimitiveJournal): void {
-    const shared = this.identityMap.translate(journal);
+    const projected = projectJournalToShared(this.registry, this.identityMap.translate(journal));
+    if (!projected.ok) {
+      this.refuseLocalJournal({
+        code: projected.code as CollaborationFailureCode,
+        ...(projected.detail ? { detail: projected.detail } : {}),
+      });
+      return;
+    }
+    const shared = projected.journal;
     const blobs = this.collectJournalBlobs(journal);
     if (blobs !== null && blobs.ok === false) {
       this.refuseLocalJournal(blobs.failure);
@@ -614,22 +623,9 @@ class DocumentSession implements DocumentCollaborationSession {
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
     if (this.destroyed || !this.port) return;
-    // The canonical store already holds a local commit. Materializing it back would rebuild
-    // the package for an edit the store authored — so this normally skips a local transaction.
-    // The exception is a concurrent-split tangle the dedup declines (#581): the materialized
-    // tree then differs from what the store authored, and without reconciling it here the
-    // author would keep a clean view while every other replica converges on the duplicated one.
-    if (transaction.origin === this.localOrigin) {
-      // Reconcile only on the edit that CREATES a tangle, not on every later keystroke while it
-      // persists: the marker changes on each tangle-creating edit, so a steady stream of edits
-      // in an already-tangled document takes the early return with no materialize.
-      const tangles = this.registry.declinedSplitTangleEvents();
-      if (tangles !== this.seenDeclinedTangles) {
-        this.seenDeclinedTangles = tangles;
-        this.publishSharedToPort();
-      }
-      return;
-    }
+    // The canonical store already holds a local commit. Its journal translates visible
+    // positions before writing shared state, so no local materialization is necessary.
+    if (transaction.origin === this.localOrigin) return;
     // Nothing is published from here. A journal describes the tree as it stood when its
     // transaction committed, and its `spliceText` / `spliceChildren` positions are absolute.
     // This update has already integrated, so applying a journal now would address the wrong
@@ -644,6 +640,11 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!port || this.applyingRemote) return;
     this.applyingRemote = true;
     try {
+      const versionFailure = packageVersionFailure(this.registry.schema.meta);
+      if (versionFailure) {
+        this.setStatus('error', versionFailure);
+        return;
+      }
       const exceeded = limitFailure(this.registry, this.blobs);
       if (exceeded) {
         this.setStatus('error', exceeded.code, exceeded.detail);
@@ -903,6 +904,8 @@ async function bootstrapDocumentReplica(
         throw new CollaborationSchemaError('document-id-mismatch');
       }
       // Same rebuild as the join path: shared state arrived before this registry existed.
+      const versionFailure = packageVersionFailure(registry.schema.meta);
+      if (versionFailure) throw new CollaborationSchemaError(versionFailure);
       registry.rebuildDerivedIndexes();
     }
   } else {
@@ -918,6 +921,8 @@ async function bootstrapDocumentReplica(
     // Shared state can arrive before this registry exists, and the derived parent index is
     // built from child-array EVENTS. Without one rebuild here a joiner materializes a
     // document with no known parents.
+    const versionFailure = packageVersionFailure(registry.schema.meta);
+    if (versionFailure) throw new CollaborationSchemaError(versionFailure);
     registry.rebuildDerivedIndexes();
   }
 

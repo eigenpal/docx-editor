@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { projectedTextTarget } from './projected-text-target.ts';
+import { recordSplitTextSources } from './split-text-recording.ts';
 import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
@@ -62,7 +64,7 @@ function validateDescriptor(
     : null;
 }
 
-function validateEffect(
+export function validateEffect(
   registry: DocumentRegistry,
   effect: CanonicalPrimitiveEffect,
   projection: JournalProjection
@@ -266,7 +268,13 @@ function applyEffect(
       ) {
         return;
       }
-      registry.spliceText(effect.logicalId, effect.utf16Start, effect.deleteCount, effect.insert);
+      const target = projectedTextTarget(effect);
+      registry.spliceText(
+        target?.logicalId ?? effect.logicalId,
+        target?.utf16Start ?? effect.utf16Start,
+        effect.deleteCount,
+        effect.insert
+      );
       return;
     case 'setAttribute':
       registry.setAttribute(effect.logicalId, effect.qname, effect.value);
@@ -365,13 +373,13 @@ interface JournalPlan {
    */
   readonly mintedText: ReadonlySet<string>;
   /**
-   * For each removed id, the ids the SAME `spliceChildren` inserted in its place.
+   * For each replacement splice, the ids it removed in effect order.
    *
    * A format split removes one run and inserts its head/tail at that slot; this is how a
    * later tombstone learns which runs replaced the dropped one, so two concurrent splits of
    * one run can be de-duplicated deterministically instead of duplicating the text (#581).
    */
-  readonly replacementsByRemoved: ReadonlyMap<LogicalId, readonly LogicalId[]>;
+  readonly replacementsByEffect: ReadonlyMap<CanonicalPrimitiveEffect, readonly LogicalId[]>;
 }
 
 /**
@@ -395,7 +403,7 @@ function planJournal(
   const removed: LogicalId[] = [];
   const reinserted = new Set<LogicalId>();
   const mintedText = new Set<string>();
-  const replacementsByRemoved = new Map<LogicalId, readonly LogicalId[]>();
+  const replacementsByEffect = new Map<CanonicalPrimitiveEffect, LogicalId[]>();
   for (const effect of effects) {
     const refusal = validateEffect(registry, effect, projection);
     if (refusal) return refusal;
@@ -409,7 +417,9 @@ function planJournal(
           removed.push(childId);
           // The runs this same splice inserts at the dropped slot are its replacements.
           if (effect.childLogicalIds.length > 0) {
-            replacementsByRemoved.set(childId, effect.childLogicalIds);
+            const ids = replacementsByEffect.get(effect) ?? [];
+            ids.push(childId);
+            replacementsByEffect.set(effect, ids);
           }
         }
       }
@@ -421,7 +431,7 @@ function planJournal(
     }
     projectEffect(projection, effect);
   }
-  return { removed, reinserted, mintedText, replacementsByRemoved };
+  return { removed, reinserted, mintedText, replacementsByEffect };
 }
 
 function mintedNodeCount(effects: readonly CanonicalPrimitiveEffect[]): number {
@@ -455,9 +465,18 @@ export function applyPrimitiveJournal(
     // reading a derived index in between has to know it is looking at the older tree.
     registry.noteWrite();
     const formerChildren = captureChildLists(registry, planned.removed);
-    for (const effect of journal.effects) applyEffect(registry, effect, planned.mintedText);
+    for (const effect of journal.effects) {
+      applyEffect(registry, effect, planned.mintedText);
+      if (effect.kind === 'spliceChildren') {
+        recordSplitProvenance(
+          registry,
+          planned,
+          planned.replacementsByEffect.get(effect) ?? [],
+          effect.childLogicalIds
+        );
+      }
+    }
     tombstoneRemoved(registry, journal.effects, planned, formerChildren);
-    recordSplitProvenance(registry, planned);
   }, JOURNAL_ORIGIN);
   return { ok: true };
 }
@@ -489,18 +508,20 @@ function tombstoneRemoved(
 /**
  * Stamp each run a format split minted with the run it replaced (#581).
  *
- * Runs the whole `replacementsByRemoved` map, not the tombstone loop, because one op splits
- * at both edges: the intermediate run the first split produced is removed AND reinserted in
- * the same journal, so the tombstone loop skips it and its second-split products would never
- * be stamped. `recordSplitFrom` resolves the origin to its root, and the map is in effect
- * order (the earlier split first), so a later split's origin already carries the root when it
- * resolves.
+ * Record immediately after each replacement, including intermediate runs split again in
+ * this journal. Later effects then inherit the original shared characters and split origin.
  */
-function recordSplitProvenance(registry: DocumentRegistry, planned: JournalPlan): void {
-  for (const [removedId, insertedIds] of planned.replacementsByRemoved) {
+function recordSplitProvenance(
+  registry: DocumentRegistry,
+  planned: JournalPlan,
+  removedIds: readonly LogicalId[],
+  insertedIds: readonly LogicalId[]
+): void {
+  for (const removedId of removedIds) {
     if (registry.kindOf(removedId) !== 'run') continue;
     const root = resolveSplitRoot(registry, removedId, planned.reinserted);
     const runs = insertedIds.filter((runId) => registry.kindOf(runId) === 'run');
+    recordSplitTextSources(registry, removedId, runs);
     registry.recordRunSplit(root, removedId, runs);
   }
 }

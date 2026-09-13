@@ -21,6 +21,9 @@ import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
   TreePackageStore,
+  WML_NAMESPACE_URI,
+  isStoryPart,
+  withPart,
   normalizeParagraphIdentity,
   readOoxmlPackage,
   type OoxmlPackage,
@@ -65,7 +68,25 @@ export function openBaselinePackage(bytes: Uint8Array): OoxmlPackage {
   if (!loaded.ok) throw new CollaborationSchemaError('invalid-baseline');
   const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
   if (!main) throw new CollaborationSchemaError('no-main-document-part');
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  // Lazy story stores normalize paragraph identity when first opened. Seed the same
+  // identity into shared authority so a concurrent-edit snapshot cannot strip it and
+  // make a cold join disagree with peers whose header/footer store is already open.
+  let baseline = loaded.package;
+  for (const part of baseline.parts.values()) {
+    if (
+      part.root.namespaceUri !== WML_NAMESPACE_URI ||
+      !['document', 'hdr', 'ftr'].includes(part.root.localName) ||
+      !isStoryPart(part)
+    ) {
+      continue;
+    }
+    const normalized = normalizeParagraphIdentity(part);
+    if (normalized !== part) baseline = withPart(baseline, normalized);
+  }
+  const store = new TreePackageStore(
+    baseline,
+    normalizeParagraphIdentity(baseline.parts.get(main.name)!)
+  );
   return store.currentPackage();
 }
 

@@ -650,6 +650,42 @@ function applyInsertContent(
   // of this rule is how a lock came to be resolved against a different place than the write.
   const site = insertionDestination(paragraph, offset, owner, bias).site;
 
+  // Plain typing changes the existing leaf, rather than copying its text into newly
+  // minted containers. Shared split ranges address that leaf, including after formatting
+  // has replaced its run. Tabs, breaks, atoms, and deleted text keep their structural paths.
+  const insertIntoText = (segment: Segment | undefined): TreeOpResult | null => {
+    const content = nodes.length === 1 ? nodes[0] : undefined;
+    const text =
+      content?.kind === 'text' && content.children.length === 1 ? content.children[0] : undefined;
+    if (
+      !segment ||
+      segment.removeNodeIds ||
+      segment.node.kind !== 'textValue' ||
+      text?.kind !== 'textValue'
+    )
+      return null;
+    const owner = findTextParent(paragraph, segment.node.id);
+    if (owner?.kind !== 'text' || owner.children.length !== 1) return null;
+    const local = offset - segment.start;
+    return finishContentEdit(
+      fromEdit(
+        replaceNode(
+          part,
+          segment.node.id,
+          {
+            ...segment.node,
+            value:
+              segment.node.value.slice(0, local) + text.value + segment.node.value.slice(local),
+          },
+          deferOptions(options, control)
+        ),
+        effect
+      ),
+      control,
+      options
+    );
+  };
+
   let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
   if (site.kind === 'withinValue') {
@@ -674,6 +710,8 @@ function applyInsertContent(
       });
       if (relocated) return relocated;
     }
+    const plain = insertIntoText(segment);
+    if (plain) return plain;
     const kind = textNode.kind === 'deletedText' ? 'deletedText' : 'text';
     const head = textElement(nextId, value.slice(0, local), kind);
     const tail = textElement(nextId, value.slice(local), kind);
@@ -689,6 +727,8 @@ function applyInsertContent(
 
   if (inside !== undefined) {
     if (site.kind === 'atBoundary') {
+      const plain = insertIntoText(site.segment);
+      if (plain) return plain;
       const run = findNode(part, site.segment.runId);
       if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
       const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
@@ -699,6 +739,10 @@ function applyInsertContent(
       return finishContentEdit(inserted, control, options);
     }
     if (site.kind === 'appendToRun') {
+      const plain = insertIntoText(
+        findLast(segments, (segment) => segment.runId === site.run.id && segment.end === offset)
+      );
+      if (plain) return plain;
       inserted = fromEdit(
         insertChildren(
           part,
@@ -784,6 +828,8 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(before);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, before.node.id));
     inserted = fromEdit(
       insertChildren(
@@ -834,6 +880,8 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(after);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, after.node.id));
     inserted = fromEdit(
       insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
@@ -1140,7 +1188,6 @@ function applyDeleteText(
     impact: 'text-local',
   };
   let current = part;
-  const nextId = createNodeIdAllocator(part);
 
   const fieldsRemoved = removeCoveredTextFormDefinitions(
     current,
@@ -1177,17 +1224,16 @@ function applyDeleteText(
     const value = segment.node.value.slice(0, from) + segment.node.value.slice(to);
     const owner = findTextParent(paragraph, segment.node.id);
     if (!owner) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
-    const edited =
-      value.length === 0
-        ? removeNode(current, owner.id, editOptions)
-        : replaceNode(
-            current,
-            owner.id,
-            textElement(nextId, value, owner.kind === 'deletedText' ? 'deletedText' : 'text'),
-            editOptions
-          );
+    const edited = replaceNode(current, segment.node.id, { ...segment.node, value }, editOptions);
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
+    if (value.length === 0) {
+      // Publish the source deletion before removing its container. Concurrent formatting
+      // may still reference this leaf through a split range after the owner disappears.
+      const removed = removeNode(current, owner.id, editOptions);
+      if (!removed.ok) return fromEdit(removed, effect);
+      current = removed.part;
+    }
   }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would
