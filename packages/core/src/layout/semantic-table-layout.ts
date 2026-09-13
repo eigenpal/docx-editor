@@ -103,8 +103,8 @@ import type {
   TextMeasurer,
   LayoutBox,
 } from './semantic-records.ts';
-import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
-import { publishListMarker } from './list-marker.ts';
+import { type ResolvedListItem } from './list-resolve.ts';
+import { directionalListFirstLineShift, publishListMarker } from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
@@ -458,7 +458,14 @@ function placeCellParagraph(
   // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
   // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
   // the next tab stop past an overflowing one (§17.9.30).
-  const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
+  const firstLineOffset = directionalListFirstLineShift(
+    listItem,
+    indent,
+    deps.measurer,
+    tabStops,
+    available,
+    rtl
+  );
   const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
   const filtered = deps.paragraphOrderIndex
@@ -827,7 +834,8 @@ function placeCellParagraph(
           listItem,
           deps.measurer,
           rawRecords[0] ? { y: rawRecords[0].box.y, height: rawRecords[0].box.height } : undefined,
-          originX
+          originX,
+          rtl ? indent.left + available + indent.right : undefined
         )
       : undefined;
 

@@ -179,14 +179,13 @@ import {
 } from './semantic-records.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import {
-  firstLineShift,
   withResolvedListItems,
   withResolvedListItemsForSession,
   type ResolvedListItem,
 } from './list-resolve.ts';
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
-import { publishListMarker } from './list-marker.ts';
+import { directionalListFirstLineShift, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
@@ -1705,12 +1704,13 @@ function layoutBlocksPass(
 
   // Current-pass list map first, so marker ordinals stay fresh when the memo reuses inputs.
   const firstLineOffsetOf = (entry: PreparedParagraph): number =>
-    firstLineShift(
+    directionalListFirstLineShift(
       listItems?.get(entry.paragraph.id) ?? entry.listItem,
       entry.indent,
       measurer,
       entry.tabStops,
-      entry.available
+      entry.available,
+      paragraphIsRtl(entry.props)
     );
 
   // A one-shot cache releases a paragraph only after its final placement. This preserves
@@ -2483,7 +2483,9 @@ function layoutBlocksPass(
           ? publishListMarker(
               listItem,
               measurer,
-              pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined
+              pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined,
+              0,
+              rtl ? indent.left + available + indent.right : undefined
             )
           : undefined;
       const marker = rawMarker
