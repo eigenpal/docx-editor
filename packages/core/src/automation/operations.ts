@@ -1,9 +1,8 @@
+import type { AutomationAuthoringOperation } from './authoring-operations.ts';
 // The typed operation vocabulary.
 //
-// Small on purpose, and it grows by KIND of crossing rather than by convenience. Every
-// operation here is either a read derived from one canonical package snapshot, or a command
-// that turns into `TreeDocOp`s and commits through the single transaction path. Nothing in
-// between exists: there is no "read after write in the same batch", because a batch is one
+// Each operation reads one canonical package snapshot or becomes `TreeDocOp`s committed
+// through the single transaction path. Nothing in between exists: there is no "read after write in the same batch", because a batch is one
 // atomic transaction and a query that answered post-commit state would describe a document
 // nobody had published yet.
 //
@@ -156,6 +155,7 @@ export type AutomationSelectionMode = 'select' | 'start' | 'end';
  * host minted, never pointers, so an operation is plain transport data.
  */
 export type AutomationOperation =
+  | AutomationAuthoringOperation
   | { readonly op: 'getChangeTrackingMode' }
   | {
       readonly op: 'setChangeTrackingMode';
@@ -723,6 +723,8 @@ export type AutomationOperation =
   /** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
   | {
       readonly op: 'setContentControlProperties';
+      readonly cannotEdit?: boolean;
+      readonly cannotDelete?: boolean;
       readonly contentControl: AutomationHandle;
       readonly tag?: string | null;
       readonly title?: string | null;
@@ -750,6 +752,7 @@ export type AutomationOperation =
   /** Wrap a span in a new control of the named type. */
   | {
       readonly op: 'insertContentControl';
+      readonly returnHandle?: boolean;
       readonly span: AutomationSpanRef;
       readonly subtype: AutomationContentControlSubtype;
       readonly tag?: string;
@@ -816,10 +819,22 @@ export type AutomationOperationKind = AutomationOperation['op'];
 
 /** Operations that read. They never open a transaction. */
 export const AUTOMATION_QUERY_OPERATIONS = [
+  'getTables',
+  'getTable',
+  'getTableRows',
+  'getTableCells',
+  'getTableCell',
+  'getTableCellProperties',
+  'getTableCellBody',
+  'getFields',
+  'getField',
+  'getInlinePictures',
+  'getInlinePicture',
   'getChangeTrackingMode',
   'getDocument',
   'getBody',
   'getParagraphs',
+  'getRange',
   'getSpanParagraphs',
   'getText',
   'getSpanText',
@@ -877,6 +892,17 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
+  'insertTable',
+  'updateTable',
+  'updateTableCell',
+  'setInlinePicture',
+  'deleteInlinePicture',
+  'insertField',
+  'setFieldCode',
+  'deleteField',
+  'updateFieldResult',
+  'insertInlinePicture',
+  'insertBreak',
   'setChangeTrackingMode',
   'proposeInsertion',
   'proposeDeletion',
@@ -895,6 +921,10 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setPageSetup',
   'deleteNote',
   'setListLevel',
+  'startNewList',
+  'attachToList',
+  'detachFromList',
+  'setListLevelFormat',
   'insertListParagraph',
   'setHyperlink',
   'insertComment',
@@ -923,6 +953,10 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  * caller's batch is published. Refused while planning instead.
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
+  'insertTable',
+  'insertInlinePicture',
+  'insertBreak',
+  'startNewList',
   'deleteNote',
   'insertComment',
   'setCommentResolved',
@@ -936,7 +970,13 @@ const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);
 
 /** Whether an operation must be the only one in its batch. */
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean {
-  return SOLITARY.has(operation.op);
+  return (
+    SOLITARY.has(operation.op) ||
+    (operation.op === 'updateTable' &&
+      ['addRows', 'addColumns', 'deleteRows', 'deleteColumns', 'delete'].includes(
+        operation.mutation.kind
+      ))
+  );
 }
 
 // Compile-time exhaustiveness: a new operation must be classified as a query or a command, or

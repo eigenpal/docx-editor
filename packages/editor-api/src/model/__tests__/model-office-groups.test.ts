@@ -17,6 +17,7 @@ import { createServer } from '../../runtime/server.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import {
   docx,
+  withNumbering,
   p,
   reopen,
   serverRuntime,
@@ -30,8 +31,9 @@ const numbered = (text: string, numId: string, level = 0): string =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${String(level)}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
   `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
-const LIST_DOCUMENT = docx(
-  numbered('first', '3') + numbered('second', '3') + '<w:p><w:r><w:t>prose</w:t></w:r></w:p>'
+const LIST_DOCUMENT = withNumbering(
+  docx(numbered('first', '3') + numbered('second', '3') + '<w:p><w:r><w:t>prose</w:t></w:r></w:p>'),
+  ['3']
 );
 
 const BOOKMARKED = docx(

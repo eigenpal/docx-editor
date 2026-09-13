@@ -38,8 +38,44 @@ import {
 import { spanRefOf, type SpanOwner } from './addressing.ts';
 import { ModelObject } from './model-object.ts';
 
+/** Office.js underline values. Unsupported runtime modes refuse at sync. @public */
+export enum UnderlineType {
+  mixed = 'Mixed',
+  none = 'None',
+  hidden = 'Hidden',
+  dotLine = 'DotLine',
+  single = 'Single',
+  word = 'Word',
+  double = 'Double',
+  thick = 'Thick',
+  dotted = 'Dotted',
+  dottedHeavy = 'DottedHeavy',
+  dashLine = 'DashLine',
+  dashLineHeavy = 'DashLineHeavy',
+  dashLineLong = 'DashLineLong',
+  dashLineLongHeavy = 'DashLineLongHeavy',
+  dotDashLine = 'DotDashLine',
+  dotDashLineHeavy = 'DotDashLineHeavy',
+  twoDotDashLine = 'TwoDotDashLine',
+  twoDotDashLineHeavy = 'TwoDotDashLineHeavy',
+  wave = 'Wave',
+  waveHeavy = 'WaveHeavy',
+  waveDouble = 'WaveDouble',
+}
+
 /** Every property a font both reads and writes. Order is the order a load answers them in. */
-const FIELDS = ['bold', 'italic', 'color', 'name', 'size'] as const;
+const FIELDS = [
+  'bold',
+  'italic',
+  'color',
+  'name',
+  'size',
+  'underline',
+  'strikeThrough',
+  'highlightColor',
+  'subscript',
+  'superscript',
+] as const;
 
 type FontField = (typeof FIELDS)[number];
 
@@ -124,6 +160,66 @@ export class Font extends ModelObject {
     this.#author('size', requireNumber(value, `${this.path.label}.size`));
   }
 
+  /** Office underline styles. Mixed, Hidden, and DotLine refuse at sync. */
+  get underline(): string | null {
+    return this.loadedProperty<string | null>('underline');
+  }
+  set underline(
+    value:
+      | UnderlineType
+      | 'Mixed'
+      | 'None'
+      | 'Hidden'
+      | 'DotLine'
+      | 'Single'
+      | 'Word'
+      | 'Double'
+      | 'Thick'
+      | 'Dotted'
+      | 'DottedHeavy'
+      | 'DashLine'
+      | 'DashLineHeavy'
+      | 'DashLineLong'
+      | 'DashLineLongHeavy'
+      | 'DotDashLine'
+      | 'DotDashLineHeavy'
+      | 'TwoDotDashLine'
+      | 'TwoDotDashLineHeavy'
+      | 'Wave'
+      | 'WaveHeavy'
+      | 'WaveDouble'
+  ) {
+    this.#author('underline', requireString(value, `${this.path.label}.underline`));
+  }
+  /** Exact Word palette color, returned as #RRGGBB. Null clears highlighting. */
+  get highlightColor(): string | null {
+    return this.loadedProperty<string | null>('highlightColor');
+  }
+  set highlightColor(value: string) {
+    this.#author(
+      'highlightColor',
+      value === null ? null : requireString(value, `${this.path.label}.highlightColor`)
+    );
+  }
+  get strikeThrough(): boolean | null {
+    return this.loadedProperty<boolean | null>('strikeThrough');
+  }
+  set strikeThrough(value: boolean) {
+    this.#author('strikeThrough', requireBoolean(value, `${this.path.label}.strikeThrough`));
+  }
+  get subscript(): boolean | null {
+    return this.loadedProperty<boolean | null>('subscript');
+  }
+  set subscript(value: boolean) {
+    this.#author('subscript', requireBoolean(value, `${this.path.label}.subscript`));
+  }
+  get superscript(): boolean | null {
+    return this.loadedProperty<boolean | null>('superscript');
+  }
+  set superscript(value: boolean) {
+    this.#author('superscript', requireBoolean(value, `${this.path.label}.superscript`));
+  }
+
   /**
    * One read for every property asked for.
    *
@@ -148,24 +244,30 @@ export class Font extends ModelObject {
   }
 
   #author(field: FontField, value: unknown): void {
-    this.requireAddressable();
+    this.requireUsablePath();
     if (this.#pending) {
       this.#pending[field] = value;
+      if (field === 'subscript' && value === true) this.#pending.superscript = false;
+      if (field === 'superscript' && value === true) this.#pending.subscript = false;
       return;
     }
     const pending: Record<string, unknown> = { [field]: value };
+    if (field === 'subscript' && value === true) pending.superscript = false;
+    if (field === 'superscript' && value === true) pending.subscript = false;
     this.#pending = pending;
     const label = `${this.path.label}.${field}`;
     this.commandAnswering(
       this.path.label,
       () => {
-        // Snapshotted and cleared AT DISPATCH: whatever else was assigned before this sync is in
-        // the bag, and whatever is assigned after it belongs to the next batch.
-        this.#pending = undefined;
+        // Queue capture detaches this bag before prerequisite reads can yield.
+        // Later assignments belong to the next sync, even while this one waits.
         return { op: 'setFont', span: this.#span(), font: pending };
       },
       (answer) => {
         hydratedApplied(answer, label);
+      },
+      () => {
+        if (this.#pending === pending) this.#pending = undefined;
       }
     );
   }

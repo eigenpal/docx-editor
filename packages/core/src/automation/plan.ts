@@ -1,3 +1,23 @@
+import {
+  TextEditLedger,
+  isPlainTextTarget,
+  planPlainTextEdit,
+  planSingleTextReplacement,
+  placeholderInsertionRefusal,
+} from './text-edit-ledger.ts';
+import { isTextHyperlink } from '../store/store/tree-op-hyperlink-range.ts';
+import type { ContentControlLock } from '../store/package/content-control-nodes.ts';
+import type { PlannedOperation } from './plan-types.ts';
+export type { PlannedOperation } from './plan-types.ts';
+import { delimiterOccurrences, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
+import { planFields } from './plan-fields.ts';
+import { planTableOperation } from './plan-tables.ts';
+import { planVirtualFurniture } from './virtual-furniture.ts';
+import { isAutomationCommand } from './operations.ts';
+import { planPictures } from './plan-pictures.ts';
+import { planBreakOperation } from './plan-breaks.ts';
+import { automationListLevelExists } from './list-authoring.ts';
+import { planListAuthoring } from './plan-list-authoring.ts';
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
 // The planner is pure with respect to the document: it reads a snapshot and produces ops. Every
 // question ("what does inserting a paragraph before another one do to identity", "what does
@@ -10,9 +30,8 @@
 //    decisions were made against.
 //
 // 2. COMMANDS ARE PLANNED FROM THE START OF THE BATCH AND APPLIED IN ORDER. Offsets a caller
-//    supplies are validated against the state it could see. Inside the transaction the ops run
-//    in sequence, so two writes to one paragraph shift each other exactly as two sequential
-//    edits would.
+//    supplies are validated against the state it could see. Disjoint plain text edits rebase
+//    their operations and result ranges as earlier commands change that paragraph.
 //
 // 3. A PARAGRAPH THAT ONE COMMAND RESTRUCTURES BELONGS TO THAT COMMAND. Splitting, deleting, or
 //    inserting beside a paragraph changes what its offsets mean; a second command addressing it
@@ -31,6 +50,7 @@ import {
 import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import {
   fontProperties,
+  fontVerticalProperties,
   fontRead,
   paragraphFormatProperties,
   paragraphFormatRead,
@@ -53,7 +73,12 @@ import type {
   AutomationSpan,
   AutomationValue,
 } from './protocol.ts';
-import { PARAGRAPH_MARK, type AutomationPackageReads, type AutomationStoryReads } from './reads.ts';
+import {
+  scopedStoryReads,
+  PARAGRAPH_MARK,
+  type AutomationPackageReads,
+  type AutomationStoryReads,
+} from './reads.ts';
 import {
   resolveParagraphHandle,
   resolveParagraphRef,
@@ -82,12 +107,11 @@ import {
   type AutomationLinkRead,
 } from './links.ts';
 import { listReads, membershipIn, MAX_LIST_LEVEL, type AutomationListRead } from './lists.ts';
-import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
+import { pageSetupProperties } from './sections.ts';
 import { projectedSearchSpans } from './search.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
-import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal } from './plan-proposal.ts';
 import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
@@ -114,7 +138,6 @@ import {
   allControlsUnder,
   contentControlValueOf,
 } from './content-control-input.ts';
-import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import {
   customNodePayloadOf,
   customNodePlacement,
@@ -123,99 +146,12 @@ import {
 } from './custom-node-plan.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 
-/**
- * Characters that mean "a new paragraph" in a document but are merely characters in a run.
- *
- * Writing one into a `w:t` would produce a document whose text reads back with a break the
- * layout does not honour and the paragraph collection does not see. Word's own `insertText`
- * splits paragraphs on these; this slice does not implement that, so it refuses them rather
- * than writing something that means something else. `\u2028`/`\u2029` are here for the same
- * reason: they arrive from pasted HTML and mean line and paragraph separator.
- */
+/** Paragraph-breaking characters cannot be authored as ordinary run text. */
 const PARAGRAPH_BREAKING = /[\r\n\v\f\u2028\u2029]/;
 
 /** Most delimiters one split accepts, and the longest each may be. Both are host input. */
 const MAX_DELIMITERS = 16;
 const MAX_DELIMITER_LENGTH = 64;
-
-/** Whitespace trimmed off the ENDS of an answered range when `trimSpacing` is asked for. */
-const TRIMMABLE = /\s/;
-
-export type PlannedOperation =
-  | { readonly ok: true; readonly kind: 'query'; readonly value: AutomationValue }
-  | {
-      readonly ok: true;
-      readonly kind: 'command';
-      readonly ops: readonly TreeDocOp[];
-      /** Which story the ops address. A batch commits into one story; see `pinWrite`. */
-      readonly story: AutomationStoryId;
-      /**
-       * The op commits as a PACKAGE transaction rather than inside a story's.
-       *
-       * A note's lifecycle rewrites the notes part, the references in every story that cited it,
-       * a relationship and a content-type override, and the store publishes that as its own undo
-       * unit. The host routes it through the port's lifecycle path, and the planner has already
-       * refused it any company — one commit per batch, or the batch is not one transaction.
-       */
-      readonly lifecycle?: boolean;
-      /**
-       * A relationship these ops need, and the ops once the package declares it.
-       *
-       * Present only for an external hyperlink target, and then `ops` is EMPTY: a relationship is a
-       * package fact that outlives a refusal — it lives beside the trees, outside the undo stack —
-       * so minting one while planning left a `Relationship` in `.rels` for a link a later refusal
-       * meant the document never got, on a document that may not even have been writable. Planning
-       * validates the target (see `authorableHyperlinkTarget`, the same gate the mint applies) and
-       * schedules it; the application path mints it after the mode gate has passed and builds the
-       * ops from the id it got back.
-       */
-      readonly relate?: {
-        readonly url: string;
-        readonly ops: (relationshipId: string) => readonly TreeDocOp[];
-      };
-      /** Computed after the commit, so a created paragraph can be named. */
-      readonly answer: (post: AutomationPackageReads) => AutomationValue;
-    }
-  | {
-      readonly ok: true;
-      /**
-       * A comment write, which is a package transaction of its own rather than a tree op.
-       *
-       * See `AutomationDocumentPort.applyCommentWrite`: a reply is markers plus `comments.xml`
-       * plus `commentsExtended.xml` plus a relationship plus a content type, and the engine
-       * already commits that as one thing. Solitary like a lifecycle op, for the same reason.
-       */
-      readonly kind: 'commentWrite';
-      readonly write: AutomationCommentWrite;
-      readonly story: AutomationStoryId;
-      /**
-       * The answer, given the committed state and the id the write minted.
-       *
-       * The id is carried separately because it does not exist until the package transaction runs:
-       * a reply's `w:id` is chosen while writing `comments.xml`, and nothing in the post-commit
-       * reads says which of the part's comments the caller just added.
-       */
-      readonly answer: (
-        post: AutomationPackageReads,
-        commentId: string | undefined
-      ) => AutomationValue;
-    }
-  | {
-      readonly ok: true;
-      /**
-       * A custom-node write: the data part, the node inside it, and the bound control.
-       *
-       * See `AutomationDocumentPort.applyCustomNodeWrite`. Its own kind rather than a command
-       * with ops, because the store the binding quotes does not exist until the write runs — a
-       * `TreeDocOp` carrying the `w:storeItemID` would have to be built from an id nothing has
-       * minted yet. Solitary, like a comment write.
-       */
-      readonly kind: 'customNodeWrite';
-      readonly write: InsertCustomNodeWrite;
-      readonly story: AutomationStoryId;
-      readonly answer: (post: AutomationPackageReads) => AutomationValue;
-    }
-  | { readonly ok: false; readonly error: AutomationError };
 
 /** A position in the symbolic story order. Bound to a real id after the commit. */
 interface Slot {
@@ -223,6 +159,11 @@ interface Slot {
 }
 
 export interface BatchPlannerHost {
+  readonly fieldPageContext?: (
+    story: AutomationStoryId,
+    paragraphId: string,
+    fieldNodeId: string
+  ) => { pageNumber: number; pageNumberText?: string; pageCount: number } | null;
   readonly handles: AutomationHandleTable;
   readonly reads: AutomationPackageReads;
   readonly capabilities: AutomationCapabilities;
@@ -275,84 +216,9 @@ function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
 }
 
-/** Every occurrence of any delimiter in `text`, non-overlapping, in order. */
-function delimiterOccurrences(
-  text: string,
-  delimiters: readonly string[]
-): readonly { readonly start: number; readonly length: number }[] {
-  const found: { start: number; length: number }[] = [];
-  let cursor = 0;
-  while (cursor < text.length) {
-    let best: { start: number; length: number } | null = null;
-    for (const delimiter of delimiters) {
-      const at = text.indexOf(delimiter, cursor);
-      if (at < 0) continue;
-      // Earliest wins; at the same position the LONGEST wins, so a two-character delimiter is
-      // not shadowed by a one-character one that happens to be its prefix.
-      if (!best || at < best.start || (at === best.start && delimiter.length > best.length))
-        best = { start: at, length: delimiter.length };
-    }
-    if (!best) break;
-    found.push(best);
-    cursor = best.start + best.length;
-  }
-  return found;
-}
-
-/**
- * The paragraph `setSectionProperties` should resolve a section from.
- *
- * A section is ended by the paragraph whose mark carries its `w:sectPr`, so that paragraph names
- * it exactly. The FINAL section is the exception: no mark closes it — the body-level `w:sectPr`
- * governs whatever is left — so the story's last paragraph names it, provided that paragraph is
- * not itself a section mark. When it is, the trailing blocks are not paragraphs and there is
- * nothing to anchor to; the caller is told rather than having another section written.
- */
-function anchorForSection(
-  body: AutomationStoryReads,
-  sections: readonly AutomationSectionRead[],
-  index: number
-): string | null {
-  const own = sections[index]?.markParagraphId ?? null;
-  if (own !== null) return own;
-  const ids = body.paragraphIds;
-  const last = ids[ids.length - 1];
-  if (last === undefined) return null;
-  const marks = new Set(
-    sections.map((section) => section.markParagraphId).filter((id): id is string => id !== null)
-  );
-  return marks.has(last) ? null : last;
-}
-
-/** Whether both ends of a range still name a paragraph and an offset inside it. */
-function placeable(range: ResolvedRange, reads: AutomationStoryReads): boolean {
-  for (const point of [range.start, range.end]) {
-    const text = reads.rawText(point.paragraphId);
-    if (text === null || point.offset > text.length) return false;
-  }
-  return true;
-}
-
-/** `[start, end)` narrowed past leading and trailing whitespace. */
-function trimmed(text: string, start: number, end: number): readonly [number, number] {
-  let from = start;
-  let to = end;
-  while (from < to && TRIMMABLE.test(text[from] as string)) from += 1;
-  while (to > from && TRIMMABLE.test(text[to - 1] as string)) to -= 1;
-  return [from, to];
-}
-
-/**
- * One story's planning state.
- *
- * PER STORY rather than per batch, because everything in it is addressed in one story's
- * coordinates: a symbolic paragraph order, the claims that keep two commands from planning
- * against the same paragraph, and the slots a structural command leaves for `settle` to bind. A
- * single shared set of those would have a header's paragraph conflicting with a body paragraph
- * that shares nothing but a position, and would settle created paragraphs against the wrong
- * story's reads.
- */
+/** Planning state remains separate for each story and scoped body. */
 interface StoryPlan {
+  externalCreatedCount: number;
   readonly reads: AutomationStoryReads;
   /** The symbolic story order: bound slots for paragraphs that exist, unbound for created ones. */
   readonly order: Slot[];
@@ -361,19 +227,11 @@ interface StoryPlan {
   /** Paragraphs a command has restructured, and paragraphs any command has touched. */
   readonly restructured: Set<string>;
   readonly touched: Set<string>;
+  readonly textEdits: TextEditLedger;
   /** Property containers a command has written, as `container:paragraphId` (`claimFormatting`). */
   readonly formatted: Set<string>;
-  /**
-   * Paragraphs a queued selection covers.
-   *
-   * Tracked because a selection is applied AFTER the transaction while its coordinates were
-   * resolved BEFORE it, so a batch that both selects a paragraph and changes it would move the
-   * reader's caret to a position the change invalidated — or into a paragraph the change removed.
-   * Which of the two the caller wrote first cannot matter, and this is the half that makes it not:
-   * `planSelect` looks at what has been edited, and every edit looks at this.
-   */
+  /** Selections resolve before writes but apply afterward; edits cannot share their paragraphs. */
   readonly selected: Set<string>;
-  /** Identity moves to apply after the commit: the caller's handle for `from` must name `to`. */
   readonly retargets: { readonly from: string; readonly slot: Slot }[];
 }
 
@@ -382,8 +240,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const packageReads = host.reads;
 
   const plans = new Map<string, StoryPlan>();
+  // Partial flag writes through aliases compose against earlier writes in this batch.
+  // Only own flags are staged; canonical validation still enforces ancestor protection.
+  const controlLocks = new Map<StoryPlan, Map<string, ContentControlLock>>();
   const planFor = (reads: AutomationStoryReads): StoryPlan => {
-    const key = storyKey(reads.story);
+    const key = `${storyKey(reads.story)}:${reads.root.id}`;
     const existing = plans.get(key);
     if (existing) return existing;
     const slotById = new Map<string, Slot>();
@@ -393,12 +254,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return slot;
     });
     const fresh: StoryPlan = {
+      externalCreatedCount: 0,
       reads,
       order,
       slotById,
       created: [],
       restructured: new Set<string>(),
       touched: new Set<string>(),
+      textEdits: new TextEditLedger(),
       formatted: new Set<string>(),
       selected: new Set<string>(),
       retargets: [],
@@ -410,13 +273,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
     [];
   const commandPolicy = createBatchCommandPolicy();
+  let dynamicSolitary = false;
   /** The one story this batch writes into, pinned by its first command. */
   let writeStory: StoryPlan | null = null;
 
-  /**
-   * Claim the batch's single write story, or refuse a second one. `TreePackageStore` commits per
-   * story, so crossing stories would create two revisions, two undo units, and partial publication.
-   */
+  /** Keep every command within the batch's single atomic write story. */
   const pinWrite = (plan: StoryPlan): PlannedOperation | null => {
     if (writeStory === null) {
       writeStory = plan;
@@ -574,7 +435,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const touch = (plan: StoryPlan, paragraphId: string): PlannedOperation | null => {
     const selection = selectionConflict(plan, paragraphId);
     if (selection) return selection;
-    if (plan.restructured.has(paragraphId)) {
+    if (plan.restructured.has(paragraphId) || plan.textEdits.has(paragraphId)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch restructures that paragraph',
@@ -585,23 +446,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return null;
   };
 
-  /**
-   * Claim one of a paragraph's property CONTAINERS for a formatting write.
-   *
-   * Per container rather than per paragraph, and the distinction is the difference between the
-   * ordinary shape of a formatting script working and not. A property write replaces the container
-   * it names, so each op carries that container's existing children forward — read from the tree
-   * as it was BEFORE the batch. Two writes to the SAME container are therefore refused: the second
-   * carries children the first has already superseded, so the caller would have asked for two
-   * things and silently got one. Two writes to DIFFERENT containers are independent — the run and
-   * mark properties a font write touches are exactly the children a paragraph-property write keeps
-   * as authored, and the other way round — so `font.bold = true` and `alignment = 'Right'` on one
-   * paragraph in one sync are one batch and both land.
-   */
+  /** Different property containers may compose; two writes to one container must refuse. */
   const claimFormatting = (
     plan: StoryPlan,
     paragraphId: string,
-    container: 'runs' | 'paragraph'
+    container: 'runs' | 'paragraph' | `list:${string}:${number}`
   ): PlannedOperation | null => {
     const claimed = `${container}:${paragraphId}`;
     if (plan.formatted.has(claimed)) {
@@ -674,32 +523,57 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return query({ kind: 'spans', spans: searched.spans });
   };
 
-  const planInsertText = (plan: StoryPlan, at: ResolvedPoint, text: string): PlannedOperation => {
-    if (typeof text !== 'string')
-      return refuse('unsupported-content', 'insertText needs text', 'text');
-    if (PARAGRAPH_BREAKING.test(text)) {
-      return refuse(
-        'unsupported-content',
-        'text carrying a paragraph mark is not written by this host',
-        'paragraph-mark-in-text'
-      );
-    }
+  const planPlainText = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    text: string,
+    prepend = false
+  ): PlannedOperation => {
+    const paragraphId = range.start.paragraphId;
+    const conflict = plan.textEdits.has(paragraphId)
+      ? selectionConflict(plan, paragraphId)
+      : plan.touched.has(paragraphId)
+        ? refuse(
+            'conflicting-operations',
+            'text edits cannot share a paragraph with other edits',
+            paragraphId
+          )
+        : touch(plan, paragraphId);
+    if (conflict) return conflict;
+    return planPlainTextEdit(plan.textEdits, range, text, handles, prepend);
+  };
+
+  const planInsertText = (
+    plan: StoryPlan,
+    at: ResolvedPoint,
+    text: string,
+    prepend = false
+  ): PlannedOperation => {
+    if (typeof text !== 'string' || PARAGRAPH_BREAKING.test(text))
+      return refuse('unsupported-content', 'insertText needs text without paragraph marks', 'text');
     const pin = pinWrite(plan);
     if (pin) return pin;
-    const conflict = touch(plan, at.paragraphId);
+    const tracked = host.replacementLanding?.(at.paragraphId, at.offset, at.offset) != null;
+    const promptRefusal =
+      !tracked && placeholderInsertionRefusal(plan.reads.part, at.paragraphId, at.offset, text);
+    if (promptRefusal) return promptRefusal;
+    if (!tracked && isPlainTextTarget(plan.reads.part, at.paragraphId, at.offset))
+      return planPlainText(plan, { start: at, end: at }, text, prepend);
+    const conflict = claim(plan, at.paragraphId);
     if (conflict) return conflict;
-    const ops: TreeDocOp[] =
-      text.length === 0
-        ? []
-        : [{ op: 'insertText', paragraphId: at.paragraphId, offset: at.offset, text }];
-    const answer = (): AutomationValue => ({
-      kind: 'span',
-      span: spanOf({
-        start: at,
-        end: { ...at, offset: at.offset + text.length },
+    const ops: TreeDocOp[] = text.length
+      ? [{ op: 'insertText', paragraphId: at.paragraphId, offset: at.offset, text }]
+      : [];
+    return {
+      ok: true,
+      kind: 'command',
+      ops,
+      story: plan.reads.story,
+      answer: () => ({
+        kind: 'span',
+        span: spanOf({ start: at, end: { ...at, offset: at.offset + text.length } }),
       }),
-    });
-    return { ok: true, kind: 'command', ops, story: plan.reads.story, answer };
+    };
   };
 
   const planReplaceSpan = (
@@ -725,9 +599,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const pin = pinWrite(plan);
     if (pin) return pin;
 
+    const struckEnd = ids.length === 1 ? range.end.offset : (reads.rawText(first) ?? '').length;
+    const landing = host.replacementLanding?.(first, range.start.offset, struckEnd);
+    if (
+      ids.length === 1 &&
+      landing == null &&
+      isPlainTextTarget(reads.part, first, range.start.offset)
+    )
+      return planPlainText(plan, range, text);
     if (ids.length === 1) {
-      const conflict = touch(plan, first);
+      const conflict = claim(plan, first);
       if (conflict) return conflict;
+      if (landing == null) return planSingleTextReplacement(reads.part, range, text, handles);
       if (range.end.offset > range.start.offset) {
         ops.push({
           op: 'deleteText',
@@ -764,30 +647,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
     }
 
-    // WHERE THE TEXT GOES. In suggesting mode the deletion strikes the words in place and the
-    // replacement belongs after them — Word's order, the order the keyboard writes, and the
-    // adjacency the review lane pairs into one card. The owner's landing rule says where that
-    // is: past the struck stretch, minus whatever of it was this author's own pending
-    // insertion, which leaves. With no rule, or none that tracks, the words are simply gone
-    // and the range start is the spot. The answer is that same spot, so a caller that
-    // formats or comments on what it just wrote addresses the new text; with an empty `text`
-    // it is where a replacement would have gone.
-    //
-    // ALWAYS THE FIRST PARAGRAPH, past its own struck tail. The keyboard puts a spanning
-    // replacement in the last paragraph instead, and matching that here refused the batch
-    // outright: the proposed merge REALLY merges when the first paragraph's mark is this
-    // author's own pending insertion, so the last paragraph leaves the tree and an op naming
-    // it vetoes the transaction. The two lanes therefore still pair a spanning replacement
-    // into different review cards; a refused edit is the worse of the two.
-    // Read against the document as the batch was PLANNED, like every offset a batch carries:
-    // a second `replaceSpan` earlier in the same paragraph shifts this one, and a caller
-    // orders such a batch back to front. The landing inherits that constraint, no more.
-    // RAW text, the offset authority the `deleteText` above measures with. The projected
-    // reading expands a field to its result, so a paragraph holding one made the struck
-    // stretch a range that does not exist — and the landing computed from it aimed past the
-    // paragraph's end, refusing the whole scripted replacement as `offset-out-of-range`.
-    const struckEnd = ids.length === 1 ? range.end.offset : (reads.rawText(first) ?? '').length;
-    const landing = host.replacementLanding?.(first, range.start.offset, struckEnd);
+    // Tracked deletions retain text. Their host-provided landing has no plain
+    // length delta, so these edits claim their paragraph and cannot compose.
     const at = landing ?? range.start.offset;
     if (text.length > 0) ops.push({ op: 'insertText', paragraphId: first, offset: at, text });
 
@@ -800,21 +661,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   /**
-   * Empty the WHOLE story and write `text` into what is left of it.
-   *
-   * Not the same plan as replacing a stretch of a story, and the difference is structural. A
-   * stretch is deleted by removing text and joining what remains of the two ends; a story that
-   * holds a table has no such join — `joinParagraphs` refuses across a cell boundary, because two
-   * cells' paragraphs are not adjacent siblings — so "empty this story" takes the BLOCKS out
-   * instead and keeps one paragraph to write into. That is also what Word leaves behind: a body
-   * with no paragraph at all is not a document, it is a document with nowhere to put the caret.
-   *
-   * WHAT SURVIVES IS DELIBERATE. A paragraph whose mark ends a section stays and is emptied rather
-   * than removed, because removing it would merge its section into the next one and take that
-   * section's page size, orientation and headers over every page this one governed. A paragraph
-   * inside a block-level content control stays for a plainer reason: `deleteBlock` does not name a
-   * `w:sdt`, so the control is not a block this plan can remove, and emptying its paragraphs is the
-   * honest half of the job. Everything else — paragraphs, tables — goes.
+   * Whole-body replacement removes blocks rather than joining text across table cells.
+   * Preserve section-owning paragraphs and paragraphs within block content controls.
    */
   const planReplaceStory = (plan: StoryPlan, text: string): PlannedOperation => {
     const reads = plan.reads;
@@ -1157,7 +1005,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         share.paragraphId,
         share.start,
         share.end,
-        properties.value,
+        properties.value.filter((property) => property.localName !== 'vertAlign'),
         host.displayMode
       )) {
         ops.push({
@@ -1165,7 +1013,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           paragraphId: share.paragraphId,
           start: edit.start,
           end: edit.end,
-          properties: edit.properties,
+          properties: fontVerticalProperties(edit.properties, request),
           ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
         });
       }
@@ -1173,7 +1021,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId: share.paragraphId,
-          properties: mergedParagraphMarkProperties(part, share.paragraphId, properties.value),
+          properties: fontVerticalProperties(
+            mergedParagraphMarkProperties(
+              part,
+              share.paragraphId,
+              properties.value.filter((property) => property.localName !== 'vertAlign')
+            ),
+            request
+          ),
         });
       }
     }
@@ -1408,8 +1263,19 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // REFUSED FOR PROSE, not silently numbered: `setListLevel` writes `w:ilvl` inside an existing
     // `w:numPr`, and a paragraph with none is not a list item. Numbering it here would need a
     // `w:numId` this operation was never given.
-    if (!membershipIn(plan.reads, paragraphId))
+    const membership = membershipIn(plan.reads, paragraphId);
+    if (!membership)
       return refuse('unsupported-content', 'that paragraph is not in a list', paragraphId);
+    if (
+      !packageReads.package ||
+      !automationListLevelExists(packageReads.package, membership.numId, level)
+    ) {
+      return refuse(
+        'unsupported-content',
+        'list level is not defined; configure that level first',
+        paragraphId
+      );
+    }
     const pin = pinWrite(plan);
     if (pin) return pin;
     // The paragraph's PROPERTIES container, the same one a paragraph-format write claims: both
@@ -1490,8 +1356,29 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const collapsed =
       range.start.paragraphId === range.end.paragraphId && range.start.offset === range.end.offset;
 
-    // UNLINK. The element goes, the runs stay: their text, their formatting and their order are
-    // not the link's, it only wrapped them.
+    const partial =
+      existing && (range.start.offset !== existing.start || range.end.offset !== existing.end);
+    const bounds = partial ? { range: { start: range.start.offset, end: range.end.offset } } : {};
+    if (partial) {
+      const paragraph = reads.node(existing.paragraphId);
+      const link =
+        paragraph?.kind === 'paragraph'
+          ? paragraph.children.find((child) => child.id === existing.id)
+          : undefined;
+      if (
+        collapsed ||
+        !link ||
+        !isTextHyperlink(link) ||
+        paragraph?.kind !== 'paragraph' ||
+        !paragraph.children.some((child) => child.id === existing.id)
+      ) {
+        return refuse(
+          'unsupported-capability',
+          'partial hyperlink edits require ordinary text in a paragraph'
+        );
+      }
+    }
+
     if (target.length === 0) {
       if (!existing) return refuse('unsupported-content', 'that text is not a link', 'no-link');
       const pin = pinWrite(plan);
@@ -1501,15 +1388,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return {
         ok: true,
         kind: 'command',
-        ops: [{ op: 'removeHyperlink', linkId: existing.id }],
+        ops: [{ op: 'removeHyperlink', linkId: existing.id, ...bounds }],
         story: reads.story,
         answer: () => APPLIED,
       };
     }
 
-    // An anchor names a bookmark in THIS document, so it is resolved against the story rather
-    // than trusted: a jump to a name nothing declares lands nowhere, and writing it would put
-    // that dead end in the file.
     let aimed: { readonly anchor?: string } = {};
     /** The external target to mint for, once the batch is allowed to write. */
     let external: string | null = null;
@@ -1519,9 +1403,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return refuse('unsupported-content', 'this document declares no such bookmark', target);
       aimed = { anchor: name };
     } else {
-      // NULL IS THE SECURITY ANSWER as much as the validity one: a refused scheme, a target that
-      // is not an absolute URI, a string too long to be one. Refused here, while planning, so no op
-      // is staged and — because this only READS the rules — nothing about the package moves either.
       if (authorableHyperlinkTarget(target) === null)
         return refuse('unsupported-content', 'this engine will not author that target', 'target');
       external = target;
@@ -1554,13 +1435,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             answer: () => APPLIED,
           };
 
-    // RETARGET rather than wrap, when the span is already inside a link: replacing the element
-    // would throw away its authored `w:history` and `w:tgtFrame` and its identity, and wrapping
-    // it again would nest one link inside another — markup Word does not write.
     if (existing) {
       const conflict = touch(plan, existing.paragraphId);
       if (conflict) return conflict;
-      return staged((aim) => ({ op: 'setHyperlinkTarget', linkId: existing.id, ...aim }));
+      return staged((aim) => ({
+        op: 'setHyperlinkTarget',
+        linkId: existing.id,
+        ...bounds,
+        ...aim,
+      }));
     }
 
     if (collapsed)
@@ -1574,8 +1457,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     }
     const conflict = touch(plan, range.start.paragraphId);
     if (conflict) return conflict;
-    // `Hyperlink` is marked on the runs only when the document DEFINES it: a `w:rStyle` naming a
-    // style that is not there paints nothing and reads back as a style the document lacks.
     const styleId = reads.styles().idOf('hyperlink');
     return staged((aim) => ({
       op: 'insertHyperlink',
@@ -1639,6 +1520,30 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
+    const virtual = planVirtualFurniture(operation, host, (reads) =>
+      createBatchPlanner({ ...host, reads })
+    );
+    if (virtual) {
+      if (trackingAuthor && virtual.ok && virtual.kind === 'command')
+        return refuse('unsupported-content', 'header/footer creation cannot be tracked');
+      return virtual;
+    }
+    const table = planTableOperation(operation, {
+      handles,
+      reads: packageReads,
+      admitWrite: (reads, count, paragraphIds) => {
+        const plan = planFor(reads);
+        const refusal = pinWrite(plan);
+        if (refusal) return refusal;
+        for (const id of paragraphIds) {
+          const conflict = claim(plan, id);
+          if (conflict) return conflict;
+        }
+        plan.externalCreatedCount += count;
+        return null;
+      },
+    });
+    if (table) return table;
     const tracked = trackingAuthor !== undefined;
     if (tracked && operation.op === 'insertText') {
       operation = {
@@ -1657,6 +1562,63 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       };
     }
     switch (operation.op) {
+      case 'getFields':
+      case 'getField':
+      case 'setFieldCode':
+      case 'deleteField':
+      case 'updateFieldResult':
+      case 'insertField':
+        return planFields(
+          operation,
+          handles,
+          packageReads,
+          (story, paragraphId, resultOnly) => {
+            const plan = planFor(story);
+            return pinWrite(plan) ?? (resultOnly ? null : claim(plan, paragraphId));
+          },
+          host.fieldPageContext
+        );
+      case 'getInlinePictures':
+      case 'getInlinePicture':
+      case 'setInlinePicture':
+      case 'deleteInlinePicture':
+      case 'insertInlinePicture':
+        return planPictures(operation, handles, packageReads, (story, paragraphId) => {
+          const plan = planFor(story);
+          return pinWrite(plan) ?? claim(plan, paragraphId);
+        });
+      case 'insertBreak':
+        return planBreakOperation(
+          operation,
+          handles,
+          packageReads,
+          (story, paragraphId, createdCount) => {
+            const plan = planFor(story);
+            const refusal = pinWrite(plan) ?? claim(plan, paragraphId);
+            if (!refusal) plan.externalCreatedCount += createdCount;
+            return refusal;
+          }
+        );
+      case 'startNewList':
+      case 'attachToList':
+      case 'detachFromList':
+      case 'setListLevelFormat':
+        return planListAuthoring(
+          operation,
+          handles,
+          packageReads,
+          (story, paragraphId, numbering) => {
+            const plan = planFor(story);
+            return (
+              pinWrite(plan) ??
+              claimFormatting(
+                plan,
+                paragraphId,
+                numbering ? `list:${numbering.numId}:${numbering.level}` : 'paragraph'
+              )
+            );
+          }
+        );
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
 
@@ -1680,6 +1642,21 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         });
       }
 
+      case 'getRange': {
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        if (!resolved.value) return refuse('invalid-offset', 'empty story');
+        if (!['Whole', 'Content', 'Start', 'End'].includes(operation.location))
+          return refuse('unsupported-content', 'unsupported range location');
+        const range = resolved.value;
+        const selected =
+          operation.location === 'Start'
+            ? { start: range.start, end: range.start }
+            : operation.location === 'End'
+              ? { start: range.end, end: range.end }
+              : range;
+        return query({ kind: 'span', span: spanValue(selected, handles) });
+      }
       case 'getSpanParagraphs': {
         const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
@@ -1773,7 +1750,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!at.ok) return refuse(at.code, 'that is not a place to insert at', at.detail);
         const story = packageReads.story(at.value.story);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
-        return planInsertText(planFor(story), at.value, operation.text);
+        return planInsertText(
+          planFor(story),
+          at.value,
+          operation.text,
+          'at' in operation.at && operation.at.at === 'start'
+        );
       }
 
       case 'replaceSpan': {
@@ -1958,12 +1940,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             'that is not a furniture variant',
             String(operation.variant)
           );
-        if (!packageReads.story(story))
-          return refuse(
-            'invalid-handle',
-            'this document declares no such header or footer',
-            storyKey(story)
-          );
+        if (!packageReads.sections()[target.index])
+          return refuse('invalid-handle', 'that section no longer exists');
         return query({ kind: 'handle', handle: handles.body(story) });
       }
 
@@ -2632,7 +2610,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (
           operation.tag === undefined &&
           operation.title === undefined &&
-          operation.lock === undefined
+          operation.lock === undefined &&
+          operation.cannotEdit === undefined &&
+          operation.cannotDelete === undefined
         ) {
           return refuse('unsupported-content', 'nothing to write', 'no-properties');
         }
@@ -2643,9 +2623,36 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             operation.lock
           );
         }
+        for (const value of [operation.cannotEdit, operation.cannotDelete]) {
+          if (value !== undefined && typeof value !== 'boolean')
+            return refuse('unsupported-content', 'lock flags must be boolean');
+        }
         const plan = planFor(found.reads);
+        let lock = operation.lock;
+        if (operation.cannotEdit !== undefined || operation.cannotDelete !== undefined) {
+          const own =
+            lock ??
+            controlLocks.get(plan)?.get(found.control.nodeId) ??
+            found.control.properties.lock;
+          const edit =
+            operation.cannotEdit ?? (own === 'contentLocked' || own === 'sdtContentLocked');
+          const removal =
+            operation.cannotDelete ?? (own === 'sdtLocked' || own === 'sdtContentLocked');
+          lock = edit
+            ? removal
+              ? 'sdtContentLocked'
+              : 'contentLocked'
+            : removal
+              ? 'sdtLocked'
+              : 'unlocked';
+        }
         const pin = pinWrite(plan);
         if (pin) return pin;
+        if (lock !== undefined) {
+          const staged = controlLocks.get(plan) ?? new Map<string, ContentControlLock>();
+          staged.set(found.control.nodeId, lock);
+          controlLocks.set(plan, staged);
+        }
         return {
           ok: true,
           kind: 'command',
@@ -2658,7 +2665,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
               // `title` in the object model is `w:alias` in the file. One name each side, and the
               // translation happens here rather than leaking Word's UI wording into the tree.
               ...(operation.title === undefined ? {} : { alias: operation.title }),
-              ...(operation.lock === undefined ? {} : { lock: operation.lock }),
+              ...(lock === undefined ? {} : { lock }),
             },
           ],
           answer: () => APPLIED,
@@ -2798,9 +2805,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             operation.subtype
           );
         }
+        const existingControlIds = new Set(allControlsUnder(story.root).map((node) => node.id));
         const plan = planFor(story);
         const pin = pinWrite(plan);
         if (pin) return pin;
+        const conflict = claim(plan, range.start.paragraphId);
+        if (conflict) return conflict;
         return {
           ok: true,
           kind: 'command',
@@ -2816,7 +2826,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
               ...(operation.title === undefined ? {} : { alias: operation.title }),
             },
           ],
-          answer: () => APPLIED,
+          answer: (post) => {
+            if (!operation.returnHandle) return APPLIED;
+            const after = post.story(story.story);
+            const created =
+              after &&
+              allControlsUnder(after.root).find((node) => !existingControlIds.has(node.id));
+            if (!created) throw new Error('content control insertion did not create a control');
+            return { kind: 'handle', handle: handles.contentControl(created.id, story.story) };
+          },
         };
       }
 
@@ -2858,9 +2876,16 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   return {
     plan(operation, trackingAuthor) {
+      if (dynamicSolitary && isAutomationCommand(operation))
+        return refuse('conflicting-operations', 'header/footer creation must commit alone');
       const conflict = commandPolicy.conflict(operation);
       if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
       const planned = plan(operation, trackingAuthor);
+      if (planned.ok && planned.kind === 'command' && planned.solitary) {
+        if (commandPolicy.hasCommands)
+          return refuse('conflicting-operations', 'header/footer creation must commit alone');
+        dynamicSolitary = true;
+      }
       if (planned.ok) commandPolicy.note(operation);
       return planned;
     },
@@ -2875,7 +2900,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // have created paragraphs. A read-only batch has nothing to bind at all.
       const pinned = writeStory;
       if (pinned) {
-        const after = post.story(pinned.reads.story);
+        const fullAfter = post.story(pinned.reads.story);
+        const scopedRoot = fullAfter && findNode(fullAfter.part, pinned.reads.root.id);
+        const after =
+          fullAfter && scopedRoot && scopedRoot.id !== fullAfter.root.id
+            ? scopedStoryReads(fullAfter, scopedRoot)
+            : fullAfter;
         if (!after) {
           return {
             ok: false,
@@ -2884,10 +2914,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         }
         const before = new Set(pinned.reads.paragraphIds);
         const fresh = after.paragraphIds.filter((id) => !before.has(id));
-        if (fresh.length !== pinned.created.length) {
+        if (fresh.length !== pinned.created.length + pinned.externalCreatedCount) {
           return {
             ok: false,
-            detail: `planned ${String(pinned.created.length)} new paragraphs, the transaction made ${String(fresh.length)}`,
+            detail: `planned ${String(pinned.created.length + pinned.externalCreatedCount)} new paragraphs, the transaction made ${String(fresh.length)}`,
           };
         }
         // Reading order on both sides: `created` is ordered by the symbolic story position each

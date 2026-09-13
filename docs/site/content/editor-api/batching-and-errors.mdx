@@ -1,0 +1,198 @@
+---
+title: 'Batching, loading, and errors'
+description: 'Load explicit properties, manage proxy lifetimes, handle atomic batches, and recover from stable error codes.'
+category: 'Editing API'
+order: 52
+---
+
+All document objects are proxies. Obtain them through `context.document`, rather than constructing them.
+A `RunCallback<T>` receives a `RequestContext` and returns `Promise<T>`.
+`runtime.run()` returns that callback's result.
+Returning from `run()` does not flush pending commands. Use an explicit final `await context.sync()`.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Load collections, then item properties
+
+`ClientObject.load(option?)` queues reads and returns the same proxy.
+Its `context` property identifies the owning request context.
+A navigation getter returns another proxy; it does not load that proxy's scalar properties.
+
+Load collection membership before loading each item's properties:
+
+```ts
+const headings = await runtime.run(async (context) => {
+  const paragraphs = context.document.paragraphs;
+  paragraphs.load({ select: 'items', top: 100, skip: 0 });
+  await context.sync();
+
+  for (const paragraph of paragraphs.items) {
+    paragraph.load(['text', 'style']);
+  }
+  await context.sync();
+  return paragraphs.items.map((paragraph) => ({
+    text: paragraph.text,
+    style: paragraph.style,
+  }));
+});
+```
+
+Each loop queues independent loads. Neither loop performs a sync for each item.
+The result contains plain data that can leave the run safely.
+Collections expose read-only `items` arrays. Item objects remain editable proxies.
+Reload values after writes when your next decision needs the changed document.
+
+`LoadOption` accepts a property string, a string array, or `LoadQueryOptions`:
+
+| Form or option                                    | Meaning                                                    |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `load('text')`                                    | Load one scalar property                                   |
+| `load('text,style')` or `load(['text', 'style'])` | Load named scalar properties                               |
+| `{ select: 'items', top: 20, skip: 40 }`          | Load a collection window                                   |
+| `load()`                                          | Load the object's default selection; prefer explicit names |
+| `expand`                                          | Reserved; non-empty values fail with `InvalidArgument`     |
+
+`top` and `skip` require nonnegative integers and apply to collections.
+Unknown properties and options fail explicitly.
+Nested paths such as `items/text` do not work.
+Load `paragraph.font` or another navigation object directly.
+
+## Separate dependent work
+
+Each `sync(): Promise<void>` commits its writes atomically.
+Calling `sync()` captures the queued operations immediately, including coalesced property writes.
+Setters called while that sync awaits prerequisite reads belong to the next sync.
+Await each sync before starting another sync on the same context.
+Supported read-derived proxies can require additional read-only transport batches before the write transaction.
+These phases share a document revision.
+A concurrent edit produces `StaleDocument`, without replaying the write.
+
+Objects returned by insertions need a completed sync before dependent edits:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.insertParagraph('Summary', 'End');
+  await context.sync();
+  paragraph.font.bold = true;
+  paragraph.spaceAfter = 12;
+  await context.sync();
+});
+```
+
+The two syncs are separate transactions. A later failure does not undo an earlier successful sync.
+Batch independent writes when they should succeed or fail together.
+Use separate syncs for conflicting structural edits, solitary table mutations, and break insertion.
+Different levels of an existing list can share a sync; competing aliases for one level can conflict.
+Keep field result updates separate from layout-changing writes.
+See each topic's supported batching limits.
+
+Disjoint plain-text edits can batch within an ordinary paragraph with direct text runs.
+Their returned ranges account for that batch's changes.
+Older ranges still retain snapshot offsets across later batches; tracking does not change this behavior.
+After editing a paragraph, search again before a later dependent edit.
+Same-paragraph text mixed with formatting, hyperlinks, or structural writes refuses atomically.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for the supported domain.
+
+## Handle an absent item
+
+Use the collection's null-object accessor when absence is expected:
+
+```ts
+await runtime.run(async (context) => {
+  const first = context.document.body.search('Optional clause').getFirstOrNullObject();
+  first.load('text');
+  await context.sync();
+  if (first.isNullObject) return;
+  console.log(first.text);
+});
+```
+
+Check `isNullObject` after sync. Do not read other properties on a null object.
+A non-null accessor such as `getFirst()` fails with `ItemNotFound` when its collection is empty.
+Collections expose different accessors; check the [API member directory](/docs/2.x/editor-api/reference).
+
+## Keep proxies within their lifetime
+
+A proxy remains usable across syncs within its run.
+An untracked proxy becomes invalid when the run finishes.
+Keep plain data in model prompts and job queues.
+
+For intentional proxy reuse, track the object and explicitly adopt it in a later run:
+
+```ts
+const paragraph = await runtime.run(async (context) => {
+  const first = context.document.paragraphs.getFirst();
+  first.load('text');
+  await context.sync();
+  context.trackedObjects.add(first);
+  return first;
+});
+
+await runtime.run(paragraph, async (context) => {
+  paragraph.load('text');
+  await context.sync();
+  console.log(paragraph.text);
+  context.trackedObjects.remove(paragraph);
+});
+```
+
+`TrackedObjects.add()` and `remove()` accept one `ClientObject` or an array.
+`runtime.run(objectOrArray, callback)` adopts tracked objects from completed runs of that runtime.
+Await the first run before adoption. Tracking does not prevent document edits or deletion of the target.
+No proxy survives runtime disposal.
+
+`ClientResult<T>` is an exported support type with `isLoaded` and `value`.
+Read `value` only after its producing sync; otherwise it throws `ValueNotLoaded`.
+It is not a promise. The document model does not expose a public result-producing method in this subset.
+
+## Recover by error code
+
+Catch both synchronous call failures and rejected syncs.
+Use `isDocxEditorError(error)` or `DocxEditorError`, then inspect `code`.
+Do not match message text.
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+try {
+  await runtime.run(async (context) => {
+    const target = context.document.body.search('Approved').getFirst();
+    target.insertText('Reviewed', 'Replace');
+    await context.sync();
+  });
+} catch (error) {
+  if (!isDocxEditorError(error)) throw error;
+  if (error.code === 'StaleDocument') {
+    // Start a fresh read and reconsider the target before proposing an edit.
+  } else {
+    throw error;
+  }
+}
+```
+
+| `DocxEditorErrorCode`            | Recovery                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------- |
+| `PropertyNotLoaded`              | Load the named property and sync before reading                                          |
+| `ValueNotLoaded`                 | Complete the result-producing sync                                                       |
+| `InvalidObjectPath`              | Sync a pending object, or obtain a fresh proxy after expiration or deletion              |
+| `ObjectInUse`                    | Await the owning run before adopting its tracked objects                                 |
+| `InvalidArgument`                | Correct the input, property name, location, or document target                           |
+| `ResourceLimitExceeded`          | Inspect `limit`; reject the file or deliberately adjust supported input budgets          |
+| `ItemNotFound`                   | Handle absence or choose a null-object accessor                                          |
+| `NotSupported`, `NotImplemented` | Check host, operation, mode, and document-structure limits; choose a supported operation |
+| `ConflictingChanges`             | Read again and separate dependent edits into different syncs                             |
+| `InvalidRequestContext`          | Start a new run                                                                          |
+| `RuntimeDisposed`                | Create a new runtime                                                                     |
+| `StaleDocument`                  | Start a fresh run, read again, and reconsider the proposed change                        |
+| `DocumentUnavailable`            | Wait for the owning editor to attach a document, then start a new run                    |
+| `GeneralException`               | Report the refusal and inspect the target; do not silently discard document structure    |
+
+`DocxEditorErrorInit` describes `code`, optional `target`, and optional resource or revision metadata.
+`DocxEditorError` exposes the same fields.
+For stale reads, `expectedRevision` and `actualRevision` identify the mismatch when available.
+For input limits, `limit` names the exceeded ZIP, XML, part, or relationship budget.
+Never blindly replay a model edit after a stale read.
+Never disable change tracking automatically to bypass a refusal.
+
+See [Runtime and setup](/docs/2.x/editor-api/runtime) and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).

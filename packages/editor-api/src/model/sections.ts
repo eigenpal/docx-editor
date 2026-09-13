@@ -10,12 +10,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the section itself is mostly navigation: the story it governs, the header and footer stories it
 // declares, and the section after it.
 //
-// `getHeader`/`getFooter` ANSWER A BODY THAT MAY NOT EXIST YET, AND SAY SO. A section with no
-// first-page header inherits the previous section's; a section at the start of a document with none
-// at all has nothing to answer, and the read is refused (`ItemNotFound`) rather than minting the
-// part. Word creates the header when a script asks for it; doing that here would make a READ write
-// to the document, and a header that exists only because it was asked about is a header the author
-// never added. The divergence is recorded in `compat/manifest.json`.
+// A missing header/footer reads as an empty body. Its first content insertion creates
+// the part and its section reference in one transaction. Existing inherited furniture
+// continues to address the inherited story; reads never create document parts.
 
 import {
   ObjectPath,
@@ -40,7 +37,8 @@ import { ModelObject } from './model-object.ts';
  * Capitalised here and lower-case in the engine on purpose: the engine speaks OOXML's vocabulary,
  * and this is the public API's. The mapping lives in this file and nowhere else.
  */
-export type PageOrientation = 'Portrait' | 'Landscape';
+export { PageOrientation } from './editing-enums.ts';
+import { PageOrientation } from './editing-enums.ts';
 
 /** Which header or footer of a section: Word's own three variants. */
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
@@ -108,11 +106,11 @@ export class PageSetup extends ModelObject {
    * Writing it alone SWAPS this section's own dimensions rather than assuming a paper size, so a
    * document of mixed sizes survives a flip with its sizes intact.
    */
-  get orientation(): PageOrientation {
+  get orientation(): PageOrientation | 'Portrait' | 'Landscape' {
     return this.loadedProperty<PageOrientation>('orientation');
   }
 
-  set orientation(value: PageOrientation) {
+  set orientation(value: PageOrientation | 'Portrait' | 'Landscape') {
     const target = `${this.path.label}.orientation`;
     if (value !== 'Portrait' && value !== 'Landscape') fail({ code: 'InvalidArgument', target });
     this.#author('orientation', value === 'Portrait' ? 'portrait' : 'landscape');
@@ -159,10 +157,9 @@ export class PageSetup extends ModelObject {
     const selected = this.selection(request, PAGE_FIELDS);
     if (selected.length === 0) return;
     const label = `${this.path.label}.pageSetup`;
-    const section = this.#section();
     this.read(
       label,
-      () => ({ op: 'getPageSetup', section }),
+      () => ({ op: 'getPageSetup', section: this.#section() }),
       (value) => {
         const setup = hydratedPageSetup(value, label);
         for (const field of selected as readonly PageField[]) {
@@ -187,23 +184,24 @@ export class PageSetup extends ModelObject {
    * the second would have been planned from the section the first already changed.
    */
   #author(field: PageField, value: unknown): void {
-    this.requireAddressable();
+    this.requireUsablePath();
     if (this.#pending) {
       this.#pending[field] = value;
       return;
     }
     const pending: Record<string, unknown> = { [field]: value };
     this.#pending = pending;
-    const section = this.#section();
     const label = `${this.path.label}.${field}`;
     this.commandAnswering(
       `${this.path.label}.pageSetup`,
       () => {
-        this.#pending = undefined;
-        return { op: 'setPageSetup', section, setup: pending };
+        return { op: 'setPageSetup', section: this.#section(), setup: pending };
       },
       (answer) => {
         hydratedApplied(answer, label);
+      },
+      () => {
+        if (this.#pending === pending) this.#pending = undefined;
       }
     );
   }
@@ -278,12 +276,12 @@ export class Section extends ModelObject implements PromisedItem {
     return this.#pageSetup;
   }
 
-  /** The header story of one variant, as a body. `ItemNotFound` where the document has none. */
+  /** The header story, or a virtual empty body created by its first content insertion. */
   getHeader(type: HeaderFooterType): Body {
     return this.#furniture('header', type, 'getHeader');
   }
 
-  /** The footer story of one variant, as a body. `ItemNotFound` where the document has none. */
+  /** The footer story, or a virtual empty body created by its first content insertion. */
   getFooter(type: HeaderFooterType): Body {
     return this.#furniture('footer', type, 'getFooter');
   }
@@ -291,7 +289,6 @@ export class Section extends ModelObject implements PromisedItem {
   /** The next section. `ItemNotFound` at the sync when this is the last one. */
   getNext(): Section {
     const target = `${this.path.label}.getNext`;
-    const own = this.#handle();
     const next = Section.promised(this.context, target, false);
     const document = this.internals.roots().document;
     this.read(
@@ -299,7 +296,7 @@ export class Section extends ModelObject implements PromisedItem {
       () => ({ op: 'getSections', document }),
       (value) => {
         const sections = hydratedHandles(value, target);
-        const at = sections.findIndex((handle) => handle.ref === own.ref);
+        const at = sections.findIndex((handle) => handle.ref === this.#handle().ref);
         const after = at < 0 ? undefined : sections[at + 1];
         if (!after) fail({ code: 'ItemNotFound', target });
         next.hydrateAddress({ kind: 'handle', handle: after });
@@ -319,13 +316,12 @@ export class Section extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.${accessor}`;
     const variant = VARIANTS[type];
     if (variant === undefined) fail({ code: 'InvalidArgument', target });
-    const section = this.#handle();
     const story = Body.promisedStory(this.context, target);
     // THIS object queues the read, because a pending one cannot address the document yet — and it is
     // the section that knows which furniture is being asked for.
     this.read(
       target,
-      () => ({ op: 'getFurniture', section, kind, variant }),
+      () => ({ op: 'getFurniture', section: this.#handle(), kind, variant }),
       (value) => {
         story.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
       }

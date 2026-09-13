@@ -65,9 +65,15 @@ This follows Microsoft's [split-loop and correlated-objects guidance](https://le
 Bound model input and member-property loads. The collection's `items` load still enumerates its members;
 the slice above does not promise server-side collection pagination.
 
-A sync is needed before this implementation can address a newly returned proxy. For example, sync after
-`insertText()` before loading its returned range. Nested collection loads and arbitrary dependent commands
-within one batch are not yet supported. These limits are explicit; do not assume full Office.js behavior.
+Supported read-derived proxies can share one `sync()` with their edits. For example,
+`body.getRange().insertText(text, 'Replace')` and `table.getCell(0, 0).value = text`
+resolve their reads before one atomic write transaction. This can use extra read-only
+transport calls. Every phase uses the same revision; concurrent changes cause `StaleDocument`.
+
+Proxies returned by insertions require a completed `sync()` before dependent operations.
+Do not configure a newly inserted table, image, list, or text range before that sync.
+If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite
+reads can remain loaded after a later command fails.
 
 ## Give each sync a purpose
 
@@ -108,17 +114,17 @@ Earlier successful syncs remain committed. Failed batches are discarded and are 
 
 ## Tracking subset
 
-| Intent                               | Office-shaped API                                                      |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| Track this server agent's text edits | `context.document.changeTrackingMode = 'TrackMineOnly'`                |
-| Insert before or after a range       | `range.insertText(text, 'Before')` or `'After'`                        |
-| Replace a range                      | `range.insertText(text, 'Replace')`                                    |
-| Delete range content                 | `range.delete()` or `range.clear()`                                    |
-| Read the current mode                | `document.load('changeTrackingMode')`, then sync and read the property |
-| Make an intentional permanent edit   | Explicitly set `changeTrackingMode = 'Off'`                            |
+| Intent                             | Office-shaped API                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| Track this agent's text edits      | `context.document.changeTrackingMode = 'TrackMineOnly'`                |
+| Insert before or after a range     | `range.insertText(text, 'Before')` or `'After'`                        |
+| Replace a range                    | `range.insertText(text, 'Replace')`                                    |
+| Delete range content               | `range.delete()` or `range.clear()`                                    |
+| Read the current mode              | `document.load('changeTrackingMode')`, then sync and read the property |
+| Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'`                            |
 
-`Off` is the initial server mode. `TrackMineOnly` needs a configured author and persists for that host session.
-It does not change peers' editing modes or persist a document-wide policy. `TrackAll` and browser-host mode control refuse.
+`Off` is the initial runtime mode. Browser tracked writes require the review module; this property does not change the editor UI mode. `TrackMineOnly` needs a configured author and persists for that host session.
+It does not change peers' editing modes or persist a document-wide policy. `TrackAll` refuses. Browser UI modes remain controlled by the editor host.
 Tracked edits support inline text in one paragraph, including table cells, and refuse targets touching pending revisions.
 Tracked deletion and replacement refuse simple fields with nested fields or other result containers. Direct result runs remain supported.
 Structural and formatting mutations while tracking refuse. Comments and revision decisions remain available.
@@ -127,3 +133,29 @@ Never silently fall back to `Off` when an edit cannot be tracked.
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require
 nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this.
 The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
+
+## Pictures and page fields
+
+Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`.
+Sync before setting properties on the returned picture. Width and height use points.
+New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions.
+Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
+
+Insert a page field with `range.insertField('After', 'Page')` or `'NumPages'`.
+Sync before using the returned field. `field.code = 'NUMPAGES'` changes its instruction;
+`field.updateResult()` computes and stores its result. These calls use separate syncs.
+Field updates can share a sync with other field updates. They cannot share a sync with layout-changing writes.
+
+Headless field calculation requires an explicit `pagination.measurer` when creating the server runtime.
+Use measurements from the document's fonts. Browser runtimes use the editor's measured layout.
+A runtime without pagination refuses `updateResult()` with `NotSupported`. It does not guess the page count.
+Other field instructions remain inert. The authoring subset refuses unsupported field codes and formatting switches.
+
+Character formatting also supports underline, strikethrough, exact Word-palette highlighting, subscript, and superscript.
+`font.underline = 'None'` removes an underline. Setting one script mode to `true` clears the other mode.
+The highlight setter keeps Office's pinned `string` type, although Microsoft documents runtime `null` for clearing.
+The runtime accepts this clearing value. Unsupported highlight colors refuse instead of selecting an approximate color.
+
+The workflow tests cover both hosts and save/reopen:
+`model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, and `model-picture-field-parity.test.ts`.
+The final test includes primary footer creation and a saved `NUMPAGES` result.

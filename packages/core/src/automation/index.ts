@@ -101,3 +101,11 @@ export {
   type ServerAutomationHostRejection,
   type ServerAutomationHostResult,
 } from './server-host.ts';
+
+export {
+  createAutomationPaginationProvider,
+  type AutomationPaginationOptions,
+  paginationSnapshotOf,
+  type AutomationPaginationSnapshot,
+  type AutomationPaginationProvider,
+} from './pagination.ts';

@@ -31,7 +31,12 @@ export type AutomationObjectKind =
   | 'revision'
   | 'bookmark'
   | 'list'
-  | 'contentControl';
+  | 'contentControl'
+  | 'table'
+  | 'tableRow'
+  | 'tableCell'
+  | 'field'
+  | 'inlinePicture';
 
 declare const AUTOMATION_HANDLE_BRAND: unique symbol;
 
@@ -176,6 +181,30 @@ export interface AutomationSpan {
 
 /** What an operation answered with. */
 export type AutomationValue =
+  | { readonly kind: 'field'; readonly field: { readonly code: string } }
+  | {
+      readonly kind: 'table';
+      readonly table: {
+        readonly values: readonly (readonly string[])[];
+        readonly style: string;
+        readonly headerRowCount: number;
+        readonly rowCount: number;
+        readonly columnCount: number;
+      };
+    }
+  | {
+      readonly kind: 'tableCell';
+      readonly cell: {
+        readonly value: string;
+        readonly columnWidth: number;
+        readonly shadingColor: string;
+        readonly verticalAlignment: 'Top' | 'Center' | 'Bottom';
+      };
+    }
+  | {
+      readonly kind: 'inlinePicture';
+      readonly picture: import('./pictures.ts').AutomationInlinePictureRead;
+    }
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }
@@ -298,6 +327,8 @@ export interface AutomationHost {
    * nothing is written at all.
    */
   execute(request: AutomationBatchRequest): AutomationBatchResponse;
+  /** Settle optional pagination resources before a field-update batch. Does not write content. */
+  prepare?(request: AutomationBatchRequest): Promise<void>;
   /** The current document as DOCX bytes, through the normalizing serializer. */
   save(): AutomationSaveResult;
   /** Change notification. Returns an unsubscribe that is safe to call more than once. */

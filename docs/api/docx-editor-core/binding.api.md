@@ -90,7 +90,9 @@ export type StoryScope = {
 export type StoryTargetRejection = 'unknown-scope' | 'dangling-relationship' | 'wrong-relationship-type' | 'external-relationship' | 'bad-relationship-target' | 'missing-part' | 'not-a-story-part' | 'too-many-story-stores';
 
 // @public
-export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'>;
+export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'> & {
+    readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+};
 
 // @public
 export interface TreeApplyResult {

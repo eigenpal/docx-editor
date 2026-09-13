@@ -82,9 +82,20 @@ export type AutomationStagedOps = (
   relate: (url: string) => string | null
 ) => readonly TreeDocOp[] | null;
 
+/** Pure package updates committed atomically with the batch's tree operations. */
+export type AutomationPackageEdit = (pkg: OoxmlPackage) => OoxmlPackage;
+
 export interface AutomationDocumentPort {
+  prepare?(request: import('./protocol.ts').AutomationBatchRequest): Promise<void>;
+  fieldPageContext?(
+    story: import('./stories.ts').AutomationStoryId,
+    paragraphId: string,
+    fieldNodeId: string
+  ): { pageNumber: number; pageNumberText?: string; pageCount: number } | null;
   /** This owner supports host-local Office-shaped tracking independently of browser UI modes. */
   readonly localChangeTracking?: true;
+  /** The owner UI requires edits to be tracked even when this automation runtime is Off. */
+  readonly suggesting?: () => boolean;
   /**
    * Monotonic document revision. One committed batch moves it exactly once.
    *
@@ -134,7 +145,11 @@ export interface AutomationDocumentPort {
    * The ops arrive as {@link AutomationStagedOps} so the relationship an external hyperlink needs is
    * minted here, INSIDE the owner's write gate, rather than while the batch was still being planned.
    */
-  apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult;
+  apply(
+    staged: AutomationStagedOps,
+    scope: StoryScope,
+    packageEdits?: readonly AutomationPackageEdit[]
+  ): AutomationPortApplyResult;
   /**
    * Commit ONE package-level op — a note or furniture lifecycle — as its own transaction.
    *

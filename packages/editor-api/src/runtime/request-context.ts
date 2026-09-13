@@ -5,11 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The context a `run` hands to its callback: one queue, one document, one sync at a time.
 //
-// `sync()` is the only thing in this runtime that talks to the document, and it does so exactly
-// once per call: plan the queued actions in order, send ONE batch, hydrate the answers. That is
-// where atomicity comes from — the host commits every command in a batch as one transaction, so
-// a batch either happens whole or not at all, and the runtime never splits a consumer's `sync()`
-// into several batches behind their back.
+// `sync()` commits all queued writes in one transaction. Read-derived proxy dependencies
+// can require read-only preflight batches. They share one revision with the final write
+// batch, so a concurrent change refuses the sync instead of retargeting an edit.
+// Proxies produced by writes still require a separate sync before dependent operations.
 //
 // CONDITIONAL WRITES. A context that has read from the document remembers the revision it read
 // at, and a later batch that writes is sent conditional on that revision. This is what stops a
@@ -40,7 +39,7 @@ import {
   type ContextInternals,
   type RootHandles,
 } from './internals.ts';
-import { ActionQueue } from './queue.ts';
+import { ActionQueue, type QueuedAction } from './queue.ts';
 import { TrackedObjects } from './tracked-objects.ts';
 
 /** What a context needs from the runtime that made it. */
@@ -68,10 +67,10 @@ export interface RuntimeSession {
 /**
  * What a `run` hands its callback: one queue, one document, one sync at a time.
  *
- * `sync()` is the only thing in this runtime that talks to the document, and it does so exactly
- * once per call — plan the queued actions in order, send ONE batch, hydrate the answers. That is
- * where atomicity comes from: the host commits a batch as one transaction, and the runtime never
- * splits a consumer's `sync()` into several batches behind their back.
+ * `sync()` commits all queued commands in one atomic transaction. Supported read-derived
+ * proxy dependencies can require additional read-only transport calls before that commit.
+ * These reads and the final write share one revision; a concurrent change refuses the sync.
+ * Write-created proxies require a separate sync before dependent operations.
  *
  * Conditional writes come from the same place. A context that has READ from the document
  * remembers the revision it read at, and a later batch that writes goes out conditional on it,
@@ -93,6 +92,7 @@ export class RequestContext {
   #finished = false;
   /** The revision this context last saw. `null` until it has read from the document. */
   #readRevision: number | null = null;
+  #syncInFlight = false;
 
   private constructor(session: RuntimeSession) {
     this.#session = session;
@@ -159,7 +159,7 @@ export class RequestContext {
   }
 
   /**
-   * Send everything queued as one batch and hydrate the answers.
+   * Resolve read prerequisites, then commit queued writes atomically and hydrate answers.
    *
    * An empty queue is not a round trip. Office-shaped code syncs defensively at the end of a
    * batch, and turning "nothing to say" into a host call would make a no-op sync advance a
@@ -167,17 +167,63 @@ export class RequestContext {
    */
   async sync(): Promise<void> {
     this.#internals.assertUsable();
+    if (this.#syncInFlight) fail({ code: 'InvalidRequestContext' });
     const actions = this.#queue.take();
     if (actions.length === 0) return;
 
+    this.#syncInFlight = true;
+    try {
+      let remaining = actions.filter((action) => !action.nullableLoad?.isNull);
+      const hasWrites = actions.some((action) => action.sort === 'write');
+      let pinnedRevision: number | undefined;
+      const blocked = (action: QueuedAction): boolean =>
+        action.dependencies?.some((path) => !path.isAddressable) ?? false;
+      // Read prerequisites never publish edits. Every phase and the final transaction use
+      // one revision so another writer cannot retarget an edit between dependency reads.
+      while (remaining.some(blocked)) {
+        pinnedRevision ??=
+          hasWrites && this.#readRevision !== null
+            ? this.#readRevision
+            : this.#session.host.revision();
+        const ready = remaining.filter((action) => action.sort === 'read' && !blocked(action));
+        if (ready.length === 0)
+          fail({ code: 'InvalidObjectPath', target: remaining.find(blocked)?.label });
+        await this.#dispatch(ready, pinnedRevision);
+        const sent = new Set(ready);
+        remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
+      }
+      if (remaining.length) {
+        const expected =
+          pinnedRevision ??
+          (hasWrites && this.#readRevision !== null ? this.#readRevision : undefined);
+        await this.#dispatch(remaining, expected);
+      }
+    } finally {
+      for (const action of actions) action.dispose?.();
+      this.#syncInFlight = false;
+    }
+  }
+
+  async #dispatch(actions: readonly QueuedAction[], expectedRevision?: number): Promise<void> {
     const planned = planBatch(actions);
-    const conditional = planned.hasWrite && this.#readRevision !== null;
-    const expectedRevision = conditional ? (this.#readRevision as number) : undefined;
     const request: AutomationBatchRequest = {
       operations: planned.operations,
       ...(expectedRevision === undefined ? {} : { expectedRevision }),
     };
-
+    // Resource preparation is read-only. Pin even a write-only first batch before an
+    // asynchronous font/image load gives another writer a chance to change the document.
+    if (this.#session.host.prepare) {
+      const pinned = {
+        ...request,
+        expectedRevision: request.expectedRevision ?? this.#session.host.revision(),
+      };
+      await this.#session.host.prepare(pinned);
+      const response = this.#session.host.execute(pinned);
+      if (!response.ok) throw batchFailure(response, actions, pinned.expectedRevision);
+      settleBatch(actions, response);
+      this.#readRevision = response.revision;
+      return;
+    }
     const response = this.#session.host.execute(request);
     if (!response.ok) throw batchFailure(response, actions, expectedRevision);
     settleBatch(actions, response);

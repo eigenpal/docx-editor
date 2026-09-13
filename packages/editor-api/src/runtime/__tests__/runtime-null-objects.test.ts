@@ -61,7 +61,7 @@ describe('an item that may not be there', () => {
     runtime.dispose();
   });
 
-  test('a null object refuses to be used, and says which object it was', async () => {
+  test('a null object permits scalar loads but refuses writes with its object path', async () => {
     const runtime = createRuntime({ host: openHost(NO_PARAGRAPHS), save: true });
     await runtime.run(async (context) => {
       const missing = context.document.body.paragraphs.getFirstOrNullObject();
@@ -70,7 +70,12 @@ describe('an item that may not be there', () => {
         code: 'InvalidObjectPath',
         target: 'document.body.paragraphs.getFirstOrNullObject()',
       });
-      expect(() => missing.load('text')).toThrowError(expected);
+      missing.load('text');
+      await context.sync();
+      expect(missing.isNullObject).toBe(true);
+      expect(() => missing.text).toThrowError(
+        expect.objectContaining({ code: 'PropertyNotLoaded' })
+      );
       expect(() => missing.insertText('x', 'End')).toThrowError(expected);
     });
     runtime.dispose();

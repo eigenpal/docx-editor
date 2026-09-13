@@ -1,0 +1,155 @@
+---
+title: 'Runtime and setup'
+description: 'Create server, browser, and collaborative runtimes; configure limits, save files, and release resources.'
+category: 'Editing API'
+order: 51
+---
+
+Create one runtime for each document host. Obtain document objects inside `runtime.run()`.
+The package requires the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
+
+## Install and choose an entry
+
+Install the API and its engine peer dependency:
+
+```bash
+npm install @docx-editor.dev/editor-api @docx-editor.dev/core
+```
+
+Your application must resolve one engine copy across the API and editor adapters.
+Server use requires Node.js `^20.16.0 || >=22.3.0`.
+
+| Entry                                 | Factories                                                   | Result                                                     |
+| ------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| `@docx-editor.dev/editor-api`         | `DocxEditor.createServer`, `DocxEditor.createCollaborative` | `Promise<DocxEditorServerRuntime>`                         |
+| `@docx-editor.dev/editor-api/browser` | The server factories and `DocxEditor.createBrowser`         | Browser creation returns `DocxEditorRuntime` synchronously |
+
+Both entries export the document model and shared support types.
+`CreateBrowserOptions` belongs to the browser entry.
+`DocxEditorNamespace` describes each entry's factory object.
+These host factories are DocxEditor extensions, outside the Office.js document model.
+
+## Open, edit, and save bytes
+
+This example replaces a unique template token and saves a separate file:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+
+const runtime = await DocxEditor.createServer(await readFile('input.docx'), {
+  author: 'Document agent',
+});
+try {
+  await runtime.run(async (context) => {
+    const matches = context.document.body.search('{{customer}}', {
+      matchCase: true,
+    });
+    matches.load('items');
+    await context.sync();
+    if (matches.items.length !== 1) throw new Error('Expected one customer');
+    matches.items[0]!.insertText('Ada', 'Replace');
+    await context.sync();
+  });
+  await writeFile('output.docx', await runtime.save());
+} finally {
+  runtime.dispose();
+}
+```
+
+`createServer(bytes, options?)` finishes parsing before its promise resolves.
+It does not retain the input byte array.
+`save()` returns a fresh, caller-owned `Uint8Array` each time.
+Mutating or transferring that array does not change the runtime.
+A detached runtime does not update an open editor automatically.
+Your application must explicitly load the saved bytes into that editor.
+
+`dispose()` is safe to call more than once.
+Later calls to `run()` or `save()` fail with `RuntimeDisposed`.
+Disposal also invalidates tracked objects.
+
+## Drive an open browser editor
+
+Pass an attached `DocxEditorInstance` from the core, React, or Vue editor integration:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+
+const runtime = DocxEditor.createBrowser(editor, {
+  author: 'Document reviewer',
+});
+try {
+  await runtime.run(async (context) => {
+    const first = context.document.paragraphs.getFirstOrNullObject();
+    first.load('text');
+    await context.sync();
+    if (!first.isNullObject) first.font.bold = true;
+    await context.sync();
+  });
+} finally {
+  runtime.dispose();
+}
+```
+
+Browser edits use the editor's transaction and Undo history.
+The browser runtime has no `save()` method. Save through the owning editor.
+Runtime disposal releases its adapter; it does not destroy the editor.
+
+## Configure a host
+
+| Option             | Hosts                    | Meaning                                                                                                            |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `author`           | All                      | Explicit identity for comment creation, replies, and server tracked text edits                                     |
+| `revisionTextView` | All                      | `allMarkup` by default; `original` hides pending insertions and retains pending deletions in text reads and search |
+| `limits`           | Server and collaborative | Bounded ZIP, XML, part, and relationship parsing                                                                   |
+| `pagination`       | Server and collaborative | Explicit measured pagination for page-field result updates                                                         |
+| `modules`          | Server and collaborative | `EditorModule[]` contributions for the DOM-free host                                                               |
+
+`CreateCollaborativeOptions` uses `CreateServerOptions`.
+`ServerPaginationOptions` accepts a required `measurer` and optional `producer`.
+See [Fields and pagination](/docs/2.x/editor-api/fields) for font resources and cleanup.
+`EditorModule` exposes `id` and optional `collaboration`; it does not install browser UI.
+
+`createCollaborative(bytes, collaboration, options?)` uses an existing `EditorCollaborationSession`.
+The collaboration transport and session belong to your application.
+See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) for a complete shared review workflow.
+Do not treat detached server edits as collaborative writes.
+
+## Inspect capabilities and dynamic permissions
+
+Read `runtime.capabilities` or `context.capabilities` without calling `load()`.
+The `DocumentCapabilities` object remains frozen for the runtime's lifetime.
+
+| Capability                         | Server | Browser                                                |
+| ---------------------------------- | ------ | ------------------------------------------------------ |
+| `document`                         | Yes    | Requires a document when the host reports capabilities |
+| `save`                             | Yes    | No                                                     |
+| `events`                           | Yes    | Yes                                                    |
+| `selection`, `scrolling`, `layout` | No     | Yes                                                    |
+
+Explicit server pagination does not give a server a browser selection or layout surface.
+The `events` flag does not provide a public event subscription API on the runtime.
+Capabilities do not guarantee write permission.
+Browser review writes also require the Pro review module and an editable document.
+Handle the actual refusal from the call or `sync()`.
+
+## Bound input parsing
+
+`DocumentLimits` has optional `zip`, `xml`, `maxXmlParts`, and `maxRelationships` fields.
+`DocumentZipLimits` requires `maxEntries` and `maxTotalBytes`; `maxRatio` is optional.
+`DocumentXmlLimits` requires `maxBytes`; `maxElements` is optional.
+Counts and byte budgets must be finite nonnegative integers.
+Compression ratios can be fractional.
+
+The default XML element budget is 10,000,000 per part.
+The engine permits at most 50,000,000 elements, 64 MiB per part, and 256 nested levels.
+These limits do not guarantee sufficient host memory.
+Malformed input or invalid limits produce `InvalidArgument`.
+An exceeded budget produces `ResourceLimitExceeded` with a `limit` field.
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for recovery.
+
+## Continue
+
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+- [Comments](/docs/2.x/editor-api/comments) and [Tracked changes](/docs/2.x/editor-api/revisions)
+- [API member directory](/docs/2.x/editor-api/reference)

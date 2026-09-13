@@ -1,0 +1,125 @@
+---
+title: 'Content controls'
+description: 'Discover controls, fill typed values, edit metadata and locks, create text controls, and handle XML-bound content.'
+category: 'Editing API'
+order: 61
+---
+
+Content controls mark template content for structured reading and editing.
+Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope.
+`ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Find a control and inspect its metadata
+
+`ContentControlCollection` exposes `items`, `getFirst()`, `getFirstOrNullObject()`,
+`getById(id)`, `getByTag(tag)`, and `getByTitle(title)`.
+Tag and title lookup return collections because matches need not be unique.
+`getById()` takes a number and returns the first match in document order.
+The loaded `ContentControl.id` is string metadata; DOCX ids can be absent or repeated.
+Do not treat that value as a globally unique object identity.
+
+This example fills one eligible text control:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.contentControls.getByTag('customer');
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Expected one customer control');
+  const control = matches.items[0]!;
+  control.load(['subtype', 'isBound', 'cannotEdit']);
+  await context.sync();
+  if (control.isBound || control.cannotEdit) return;
+  if (control.subtype !== 'plainText' && control.subtype !== 'richText') return;
+  control.setValue({ kind: 'text', text: 'Ada' });
+  await context.sync();
+});
+```
+
+`isBound` is advisory metadata. Every write checks binding and protection again at sync.
+A stale read or changed lock can still refuse the batch.
+Custom XML-bound writes refuse; this API does not expose `xmlMapping`.
+
+## Choose the value for the control type
+
+`ContentControl.setValue(value)` is a DocxEditor extension with a discriminated `ContentControlValue` union:
+
+| Value                                     | Use                                              |
+| ----------------------------------------- | ------------------------------------------------ |
+| `{ kind: 'text', text: 'Ada' }`           | Eligible text control                            |
+| `{ kind: 'listItem', value: 'approved' }` | A declared list item accepted by the control     |
+| `{ kind: 'checkbox', checked: true }`     | Checkbox state and its displayed glyph           |
+| `{ kind: 'date', iso: '2026-09-13' }`     | Date value; also accepts a full ISO-8601 instant |
+
+Use the loaded `subtype` to choose an operation.
+It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`.
+A control's text is not always its semantic value.
+Writing the text `true` does not set a checkbox's state.
+Unsupported values or control structures refuse rather than approximating another type.
+
+`insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`.
+Replacement uses the control's value path, including placeholder and temporary-wrapper handling.
+Sync before using that returned range.
+`text`, `placeholderShown`, and `temporary` are loaded read-only properties.
+
+For an existing placeholder, prefer replacing the control value.
+For untracked range edits, a range covering the complete prompt can also replace it.
+Replacements that would consume untargeted prompt text refuse with `NotSupported`.
+Insertions away from the prompt start also refuse with `NotSupported`.
+The first insertion at the prompt start consumes the placeholder text.
+
+## Edit metadata and locks
+
+| Property                                | Access                          |
+| --------------------------------------- | ------------------------------- |
+| `id`, `subtype`, `isBound`              | Loaded read-only metadata       |
+| `tag`, `title`                          | Loaded reads and string writes  |
+| `cannotDelete`, `cannotEdit`            | Loaded reads and boolean writes |
+| `text`, `placeholderShown`, `temporary` | Loaded reads                    |
+
+Lock assignments on the same proxy coalesce and preserve the other lock axis.
+A write does not require loading that axis first.
+Effective ancestor locks and binding checks still apply; lock setters do not bypass protection.
+`ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary.
+There is no public combined `lock` property taking that alias.
+
+## Create a text control
+
+`Range.insertContentControl(type?)` supports `RichText` and `PlainText`; the default is `RichText`.
+The range must be an eligible single-paragraph span.
+Sync creation before setting metadata:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('{{customer}}');
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one placeholder');
+  const control = matches.items[0]!.insertContentControl('PlainText');
+  await context.sync();
+  control.tag = 'customer';
+  control.title = 'Customer name';
+  await context.sync();
+});
+```
+
+`ContentControlType` includes other Office-shaped values; those creation modes refuse.
+The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support.
+Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable.
+Use a prepared template for existing eligible date, list, and checkbox controls.
+
+## Address or remove control content
+
+`getRange(location?)` accepts `Whole`, `Content`, `Start`, `End`, `Before`, and `After`.
+Resolve the returned range before dependent use.
+`delete(true)` removes the wrapper and preserves its content.
+`delete(false)` removes both wrapper and content.
+Protection, binding, unsupported structure, and tracking mode can refuse deletion or value changes.
+
+Do not delete a binding or wrapper to force a failed template write.
+Read again and report an ineligible control to the application or template author.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
+[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).

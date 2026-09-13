@@ -18,6 +18,8 @@ export interface PackageHistoryPointer {
   readonly kind: 'package';
   readonly before: OoxmlPackage;
   readonly after: OoxmlPackage;
+  /** This transaction owns numbering changes; later shell allocations still survive. */
+  readonly restoreNumbering?: boolean;
 }
 
 export type HistoryPointer = StoryHistoryPointer | PackageHistoryPointer;

@@ -1,0 +1,127 @@
+---
+title: 'Fields and pagination'
+description: 'Insert and update PAGE and NUMPAGES fields with explicit measured pagination and registered fonts.'
+category: 'Editing API'
+order: 59
+---
+
+A field stores an instruction and cached result text.
+Reading a field does not execute its instruction.
+The authoring and evaluation subset supports plain `PAGE` and `NUMPAGES` instructions, without switches.
+Other field instructions remain inert; unsupported authoring or evaluation refuses.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Insert a page field
+
+`Range.insertField(location, fieldType?, text?, removeFormatting?)` returns `Field`.
+It accepts `Before`, `After`, `Start`, `End`, or `Replace`.
+Use `Page` or `NumPages`, or `Empty` with the text `PAGE` or `NUMPAGES`.
+Omitting the type also requires supported instruction text.
+`removeFormatting: true` refuses.
+
+Resolve an anchor, insert the field, then update its result in a separate sync:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getLast();
+  paragraph.load('text');
+  await context.sync();
+  const anchor = paragraph.getRange('End');
+  await context.sync();
+  const field = anchor.insertField('After', 'NumPages');
+  await context.sync();
+  field.updateResult(); // Requires configured pagination on a server.
+  await context.sync();
+});
+```
+
+New fields start with an empty cached result.
+Insertion does not calculate pagination.
+`Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint.
+`Replace` requires an eligible span in one paragraph.
+
+`FieldType` exports the Office-shaped field vocabulary.
+`FieldTypeLiteral` provides corresponding string literals.
+The presence of an enum value does not mean its instruction can run.
+For example, `FieldType.page` works within this subset; unrelated field types refuse authoring.
+
+## Read and change instructions
+
+`Body.fields` and `Range.fields` return `FieldCollection`.
+A range includes fields fully contained within that span.
+Collections expose `items`, `getFirst()`, `getLast()`, `getFirstOrNullObject()`, and `getLastOrNullObject()`.
+
+Load each field's `code` before inspecting its raw instruction:
+
+```ts
+await runtime.run(async (context) => {
+  const fields = context.document.body.fields;
+  fields.load('items');
+  await context.sync();
+  for (const field of fields.items) field.load('code');
+  await context.sync();
+  console.log(fields.items.map((field) => field.code));
+});
+```
+
+`Field.code = 'PAGE'` or `'NUMPAGES'` changes a supported page-field instruction.
+It preserves the field identity and cached result until explicit evaluation.
+Supported simple fields and ordinary complex fields with sibling runs can accept code changes.
+Protected fields, unsupported instruction shapes, and tracked mutations refuse.
+`Field.delete()` removes the field and its cached result through the supported deletion path.
+Deleted field proxies become invalid.
+
+## Configure measured server pagination
+
+Server result updates require `CreateServerOptions.pagination`.
+`ServerPaginationOptions` contains a required `measurer` and optional `producer`.
+Build the measurer from actual font resources using the core layout APIs.
+
+The runnable [report agent](https://github.com/eigenpal/docx-editor/blob/main/examples/editor-api-consumers/report-agent.ts)
+shows the complete font setup and cleanup:
+
+```bash
+bun examples/editor-api-consumers/report-agent.ts
+```
+
+Run it from the repository root after installing workspace dependencies.
+The example loads Carlito regular, bold, italic, and bold-italic files.
+It registers those files explicitly as Calibri resources with `sha256FontBytes` and `createLayoutShaping`.
+It builds `createLayoutShapedMeasurer` with a resolver that refuses unavailable requested faces.
+Pass the configured measurer when opening the document:
+
+```ts
+const runtime = await DocxEditor.createServer(bytes, {
+  pagination: { measurer },
+});
+```
+
+Use the document's fonts or deliberately selected substitutes.
+Font substitution can change page breaks and page counts compared with Word.
+Bullets can request additional fonts, such as Symbol or Courier New.
+Provide those resources, or use an explicit registered font for custom Unicode bullets.
+
+Dispose the runtime when the job finishes.
+Release its shaping resources with `disposeLayoutShaping(shaping)` as the example shows.
+A fixed-width test measurer does not establish production pagination fidelity.
+A browser runtime uses its attached editor's layout.
+
+## Update results after document edits
+
+`Field.updateResult()` computes cached text from measured pagination, including supported section page-number formats.
+Save and reopen preserve that computed cache.
+Load the owning body's text after evaluation when you need the visible result.
+The `Field` object exposes `code`, not a separate `result` property.
+
+Multiple field result updates can share one sync, including fields in one paragraph.
+They can share queries, but cannot share other document writes.
+Finish text, table, picture, font, and page-layout edits first.
+Then evaluate fields in a separate transaction.
+
+Missing pagination, unsupported instructions, and non-rewritable cached results refuse with `NotSupported`.
+The server does not guess a page count or automatically resolve external field instructions.
+On refusal, preserve the document and provide valid measurement resources or select an eligible field.
+See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) and
+[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

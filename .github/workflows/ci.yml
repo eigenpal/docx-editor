@@ -19,6 +19,33 @@ permissions:
   contents: read
 
 jobs:
+  office-js-compatibility:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Office.js editing report (informational)
+        id: report
+        run: bun run --filter '@docx-editor.dev/editor-api' compat:report
+      - name: Report unavailable
+        if: failure()
+        run: echo 'Office.js compatibility report unavailable. See job logs; no percentage was calculated.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload full compatibility report
+        if: steps.report.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: office-js-compatibility
+          path: packages/editor-api/compat/reports/
+          retention-days: 30
+
   lint:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -179,6 +206,9 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
+      - name: Check editor API consumers against published declarations
+        run: bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published
+
       # This integration test runs real Node workers against built package exports.
       # Keep it after build: the general Bun suite runs on a source-only checkout.
       - name: Setup Node for server agent integration
@@ -188,6 +218,9 @@ jobs:
 
       - name: Server agent lifecycle integration
         run: bun run --filter './examples/server-agent-review' test:lifecycle
+
+      - name: Editor API public consumer workflows
+        run: bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
 
       # Sizes of the exact artifacts `npm publish` ships (`npm pack --dry-run`
       # per published package). Uploaded as an artifact: main-branch runs are

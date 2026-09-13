@@ -94,6 +94,11 @@ describe('reading a font over a range', () => {
     const body = roots(host).body;
     const [only] = paragraphsOf(host, body);
     expect(fontOf(host, only!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: null,
       italic: null,
       name: null,
@@ -107,6 +112,11 @@ describe('reading a font over a range', () => {
     const body = roots(host).body;
     const [only] = paragraphsOf(host, body);
     expect(fontOf(host, only!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: true,
       italic: true,
       name: 'Georgia',
@@ -155,6 +165,11 @@ describe('writing a font', () => {
     const next = reopen(host);
     const [again] = paragraphsOf(next.host, next.body);
     expect(fontOf(next.host, again!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: true,
       italic: true,
       name: 'Georgia',
@@ -192,6 +207,11 @@ describe('writing a font', () => {
     const [again] = paragraphsOf(next.host, next.body);
     // The size is agreed because both runs got it; the name is not, because neither lost its own.
     expect(fontOf(next.host, again!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: null,
       italic: null,
       name: null,

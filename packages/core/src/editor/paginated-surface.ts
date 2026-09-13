@@ -2933,20 +2933,31 @@ export function mountPaginatedSurface(
     // reader is in. Only a caller that ALREADY knows which story its ops address — an
     // automation handle names one — passes this, and then the reader's position is irrelevant.
     scope: StoryScope = storyScope(),
-    checkSelection = true
+    checkSelection = true,
+    packageEdits?: NonNullable<Parameters<TreeDocxSession['applyTreeOps']>[4]>['packageEdits']
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
     // Every live lane reaches here inside `commit`, whose head-flush already ran, so this
     // is a defensive no-op — kept so a future direct caller still lands buffered typing
     // before its ops address the document.
     flushTypeBuffer();
-    const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
+    const refusal = writeRefusal(
+      ops.some(isDocumentEdit) || !!packageEdits?.length,
+      ops,
+      checkSelection
+    );
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
     // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
     // header, a footer or a note is applied to that story rather than to the body.
     const attributed = trackedOps(
       checkSelection && textFormInteraction ? textFormInteraction.annotate(ops) : ops
     );
-    const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
+    const result = applyJournaledOps(
+      attributed,
+      selectionBefore,
+      selectionAfter,
+      scope,
+      packageEdits
+    );
     if (checkSelection) textFormInteraction?.afterApply(result.committed);
     if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
@@ -2964,7 +2975,8 @@ export function mountPaginatedSurface(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
     selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
-    scope: StoryScope = storyScope()
+    scope: StoryScope = storyScope(),
+    packageEdits?: NonNullable<Parameters<TreeDocxSession['applyTreeOps']>[4]>['packageEdits']
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
     const collaborationRefusal = collaborationSession?.gateOperations(ops, scope);
     if (collaborationRefusal) {
@@ -2983,12 +2995,13 @@ export function mountPaginatedSurface(
       scope,
       collaborationSession
         ? {
+            packageEdits,
             origin: ORIGIN_IDS.mutationHuman,
             actorId: collaborationSession.identity.actorId,
             operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
           }
-        : undefined
+        : { packageEdits }
     );
   }
 
@@ -5243,7 +5256,7 @@ export function mountPaginatedSurface(
 
     revisionDisplayMode,
     replacementLanding,
-    applyAutomationOps: (staged, scope) => {
+    applyAutomationOps: (staged, scope, packageEdits) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
       // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
@@ -5304,7 +5317,7 @@ export function mountPaginatedSurface(
               reason: 'review-module-required',
             });
           }
-          return (result = applyOps(ops, undefined, undefined, story, false));
+          return (result = applyOps(ops, undefined, undefined, story, false, packageEdits));
         },
         () => {
           // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp

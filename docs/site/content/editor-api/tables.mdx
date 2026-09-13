@@ -1,0 +1,138 @@
+---
+title: 'Tables and cells'
+description: 'Create rectangular tables, edit values, add or delete rows and columns, and format cell bodies.'
+category: 'Editing API'
+order: 57
+---
+
+Use `Body.tables` or `Range.tables` to discover tables in the addressed scope.
+`Table`, `TableRow`, and `TableCell` are proxies with separate collections.
+The editing subset supports rectangular tables. Merged or otherwise unsupported structures can refuse structural edits.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Insert a table
+
+`Range.insertTable(rowCount, columnCount, location, values?)` accepts `Before` or `After`.
+Counts must be positive integers. Supplied values must form a matching rectangular string matrix.
+Resolve the range, create the table, then configure it after sync:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  const anchor = paragraph.getRange('Content');
+  await context.sync();
+  const table = anchor.insertTable(2, 2, 'After', [
+    ['Item', 'Amount'],
+    ['License', '$100'],
+  ]);
+  await context.sync();
+  table.headerRowCount = 1;
+  await context.sync();
+});
+```
+
+The returned `Table` requires a completed sync before dependent operations.
+Table insertion is not a `Body.insertTable()` operation in this subset.
+Use a body paragraph's range as the anchor.
+
+## Read table values and cells
+
+Load scalar table properties explicitly:
+
+```ts
+await runtime.run(async (context) => {
+  const table = context.document.body.tables.getFirstOrNullObject();
+  table.load(['values', 'rowCount', 'columnCount']);
+  await context.sync();
+  if (table.isNullObject) return;
+  console.log(table.values);
+
+  const cell = table.getCell(0, 0);
+  cell.load('value');
+  await context.sync();
+  console.log(cell.value);
+});
+```
+
+`Table.getCell(rowIndex, cellIndex)` uses zero-based indexes.
+`Table.rows` returns `TableRowCollection`; `TableRow.cells` returns `TableCellCollection`.
+All three table collections expose `items`, `getFirst()`, and `getFirstOrNullObject()`.
+Load collection membership before reading item properties.
+
+`TableCell.body` exposes the cell's `Body` for text, paragraphs, search, and formatting.
+Resolve the cell and its body before dependent navigation.
+To preserve rich cell content, edit an exact range within that body.
+Whole-cell replacement supports ordinary single-paragraph text and preserves its existing font formatting.
+Multiline values, nested blocks, and complex cell contents refuse.
+Cell-body font reads remain scoped to that cell.
+Existing nested rectangular tables support navigation; nested table creation refuses.
+
+## Edit values and structure
+
+| Member                                             | Behavior                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| `Table.values`                                     | Read or replace the table's string matrix                    |
+| `TableCell.value`                                  | Read or replace one cell's plain text                        |
+| `Table.rowCount`, `Table.columnCount`              | Loaded, read-only dimensions                                 |
+| `Table.addRows(location, rowCount, values?)`       | Add rows at `Start` or `End`; return `TableRowCollection`    |
+| `Table.addColumns(location, columnCount, values?)` | Add columns at `Start` or `End`; return `void`               |
+| `Table.deleteRows(rowIndex, rowCount?)`            | Delete rows from a zero-based index; default count is one    |
+| `Table.deleteColumns(columnIndex, columnCount?)`   | Delete columns from a zero-based index; default count is one |
+| `Table.delete()`                                   | Delete the table through the supported cleanup path          |
+
+Value matrices must match the affected row and column dimensions.
+Do not assume ragged matrices or implicit resizing work.
+Deleting all rows or all columns removes the table.
+`Table.delete()` can remove an existing merged table through its supported cleanup path.
+Protection and unsupported surrounding structure can still refuse deletion.
+Sync structural changes before addressing newly added cells or relying on changed indexes.
+
+## Format tables and cells
+
+`Table.style` uses an existing table style name.
+`Table.headerRowCount` sets the number of leading header rows, from zero through the row count.
+Zero removes the header flags.
+Cell formatting exposes these properties:
+
+| `TableCell` property | Domain                                                         |
+| -------------------- | -------------------------------------------------------------- |
+| `columnWidth`        | Supported finite width in points                               |
+| `shadingColor`       | Six-digit RGB hex, optional `#`; `auto` removes direct shading |
+| `verticalAlignment`  | `Top`, `Center`, or `Bottom`; `Mixed` refuses on writes        |
+
+`VerticalAlignment` exports the corresponding enum values.
+For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`.
+A width write changes the entire grid column, matching cell widths, and total table width.
+It also sets fixed table layout. Missing grids and merged topology refuse width writes.
+
+For example, format a resolved header cell:
+
+```ts
+cell.shadingColor = '#EEEEEE';
+cell.verticalAlignment = 'Center';
+await context.sync();
+```
+
+## Handle unsupported structures
+
+Structural mutations can refuse merged grids, protected content, nested preserved structures, and pending revisions.
+Adding columns or deleting some columns requires an existing table grid.
+Deleting all columns can still remove a table without a grid.
+A matching TypeScript signature does not guarantee an edit works on every table.
+Table value replacement does not silently discard unsupported cell content.
+Inspect and edit a smaller cell-body range when that preserves the intended structure.
+
+Runtime-local tracking refuses table creation and structural or formatting changes.
+Tracked text edits can operate inside one eligible cell paragraph.
+A pending tracked row insertion or deletion blocks tracked text edits throughout that row.
+See [Tracked changes](/docs/2.x/editor-api/revisions).
+
+Each row or column addition or deletion must run alone in its sync, even across separate tables.
+Do not combine it with cell values or formatting.
+Separate other dependent structural operations into distinct syncs.
+If a batch returns `ConflictingChanges`, read the table again before retrying a revised operation.
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) and [API member directory](/docs/2.x/editor-api/reference).

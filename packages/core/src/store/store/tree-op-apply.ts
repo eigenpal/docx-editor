@@ -1,3 +1,6 @@
+import { applySetFieldCode } from './tree-op-field-code.ts';
+import { applyTableAuthoring } from './tree-op-table-batch.ts';
+import { applyTableProperties } from './tree-op-table-authoring.ts';
 import { mintCheckboxRun } from './content-control-run.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
@@ -285,6 +288,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
   }
 
+  if (op.op === 'authorTable') return applyTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return applyTableProperties(part, op, options);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
   if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
@@ -312,9 +317,13 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
+  if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
   if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if ((op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') && op.range) {
+    return applyPartialHyperlink(part, op, options);
+  }
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
   if (op.op === 'setMathEquation' || op.op === 'removeMathEquation') {
@@ -1804,6 +1813,43 @@ function inlineContentControlElement(
     attributes: [],
     children: [properties, content],
   } as unknown as OoxmlNode;
+}
+
+/** Split only the requested text while retaining each unaffected wrapper's metadata. */
+function applyPartialHyperlink(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'setHyperlinkTarget' | 'removeHyperlink' }>,
+  options?: EditOptions
+): TreeOpResult {
+  const link = findNode(part, op.linkId);
+  const paragraph = link && parentOf(part, link.id);
+  if (!link || paragraph?.kind !== 'paragraph' || !op.range)
+    return { ok: false, reason: 'tree-invariant' };
+  const pieces = distributeInline(
+    link,
+    [op.range.start, op.range.end],
+    3,
+    segmentsOf(paragraph),
+    createNodeIdAllocator(part)
+  );
+  const selected = pieces[1]?.[0];
+  if (selected?.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
+  const replacements = pieces.flat();
+  const children = paragraph.children.flatMap((child) =>
+    child.id === link.id ? replacements : [child]
+  );
+  const split = replaceChildren(part, paragraph.id, children, options);
+  if (!split.ok)
+    return fromEdit(split, {
+      dirty: [paragraph.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'paragraph-local',
+    });
+  return op.op === 'removeHyperlink'
+    ? applyRemoveHyperlink(split.part, selected.id, options)
+    : applySetHyperlinkTarget(split.part, { ...op, linkId: selected.id }, options);
 }
 
 /** Re-aim a link: one target attribute replaces the other, and the tooltip follows. */
@@ -3414,6 +3460,10 @@ export function splitRunsAt(
   // three characters.
   const runIds: string[] = [];
   for (const segment of segments) {
+    // Simple fields are paragraph children: their atom has no owning run. Grouping
+    // their empty run IDs invents one run spanning every simple field, then attempts
+    // to split that nonexistent run at an otherwise valid boundary between fields.
+    if (!segment.runId) continue;
     if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
   }
   const straddling = runIds.find((runId) => {

@@ -299,6 +299,15 @@ function storyReadsOver(
   };
 }
 
+/** A cell body shares its story's offsets while restricting reads and whole-body edits to the cell. */
+export function scopedStoryReads(
+  story: AutomationStoryReads,
+  root: OoxmlNode
+): AutomationStoryReads {
+  const scoped = storyReadsOver(story.story, story.part, story.scope, root, story.styles);
+  return { ...scoped, indexOf: (id) => (scoped.has(id) ? story.indexOf(id) : -1) };
+}
+
 /**
  * Project the reads out of a package snapshot.
  *

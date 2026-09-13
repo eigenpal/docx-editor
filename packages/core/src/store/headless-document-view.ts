@@ -121,6 +121,11 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
   }
 
   const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  return { ok: true, view: headlessViewOfStore(store) };
+}
+
+/** Internal live read view over the canonical store, preserving node identities for field pagination. */
+export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView {
   const currentPackage = (): OoxmlPackage => store.currentPackage();
   const mainPart = (): OoxmlPart => store.bodyStore().part;
   const rootOf = (relationshipType: string, fallbackName: string): OoxmlElement | null =>
@@ -164,5 +169,5 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     relationshipTarget: (relationshipId: string) =>
       relationshipTargetIn(currentPackage(), mainPart().name, relationshipId),
   });
-  return { ok: true, view };
+  return view;
 }

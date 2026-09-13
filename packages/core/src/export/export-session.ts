@@ -14,13 +14,13 @@ import {
 } from '@docx-editor.dev/core/store';
 import {
   createDocumentFurnitureSource,
-  createDocumentLinkProjectors,
-  createDocumentStyleDependencies,
-  createFieldLinkRegistry,
-  forEachSemanticDrawing,
-  TablePaginationError,
   type CreateDocumentFurnitureSourceOptions,
-} from '../layout/index.ts';
+} from '../layout/document-furniture-source.ts';
+import { createDocumentLinkProjectors } from '../layout/document-link-projector.ts';
+import { createDocumentStyleDependencies } from '../layout/document-style-deps.ts';
+import { createFieldLinkRegistry } from '../layout/field-link-registry.ts';
+import { forEachSemanticDrawing } from '../layout/semantic-record-queries.ts';
+import { TablePaginationError } from '../layout/semantic-table-layout.ts';
 import {
   layoutDocumentView,
   type LayoutDocumentViewOptions,
