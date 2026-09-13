@@ -557,6 +557,7 @@ const RELATIONSHIPS_NAMESPACE_URI =
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 export interface InlinePictureDrawingInput {
+  readonly lockAspectRatio?: boolean;
   readonly docPrId: number;
   readonly relationshipId: string;
   readonly extentEmu: { readonly cx: number; readonly cy: number };
@@ -601,7 +602,9 @@ export function buildInlinePictureDrawing(input: InlinePictureDrawingInput): Oox
     '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
     `<wp:extent cx="${cx}" cy="${cy}"/>` +
     `<wp:docPr ${docPrParts.join(' ')}>${hlinkChild}</wp:docPr>` +
-    '<wp:cNvGraphicFramePr/>' +
+    (input.lockAspectRatio
+      ? '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+      : '<wp:cNvGraphicFramePr/>') +
     `<a:graphic><a:graphicData uri="${PIC_URI}">` +
     '<pic:pic>' +
     '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>' +

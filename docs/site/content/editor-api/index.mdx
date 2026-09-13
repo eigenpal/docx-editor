@@ -23,6 +23,29 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
 
+## Effective document editing
+
+The supported subset includes text, extended font formatting, lists, rectangular tables, inline PNG/JPEG pictures,
+page setup, content controls, review operations, and plain PAGE/NUMPAGES fields.
+Some parameter values and document structures remain unsupported.
+See the [compatibility matrix](/docs/2.x/editor-api/office-js-api#compatibility-matrix) for those limits.
+
+Batch independent reads and writes. Supported read-derived proxies resolve before the atomic write transaction.
+Sync after insertion before configuring the returned object.
+Structural edits sharing a paragraph can conflict, and different list levels need separate syncs.
+Field result updates cannot share a sync with layout-changing writes.
+
+Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` from the repository root.
+The fixed 81-member profile appears in `packages/editor-api/compat/reports/agent-editing-summary.md`.
+Endpoint details appear in `agent-editing-report.md` and `agent-editing-report.json` in that directory.
+The exhaustive editing report is `report.md`.
+CI reports percentages informationally; presence and matching signatures do not prove runtime equivalence with Word.
+Per-endpoint runtime domains and differences live in `packages/editor-api/compat/runtime-notes.json`.
+
+Server page-field evaluation needs explicit pagination with a measurer using registered font resources.
+The [font-backed pagination guide](/docs/2.x/editor-api/office-js-api#measured-page-fields-on-a-server)
+links a complete runnable agent that loads fonts, edits a report, evaluates fields, and saves the result.
+
 ## Choose a host
 
 | `DocumentCapabilities` field | Server runtime | Browser runtime |

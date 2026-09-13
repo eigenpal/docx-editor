@@ -38,7 +38,7 @@ export function commitSessionTreeOpsAtomic(
 ): TreeApplyResult {
   const nonEmpty = groups.filter((group) => group.ops.length > 0);
   const opCount = nonEmpty.reduce((sum, group) => sum + group.ops.length, 0);
-  if (opCount === 0) return EMPTY_APPLY;
+  if (opCount === 0) return options.packageEdits?.length ? refused(0, 'invalidArgs') : EMPTY_APPLY;
   if (nonEmpty.some((group) => group.ops.some(isHeaderFooterLifecycleOp))) {
     return refused(opCount, 'invalidArgs');
   }
@@ -57,6 +57,7 @@ export function commitSessionTreeOpsAtomic(
   const result = packageStore.transact(
     primary!.scope,
     (ctx) => {
+      for (const edit of options.packageEdits ?? []) ctx.applyPackage(edit);
       for (const op of primary!.ops) ctx.apply(op);
       for (const group of restParts) {
         for (const op of group.ops) ctx.applyTo(group.partName, op);
@@ -76,12 +77,12 @@ export function commitSessionTreeOps(
   scope: StoryScope,
   options: TreeApplyOptions
 ): TreeApplyResult {
-  if (ops.length === 0) return EMPTY_APPLY;
+  if (ops.length === 0 && !options.packageEdits?.length) return EMPTY_APPLY;
   const lifecycleCount = ops.filter(
     (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
   ).length;
   if (lifecycleCount > 0) {
-    if (lifecycleCount !== ops.length || ops.length !== 1) {
+    if (options.packageEdits?.length || lifecycleCount !== ops.length || ops.length !== 1) {
       return refused(ops.length, 'invalidArgs');
     }
     const result = runWithTransactionActor(options.actorId, () =>
@@ -99,6 +100,7 @@ export function commitSessionTreeOps(
     (ctx) => {
       if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
       if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
+      for (const edit of options.packageEdits ?? []) ctx.applyPackage(edit);
       for (const op of ops) ctx.apply(op);
       if (partName) {
         ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));

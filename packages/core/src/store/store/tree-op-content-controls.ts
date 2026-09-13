@@ -491,6 +491,9 @@ const TREE_OP_REACH: {
   setTableRightEdgeWidth: (op) => whole(op.tableId),
   setTableRowHeight: (op) => whole(op.rowId),
   setTableCellBorders: (op) => each(op.cellIds),
+  authorTable: (op) =>
+    op.action.kind === 'insert' ? each([op.action.paragraphId]) : each([op.action.tableId]),
+  setTableProperties: (op) => each([op.tableId]),
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
   insertDrawing: (op) => writingAt(op.paragraphId, op.offset),
@@ -521,6 +524,7 @@ const TREE_OP_REACH: {
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
+  setFieldCode: (op) => whole(op.fieldNodeId),
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
@@ -1700,7 +1704,18 @@ export function applySetContentControlProperties(
   const resolved = resolveControl(part, op.controlId);
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
-  if (lockForbidsEdit(lock) || lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
+  // A control's own lock protects its content/existence, not the ability to change
+  // that lock. Retain every ancestor's protection when toggling the named control.
+  const lockOnly = op.lock !== undefined && op.tag === undefined && op.alias === undefined;
+  const effective = lockOnly
+    ? resolveContentControlLock(
+        enclosingContentControls(part, control.id)
+          .slice(0, -1)
+          .map((ancestor) => contentControlPropertiesOf(ancestor).lock)
+      )
+    : lock;
+  if (lockForbidsEdit(effective) || lockForbidsRemoval(effective))
+    return { ok: false, reason: 'locked' };
 
   const nextId = createNodeIdAllocator(part);
   const nextProperties = editedProperties(

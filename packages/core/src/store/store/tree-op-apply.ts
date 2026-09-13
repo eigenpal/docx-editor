@@ -1,3 +1,6 @@
+import { applySetFieldCode } from './tree-op-field-code.ts';
+import { applyTableAuthoring } from './tree-op-table-batch.ts';
+import { applyTableProperties } from './tree-op-table-authoring.ts';
 import { mintCheckboxRun } from './content-control-run.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
@@ -285,6 +288,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
   }
 
+  if (op.op === 'authorTable') return applyTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return applyTableProperties(part, op, options);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
   if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
@@ -312,6 +317,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
+  if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
   if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
@@ -3368,6 +3374,10 @@ export function splitRunsAt(
   // three characters.
   const runIds: string[] = [];
   for (const segment of segments) {
+    // Simple fields are paragraph children: their atom has no owning run. Grouping
+    // their empty run IDs invents one run spanning every simple field, then attempts
+    // to split that nonexistent run at an otherwise valid boundary between fields.
+    if (!segment.runId) continue;
     if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
   }
   const straddling = runIds.find((runId) => {

@@ -1,3 +1,10 @@
+import { headlessViewOfStore } from '../store/headless-document-view.ts';
+import { documentReads } from './reads.ts';
+import {
+  paginationContextFor,
+  type AutomationPaginationProvider,
+  type AutomationPaginationSnapshot,
+} from './pagination.ts';
 // The headless automation host.
 //
 // It owns what a browser session owns and nothing more: a package it opened through the
@@ -90,6 +97,8 @@ export type ServerAutomationHostResult =
  * @public
  */
 export interface ServerAutomationHostOptions {
+  /** Optional real pagination for PAGE/NUMPAGES updates. */
+  readonly pagination?: AutomationPaginationProvider;
   /**
    * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
@@ -138,6 +147,27 @@ export function createServerAutomationHost(
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
   const port = packageStorePort(store, collaboration, () => detachCollaboration());
+  if (options.pagination) {
+    let snapshot: AutomationPaginationSnapshot | undefined;
+    let atRevision = -1;
+    const provider = options.pagination;
+    port.prepare = async (request) => {
+      if (!request.operations.some((operation) => operation.op === 'updateFieldResult')) return;
+      snapshot = undefined;
+      const revision = store.packageRevision;
+      const prepared = await provider(headlessViewOfStore(store));
+      if (store.packageRevision === revision) {
+        snapshot = prepared;
+        atRevision = revision;
+      }
+    };
+    port.fieldPageContext = (story, paragraphId, fieldNodeId) => {
+      if (store.packageRevision !== atRevision) return null;
+      const reads = documentReads(store.currentPackage()).story(story);
+      return reads ? paginationContextFor(snapshot, reads.part, paragraphId, fieldNodeId) : null;
+    };
+  }
+
   const host = createAutomationHost({
     port,
     capabilities: SERVER_AUTOMATION_CAPABILITIES,
@@ -230,7 +260,11 @@ export function packageStorePort(
     localChangeTracking: true,
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
-    apply(staged: AutomationStagedOps, scope: StoryScope = BODY): AutomationPortApplyResult {
+    apply(
+      staged: AutomationStagedOps,
+      scope: StoryScope = BODY,
+      packageEdits = []
+    ): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
       // BUILT HERE, not by the planner: minting the relationship an external link names changes the
       // package, and this host has no mode to refuse a write, so "here" is as late as it gets — a
@@ -250,6 +284,7 @@ export function packageStorePort(
       const result = store.transact(
         scope,
         (ctx) => {
+          for (const edit of packageEdits) ctx.applyPackage(edit);
           for (const op of ops) ctx.apply(op);
           if (partName) {
             ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));

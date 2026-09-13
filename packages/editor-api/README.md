@@ -154,8 +154,9 @@ decisions join the editor's Undo stack, with one collection decision as one Undo
 
 - A property you did not `load()` throws instead of answering `undefined`, so a typo fails at
   the read rather than producing a wrong document later.
-- `sync()` is the only round trip. Everything queued between two syncs is one ordered batch,
-  applied atomically.
+- `sync()` resolves supported prerequisite reads before one atomic write transaction. It can use several transport calls.
+- Sync after insertion before configuring the returned object. Structural edits sharing a paragraph can conflict.
+  Different levels of one list need separate syncs. Field result updates cannot mix with layout-changing writes.
 - Proxies remain valid across `sync()` calls within a `run()`. To reuse a proxy in a later
   run, add it to `context.trackedObjects` and pass it to `runtime.run(object, callback)`.
   No proxy remains valid after `dispose()`.
@@ -186,9 +187,31 @@ site written against that vocabulary compiles here. It is not Office.js: it does
 Office add-in host and depends on no Microsoft package. Every type in the surface is authored
 in this repository.
 
-The supported subset and its documented omissions (tables, images, repeating sections, custom
-XML mapping) are listed in
+The subset includes rectangular table editing, inline PNG/JPEG pictures, list authoring, extended font formatting,
+and plain PAGE/NUMPAGES fields. Repeating-section editing, floating shapes, and custom XML mapping remain unavailable.
+Supported domains and runtime differences are listed in
 [the Office.js compatibility page](https://www.docx-editor.dev/docs/latest/editor-api/office-js-api).
+
+Run the informational checker from the repository root:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:report
+```
+
+The exhaustive editing report is `packages/editor-api/compat/reports/report.md`.
+The fixed 81-member profile is summarized in `agent-editing-summary.md` in that directory.
+Its endpoint details are in `agent-editing-report.md` and `agent-editing-report.json`.
+Presence and signature percentages do not prove runtime equivalence with Word.
+Track each endpoint's supported domains in `packages/editor-api/compat/runtime-notes.json`.
+CI publishes these percentages and artifacts without making coverage a merge gate.
+
+Server PAGE/NUMPAGES evaluation requires `createServer(bytes, { pagination: { measurer } })`.
+Use actual font resources with `createLayoutShaping` and `createLayoutShapedMeasurer` from `@docx-editor.dev/core/layout`.
+The [runnable report agent](https://github.com/eigenpal/docx-editor/blob/main/examples/editor-api-consumers/report-agent.ts)
+shows font loading, exact face resolution, runtime configuration, field updates, and disposal.
+Run `bun examples/editor-api-consumers/report-agent.ts` from the workspace root.
+See the [pagination setup guide](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api#measured-page-fields-on-a-server)
+for resource requirements and the effects of font substitution.
 
 Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? See
 [MIGRATION.md](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/MIGRATION.md).

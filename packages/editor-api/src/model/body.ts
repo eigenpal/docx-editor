@@ -16,6 +16,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // creating a paragraph in a story that has none is a different operation from editing one, and this
 // slice does not implement it.
 
+import { InsertLocation } from './editing-enums.ts';
+import { FieldCollection } from './fields.ts';
+import { InlinePictureCollection } from './pictures.ts';
+import { TableCollection } from './tables.ts';
 import {
   ObjectPath,
   fail,
@@ -57,6 +61,9 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
  * @public
  */
 export class Body extends ModelObject {
+  #tables: TableCollection | undefined;
+  #fields: FieldCollection | undefined;
+  #inlinePictures: InlinePictureCollection | undefined;
   #paragraphs: ParagraphCollection | undefined;
   #bookmarks: BookmarkCollection | undefined;
   #font: Font | undefined;
@@ -215,6 +222,23 @@ export class Body extends ModelObject {
     return this.#revisions;
   }
 
+  /** The whole body or one edge. Await sync before addressing the returned range. */
+  getRange(
+    rangeLocation: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After' = 'Whole'
+  ): Range {
+    const target = `${this.path.label}.getRange`;
+    this.requireUsablePath();
+    const range = Range.promised(this.context, target, false);
+    this.read(
+      target,
+      () => ({ op: 'getRange', span: { body: this.path.handle() }, location: rangeLocation }),
+      (value) => {
+        range.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return range;
+  }
+
   /** Every occurrence of `searchText` in this story, as ranges, in reading order. */
   search(searchText: string, options?: SearchOptions): RangeCollection {
     const target = `${this.path.label}.search`;
@@ -243,20 +267,29 @@ export class Body extends ModelObject {
   }
 
   /** Write text over the whole story, or at either edge of it. Answers the text's own range. */
-  insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
+  insertText(
+    text: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
     const where = bodyTextLocation(insertLocation, target);
-    const handle = this.#handle();
+    this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () =>
         where === 'Replace'
-          ? { op: 'replaceSpan', span: { body: handle }, text: written }
+          ? { op: 'replaceSpan', span: { body: this.#handle() }, text: written }
           : {
               op: 'insertText',
-              at: { body: handle, at: where === 'Start' ? 'start' : 'end' },
+              at: { body: this.#handle(), at: where === 'Start' ? 'start' : 'end' },
               text: written,
             },
       (value) => {
@@ -267,7 +300,10 @@ export class Body extends ModelObject {
   }
 
   /** Add a paragraph at the start or the end of the story. Answers the new paragraph. */
-  insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph {
+  insertParagraph(
+    paragraphText: string,
+    insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'
+  ): Paragraph {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);
     const where = bodyParagraphLocation(insertLocation, target);
@@ -293,10 +329,9 @@ export class Body extends ModelObject {
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'style']);
     if (selected.includes('text')) {
-      const handle = this.#handle();
       this.loadTextInto('text', () => ({
         op: 'getText',
-        target: handle,
+        target: this.#handle(),
         projection: this.revisionTextView(),
       }));
     }
@@ -305,7 +340,7 @@ export class Body extends ModelObject {
 
   #loadStyle(): void {
     const label = `${this.path.label}.style`;
-    this.requireAddressable();
+    this.requireUsablePath();
     this.read(
       label,
       () => ({ op: 'getStyle', span: spanRefOf(this.path, 'body') }),
@@ -313,6 +348,40 @@ export class Body extends ModelObject {
         this.setLoadedProperty('style', hydratedStyle(value, label));
       }
     );
+  }
+
+  /** Fields within this body. */
+  get fields(): FieldCollection {
+    this.requireUsablePath();
+    return (this.#fields ??= FieldCollection.of(
+      this.context,
+      `${this.path.label}.fields`,
+      this.path,
+      'body'
+    ));
+  }
+  /** Inline pictures within this body. */
+  get inlinePictures(): InlinePictureCollection {
+    this.requireUsablePath();
+    return (this.#inlinePictures ??= InlinePictureCollection.of(
+      this.context,
+      `${this.path.label}.inlinePictures`,
+      this.path,
+      'body'
+    ));
+  }
+
+  /** Top-level tables within this body or table cell. */
+  get tables(): TableCollection {
+    this.requireUsablePath();
+    return (this.#tables ??= TableCollection.over(
+      this.context,
+      `${this.path.label}.tables`,
+      this.path,
+      () => ({
+        body: this.#handle(),
+      })
+    ));
   }
 
   #handle(): AutomationHandle {

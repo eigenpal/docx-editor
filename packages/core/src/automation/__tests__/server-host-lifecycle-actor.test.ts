@@ -15,6 +15,9 @@ import { normalizeParagraphIdentity } from '../../store/package/para-id.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { TreePackageStore } from '../../store/store/tree-package-store.ts';
 import { stubCollaborationSession } from '../../editor/__tests__/collaboration-test-module.ts';
+import { createAutomationHost } from '../host.ts';
+import { SERVER_AUTOMATION_CAPABILITIES } from '../server-host.ts';
+import { handleAt, handlesAt, roots } from './support/protocol.ts';
 import { packageStorePort } from '../server-host.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -80,4 +83,27 @@ describe('headless applyLifecycle binds the collaboration actor', () => {
       relationshipIdFromNumber(Number(nextStripedDecimalId(used, 'bob', MAX_RELATIONSHIP_NUMBER)))
     );
   });
+});
+
+test('startNewList returns the actor-allocated ID used by the committed paragraph', () => {
+  const created = ['alice', 'bob'].map((actor) => {
+    const { port, store } = portFor(actor);
+    const host = createAutomationHost({ port, capabilities: SERVER_AUTOMATION_CAPABILITIES });
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const list = handleAt(host.execute({ operations: [{ op: 'startNewList', paragraph }] }), 0);
+    const id = host.execute({ operations: [{ op: 'getListId', list }] }).results[0]!;
+    const found = handleAt(
+      host.execute({ operations: [{ op: 'getParagraphList', paragraph }] }),
+      0
+    );
+    expect(found).toEqual(list);
+    expect(store.currentPackage().parts.has('/word/numbering.xml')).toBe(true);
+    expect(id.status).toBe('ok');
+    return id;
+  });
+  expect(created[0]).not.toEqual(created[1]);
 });

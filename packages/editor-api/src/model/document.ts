@@ -31,7 +31,8 @@ import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
 
 /** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
-export type ChangeTrackingMode = 'Off' | 'TrackAll' | 'TrackMineOnly';
+export { ChangeTrackingMode } from './editing-enums.ts';
+import { ChangeTrackingMode } from './editing-enums.ts';
 
 /**
  * The document: the root every other object is reached from.
@@ -82,17 +83,18 @@ export class Document extends ModelObject {
   }
 
   /**
-   * Tracking for this server host. Load 'changeTrackingMode' explicitly before reading.
+   * Tracking for this automation runtime. Load 'changeTrackingMode' explicitly before reading.
    * Document.load() keeps an empty default property set across hosts. Assignments take effect at sync.
    * TrackMineOnly tracks this runtime's inline text edits using its configured author.
-   * TrackAll and browser-host mode control are not supported. Unsupported tracked mutation
+   * TrackAll is unsupported. Browser tracked writes require the review module; this setting
+   * does not change the editor UI mode. Unsupported tracked mutation
    * kinds refuse; the setting is session-local and is not saved as a document-wide policy.
    */
-  get changeTrackingMode(): ChangeTrackingMode {
+  get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly' {
     return this.loadedProperty<ChangeTrackingMode>('changeTrackingMode');
   }
 
-  set changeTrackingMode(mode: ChangeTrackingMode) {
+  set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly') {
     if (!['Off', 'TrackAll', 'TrackMineOnly'].includes(mode))
       fail({ code: 'InvalidArgument', target: 'document.changeTrackingMode' });
     const author = this.internals.author;

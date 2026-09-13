@@ -1,3 +1,6 @@
+import { validateSetFieldCode } from './tree-op-field-code.ts';
+import { validateTableAuthoring } from './tree-op-table-batch.ts';
+import { validateTableProperties } from './tree-op-table-authoring.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { coveredTextFormDefinitionRefusal } from './text-form-field-deletion.ts';
@@ -391,6 +394,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     return validateRewriteTocPageNumbers(part, op);
   }
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
+  if (op.op === 'setFieldCode') return validateSetFieldCode(part, op);
   if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);
@@ -465,6 +469,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     return validateDeleteBlock(part, op.blockId);
   }
+  if (op.op === 'authorTable') return validateTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return validateTableProperties(part, op);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow') return validateTableRowOp(part, op);
   if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
     return validateTableColumnOp(part, op);

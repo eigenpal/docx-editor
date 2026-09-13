@@ -41,6 +41,7 @@
       "@docx-editor.dev/core/contracts/plugin": ["../../../core/src/contracts/plugin.ts"],
       "@docx-editor.dev/core/contracts/types": ["../../../core/src/contracts/types-barrel.ts"],
       "@docx-editor.dev/core/layout": ["../../../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/export": ["../../../core/src/export/index.ts"],
       "@docx-editor.dev/core/output": ["../../../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../../../core/src/store/index.ts"],
       "@docx-editor.dev/core/collaboration": ["../../../core/src/collaboration/index.ts"],

@@ -20,12 +20,14 @@ import {
   forEachSemanticDrawing,
   forEachSemanticStory,
   forEachStoryParagraphFragment,
-  type SemanticArtifactStoryKind,
-  type SemanticLayout,
-  type SemanticReviewArtifactOccurrence,
-  type SemanticReviewArtifactRecord,
   type SemanticStoryVisit,
-} from '../layout/index.ts';
+} from '../layout/semantic-record-queries.ts';
+import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type {
+  SemanticArtifactStoryKind,
+  SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactRecord,
+} from '../layout/review-artifact-records.ts';
 
 interface ParagraphOccurrence {
   readonly pageIndex: number;

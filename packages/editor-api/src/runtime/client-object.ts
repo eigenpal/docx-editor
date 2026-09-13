@@ -99,7 +99,7 @@ export abstract class ClientObject implements RuntimeManagedObject {
    * readable after the next `sync()`, and reading before then is `PropertyNotLoaded`.
    */
   load(option?: LoadOption): this {
-    this.requireAddressable();
+    this.requireUsablePath();
     this.onLoad(resolveLoadOption(option, this.#path.label));
     return this;
   }
@@ -140,10 +140,20 @@ export abstract class ClientObject implements RuntimeManagedObject {
     this.#internals.assertUsable(this.#path.label);
   }
 
+  /** Permit a queued read dependency, but never a null or released proxy. */
+  protected requireUsablePath(): void {
+    if (this.#path.isReleased || this.#path.isNull)
+      fail({ code: 'InvalidObjectPath', target: this.#path.label });
+    this.#internals.assertUsable(this.#path.label);
+  }
+
   /** @internal Add one action to the context's queue, to be planned at the next sync. */
   protected enqueue(action: QueuedAction): void {
-    this.requireAddressable();
-    this.#internals.queue.push(action);
+    this.requireUsablePath();
+    this.#internals.queue.push({
+      ...action,
+      dependencies: [...(action.dependencies ?? []), this.#path],
+    });
   }
 
   /** @internal Read a property a completed `load` filled in; refuses if none did. */

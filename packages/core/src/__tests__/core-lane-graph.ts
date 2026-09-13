@@ -140,7 +140,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     // The store plus its provider-neutral collaboration capability. This lane is the
     // transport-neutral host port an automation object model programs against, and a server
     // has to run it without binding, output, editor, or any CRDT/network implementation.
-    mayImport: ['store', 'collaboration'],
+    mayImport: ['store', 'collaboration', 'layout', 'export'],
     environment: 'neutral',
     subpath: './automation',
   },
@@ -168,6 +168,7 @@ export const BROWSER_REACHABLE: readonly LaneName[] = [
   'layout',
   'output',
   'automation',
+  'export',
   'editor',
 ];
 

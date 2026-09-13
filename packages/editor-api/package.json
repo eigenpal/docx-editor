@@ -30,6 +30,7 @@
     }
   },
   "devDependencies": {
+    "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/core": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
     "fflate": "^0.8.2",
@@ -51,6 +52,8 @@
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/editor-api",
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "compat:generate": "node scripts/generate-conformance.mjs",
+    "compat:report": "node scripts/compat-report.mjs",
+    "compat:fetch-inventory": "node scripts/fetch-signature-inventory.mjs",
     "compat:fetch-reference": "node scripts/fetch-office-reference.mjs",
     "compat:check-drift": "node scripts/fetch-office-reference.mjs --check",
     "compat:adopt": "node scripts/fetch-office-reference.mjs --adopt"

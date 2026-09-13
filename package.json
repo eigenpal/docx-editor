@@ -8,6 +8,7 @@
     "examples/write-agent",
     "examples/astro",
     "examples/automation",
+    "examples/editor-api-consumers",
     "examples/docx-to-markdown",
     "examples/custom-nodes",
     "examples/collaboration",

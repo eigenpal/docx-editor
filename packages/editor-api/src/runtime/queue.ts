@@ -22,10 +22,16 @@ import type { AutomationOperation, AutomationValue } from '@docx-editor.dev/core
 /** Whether an action reads or writes. Drives the conditional-revision rule in `sync()`. */
 export type ActionSort = 'read' | 'write';
 
+import type { ObjectPath } from './object-path.ts';
+
 export interface QueuedAction {
   readonly sort: ActionSort;
+  /** Paths that must resolve before this action can be planned. */
+  readonly dependencies?: readonly ObjectPath[];
   /** The consumer-facing name of what this action is for, for errors. Never a handle. */
   readonly label: string;
+  /** Release coalesced state when a batch completes or is discarded. */
+  dispose?(): void;
   /**
    * The host operation for this action.
    *
@@ -63,6 +69,7 @@ export class ActionQueue {
 
   /** Drop everything queued: what a finished run does with actions nobody synced. */
   clear(): void {
+    for (const action of this.#actions) action.dispose?.();
     this.#actions = [];
   }
 }

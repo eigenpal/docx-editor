@@ -332,7 +332,13 @@ describe('the automation lane is a neutral host port (Office-compatible automati
   test('it may reach only neutral document capabilities', () => {
     // The whole point of the lane: one document-operation implementation that a server can
     // run. A dependency on binding, output or editor would put a DOM in the server host.
-    expect([...CORE_LANES.automation.mayImport].sort()).toEqual(['collaboration', 'store']);
+    // PAGE/NUMPAGES calculation uses the neutral document-layout coordinator.
+    expect([...CORE_LANES.automation.mayImport].sort()).toEqual([
+      'collaboration',
+      'export',
+      'layout',
+      'store',
+    ]);
     for (const forbidden of ['binding', 'output', 'editor'] as LaneName[]) {
       expect(CORE_LANES.automation.mayImport).not.toContain(forbidden);
     }

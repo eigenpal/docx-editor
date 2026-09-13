@@ -56,7 +56,10 @@ export interface TreeApplyResult {
 export type TreeApplyOptions = Pick<
   TreeTransactOptions,
   'origin' | 'actorId' | 'operationId' | 'recordsHistory'
->;
+> & {
+  /** Package resources committed in the same transaction as the tree operations. */
+  readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+};
 
 /**
  * One open document: the canonical tree, and the only write path into it.
