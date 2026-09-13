@@ -88,19 +88,19 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the property has not been loaded. Call load(...) and await context.sync() before reading it.',
   ValueNotLoaded: 'the result has not been filled in yet. Await context.sync() before reading it.',
   InvalidObjectPath:
-    'the object cannot be addressed. An object an item accessor answered is usable after the ' +
-    'next await context.sync(); an object whose run has ended is released for good, unless ' +
-    'context.trackedObjects.add(...) kept it.',
+    'the object cannot be addressed. Await context.sync() after creating an object with an edit. ' +
+    'Keep proxies within their run, or use context.trackedObjects.add(...) before the run ends.',
   ObjectInUse:
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
   ResourceLimitExceeded: 'the document exceeds a supported resource limit.',
   ItemNotFound: 'the collection has no such item.',
-  NotSupported: 'this document host does not support that operation.',
+  NotSupported:
+    'the operation or argument is outside this document or host’s supported capabilities.',
   NotImplemented: 'this version does not implement that yet.',
   ConflictingChanges:
-    'two changes in this batch affect the same paragraph. Split them across two ' +
+    'these operations cannot share one atomic batch. Split them across separate ' +
     'context.sync() calls.',
   InvalidRequestContext: 'the request context has finished. Start another run to continue.',
   RuntimeDisposed: 'the runtime has been disposed.',

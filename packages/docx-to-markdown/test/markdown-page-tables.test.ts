@@ -166,3 +166,14 @@ test('keeps row cells past the declared w:tblGrid width', async () => {
   expect(result.markdown).toContain('| One | Two | Overflow |');
   expect(result.markdown).toContain('| A | B | C |');
 });
+
+test('RTL table export retains logical cell order despite mirrored layout columns', async () => {
+  const cell = (text: string) => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+  const table =
+    '<w:tbl><w:tblPr><w:bidiVisual/></w:tblPr><w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="2400"/></w:tblGrid>' +
+    `<w:tr>${cell('First')}${cell('Second')}</w:tr>` +
+    `<w:tr>${cell('A')}${cell('B')}</w:tr></w:tbl>`;
+  const result = await exportMarkdown(docx(table));
+  expect(result.markdown).toContain('| First | Second |');
+  expect(result.markdown).toContain('| A | B |');
+});

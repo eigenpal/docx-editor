@@ -25,6 +25,7 @@ import {
   MIN_TABLE_BORDER_SIZE_EIGHTHS,
   MIN_TABLE_COLUMN_WIDTH_TWIPS,
 } from '../store/store/table-constraints.ts';
+import { tableInteractionIndex } from '../layout/semantic-table-interaction.ts';
 import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
@@ -42,6 +43,18 @@ import type {
   TreeOpRejection,
 } from '../store/store/tree-op-types.ts';
 import { TABLE_BORDER_STYLES } from '../store/table-border-style.ts';
+
+function isVisualRtlTable(layout: SemanticLayout, tableId: string): boolean {
+  return tableInteractionIndex(layout).occurrences.some(
+    (occ) =>
+      occ.table.tableId === tableId &&
+      occ.row.cells.some((cell) => cell.logicalGridColumn !== undefined)
+  );
+}
+
+function visualBorderTarget(target: TableBorderEdgeTarget, rtl: boolean): TableBorderEdgeTarget {
+  return rtl ? (target === 'left' ? 'right' : target === 'right' ? 'left' : target) : target;
+}
 
 let plannerCallCount = 0;
 
@@ -625,16 +638,17 @@ function planResizeDivider(
   if (!left || !right) return refusal('invalidArgs', 'the table target is no longer valid');
   const leftIndex = topo.topology.gridColumns.indexOf(left);
   const rightIndex = topo.topology.gridColumns.indexOf(right);
-  if (rightIndex !== leftIndex + 1) {
+  if (Math.abs(rightIndex - leftIndex) !== 1) {
     return refusal('invalidArgs', 'the column divider target is not adjacent');
   }
   const op: TreeDocOp = {
     op: 'setTableColumnWidths',
     tableId: target.tableId,
-    leftGridColumnId: target.leftGridColumnId,
-    rightGridColumnId: target.rightGridColumnId,
-    leftWidthTwips,
-    rightWidthTwips,
+    // Pointer targets use visual left/right; the store operates in document order.
+    leftGridColumnId: leftIndex < rightIndex ? target.leftGridColumnId : target.rightGridColumnId,
+    rightGridColumnId: leftIndex < rightIndex ? target.rightGridColumnId : target.leftGridColumnId,
+    leftWidthTwips: leftIndex < rightIndex ? leftWidthTwips : rightWidthTwips,
+    rightWidthTwips: leftIndex < rightIndex ? rightWidthTwips : leftWidthTwips,
   };
   return planValidated(input.part, [op], { kind: 'preserveSelection' });
 }
@@ -800,17 +814,22 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       const tableId = columnTarget?.tableId ?? anchor.tableId;
       const gridColumnId =
         columnTarget?.gridColumnId ?? gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
+      const where = isVisualRtlTable(input.layout, tableId)
+        ? command.where === 'left'
+          ? 'right'
+          : 'left'
+        : command.where;
       const op: TreeDocOp = gridColumnId
         ? {
             op: 'insertTableColumn',
             tableId,
-            where: command.where,
+            where,
             gridColumnId,
           }
         : {
             op: 'insertTableColumn',
             tableId,
-            where: command.where,
+            where,
             referenceCellId: anchor.cellId,
           };
       return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
@@ -884,7 +903,10 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
           tableId: anchor.tableId,
           cellIds: anchor.cellIds,
           scope: 'none',
-          target: command.target as TableBorderEdgeTarget,
+          target: visualBorderTarget(
+            command.target as TableBorderEdgeTarget,
+            isVisualRtlTable(input.layout, anchor.tableId)
+          ),
         };
         return planValidated(part, [op], { kind: 'preserveSelection' });
       }
@@ -894,7 +916,7 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
         op: 'setTableCellBorders',
         tableId: anchor.tableId,
         cellIds: anchor.cellIds,
-        scope: command.scope,
+        scope: visualBorderTarget(command.scope, isVisualRtlTable(input.layout, anchor.tableId)),
         spec: lowered.spec,
       };
       return planValidated(part, [op], { kind: 'preserveSelection' });

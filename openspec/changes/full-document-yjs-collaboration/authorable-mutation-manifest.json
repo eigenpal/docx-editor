@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 76,
-    "singlePartApply": 64,
+    "treeDocOpKinds": 79,
+    "singlePartApply": 67,
     "headerFooterLifecycle": 5,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -22,7 +22,7 @@
     "storyScopeKinds": 3,
     "namedPackageIntents": 16,
     "unsupportedRows": 16,
-    "activeOpenSpecChanges": 26
+    "activeOpenSpecChanges": 27
   },
   "storyScopes": [
     {
@@ -63,6 +63,7 @@
       "insertHardBreak",
       "insertPageBreak",
       "insertPageField",
+      "setFieldCode",
       "setListLevel",
       "setListNumbering",
       "setParagraphTabStops",
@@ -91,6 +92,8 @@
       "setTableColumnWidths",
       "setTableRightEdgeWidth",
       "setTableRowHeight",
+      "setTableProperties",
+      "authorTable",
       "setTableCellBorders",
       "setTableCellFill",
       "setTableCellVerticalAlignment",
@@ -145,6 +148,7 @@
     "insertHardBreak",
     "insertPageBreak",
     "insertPageField",
+    "setFieldCode",
     "setListLevel",
     "setListNumbering",
     "setParagraphTabStops",
@@ -175,6 +179,8 @@
     "setTableColumnWidths",
     "setTableRightEdgeWidth",
     "setTableRowHeight",
+    "setTableProperties",
+    "authorTable",
     "setTableCellBorders",
     "setTableCellFill",
     "setTableCellVerticalAlignment",
@@ -435,6 +441,15 @@
       ],
       "packageIntents": [],
       "openSpec": ["scoped-header-footer-editing", "word-like-field-rendering"]
+    },
+    {
+      "kind": "setFieldCode",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setListLevel",
@@ -741,6 +756,24 @@
       "commandExposure": ["surface-table"],
       "packageIntents": [],
       "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
+    },
+    {
+      "kind": "authorTable",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setTableCellBorders",
@@ -1530,6 +1563,11 @@
       "name": "document-navigation-pane",
       "role": "independent",
       "notes": "Navigation chrome. No new mutation kind."
+    },
+    {
+      "name": "agent-editing-subset",
+      "role": "mutation-extension",
+      "notes": "Adds canonical table authoring, direct table properties, and page-field instruction writes; primitive replay convergence is covered."
     }
   ],
   "remainingAmbiguity": [

@@ -207,13 +207,10 @@ export interface SemanticTableCell {
   readonly legacyContentAlignment?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
-  /**
-   * Absolute grid column this cell starts on, after `w:gridBefore` and every preceding
-   * span. Structural conditional formats and cell geometry both key on this, never on the
-   * cell's position in the row: one `gridSpan` cell otherwise shifts firstCol/lastCol and
-   * the vertical bands for every cell after it.
-   */
+  /** Physical grid column after width/style resolution and the bidiVisual projection. */
   readonly gridColumn: number;
+  /** Stored grid index when bidiVisual maps this cell into a physical RTL grid. */
+  readonly logicalGridColumn?: number;
   /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
   readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
@@ -280,6 +277,8 @@ export interface SemanticTableRow {
  * spans — vertical merges and column spans are already accounted for.
  */
 export interface SemanticTableStructure {
+  /** Whether stored columns and horizontal table properties display right to left. */
+  readonly bidiVisual?: true;
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
   /** Verified pre-2013 content-aligned full-width inline table; derived, never serialized. */
@@ -704,6 +703,11 @@ function readTableStructureUncached(
     ? cascadeTableFormatting(styleCascade, styleId)
     : EMPTY_TABLE_FORMATTING;
   const look = readTableLook(tblPr);
+  let bidiVisual = false;
+  for (const node of tableStyle.tablePropertyNodes) {
+    if (childNamed(node, 'bidiVisual')) bidiVisual = readFlag(node, 'bidiVisual');
+  }
+  if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
   let styleMargins = DEFAULT_CELL_MARGINS;
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
@@ -1003,20 +1007,36 @@ function readTableStructureUncached(
     floating: float !== undefined,
   });
 
+  const columnWidthsPt = resolveColumnWidthsPt({
+    gridCols,
+    claims:
+      legacyWidth === undefined ? claims : legacyRoundedCellClaims(claims, gridCols, legacyWidth),
+    columnCount,
+    contentWidthPt: legacyWidth ?? contentWidthPt,
+    tableWidth,
+    layoutFixed,
+  });
+  // Resolve widths and conditional styles in stored order, then project the grid only.
+  // Cell arrays keep document order so keyboard traversal and text never reverse.
+  const visualRows = bidiVisual
+    ? rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => ({
+          ...cell,
+          margins: { ...cell.margins, left: cell.margins.right, right: cell.margins.left },
+          borders: { ...cell.borders, left: cell.borders.right, right: cell.borders.left },
+          logicalGridColumn: cell.gridColumn,
+          gridColumn: Math.max(0, columnWidthsPt.length - cell.gridColumn - cell.gridSpan),
+        })),
+      }))
+    : rows;
   return {
-    columnWidthsPt: resolveColumnWidthsPt({
-      gridCols,
-      claims:
-        legacyWidth === undefined ? claims : legacyRoundedCellClaims(claims, gridCols, legacyWidth),
-      columnCount,
-      contentWidthPt: legacyWidth ?? contentWidthPt,
-      tableWidth,
-      layoutFixed,
-    }),
+    ...(bidiVisual ? { bidiVisual: true as const } : {}),
+    columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
     rows:
       legacyWidth === undefined
-        ? rows
-        : rows.map((row) => ({
+        ? visualRows
+        : visualRows.map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
           })),
@@ -1024,10 +1044,20 @@ function readTableStructureUncached(
     tableWidth,
     layoutFixed,
     indentPt,
-    alignment,
+    alignment: bidiVisual
+      ? alignment === 'left'
+        ? 'right'
+        : alignment === 'right'
+          ? 'left'
+          : alignment
+      : alignment,
     ...(float ? { float } : {}),
     cellSpacingPt,
-    tableBorders,
-    defaultMargins,
+    tableBorders: bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    defaultMargins: bidiVisual
+      ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
+      : defaultMargins,
   };
 }

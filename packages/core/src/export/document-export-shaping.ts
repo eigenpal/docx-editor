@@ -18,6 +18,7 @@ import {
   complexSymbolFieldFonts,
   usedNumberingFontFamilies,
 } from '../layout/synthesized-font-families.ts';
+import { eastAsianLanguageFontFamilies } from '../layout/east-asian-font-families.ts';
 import { EQUATION_FONT_FAMILY } from '../layout/equation-layout.ts';
 import {
   createFieldParseState,
@@ -462,6 +463,7 @@ function documentFontFamilies(view: HeadlessDocumentView): readonly string[] {
   }
   const headlessTheme = view.documentThemeFonts();
   const theme = {
+    ...headlessTheme,
     major: headlessTheme.major,
     minor: headlessTheme.minor,
     majorEastAsia: headlessTheme.majorEastAsia ?? null,
@@ -488,6 +490,7 @@ function documentFontFamilies(view: HeadlessDocumentView): readonly string[] {
       ...rendered.direct,
       ...layoutSynthesizedFontFamilies(roots),
       ...markerFamilies,
+      ...eastAsianLanguageFontFamilies(roots, view.stylesRoot(), theme),
       ...rendered.inherited,
     ]) {
       const fold = family.toLowerCase();

@@ -743,7 +743,7 @@ describe('a scripted write obeys the editing mode', () => {
     });
 
     expect(response.ok).toBe(false);
-    expect(errorAt(response, 0).detail).toContain('author');
+    expect(errorAt(response, 0).code).toBe('unsupported-capability');
     expect(savedPart(host, 'word/_rels/document.xml.rels')).toBe(before);
   });
 

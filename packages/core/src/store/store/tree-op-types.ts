@@ -1,3 +1,4 @@
+import type { SetFieldCodeOp } from './tree-op-field-code.ts';
 import type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
 import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-form-fields.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
@@ -154,6 +155,7 @@ export {
  * unchanged.
  */
 export type TreeDocOp =
+  | SetFieldCodeOp
   | {
       /**
        * Replace one story's complete block structure with fresh plain paragraphs.
@@ -510,6 +512,8 @@ export type TreeDocOp =
        */
       readonly op: 'setHyperlinkTarget';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
       readonly relationshipId?: string;
       readonly anchor?: string;
       readonly tooltip?: string;
@@ -525,6 +529,8 @@ export type TreeDocOp =
        */
       readonly op: 'removeHyperlink';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
     }
   | {
       /**
@@ -689,6 +695,32 @@ export type TreeDocOp =
       readonly gridColumnId: string;
       readonly columnWidthTwips: number;
       readonly tableWidthTwips: number;
+    }
+  | {
+      /** Atomic semantic table authoring. Newly created nodes never need caller-supplied IDs. */
+      readonly op: 'authorTable';
+      readonly action:
+        | {
+            readonly kind: 'existing';
+            readonly tableId: string;
+            readonly mutation: import('./table-authoring-plan.ts').AutomationTableMutation;
+          }
+        | {
+            readonly kind: 'insert';
+            readonly paragraphId: string;
+            readonly offset: number;
+            readonly rowCount: number;
+            readonly columnCount: number;
+            readonly values?: readonly (readonly string[])[];
+          };
+    }
+  | {
+      /** Lossless direct table properties; widths are one value per rectangular grid column. */
+      readonly op: 'setTableProperties';
+      readonly tableId: string;
+      readonly styleId?: string;
+      readonly headerRowCount?: number;
+      readonly columnWidthsTwips?: readonly number[];
     }
   | {
       /** Set one authored table row to an exact height in twips. */
@@ -1041,6 +1073,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertHardBreak',
   'insertPageBreak',
   'insertPageField',
+  'setFieldCode',
   'setListLevel',
   'setListNumbering',
   'setParagraphTabStops',
@@ -1071,6 +1104,8 @@ export const TREE_DOC_OP_KINDS = [
   'setTableColumnWidths',
   'setTableRightEdgeWidth',
   'setTableRowHeight',
+  'setTableProperties',
+  'authorTable',
   'setTableCellBorders',
   'setTableCellFill',
   'setTableCellVerticalAlignment',

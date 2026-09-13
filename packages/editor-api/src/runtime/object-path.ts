@@ -5,17 +5,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // How a proxy names the document object it stands for.
 //
-// The host addresses objects by opaque handles it minted, and a handle is DATA in a batch
-// request — so an operation's target must be known before the batch is sent. That single fact
-// decides this whole file: a proxy is addressable when it holds a handle, and a proxy that does
-// not hold one yet cannot be the target of an operation in the batch that is about to go out.
-// It becomes addressable when a read in some batch hands it a handle.
-//
-// The consequence is deliberate and documented: `load`/`sync` is what turns a promised object
-// into an addressable one, so reaching a paragraph takes one sync before writing to it. The
-// alternative — resolving chained paths by quietly sending several batches per `sync()` — would
-// trade the property this runtime exists to guarantee (one sync is one atomic batch) for
-// syntactic convenience.
+// Pending paths resolve from read-only prerequisite batches before one atomic write batch.
+// The runtime pins all such reads and the final write to one document revision. A path
+// returned by an insertion cannot resolve this way: its producer writes, so callers must
+// sync that insertion before using the returned object. Released and null paths never
+// become valid prerequisites.
 //
 // A path also carries its LABEL: the consumer-facing name of the object (`document.body`,
 // `document.body.paragraphs.items[0]`). It is what errors are allowed to say. The handle never

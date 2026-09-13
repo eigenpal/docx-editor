@@ -25,6 +25,7 @@
 // file input. Both are validated as XML text here; the serializer escapes on the way out. This
 // file builds no markup, no URL and no CSS.
 
+import { extendedFontProperties, highlightHex, underlineName } from './font-values.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
@@ -64,6 +65,11 @@ export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'R
 export interface AutomationFontRead {
   readonly bold: boolean | null;
   readonly italic: boolean | null;
+  readonly underline: string | null;
+  readonly strikeThrough: boolean | null;
+  readonly highlightColor: string | null;
+  readonly subscript: boolean | null;
+  readonly superscript: boolean | null;
   /** `w:rFonts/@w:ascii`. */
   readonly name: string | null;
   /** Points. */
@@ -76,6 +82,11 @@ export interface AutomationFontRead {
 export interface AutomationFontWrite {
   readonly bold?: boolean;
   readonly italic?: boolean;
+  readonly underline?: string;
+  readonly strikeThrough?: boolean;
+  readonly highlightColor?: string | null;
+  readonly subscript?: boolean;
+  readonly superscript?: boolean;
   readonly name?: string;
   readonly size?: number;
   readonly color?: string;
@@ -139,6 +150,11 @@ export type FormattingPlan<T> =
 const NO_FONT: AutomationFontRead = Object.freeze({
   bold: null,
   italic: null,
+  underline: null,
+  strikeThrough: null,
+  highlightColor: null,
+  subscript: null,
+  superscript: null,
   name: null,
   size: null,
   color: null,
@@ -227,6 +243,15 @@ export function fontRead(
   return {
     bold: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'b')))),
     italic: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'i')))),
+    underline: agreed(
+      properties.map((rPr) => underlineName(attributeOf(namedChild(rPr, 'u'), 'val')))
+    ),
+    strikeThrough: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'strike')))),
+    highlightColor: agreed(
+      properties.map((rPr) => highlightHex(attributeOf(namedChild(rPr, 'highlight'), 'val')))
+    ),
+    subscript: agreed(properties.map((rPr) => scriptValue(rPr, 'subscript'))),
+    superscript: agreed(properties.map((rPr) => scriptValue(rPr, 'superscript'))),
     name: agreed(
       properties.map((rPr) => {
         const fonts = namedChild(rPr, 'rFonts');
@@ -336,7 +361,9 @@ function twipsFor(value: number, field: string): FormattingPlan<number> {
  * deleting a run's colour.
  */
 export function fontProperties(request: AutomationFontWrite): FormattingPlan<OoxmlProperty[]> {
-  const properties: OoxmlProperty[] = [];
+  const extra = extendedFontProperties(request);
+  if (!extra.ok) return extra;
+  const properties: OoxmlProperty[] = extra.value;
   if (request.bold !== undefined) {
     if (typeof request.bold !== 'boolean') return { ok: false, detail: 'bold: not a boolean' };
     properties.push({ localName: 'b', ...(request.bold ? {} : { attributes: { val: '0' } }) });
@@ -381,7 +408,12 @@ export function fontProperties(request: AutomationFontWrite): FormattingPlan<Oox
       attributes: { val: colour.trim().slice(1).toUpperCase() },
     });
   }
-  if (properties.length === 0) return { ok: false, detail: 'no formatting was asked for' };
+  if (
+    properties.length === 0 &&
+    request.subscript === undefined &&
+    request.superscript === undefined
+  )
+    return { ok: false, detail: 'no formatting was asked for' };
   return { ok: true, value: properties };
 }
 
@@ -505,4 +537,30 @@ function attributesOf(element: OoxmlElement | undefined): Record<string, string>
     record[entry.localName] = entry.value;
   }
   return record;
+}
+
+// Conditional false writes must preserve the opposite vertical alignment on each run.
+// Use this after merging the ordinary incoming properties with the run or paragraph mark.
+export function fontVerticalProperties(
+  properties: readonly OoxmlProperty[],
+  request: AutomationFontWrite
+): OoxmlProperty[] {
+  if (request.subscript === undefined && request.superscript === undefined) return [...properties];
+  const current = properties.find((p) => p.localName === 'vertAlign')?.attributes?.val;
+  const val =
+    request.subscript === true
+      ? 'subscript'
+      : request.superscript === true
+        ? 'superscript'
+        : current === 'subscript' && request.subscript === false
+          ? 'baseline'
+          : current === 'superscript' && request.superscript === false
+            ? 'baseline'
+            : (current ?? 'baseline');
+  return mergedProperties(properties, [{ localName: 'vertAlign', attributes: { val } }]);
+}
+
+function scriptValue(rPr: OoxmlElement | undefined, expected: string): boolean | null {
+  const value = attributeOf(namedChild(rPr, 'vertAlign'), 'val');
+  return value === null ? null : value === expected;
 }

@@ -1,3 +1,6 @@
+import { renderPopup } from '../popup-renderer';
+import { usePopupConfig } from '../popup-config';
+import type { RefObject } from '../../docx-editor-ref-object';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 // Alt-text authoring: description and title, never `@name` fallback.
 
@@ -23,7 +26,7 @@ export interface ImageAltTextProps {
  * @public
  */
 export function ImageAltText({ className, hidden, asChild, children }: ImageAltTextProps) {
-  const { t } = useTranslation();
+  const popups = usePopupConfig();
   const label = useToolbarLabel();
   const { execute, value, isEnabled, disabledReason } = useEditorValueCommand('image.altText');
   const [open, setOpen] = useState(false);
@@ -40,7 +43,12 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
     if (!open) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (
+        event.target instanceof Node &&
+        (root?.contains(event.target) ||
+          root?.ownerDocument.getElementById(panelId)?.contains(event.target))
+      )
+        return;
       setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -55,7 +63,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       document.removeEventListener('mousedown', onMouseDown, true);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open]);
+  }, [open, panelId]);
 
   const apply = useCallback(() => {
     execute(draft);
@@ -82,6 +90,16 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
     onClick: () => setOpen((was) => !was),
   };
 
+  const popupProps: DocxEditorImageAltTextPopupProps = {
+    id: panelId,
+    value: draft,
+    onValueChange: setDraft,
+    onApply: apply,
+    onClose: () => setOpen(false),
+    isEnabled,
+    anchorRef: triggerRef,
+  };
+
   return (
     <div ref={rootRef} className="docx-toolbar__alt-text">
       {asChild ? (
@@ -89,37 +107,12 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       ) : (
         <button {...shared}>{children ?? text}</button>
       )}
-      {open ? (
-        <div
-          id={panelId}
-          role="dialog"
-          aria-label={t('imageAltText.panelTitle')}
-          className="docx-toolbar__alt-text-panel"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <label className="docx-dialog__label" htmlFor={`${panelId}-description`}>
-            {t('imageAltText.description')}
-          </label>
-          <textarea
-            id={`${panelId}-description`}
-            className="docx-dialog__textarea"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
-          />
-          <div className="docx-dialog__footer">
-            <button type="button" className="docx-dialog__button" onClick={() => setOpen(false)}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="docx-dialog__button docx-dialog__button--primary"
-              onClick={apply}
-            >
-              {t('common.apply')}
-            </button>
-          </div>
-        </div>
+      {open && popups?.imageAltText !== false ? (
+        popups?.imageAltText ? (
+          renderPopup(popups.imageAltText, popupProps)
+        ) : (
+          <DocxEditorImageAltTextPopup {...popupProps} />
+        )
       ) : null}
     </div>
   );
@@ -136,3 +129,60 @@ export interface ImageAltTextPartComponent {
 export const ToolbarImageAltText: ImageAltTextPartComponent = Object.assign(ImageAltText, {
   docxSlot: 'image.altText' as const,
 });
+
+/** State and actions for the image alt-text panel. @public */
+export interface DocxEditorImageAltTextPopupProps {
+  id: string;
+  value: string;
+  onValueChange(value: string): void;
+  onApply(): void;
+  onClose(): void;
+  isEnabled: boolean;
+  anchorRef?: RefObject<HTMLElement | null>;
+  className?: string;
+}
+/** Default image alt-text panel. @public */
+export function DocxEditorImageAltTextPopup({
+  id,
+  value,
+  onValueChange,
+  onApply,
+  onClose,
+  isEnabled,
+  className,
+}: DocxEditorImageAltTextPopupProps) {
+  const { t } = useTranslation();
+  return (
+    <div
+      id={id}
+      role="dialog"
+      aria-label={t('imageAltText.panelTitle')}
+      className={`docx-toolbar__alt-text-panel${className ? ` ${className}` : ''}`}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      <label className="docx-dialog__label" htmlFor={`${id}-description`}>
+        {t('imageAltText.description')}
+      </label>
+      <textarea
+        id={`${id}-description`}
+        className="docx-dialog__textarea"
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
+      />
+      <div className="docx-dialog__footer">
+        <button type="button" className="docx-dialog__button" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          className="docx-dialog__button docx-dialog__button--primary"
+          disabled={!isEnabled}
+          onClick={onApply}
+        >
+          {t('common.apply')}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,79 @@
 # DocxEditor / Word JavaScript API compatibility
 
+## Informational document editing report
+
+From the repository root, run:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:report
+```
+
+The report checks only document editing methods and property writes selected in
+`editing-scope.json`. It covers content insertion/deletion, formatting, tables,
+images, lists, comments, revisions, and document metadata. Read-only APIs,
+navigation, selection changes, host setup, lifecycle methods, enums, and option
+objects do not enter the denominator. Text replacement through the selection is
+an edit; moving the selection is not.
+
+The explicit upstream UID list defines scope independently from our implemented
+subset. Unsupported editing calls stay in the denominator. Review this list when
+adopting a new upstream pin or changing the intended editing scope. A missing UID
+is an error; it never silently reduces the denominator. The full pinned inventory
+remains reference input so scope changes do not require a network fetch.
+
+The checker reads actual `src/index.ts` exports, following re-exports and
+inheritance. Methods compare all overloads, parameters, and return signatures.
+Property writes compare setter types only. For example, a nullable `font.bold`
+getter does not reduce write compatibility if the setter accepts `boolean`.
+Read differences can still appear in runtime notes.
+
+Read `packages/editor-api/compat/reports/report.md` for editing endpoints and
+runtime notes. `report.json` includes the comparison shapes under `expected` and
+`actual`, along with upstream metadata. `summary.md` contains the overall editing
+percentage and separate method/property-write percentages shown in CI.
+Use `--output <directory>` with the package command to change the output directory.
+
+Signature statuses are `match`, `different`, and `missing`. Each editing member
+counts once. An exact method match requires all overloads to match. Namespace,
+whitespace, quote, and union-order normalization preserve enum alternatives and
+inline object types. Named references remain named; this is not recursive
+structural assignability. Equivalent overload spellings or differently named
+aliases can appear as `different`. No percentage proves runtime equivalence.
+
+Add per-endpoint observations to `runtime-notes.json`:
+
+```json
+{
+  "Word.Range#insertComment": {
+    "status": "partial",
+    "notes": "Writes require an explicit author."
+  }
+}
+```
+
+Runtime statuses are `equivalent`, `partial`, `different`, `unsupported`, and
+`unverified`. Missing notes default to `unverified`. Use `equivalent` only after
+reviewing runtime behavior and tests. Notes never change signature scores. Notes
+outside the editing scope remain stored but do not appear in the editing report.
+
+CI runs the report as an independent, non-blocking job. It writes a step summary
+and uploads an `office-js-compatibility` artifact. Signature differences do not
+fail the command. Tooling errors exit nonzero and show an unavailable report.
+Existing subset conformance checks remain unchanged.
+
+To refresh the full reference after reviewing the pin in `provenance.json`, run:
+
+```bash
+bun run --filter '@docx-editor.dev/editor-api' compat:fetch-inventory
+```
+
+This maintenance command downloads the pinned npm tarball and verifies its
+integrity. It records normalized facts and source provenance, not upstream
+declaration files. Commit the generated inventory with the change. Reports and
+tests use committed reference data without network access.
+
+## Selected subset conformance
+
 This directory freezes a checked-in, versioned subset of the _shape_ of the
 stable Microsoft Word JavaScript API (`Word.*`), so that
 `compat/docxeditor/declarations.ts` — DocxEditor's own, independently
@@ -31,8 +105,9 @@ and never depended on by the published package.
 ## The offline-CI guarantee
 
 `bun test`, `bun run typecheck`, `bun run build`, and `bun install` never
-touch the network. The **only** script in this task that does is
-`scripts/fetch-office-reference.mjs` — it is invoked by the scheduled
+touch the network. Explicit reference maintenance uses
+`scripts/fetch-signature-inventory.mjs` or `scripts/fetch-office-reference.mjs`.
+The latter is invoked by the scheduled
 `.github/workflows/office-compat-drift.yml` workflow, or manually by a
 maintainer, never by any of the checks above. Everything `bun test` gates on
 (reference-fixture validity, manifest/reference consistency, the generated
@@ -152,6 +227,21 @@ textual mismatch.
   source-compat fixtures can end a batch with `await context.sync()`, same
   as real Office.js samples do — this has no runtime behavior and is not
   compared against the reference.
-- **Tables and images are omitted, not stubbed** — no engine lane targets
-  them yet, so no `Word.Table`/`Word.InlinePicture`-shaped type appears
-  anywhere in `docxeditor/declarations.ts`, working or not.
+- **The older declaration-only fixture is a selected contract** — it does not
+  enumerate all runtime capabilities. Tables, pictures, fields, and the other
+  members of the 81-member editing profile are checked directly against actual
+  public exports by `compat:report`, using the pinned full inventory.
+
+### Effective document-editing profile
+
+The same `compat:report` command reports the fixed 81-member scope in
+`agent-editing-scope.json`. CI includes both the broad editing inventory and this
+ordinary-document profile in its informational job summary. Download the artifact
+for `agent-editing-report.json` and `agent-editing-report.md`, including expected
+and actual signatures and endpoint runtime notes.
+
+Member presence, exact signatures, and tested behavior are separate evidence.
+An exact signature does not imply every enum value, advanced structure, batching
+pattern, or Word behavior is supported. The Office guide explains the runtime
+contracts; `openspec/changes/agent-editing-subset/` records workflow and consumer
+verification. Both scopes share one normalized upstream inventory.

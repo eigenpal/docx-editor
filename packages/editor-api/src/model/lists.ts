@@ -37,6 +37,26 @@ import { Paragraph } from './paragraph.ts';
 /** Deepest level OOXML numbering has. Nine levels, counted from zero. */
 const MAX_LEVEL = 8;
 
+/** Supported Word bullet styles. @public */
+export enum ListBullet {
+  custom = 'Custom',
+  solid = 'Solid',
+  hollow = 'Hollow',
+  square = 'Square',
+  diamonds = 'Diamonds',
+  arrow = 'Arrow',
+  checkmark = 'Checkmark',
+}
+/** Supported Word numbering styles. @public */
+export enum ListNumbering {
+  none = 'None',
+  arabic = 'Arabic',
+  upperRoman = 'UpperRoman',
+  lowerRoman = 'LowerRoman',
+  upperLetter = 'UpperLetter',
+  lowerLetter = 'LowerLetter',
+}
+
 /**
  * A list: the set of paragraphs sharing one numbering id.
  *
@@ -49,6 +69,10 @@ const MAX_LEVEL = 8;
  */
 export class List extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
+  #formats = new Map<
+    number,
+    Extract<AutomationOperation, { op: 'setListLevelFormat' }>['format']
+  >();
 
   /** @internal A list a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): List {
@@ -96,10 +120,9 @@ export class List extends ModelObject implements PromisedItem {
   getLevelParagraphs(level: number): ParagraphCollection {
     const target = `${this.path.label}.getLevelParagraphs`;
     const chosen = requireLevel(level, target);
-    const handle = this.#handle();
     return ParagraphCollection.overListing(this.context, target, this.path, () => ({
       op: 'getListParagraphs',
-      list: handle,
+      list: this.#handle(),
       level: chosen,
     }));
   }
@@ -127,13 +150,12 @@ export class List extends ModelObject implements PromisedItem {
     ) {
       fail({ code: 'InvalidArgument', target });
     }
-    const handle = this.#handle();
     const created = Paragraph.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () => ({
         op: 'insertListParagraph',
-        list: handle,
+        list: this.#handle(),
         where:
           insertLocation === 'Start' || insertLocation === 'Before'
             ? 'start'
@@ -147,14 +169,118 @@ export class List extends ModelObject implements PromisedItem {
     return created;
   }
 
+  /** Set a level's bullet glyph. Custom bullets require a Unicode character code. */
+  setLevelBullet(level: number, listBullet: ListBullet, charCode?: number, fontName?: string): void;
+  setLevelBullet(
+    level: number,
+    listBullet: 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark',
+    charCode?: number,
+    fontName?: string
+  ): void;
+  setLevelBullet(
+    level: number,
+    listBullet:
+      | ListBullet
+      | 'Custom'
+      | 'Solid'
+      | 'Hollow'
+      | 'Square'
+      | 'Diamonds'
+      | 'Arrow'
+      | 'Checkmark',
+    charCode?: number,
+    fontName?: string
+  ): void {
+    this.#formatLevel(level, {
+      bullet: listBullet,
+      ...(charCode === undefined ? {} : { charCode }),
+      ...(fontName === undefined ? {} : { fontName }),
+    });
+  }
+
+  /** Set decimal, letter, Roman, or unnumbered markers. Numeric format entries identify zero-based levels. */
+  setLevelNumbering(
+    level: number,
+    listNumbering: ListNumbering,
+    formatString?: (string | number)[]
+  ): void;
+  setLevelNumbering(
+    level: number,
+    listNumbering: 'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter',
+    formatString?: (string | number)[]
+  ): void;
+  setLevelNumbering(
+    level: number,
+    listNumbering:
+      | ListNumbering
+      | 'None'
+      | 'Arabic'
+      | 'UpperRoman'
+      | 'LowerRoman'
+      | 'UpperLetter'
+      | 'LowerLetter',
+    formatString?: (string | number)[]
+  ): void {
+    this.#formatLevel(level, {
+      numbering: listNumbering,
+      ...(formatString === undefined ? {} : { formatString: [...formatString] }),
+    });
+  }
+
+  /** Set the starting counter for this list instance without changing other lists. */
+  setLevelStartingNumber(level: number, startingNumber: number): void {
+    this.#formatLevel(level, { startingNumber });
+  }
+
+  /** Set text indent and relative first-line indent in points. Negative relative values create hanging indents. */
+  setLevelIndents(level: number, textIndent: number, bulletNumberPictureIndent: number): void {
+    this.#formatLevel(level, { textIndent, bulletNumberPictureIndent });
+  }
+
+  #formatLevel(
+    level: number,
+    format: Extract<AutomationOperation, { op: 'setListLevelFormat' }>['format']
+  ): void {
+    const target = `${this.path.label}.levelFormat`;
+    const chosen = requireLevel(level, target);
+    this.requireUsablePath();
+    const pending = this.#formats.get(chosen);
+    if (pending) {
+      Object.assign(pending, format);
+      if ('bullet' in format) {
+        delete (pending as Record<string, unknown>).numbering;
+        delete (pending as Record<string, unknown>).formatString;
+      }
+      if ('numbering' in format) {
+        delete (pending as Record<string, unknown>).bullet;
+        delete (pending as Record<string, unknown>).charCode;
+        delete (pending as Record<string, unknown>).fontName;
+      }
+      return;
+    }
+    const merged = { ...format };
+    this.#formats.set(chosen, merged);
+    this.commandAnswering(
+      target,
+      () => {
+        return { op: 'setListLevelFormat', list: this.#handle(), level: chosen, format: merged };
+      },
+      (value) => {
+        hydratedApplied(value, target);
+      },
+      () => {
+        if (this.#formats.get(chosen) === merged) this.#formats.delete(chosen);
+      }
+    );
+  }
+
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['id']).includes('id')) return;
     const label = `${this.path.label}.id`;
-    const handle = this.#handle();
     this.read(
       label,
-      () => ({ op: 'getListId', list: handle }),
+      () => ({ op: 'getListId', list: this.#handle() }),
       (value) => {
         this.setLoadedProperty('id', hydratedNumber(value, label));
       }
@@ -270,10 +396,9 @@ export class ListItem extends ModelObject {
   set level(value: number) {
     const target = `${this.path.label}.level`;
     const level = requireLevel(value, target);
-    const paragraph = this.#paragraph();
     this.commandAnswering(
       target,
-      () => ({ op: 'setListLevel', paragraph, level }),
+      () => ({ op: 'setListLevel', paragraph: this.#paragraph(), level }),
       (answer) => {
         hydratedApplied(answer, target);
       }
@@ -284,10 +409,9 @@ export class ListItem extends ModelObject {
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['level']).includes('level')) return;
     const label = `${this.path.label}.level`;
-    const paragraph = this.#paragraph();
     this.read(
       label,
-      () => ({ op: 'getListLevel', paragraph }),
+      () => ({ op: 'getListLevel', paragraph: this.#paragraph() }),
       (value) => {
         this.setLoadedProperty('level', hydratedNumber(value, label));
       }

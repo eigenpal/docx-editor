@@ -266,6 +266,13 @@ The ref exposes seven methods:
 Use `exec()` for commands that must use the same validation as packaged chrome.
 Use `snapshot()` for a synchronous state read.
 
+## `popups`
+
+Use `definePopup(MyPopup)` to customize an automatic popup with your component.
+Forward its typed props to the default component to retain editor behavior.
+Render callbacks also work. Use `false` only when you own the trigger and visibility.
+For supported surfaces and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+
 ## Next steps
 
 - [Vue quickstart](/docs/2.x/vue)

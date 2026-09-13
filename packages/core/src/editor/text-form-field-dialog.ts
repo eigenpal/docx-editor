@@ -137,7 +137,7 @@ export function textFormFieldDialog(
   };
   apply.addEventListener('click', submit);
   panel.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+    if (event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) {
       event.preventDefault();
       submit();
     }

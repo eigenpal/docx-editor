@@ -23,6 +23,50 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
 
+## Guides by task
+
+Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and
+[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+Every example uses the supported public model and explicit sync boundaries.
+
+| Task                                                      | Guide                                                                   |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Read, insert, replace, or remove text                     | [Text and ranges](/docs/2.x/editor-api/text-and-ranges)                 |
+| Find matches, split paragraphs, or use bookmarks          | [Search and navigation](/docs/2.x/editor-api/search-and-navigation)     |
+| Set fonts, paragraph properties, styles, or links         | [Formatting and styles](/docs/2.x/editor-api/formatting)                |
+| Create and configure lists                                | [Lists and numbering](/docs/2.x/editor-api/lists)                       |
+| Work with table values, rows, columns, and cells          | [Tables and cells](/docs/2.x/editor-api/tables)                         |
+| Insert and resize images                                  | [Inline pictures](/docs/2.x/editor-api/pictures)                        |
+| Calculate PAGE and NUMPAGES                               | [Fields and pagination](/docs/2.x/editor-api/fields)                    |
+| Set page geometry and edit headers, footers, or notes     | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
+| Fill template controls and edit their metadata            | [Content controls](/docs/2.x/editor-api/content-controls)               |
+| Discuss content and manage threads                        | [Comments](/docs/2.x/editor-api/comments)                               |
+| Create, inspect, and decide redlines                      | [Tracked changes](/docs/2.x/editor-api/revisions)                       |
+| Find any public object, method, property, or support type | [API member directory](/docs/2.x/editor-api/reference)                  |
+
+## Effective document editing
+
+The supported subset includes text, extended font formatting, lists, rectangular tables, inline PNG/JPEG pictures,
+page setup, content controls, review operations, and plain PAGE/NUMPAGES fields.
+Some parameter values and document structures remain unsupported.
+See the [compatibility matrix](/docs/2.x/editor-api/office-js-api#compatibility-matrix) for those limits.
+
+Batch independent reads and writes. Supported read-derived proxies resolve before the atomic write transaction.
+Sync after insertion before configuring the returned object.
+Structural edits sharing a paragraph can conflict. Different list levels can batch after list creation completes.
+Field result updates cannot share a sync with layout-changing writes.
+
+Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` from the repository root.
+The fixed 81-member profile appears in `packages/editor-api/compat/reports/agent-editing-summary.md`.
+Endpoint details appear in `agent-editing-report.md` and `agent-editing-report.json` in that directory.
+The exhaustive editing report is `report.md`.
+CI reports percentages informationally; presence and matching signatures do not prove runtime equivalence with Word.
+Per-endpoint runtime domains and differences live in `packages/editor-api/compat/runtime-notes.json`.
+
+Server page-field evaluation needs explicit pagination with a measurer using registered font resources.
+The [font-backed pagination guide](/docs/2.x/editor-api/office-js-api#measured-page-fields-on-a-server)
+links a complete runnable agent that loads fonts, edits a report, evaluates fields, and saves the result.
+
 ## Choose a host
 
 | `DocumentCapabilities` field | Server runtime | Browser runtime |
@@ -66,8 +110,8 @@ const runtime = await DocxEditor.createServer(await readFile('contract.docx'), {
 try {
   await runtime.run(async (context) => {
     const matches = context.document.body.search('$50k');
-    matches.load();
-    await context.sync(); // one round trip: now you know what was found
+    matches.load('items');
+    await context.sync(); // Read the matching ranges.
 
     for (const match of matches.items) match.insertText('$500k', 'Replace');
     await context.sync(); // one atomic batch: all of the writes, or none
@@ -187,12 +231,20 @@ await context.sync(); // one transaction; editor Undo restores both threads
 
 The server runtime supports the same object-model calls without a browser module.
 
+## Range snapshots
+
+Ranges retain the paragraph offsets where they were found.
+They do not follow later text edits inside those paragraphs, even when their proxies are tracked.
+After editing a paragraph, search again before acting on another target there.
+Use the range returned by `insertText()` after sync to address its inserted text.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for snapshot and same-batch editing limits.
+
 ## Programming model
 
 - Reading a property you did not `load()` throws. This catches typos before they affect later writes.
 - Navigation-property expansion is not supported. A non-empty `LoadQueryOptions.expand` is
   rejected with `InvalidArgument`; load the navigation object or collection explicitly instead.
-- `sync()` is the only round trip. Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
+- `sync()` resolves supported prerequisite reads and commits one atomic write transaction. It can use several transport calls. A refused write batch applies no writes.
 - Objects are proxies into a document the runtime owns. They remain valid across `sync()` calls within one
   `run`. To carry one into a later `run`, track it and pass it to
   `runtime.run(object, callback)` for adoption. No proxy remains valid after `dispose()`.

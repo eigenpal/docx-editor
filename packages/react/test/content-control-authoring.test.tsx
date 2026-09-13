@@ -1,3 +1,4 @@
+import { definePopup } from '../src/editor/popup-renderer';
 // DocxEditor.ContentControl — inspector, remove, accessibility, focus preservation.
 //
 // Against the REAL engine: a mounted document with an SDT, caret inside it, live query
@@ -7,7 +8,10 @@
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useDocxEditor } from '../src/editor/context';
+import { DocxEditorContentControlWidget } from '../src/editor/DocxEditorContentControlWidget';
+import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,10 +54,7 @@ const sdt = (sdtPr: string, content: string) =>
   `<w:sdt><w:sdtPr>${sdtPr}</w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
 
 const PLAIN = docx(
-  sdt(
-    `<w:alias w:val="Project"/><w:tag w:val="project"/><w:text/>`,
-    p('Enter project name')
-  )
+  sdt(`<w:alias w:val="Project"/><w:tag w:val="project"/><w:text/>`, p('Enter project name'))
 );
 const LOCKED = docx(
   sdt(
@@ -62,10 +63,7 @@ const LOCKED = docx(
   )
 );
 const REMOVAL_LOCKED = docx(
-  sdt(
-    `<w:alias w:val="Keep"/><w:lock w:val="sdtLocked"/><w:text/>`,
-    p('editable but kept')
-  )
+  sdt(`<w:alias w:val="Keep"/><w:lock w:val="sdtLocked"/><w:text/>`, p('editable but kept'))
 );
 const BOUND = docx(
   sdt(
@@ -441,3 +439,86 @@ describe('content-control authoring surface', () => {
     expect(result.dataset.reason).toMatch(/does not match/i);
   });
 });
+
+for (const mode of ['native', 'custom', 'component', 'manual'] as const) {
+  test(`value widget ownership: ${mode}`, async () => {
+    let manual: ContentControlWidgetSession | undefined;
+    let editor: DocxEditorInstance | undefined;
+    function ManualOwner() {
+      const owner = useDocxEditor();
+      useEffect(
+        () =>
+          owner?.setContentControlWidgetChrome({
+            onRequest(session) {
+              manual = session;
+            },
+          }),
+        [owner]
+      );
+      return null;
+    }
+    const view = render(
+      <DocxEditorRoot
+        document={DROPDOWN}
+        onReady={(value) => {
+          editor = value as DocxEditorInstance;
+        }}
+        popups={{
+          contentControlWidget:
+            mode === 'native'
+              ? undefined
+              : mode === 'manual'
+                ? false
+                : mode === 'component'
+                  ? definePopup(DocxEditorContentControlWidget)
+                  : (props) => <DocxEditorContentControlWidget {...props} />,
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          {mode === 'manual' ? <ManualOwner /> : null}
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {});
+    await act(async () => {
+      editor!.focus();
+    });
+    const opener = document.activeElement;
+    const widget = view.container.querySelector<HTMLElement>('[data-docx-cc-widget="dropdown"]');
+    expect(widget !== null).toBe(true);
+    await act(async () => {
+      fireEvent.pointerDown(widget!, { button: 0, pointerId: 1, pointerType: 'mouse' });
+    });
+    expect(view.container.querySelectorAll('.docx-content-control-menu').length).toBe(
+      mode === 'native' ? 1 : 0
+    );
+    expect(view.container.querySelectorAll('[data-docx-popup="contentControlWidget"]').length).toBe(
+      mode === 'custom' || mode === 'component' ? 1 : 0
+    );
+    if (mode === 'manual') {
+      expect(manual !== undefined).toBe(true);
+      expect(manual!.signal.aborted).toBe(false);
+      await act(async () => {
+        expect(manual!.apply('2')).toBe(true);
+      });
+      expect(editor!.surface!.session.bodyText()).toContain('Two');
+    }
+    if (mode === 'custom' || mode === 'component') {
+      const select = view.getByRole('combobox') as HTMLSelectElement;
+      expect(select.value).toBe('1');
+      expect(document.activeElement === select).toBe(true);
+      await act(async () => {
+        fireEvent.change(select, { target: { value: '2' } });
+      });
+      await act(async () => {
+        fireEvent.click(view.getByRole('button', { name: 'Apply', exact: true }));
+      });
+      expect(
+        view.container.querySelectorAll('[data-docx-popup="contentControlWidget"]').length
+      ).toBe(0);
+      expect(editor!.surface!.session.bodyText()).toContain('Two');
+      expect(document.activeElement === opener).toBe(true);
+    }
+  });
+}

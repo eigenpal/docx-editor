@@ -17,8 +17,9 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   const slack = containerWidthPt - width;
   if (!Number.isFinite(slack) || slack <= 0) return 0;
   if (structure.alignment === 'center') return slack / 2;
-  if (structure.alignment === 'right') return slack;
-  return Math.min(structure.indentPt, slack);
+  if (structure.alignment === 'right')
+    return structure.bidiVisual ? Math.max(0, slack - structure.indentPt) : slack;
+  return structure.bidiVisual ? 0 : Math.min(structure.indentPt, slack);
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { DocxEditorPopups } from '../src/editor/popup-config';
 // Note scope chrome against the real engine: banner, inserts, preview, navigation,
 // context menu, properties dialog, ARIA, and selector stability.
 
@@ -102,12 +103,14 @@ function dualNoteDoc(): Uint8Array {
 
 function mountChrome(
   source: Uint8Array,
-  extra?: ReactNode
+  extra?: ReactNode,
+  popups?: DocxEditorPopups
 ): { editor: () => DocxEditorInstance; view: ReturnType<typeof render>; container: HTMLElement } {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
       document={source}
+      popups={popups}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -519,3 +522,79 @@ describe('DocxEditor.NotesChrome', () => {
     expect(first).toBe(second);
   });
 });
+
+for (const disabled of [false, true]) {
+  test(`note popup callbacks and false control automatic rendering (${disabled})`, async () => {
+    const { view, editor } = mountChrome(footnoteDoc(), undefined, {
+      notesContextMenu: disabled
+        ? false
+        : (props) => (
+            <button data-testid="custom-note-menu" onClick={props.onOpenProperties}>
+              {props.scopeId}
+            </button>
+          ),
+      noteProperties: disabled
+        ? false
+        : (props) => (
+            <button data-testid="custom-note-properties" onClick={props.onClose}>
+              Close properties
+            </button>
+          ),
+      notePreview: false,
+    });
+    await enterFootnote(editor());
+    const note = view.container.querySelector('[data-docx-note-scope]')!;
+    await act(async () => {
+      fireEvent.contextMenu(note);
+    });
+    expect(!!view.queryByTestId('custom-note-menu')).toBe(!disabled);
+    expect(view.queryByTestId('docx-notes-menu')).toBeNull();
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties'));
+    });
+    expect(!!view.queryByTestId('custom-note-properties')).toBe(!disabled);
+    expect(view.queryByTestId('docx-notes-properties-dialog')).toBeNull();
+    if (!disabled) {
+      await act(async () => {
+        fireEvent.click(view.getByTestId('custom-note-properties'));
+      });
+      expect(view.queryByTestId('custom-note-properties')).toBeNull();
+    }
+  });
+}
+
+test('note popup requests stay with the owning editor', async () => {
+  const first = mountChrome(footnoteDoc(), undefined, {
+    notesContextMenu: (props) => <div data-testid="first-note-menu">{props.scopeId}</div>,
+  });
+  const second = mountChrome(footnoteDoc(), undefined, {
+    notesContextMenu: (props) => <div data-testid="second-note-menu">{props.scopeId}</div>,
+  });
+  await enterFootnote(second.editor());
+  await act(async () => {
+    fireEvent.contextMenu(second.view.container.querySelector('[data-docx-note-scope]')!);
+  });
+  expect(second.view.container.querySelector('[data-testid="second-note-menu"]')).not.toBeNull();
+  expect(first.view.container.querySelector('[data-testid="first-note-menu"]')).toBeNull();
+});
+
+for (const disabled of [false, true]) {
+  test(`note preview callback and false retain owning hover state (${disabled})`, async () => {
+    const { view, container } = mountChrome(footnoteDoc('Custom preview text'), undefined, {
+      notePreview: disabled
+        ? false
+        : (props) => <div data-testid="custom-note-preview">{props.text}</div>,
+    });
+    await act(async () => {
+      fireEvent.pointerOver(container.querySelector('[data-docx-note-ref]')!);
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(!!view.queryByTestId('custom-note-preview')).toBe(!disabled);
+    if (!disabled)
+      expect(view.getByTestId('custom-note-preview').textContent).toContain('Custom preview text');
+    expect(view.queryByTestId('docx-notes-preview')).toBeNull();
+  });
+}

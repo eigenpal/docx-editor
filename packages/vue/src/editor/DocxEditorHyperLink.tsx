@@ -423,6 +423,7 @@ const HyperLinkPreset = defineComponent({
 const HyperLinkRoot = defineComponent({
   name: 'DocxEditorHyperLink',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     className: { type: String, default: undefined },
     asChild: { type: Boolean, default: undefined },
     hidden: { type: Boolean, default: undefined },

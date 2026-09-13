@@ -99,3 +99,16 @@ test('theme fonts accept faces only beneath their schema slot', () => {
     minorEastAsia: 'Valid EA',
   });
 });
+
+test('supplemental CJK theme faces remain independent and validate authored font names', () => {
+  const theme = collectDocumentThemeFonts(
+    fontThemeRoot(
+      '<a:majorFont><a:ea typeface=""/><a:font script="Hans" typeface="Heading"/></a:majorFont>' +
+        '<a:minorFont><a:ea typeface=""/><a:font script="Hans" typeface="Body"/><a:font script="Jpan" typeface="ＭＳ 明朝"/>' +
+        '<a:font script="Hant" typeface="bad;face"/><a:font script="__proto__" typeface="Invalid"/></a:minorFont>'
+    )
+  );
+  expect(theme.majorEastAsia).toBeNull();
+  expect(theme.majorSupplemental).toEqual({ Hans: 'Heading' });
+  expect(theme.minorSupplemental).toEqual({ Hans: 'Body', Jpan: 'ＭＳ 明朝' });
+});

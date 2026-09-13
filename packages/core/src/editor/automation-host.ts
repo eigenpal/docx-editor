@@ -1,3 +1,9 @@
+import {
+  paginationSnapshotOf,
+  paginationContextFor,
+  type AutomationPaginationSnapshot,
+} from '../automation/pagination.ts';
+import { documentReads } from '../automation/reads.ts';
 // Automation over an editor that is already open.
 //
 // This is an ADAPTER, not a second host: it builds the neutral lane's port over the live
@@ -159,7 +165,29 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     return live;
   };
 
+  let fieldPagination: AutomationPaginationSnapshot | undefined;
+  let fieldPaginationPackage: OoxmlPackage | null = null;
   return {
+    localChangeTracking: true,
+    suggesting: () => editor.surface?.editingMode() === 'suggest',
+    async prepare(request) {
+      if (!request.operations.some((operation) => operation.op === 'updateFieldResult')) return;
+      fieldPagination = undefined;
+      fieldPaginationPackage = null;
+      const surface = editor.surface;
+      if (!surface) return;
+      const layout = surface.layout();
+      fieldPagination = paginationSnapshotOf(layout);
+      fieldPaginationPackage = sync()?.currentPackage() ?? null;
+    },
+    fieldPageContext(story, paragraphId, fieldNodeId) {
+      const current = sync()?.currentPackage() ?? null;
+      if (!current || current !== fieldPaginationPackage) return null;
+      const reads = documentReads(current).story(story);
+      return reads
+        ? paginationContextFor(fieldPagination, reads.part, paragraphId, fieldNodeId)
+        : null;
+    },
     revision() {
       sync();
       return base + seen;
@@ -173,7 +201,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       editor.surface?.revisionDisplayMode() ?? DEFAULT_FORMATTING_DISPLAY_MODE,
     replacementLanding: (paragraphId, start, end) =>
       editor.surface?.replacementLanding(paragraphId, start, end) ?? null,
-    apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult {
+    apply(
+      staged: AutomationStagedOps,
+      scope: StoryScope,
+      packageEdits = []
+    ): AutomationPortApplyResult {
       sync();
       const surface = editor.surface;
       if (!surface) return { ok: false, reason: 'no-document' };
@@ -188,7 +220,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // The ops are STAGED, so the relationship an external hyperlink needs is minted inside that
       // gate — see `applyAutomationOps`. Minting it out here would put a target in the `.rels` of a
       // document the very next line refuses to write to.
-      const result = surface.applyAutomationOps(staged, scope);
+      const result = surface.applyAutomationOps(staged, scope, packageEdits);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },

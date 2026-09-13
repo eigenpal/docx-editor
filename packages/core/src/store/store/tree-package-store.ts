@@ -113,6 +113,7 @@ const RESOLUTION_OPS: ReadonlySet<string> = new Set([
  * a before/after diff and finds nothing when the table held no comment.
  */
 const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
+  'authorTable',
   'deleteTableRow',
   'deleteTableColumn',
   'removeContentControl',
@@ -463,7 +464,7 @@ export class TreePackageStore {
                 deleteBlockMayStrandNote(this.pkg, store.part, op, deleteTargets)
               ) {
                 mayDeleteNoteAtoms = true;
-              } else if (RESOLUTION_OPS.has(op.op)) {
+              } else if (RESOLUTION_OPS.has(op.op) || CONTENT_REMOVING_OPS.has(op.op)) {
                 // Resolving a revision removes the content it covers, and a note reference is one
                 // model unit, so a struck-through selection carries it away. Not narrowable to a
                 // paragraph range: a revision's sites are wherever the file put them. The cascade
@@ -517,7 +518,9 @@ export class TreePackageStore {
     // author saved dangling references to relationships every other replica had.
     let promotedShellWrite = false;
     if (result.change && packageShellTouched) {
-      this.installPackageSnapshotInternal(store.package);
+      // The transaction started from the current shell. Re-merging the old shell would
+      // overwrite explicit numbering edits in this committed snapshot.
+      this.installPackageSnapshotInternal(store.package, false);
       if (!compositionWasOpen) {
         store.restoreHistoryStacks(checkpoint);
       } else if (this.compositionSession) {
@@ -782,7 +785,7 @@ export class TreePackageStore {
     const pointer = this.undoOrder.pop();
     if (!pointer) return null;
     if (pointer.kind === 'package') {
-      this.installPackageSnapshotInternal(pointer.before);
+      this.installPackageSnapshotInternal(pointer.before, true, pointer.restoreNumbering);
       this.redoOrder.push(pointer);
       this.packageRev += 1;
       const change = this.publishSynthetic(
@@ -811,7 +814,7 @@ export class TreePackageStore {
     const pointer = this.redoOrder.pop();
     if (!pointer) return null;
     if (pointer.kind === 'package') {
-      this.installPackageSnapshotInternal(pointer.after);
+      this.installPackageSnapshotInternal(pointer.after, true, pointer.restoreNumbering);
       this.undoOrder.push(pointer);
       this.packageRev += 1;
       const change = this.publishSynthetic(
@@ -1052,21 +1055,15 @@ export class TreePackageStore {
     this.pkg = next;
   }
 
-  /**
-   * Install a full package snapshot: body + opened story stores track the snapshot's parts.
-   * Stores whose parts disappeared stay parked (history identity preserved) so a later
-   * package undo can reconnect them; rId cache rebuilds from remaining relationships.
-   *
-   * Numbering / shell-minted hyperlink resources (via {@link replacePackageShell}) are merged
-   * onto the snapshot so lifecycle undo cannot orphan story `numId` / `r:id` references.
-   * Furniture and notes parts remain snapshot-owned; shell hyperlink `.rels` for those owners
-   * park when the part is temporarily absent and are pruned once history can no longer restore
-   * the owner. Lifecycle-cloned owned relationships are not shell-minted and GC with the part.
-   */
-  private installPackageSnapshotInternal(snapshot: OoxmlPackage, mergeLocalShell = true): void {
+  /** Restore snapshot stories while retaining history-reachable shell resources. */
+  private installPackageSnapshotInternal(
+    snapshot: OoxmlPackage,
+    mergeLocalShell = true,
+    restoreNumbering = false
+  ): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
     const merged = mergeLocalShell
-      ? mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks)
+      ? mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks, restoreNumbering)
       : snapshot;
     const main = merged.parts.get(merged.mainDocumentPart);
     if (!main) return;
@@ -1223,20 +1220,20 @@ export class TreePackageStore {
   }
 
   private pushUndoPointer(pointer: HistoryPointer): void {
+    if (
+      pointer.kind === 'package' &&
+      pointer.before.parts.get('/word/numbering.xml') !==
+        pointer.after.parts.get('/word/numbering.xml')
+    ) {
+      pointer = { ...pointer, restoreNumbering: true };
+    }
     this.undoOrder.push(pointer);
     this.redoOrder.length = 0;
     if (this.undoOrder.length > this.historyLimit) this.undoOrder.shift();
     this.evictUnreachableStories();
   }
 
-  /**
-   * Drop parked story stores that no current package part and no undo/redo pointer can
-   * restore. History-reachable identities stay so edit→delete→undo reconnects the same
-   * store; unreachable parked entries must not hold `maxEditableStoryParts` forever.
-   *
-   * Also prunes scoped hyperlink shell resources parked for owners that are no longer
-   * live and not history-reachable (see `pruneUnreachableHyperlinkShell`).
-   */
+  /** Keep history-reachable stories and prune unreachable shell hyperlink owners. */
   private evictUnreachableStories(): void {
     const retained = retainedStoryPartNames(
       this.pkg,

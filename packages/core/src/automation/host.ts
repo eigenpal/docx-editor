@@ -16,7 +16,11 @@
 // failing operation with a code and everything else as `skipped`. There is no path through
 // this file that writes part of a batch.
 
-import { trackingStep, type LocalTrackingState } from './change-tracking.ts';
+import {
+  trackingStep,
+  supportsTrackedAutomationOperation,
+  type LocalTrackingState,
+} from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
@@ -59,6 +63,15 @@ function automationError(
 
 /** Map a store story-transaction refusal onto the protocol code a caller can handle. */
 function storeTransactionError(reason: string): AutomationError {
+  if (
+    reason === 'review-module-required' ||
+    reason === 'automation-structural-tracking-unsupported'
+  )
+    return automationError(
+      'unsupported-capability',
+      'this edit requires a supported review mode',
+      reason
+    );
   const unsupported =
     reason === 'unsupported-revision' || reason.startsWith('unsupported-revision:');
   return automationError(
@@ -168,6 +181,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       ...(port.replacementLanding
         ? { replacementLanding: port.replacementLanding.bind(port) }
         : {}),
+      ...(port.fieldPageContext ? { fieldPageContext: port.fieldPageContext.bind(port) } : {}),
       ...(port.select ? { select: port.select.bind(port) } : {}),
     });
 
@@ -185,6 +199,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     const stages: ((relate: (url: string) => string | null) => readonly TreeDocOp[] | null)[] = [];
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
+    const packageEdits: import('./document-port.ts').AutomationPackageEdit[] = [];
     /** Comment deletes can batch; reply/resolve remain solitary by planner rule. */
     const commentWrites: AutomationCommentWrite[] = [];
     let commentWriteScope: StoryScope | null = null;
@@ -196,12 +211,27 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     let stagedTracking = tracking;
     for (let index = 0; index < operations.length; index += 1) {
       const operation = operations[index]!;
+      if (
+        port.suggesting?.() &&
+        operation.op !== 'replaceSpan' &&
+        !supportsTrackedAutomationOperation(operation)
+      )
+        return refuse(
+          operations,
+          index,
+          automationError(
+            'unsupported-capability',
+            'this operation has no supported tracked form in suggesting mode'
+          ),
+          revision
+        );
       const policy = trackingStep(operation, port.localChangeTracking === true, stagedTracking);
       const step = policy?.step ?? planner.plan(operation, stagedTracking.author);
       if (policy) stagedTracking = policy.state;
       if (!step.ok) return refuse(operations, index, step.error, revision);
       planned.push(step);
       if (step.kind === 'command') {
+        if (step.packageEdits) packageEdits.push(...step.packageEdits);
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;
         else if (step.relate) {
@@ -292,7 +322,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
           }
           return built;
         },
-        planner.writeScope ?? { kind: 'body' }
+        planner.writeScope ?? { kind: 'body' },
+        packageEdits
       );
       if (!applied.ok) {
         return refuse(
@@ -362,6 +393,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     capabilities,
     revision: () => port.revision(),
     execute,
+    ...(port.prepare ? { prepare: port.prepare.bind(port) } : {}),
     save(): AutomationSaveResult {
       if (disposed) {
         return { ok: false, error: automationError('disposed', 'this host was disposed') };

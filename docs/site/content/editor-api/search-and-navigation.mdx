@@ -1,0 +1,129 @@
+---
+title: 'Search and navigation'
+description: 'Find plain text, split paragraph text into ranges, enumerate bookmarks, and select browser ranges.'
+category: 'Editing API'
+order: 54
+---
+
+Search within the smallest body or range that represents your task.
+Search returns `RangeCollection`; it does not modify the document.
+Match counts and context help you avoid edits to the wrong occurrence.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Search and inspect matches
+
+`Body.search(searchText, options?)` and `Range.search(searchText, options?)` accept `SearchOptions`.
+Load collection membership, then load text on its ranges:
+
+```ts
+const found = await runtime.run(async (context) => {
+  const matches = context.document.body.search('contract', {
+    matchCase: false,
+    matchWholeWord: true,
+  });
+  matches.load('items');
+  await context.sync();
+  for (const match of matches.items) match.load('text');
+  await context.sync();
+  return matches.items.map((match) => match.text);
+});
+```
+
+| Option                                         | Runtime behavior                                         |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| `matchCase`                                    | Case-sensitive matching when `true`                      |
+| `matchWholeWord`                               | Whole-word matching when `true`                          |
+| `ignorePunct`, `ignoreSpace`, `matchWildcards` | Accepted in the type; `true` refuses with `NotSupported` |
+
+Search is plain-text search, not a regular-expression API.
+Use non-empty search text and handle unsupported text boundaries explicitly.
+Search follows the runtime's `revisionTextView`, including its treatment of pending insertions and deletions.
+Cached field result text can appear in ordinary text reads and searches.
+A search result is not permission to replace protected field or revision structure.
+
+`RangeCollection` exposes `items`, `getFirst()`, `getLast()`, and `getFirstOrNullObject()`.
+A non-null accessor fails with `ItemNotFound` when no match exists.
+After `sync()`, check `isNullObject` before reading a nullable result.
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for object lifetimes.
+
+Search results retain their original paragraph offsets across later syncs.
+After editing a matched paragraph, search again before editing another target there.
+For inserted text, use the range returned by the insertion after sync.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-edits) for snapshot and batching limits.
+
+## Split paragraph text into ranges
+
+`Paragraph.split(delimiters, trimDelimiters?, trimSpacing?)` returns a `RangeCollection`.
+It splits the paragraph at matching delimiters and returns one range per resulting paragraph.
+This is a structural write, including when your purpose is to inspect the pieces.
+Use delimiter strings only when you intend to change paragraph structure:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  const parts = paragraph.split([';'], true, true);
+  await context.sync(); // The write fills the returned collection.
+  for (const part of parts.items) part.load('text');
+  await context.sync();
+  console.log(parts.items.map((part) => part.text));
+});
+```
+
+A split can conflict with other structural writes on that paragraph.
+Runtime-local tracking refuses this structural operation.
+
+For paragraph collections, use `getFirst()`, `getLast()`, `getFirstOrNullObject()`, or `getLastOrNullObject()`.
+To insert or remove paragraphs, use [Text and ranges](/docs/2.x/editor-api/text-and-ranges).
+
+## Discover bookmarks
+
+`Body.bookmarks` enumerates bookmarks in one story, in document order.
+`Range.bookmarks` provides bookmarks for the addressed range scope.
+A `Bookmark` exposes loaded `name`, navigation `range`, and `select(selectionMode?)`.
+`BookmarkCollection` exposes `items`; it has no `exists()` or bookmark deletion method.
+
+This example returns bookmark names from the main story:
+
+```ts
+const names = await runtime.run(async (context) => {
+  const bookmarks = context.document.body.bookmarks;
+  bookmarks.load('items');
+  await context.sync();
+  for (const bookmark of bookmarks.items) bookmark.load('name');
+  await context.sync();
+  return bookmarks.items.map((bookmark) => bookmark.name);
+});
+```
+
+A header, footer, or note body has its own bookmark collection.
+No accessor combines bookmarks across all stories.
+Bookmark ranges do not expose document-wide numeric offsets.
+
+## Select a range in the browser
+
+`Range.select(selectionMode?)` and `Bookmark.select(selectionMode?)` accept `SelectionMode`:
+`Select`, `Start`, or `End`.
+The default selects the range. Endpoint modes place the selection at that endpoint.
+A server runtime refuses selection with `NotSupported`.
+
+Check the host before moving its selection:
+
+```ts
+if (runtime.capabilities.selection) {
+  await runtime.run(async (context) => {
+    const result = context.document.body.search('Signature').getFirstOrNullObject();
+    result.load('text');
+    await context.sync();
+    if (!result.isNullObject) result.select('Start');
+    await context.sync();
+  });
+}
+```
+
+Selection requires an attached browser document.
+The API does not expose `Document.getSelection()` or a separate range scrolling method.
+See [API member directory](/docs/2.x/editor-api/reference) for the public navigation surface.

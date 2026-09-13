@@ -65,7 +65,7 @@ export interface DocumentCapabilities {
  * Runs are ISOLATED, not serialized. Every {@link DocxEditorRuntime.run} gets its own context and
  * its own queue, so two runs cannot interleave into one batch, and a run started inside another
  * run works instead of waiting for a lock its own caller holds. Batches are still ordered — each
- * `sync()` sends one atomic batch, in the order the `sync()` calls happen.
+ * `sync()` commits writes atomically; read dependencies can use additional read-only batches.
  *
  * Disposal is final: {@link DocxEditorRuntime.dispose} releases the host once and is safe to call
  * again, and every later `run` fails with `RuntimeDisposed`.

@@ -183,14 +183,13 @@ describe('what the runtime imports', () => {
     expect(reached).not.toContain('browser.ts');
   });
 
-  test('the headless collaboration graph reaches no browser or rendering lane', () => {
+  test('the headless graph reaches no browser or UI lane', () => {
     const reached = reachableSources(join(PACKAGE_SRC, 'index.ts')).map((file) =>
       relative(join(PACKAGE_SRC, '..'), file)
     );
     const forbidden = reached.filter((file) =>
       [
         `${join('core', 'src', 'editor')}/`,
-        `${join('core', 'src', 'layout')}/`,
         `${join('core', 'src', 'output')}/`,
         `${join('core', 'src', 'binding')}/`,
         `${join('react', 'src')}/`,

@@ -441,6 +441,30 @@ Install `@docx-editor.dev/pro` and import these APIs from
 The package also exports `DocxEditorReview`. Mount it inside
 `DocxEditor.Viewport`, beside `DocxEditor.Content`.
 
+## Dialog draft contexts
+
+Call the hook in a child component of the matching dialog. Each returns `values`,
+`setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
+
+| Hook                       | Draft type                                    | Draft keys                                                                                                                                                                                                                                |
+| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `usePageSetupDialog()`     | `PageSetupDialogFields`                       | `pageWidth`, `pageHeight`, `orientation`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `scope`                                                                                                                               |
+| `useParagraphDialog()`     | `UseParagraphDialogReturn['values']['value']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
+| `useTextFormFieldDialog()` | `TextFormFieldDialogFields`                   | `defaultText`, `type`, `maxLength`, `format`, `enabled`                                                                                                                                                                                   |
+
+Vue exposes state as refs. Use `.value` in JavaScript; templates unwrap these refs.
+
+Page dimensions, margins, and paragraph indents use twips: 1,440 per inch.
+Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`,
+and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
+
+Most `Field` names match draft keys. Page Setup uses `pageSize` for the size selector,
+which updates `pageWidth` and `pageHeight`. Paragraph's `clearedAllTabStops` is draft
+state, not a separate `Field`.
+
+See [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input)
+for a complete control and its placement inside the dialog.
+
 ## Next steps
 
 - [Vue composition](/docs/2.x/vue/composition): place custom controls.

@@ -1,10 +1,7 @@
+import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import { createReviewCommands } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
-// The `Editor` facade over the paginated surface.
-//
-// `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
-// the document session, semantic layout and painted pages that framework adapters mount.
-//
+// The Editor facade owns the document session, semantic layout, and painted pages.
 // - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
 //   alignment, indent, line break, undo/redo, semantic setSelection, selection-addressed
 //   insert/delete text), selection formatting, `isActive` for marks and alignment, page
@@ -342,6 +339,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
   let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
+  const popupChrome = createEditorPopupChrome();
   const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
@@ -581,6 +579,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
+      ...popupChrome.surfaceOptions,
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
@@ -1744,6 +1743,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface;
     },
 
+    ...popupChrome.setters,
     setHyperlinkChrome: hyperlinkChrome.push,
 
     setEquationChrome: equationChrome.push,

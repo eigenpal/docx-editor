@@ -140,6 +140,23 @@ export interface TableInteractionIndex {
 }
 
 const indexCache = new WeakMap<SemanticLayout, TableInteractionIndex>();
+const mergedTablesCache = new WeakMap<TableInteractionIndex, ReadonlySet<string>>();
+
+function tablesWithMergedCells(index: TableInteractionIndex): ReadonlySet<string> {
+  const cached = mergedTablesCache.get(index);
+  if (cached) return cached;
+  const merged = new Set<string>();
+  for (const occurrence of index.occurrences) {
+    if (
+      occurrence.row.cells.some(
+        (cell) => cell.gridSpan > 1 || cell.vMergeContinue || (cell.rowSpan ?? 1) > 1
+      )
+    )
+      merged.add(occurrence.table.tableId);
+  }
+  mergedTablesCache.set(index, merged);
+  return merged;
+}
 
 const DIVIDER_HIT_PX = 4;
 const INSERT_ROW_BAND_PX = 6;
@@ -417,6 +434,10 @@ function dividerHit(
   ) {
     return null;
   }
+  // Column resize commands refuse merged tables. In RTL, a merged cell's physical
+  // start can expose its logical leading ID on the wrong grid boundary. Do not
+  // advertise a divider that the command cannot execute, including on other rows.
+  if (tablesWithMergedCells(index).has(table.tableId)) return null;
   for (let edgeIndex = 1; edgeIndex < table.columnEdges.length - 1; edgeIndex += 1) {
     const edgeX = table.columnEdges[edgeIndex]!;
     if (Math.abs(localX - edgeX) > DIVIDER_HIT_PX) continue;
@@ -442,6 +463,9 @@ function dividerHit(
     const lastCol = table.columnEdges.length - 2;
     const gridColumnId = gridColumnIdAt(occ.row, lastCol);
     if (!gridColumnId) return null;
+    // The store's outer-edge operation resizes the last STORED column. In RTL that
+    // is the left edge. Do not offer a right-edge handle that edits the wrong cell.
+    if (occ.row.cells.some((cell) => cell.logicalGridColumn !== undefined)) return null;
     return {
       kind: 'rightEdge',
       pageIndex: occ.pageIndex,

@@ -891,10 +891,12 @@ test('field context action opens shared options and saves all controls', () => {
   const [text, max, enabled] = dialog.querySelectorAll('input');
   act(() => {
     fireEvent.change(type!, { target: { value: 'number' } });
-    text!.value = '12.5';
-    max!.value = '4';
-    format!.value = '0.00';
-    enabled!.checked = false;
+    fireEvent.change(text!, { target: { value: '12.5' } });
+    fireEvent.change(max!, { target: { value: '4' } });
+    fireEvent.change(format!, { target: { value: '0.00' } });
+    fireEvent.click(enabled!);
+  });
+  act(() => {
     fireEvent.click(dialog.querySelectorAll('button')[1]!);
   });
   expect(view.container.querySelector('dialog')).toBeNull();

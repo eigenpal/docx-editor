@@ -1,3 +1,4 @@
+import { mintCheckboxRun } from './content-control-run.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
 export {
@@ -26,7 +27,7 @@ import { textFormFieldForEdit, textFormFieldsOf } from './text-form-fields.ts';
 
 import {
   contentControlContentNodeOf,
-  contentControlPropertiesNodeOf,
+  contentControlPropertiesContainerOf,
   contentControlPropertiesOf,
   contentControlsIn,
   lockForbidsEdit,
@@ -490,6 +491,9 @@ const TREE_OP_REACH: {
   setTableRightEdgeWidth: (op) => whole(op.tableId),
   setTableRowHeight: (op) => whole(op.rowId),
   setTableCellBorders: (op) => each(op.cellIds),
+  authorTable: (op) =>
+    op.action.kind === 'insert' ? each([op.action.paragraphId]) : each([op.action.tableId]),
+  setTableProperties: (op) => each([op.tableId]),
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
   insertDrawing: (op) => writingAt(op.paragraphId, op.offset),
@@ -520,6 +524,7 @@ const TREE_OP_REACH: {
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
+  setFieldCode: (op) => whole(op.fieldNodeId),
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
@@ -1338,6 +1343,7 @@ interface PlannedValue {
   readonly lastValue?: string;
   readonly fullDate?: string;
   readonly checked?: boolean;
+  readonly symbol?: { readonly hex: string; readonly font: string };
 }
 
 /**
@@ -1413,7 +1419,15 @@ function planValue(
         : properties.checkbox.uncheckedState;
       const glyph = glyphFor(state?.value, value.checked);
       if (glyph === null) return 'invalidArgs';
-      return { text: glyph, showingPlaceholder: false, checked: value.checked };
+      return {
+        text: glyph,
+        showingPlaceholder: false,
+        checked: value.checked,
+        symbol: {
+          hex: state?.value ?? (value.checked ? '2612' : '2610'),
+          font: state?.font ?? 'MS Gothic',
+        },
+      };
     }
     case 'date': {
       if (properties.type !== 'date') return 'typeMismatch';
@@ -1569,10 +1583,12 @@ export function editedProperties(
 function contentWithText(
   content: OoxmlElement | undefined,
   text: string,
-  nextId: () => string
+  nextId: () => string,
+  symbol?: PlannedValue['symbol']
 ): readonly OoxmlNode[] {
-  const properties = firstRunProperties(content, nextId);
-  const run = textRun(nextId, text, properties);
+  const run = symbol
+    ? mintCheckboxRun(nextId, symbol.hex, symbol.font, firstRunProperties(content, nextId), text)
+    : textRun(nextId, text, firstRunProperties(content, nextId));
   const firstParagraph = content?.children.find((child) => child.kind === 'paragraph');
   if (!firstParagraph || firstParagraph.kind === 'textValue') return [run];
   const pPr = firstParagraph.children.find(
@@ -1630,7 +1646,7 @@ export function applySetContentControlValue(
   if (typeof planned === 'string') return { ok: false, reason: planned };
 
   const nextId = createNodeIdAllocator(part);
-  const sdtPr = contentControlPropertiesNodeOf(control);
+  const sdtPr = contentControlPropertiesContainerOf(control);
   const content = contentControlContentNodeOf(control);
   const nextProperties = editedProperties(
     sdtPr,
@@ -1645,7 +1661,7 @@ export function applySetContentControlValue(
   const nextContent = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
-    children: contentWithText(content, planned.text, nextId),
+    children: contentWithText(content, planned.text, nextId, planned.symbol),
   } as OoxmlNode;
 
   const rebuilt = {
@@ -1653,8 +1669,7 @@ export function applySetContentControlValue(
     children: [
       nextProperties,
       ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
+        (child) => child.id !== sdtPr?.id && child.kind !== 'contentControlContent'
       ),
       nextContent,
     ],
@@ -1688,11 +1703,23 @@ export function applySetContentControlProperties(
   const resolved = resolveControl(part, op.controlId);
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
-  if (lockForbidsEdit(lock) || lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
+  // A control's own lock protects its content/existence, not the ability to change
+  // that lock. Retain every ancestor's protection when toggling the named control.
+  const lockOnly = op.lock !== undefined && op.tag === undefined && op.alias === undefined;
+  const effective = lockOnly
+    ? resolveContentControlLock(
+        enclosingContentControls(part, control.id)
+          .slice(0, -1)
+          .map((ancestor) => contentControlPropertiesOf(ancestor).lock)
+      )
+    : lock;
+  if (lockForbidsEdit(effective) || lockForbidsRemoval(effective))
+    return { ok: false, reason: 'locked' };
 
   const nextId = createNodeIdAllocator(part);
+  const properties = contentControlPropertiesContainerOf(control);
   const nextProperties = editedProperties(
-    contentControlPropertiesNodeOf(control),
+    properties,
     {
       ...(op.tag === undefined ? {} : { tag: op.tag }),
       ...(op.alias === undefined ? {} : { alias: op.alias }),
@@ -1702,7 +1729,7 @@ export function applySetContentControlProperties(
   );
   const children = [
     nextProperties,
-    ...control.children.filter((child) => child.kind !== 'contentControlProperties'),
+    ...control.children.filter((child) => child.id !== properties?.id),
   ];
   return fromEdit(
     replaceNode(part, control.id, { ...control, children } as OoxmlNode, options),
@@ -1779,11 +1806,8 @@ export function clearPlaceholder(
   if (!control || control.kind !== 'contentControl') return null;
   const nextId = createNodeIdAllocator(part);
   const content = contentControlContentNodeOf(control);
-  const properties = editedProperties(
-    contentControlPropertiesNodeOf(control),
-    { showingPlaceholder: false },
-    nextId
-  );
+  const sdtPr = contentControlPropertiesContainerOf(control);
+  const properties = editedProperties(sdtPr, { showingPlaceholder: false }, nextId);
   const emptied = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
@@ -1794,8 +1818,7 @@ export function clearPlaceholder(
     children: [
       properties,
       ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
+        (child) => child.id !== sdtPr?.id && child.kind !== 'contentControlContent'
       ),
       emptied,
     ],

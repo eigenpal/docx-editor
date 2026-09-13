@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expectTypeOf, test } from 'bun:test';
 import type { Font as BrowserFont } from '../browser.ts';
+import { UnderlineType } from '../index.ts';
 import type { Font as ServerFont } from '../index.ts';
 
 test('both public entries expose nullable font reads and non-nullable writes', () => {
@@ -21,6 +22,13 @@ test('both public entries expose nullable font reads and non-nullable writes', (
   font.color = '#112233';
   font.name = 'Georgia';
   font.size = 12;
+  font.underline = UnderlineType.single;
+  font.strikeThrough = true;
+  font.subscript = false;
+  font.superscript = true;
+  font.highlightColor = 'Yellow';
+  // @ts-expect-error Office's pinned declaration omits its documented runtime null clearing.
+  font.highlightColor = null;
 
   // @ts-expect-error Null describes a read with no agreed authored value; it is not writable.
   font.bold = null;

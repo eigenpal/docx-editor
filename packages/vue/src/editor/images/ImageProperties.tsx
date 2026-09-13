@@ -1,3 +1,5 @@
+import { renderPopup } from '../popup-renderer';
+import { usePopupConfig } from '../popup-config';
 import { computed, defineComponent, nextTick, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
@@ -865,10 +867,17 @@ export const ImagePropertiesTrigger = defineComponent({
     asChild: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
+    const popups = usePopupConfig();
     const editorRef = useDocxEditor();
     const { t } = useTranslation();
     const image = useEditorState(selectImage);
     const open = ref(false);
+    watch(
+      () => popups.value?.imageProperties,
+      (renderer) => {
+        if (renderer === false) open.value = false;
+      }
+    );
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const probe = { type: 'setImageProperties' as const, description: 'probe' };
 
@@ -889,7 +898,7 @@ export const ImagePropertiesTrigger = defineComponent({
         title: disabledReason ?? t('formattingBar.imagePropertiesShortcut'),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
-          open.value = true;
+          if (popups.value?.imageProperties !== false) open.value = true;
         },
       };
 
@@ -900,13 +909,23 @@ export const ImagePropertiesTrigger = defineComponent({
           ) : (
             <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
           )}
-          <DocxEditorImagePropertiesDialog
-            open={open.value}
-            onClose={() => {
-              open.value = false;
-            }}
-            triggerRef={refAsRefObject(triggerRef)}
-          />
+          {popups.value?.imageProperties === false ? null : popups.value?.imageProperties ? (
+            renderPopup(popups.value.imageProperties, {
+              open: open.value,
+              onClose: () => {
+                open.value = false;
+              },
+              triggerRef: refAsRefObject(triggerRef),
+            })
+          ) : (
+            <DocxEditorImagePropertiesDialog
+              open={open.value}
+              onClose={() => {
+                open.value = false;
+              }}
+              triggerRef={refAsRefObject(triggerRef)}
+            />
+          )}
         </>
       );
     };

@@ -21,10 +21,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // with the reasons recorded as omissions there — rather than left declared for a shipped object that
 // could never satisfy them. A caller who wants the ends of a range asks it for its paragraphs.
 
+import { InsertLocation, BreakType, ContentControlType } from './editing-enums.ts';
+import { Field, FieldCollection } from './fields.ts';
+import type { FieldType, FieldTypeLiteral } from './field-types.ts';
+import { InlinePicture, InlinePictureCollection } from './pictures.ts';
+import { Table, TableCollection } from './tables.ts';
 import {
   ObjectPath,
   fail,
   hydratedSpan,
+  hydratedHandle,
+  hydratedApplied,
   hydratedStyle,
   hydratedText,
   type AutomationSpan,
@@ -36,6 +43,7 @@ import { ParagraphCollection, RangeCollection, type PromisedItem } from './colle
 import { BookmarkCollection } from './bookmarks.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
+import { ContentControl } from './content-controls.ts';
 import {
   insertableText,
   rangeTextLocation,
@@ -65,6 +73,9 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
  * @public
  */
 export class Range extends ModelObject implements PromisedItem {
+  #tables: TableCollection | undefined;
+  #fields: FieldCollection | undefined;
+  #inlinePictures: InlinePictureCollection | undefined;
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
   #bookmarks: BookmarkCollection | undefined;
@@ -149,6 +160,8 @@ export class Range extends ModelObject implements PromisedItem {
    * WRITING IT AUTHORS A LINK over exactly these characters, and `''` removes one. A URL whose
    * scheme this engine would refuse to OPEN is refused here too, by the same allowlist: a document
    * this API writes must not be one it would then decline to follow.
+   * Partial retargeting and unlinking support ordinary text links directly inside a paragraph.
+   * Complex or nested link wrappers and collapsed ranges inside links refuse with `NotSupported`.
    */
   get hyperlink(): string {
     return this.loadedProperty<string>('hyperlink');
@@ -157,8 +170,8 @@ export class Range extends ModelObject implements PromisedItem {
   set hyperlink(value: string) {
     const target = `${this.path.label}.hyperlink`;
     if (typeof value !== 'string' || value.length > 2048) fail({ code: 'InvalidArgument', target });
-    const span = this.#span();
-    this.command('hyperlink', () => ({ op: 'setHyperlink', span, target: value }));
+    this.requireUsablePath();
+    this.command('hyperlink', () => ({ op: 'setHyperlink', span: this.#span(), target: value }));
   }
 
   /** The bookmarks whose text this range overlaps, in document order. */
@@ -207,23 +220,25 @@ export class Range extends ModelObject implements PromisedItem {
    */
   insertText(
     text: string,
-    insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'
+    insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'
   ): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
     const where = rangeTextLocation(insertLocation, target);
-    const span = this.#span();
+    this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () =>
-        where === 'Replace'
+      () => {
+        const span = this.#span();
+        return where === 'Replace'
           ? { op: 'replaceSpan', span, text: written }
           : {
               op: 'insertText',
               at: where === 'Start' || where === 'Before' ? span.start : span.end,
               text: written,
-            },
+            };
+      },
       (value) => {
         created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
       }
@@ -233,8 +248,8 @@ export class Range extends ModelObject implements PromisedItem {
 
   /** Delete this range's content. TrackMineOnly preserves inline text as a pending deletion. */
   delete(): void {
-    const span = this.#span();
-    this.commandDiscarding('delete', () => ({ op: 'replaceSpan', span, text: '' }));
+    this.requireUsablePath();
+    this.commandDiscarding('delete', () => ({ op: 'replaceSpan', span: this.#span(), text: '' }));
   }
 
   /** Clear this range's content, preserving the surrounding structure. */
@@ -259,11 +274,10 @@ export class Range extends ModelObject implements PromisedItem {
     if (typeof author !== 'string' || author.trim().length === 0) {
       fail({ code: 'NotSupported', target });
     }
-    const span = this.#span();
     const created = Comment.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () => ({ op: 'insertComment', span, text: commentText, author }),
+      () => ({ op: 'insertComment', span: this.#span(), text: commentText, author }),
       (value) => {
         if (value.kind !== 'handle') fail({ code: 'GeneralException', target });
         created.hydrateAddress(value);
@@ -272,8 +286,226 @@ export class Range extends ModelObject implements PromisedItem {
     return created;
   }
 
+  /**
+   * Wrap this single-paragraph range in a rich-text or plain-text content control.
+   * Await sync before configuring the returned control. Other types explicitly refuse.
+   */
+  insertContentControl(
+    contentControlType?:
+      | ContentControlType.richText
+      | ContentControlType.plainText
+      | ContentControlType.buildingBlockGallery
+      | ContentControlType.checkBox
+      | ContentControlType.comboBox
+      | ContentControlType.datePicker
+      | ContentControlType.dropDownList
+      | ContentControlType.group
+      | ContentControlType.picture
+      | ContentControlType.repeatingSection
+      | 'RichText'
+      | 'PlainText'
+      | 'BuildingBlockGallery'
+      | 'CheckBox'
+      | 'ComboBox'
+      | 'DatePicker'
+      | 'DropDownList'
+      | 'Group'
+      | 'Picture'
+      | 'RepeatingSection'
+  ): ContentControl {
+    const target = `${this.path.label}.insertContentControl`;
+    const type = contentControlType ?? 'RichText';
+    if (type !== 'RichText' && type !== 'PlainText') fail({ code: 'NotSupported', target });
+    const created = ContentControl.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({
+        op: 'insertContentControl',
+        span: this.#span(),
+        subtype: type === 'PlainText' ? 'plainText' : 'richText',
+        returnHandle: true,
+      }),
+      (value) => {
+        if (value.kind !== 'handle') fail({ code: 'GeneralException', target });
+        created.hydrateAddress(value);
+      }
+    );
+    return created;
+  }
+
+  /** Tables contained by this range, in document order. */
+  get tables(): TableCollection {
+    this.requireUsablePath();
+    return (this.#tables ??= TableCollection.over(
+      this.context,
+      `${this.path.label}.tables`,
+      this.path,
+      () => spanRefOf(this.path, 'span')
+    ));
+  }
+  /** Fields fully contained within this range. */
+  get fields(): FieldCollection {
+    this.requireUsablePath();
+    return (this.#fields ??= FieldCollection.of(
+      this.context,
+      `${this.path.label}.fields`,
+      this.path,
+      'span'
+    ));
+  }
+  insertField(
+    insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
+    fieldType?: FieldType,
+    text?: string,
+    removeFormatting?: boolean
+  ): Field;
+  insertField(
+    insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
+    fieldType?: FieldTypeLiteral,
+    text?: string,
+    removeFormatting?: boolean
+  ): Field;
+  /** Insert PAGE or NUMPAGES. Sync before configuring the returned field. */
+  insertField(
+    insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
+    fieldType?: FieldType | FieldTypeLiteral,
+    text?: string,
+    removeFormatting?: boolean
+  ): Field {
+    const target = `${this.path.label}.insertField`;
+    if (
+      (fieldType !== undefined && typeof fieldType !== 'string') ||
+      (text !== undefined && typeof text !== 'string') ||
+      (removeFormatting !== undefined && typeof removeFormatting !== 'boolean')
+    )
+      fail({ code: 'InvalidArgument', target });
+    const location = rangeTextLocation(insertLocation, target);
+    this.requireUsablePath();
+    const field = Field.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({
+        op: 'insertField',
+        span: this.#span(),
+        location,
+        ...(fieldType === undefined ? {} : { fieldType }),
+        ...(text === undefined ? {} : { text }),
+        ...(removeFormatting === undefined ? {} : { removeFormatting }),
+      }),
+      (value) => field.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) })
+    );
+    return field;
+  }
+
+  /** Inline pictures fully contained within this snapshot range. */
+  get inlinePictures(): InlinePictureCollection {
+    this.requireUsablePath();
+    return (this.#inlinePictures ??= InlinePictureCollection.of(
+      this.context,
+      `${this.path.label}.inlinePictures`,
+      this.path,
+      'span'
+    ));
+  }
+
+  /** Insert a bounded PNG/JPEG image. Sync before configuring the returned picture. */
+  insertInlinePictureFromBase64(
+    base64EncodedImage: string,
+    insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'
+  ): InlinePicture {
+    const target = `${this.path.label}.insertInlinePictureFromBase64`;
+    if (typeof base64EncodedImage !== 'string' || base64EncodedImage.length === 0)
+      fail({ code: 'InvalidArgument', target });
+    const location = rangeTextLocation(insertLocation, target);
+    this.requireUsablePath();
+    const picture = InlinePicture.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({
+        op: 'insertInlinePicture',
+        span: this.#span(),
+        base64: base64EncodedImage,
+        location,
+      }),
+      (value) => {
+        picture.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
+      }
+    );
+    return picture;
+  }
+
+  /** Page and next-page section breaks are supported; other break types refuse at sync. */
+  insertBreak(
+    breakType:
+      | BreakType
+      | 'Page'
+      | 'SectionNext'
+      | 'Next'
+      | 'Line'
+      | 'SectionContinuous'
+      | 'SectionEven'
+      | 'SectionOdd',
+    insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'
+  ): void {
+    const target = `${this.path.label}.insertBreak`;
+    if (insertLocation !== 'Before' && insertLocation !== 'After')
+      fail({ code: 'InvalidArgument', target });
+    const location = insertLocation;
+    this.requireUsablePath();
+    this.commandAnswering(
+      target,
+      () => ({ op: 'insertBreak', span: this.#span(), breakType, location }),
+      (value) => hydratedApplied(value, target)
+    );
+  }
+
+  /** Insert a rectangular table before or after this range. */
+  insertTable(
+    rowCount: number,
+    columnCount: number,
+    insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After',
+    values?: string[][]
+  ): Table {
+    const target = `${this.path.label}.insertTable`;
+    if (
+      !Number.isInteger(rowCount) ||
+      !Number.isInteger(columnCount) ||
+      rowCount < 1 ||
+      columnCount < 1 ||
+      !['Before', 'After'].includes(insertLocation)
+    )
+      fail({ code: 'InvalidArgument', target });
+    if (
+      values !== undefined &&
+      (!Array.isArray(values) ||
+        values.some((row) => !Array.isArray(row) || row.some((cell) => typeof cell !== 'string')))
+    )
+      fail({ code: 'InvalidArgument', target });
+    const copied = values?.map((row) => [...row]);
+    const table = Table.promised(this.context, target);
+    this.commandAnswering(
+      target,
+      () => ({
+        op: 'insertTable',
+        span: spanRefOf(this.path, 'span'),
+        location: insertLocation,
+        rowCount,
+        columnCount,
+        ...(copied ? { values: copied } : {}),
+      }),
+      (answer) => {
+        if (answer.kind !== 'handle') fail({ code: 'GeneralException', target });
+        table.hydrateAddress({ kind: 'handle', handle: answer.handle });
+      }
+    );
+    return table;
+  }
+
   /** Add a paragraph before or after the one this range starts or ends in. */
-  insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph {
+  insertParagraph(
+    paragraphText: string,
+    insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'
+  ): Paragraph {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);
     const where = rangeTextLocation(insertLocation, target);
@@ -326,15 +558,13 @@ export class Range extends ModelObject implements PromisedItem {
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'style', 'hyperlink']);
     if (selected.includes('hyperlink')) {
-      const span = this.#span();
-      this.loadTextInto('hyperlink', () => ({ op: 'getHyperlink', span }));
+      this.loadTextInto('hyperlink', () => ({ op: 'getHyperlink', span: this.#span() }));
     }
     if (selected.includes('text')) {
-      const span = this.#span();
       const label = `${this.path.label}.text`;
       this.read(
         label,
-        () => ({ op: 'getSpanText', span, projection: this.revisionTextView() }),
+        () => ({ op: 'getSpanText', span: this.#span(), projection: this.revisionTextView() }),
         (value) => {
           this.setLoadedProperty('text', hydratedText(value, label));
         }
@@ -342,7 +572,7 @@ export class Range extends ModelObject implements PromisedItem {
     }
     if (!selected.includes('style')) return;
     const label = `${this.path.label}.style`;
-    this.requireAddressable();
+    this.requireUsablePath();
     this.read(
       label,
       () => ({ op: 'getStyle', span: spanRefOf(this.path, 'span') }),

@@ -1,0 +1,19 @@
+{
+  "name": "@docx-editor-examples/editor-api-consumers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "contract": "cd ../.. && bun examples/editor-api-consumers/contract-agent.ts --browser",
+    "report": "cd ../.. && bun examples/editor-api-consumers/report-agent.ts",
+    "report:browser": "cd ../.. && bun examples/editor-api-consumers/report-browser-run.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:published": "tsc --noEmit -p tsconfig.published.json",
+    "test:published": "node fresh-contract-agent.ts && node fresh-tables-agent.ts"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "fflate": "^0.8.2"
+  }
+}

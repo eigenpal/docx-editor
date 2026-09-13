@@ -573,23 +573,14 @@ describe('writing through a range', () => {
 });
 
 describe('writing through an object a read has not answered for yet', () => {
-  test('is refused: an item accessor needs one sync before it can be written through', async () => {
-    // The shape upstream allows and this runtime does not. `getFirst()` answers a proxy whose
-    // address is the answer to a read, and a read answers at a sync — so a write queued before that
-    // sync has nothing to name. Refusing is the deliberate half of "one sync is one atomic batch":
-    // the alternative is quietly sending several batches per sync so a chained path can resolve.
+  test('resolves read prerequisites before committing the edit in one sync', async () => {
     const runtime = await serverRuntime();
-    const code = await codeOf(() =>
-      runtime.run(async (context) => {
-        const found = context.document.body.search('alpha');
-        found.load();
-        await context.sync();
-        const first = found.getFirst();
-        first.insertText('!', 'End');
-      })
-    );
-    expect(code).toBe('InvalidObjectPath');
-    expect(await paragraphTexts(runtime)).toEqual(['alpha', 'beta']);
+    await runtime.run(async (context) => {
+      const first = context.document.body.search('alpha').getFirst();
+      first.insertText('!', 'End');
+      await context.sync();
+    });
+    expect(await paragraphTexts(runtime)).toEqual(['alpha!', 'beta']);
   });
 
   test('and works with the sync in place', async () => {

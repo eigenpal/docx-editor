@@ -34,6 +34,7 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/core/store": ["../../../core/src/store/index.ts"],
       "@docx-editor.dev/core/automation": ["../../../core/src/automation/index.ts"],
       "@docx-editor.dev/core/collaboration": ["../../../core/src/collaboration/index.ts"]
     }

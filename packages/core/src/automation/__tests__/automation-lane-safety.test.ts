@@ -87,7 +87,7 @@ function withoutComments(source: string): string {
 describe('the lane imports nothing that assumes a browser', () => {
   const files = laneFiles();
 
-  test('it reaches only the store and provider-neutral collaboration lanes', () => {
+  test('it reaches only provider-neutral store, collaboration, layout and export lanes', () => {
     // Every assertion below is over this list. Keep its setup guard on the actual graph test.
     expect(files.length).toBeGreaterThanOrEqual(6);
     expect(files.map((file) => file.split('/').pop())).toContain('server-host.ts');
@@ -101,6 +101,8 @@ describe('the lane imports nothing that assumes a browser', () => {
         if (target.startsWith(LANE)) continue;
         if (target.startsWith(join(CORE_SRC, 'store'))) continue;
         if (target.startsWith(join(CORE_SRC, 'collaboration'))) continue;
+        if (target.startsWith(join(CORE_SRC, 'layout'))) continue;
+        if (target.startsWith(join(CORE_SRC, 'export'))) continue;
         foreign.push(`${file.split('/').pop()} -> ${specifier}`);
       }
     }
@@ -159,7 +161,9 @@ describe('the lane touches no DOM and no unsafe sink', () => {
       /\bNode\s*\)/,
     ];
     for (const file of files) {
-      const source = withoutComments(readFileSync(file, 'utf8'));
+      const source = withoutComments(readFileSync(file, 'utf8'))
+        .replace(/'(?:\\.|[^'\\])*'/g, "''")
+        .replace(/"(?:\\.|[^"\\])*"/g, '""');
       for (const pattern of globals) {
         if (pattern.test(source)) hits.push(`${file.split('/').pop()} ${String(pattern)}`);
       }

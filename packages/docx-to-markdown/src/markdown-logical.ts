@@ -139,7 +139,7 @@ export function mergeRows(
         rows.push(logical);
       }
       for (const [index, cell] of row.cells.entries()) {
-        const gridColumn = cell.gridColumn ?? index;
+        const gridColumn = cell.logicalGridColumn ?? cell.gridColumn ?? index;
         const existing = logical.cells.find((candidate) => candidate.gridColumn === gridColumn);
         if (existing) existing.blocks.push(...cell.blocks);
         else {

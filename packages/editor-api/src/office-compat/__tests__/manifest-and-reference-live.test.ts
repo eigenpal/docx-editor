@@ -83,11 +83,14 @@ describe('the checked-in compat/ fixtures', () => {
     expect(validateAuthoredExportsAgainstManifest(exportedNames, manifest)).toEqual([]);
   });
 
-  test('tables and images are recorded as deliberate omissions, never as selected symbols', () => {
+  test('implemented tables and images are no longer described as entirely omitted', () => {
     const omittedUids = manifest.omissions.map((o) => o.uid);
-    expect(omittedUids).toContain('Word.Table');
-    expect(omittedUids).toContain('Word.InlinePicture');
-    expect(manifest.symbols).not.toHaveProperty('Table');
-    expect(manifest.symbols).not.toHaveProperty('InlinePicture');
+    expect(omittedUids).not.toContain('Word.Table');
+    expect(omittedUids).not.toContain('Word.InlinePicture');
+    // The exhaustive report checks these new members directly against the real public exports.
+    expect(manifest.divergences.some((entry) => entry.uid === 'Word.Range#insertTable')).toBe(true);
+    expect(manifest.divergences.some((entry) => entry.uid === 'Word.InlinePicture#delete')).toBe(
+      true
+    );
   });
 });

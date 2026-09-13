@@ -1,3 +1,5 @@
+import { renderPopup } from '../popup-renderer';
+import { usePopupConfig } from '../popup-config';
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -836,6 +838,7 @@ export function ImagePropertiesTrigger({
   asChild,
   children,
 }: ImagePropertiesTriggerProps) {
+  const popups = usePopupConfig();
   const editor = useDocxEditor();
   const { t } = useTranslation();
   const image = useEditorState(selectImage);
@@ -869,11 +872,17 @@ export function ImagePropertiesTrigger({
       ) : (
         <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>
       )}
-      <DocxEditorImagePropertiesDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        triggerRef={triggerRef}
-      />
+      {open && popups?.imageProperties !== false ? (
+        popups?.imageProperties ? (
+          renderPopup(popups.imageProperties, { open, onClose: () => setOpen(false), triggerRef })
+        ) : (
+          <DocxEditorImagePropertiesDialog
+            open={open}
+            onClose={() => setOpen(false)}
+            triggerRef={triggerRef}
+          />
+        )
+      ) : null}
     </>
   );
 }

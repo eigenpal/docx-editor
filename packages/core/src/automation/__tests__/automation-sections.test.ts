@@ -232,17 +232,19 @@ describe('a header is a story of its own', () => {
     expect(paragraphTexts(host, footer)).toEqual(['page foot']);
   });
 
-  test('a variant the document does not have is refused rather than answered empty', () => {
+  test('an absent variant reads as an empty virtual body without creating a part', () => {
     const host = withFurniture();
+    const before = host.save();
     const [section] = sectionsOf(host) as [AutomationHandle];
-    expect(
-      errorAt(
-        host.execute({
-          operations: [{ op: 'getFurniture', section, kind: 'header', variant: 'first' }],
-        }),
-        0
-      )
-    ).toBe('invalid-handle');
+    const header = handleAt(
+      host.execute({
+        operations: [{ op: 'getFurniture', section, kind: 'header', variant: 'first' }],
+      }),
+      0
+    );
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: header }] }), 0)).toBe('');
+    expect(paragraphTexts(host, header)).toEqual([]);
+    expect(host.save()).toEqual(before);
   });
 
   test('text written into a header lands in the header part and survives save and reopen', () => {

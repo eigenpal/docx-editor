@@ -11,7 +11,7 @@
 // which is what the D8 boundary covers.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
-import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
@@ -146,6 +146,9 @@ export interface ThemeFonts {
   readonly majorEastAsia?: string | null;
   /** `a:minorFont` east asian typeface (`a:ea`) — body text. Optional for back-compat. */
   readonly minorEastAsia?: string | null;
+  /** Language-specific theme faces, keyed by ISO 15924 script. */
+  readonly majorSupplemental?: Readonly<Record<string, string>>;
+  readonly minorSupplemental?: Readonly<Record<string, string>>;
 }
 
 /** A document with no theme part: every theme reference falls back to its explicit name. */
@@ -175,6 +178,13 @@ export function resolveRunStyle(
     -readonly [K in keyof ResolvedRunStyle]: ResolvedRunStyle[K];
   } = { ...DEFAULT_RUN_STYLE };
 
+  // Resolve language first: rFonts commonly precedes lang, and an inherited theme
+  // reference must use the final run language, including a character-style override.
+  let eastAsiaLanguage: string | undefined;
+  for (const property of props) {
+    if (property.localName === 'lang' && property.attributes?.eastAsia !== undefined)
+      eastAsiaLanguage = property.attributes.eastAsia;
+  }
   for (const property of props) {
     switch (property.localName) {
       case 'rFonts': {
@@ -186,8 +196,8 @@ export function resolveRunStyle(
         // nothing, because a stale face still beats no face at all.
         const attributes = property.attributes;
         const themed = themeFonts
-          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts) ??
-            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts))
+          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts, eastAsiaLanguage) ??
+            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts, eastAsiaLanguage))
           : null;
         const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
@@ -196,7 +206,7 @@ export function resolveRunStyle(
         // which is how the docDefaults' `w:eastAsiaTheme` survives a style chain that only
         // ever re-states `w:ascii`.
         const themedEastAsia = themeFonts
-          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts)
+          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts, eastAsiaLanguage)
           : null;
         const familyEastAsia = themedEastAsia ?? attributes?.eastAsia;
         if (familyEastAsia && familyEastAsia.length <= 128) {
@@ -294,6 +304,7 @@ export function resolveRunStyle(
         break;
     }
   }
+  style.fontFamilyEastAsia ??= eastAsianDefaultFamily(eastAsiaLanguage);
   return style;
 }
 

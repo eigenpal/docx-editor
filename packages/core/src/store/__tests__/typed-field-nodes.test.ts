@@ -253,6 +253,33 @@ describe('atomic UTF-16 addressing', () => {
     expect(serializeOoxmlPart(again).includes('<w:instrText>PAGE</w:instrText>')).toBe(true);
   });
 
+  test('formatting between simple fields preserves instruction and unrelated result formatting', () => {
+    const part = parse(
+      '<w:p><w:fldSimple w:instr="PAGE" w:dirty="true"><w:r><w:t/></w:r></w:fldSimple>' +
+        '<w:r><w:t> of </w:t></w:r>' +
+        '<w:fldSimple w:instr="NUMPAGES"><w:r><w:rPr><w:i/></w:rPr><w:t>12</w:t></w:r></w:fldSimple></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+    const formatted = applyTreeOp(part, {
+      op: 'setRunProperties',
+      paragraphId: paragraph.id,
+      start: 0,
+      end: 1,
+      properties: [{ localName: 'b', attributes: { val: '1' } }],
+    });
+    expect(formatted.ok).toBe(true);
+    if (!formatted.ok) return;
+    const xml = serializeOoxmlPart(reopen(formatted.part));
+    expect(xml).toContain('w:instr="PAGE"');
+    expect(xml).toContain('w:dirty="true"');
+    const fields = xml.match(/<w:fldSimple[^>]*>[\s\S]*?<\/w:fldSimple>/g)!;
+    expect(fields).toHaveLength(2);
+    expect(fields[0]).toContain('<w:b w:val="1"/>');
+    expect(fields[1]).toContain('<w:i/>');
+    expect(fields[1]).not.toContain('<w:b');
+    expect(fields[1]).toContain('<w:t>12</w:t>');
+  });
+
   test('caret segments have no interior offsets inside a field', () => {
     const part = parse(
       `<w:p><w:r><w:t>A</w:t>` +
