@@ -1,8 +1,14 @@
+import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import { paragraphMergeGroupOf } from './story-roots.ts';
+import { mergeBoundariesOf } from './merged-paragraph-ranges.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { runStylesEqual } from './run-style.ts';
 
 /** Merge equivalent source runs before shaping, preserving every semantic boundary. */
-export function coalesceBidiPieces(pieces: readonly FieldAwarePiece[]): readonly FieldAwarePiece[] {
+export function coalesceBidiPieces(
+  pieces: readonly FieldAwarePiece[],
+  sourceBoundaries?: ReadonlySet<number>
+): readonly FieldAwarePiece[] {
   const keys = pieces.map((piece) => {
     if (
       piece.projected ||
@@ -29,6 +35,7 @@ export function coalesceBidiPieces(pieces: readonly FieldAwarePiece[]): readonly
       keys[start] !== null &&
       keys[end] === keys[start] &&
       pieces[end - 1]!.end === pieces[end]!.start &&
+      !sourceBoundaries?.has(pieces[end]!.start) &&
       runStylesEqual(pieces[start]!.style, pieces[end]!.style)
     )
       end++;
@@ -48,4 +55,10 @@ export function coalesceBidiPieces(pieces: readonly FieldAwarePiece[]): readonly
     start = end;
   }
   return result;
+}
+
+/** Publication remaps merged paragraphs independently, so their source ranges cannot coalesce. */
+export function bidiSourceBoundaries(paragraph: OoxmlNode): ReadonlySet<number> | undefined {
+  const group = 'children' in paragraph ? paragraphMergeGroupOf(paragraph) : null;
+  return group ? new Set(mergeBoundariesOf(group).members.map((member) => member.base)) : undefined;
 }

@@ -265,3 +265,15 @@ export function fragmentHolding(
   }
   return null;
 }
+
+/** View one merged member in its own offset space for logical line-end rules. */
+export function lineForSegment(line: LineRecord, segment: LineSegment | undefined): LineRecord {
+  return segment
+    ? {
+        ...line,
+        range: { paragraphId: segment.paragraphId, start: segment.start, end: segment.end },
+        spans: segment.spans,
+        drawings: segment.drawings,
+      }
+    : line;
+}

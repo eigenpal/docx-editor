@@ -1,3 +1,4 @@
+import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
 import type { Alignment } from './paragraph-alignment.ts';
 export { paragraphAlignment, type Alignment } from './paragraph-alignment.ts';
 import {
@@ -446,15 +447,9 @@ function endsWithExpandableSpace(text: string): boolean {
 }
 
 /**
- * Shift a line's spans to satisfy the paragraph alignment.
- *
- * Layout is the only geometry authority: hit testing and the caret read published span boxes
- * and measure intra-span prefixes on demand. Paint starts the line at `LineRecord.contentX` —
- * the first span's x whenever there is one — and flows inline, so justification slack must
- * land on the same inter-word spaces `word-spacing` expands, not on every style-span boundary.
- *
- * A line with NO spans returns unchanged; its alignment is published as `contentX` by the
- * callers, which is the only place an empty paragraph's caret x can come from.
+ * Align logical spans before bidi reordering. Layout publishes the shared geometry.
+ * Justification expands inter-word spaces, matching paint's CSS word-spacing.
+ * Empty lines stay unchanged; callers publish their aligned origin as contentX.
  */
 function alignLogicalSpans(
   spans: readonly StyleSpanRecord[],
@@ -629,7 +624,8 @@ export function breakParagraph(
             ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
             : undefined
         )
-      )
+      ),
+    bidiSourceBoundaries(paragraph)
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const visiblePieces = allPieces.flatMap((piece): FieldAwarePiece[] => {

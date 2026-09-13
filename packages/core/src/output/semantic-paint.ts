@@ -1,4 +1,10 @@
-import { paintParagraphMark, paintManualLineBreak } from './semantic-paragraph-marks.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import {
+  paintParagraphMark,
+  paintManualLineBreak,
+  lineTerminatorEdge,
+  positionTerminatorMark,
+} from './semantic-paragraph-marks.ts';
 // Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
 // no `getComputedStyle`, no canvas text metrics. If this file could measure, the DOM would
@@ -1252,7 +1258,8 @@ function paintHyperlinkAnchor(
 function paintLine(
   document: Document,
   line: LineRecord,
-  ctx: DrawingPaintHostContext
+  ctx: DrawingPaintHostContext,
+  paragraphRtl = false
 ): HTMLElement {
   const scale = ctx.scale;
   const element = document.createElement('div');
@@ -1481,7 +1488,7 @@ function paintLine(
     height: line.box.height,
   });
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles));
+    element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles, paragraphRtl));
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1632,16 +1639,20 @@ function paintFragment(
     const last = fragment.lines[fragment.lines.length - 1];
     if (last) {
       // At the end of the last line's text, which is where the mark itself sits.
-      const end = last.spans[last.spans.length - 1];
       glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
       // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
       // place the caret goes. Reading the line box drew a centred one against the margin.
-      glyph.style.left = `${((end ? end.box.x + end.box.width : last.contentX) - fragment.box.x) * scale}px`;
+      positionTerminatorMark(
+        glyph,
+        lineTerminatorEdge(last, paragraphIsRtl(fragment.props)),
+        fragment.box.x,
+        scale
+      );
       element.append(glyph);
     }
   }
   for (const line of fragment.lines) {
-    const painted = paintLine(document, line, ctx);
+    const painted = paintLine(document, line, ctx, paragraphIsRtl(fragment.props));
     if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
       applyParagraphFormatAnchor(painted, fragment, true);
     }

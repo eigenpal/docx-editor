@@ -21,7 +21,8 @@ export function paragraphIsRtl(props: readonly OoxmlProperty[]): boolean {
 /** Resolve paragraph-wide levels before wrapping; source offsets remain logical. */
 export function bidiPieces(
   pieces: readonly FieldAwarePiece[],
-  rtl: boolean
+  rtl: boolean,
+  sourceBoundaries?: ReadonlySet<number>
 ): readonly FieldAwarePiece[] {
   const text = pieces.map((piece) => piece.text).join('');
   if (!rtl && !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text)) return pieces;
@@ -42,7 +43,7 @@ export function bidiPieces(
   const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
   const result: FieldAwarePiece[] = [];
   let offset = 0;
-  for (const piece of coalesceBidiPieces(pieces)) {
+  for (const piece of coalesceBidiPieces(pieces, sourceBoundaries)) {
     let items;
     try {
       items = itemizeScriptFontSlots(piece.text, offset, embedding);

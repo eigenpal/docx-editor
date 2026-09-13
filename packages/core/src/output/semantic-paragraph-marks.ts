@@ -11,12 +11,43 @@ import {
   type RevisionStyleContext,
 } from './revision-presentation.ts';
 
+/** Paragraph terminators follow the base direction, outside the physical text band. */
+export function lineTerminatorEdge(
+  line: LineRecord,
+  paragraphRtl = false
+): {
+  readonly x: number;
+  readonly rtl: boolean;
+} {
+  const base = line.spans.find((span) => span.style.shaping)?.style.shaping?.baseLevel;
+  const rtl = base === undefined ? paragraphRtl : base === 1;
+  if (!line.spans.length) return { x: line.contentX, rtl };
+  return {
+    x: rtl
+      ? line.spans.reduce((x, span) => Math.min(x, span.box.x), Infinity)
+      : line.spans.reduce((x, span) => Math.max(x, span.box.x + span.box.width), -Infinity),
+    rtl,
+  };
+}
+
+export function positionTerminatorMark(
+  glyph: HTMLElement,
+  edge: { readonly x: number; readonly rtl: boolean },
+  originX: number,
+  scale: number
+): void {
+  glyph.style.left = `${(edge.x - originX) * scale}px`;
+  glyph.style.marginLeft = `${(edge.rtl ? -2 : 2) * scale}px`;
+  if (edge.rtl) glyph.style.transform = 'translateX(-100%)';
+}
+
 /** Manual line-break furniture. The zero-width model span still owns the newline. */
 export function paintManualLineBreak(
   document: Document,
   line: LineRecord,
   scale: number,
-  colors?: RevisionStyleContext
+  colors?: RevisionStyleContext,
+  paragraphRtl = false
 ): HTMLElement {
   const glyph = document.createElement('span');
   const last = line.spans[line.spans.length - 1];
@@ -28,9 +59,8 @@ export function paintManualLineBreak(
   glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
   glyph.style.userSelect = 'none';
-  glyph.style.left = `${((last ? last.box.x + last.box.width : line.contentX) - line.contentX) * scale}px`;
+  positionTerminatorMark(glyph, lineTerminatorEdge(line, paragraphRtl), line.contentX, scale);
   glyph.style.top = `${line.leading * scale}px`;
-  glyph.style.marginLeft = `${2 * scale}px`;
   glyph.style.fontSize = `${(last?.style.fontSizePt ?? line.box.height) * scale}px`;
   glyph.style.lineHeight = `${Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0)) * scale}px`;
   glyph.style.color = 'var(--doc-revision-format)';

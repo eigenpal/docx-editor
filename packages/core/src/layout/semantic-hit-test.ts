@@ -27,7 +27,7 @@ import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { isCjk } from './cjk-paragraph-breaks.ts';
 import { lastCodePointOf } from './cjk-line-break.ts';
-import { lineSegments, type LineSegment } from './line-segments.ts';
+import { lineForSegment, lineSegments, type LineSegment } from './line-segments.ts';
 import { baselineShiftPtOf, measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
@@ -687,6 +687,11 @@ function drawingHitIdentity(drawing: InlineDrawingRecord): SemanticHitDrawing {
  */
 function segmentAtX(line: LineRecord, x: number): LineSegment {
   const segments = lineSegments(line);
+  const bidiSpan = nearestBidiSpan(line.spans, x);
+  if (bidiSpan) {
+    const owner = segments.find((segment) => segment.paragraphId === bidiSpan.range.paragraphId);
+    if (owner) return owner;
+  }
   let found = segments[0]!;
   for (const segment of segments) {
     const first = segment.spans[0];
@@ -777,10 +782,15 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       Math.max(bidiSpan.box.x, Math.min(x, bidiSpan.box.x + bidiSpan.box.width)),
       context
     );
-    const offset = Math.min(candidate.offset, lineEndOffset(context.layout, line));
+    const segment = lineSegments(line).find(
+      (entry) => entry.paragraphId === bidiSpan.range.paragraphId
+    );
+    // Merged display lines carry independent offset spaces. Trim only this member's tail.
+    const ownedLine = lineForSegment(line, segment);
+    const offset = Math.min(candidate.offset, lineEndOffset(context.layout, ownedLine));
     return offset === candidate.offset
       ? candidate
-      : { ...candidate, offset, x: caretBoxOnLine(line, offset, context.measurer).x };
+      : { ...candidate, offset, x: caretBoxOnLine(line, offset, context.measurer, segment).x };
   }
   const first = spans[0]!;
   if (x <= first.box.x) return { offset: line.range.start, x: first.box.x, withinSpan: false };
