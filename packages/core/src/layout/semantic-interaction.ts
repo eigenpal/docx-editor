@@ -1,12 +1,14 @@
-// Semantic caret stops, hit regions, selection and keyboard navigation (task 7.4).
-//
-// Everything here is derived from the layout records and nothing else. No DOM ranges, no
-// element rectangles, no remeasurement — which is what makes interaction answerable
-// headlessly and identical between adapters.
-//
-// A position is always (paragraph node id, UTF-16 offset). The same address the tree ops
-// take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
-// handed straight to `insertText` without a translation step that could disagree.
+import { mergedCaretGroup } from './merged-caret-navigation.ts';
+import {
+  bidiDirectionOfStop,
+  horizontalCaretStep,
+  directionThroughGap,
+  visualWordBoundary,
+  visualLineEdge,
+  type VisualCaretStop,
+} from './visual-caret-navigation.ts';
+// Navigation derives from layout records in both headless and browser adapters.
+// Positions use the canonical paragraph id and UTF-16 offset accepted by tree operations.
 
 import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
@@ -36,6 +38,7 @@ import {
   moveToLineEdge,
   moveVerticalCaret,
   nearestStop,
+  lastStopOfParagraph,
   stopInDirection,
 } from './semantic-caret-navigation.ts';
 import {
@@ -99,23 +102,13 @@ function pushLineCaretStops(
   layout: SemanticLayout,
   line: LineRecord,
   pageIndex: number,
-  fragmentStart: number,
   measurer?: TextMeasurer,
   only?: string,
   clipBox?: LayoutBox
 ): void {
   for (const segment of lineSegments(line)) {
     if (only !== undefined && segment.paragraphId !== only) continue;
-    pushSegmentCaretStops(
-      stops,
-      layout,
-      line,
-      segment,
-      pageIndex,
-      fragmentStart,
-      measurer,
-      clipBox
-    );
+    pushSegmentCaretStops(stops, layout, line, segment, pageIndex, measurer, clipBox);
   }
 }
 
@@ -125,7 +118,6 @@ function pushSegmentCaretStops(
   line: LineRecord,
   segment: LineSegment,
   pageIndex: number,
-  fragmentStart: number,
   measurer?: TextMeasurer,
   clipBox?: LayoutBox
 ): void {
@@ -154,12 +146,9 @@ function pushSegmentCaretStops(
     }
     // A continuation line's first stop is the same model position as the previous
     // line's last, so it is emitted once — by the line that starts there.
-    if (offset === segment.start && offset > fragmentStart && stops.length > 0) {
-      const previous = stops[stops.length - 1]!;
-      if (
-        previous.position.paragraphId === segment.paragraphId &&
-        previous.position.offset === offset
-      ) {
+    if (offset === segment.start && segment.start > 0 && stops.length > 0) {
+      const previous = lastStopOfParagraph(stops, segment.paragraphId);
+      if (previous?.position.offset === offset) {
         continue;
       }
     }
@@ -209,7 +198,6 @@ function visitParagraphFragments(
           layout,
           line,
           pageIndex,
-          block.range.start,
           measurer,
           undefined,
           block.clipToBox ? block.box : undefined
@@ -245,7 +233,6 @@ export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): Car
           layout,
           line,
           page.index,
-          fragment.range.start,
           measurer,
           undefined,
           fragment.clipToBox ? fragment.box : undefined
@@ -256,35 +243,22 @@ export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): Car
   return stops;
 }
 
-/**
- * Caret stops for every paragraph on the caret's line, or null when the line holds one.
- *
- * Built only for a merged line, so an ordinary document keeps the per-paragraph index it
- * always used — that index is memoized per paragraph and this is not.
- */
-function mergedLineCaretStops(
+const mergedCaretStopCache = new ParagraphCaretStopCache<CaretGeometry>();
+
+/** Use connected merged members so physical motion cannot stop at a hidden paragraph mark. */
+function navigationCaretStops(
   layout: SemanticLayout,
-  position: SemanticPosition,
+  paragraphId: string,
   measurer?: TextMeasurer
-): IndexedCaretStops<CaretGeometry> | null {
-  const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
-  const found = placed.find(({ line }) => {
-    const segment = lineSegmentFor(line, position.paragraphId);
-    return segment !== null && position.offset >= segment.start && position.offset <= segment.end;
+): IndexedCaretStops<CaretGeometry> {
+  const group = mergedCaretGroup(layout, paragraphId);
+  if (!group) return paragraphCaretStops(layout, paragraphId, measurer);
+  return mergedCaretStopCache.get(layout, group.members[0]!, measurer, () => {
+    const stops: CaretGeometry[] = [];
+    for (const { line, pageIndex, clipBox } of group.lines)
+      pushLineCaretStops(stops, layout, line, pageIndex, measurer, undefined, clipBox);
+    return indexCaretStops(stops);
   });
-  if (!found || lineSegments(found.line).length < 2) return null;
-  const stops: CaretGeometry[] = [];
-  pushLineCaretStops(
-    stops,
-    layout,
-    found.line,
-    found.pageIndex,
-    0,
-    measurer,
-    undefined,
-    found.clipBox
-  );
-  return indexCaretStops(stops);
 }
 
 function paragraphCaretStops(
@@ -295,7 +269,7 @@ function paragraphCaretStops(
   return paragraphCaretStopCache.get(layout, paragraphId, measurer, () => {
     const stops: CaretGeometry[] = [];
     for (const { line, pageIndex, clipBox } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
-      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer, paragraphId, clipBox);
+      pushLineCaretStops(stops, layout, line, pageIndex, measurer, paragraphId, clipBox);
     }
     return indexCaretStops(stops);
   });
@@ -652,24 +626,7 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   return text;
 }
 
-/**
- * Paragraph offsets a WORD may not run through: the edges of every struck half on screen.
- *
- * Deleted text is the one thing a view paints that does not exist in the document the reader
- * is heading towards — it is the OTHER version, spliced in beside the proposal so the two can
- * be compared. Its characters are therefore not adjacent to their neighbours in any single
- * version, however adjacent they look.
- *
- * A replacement is where that stops being pedantic. Word writes one as a deletion immediately
- * followed by an insertion, with no separator between them, so `ALL CAPS` struck and `fsdfsd`
- * added read as the single word `CAPSfsdfsd`: a double-click on the old text selected the new
- * text with it, across a decision the reader had not taken. Feeding these to `wordBoundary`
- * makes each half its own word.
- *
- * Only the halves this view actually renders contribute. `proposed` paints no deletion, so it
- * has no seams and this answers empty — which is also why the walk reads the LAYOUT rather
- * than the tree.
- */
+/** Visible deletion boundaries split words without changing canonical text offsets. */
 export function deletedTextBoundaries(
   layout: SemanticLayout,
   paragraphId: string
@@ -704,10 +661,30 @@ function moveHorizontalCaret(
   measurer?: TextMeasurer
 ): { position: SemanticPosition; desiredX: null } | null {
   const order = documentOrder(layout);
-  const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
+  const orderIndex = documentOrderIndex(layout);
+  let paragraphIndex = orderIndex.get(position.paragraphId);
   if (paragraphIndex === undefined) return null;
-  return moveIndexedHorizontalCaret(position, direction, order, paragraphIndex, (paragraphId) =>
-    paragraphCaretStops(layout, paragraphId, measurer)
+  const group = mergedCaretGroup(layout, position.paragraphId);
+  const indexed = navigationCaretStops(layout, position.paragraphId, measurer);
+  const directionOf = (stop: VisualCaretStop) => bidiDirectionOfStop(layout, stop);
+  if (group) {
+    const stopIndex = indexed.index.get(position.paragraphId)?.get(position.offset);
+    const logicalDirection =
+      stopIndex === undefined
+        ? directionThroughGap(indexed.stops, position, direction, directionOf)
+        : horizontalCaretStep(indexed.stops, stopIndex, direction, directionOf).logicalDirection;
+    const members = group.members
+      .map((id) => orderIndex.get(id))
+      .filter((value): value is number => value !== undefined);
+    paragraphIndex = logicalDirection === -1 ? Math.min(...members) : Math.max(...members);
+  }
+  return moveIndexedHorizontalCaret(
+    position,
+    direction,
+    order,
+    paragraphIndex,
+    (id) => (id === position.paragraphId ? indexed : paragraphCaretStops(layout, id, measurer)),
+    directionOf
   );
 }
 
@@ -719,19 +696,34 @@ export function moveCaret(
   desiredX: number | null = null,
   options: MoveCaretOptions = {}
 ): { position: SemanticPosition; desiredX: number | null } | null {
+  const directionOf = (stop: VisualCaretStop) => bidiDirectionOfStop(layout, stop);
   if (!options.stops && (command === 'left' || command === 'right')) {
     return moveHorizontalCaret(layout, position, command === 'left' ? -1 : 1, options.measurer);
   }
   if (!options.stops && (command === 'wordLeft' || command === 'wordRight')) {
-    const direction = command === 'wordLeft' ? -1 : 1;
-    const target = wordBoundary(
-      paragraphTextFromLayout(layout, position.paragraphId),
-      position.offset,
-      direction,
-      deletedTextBoundaries(layout, position.paragraphId)
-    );
+    const physicalDirection = command === 'wordLeft' ? -1 : 1;
+    const indexed = navigationCaretStops(layout, position.paragraphId, options.measurer);
+    const stopIndex = indexed.index.get(position.paragraphId)?.get(position.offset);
+    const text = paragraphTextFromLayout(layout, position.paragraphId);
+    const boundaries = deletedTextBoundaries(layout, position.paragraphId);
+    const target =
+      stopIndex === undefined
+        ? wordBoundary(
+            text,
+            position.offset,
+            directionThroughGap(indexed.stops, position, physicalDirection, directionOf),
+            boundaries
+          )
+        : visualWordBoundary(
+            text,
+            indexed.stops,
+            stopIndex,
+            physicalDirection,
+            directionOf,
+            boundaries
+          );
     return target === position.offset
-      ? moveHorizontalCaret(layout, position, direction, options.measurer)
+      ? moveHorizontalCaret(layout, position, physicalDirection, options.measurer)
       : { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };
   }
   if (!options.stops && (command === 'lineStart' || command === 'lineEnd')) {
@@ -741,8 +733,8 @@ export function moveCaret(
     const target = moveToLineEdge(
       position,
       command === 'lineStart' ? -1 : 1,
-      mergedLineCaretStops(layout, position, options.measurer) ??
-        paragraphCaretStops(layout, position.paragraphId, options.measurer)
+      navigationCaretStops(layout, position.paragraphId, options.measurer),
+      directionOf
     );
     return target ? { position: target, desiredX: null } : null;
   }
@@ -766,7 +758,7 @@ export function moveCaret(
       (paragraphId) => paragraphCaretStops(layout, paragraphId, options.measurer)
     );
   }
-  const stops = options.stops ? [...options.stops] : caretStops(layout, options.measurer);
+  const stops = options.stops ?? caretStops(layout, options.measurer);
   if (stops.length === 0) return null;
   let index = stops.findIndex(
     (stop) =>
@@ -779,8 +771,11 @@ export function moveCaret(
     // everything else proceeds from the nearest stop of the same paragraph.
     if (command === 'left' || command === 'right') {
       const resolved =
-        stopInDirection(stops, position, command === 'left' ? -1 : 1) ??
-        nearestStop(stops, position);
+        stopInDirection(
+          stops,
+          position,
+          directionThroughGap(stops, position, command === 'left' ? -1 : 1, directionOf)
+        ) ?? nearestStop(stops, position);
       return resolved ? { position: resolved.position, desiredX: null } : null;
     }
     const resolved = nearestStop(stops, position);
@@ -790,37 +785,44 @@ export function moveCaret(
   const current = stops[index]!;
 
   switch (command) {
-    case 'left': {
-      const next = stops[Math.max(0, index - 1)]!;
-      return { position: next.position, desiredX: null };
-    }
+    case 'left':
     case 'right': {
-      const next = stops[Math.min(stops.length - 1, index + 1)]!;
+      const next =
+        horizontalCaretStep(stops, index, command === 'left' ? -1 : 1, (stop) =>
+          bidiDirectionOfStop(layout, stop)
+        ).target ?? current;
       return { position: next.position, desiredX: null };
     }
     case 'lineStart': {
-      const line = stops.filter((stop) => stop.lineId === current.lineId);
-      return { position: line[0]!.position, desiredX: null };
+      return {
+        position: visualLineEdge(stops, current, -1, directionOf).position,
+        desiredX: null,
+      };
     }
     case 'lineEnd': {
-      const line = stops.filter((stop) => stop.lineId === current.lineId);
-      return { position: line[line.length - 1]!.position, desiredX: null };
+      return {
+        position: visualLineEdge(stops, current, 1, directionOf).position,
+        desiredX: null,
+      };
     }
     case 'wordLeft':
     case 'wordRight': {
       const text = paragraphTextFromLayout(layout, position.paragraphId);
-      const direction = command === 'wordLeft' ? -1 : 1;
-      const target = wordBoundary(
+      const target = visualWordBoundary(
         text,
-        position.offset,
-        direction,
+        stops,
+        index,
+        command === 'wordLeft' ? -1 : 1,
+        directionOf,
         deletedTextBoundaries(layout, position.paragraphId)
       );
       // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
       // arrow would, so the key is never a dead press at a boundary.
       if (target === position.offset) {
         const next =
-          stops[direction === -1 ? Math.max(0, index - 1) : Math.min(stops.length - 1, index + 1)]!;
+          horizontalCaretStep(stops, index, command === 'wordLeft' ? -1 : 1, (stop) =>
+            bidiDirectionOfStop(layout, stop)
+          ).target ?? current;
         return { position: next.position, desiredX: null };
       }
       return { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };

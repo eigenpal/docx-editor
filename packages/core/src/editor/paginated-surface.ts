@@ -1,3 +1,4 @@
+import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
@@ -4862,12 +4863,11 @@ export function mountPaginatedSurface(
         (selection.anchor.paragraphId !== selection.head.paragraphId ||
           selection.anchor.offset !== selection.head.offset)
       ) {
-        // A plain horizontal arrow collapses a range to that arrow's edge. Starting a
-        // navigation step at `selection.head` moved one character beyond that edge, or one
-        // character from the wrong edge when the range was selected backwards.
+        // Collapse to the selected edge without taking another navigation step.
         const range = orderedRange();
         desiredX = null;
-        setSelection(collapsedAt(command === 'left' ? range.from : range.to), true);
+        const target = collapseSelection(currentLayout, range, paragraphOrder(), command, measurer);
+        setSelection(collapsedAt(target), true);
         return;
       }
       let moved = navigateInActiveScope(
