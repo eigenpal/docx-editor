@@ -13,7 +13,8 @@ import {
   tableSpanWidth,
   tablePreferredWidth,
 } from './clipboard-html-table-styles.ts';
-import { tagOf } from './clipboard-html-styles.ts';
+import { tableSide } from './clipboard-table-direction.ts';
+import { parseInlineStyle, tagOf } from './clipboard-html-styles.ts';
 import type { FlowContext, Projection } from './clipboard-html-read.ts';
 
 const TABLE_TOTAL_TWIPS = 9360; // 6.5 inches, Word's default content width.
@@ -114,10 +115,13 @@ export function projectHtmlTable(
   // so a row flood cannot spin an uncharged O(rows x columns) pass.
   const budgetedRows = rows.length > p.nodesLeft ? rows.slice(0, Math.max(1, p.nodesLeft)) : rows;
   const columnWidths = tableColumnWidths(budgetedRows, columns, totalWidth);
-  const borders = tableBordersXml(table);
+  const direction = parseInlineStyle(table).get('direction') ?? table.getAttribute('dir');
+  const rtl = direction?.trim().toLowerCase() === 'rtl';
+  const borders = tableBordersXml(table, rtl);
   const position = tablePositionXml(table);
-  const justification = tableJustification(table);
-  const jc = justification === undefined ? '' : `<w:jc w:val="${justification}"/>`;
+  // HTML tables without alignment stay physically left, also under dir=rtl.
+  const justification = tableJustification(table) ?? (rtl ? 'left' : undefined);
+  const jc = justification === undefined ? '' : `<w:jc w:val="${tableSide(justification, rtl)}"/>`;
   const grid = columnWidths.map((width) => `<w:gridCol w:w="${width}"/>`).join('');
 
   const carry: Array<RowSpanCarry | null> = new Array<RowSpanCarry | null>(columns).fill(null);
@@ -190,7 +194,8 @@ export function projectHtmlTable(
           depth,
           ctx,
           p,
-          projectFlow
+          projectFlow,
+          rtl
         )
       );
       column += span;
@@ -205,7 +210,7 @@ export function projectHtmlTable(
   // so a budget break before the first complete row emits nothing at all.
   if (rowXml.length === 0) return;
   out.push(
-    `<w:tbl><w:tblPr>${position}${preferredWidth.xml}${jc}${borders}</w:tblPr>` +
+    `<w:tbl><w:tblPr>${rtl ? '<w:bidiVisual/>' : ''}${position}${preferredWidth.xml}${jc}${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`
   );
   p.lastMarkCovered = false;
@@ -219,13 +224,14 @@ function projectCell(
   depth: number,
   ctx: FlowContext,
   p: Projection,
-  projectFlow: ProjectFlow
+  projectFlow: ProjectFlow,
+  rtl: boolean
 ): string {
   const isHeader = tagOf(cell) === 'th';
   let tcPr = `<w:tcW w:w="${width}" w:type="dxa"/>`;
   if (span > 1) tcPr += `<w:gridSpan w:val="${span}"/>`;
   if (vMergeRestart) tcPr += '<w:vMerge w:val="restart"/>';
-  tcPr += cellCssPropertiesXml(cell);
+  tcPr += cellCssPropertiesXml(cell, rtl);
 
   const cellCtx: FlowContext = {
     run: isHeader ? { ...ctx.run, bold: true } : ctx.run,

@@ -332,7 +332,7 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     expect(html).toContain(
-      '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto;'
+      '<table dir="ltr" align="center" style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto;'
     );
     expect(html).toContain('<tr style="height:18pt;mso-height-rule:exactly">');
     expect(html).toContain('colspan="63"');

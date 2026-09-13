@@ -392,7 +392,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Authored w:bidiVisual tables display logical cells from right to left, including merged cells and repeated headers. Table styles can supply the property; a direct false value overrides it. Borders, margins, alignment, selection, column insertion, and divider resizing follow the visual grid. Changing table direction and resizing the outer right edge of an RTL table are not supported.',
+      'Authored w:bidiVisual tables display logical cells from right to left, including merged cells and repeated headers. Table styles can supply the property; a direct false value overrides it. Borders, margins, alignment, selection, column insertion, and divider resizing follow the visual grid. HTML copy and paste preserve explicit table direction and physical cell borders and margins. Changing table direction and resizing the outer right edge of an RTL table are not supported.',
   },
   {
     id: 'tables.rows-columns',

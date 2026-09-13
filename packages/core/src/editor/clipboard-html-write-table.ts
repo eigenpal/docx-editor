@@ -16,7 +16,8 @@ import {
   wmlChild,
   wmlVal,
 } from './clipboard-html-write-tree.ts';
-import { styleChain } from './clipboard-html-write-cascade.ts';
+import { tableSide } from './clipboard-table-direction.ts';
+import { styleChain, toggleOn } from './clipboard-html-write-cascade.ts';
 import {
   conditionalCellFormat,
   tableConditionalFormats,
@@ -187,6 +188,16 @@ function cellContextsOf(
   return contexts;
 }
 
+function resolvedTableStyleChain(
+  ctx: RenderContext,
+  properties: OoxmlElement | null
+): OoxmlElement[] {
+  const named = styleChain(ctx.styles, wmlVal(wmlChild(properties, 'tblStyle')), 'table');
+  return named.length > 0
+    ? named
+    : styleChain(ctx.styles, ctx.styles.defaultTableStyleId ?? undefined, 'table');
+}
+
 /** Per-cell contexts for the cells that the table renderer emits. */
 export function renderedTableCellContexts(
   ctx: RenderContext,
@@ -194,7 +205,7 @@ export function renderedTableCellContexts(
 ): ReadonlyMap<OoxmlElement, RenderContext> {
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
-  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')), 'table');
+  const chain = resolvedTableStyleChain(ctx, ownTblPr);
   const conditionalFormats = tableConditionalFormats(chain, wmlChild(ownTblPr, 'tblLook'));
   const { rows } = tableRowsOf(table);
   const { placements } = cellPlacementsOf(rows);
@@ -210,10 +221,22 @@ export function renderHtmlTable(
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
   let tblBorders: OoxmlElement | null = null;
-  const tableStyleChain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')), 'table');
+  const tableStyleChain = resolvedTableStyleChain(ctx, ownTblPr);
   for (const style of tableStyleChain) {
     const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
     if (styleBorders) tblBorders = styleBorders;
+  }
+  const propertySources = tableStyleChain
+    .map((style) => wmlChild(style, 'tblPr'))
+    .filter((node): node is OoxmlElement => node !== null);
+  if (ownTblPr) propertySources.push(ownTblPr);
+  const rtl = toggleOn(propertySources, 'bidiVisual');
+  const tableMargins: OoxmlElement[] = [];
+  let tableJc: string | undefined;
+  for (const source of propertySources) {
+    const margins = wmlChild(source, 'tblCellMar');
+    if (margins) tableMargins.unshift(margins);
+    tableJc = wmlVal(wmlChild(source, 'jc')) ?? tableJc;
   }
   const ownBorders = wmlChild(ownTblPr, 'tblBorders');
   if (ownBorders) tblBorders = ownBorders;
@@ -236,9 +259,13 @@ export function renderHtmlTable(
   if (width !== null && width > 0 && attrOf(tableWidth, 'type', WML_NAMESPACE_URI) === 'dxa') {
     tableRules.push(`width:${ptFromTwips(width)}`);
   }
-  const tableJc = wmlVal(wmlChild(ownTblPr, 'jc'));
-  if (tableJc === 'center') tableRules.push('margin-left:auto', 'margin-right:auto');
-  else if (tableJc === 'right') tableRules.push('margin-left:auto', 'margin-right:0');
+  const alignment = tableSide(
+    tableJc === 'right' || tableJc === 'end' ? 'right' : tableJc === 'center' ? 'center' : 'left',
+    rtl
+  );
+  if (alignment === 'center') tableRules.push('margin-left:auto', 'margin-right:auto');
+  else if (alignment === 'right') tableRules.push('margin-left:auto', 'margin-right:0');
+  else tableRules.push('margin-left:0', 'margin-right:auto');
   for (const [xmlName, cssName] of [
     ['insideH', 'insideh'],
     ['insideV', 'insidev'],
@@ -248,7 +275,7 @@ export function renderHtmlTable(
   }
   // Outer-vs-inside edges classify by GRID COLUMN, not placement index: a ragged
   // short row's last cell sits mid-grid and must take the inside border.
-  let out = `<table style="${tableRules.join(';')}">`;
+  let out = `<table dir="${rtl ? 'rtl' : 'ltr'}" align="${alignment}" style="${tableRules.join(';')}">`;
   for (const item of tableItems) {
     if ('skip' in item) {
       // Skipped table children never render, but their fldChars still drive the
@@ -304,7 +331,9 @@ export function renderHtmlTable(
         rowSpan,
         placement.startColumn === 0,
         lastGridColumn,
-        conditional?.fill ?? wholeTable?.fill ?? null
+        conditional?.fill ?? wholeTable?.fill ?? null,
+        rtl,
+        tableMargins
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
@@ -313,7 +342,7 @@ export function renderHtmlTable(
       // The condition's rPr/pPr layer under the cell's own styles, so a styled
       // header row keeps its bold and text color in the copied HTML.
       const cellCtx = cellContexts.get(placement.cell) ?? ctx;
-      out += `<td${attrs}>${deps.renderBlocks(cellCtx, placement.cell.children, fields)}</td>`;
+      out += `<td dir="ltr"${attrs}>${deps.renderBlocks(cellCtx, placement.cell.children, fields)}</td>`;
     }
     out += '</tr>';
   }
