@@ -5,16 +5,30 @@ import { formatRevisionOf } from './revision-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
-import type { TextMeasurer } from './semantic-records.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
-// Only these classes have a half-em side bearing. Centred punctuation (！：；？)
-// must retain its natural advance; treating it as a closing bracket clips ink.
+// Opening/closing classes have a half-em side bearing. A colon needs a separate
+// seam rule because its ink can be centred, depending on the face and locale.
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
+
+/** A colon cannot borrow an opening bearing across a line or exclusion passage. */
+export function colonLostOpeningBearing(
+  lines: readonly { readonly spans: readonly StyleSpanRecord[] }[]
+): boolean {
+  return lines.some((line) =>
+    line.spans.some(
+      (span, index) =>
+        span.glyphOffsetPt === 0 &&
+        span.text.endsWith('：') &&
+        (!line.spans[index + 1] || (line.spans[index + 1]!.wrapAdvanceBefore ?? 0) > 0)
+    )
+  );
+}
 
 const compressible = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
@@ -43,7 +57,8 @@ interface CompressionSlice {
 function compressionSlices(
   pieces: readonly FieldAwarePiece[],
   includeKana: boolean,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  preserveColonAdvances: boolean
 ): ReadonlyMap<FieldAwarePiece, readonly CompressionSlice[]> {
   const starts: number[] = [];
   let length = 0;
@@ -62,20 +77,27 @@ function compressionSlices(
     const cluster = clusters[clusterIndex]!;
     const previous = clusters[clusterIndex - 1]?.text;
     const next = clusters[clusterIndex + 1]?.text;
-    // Remove one shared half-em at a punctuation seam, not both neighbours'
-    // bearings. Ordinary text and authored spaces are never compression triggers.
-    const trimLeft =
-      OPENING.test(cluster.text) &&
-      (previous === undefined || previous === '\n' || OPENING.test(previous));
-    const trimRight =
-      CLOSING.test(cluster.text) &&
-      (next === undefined || next === '\n' || OPENING.test(next) || CLOSING.test(next));
-    const fraction =
-      trimLeft || trimRight ? 0.5 : includeKana && KANA.test(cluster.text) ? 0.125 : 0;
-    if (!fraction) continue;
     while (pieceIndex + 1 < pieces.length && starts[pieceIndex + 1]! <= cluster.utf16From)
       pieceIndex++;
     const base = pieces[pieceIndex]!;
+    // Remove one shared half-em at a punctuation seam, not both neighbours'
+    // bearings. Ordinary text and authored spaces are never compression triggers.
+    // Paragraph and manual-line boundaries do not supply a neighbouring bearing.
+    const trimLeft = OPENING.test(cluster.text) && previous !== undefined && OPENING.test(previous);
+    const trimRight =
+      next !== undefined &&
+      ((CLOSING.test(cluster.text) &&
+        (OPENING.test(next) || CLOSING.test(next) || next === '：')) ||
+        // Retain the following opening's left bearing. It receives a centred
+        // colon's overhang without moving or clipping the colon's native ink.
+        (cluster.text === '：' &&
+          OPENING.test(next) &&
+          !preserveColonAdvances &&
+          !base.style.highlight &&
+          !base.style.shading));
+    const fraction =
+      trimLeft || trimRight ? 0.5 : includeKana && KANA.test(cluster.text) ? 0.125 : 0;
+    if (!fraction) continue;
     // Measure the complete cluster with its base character's font. Apply the
     // same per-unit reduction to every fragment, including split combining marks.
     const face = styleForFontSlot(base.style, base.fontSlot);
@@ -86,8 +108,23 @@ function compressionSlices(
       trimLeft || trimRight
         ? measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
         : advance;
-    const reduction =
-      Math.max(0, Math.min(advance, naturalAdvance * fraction)) / cluster.text.length;
+    let bearing = naturalAdvance * fraction;
+    if (cluster.text === '：' && next !== undefined && OPENING.test(next)) {
+      let nextPieceIndex = pieceIndex;
+      const nextFrom = clusters[clusterIndex + 1]!.utf16From;
+      while (nextPieceIndex + 1 < pieces.length && starts[nextPieceIndex + 1]! <= nextFrom)
+        nextPieceIndex++;
+      const nextPiece = pieces[nextPieceIndex]!;
+      const nextFace = styleForFontSlot(nextPiece.style, nextPiece.fontSlot);
+      // A smaller following bracket cannot receive a larger colon's whole half-em.
+      const nextAdvance = measureDisplayText(
+        next,
+        { ...nextFace, characterSpacingPt: 0 },
+        measurer
+      );
+      bearing = Math.min(bearing, Math.max(0, nextAdvance / 2));
+    }
+    const reduction = Math.max(0, Math.min(advance, bearing)) / cluster.text.length;
     for (
       let index = pieceIndex;
       index < pieces.length && starts[index]! < cluster.utf16To;
@@ -116,7 +153,8 @@ function compressionSlices(
 export function compressCjkPieces(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  preserveColonAdvances = false
 ): readonly FieldAwarePiece[] {
   const compression = policy.settings?.compression;
   if (!compression || compression === 'doNotCompress') return pieces;
@@ -125,7 +163,8 @@ export function compressCjkPieces(
   const slices = compressionSlices(
     pieces,
     compression === 'compressPunctuationAndJapaneseKana',
-    measurer
+    measurer,
+    preserveColonAdvances
   );
   for (const piece of pieces) {
     const compressedSlices = slices.get(piece);

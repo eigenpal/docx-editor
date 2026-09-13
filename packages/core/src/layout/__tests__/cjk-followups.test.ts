@@ -214,21 +214,21 @@ describe('CJK follow-up: document and paragraph policy', () => {
     expect(textLines(['天地。。人'], 12, '<w:overflowPunct/>')).toEqual(['天', '地。。', '人']);
   });
   test('compression changes advances, keeps text and model ranges, and respects dont-compress', () => {
-    const ordinary = layout(['天地。。'], 18);
+    const ordinary = layout(['天地。。'], 21);
     const compressed = layout(
       ['天地。。'],
-      18,
+      21,
       '',
       '',
       '<w:characterSpacingControl w:val="compressPunctuation"/>'
     );
     expect(ordinary.length).toBe(2);
     expect(compressed.length).toBe(1);
-    expect(compressed[0]!.width).toBe(18);
+    expect(compressed[0]!.width).toBe(21);
     expect(compressed[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
     expect(compressed[0]!.end).toBe(4);
     expect(
-      textLines(['天地。。'], 18, '', '', '<w:characterSpacingControl w:val="doNotCompress"/>')
+      textLines(['天地。。'], 21, '', '', '<w:characterSpacingControl w:val="doNotCompress"/>')
     ).toEqual(['天', '地。。']);
     expect(
       layout(

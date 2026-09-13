@@ -46,13 +46,15 @@ test('issue #792 contract brackets and form spaces keep their natural advances',
 test.each([
   ['甲（乙）丙', [12, 12, 12, 12, 12]],
   ['甲【  】乙', [12, 12, 12, 12, 12, 12]],
-  ['（甲）', [6, 12, 6]],
+  ['（甲）', [12, 12, 12]],
   ['甲）（乙', [12, 6, 12, 12]],
   ['甲（（乙', [12, 12, 6, 12]],
   ['甲）。乙', [12, 6, 12, 12]],
   ['甲！？：；乙', [12, 12, 12, 12, 12, 12]],
+  ['甲）：【乙', [12, 6, 6, 12, 12]],
+  ['甲：：）乙', [12, 12, 12, 12, 12]],
   ['甲。乙', [12, 12, 12]],
-  ['甲。\n（乙', [12, 6, 12, 6, 12]],
+  ['甲。\n（乙', [12, 12, 12, 12, 12]],
 ] as const)('contextual advances survive every run seam: %s', (text, expected) => {
   for (let split = 1; split <= text.length; split++) {
     const pieces = compress(text, split);
@@ -69,20 +71,20 @@ test.each([
 });
 
 test('opening glyphs move by the removed left bearing; closing glyphs keep their origin', () => {
-  const pieces = compress('（甲）');
-  expect(pieces.map((piece) => piece.glyphOffsetPt ?? 0)).toEqual([-6, 0, 0]);
-  expect(pieces.map((piece) => piece.style.characterSpacingPt)).toEqual([-6, 0, -6]);
+  const pieces = compress('（（甲））');
+  expect(pieces.map((piece) => piece.glyphOffsetPt ?? 0)).toEqual([0, -6, 0, 0, 0]);
+  expect(pieces.map((piece) => piece.style.characterSpacingPt)).toEqual([0, -6, 0, -6, 0]);
 });
 
 test('punctuation compression removes natural bearings, not authored tracking', () => {
   for (const tracking of [2, -2, -10]) {
     const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 11, characterSpacingPt: tracking };
     const pieces = compressCjkPieces(
-      [{ text: '（', start: 0, end: 1, props: [], style }],
+      [{ text: '（（', start: 0, end: 2, props: [], style }],
       policy,
       measurer
     );
-    const compressed = pieces[0]!;
+    const compressed = pieces[1]!;
     const reduction = Math.min(6, 12 + tracking);
     expect(compressed.style.characterSpacingPt).toBe(tracking - reduction);
     expect(compressed.glyphOffsetPt).toBe(-reduction);
@@ -93,9 +95,9 @@ test('punctuation compression removes natural bearings, not authored tracking', 
 
 test('outlined punctuation retains its bearing for the extended ink', () => {
   const piece: FieldAwarePiece = {
-    text: '（甲）',
+    text: '（（甲））',
     start: 0,
-    end: 3,
+    end: 5,
     props: [],
     style: { ...DEFAULT_RUN_STYLE, textOutline: { widthPt: 1, color: 'FF0000' } },
   };
@@ -104,9 +106,9 @@ test('outlined punctuation retains its bearing for the extended ink', () => {
 
 test('decorated, linked-style, and tracked punctuation retains native ink and selection', () => {
   const base: FieldAwarePiece = {
-    text: '（甲）',
+    text: '（（甲））',
     start: 0,
-    end: 3,
+    end: 5,
     props: [],
     style: DEFAULT_RUN_STYLE,
   };
@@ -122,7 +124,7 @@ test('decorated, linked-style, and tracked punctuation retains native ink and se
   ];
   for (const piece of decorated)
     expect(compressCjkPieces([piece], policy, measurer)).toEqual([piece]);
-  const plain = { ...base, start: 3, end: 6 };
+  const plain = { ...base, start: 5, end: 10 };
   const result = compressCjkPieces([decorated[0]!, plain], policy, measurer);
   expect(result[0]).toEqual(decorated[0]);
   expect(result.some((piece) => piece.glyphOffsetPt !== undefined)).toBe(true);

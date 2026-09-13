@@ -61,15 +61,15 @@ test('CJK compression uses the same spacing in layout and DOM paint', () => {
   const container = document.createElement('div');
   paintSemanticLayout(container, layout, { scale: 1 });
   const punctuation = [...container.querySelectorAll<HTMLElement>('[data-start]')].filter(
-    (element) => element.textContent === '。。'
+    (element) => element.textContent === '。'
   );
-  expect(punctuation).toHaveLength(1);
-  expect(punctuation.map((element) => element.style.letterSpacing)).toEqual(['-3px']);
-  expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width - line.spans[0]!.box.x).toBe(18);
+  expect(punctuation).toHaveLength(2);
+  expect(punctuation.map((element) => element.style.letterSpacing)).toEqual(['-3px', '']);
+  expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width - line.spans[0]!.box.x).toBe(21);
 });
 
 test('typography settings invalidate cached layout without a text edit', () => {
-  const document = documentPart('天地玄黄。人。', '');
+  const document = documentPart('天地玄黄。。人。', '');
   const session = createLayoutSession();
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
@@ -103,14 +103,14 @@ test('headers and table cells consume the same document typography settings', ()
   const p =
     '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>天地。。</w:t></w:r></w:p>';
   const header = part(`<w:hdr xmlns:w="${W}">${p}</w:hdr>`, '/word/header1.xml');
-  const story = layoutHeaderFooterStory(header, 18, measurer, 'cjk-test', undefined, styleCascade);
+  const story = layoutHeaderFooterStory(header, 21, measurer, 'cjk-test', undefined, styleCascade);
   const headerParagraph = story.fragments[0]!;
   expect(headerParagraph.kind).toBe('paragraph');
   if (headerParagraph.kind !== 'paragraph') throw new Error('expected header paragraph');
   expect(headerParagraph.lines).toHaveLength(1);
   expect(headerParagraph.lines[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
   const table = part(
-    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="360" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="360"/></w:tblGrid><w:tr><w:tc>${p}</w:tc></w:tr></w:tbl></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="420" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="420"/></w:tblGrid><w:tr><w:tc>${p}</w:tc></w:tr></w:tbl></w:body></w:document>`
   );
   const layout = layoutSemanticDocument(table, 0, { measurer, geometry, styleCascade });
   const tableFragment = layout.pages[0]!.fragments[0]!;
@@ -138,10 +138,10 @@ test('compressed opening punctuation translates only ink and retains layout care
     (element) => element.textContent === '（'
   );
   expect(openings).toHaveLength(2);
-  expect(container.querySelectorAll('[data-docx-shifted-ink]')).toHaveLength(2);
-  expect(openings.map((element) => element.style.width)).toEqual(['6px', '6px']);
+  expect(container.querySelectorAll('[data-docx-shifted-ink]')).toHaveLength(1);
+  expect(openings.map((element) => element.style.width)).toEqual(['', '6px']);
   expect(openings.map((element) => element.firstElementChild?.getAttribute('style'))).toEqual([
-    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
+    undefined,
     'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
   ]);
   for (const span of line.spans) {
@@ -150,7 +150,7 @@ test('compressed opening punctuation translates only ink and retains layout care
         .x
     ).toBeCloseTo(span.box.x, 5);
   }
-  expect(line.spans.slice(0, 2).map((span) => span.glyphOffsetPt)).toEqual([-3, -3]);
+  expect(line.spans.slice(0, 2).map((span) => span.glyphOffsetPt)).toEqual([undefined, -3]);
 });
 
 test('scaled revision punctuation retains natural advances and native decoration', () => {

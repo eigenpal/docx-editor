@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Fix CJK punctuation overlap when `characterSpacingControl` enables compression. Preserve ordinary brackets and authored spaces, compress qualifying punctuation seams, and position opening glyphs inside their reduced advances.
+Fix CJK punctuation spacing and overlap when `characterSpacingControl` enables compression. Match Word's shared punctuation seams while preserving authored spaces and advances at paragraph boundaries.
