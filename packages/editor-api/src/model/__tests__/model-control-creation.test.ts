@@ -150,3 +150,54 @@ test('distinct control aliases combine lock axes in queue order and preserve anc
     }
   }
 });
+
+test('unlock and value writes preserve metadata in a preserved out-of-order property container', async () => {
+  const source = docx(
+    '<w:p><w:sdt><w:sdtPr><w:id w:val="12"/><w:tag w:val="reference"/>' +
+      '<w:alias w:val="Reference title"/><w:text/><w:lock w:val="sdtContentLocked"/>' +
+      '</w:sdtPr><w:sdtContent><w:r><w:t>REF-OLD</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+  );
+  for (const mode of ['insertText', 'setValue'] as const) {
+    const runtime = await serverRuntime(source);
+    await runtime.run(async (context) => {
+      const control = context.document.contentControls.getByTag('reference').getFirst();
+      control.load('tag,title,id,cannotEdit,cannotDelete');
+      await context.sync();
+      expect([control.tag, control.title, control.id]).toEqual([
+        'reference',
+        'Reference title',
+        '12',
+      ]);
+      control.cannotEdit = false;
+      control.cannotDelete = false;
+      await context.sync();
+      if (mode === 'insertText') control.insertText('REF-NEW', 'Replace');
+      else control.setValue({ kind: 'text', text: 'REF-NEW' });
+      await context.sync();
+      control.load('tag,title,id,text,cannotEdit,cannotDelete');
+      await context.sync();
+      expect([control.tag, control.title, control.id, control.text]).toEqual([
+        'reference',
+        'Reference title',
+        '12',
+        'REF-NEW',
+      ]);
+      expect([control.cannotEdit, control.cannotDelete]).toEqual([false, false]);
+    });
+    const saved = await runtime.save();
+    const reopened = await serverRuntime(saved);
+    await reopened.run(async (context) => {
+      const control = context.document.contentControls.getByTag('reference').getFirst();
+      control.load('tag,title,id,text');
+      await context.sync();
+      expect([control.tag, control.title, control.id, control.text]).toEqual([
+        'reference',
+        'Reference title',
+        '12',
+        'REF-NEW',
+      ]);
+    });
+    runtime.dispose();
+    reopened.dispose();
+  }
+});

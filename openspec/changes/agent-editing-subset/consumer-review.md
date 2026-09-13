@@ -16,7 +16,7 @@
 
 These are documented profile boundaries, not silently successful operations:
 
-- Different list-level formatting operations require separate syncs; same-level setters coalesce.
+- List level formats now batch across different levels and with existing item membership edits. Aliases writing the same level still refuse.
 - Detaching a list item and changing paragraph formatting may require separate syncs.
 - A write-created proxy requires sync before configuration; read-derived proxies can be used within one sync.
 - Lock refusals currently use GeneralException rather than a dedicated protection recovery code.

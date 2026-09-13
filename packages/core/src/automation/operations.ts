@@ -957,7 +957,6 @@ export const AUTOMATION_SOLITARY_OPERATIONS = [
   'insertInlinePicture',
   'insertBreak',
   'startNewList',
-  'setListLevelFormat',
   'deleteNote',
   'insertComment',
   'setCommentResolved',

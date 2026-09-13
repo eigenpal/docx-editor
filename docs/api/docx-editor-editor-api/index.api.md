@@ -1238,84 +1238,65 @@ export interface ServerPaginationOptions extends AutomationPaginationOptions {
 
 // @public
 export class Table extends ModelObject implements PromisedItem {
-    // (undocumented)
     addColumns(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', columnCount: number, values?: string[][]): void;
-    // (undocumented)
     addRows(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', rowCount: number, values?: string[][]): TableRowCollection;
-    // (undocumented)
+    // @internal (undocumented)
     static at(context: RequestContext, label: string, address: ObjectAddress): Table;
-    // (undocumented)
     get columnCount(): number;
-    // (undocumented)
     delete(): void;
-    // (undocumented)
     deleteColumns(columnIndex: number, columnCount?: number): void;
-    // (undocumented)
     deleteRows(rowIndex: number, rowCount?: number): void;
-    // (undocumented)
     getCell(rowIndex: number, cellIndex: number): TableCell;
-    // (undocumented)
     get headerRowCount(): number;
     set headerRowCount(value: number);
-    // (undocumented)
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // (undocumented)
+    // @internal (undocumented)
     hydrateNull(): void;
     // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
-    // (undocumented)
+    // @internal (undocumented)
     static promised(context: RequestContext, label: string, nullable?: boolean): Table;
-    // (undocumented)
     get rowCount(): number;
-    // (undocumented)
     get rows(): TableRowCollection;
-    // (undocumented)
     get style(): string;
     set style(value: string);
-    // (undocumented)
     get values(): string[][];
     set values(value: string[][]);
 }
 
 // @public
 export class TableCell extends ModelObject implements PromisedItem {
-    // (undocumented)
+    // @internal (undocumented)
     static at(context: RequestContext, label: string, address: ObjectAddress): TableCell;
-    // (undocumented)
     get body(): Body_2;
-    // (undocumented)
     get columnWidth(): number;
     set columnWidth(value: number);
-    // (undocumented)
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // (undocumented)
+    // @internal (undocumented)
     hydrateNull(): void;
     // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
-    // (undocumented)
+    // @internal (undocumented)
     static promised(context: RequestContext, label: string, nullable?: boolean): TableCell;
-    // (undocumented)
     get shadingColor(): string;
     set shadingColor(value: string);
-    // (undocumented)
     get value(): string;
     set value(value: string);
-    // (undocumented)
     get verticalAlignment(): VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed';
     set verticalAlignment(value: VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed');
 }
 
 // @public
 export class TableCellCollection extends HandleCollection<TableCell> {
-    // (undocumented)
     getFirst(): TableCell;
-    // (undocumented)
     getFirstOrNullObject(): TableCell;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): TableCell;
     // (undocumented)
     protected listing(): AutomationOperation | null;
-    // (undocumented)
+    // @internal (undocumented)
     static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCellCollection;
     // (undocumented)
     protected promised(label: string, nullable: boolean): TableCell & PromisedItem;
@@ -1323,17 +1304,15 @@ export class TableCellCollection extends HandleCollection<TableCell> {
 
 // @public
 export class TableCollection extends HandleCollection<Table> {
-    // (undocumented)
     getFirst(): Table;
-    // (undocumented)
     getFirstOrNullObject(): Table;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Table;
     // (undocumented)
     protected listing(): AutomationOperation | null;
-    // (undocumented)
+    // @internal (undocumented)
     static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCollection;
-    // (undocumented)
+    // @internal (undocumented)
     static over(context: RequestContext, label: string, owner: ObjectPath, scope: () => AutomationSpanRef): TableCollection;
     // (undocumented)
     protected promised(label: string, nullable: boolean): Table & PromisedItem;
@@ -1341,29 +1320,26 @@ export class TableCollection extends HandleCollection<Table> {
 
 // @public
 export class TableRow extends ModelObject implements PromisedItem {
-    // (undocumented)
+    // @internal (undocumented)
     static at(context: RequestContext, label: string, address: ObjectAddress): TableRow;
-    // (undocumented)
     get cells(): TableCellCollection;
-    // (undocumented)
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // (undocumented)
+    // @internal (undocumented)
     hydrateNull(): void;
-    // (undocumented)
+    // @internal (undocumented)
     static promised(context: RequestContext, label: string, nullable?: boolean): TableRow;
 }
 
 // @public
 export class TableRowCollection extends HandleCollection<TableRow> {
-    // (undocumented)
     getFirst(): TableRow;
-    // (undocumented)
     getFirstOrNullObject(): TableRow;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): TableRow;
     // (undocumented)
     protected listing(): AutomationOperation | null;
-    // (undocumented)
+    // @internal (undocumented)
     static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableRowCollection;
     // (undocumented)
     protected promised(label: string, nullable: boolean): TableRow & PromisedItem;

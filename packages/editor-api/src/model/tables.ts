@@ -38,23 +38,28 @@ function location(value: 'Start' | 'End', target: string): 'start' | 'end' {
 /** A canonical rectangular table. Reads require load() and sync(). @public */
 export class Table extends ModelObject implements PromisedItem {
   #rows: TableRowCollection | undefined;
+  /** @internal */
   static at(context: RequestContext, label: string, address: ObjectAddress): Table {
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: label });
     return new Table(context, ObjectPath.of(label, address.handle), false);
   }
+  /** @internal */
   static promised(context: RequestContext, label: string, nullable = false): Table {
     return new Table(context, ObjectPath.pending(label), nullable);
   }
   private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
     super(context, path, { nullable });
   }
+  /** @internal */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
+  /** @internal */
   hydrateNull(): void {
     this.path.resolveNull();
   }
+  /** Cell text by row. A write replaces the whole rectangular matrix; rich cell content refuses. */
   get values(): string[][] {
     return this.loadedProperty<string[][]>('values');
   }
@@ -66,6 +71,7 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'values', values },
     }));
   }
+  /** Table style display name. Writes must name an existing table style in the document. */
   get style(): string {
     return this.loadedProperty<string>('style');
   }
@@ -78,6 +84,7 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'properties', styleId: value },
     }));
   }
+  /** Number of consecutive leading rows repeated as table headers. */
   get headerRowCount(): number {
     return this.loadedProperty<number>('headerRowCount');
   }
@@ -89,12 +96,15 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'properties', headerRowCount: value },
     }));
   }
+  /** Number of rows. Load this property before reading it. */
   get rowCount(): number {
     return this.loadedProperty<number>('rowCount');
   }
+  /** Number of columns in the rectangular grid. Load before reading. */
   get columnCount(): number {
     return this.loadedProperty<number>('columnCount');
   }
+  /** Stable row collection. Load `items`, then sync before reading its elements. */
   get rows(): TableRowCollection {
     return (this.#rows ??= TableRowCollection.of(
       this.context,
@@ -106,6 +116,7 @@ export class Table extends ModelObject implements PromisedItem {
       })
     ));
   }
+  /** Address a cell by zero-based row and column. Read-derived operations may share its next sync. */
   getCell(rowIndex: number, cellIndex: number): TableCell {
     const label = `${this.path.label}.getCell`;
     integer(rowIndex, label);
@@ -118,6 +129,7 @@ export class Table extends ModelObject implements PromisedItem {
     );
     return cell;
   }
+  /** Add rows at an edge. Sync before configuring the returned rows; omitted values create empty cells. */
   addRows(
     insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
     rowCount: number,
@@ -144,6 +156,7 @@ export class Table extends ModelObject implements PromisedItem {
     );
     return rows;
   }
+  /** Add columns at an edge. Values are row-major; new columns initially copy the nearest edge width. */
   addColumns(
     insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
     columnCount: number,
@@ -164,6 +177,7 @@ export class Table extends ModelObject implements PromisedItem {
       },
     }));
   }
+  /** Delete consecutive rows from a zero-based index. Defaults to one row. */
   deleteRows(rowIndex: number, rowCount?: number): void {
     if (rowCount === undefined) rowCount = 1;
     integer(rowIndex, this.path.label);
@@ -174,6 +188,7 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'deleteRows', index: rowIndex, count: rowCount },
     }));
   }
+  /** Delete consecutive columns from a zero-based index. Defaults to one column. */
   deleteColumns(columnIndex: number, columnCount?: number): void {
     if (columnCount === undefined) columnCount = 1;
     integer(columnIndex, this.path.label);
@@ -184,6 +199,7 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'deleteColumns', index: columnIndex, count: columnCount },
     }));
   }
+  /** Delete this table and its contents through the canonical document transaction. */
   delete(): void {
     this.command('delete', () => ({
       op: 'updateTable',
@@ -214,23 +230,28 @@ export class Table extends ModelObject implements PromisedItem {
 /** A row with stable identity. Its cells follow document order. @public */
 export class TableRow extends ModelObject implements PromisedItem {
   #cells: TableCellCollection | undefined;
+  /** @internal */
   static at(context: RequestContext, label: string, address: ObjectAddress): TableRow {
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: label });
     return new TableRow(context, ObjectPath.of(label, address.handle), false);
   }
+  /** @internal */
   static promised(context: RequestContext, label: string, nullable = false): TableRow {
     return new TableRow(context, ObjectPath.pending(label), nullable);
   }
   private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
     super(context, path, { nullable });
   }
+  /** @internal */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
+  /** @internal */
   hydrateNull(): void {
     this.path.resolveNull();
   }
+  /** Stable cell collection for this row. Load `items` and sync before reading. */
   get cells(): TableCellCollection {
     return (this.#cells ??= TableCellCollection.of(
       this.context,
@@ -247,23 +268,28 @@ export class TableRow extends ModelObject implements PromisedItem {
 /** An ordinary table cell. Column width uses points and changes the whole grid column. @public */
 export class TableCell extends ModelObject implements PromisedItem {
   #body: Body | undefined;
+  /** @internal */
   static at(context: RequestContext, label: string, address: ObjectAddress): TableCell {
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: label });
     return new TableCell(context, ObjectPath.of(label, address.handle), false);
   }
+  /** @internal */
   static promised(context: RequestContext, label: string, nullable = false): TableCell {
     return new TableCell(context, ObjectPath.pending(label), nullable);
   }
   private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
     super(context, path, { nullable });
   }
+  /** @internal */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
+  /** @internal */
   hydrateNull(): void {
     this.path.resolveNull();
   }
+  /** A body scoped to this cell for text, ranges, formatting, and nested table navigation. */
   get body(): Body {
     if (this.#body) return this.#body;
     const label = `${this.path.label}.body`;
@@ -276,6 +302,7 @@ export class TableCell extends ModelObject implements PromisedItem {
     this.#body = body;
     return body;
   }
+  /** Plain cell text. Replacing complex content refuses; use the scoped body for targeted edits. */
   get value(): string {
     return this.loadedProperty<string>('value');
   }
@@ -288,6 +315,7 @@ export class TableCell extends ModelObject implements PromisedItem {
       properties: { value: value },
     }));
   }
+  /** Width in points. A write affects the whole grid column, not only this cell. */
   get columnWidth(): number {
     return this.loadedProperty<number>('columnWidth');
   }
@@ -300,6 +328,7 @@ export class TableCell extends ModelObject implements PromisedItem {
       properties: { columnWidth: value },
     }));
   }
+  /** Cell background as a supported color string. */
   get shadingColor(): string {
     return this.loadedProperty<string>('shadingColor');
   }
@@ -312,6 +341,7 @@ export class TableCell extends ModelObject implements PromisedItem {
       properties: { shadingColor: value },
     }));
   }
+  /** Top, Center, or Bottom. Mixed is a read state and cannot be assigned. */
   get verticalAlignment(): VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed' {
     return this.loadedProperty<VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed'>(
       'verticalAlignment'
@@ -349,6 +379,7 @@ export class TableCell extends ModelObject implements PromisedItem {
 /** A loaded collection of Table objects. @public */
 export class TableCollection extends HandleCollection<Table> {
   readonly #listing: () => AutomationOperation | null;
+  /** @internal */
   static of(
     context: RequestContext,
     label: string,
@@ -357,6 +388,7 @@ export class TableCollection extends HandleCollection<Table> {
   ): TableCollection {
     return new TableCollection(context, ObjectPath.derived(label, owner), listing);
   }
+  /** @internal */
   static over(
     context: RequestContext,
     label: string,
@@ -373,9 +405,11 @@ export class TableCollection extends HandleCollection<Table> {
     super(context, path);
     this.#listing = listing;
   }
+  /** Return the first item; an empty collection raises ItemNotFound at sync. */
   getFirst(): Table {
     return this.edge('first', 'getFirst', false);
   }
+  /** Return the first item or a null object. Check isNullObject after sync. */
   getFirstOrNullObject(): Table {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
@@ -393,6 +427,7 @@ export class TableCollection extends HandleCollection<Table> {
 /** A loaded collection of TableRow objects. @public */
 export class TableRowCollection extends HandleCollection<TableRow> {
   readonly #listing: () => AutomationOperation | null;
+  /** @internal */
   static of(
     context: RequestContext,
     label: string,
@@ -409,9 +444,11 @@ export class TableRowCollection extends HandleCollection<TableRow> {
     super(context, path);
     this.#listing = listing;
   }
+  /** Return the first item; an empty collection raises ItemNotFound at sync. */
   getFirst(): TableRow {
     return this.edge('first', 'getFirst', false);
   }
+  /** Return the first item or a null object. Check isNullObject after sync. */
   getFirstOrNullObject(): TableRow {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
@@ -429,6 +466,7 @@ export class TableRowCollection extends HandleCollection<TableRow> {
 /** A loaded collection of TableCell objects. @public */
 export class TableCellCollection extends HandleCollection<TableCell> {
   readonly #listing: () => AutomationOperation | null;
+  /** @internal */
   static of(
     context: RequestContext,
     label: string,
@@ -445,9 +483,11 @@ export class TableCellCollection extends HandleCollection<TableCell> {
     super(context, path);
     this.#listing = listing;
   }
+  /** Return the first item; an empty collection raises ItemNotFound at sync. */
   getFirst(): TableCell {
     return this.edge('first', 'getFirst', false);
   }
+  /** Return the first item or a null object. Check isNullObject after sync. */
   getFirstOrNullObject(): TableCell {
     return this.edge('first', 'getFirstOrNullObject', true);
   }

@@ -160,6 +160,8 @@ export class Range extends ModelObject implements PromisedItem {
    * WRITING IT AUTHORS A LINK over exactly these characters, and `''` removes one. A URL whose
    * scheme this engine would refuse to OPEN is refused here too, by the same allowlist: a document
    * this API writes must not be one it would then decline to follow.
+   * Partial retargeting and unlinking support ordinary text links directly inside a paragraph.
+   * Complex or nested link wrappers and collapsed ranges inside links refuse with `NotSupported`.
    */
   get hyperlink(): string {
     return this.loadedProperty<string>('hyperlink');
@@ -272,11 +274,10 @@ export class Range extends ModelObject implements PromisedItem {
     if (typeof author !== 'string' || author.trim().length === 0) {
       fail({ code: 'NotSupported', target });
     }
-    const span = this.#span();
     const created = Comment.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () => ({ op: 'insertComment', span, text: commentText, author }),
+      () => ({ op: 'insertComment', span: this.#span(), text: commentText, author }),
       (value) => {
         if (value.kind !== 'handle') fail({ code: 'GeneralException', target });
         created.hydrateAddress(value);

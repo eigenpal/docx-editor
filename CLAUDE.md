@@ -53,6 +53,8 @@ Record per-endpoint runtime differences in `packages/editor-api/compat/runtime-n
 - Never disable tracking automatically to make an unsupported tracked edit succeed.
 
 Use `packages/editor-api/OFFICE_JS_GUIDE.md` as the reference for agent-facing examples.
+Dedicated API guides and the complete public member directory live in `docs/site/content/editor-api/`.
+Keep the relevant guide and `reference.mdx` current when adding or changing public API behavior.
 
 ## Packages
 

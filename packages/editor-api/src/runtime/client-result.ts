@@ -26,12 +26,8 @@ import { fail } from './errors.ts';
  * sync fills it, and reading it early is `ValueNotLoaded` rather than `undefined` flowing onwards
  * into something that misinterprets it.
  *
- * @example
- * ```ts
- * const count = body.getParagraphCount();
- * await context.sync();
- * console.log(count.value);
- * ```
+ * This is a support type. No current public document method produces a ClientResult.
+ * Document collections expose loaded `items`; read their length after `load('items')` and `sync()`.
  *
  * @public
  */

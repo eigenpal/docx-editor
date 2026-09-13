@@ -251,7 +251,6 @@ describe('the operation vocabulary declares which operations write', () => {
       'insertInlinePicture',
       'insertBreak',
       'startNewList',
-      'setListLevelFormat',
       'deleteNote',
       'insertComment',
       'setCommentResolved',

@@ -102,11 +102,10 @@ export class NoteItem extends ModelObject implements PromisedItem {
   get body(): Body {
     if (this.#body) return this.#body;
     const label = `${this.path.label}.body`;
-    const note = this.#handle();
     const story = Body.promisedStory(this.context, label);
     this.read(
       label,
-      () => ({ op: 'getNoteBody', note }),
+      () => ({ op: 'getNoteBody', note: this.#handle() }),
       (value) => {
         story.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, label) });
       }
@@ -122,38 +121,40 @@ export class NoteItem extends ModelObject implements PromisedItem {
    * any company rather than committing half a batch. Two syncs get a delete and anything else.
    */
   delete(): void {
-    const note = this.#handle();
-    this.command('delete', () => ({ op: 'deleteNote', note }));
+    this.command('delete', () => ({ op: 'deleteNote', note: this.#handle() }));
   }
 
   /** The next note of the same kind. `ItemNotFound` at the sync when this is the last one. */
   getNext(): NoteItem {
     const target = `${this.path.label}.getNext`;
-    const own = this.#handle();
     const next = NoteItem.promised(this.context, target, false);
     const document = this.internals.roots().document;
     // The KIND first, because the ordering a note is next in is the ordering of its own part: a
     // footnote's next note is the next footnote, never the first endnote.
     const kindLabel = `${target}.type`;
     let noteKind: 'footnote' | 'endnote' = 'footnote';
+    const kindPath = ObjectPath.pending(kindLabel);
     this.read(
       kindLabel,
-      () => ({ op: 'getNoteKind', note: own }),
+      () => ({ op: 'getNoteKind', note: this.#handle() }),
       (value) => {
         noteKind = hydratedText(value, kindLabel) === 'endnote' ? 'endnote' : 'footnote';
+        kindPath.resolveTo(this.#handle());
       }
     );
-    this.read(
-      target,
-      () => ({ op: 'getNotes', document, noteKind }),
-      (value) => {
+    this.enqueue({
+      sort: 'read',
+      label: target,
+      dependencies: [kindPath],
+      plan: () => ({ op: 'getNotes', document, noteKind }),
+      settle: (value) => {
         const notes = hydratedHandles(value, target);
-        const at = notes.findIndex((handle) => handle.ref === own.ref);
+        const at = notes.findIndex((handle) => handle.ref === this.#handle().ref);
         const after = at < 0 ? undefined : notes[at + 1];
         if (!after) fail({ code: 'ItemNotFound', target });
         next.hydrateAddress({ kind: 'handle', handle: after });
-      }
-    );
+      },
+    });
     return next;
   }
 
@@ -161,19 +162,17 @@ export class NoteItem extends ModelObject implements PromisedItem {
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'type']);
     if (selected.includes('text')) {
-      const note = this.#handle();
       this.loadTextInto('text', () => ({
         op: 'getNoteText',
-        note,
+        note: this.#handle(),
         projection: this.revisionTextView(),
       }));
     }
     if (selected.includes('type')) {
       const label = `${this.path.label}.type`;
-      const note = this.#handle();
       this.read(
         label,
-        () => ({ op: 'getNoteKind', note }),
+        () => ({ op: 'getNoteKind', note: this.#handle() }),
         (value) => {
           // Word's spelling on this side, OOXML's on the engine's — the mapping lives here and in
           // `getNext`, and nowhere else.

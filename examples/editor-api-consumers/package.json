@@ -6,7 +6,9 @@
     "contract": "cd ../.. && bun examples/editor-api-consumers/contract-agent.ts --browser",
     "report": "cd ../.. && bun examples/editor-api-consumers/report-agent.ts",
     "report:browser": "cd ../.. && bun examples/editor-api-consumers/report-browser-run.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:published": "tsc --noEmit -p tsconfig.published.json",
+    "test:published": "node fresh-contract-agent.ts && node fresh-tables-agent.ts"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",

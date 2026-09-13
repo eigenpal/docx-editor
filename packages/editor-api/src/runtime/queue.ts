@@ -28,6 +28,8 @@ export interface QueuedAction {
   readonly sort: ActionSort;
   /** Paths that must resolve before this action can be planned. */
   readonly dependencies?: readonly ObjectPath[];
+  /** A scalar load on an OrNullObject proxy is skipped if its lookup resolves null. */
+  readonly nullableLoad?: ObjectPath;
   /** The consumer-facing name of what this action is for, for errors. Never a handle. */
   readonly label: string;
   /** Release coalesced state when a batch completes or is discarded. */

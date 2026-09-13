@@ -259,7 +259,18 @@ export function spanParagraphIds(
   reads: AutomationStoryReads
 ): readonly string[] {
   if (!span) return [];
-  return reads.paragraphIds.slice(span.start.index, span.end.index + 1);
+  const ids = reads.paragraphIds;
+  // Resolved positions use whole-story indexes. A cell-scoped read exposes only
+  // its own paragraphs, so those positions need indexes within this array.
+  const start =
+    ids[span.start.index] === span.start.paragraphId
+      ? span.start.index
+      : ids.indexOf(span.start.paragraphId);
+  const end =
+    ids[span.end.index] === span.end.paragraphId
+      ? span.end.index
+      : ids.indexOf(span.end.paragraphId);
+  return start < 0 || end < start ? [] : ids.slice(start, end + 1);
 }
 
 /** One paragraph's share of a span: the offsets inside it the span actually reaches. */

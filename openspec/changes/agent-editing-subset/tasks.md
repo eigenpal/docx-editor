@@ -149,3 +149,12 @@ Each item requires implementation, positive behavior, refusal/preservation check
 - [x] 5.7 Combine feedback in one issue log with reproduction, expected/actual behavior, severity, source fix, and regression evidence. Fix required workflow failures in the API; do not hide them with private imports or browser fallbacks.
 - [x] 5.8 Rerun consumer apps after fixes, then run an independent reviewer loop over implementation, public contract, preservation, and evidence. Repeat until required findings are resolved.
 - [x] 5.9 Run final gates, reconcile all evidence/checklists, and open the single PR only when ready. Delivered in [PR #811](https://github.com/eigenpal/docx-editor/pull/811).
+
+## 6. Fresh developer review follow-up
+
+- [x] 6.1 Launch two new high-reasoning consumers without implementation or review history. Record blind findings before source inspection.
+- [x] 6.2 Add dedicated topic pages and a complete public API member directory. Typecheck examples and execute representative save/reopen workflows. See `docs-coverage.md`.
+- [x] 6.3 Fix concrete consumer failures and add regression tests. Combine findings in `high-reasoning-review.md`.
+- [x] 6.4 Complete cross-review of the final text, placeholder, and runtime fixes with no open concrete P2-or-higher finding in the reviewed scope.
+- [x] 6.5 Run both fresh apps under Node against built package exports and keep them in CI after the build. Keep signature percentages informational.
+- [x] 6.6 Run final repository gates and update PR #811 with the reviewed fixes, docs, and evidence.

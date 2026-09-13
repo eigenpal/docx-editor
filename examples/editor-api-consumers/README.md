@@ -7,7 +7,7 @@ and assert targeted edits and preserved content. No LLM credentials are needed.
 Run from the repository root after `bun install` and `bun run build:packages`:
 
 ```sh
-bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck
+bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published
 bun run --filter '@docx-editor-examples/editor-api-consumers' contract
 bun run --filter '@docx-editor-examples/editor-api-consumers' report
 bun run --filter '@docx-editor-examples/editor-api-consumers' report:browser
@@ -26,6 +26,24 @@ the repository's Carlito font files and disposes shaping resources after the
 runtime; callers outside this repository should supply their own font paths.
 The browser gets measured pagination from the configured editor.
 
-See the two `*-feedback.md` files for findings and rerun outcomes, and
+See the `*-feedback.md` files for findings and rerun outcomes, and
 `openspec/changes/agent-editing-subset/consumer-review.md` for API fixes and
 remaining explicit runtime differences.
+
+The default `typecheck` uses workspace source exports and runs before builds in CI.
+`typecheck:published` uses built declarations and runs after package builds in CI.
+
+## Fresh developer audits
+
+Two further agents started with public docs and declarations only. Their programs
+retain the original semantic assertions and document each discovered failure:
+
+```sh
+bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
+```
+
+This command uses Node 24 or newer after package builds to test the same exports a
+package consumer receives. It also runs in CI after the build. Node ignores workspace
+TypeScript aliases. Ordinary Bun execution in this workspace resolves source aliases.
+See `fresh-contract-feedback.md` and `fresh-tables-feedback.md` for the blind findings,
+fixes, remaining explicit batching limits, and the scope of the developer-experience score.

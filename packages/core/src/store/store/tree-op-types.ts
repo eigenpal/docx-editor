@@ -512,6 +512,8 @@ export type TreeDocOp =
        */
       readonly op: 'setHyperlinkTarget';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
       readonly relationshipId?: string;
       readonly anchor?: string;
       readonly tooltip?: string;
@@ -527,6 +529,8 @@ export type TreeDocOp =
        */
       readonly op: 'removeHyperlink';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
     }
   | {
       /**

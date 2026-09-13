@@ -27,7 +27,7 @@ import { textFormFieldForEdit, textFormFieldsOf } from './text-form-fields.ts';
 
 import {
   contentControlContentNodeOf,
-  contentControlPropertiesNodeOf,
+  contentControlPropertiesContainerOf,
   contentControlPropertiesOf,
   contentControlsIn,
   lockForbidsEdit,
@@ -1646,7 +1646,7 @@ export function applySetContentControlValue(
   if (typeof planned === 'string') return { ok: false, reason: planned };
 
   const nextId = createNodeIdAllocator(part);
-  const sdtPr = contentControlPropertiesNodeOf(control);
+  const sdtPr = contentControlPropertiesContainerOf(control);
   const content = contentControlContentNodeOf(control);
   const nextProperties = editedProperties(
     sdtPr,
@@ -1669,8 +1669,7 @@ export function applySetContentControlValue(
     children: [
       nextProperties,
       ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
+        (child) => child.id !== sdtPr?.id && child.kind !== 'contentControlContent'
       ),
       nextContent,
     ],
@@ -1718,8 +1717,9 @@ export function applySetContentControlProperties(
     return { ok: false, reason: 'locked' };
 
   const nextId = createNodeIdAllocator(part);
+  const properties = contentControlPropertiesContainerOf(control);
   const nextProperties = editedProperties(
-    contentControlPropertiesNodeOf(control),
+    properties,
     {
       ...(op.tag === undefined ? {} : { tag: op.tag }),
       ...(op.alias === undefined ? {} : { alias: op.alias }),
@@ -1729,7 +1729,7 @@ export function applySetContentControlProperties(
   );
   const children = [
     nextProperties,
-    ...control.children.filter((child) => child.kind !== 'contentControlProperties'),
+    ...control.children.filter((child) => child.id !== properties?.id),
   ];
   return fromEdit(
     replaceNode(part, control.id, { ...control, children } as OoxmlNode, options),
@@ -1806,11 +1806,8 @@ export function clearPlaceholder(
   if (!control || control.kind !== 'contentControl') return null;
   const nextId = createNodeIdAllocator(part);
   const content = contentControlContentNodeOf(control);
-  const properties = editedProperties(
-    contentControlPropertiesNodeOf(control),
-    { showingPlaceholder: false },
-    nextId
-  );
+  const sdtPr = contentControlPropertiesContainerOf(control);
+  const properties = editedProperties(sdtPr, { showingPlaceholder: false }, nextId);
   const emptied = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
@@ -1821,8 +1818,7 @@ export function clearPlaceholder(
     children: [
       properties,
       ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
+        (child) => child.id !== sdtPr?.id && child.kind !== 'contentControlContent'
       ),
       emptied,
     ],

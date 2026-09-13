@@ -1,7 +1,6 @@
 // Table protocol dispatch. Handles never expose canonical node identities.
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
-import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -58,6 +57,17 @@ function paragraphs(root: OoxmlNode): Set<string> {
 function countNew(before: OoxmlNode, after: OoxmlNode): number {
   const old = paragraphs(before);
   return [...paragraphs(after)].filter((id) => !old.has(id)).length;
+}
+function parentTable(root: OoxmlNode, nodeId: string): OoxmlElement | undefined {
+  const stack: { node: OoxmlNode; table?: OoxmlElement }[] = [{ node: root }];
+  while (stack.length) {
+    const { node, table } = stack.pop()!;
+    if (node.id === nodeId) return table;
+    if (node.kind === 'textValue') continue;
+    const parent = node.kind === 'table' ? node : table;
+    for (const child of node.children) stack.push({ node: child, table: parent });
+  }
+  return undefined;
 }
 function styles(reads: AutomationPackageReads) {
   const part = reads.package && stylesPartOf(reads.package);
@@ -157,19 +167,7 @@ export function planTableOperation(
   if (!reads) return refuse('invalid-handle', 'missing-table-story');
   const node = findNode(reads.part, target.nodeId);
   if (!node || node.kind !== named) return refuse('invalid-handle', 'deleted-table-object');
-  const table =
-    named === 'table'
-      ? node
-      : tableNodes(reads.root).find((candidate) => {
-          const topology = readEditableTableTopology(reads.root as OoxmlElement, candidate.id);
-          return (
-            topology.ok &&
-            topology.topology.rows.some(
-              ({ row, cells }) =>
-                row.id === target.nodeId || cells.some((cell) => cell.id === target.nodeId)
-            )
-          );
-        });
+  const table = named === 'table' ? node : parentTable(reads.root, target.nodeId);
   if (!table) return refuse('invalid-handle', 'missing-parent-table');
   const data = tableRead(reads, table.id);
   if (!data) return refuse('unsupported-content', 'unsupported-table-topology');

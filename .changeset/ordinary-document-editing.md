@@ -9,3 +9,8 @@ header/footer creation through canonical transactions on server and browser host
 Support read-derived object dependencies within one sync and runtime-local browser
 tracked text edits. Document bounded behavior and report pinned signature coverage
 for both the exhaustive editing inventory and the fixed 81-member profile in CI.
+
+Add dedicated guides for every editing API domain and a public member directory.
+Fix targeted replacement offsets and formatting, partial hyperlink changes,
+nullable/deferred reads, control metadata preservation, nested table navigation,
+and table value formatting found by independent consumer applications.

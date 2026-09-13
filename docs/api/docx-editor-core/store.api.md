@@ -4392,11 +4392,19 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly anchor?: string;
     readonly linkId: string;
     readonly op: 'setHyperlinkTarget';
+    readonly range?: {
+        readonly end: number;
+        readonly start: number;
+    };
     readonly relationshipId?: string;
     readonly tooltip?: string;
 } | {
     readonly linkId: string;
     readonly op: 'removeHyperlink';
+    readonly range?: {
+        readonly end: number;
+        readonly start: number;
+    };
 } | {
     readonly equationId: string;
     readonly linear: string;

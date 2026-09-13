@@ -2,13 +2,16 @@
 title: 'Office.js compatibility'
 description: 'Compare the supported Word JavaScript API subset, known differences, and unavailable APIs.'
 category: 'Editing API'
-order: 53
+order: 65
 ---
 
 `@docx-editor.dev/editor-api` implements a subset of the Word JavaScript API object model.
 You can reuse code based on objects such as `Document`, `Body`, `Paragraph`, and `Range`.
 
 You must replace the Office host setup. You must also account for the differences on this page.
+
+For task examples and every public symbol, use the [API member directory](/docs/2.x/editor-api/reference).
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for execution and recovery.
 
 ## Compatibility matrix
 
@@ -23,7 +26,7 @@ It does not mean that every Office.js member in that area works.
 | Search                       | Partial          | Plain-text search, `matchCase`, and `matchWholeWord`                                                                          | `ignorePunct`, `ignoreSpace`, and `matchWildcards` compile but refuse `true` with `NotSupported`.                                                |
 | Font formatting              | Partial          | Bold, italic, color, name, size, underline, strike-through, highlight, subscript, and superscript                             | Underline supports 18 styles. Highlight writes require the Word palette. Mixed, unspecified, or inherited values return `null`.                  |
 | Paragraph formatting         | Supported subset | Style, alignment, first-line indent, left indent, right indent, line spacing, space before, and space after                   | The API exposes these values on `Paragraph`. It does not expose the full `ParagraphFormat` object.                                               |
-| Lists                        | Partial          | Create lists, attach/detach paragraphs, set bullets/numbering, nesting, indents, and restart                                  | Picture bullets are unavailable. Different list levels need separate syncs.                                                                      |
+| Lists                        | Partial          | Create lists, attach/detach paragraphs, set bullets/numbering, nesting, indents, and restart                                  | Picture bullets are unavailable. Different list levels can batch after list creation.                                                            |
 | Bookmarks                    | Partial          | Discover bookmarks, read names and ranges, and select bookmarks                                                               | The API does not support bookmark deletion or document-wide bookmark offsets.                                                                    |
 | Sections and page setup      | Partial          | Section bodies, headers, footers, size, orientation, margins, page breaks, and next-page section breaks                       | Other break types refuse. Missing header/footer stories are created on their first write.                                                        |
 | Footnotes and endnotes       | Supported subset | Enumerate notes, read note bodies and text, move to the next note, and delete notes                                           | Use `document.footnotes` and `document.endnotes`. These accessors differ from Office.js.                                                         |
@@ -60,6 +63,19 @@ first.insertText('TOTAL', 'Replace');
 await context.sync();
 ```
 
+## Range snapshots differ from Word
+
+A `Range` retains paragraph identities and UTF-16 offsets from the moment it was found.
+It does not follow later edits inside those paragraphs.
+Tracking the proxy only extends its lifetime; it does not create a moving text region.
+After an edit, search again or use its returned insertion range after sync.
+
+Disjoint plain-text edits can batch in ordinary paragraphs with direct text runs.
+Their returned ranges account for all edits in that transaction.
+Overlaps and same-paragraph text mixed with formatting, hyperlinks, or structural writes refuse atomically.
+Rich paragraphs and browser suggesting edits need one text edit per paragraph per sync.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for examples and recovery.
+
 ## Editing batches and runtime limits
 
 Batch independent reads and writes. Writes commit atomically at `sync()`.
@@ -68,7 +84,7 @@ These reads use one revision; a concurrent change causes `StaleDocument`.
 
 Sync after creating a table, picture, list, field, or text range before configuring that returned object.
 Structural edits sharing a paragraph can conflict; split them into separate syncs and reconsider their targets.
-Different levels of one list need separate syncs.
+Different list levels can batch after list creation. Competing proxies for one level still conflict.
 Page-field result updates can share a sync with queries and other result updates.
 They cannot share a sync with layout-changing writes, because evaluation uses the measured document before those writes.
 

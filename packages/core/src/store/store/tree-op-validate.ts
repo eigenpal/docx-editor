@@ -1,3 +1,4 @@
+import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
 import { validateTableAuthoring } from './tree-op-table-batch.ts';
 import { validateTableProperties } from './tree-op-table-authoring.ts';
@@ -519,6 +520,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     {
       const restriction = nodeTouchesContentRestriction(part, op.linkId);
       if (restriction) return restriction;
+    }
+    if (op.range !== undefined) {
+      const rejection = validateHyperlinkRange(part, op.linkId, op.range);
+      if (rejection) return rejection;
     }
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
     return null;

@@ -77,19 +77,19 @@
   },
   "Word.Revision#type": {
     "status": "partial",
-    "notes": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    "notes": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it — so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
   },
   "Word.List#insertParagraph": {
     "status": "partial",
-    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position — the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
   },
   "Word.ContentControl#getRange": {
     "status": "partial",
-    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses — there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
   },
   "Word.ContentControl#insertText": {
     "status": "partial",
-    "notes": "All three locations are accepted and the answer is the range of the text that was written. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets."
+    "notes": "All three locations are accepted and the answer is the range of the text that was written. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets."
   },
   "OfficeExtension.LoadOption#expand": {
     "status": "partial",
@@ -205,7 +205,7 @@
   },
   "Word.List#setLevelBullet": {
     "status": "partial",
-    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters coalesce; different levels require separate syncs."
+    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse."
   },
   "Word.List#setLevelNumbering": {
     "status": "partial",
@@ -477,7 +477,7 @@
   },
   "Word.Range#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; partial prompt replacement or insertion away from the prompt start refuses. Insertion at the prompt start consumes the prompt."
   },
   "Word.Range#delete": {
     "status": "partial",
@@ -489,7 +489,7 @@
   },
   "Word.Range#hyperlink": {
     "status": "partial",
-    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid."
+    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported."
   },
   "Word.Paragraph#style": {
     "status": "partial",
@@ -553,7 +553,7 @@
   },
   "Word.ListItem#level": {
     "status": "partial",
-    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. Missing levels, protected paragraphs, and tracked structural edits refuse."
+    "notes": "Writes levels 0–8 only when the list defines that level. New authored lists define all nine levels. Missing levels, protected paragraphs, and tracked structural edits refuse."
   },
   "Word.Range#insertBreak": {
     "status": "partial",

@@ -33,7 +33,11 @@ export function planListAuthoring(
   operation: ListOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
-  claim: (story: AutomationStoryReads, paragraphId: string) => PlannedOperation | null
+  claim: (
+    story: AutomationStoryReads,
+    paragraphId: string,
+    numbering?: { numId: string; level: number }
+  ) => PlannedOperation | null
 ): PlannedOperation {
   const pkg = reads.package;
   if (!pkg) return refuse('no document');
@@ -58,7 +62,7 @@ export function planListAuthoring(
     for (const id of list.paragraphIds) {
       if (effectiveContentLockAt(story.part, id).content || isBoundAt(story.part, id))
         return refuse('list contains protected content');
-      const conflict = claim(story, id);
+      const conflict = claim(story, id, { numId: target.numId, level: operation.level });
       if (conflict) return conflict;
     }
     if (!formatAutomationListLevel(pkg, target.numId, operation.level, operation.format))

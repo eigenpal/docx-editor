@@ -1,0 +1,97 @@
+---
+title: 'Inline pictures'
+description: 'Insert PNG or JPEG images, read picture collections, resize images, set alternative text, and delete pictures.'
+category: 'Editing API'
+order: 58
+---
+
+The API edits inline PNG and JPEG pictures.
+Use `Body.inlinePictures` or `Range.inlinePictures` to discover pictures.
+Floating shapes, picture bullets, and a general `Shape` object are outside this subset.
+
+Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
+Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+
+## Insert image bytes
+
+`Range.insertInlinePictureFromBase64(base64EncodedImage, location)` accepts
+`Replace`, `Start`, `End`, `Before`, or `After`.
+Pass the base64 image bytes, and sync before configuring the returned `InlinePicture`.
+
+This server example reads a PNG file and inserts it after the first paragraph's content:
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const imageBase64 = (await readFile('logo.png')).toString('base64');
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  const anchor = paragraph.getRange('End');
+  await context.sync();
+  const picture = anchor.insertInlinePictureFromBase64(imageBase64, 'After');
+  await context.sync();
+  picture.altTextDescription = 'Company logo';
+  picture.lockAspectRatio = true;
+  picture.width = 96;
+  await context.sync();
+});
+```
+
+The runtime validates the image format and bytes.
+Unsupported formats and invalid payloads refuse; changing the filename does not convert an image.
+The API adds package media resources through its document transaction.
+
+## Read picture properties
+
+Load the collection, then load individual properties:
+
+```ts
+const descriptions = await runtime.run(async (context) => {
+  const pictures = context.document.body.inlinePictures;
+  pictures.load('items');
+  await context.sync();
+  for (const picture of pictures.items) {
+    picture.load(['width', 'height', 'altTextDescription']);
+  }
+  await context.sync();
+  return pictures.items.map((picture) => ({
+    width: picture.width,
+    height: picture.height,
+    description: picture.altTextDescription,
+  }));
+});
+```
+
+`InlinePictureCollection` exposes `items`, `getFirst()`, `getLast()`,
+`getFirstOrNullObject()`, and `getLastOrNullObject()`.
+Check `isNullObject` after sync when using a nullable accessor.
+A range collection includes pictures fully contained within that range.
+
+## Resize and describe a picture
+
+| `InlinePicture` member | Behavior                                              |
+| ---------------------- | ----------------------------------------------------- |
+| `width`, `height`      | Read or write positive supported dimensions in points |
+| `lockAspectRatio`      | Read or write the aspect-ratio lock                   |
+| `altTextDescription`   | Read or write the alternative description             |
+| `delete()`             | Delete the addressed picture                          |
+
+When aspect locking applies, changing one dimension preserves the ratio.
+Contradictory width and height assignments under the lock refuse.
+Batch compatible settings on the same picture proxy.
+Use a description that conveys the image's purpose to a reader.
+
+## Handle refusals
+
+Newly inserted pictures need sync before resizing, loading, or deleting them.
+Protected, unsupported, or revision-bearing targets can refuse mutation.
+Runtime-local tracking does not support image insertion, removal, or formatting.
+A failed write batch applies none of its document changes.
+Earlier successful syncs remain committed.
+
+For another picture variant, prepare supported PNG or JPEG bytes before insertion.
+This API does not expose cropping, rotation, replacement-by-URL, or floating-picture positioning methods.
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
+[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [API member directory](/docs/2.x/editor-api/reference).

@@ -206,6 +206,9 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
+      - name: Check editor API consumers against published declarations
+        run: bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published
+
       # This integration test runs real Node workers against built package exports.
       # Keep it after build: the general Bun suite runs on a source-only checkout.
       - name: Setup Node for server agent integration
@@ -215,6 +218,9 @@ jobs:
 
       - name: Server agent lifecycle integration
         run: bun run --filter './examples/server-agent-review' test:lifecycle
+
+      - name: Editor API public consumer workflows
+        run: bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
 
       # Sizes of the exact artifacts `npm publish` ships (`npm pack --dry-run`
       # per published package). Uploaded as an artifact: main-branch runs are

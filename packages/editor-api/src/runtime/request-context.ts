@@ -173,7 +173,7 @@ export class RequestContext {
 
     this.#syncInFlight = true;
     try {
-      let remaining = [...actions];
+      let remaining = actions.filter((action) => !action.nullableLoad?.isNull);
       const hasWrites = actions.some((action) => action.sort === 'write');
       let pinnedRevision: number | undefined;
       const blocked = (action: QueuedAction): boolean =>
@@ -190,7 +190,7 @@ export class RequestContext {
           fail({ code: 'InvalidObjectPath', target: remaining.find(blocked)?.label });
         await this.#dispatch(ready, pinnedRevision);
         const sent = new Set(ready);
-        remaining = remaining.filter((action) => !sent.has(action));
+        remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
       }
       if (remaining.length) {
         const expected =

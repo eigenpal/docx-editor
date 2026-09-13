@@ -244,11 +244,19 @@ export function planTableMutation(
       return 'unsupported-cell-content';
     const p = paragraphs[0]!;
     const old = paragraphModelTextOf(p);
+    if (old === text) return null;
     let error: string | null = null;
-    if (old.length)
-      error = apply({ op: 'deleteText', paragraphId: p.id, start: 0, end: old.length });
+    // Insert while the original first run still supplies its formatting. Deleting
+    // every original character first would leave no run properties to inherit.
+    if (text.length) error = apply({ op: 'insertText', paragraphId: p.id, offset: 0, text });
     if (error) return error;
-    if (text.length) return apply({ op: 'insertText', paragraphId: p.id, offset: 0, text });
+    if (old.length)
+      return apply({
+        op: 'deleteText',
+        paragraphId: p.id,
+        start: text.length,
+        end: text.length + old.length,
+      });
     return null;
   };
   let error: string | null = null;
