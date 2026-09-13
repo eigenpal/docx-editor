@@ -1,6 +1,7 @@
 // Opt-in OOXML punctuation/kana compression and hanging punctuation. All advances
 // are measured here and travel in layout records to browser paint and exporters.
 import type { FieldAwarePiece } from './field-projection.ts';
+import { formatRevisionOf } from './revision-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -19,6 +20,13 @@ const compressible = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
   // Outlined ink extends into the nominal bearing; keep its complete advance.
   !piece.style.textOutline &&
+  // Transparent selection ink suppresses native decorations. Keep decorated and
+  // tracked text on the native paint path, including hidden revision presentations.
+  !piece.style.underline &&
+  !piece.style.strike &&
+  !piece.style.doubleStrike &&
+  !piece.revisions?.length &&
+  !formatRevisionOf(piece.props) &&
   piece.measureText === undefined &&
   !piece.positionalTab &&
   !piece.equation &&

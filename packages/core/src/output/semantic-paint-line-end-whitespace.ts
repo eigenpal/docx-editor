@@ -28,11 +28,14 @@ export function prepareTextPaintHost(
     if (horizontalScale !== 1)
       glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / horizontalScale}px`;
     if (span.glyphOffsetPt) {
+      glyph.dataset.docxShiftedInk = '';
       // Keep the shadow in forced-colour modes, but inherit their accessible ink
       // colour from the parent instead of retaining an authored document colour.
       glyph.style.setProperty('forced-color-adjust', 'preserve-parent-color');
       glyph.style.setProperty('-webkit-text-fill-color', 'transparent');
-      glyph.style.textShadow = `${(span.glyphOffsetPt * scale) / horizontalScale}px 0 currentColor`;
+      const inkOffset = `${(span.glyphOffsetPt * scale) / horizontalScale}px`;
+      glyph.style.setProperty('--docx-glyph-ink-offset', inkOffset);
+      glyph.style.textShadow = `${inkOffset} 0 currentColor`;
     }
     element.append(glyph);
     return glyph;

@@ -101,3 +101,29 @@ test('outlined punctuation retains its bearing for the extended ink', () => {
   };
   expect(compressCjkPieces([piece], policy, measurer)).toEqual([piece]);
 });
+
+test('decorated, linked-style, and tracked punctuation retains native ink and selection', () => {
+  const base: FieldAwarePiece = {
+    text: '（甲）',
+    start: 0,
+    end: 3,
+    props: [],
+    style: DEFAULT_RUN_STYLE,
+  };
+  const decorated: FieldAwarePiece[] = [
+    { ...base, style: { ...DEFAULT_RUN_STYLE, underline: { variant: 'single', color: null } } },
+    { ...base, style: { ...DEFAULT_RUN_STYLE, strike: true } },
+    { ...base, style: { ...DEFAULT_RUN_STYLE, doubleStrike: true } },
+    { ...base, props: [{ localName: 'rPrChange', attributes: { id: '1' } }] },
+    ...(['insertion', 'deletion', 'moveFrom', 'moveTo'] as const).map((kind) => ({
+      ...base,
+      revisions: [{ kind, id: '1', author: 'QA', nodeId: 'revision' }],
+    })),
+  ];
+  for (const piece of decorated)
+    expect(compressCjkPieces([piece], policy, measurer)).toEqual([piece]);
+  const plain = { ...base, start: 3, end: 6 };
+  const result = compressCjkPieces([decorated[0]!, plain], policy, measurer);
+  expect(result[0]).toEqual(decorated[0]);
+  expect(result.some((piece) => piece.glyphOffsetPt !== undefined)).toBe(true);
+});

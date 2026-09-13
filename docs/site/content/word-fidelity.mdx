@@ -153,8 +153,11 @@ Explicit symbol fonts retain their selected face.
 
 Existing document settings control kinsoku, Japanese strict rules, custom
 language-specific break restrictions, Korean character wrapping, punctuation
-overflow, and punctuation or kana compression. Compression uses deterministic
-advance reductions. Font-specific optical compression is not modeled.
+overflow, and punctuation or kana compression. Punctuation compression removes shared
+side bearings and preserves the ink position during native text selection.
+Ordinary text, authored spaces, centered punctuation, outlined text, decorated text, and tracked changes retain their advances.
+Kana uses deterministic advance reductions. Soft-wrap edge compression and
+font-specific optical compression are not modeled.
 The feature matrix lists the support limits for East Asian typography.
 
 For pipeline details, see [Architecture](/docs/2.x/core/architecture). Test your

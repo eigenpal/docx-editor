@@ -138,10 +138,11 @@ test('compressed opening punctuation translates only ink and retains layout care
     (element) => element.textContent === '（'
   );
   expect(openings).toHaveLength(2);
+  expect(container.querySelectorAll('[data-docx-shifted-ink]')).toHaveLength(2);
   expect(openings.map((element) => element.style.width)).toEqual(['6px', '6px']);
   expect(openings.map((element) => element.firstElementChild?.getAttribute('style'))).toEqual([
-    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; text-shadow: -6px 0 currentColor;',
-    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; text-shadow: -6px 0 currentColor;',
+    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
+    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
   ]);
   for (const span of line.spans) {
     expect(
@@ -152,7 +153,7 @@ test('compressed opening punctuation translates only ink and retains layout care
   expect(line.spans.slice(0, 2).map((span) => span.glyphOffsetPt)).toEqual([-3, -3]);
 });
 
-test('scaled compressed punctuation keeps revision decoration and native text flow', () => {
+test('scaled revision punctuation retains natural advances and native decoration', () => {
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
   );
@@ -167,16 +168,28 @@ test('scaled compressed punctuation keeps revision decoration and native text fl
     });
     const container = document.createElement('div');
     paintSemanticLayout(container, layout, { scale: 2 });
-    const glyph = container.querySelector<HTMLElement>('[data-docx-glyph-offset]')!;
-    const run = glyph.parentElement!;
+    expect(container.querySelector('[data-docx-glyph-offset]')).toBeNull();
+    const run = container.querySelector<HTMLElement>('.layout-run-text')!;
     expect(run.style.textDecorationLine).toBe(revision === 'del' ? 'line-through' : 'underline');
     expect(run.style.transform).toBe('scaleX(2)');
-    expect(run.style.width).toBe('6px');
-    expect(run.style.marginRight).toBe('6px');
-    expect(glyph.style.letterSpacing).toBe('-6px');
-    expect(glyph.style.display).toBe('');
-    expect(glyph.style.position).toBe('');
-    expect(glyph.style.getPropertyValue('-webkit-text-fill-color')).toBe('transparent');
-    expect(glyph.style.textShadow).toBe('-6px 0 currentColor');
+    expect(run.textContent).toBe('（甲）');
+    expect(run.style.textShadow).toBe('');
+    for (const displayMode of ['original', 'proposed'] as const) {
+      const projected = layoutSemanticDocument(doc, 0, {
+        measurer,
+        displayMode,
+        styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+      });
+      const projectedHost = document.createElement('div');
+      paintSemanticLayout(projectedHost, projected, { scale: 2 });
+      const visible = revision === 'ins' ? displayMode === 'proposed' : displayMode === 'original';
+      expect(projectedHost.textContent).toBe(visible ? '（甲）' : '');
+      expect(projectedHost.querySelector('[data-docx-glyph-offset]') === null).toBe(true);
+    }
+
+    for (const span of layout.pages[0]!.fragments[0]!.lines[0]!.spans) {
+      expect(span.glyphOffsetPt).toBeUndefined();
+      expect(span.style.characterSpacingPt).toBe(0);
+    }
   }
 });
