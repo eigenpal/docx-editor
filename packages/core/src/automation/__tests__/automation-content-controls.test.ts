@@ -416,7 +416,8 @@ describe('a script writes through the same refusals the keyboard meets', () => {
     });
     const xml = savedMainXml(host);
     expect(xml).toContain('w14:val="1"');
-    expect(xml).toContain('\u2612');
+    expect(xml).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
+    expect(xml).not.toContain('<w:t>☒</w:t>');
   });
 
   test('metadata is written through the op path and reads back', () => {

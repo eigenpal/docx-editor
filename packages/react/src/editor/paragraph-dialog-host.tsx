@@ -1,3 +1,4 @@
+import { useDialogHost } from './dialog-host';
 // Who owns the Paragraph dialog's mount.
 //
 // Not the control that opens it. The line-spacing part moves between the formatting bar and
@@ -36,17 +37,22 @@ const ParagraphDialogContext = createContext<ParagraphDialogHandle | null>(null)
  * cannot find a host simply renders nothing rather than mounting a dialog that will vanish.
  */
 export function ParagraphDialogHost({ children }: { children: ReactNode }): ReactElement {
+  const dialogs = useDialogHost();
   const [open, setOpen] = useState(false);
   const openerRef = useRef<Element | null>(null);
 
   const handle = useMemo<ParagraphDialogHandle>(
     () => ({
       open: (returnFocusTo?: HTMLElement | null) => {
+        if (dialogs) {
+          dialogs.open('paragraph', returnFocusTo);
+          return;
+        }
         openerRef.current = returnFocusTo ?? document.activeElement;
         setOpen(true);
       },
     }),
-    []
+    [dialogs]
   );
 
   const close = useCallback(() => {

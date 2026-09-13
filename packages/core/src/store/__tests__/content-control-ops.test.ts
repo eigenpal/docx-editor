@@ -160,7 +160,7 @@ describe('setContentControlValue writes the value each type accepts', () => {
       value: { kind: 'checkbox', checked: true },
     });
     expect(contentControlPropertiesOf(controlOf(next)).checkbox?.checked).toBe(true);
-    expect(contentControlTextOf(controlOf(next))).toBe('\u2612');
+    expect(serializeOoxmlPart(next)).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
   });
 
   test('a date validates ISO input and writes fullDate beside the formatted content', () => {
@@ -270,7 +270,7 @@ describe('a bare string is read in the vocabulary the control type declares', ()
   test('a checkbox reads it as a state and writes the declared glyph', () => {
     const next = written(CHECKBOX, 'true');
     expect(contentControlPropertiesOf(controlOf(next)).checkbox?.checked).toBe(true);
-    expect(contentControlTextOf(controlOf(next))).toBe('\u2612');
+    expect(serializeOoxmlPart(next)).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
   });
 
   test('a string that is neither state is a type mismatch, not an unchecked box', () => {

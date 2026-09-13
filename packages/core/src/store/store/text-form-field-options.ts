@@ -16,6 +16,7 @@ export interface TextFormFieldOptions {
   readonly enabled: boolean;
 }
 
+/** Supported format choices for legacy text input fields. @public */
 export const TEXT_FORM_FORMATS = {
   regular: ['', 'Uppercase', 'Lowercase', 'First capital', 'Title case'],
   number: ['', '0', '0.00', '#,##0', '#,##0.00', '0%', '0.00%'],

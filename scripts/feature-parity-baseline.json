@@ -201,9 +201,21 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorContentControlWidget": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "name", "props", "role"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorInvalidTextFormFieldDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -227,21 +239,20 @@
     },
     "editor/DocxEditorPageSetup": {
       "propsAddedInReact": [
-        "alignItems",
-        "backgroundColor",
-        "display",
-        "inset",
-        "justifyContent",
-        "position",
-        "zIndex"
+        "marginBottomTwips",
+        "marginLeftTwips",
+        "marginRightTwips",
+        "marginTopTwips",
+        "pageHeightTwips",
+        "pageWidthTwips"
       ],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorParagraphDialog": {
-      "propsAddedInReact": ["color", "fontSize", "marginRight"],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -267,6 +278,7 @@
         "onReady",
         "onReady",
         "onReady",
+        "popups",
         "tableInteractionLabel",
         "translate",
         "zoom",
@@ -274,6 +286,12 @@
       ],
       "propsAddedInVue": [],
       "emitsAddedInReact": ["change", "font-error", "ready"],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorTextFormFieldDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorViewport": {
@@ -349,6 +367,12 @@
     "editor/navigation/parts": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name", "props", "value"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/note-popup-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -442,6 +466,7 @@
         "onChange",
         "onFontError",
         "onReady",
+        "popups",
         "props",
         "ready",
         "tableInteractionLabel",

@@ -1,3 +1,4 @@
+import { formControlTranslateKey } from './form-control-translate';
 import {
   computed,
   inject,
@@ -48,6 +49,7 @@ import {
 
 /** @public */
 export interface DocxEditorRootProps {
+  popups?: import('./popup-config').DocxEditorPopups;
   document?: DocumentSource;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
@@ -125,6 +127,8 @@ export function useDocxEditorRootOwner(
     return (key: string, params?: Record<string, string | number>) =>
       custom ? custom(key, params) : translation.t(key as TranslationKey, params);
   });
+
+  provide(formControlTranslateKey, translateResolver);
 
   const railCount = shallowRef(0);
   const commentDraftHandlers: Array<() => void> = [];

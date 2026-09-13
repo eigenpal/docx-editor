@@ -436,3 +436,51 @@ export {
   type RulerUnit,
 } from './rulerTicks';
 export { useEditorSnapshot } from './useEditorSnapshot';
+
+export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';
+export type { DocxEditorPopups } from './editor/popup-config';
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type DocxEditorTextFormFieldDialogProps,
+  type UseTextFormFieldDialogReturn,
+} from './editor/DocxEditorTextFormFieldDialog';
+
+export {
+  DocxEditorImageAltTextPopup,
+  type DocxEditorImageAltTextPopupProps,
+} from './editor/images/ImageAltText';
+export {
+  DocxEditorNotePropertiesDialog,
+  type DocxEditorNotePropertiesDialogProps,
+} from './editor/DocxEditorNotes';
+export {
+  DocxEditorNotePreview,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotePreviewProps,
+  type DocxEditorNotesContextMenuProps,
+} from './editor/note-popup-parts';
+
+export {
+  DocxEditorContentControlWidget,
+  type DocxEditorContentControlWidgetProps,
+} from './editor/DocxEditorContentControlWidget';
+export {
+  DocxEditorInvalidTextFormFieldDialog,
+  type DocxEditorInvalidTextFormFieldDialogProps,
+} from './editor/DocxEditorInvalidTextFormFieldDialog';

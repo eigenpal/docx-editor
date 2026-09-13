@@ -1,3 +1,4 @@
+import { mintCheckboxRun } from './content-control-run.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
 export {
@@ -1338,6 +1339,7 @@ interface PlannedValue {
   readonly lastValue?: string;
   readonly fullDate?: string;
   readonly checked?: boolean;
+  readonly symbol?: { readonly hex: string; readonly font: string };
 }
 
 /**
@@ -1413,7 +1415,15 @@ function planValue(
         : properties.checkbox.uncheckedState;
       const glyph = glyphFor(state?.value, value.checked);
       if (glyph === null) return 'invalidArgs';
-      return { text: glyph, showingPlaceholder: false, checked: value.checked };
+      return {
+        text: glyph,
+        showingPlaceholder: false,
+        checked: value.checked,
+        symbol: {
+          hex: state?.value ?? (value.checked ? '2612' : '2610'),
+          font: state?.font ?? 'MS Gothic',
+        },
+      };
     }
     case 'date': {
       if (properties.type !== 'date') return 'typeMismatch';
@@ -1569,10 +1579,12 @@ export function editedProperties(
 function contentWithText(
   content: OoxmlElement | undefined,
   text: string,
-  nextId: () => string
+  nextId: () => string,
+  symbol?: PlannedValue['symbol']
 ): readonly OoxmlNode[] {
-  const properties = firstRunProperties(content, nextId);
-  const run = textRun(nextId, text, properties);
+  const run = symbol
+    ? mintCheckboxRun(nextId, symbol.hex, symbol.font, firstRunProperties(content, nextId), text)
+    : textRun(nextId, text, firstRunProperties(content, nextId));
   const firstParagraph = content?.children.find((child) => child.kind === 'paragraph');
   if (!firstParagraph || firstParagraph.kind === 'textValue') return [run];
   const pPr = firstParagraph.children.find(
@@ -1645,7 +1657,7 @@ export function applySetContentControlValue(
   const nextContent = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
-    children: contentWithText(content, planned.text, nextId),
+    children: contentWithText(content, planned.text, nextId, planned.symbol),
   } as OoxmlNode;
 
   const rebuilt = {

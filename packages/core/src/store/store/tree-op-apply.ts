@@ -1,3 +1,4 @@
+import { mintCheckboxRun } from './content-control-run.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
@@ -1907,71 +1908,6 @@ function applyRemoveContentControl(
   return fromEdit(replaceChildren(part, owner.id, children, options), effect);
 }
 
-function mintTextRun(nextId: () => string, text: string, font?: string): OoxmlNode {
-  const content: OoxmlNode[] = [];
-  if (font) {
-    content.push({
-      id: nextId(),
-      kind: 'runProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'rPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [
-        {
-          id: nextId(),
-          kind: 'generic',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'rFonts',
-          prefix: 'w',
-          namespaceBindings: [],
-          attributes: [
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'ascii',
-              value: font,
-            },
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'hAnsi',
-              value: font,
-            },
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'eastAsia',
-              value: font,
-            },
-          ],
-          children: [],
-        } as unknown as OoxmlNode,
-      ],
-    } as unknown as OoxmlNode);
-  }
-  // Checkbox glyphs are `w:sym`; plain values use `w:t`.
-  if (/^[0-9A-Fa-f]{4}$/.test(text) && font) {
-    content.push({
-      id: nextId(),
-      kind: 'generic',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'sym',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [
-        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'font', value: font },
-        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'char', value: text },
-      ],
-      children: [],
-    } as unknown as OoxmlNode);
-  } else {
-    content.push(textElement(nextId, text));
-  }
-  return runElement(nextId, content);
-}
-
 function replaceControlContent(
   control: OoxmlNode,
   contentChildren: readonly OoxmlNode[],
@@ -2060,7 +1996,9 @@ function applySetContentControlValue(
   let nextControl: OoxmlNode = control;
 
   const setTextContent = (display: string, font?: string): void => {
-    const run = mintTextRun(nextId, display, font);
+    const run = font
+      ? mintCheckboxRun(nextId, display, font)
+      : runElement(nextId, [textElement(nextId, display)]);
     const existingContent = contentControlContentOf(nextControl);
     const existingParagraph =
       !inline && existingContent?.children.length === 1 ? existingContent.children[0] : undefined;

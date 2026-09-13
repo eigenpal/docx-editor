@@ -10,10 +10,10 @@ if you find yourself at the bottom of this page, open an issue rather than livin
 
 ## 1. Props on the parts
 
-Every packaged control is a compound with the same contract: render it with no children and
-you get the default arrangement; a child that names one of its members **replaces that member
-in place**; `hidden` removes it; `preset={false}` starts from nothing; and there is a part for
-adding something the library does not model.
+Packaged compounds expose named parts. Render a compound without children to use
+its default arrangement. A named child replaces the corresponding part in place.
+Use `hidden` to remove a part and `preset={false}` to supply your own arrangement.
+The available parts depend on the component.
 
 ```tsx
 <DocxEditor.Toolbar>
@@ -27,11 +27,14 @@ adding something the library does not model.
 The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu` and
 `DocxEditor.Navigation`.
 
+Page Setup, Paragraph Options, and legacy text Field Options also expose named
+parts. Use the editor's `popups` configuration for automatically opened instances.
+See [Customize popups](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
+
 ### Prefer your own classes over styling ours
 
-Every compound exposes its internals as statics, and every part takes a `className`. So
-instead of writing CSS against our class names, **compose the parts and hang your own class
-on each one**:
+Use the documented part statics and their `className` props to attach your own
+classes. For example:
 
 ```tsx
 <DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>

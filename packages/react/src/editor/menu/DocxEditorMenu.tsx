@@ -1,3 +1,4 @@
+import { useDialogHost } from '../dialog-host';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The compound menu bar: File · Format · Insert · Review · Help, derived FROM the chrome registry.
@@ -98,7 +99,7 @@ export interface DocxEditorMenuProps {
   onOpenFile?: (file: File) => void;
   /** Replaces File › Save. The default runs `Editor.save()` and downloads the bytes. */
   onSave?: () => void;
-  /** Replaces File › Page setup. The default opens the packaged Page Setup dialog. */
+  /** Owns Page Setup opening when `popups.pageSetup` is omitted. Use `popups` to customize its UI. */
   onPageSetup?: () => void;
   /**
    * Replaces Help › Report issue. The default opens THIS project's issue tracker,
@@ -156,6 +157,7 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 }
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
+  const dialogs = useDialogHost();
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
   const {
@@ -229,13 +231,27 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       });
   }, [editor, fileName, openedName]);
 
-  const packagedPageSetup = useCallback(() => setPageSetupOpen(true), []);
+  const packagedPageSetup = useCallback(
+    () =>
+      dialogs
+        ? dialogs.open(
+            'pageSetup',
+            rootRef.current?.querySelector<HTMLElement>('[data-menu="file"] > [role="menuitem"]')
+          )
+        : setPageSetupOpen(true),
+    [dialogs]
+  );
 
-  // The resolved actions, host override first. Each is undefined without an editor, which
+  // Explicit popup ownership wins for Page Setup; other actions use their host overrides.
+  // Each action is undefined without an editor, which
   // is what disables the row before the document is ready.
   const resolvedOpen = editor ? (onOpen ?? packagedOpen) : undefined;
   const resolvedSave = editor ? (onSave ?? packagedSave) : undefined;
-  const resolvedPageSetup = editor ? (onPageSetup ?? packagedPageSetup) : undefined;
+  const resolvedPageSetup = editor
+    ? dialogs?.ownsPageSetup
+      ? packagedPageSetup
+      : (onPageSetup ?? packagedPageSetup)
+    : undefined;
 
   // Ctrl/Cmd+O and Ctrl/Cmd+S, so the shortcut column tells the truth. Both are what the
   // browser would otherwise handle (open a local file, save the page), and an editor that
@@ -278,7 +294,15 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       onOpen: resolvedOpen,
       onSave: resolvedSave,
       onPageSetup: resolvedPageSetup,
-      onParagraphDialog: () => setParagraphDialogOpen(true),
+      onParagraphDialog: () =>
+        dialogs
+          ? dialogs.open(
+              'paragraph',
+              rootRef.current?.querySelector<HTMLElement>(
+                '[data-menu="format"] > [role="menuitem"]'
+              )
+            )
+          : setParagraphDialogOpen(true),
       onReportIssue,
       reportIssue,
     }),
@@ -290,6 +314,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       resolvedOpen,
       resolvedSave,
       resolvedPageSetup,
+      dialogs,
       onReportIssue,
       reportIssue,
     ]
@@ -395,7 +420,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
             });
         }}
       />
-      {/* The packaged Page Setup dialog. A host that passed `onPageSetup` never opens it. */}
+      {/* Fallback for menus mounted without the dialog coordinator. */}
       <DocxEditorPageSetupDialog open={pageSetupOpen} onClose={() => setPageSetupOpen(false)} />
       {/* The menu bar owns its own, the way it owns Page Setup's: it does not collapse, so
           this route survives the narrow window that hides the line-spacing menu. */}

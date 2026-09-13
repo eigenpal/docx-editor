@@ -35,7 +35,7 @@ export function textFormFieldInvalidDialog(
   };
   ok.addEventListener('click', accept);
   panel.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
     accept();

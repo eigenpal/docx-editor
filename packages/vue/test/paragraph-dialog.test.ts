@@ -1,4 +1,3 @@
- 
 // The Vue twin of `packages/react/test/paragraph-dialog.test.tsx`.
 //
 // The two dialogs share their field logic as a byte-identical module, so what is worth
@@ -9,14 +8,17 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createApp, h, nextTick, ref } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref, type VNode } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
-import { DocxEditorParagraphDialog } from '../src/editor/DocxEditorParagraphDialog';
+import {
+  DocxEditorParagraphDialog,
+  useParagraphDialog,
+} from '../src/editor/DocxEditorParagraphDialog';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -49,7 +51,7 @@ async function flush(): Promise<void> {
   await new Promise((r) => setTimeout(r, 150));
 }
 
-function mountDialog(body: string) {
+function mountDialog(body: string, customization?: { preset?: boolean; children: () => VNode[] }) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const open = ref(false);
@@ -67,12 +69,17 @@ function mountDialog(body: string) {
             h(DocxEditorViewport, null, {
               default: () => [
                 h(DocxEditorContent),
-                h(DocxEditorParagraphDialog, {
-                  open: open.value,
-                  onClose: () => {
-                    open.value = false;
+                h(
+                  DocxEditorParagraphDialog,
+                  {
+                    preset: customization?.preset ?? true,
+                    open: open.value,
+                    onClose: () => {
+                      open.value = false;
+                    },
                   },
-                }),
+                  customization ? { default: customization.children } : undefined
+                ),
               ],
             }),
         }
@@ -299,4 +306,103 @@ describe('the Vue Paragraph dialog', () => {
       app.unmount();
     }
   });
+});
+
+describe('Vue dialog composition', () => {
+  test('replaces Apply with asChild while preserving the command and default fields', async () => {
+    const mounted = mountDialog(p('alpha'), {
+      children: () => [
+        h(
+          DocxEditorParagraphDialog.Apply,
+          { asChild: true },
+          { default: () => h('button', { 'data-custom-apply': '' }, 'Save paragraph') }
+        ),
+      ],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      const input = field(mounted.container, 'Before') as HTMLInputElement;
+      input.value = '18';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await flush();
+      expect(document.querySelectorAll('[data-docx-part="apply"]').length).toBe(1);
+      (document.querySelector('[data-custom-apply]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.open.value).toBe(false);
+      expect(mounted.editor().snapshot().formatting?.spaceBeforePt).toBe(18);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
+  test('custom layout and hook control preserve Apply and resolve mixed state', async () => {
+    const Custom = defineComponent({
+      setup() {
+        // Vue composables run in setup; this is not a React hook.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const dialog = useParagraphDialog();
+        return () =>
+          h(
+            'button',
+            { 'data-custom-control': '', onClick: () => dialog.setValue('alignment', 'right') },
+            dialog.values.value.alignment
+          );
+      },
+    });
+    const mounted = mountDialog(p('alpha'), {
+      preset: false,
+      children: () => [
+        h(DocxEditorParagraphDialog.Cancel),
+        h(Custom),
+        h(DocxEditorParagraphDialog.Field, { name: 'spaceBefore' }),
+        h(DocxEditorParagraphDialog.Apply),
+      ],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      expect(document.querySelector('[data-docx-part="header"]')).toBeNull();
+      const panel = document.querySelector('[data-docx-dialog="paragraph"]')!;
+      expect(panel.firstElementChild?.getAttribute('data-docx-part')).toBe('cancel');
+      (document.querySelector('[data-custom-control]') as HTMLButtonElement).click();
+      await flush();
+      (document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.editor().snapshot().formatting?.alignment).toBe('right');
+      expect(mounted.open.value).toBe(false);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
+});
+
+test('a Paragraph draft cannot apply to a replacement document before the next render', async () => {
+  const mounted = mountDialog(p('first'));
+  try {
+    await flush();
+    mounted.editor().surface!.selectAll();
+    await flush();
+    mounted.open.value = true;
+    await flush();
+    const before = field(mounted.container, 'Before') as HTMLInputElement;
+    before.value = '18';
+    before.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    const apply = document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
+    mounted.editor().load(docx(p('replacement')));
+    apply.click();
+    await flush();
+    expect(mounted.open.value).toBe(false);
+    mounted.editor().surface!.selectAll();
+    await flush();
+    expect(mounted.editor().snapshot().formatting?.spaceBeforePt).not.toBe(18);
+  } finally {
+    mounted.app.unmount();
+  }
 });
