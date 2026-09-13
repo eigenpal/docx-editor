@@ -1,4 +1,5 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
@@ -41,7 +42,7 @@ export function bidiPieces(
   const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
   const result: FieldAwarePiece[] = [];
   let offset = 0;
-  for (const piece of pieces) {
+  for (const piece of coalesceBidiPieces(pieces)) {
     let items;
     try {
       items = itemizeScriptFontSlots(piece.text, offset, embedding);

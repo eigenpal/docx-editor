@@ -550,7 +550,9 @@ Text paragraphs use the inherited `w:bidi` setting for default alignment and
 visual order. Arabic and Latin text keep their logical document offsets when
 the editor places words from right to left.
 
-The shaper uses the resolved script and direction. When a font lacks a glyph,
+The shaper uses the resolved script and direction. Adjacent source runs with
+identical formatting and metadata shape together, preserving Arabic joining.
+When a font lacks a glyph,
 browser layout uses host fallback measurement instead of the missing-glyph box.
 Supply an Arabic-capable font for consistent browser and server metrics.
 Caret movement uses whole-run cluster advances when font bytes are available.
