@@ -1,9 +1,9 @@
 // `ST_Border` → painted CSS, shared by every border a document draws.
 //
-// One mapping, three callers: the paragraph rules of `w:pBdr`, the page frame of
-// `w:pgBorders`, and anything else that publishes a stroke box. They are the same complex type
-// in the schema (`CT_Border`) and the same ink on the page, so a second copy of this switch
-// would be a second place for `dotDotDash` to quietly become a solid line on one surface only.
+// One mapping, two callers today: the paragraph rules of `w:pBdr` and the page frame of
+// `w:pgBorders`. They are the same complex type in the schema (`CT_Border`) and the same ink on
+// the page, so a second copy of this switch would be a second place for `dotDotDash` to quietly
+// become a solid line on one surface only.
 //
 // THICKNESS IS NOT DECIDED HERE. Layout publishes the stroke box, already inflated for the
 // compound styles (`border-metrics.ts`), and these functions only choose how to fill it.
