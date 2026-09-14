@@ -367,26 +367,27 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
-  // Resolve new font choices serially, without rebuilding the editing session.
   const liveFonts = createLiveFontResolution(
     () => {
       if (destroyed || !surface) return null;
+      const { session } = surface;
       const [selected] = supportedFontFamilies([[snapshotNow().formatting?.fontFamily]]);
       return {
         generation: loadSeq,
         dynamic: typeof config.fonts === 'function',
-        families: fontResolverFamilies(
-          [
-            ...new Set([
-              ...(selected && selected !== configuredDefaultFontFamily(fontConfiguration())
-                ? [selected]
-                : []),
-              ...surface.session.documentFonts(),
-            ]),
-          ],
-          resolverGlyphFontFamilies(surface.session),
-          MAX_RESOLVER_FAMILIES
-        ),
+        families: () =>
+          fontResolverFamilies(
+            [
+              ...new Set([
+                ...(selected && selected !== configuredDefaultFontFamily(fontConfiguration())
+                  ? [selected]
+                  : []),
+                ...session.documentFonts(),
+              ]),
+            ],
+            resolverGlyphFontFamilies(session),
+            MAX_RESOLVER_FAMILIES
+          ),
       };
     },
     async (families) => {
@@ -394,7 +395,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   );
   let fontsResolving = false;
-
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
    * container's document and dropped with it — a probe answers for ONE platform's font

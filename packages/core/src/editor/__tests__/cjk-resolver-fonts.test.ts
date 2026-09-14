@@ -1,3 +1,4 @@
+import { resolverGlyphFontFamilies } from '../resolver-glyph-font-families.ts';
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
@@ -114,4 +115,32 @@ test('headless layout honors theme language with conflicting or absent run langu
       opened.session.dispose();
     }
   }
+});
+
+test('incremental discovery sees CJK introduced into an existing Latin run', () => {
+  const opened = openTreeSession(fixture(paragraph('zh-CN', 'plain')));
+  if (!opened.ok) throw new Error(opened.reason);
+  const session = opened.session;
+  expect(resolverGlyphFontFamilies(session)).not.toContain('Chinese Body');
+  expect(
+    session.applyTreeOps([
+      { op: 'insertText', paragraphId: session.paragraphIds()[0]!, offset: 5, text: '中文' },
+    ]).committed
+  ).toBe(true);
+  expect(resolverGlyphFontFamilies(session)).toContain('Chinese Body');
+});
+
+test('incremental discovery retains conditional table fonts after a text edit', () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblStyle w:val="CJK"/><w:tblLook w:firstRow="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>日本語</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const opened = openTreeSession(fixture(table));
+  if (!opened.ok) throw new Error(opened.reason);
+  const session = opened.session;
+  expect(resolverGlyphFontFamilies(session)).toContain('Japanese Body');
+  expect(
+    session.applyTreeOps([
+      { op: 'insertText', paragraphId: session.paragraphIds()[0]!, offset: 0, text: '文' },
+    ]).committed
+  ).toBe(true);
+  expect(resolverGlyphFontFamilies(session)).toContain('Japanese Body');
 });

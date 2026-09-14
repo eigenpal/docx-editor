@@ -1,3 +1,4 @@
+import { createFontFamilyTreeCache, fontScanChildren } from './font-family-tree-cache.ts';
 // Font needs synthesized by layout, shared by editor and export resolution.
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import {
@@ -26,28 +27,26 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
 }
 
+const scanSymbolFields = createFontFamilyTreeCache((node, context: { key: string }) => {
+  const families: string[] = [];
+  if (node.namespaceUri === WML_NAMESPACE_URI) {
+    if (node.localName === 'fldSimple') {
+      const font = parseSymbolInstruction(attributeValue(node, 'instr') ?? '')?.font;
+      if (font) families.push(font);
+    }
+    if (node.localName === 'p')
+      for (const font of complexSymbolFieldFonts(node)) families.push(font);
+  }
+  return { families, children: fontScanChildren(node, context) };
+});
+
 /** Valid SYMBOL field faces over body, furniture, notes, tables, and text boxes. */
 export function symbolFieldFontFamilies(roots: readonly OoxmlElement[]): readonly string[] {
   const families = new Map<string, string>();
-  const add = (candidate: string | null | undefined): void => {
-    const family = validFontFamily(candidate ?? undefined);
+  for (const candidate of scanSymbolFields(roots, { key: '' })) {
+    const family = validFontFamily(candidate);
     if (family !== null && !families.has(family.toLowerCase()))
       families.set(family.toLowerCase(), family);
-  };
-  for (const root of roots) {
-    const stack: OoxmlElement[] = [root];
-    while (stack.length) {
-      const node = stack.pop()!;
-      if (node.namespaceUri === WML_NAMESPACE_URI) {
-        if (node.localName === 'fldSimple')
-          add(parseSymbolInstruction(attributeValue(node, 'instr') ?? '')?.font);
-        if (node.localName === 'p') for (const family of complexSymbolFieldFonts(node)) add(family);
-      }
-      for (let i = node.children.length - 1; i >= 0; i--) {
-        const child = node.children[i]!;
-        if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
-      }
-    }
   }
   return [...families.values()];
 }

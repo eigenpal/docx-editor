@@ -224,10 +224,12 @@ printing plausible numbers.
 
 The Playwright benchmark now fails on regressions instead of only logging them:
 
-- **Deterministic layout work** — each latency scenario pins `placed`, `total`, `reusedPages`, and
-  `fullPasses` to the same values as headless `bench:edit` on the synthetic fixture. These counters
-  are hardware-independent and catch algorithmic backsliding (for example, reverting to whole-document
-  layout).
+- **Deterministic layout work** — each latency scenario pins `placed`, `total`, and `reusedPages`
+  to the same values as headless `bench:edit` on the synthetic fixture. Browser `fullPasses` includes
+  both startup layouts: canvas before font loading and shaped text afterward. The previous font
+  remount discarded the first counter; preserving the surface retains both passes. The browser
+  pins this cumulative count to two and checks that each measured edit adds zero full passes.
+  These counters are hardware-independent and catch a return to whole-document layout.
 - **Self-calibrated timing tails** — for input task, frame, layout, paint, and selection, `p95` must
   stay within `max(3× median, median + 50 ms)`. This compares each metric to itself within a run
   rather than pinning absolute milliseconds, which would be flaky across CI machines.
