@@ -6,6 +6,7 @@ import {
   decodeCheckboxGlyph,
   isInlineControl,
 } from './content-control-checkbox.ts';
+import { valueContent } from './content-control-value-content.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
@@ -2042,39 +2043,27 @@ function applySetContentControlValue(
   if (!control) return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
   const owner = parentOf(part, control.id);
-  const inline = owner?.kind === 'paragraph';
+  const inline = isInlineControl(part, control.id);
   const type = contentControlValueTypeOf(control);
   let nextControl: OoxmlNode = control;
 
-  const setTextContent = (display: string): void => {
-    const run = runElement(nextId, [textElement(nextId, display)]);
-    const existingContent = contentControlContentOf(nextControl);
-    const existingParagraph =
-      !inline && existingContent?.children.length === 1 ? existingContent.children[0] : undefined;
-    const preservedParagraph =
-      existingParagraph?.kind === 'paragraph'
-        ? ({
-            ...existingParagraph,
-            children: [...existingParagraph.children.filter(isParagraphPropertiesNode), run],
-          } as OoxmlNode)
-        : undefined;
-    const contentChildren = inline
-      ? [run]
-      : [
-          preservedParagraph ??
-            ({
-              id: nextId(),
-              kind: 'paragraph',
-              namespaceUri: WML_NAMESPACE_URI,
-              localName: 'p',
-              prefix: 'w',
-              namespaceBindings: [],
-              attributes: [],
-              children: [run],
-            } as unknown as OoxmlNode),
-        ];
-    nextControl = replaceControlContent(nextControl, contentChildren, nextId);
+  // The value becomes one run inside whatever structure the control wraps. False means the
+  // content is a shape no value can stand in for, and the caller refuses instead of flattening.
+  const setTextContent = (display: string): boolean => {
+    const children = valueContent(
+      contentControlContentOf(nextControl),
+      (properties) =>
+        runElement(
+          nextId,
+          properties ? [properties, textElement(nextId, display)] : [textElement(nextId, display)]
+        ),
+      nextId,
+      inline
+    );
+    if (!children) return false;
+    nextControl = replaceControlContent(nextControl, children, nextId);
     nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
+    return true;
   };
 
   switch (type) {
@@ -2092,7 +2081,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(item.displayText);
+      if (!setTextContent(item.displayText)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'combo': {
@@ -2109,7 +2098,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'checkbox': {
@@ -2231,13 +2220,13 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'text':
     case 'richText':
     case 'other':
-      setTextContent(value);
+      if (!setTextContent(value)) return { ok: false, reason: 'unsupported' };
       break;
     default:
       return { ok: false, reason: 'unsupported' };

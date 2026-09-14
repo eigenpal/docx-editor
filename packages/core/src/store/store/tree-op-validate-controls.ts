@@ -12,6 +12,7 @@ import {
   decodeCheckboxGlyph,
   isInlineControl,
 } from './content-control-checkbox.ts';
+import { valueContentWritable } from './content-control-value-content.ts';
 import {
   checkboxPayloadOf,
   contentControlAncestorsOf,
@@ -259,14 +260,20 @@ export function validateSetContentControlValue(
   if (typeof value !== 'string' || !isValidXmlText(value)) return 'invalidArgs';
 
   const type = contentControlValueTypeOf(control);
+  // A value becomes one run inside the structure the control wraps; content no value can stand
+  // in for is refused here, before the write, so `can()` and `exec()` agree.
+  const textWritable = (): TreeOpRejection | null =>
+    valueContentWritable(contentControlContentOf(control), isInlineControl(part, controlId))
+      ? null
+      : 'unsupported';
   switch (type) {
     case 'dropdown': {
       const items = listItemsOf(control);
       if (!items.some((item) => item.value === value)) return 'invalidArgs';
-      return null;
+      return textWritable();
     }
     case 'combo':
-      return null;
+      return textWritable();
     case 'checkbox': {
       if (parseCheckboxValue(value) === null) return 'typeMismatch';
       const payload = checkboxPayloadOf(control);
@@ -286,14 +293,14 @@ export function validateSetContentControlValue(
     }
     case 'date': {
       if (formatSdtDateDisplay(value, undefined) === null) return 'invalidArgs';
-      return null;
+      return textWritable();
     }
     case 'picture':
       return 'typeMismatch';
     case 'text':
     case 'richText':
     case 'other':
-      return null;
+      return textWritable();
     default:
       return 'unsupported';
   }

@@ -45,6 +45,7 @@ import {
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
 import { checkboxContentWritable, isInlineControl } from './content-control-checkbox.ts';
+import { valueContentWritable } from './content-control-value-content.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import {
   validateTableRowOp,
@@ -284,14 +285,15 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (control.kind !== 'contentControl') return 'not-a-content-control';
     // After the type question, which the applier answers with `typeMismatch`: only a checkbox
     // control's content shape decides whether a checkbox value can be written in place.
-    if (
-      op.op === 'setContentControlValue' &&
-      typeof op.value !== 'string' &&
-      op.value.kind === 'checkbox' &&
-      contentControlValueTypeOf(control) === 'checkbox' &&
-      !checkboxContentWritable(contentControlContentOf(control), isInlineControl(part, control.id))
-    ) {
-      return 'unsupported';
+    if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
+      const inline = isInlineControl(part, control.id);
+      const content = contentControlContentOf(control);
+      const checkbox = contentControlValueTypeOf(control) === 'checkbox';
+      const writable =
+        op.value.kind === 'checkbox'
+          ? !checkbox || checkboxContentWritable(content, inline)
+          : checkbox || valueContentWritable(content, inline);
+      if (!writable) return 'unsupported';
     }
     if (op.op === 'setContentControlProperties') {
       if (op.tag === undefined && op.alias === undefined && op.lock === undefined) {

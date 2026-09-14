@@ -94,7 +94,7 @@ const MARK_REVISION_NAMES: ReadonlySet<string> = new Set([
   'rPrChange',
 ]);
 
-function isWml(node: OoxmlNode, localName: string): boolean {
+export function isWml(node: OoxmlNode, localName: string): boolean {
   return (
     node.kind !== 'textValue' &&
     node.namespaceUri === WML_NAMESPACE_URI &&
@@ -102,16 +102,16 @@ function isWml(node: OoxmlNode, localName: string): boolean {
   );
 }
 
-function isWhitespaceText(node: OoxmlNode): boolean {
+export function isWhitespaceText(node: OoxmlNode): boolean {
   return node.kind === 'textValue' && node.value.trim().length === 0;
 }
 
-function isRangeEnd(node: OoxmlNode): boolean {
+export function isRangeEnd(node: OoxmlNode): boolean {
   return node.kind !== 'textValue' && RANGE_END_NAMES.has(node.localName);
 }
 
 /** Content that can sit beside a display run without being one: history and zero-length marks. */
-function isInertInline(node: OoxmlNode): boolean {
+export function isInertInline(node: OoxmlNode): boolean {
   if (isWhitespaceText(node)) return true;
   if (node.kind === 'textValue') return false;
   if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') return true;
@@ -122,7 +122,7 @@ function isInertInline(node: OoxmlNode): boolean {
   );
 }
 
-function paragraphOf(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
+export function paragraphOf(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
   return {
     id: nextId(),
     kind: 'paragraph',
@@ -135,7 +135,7 @@ function paragraphOf(nextId: () => string, children: readonly OoxmlNode[]): Ooxm
   } as unknown as OoxmlNode;
 }
 
-function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
+export function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
   if (node.kind === 'textValue') return { id: nextId(), kind: 'textValue', value: node.value };
   return {
     ...node,
@@ -145,7 +145,7 @@ function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 }
 
 /** The paragraph mark's `w:rPr`, minus revision records, as the formatting a new run inherits. */
-function paragraphMarkProperties(
+export function paragraphMarkProperties(
   paragraph: OoxmlElement,
   nextId: () => string
 ): OoxmlNode | undefined {
@@ -165,7 +165,7 @@ function paragraphMarkProperties(
  * `PlaceholderText`; the same write clears `w:showingPlcHdr`, so that style must not follow
  * the value onto the glyph.
  */
-function withoutPlaceholderStyle(properties: OoxmlNode | undefined): OoxmlNode | undefined {
+export function withoutPlaceholderStyle(properties: OoxmlNode | undefined): OoxmlNode | undefined {
   if (!properties || properties.kind === 'textValue') return properties;
   const children = properties.children.filter(
     (child) =>
@@ -205,7 +205,7 @@ function glyphOf(hex: string): string | null {
 }
 
 /** A run's content children: properties and Word's rendered page-break hint are not content. */
-function runContentOf(run: OoxmlElement): readonly OoxmlNode[] {
+export function runContentOf(run: OoxmlElement): readonly OoxmlNode[] {
   return run.children.filter(
     (child) =>
       !isWhitespaceText(child) &&
@@ -237,7 +237,7 @@ function displaysState(run: OoxmlElement, hexes: ReadonlySet<string>, glyphs: Re
  * Whether a run holds only characters, so replacing its content with a glyph loses no field
  * boundary, drawing, break or note reference. A run with no content at all counts.
  */
-function isTextRun(run: OoxmlElement): boolean {
+export function isTextRun(run: OoxmlElement): boolean {
   return runContentOf(run).every((child) => child.kind === 'text' || isWml(child, 'sym'));
 }
 
