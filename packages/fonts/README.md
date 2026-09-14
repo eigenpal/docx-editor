@@ -68,18 +68,16 @@ const editor = createDocxEditor({ document: bytes, fonts });
 
 ## Font registration
 
-`defaultFonts()` and `packagedFonts()` supply font bytes for the editor. By default,
-Core registers these bytes under private font names. Your app's header and sidebar
-keep their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
+`defaultFonts()` and `packagedFonts()` supply font bytes for the editor. Core
+registers these bytes under private font names. Your app's header and sidebar keep
+their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
 
-`packagedFonts` retains its `install` option, which defaults to `false`.
-Use `packagedFonts({ install: true })` only for legacy public font registration.
-This registers CSS font names across the whole page, including headers and sidebars.
-It can change text widths, wrapping, and fallback for missing glyphs outside the editor.
+The `packagedFonts` option `install` is deprecated and ignored, even when `true`.
+Remove it from loader options. `defaultFonts()` has no `install` option.
 
-`defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
-The standalone `installDefaultFontFaces()` helper still registers public CSS names.
-If your app relied on public fonts from eager loading, configure its fonts separately.
+`installDefaultFontFaces()` is a deprecated no-op that resolves to `0` without fetching or registering fonts.
+Remove helper calls and pass the font configuration through the editor's `fonts` option.
+Define fonts for the rest of your app separately. `loadDefaultFonts()` remains bytes-only.
 
 Nothing loads until you call one of these: importing the package fetches no bytes, and
 the editor engine never calls in here on its own.

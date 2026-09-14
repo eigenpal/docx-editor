@@ -61,6 +61,11 @@ const loaders = [
     () =>
       packagedFonts({ fetcher, install: false })({ families: ['Arial'], defaultFamily: 'Arial' }),
   ],
+  [
+    'packagedFonts with deprecated install:true',
+    () =>
+      packagedFonts({ fetcher, install: true })({ families: ['Arial'], defaultFamily: 'Arial' }),
+  ],
 ] as const;
 
 test.each(loaders)(
@@ -86,15 +91,6 @@ test.each(loaders)(
     expect(fontSet.size).toBe(0);
   }
 );
-
-test('public family installation remains available through explicit install:true', async () => {
-  const fragment = await packagedFonts({ fetcher, install: true })({
-    families: ['Arial'],
-    defaultFamily: 'Arial',
-  });
-  expect(fragment.sources).toHaveLength(4);
-  expect([...fontSet].map((face) => face.family)).toEqual(['Arial', 'Arial', 'Arial', 'Arial']);
-});
 
 test('an editor preserves Arabic fallback widths across font resolution and disposal', async () => {
   const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
@@ -140,7 +136,10 @@ test('an editor preserves Arabic fallback widths across font resolution and disp
   document.body.append(host);
   const hostFace = new TestFontFace('Host Page Face', null, {});
   fontSet.add(hostFace);
-  const editor = createDocxEditor({ document: bytes, fonts: packagedFonts({ fetcher }) });
+  const editor = createDocxEditor({
+    document: bytes,
+    fonts: packagedFonts({ fetcher, install: true }),
+  });
   try {
     editor.attach(host);
     const deadline = Date.now() + 8000;

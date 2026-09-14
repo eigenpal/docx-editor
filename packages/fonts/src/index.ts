@@ -122,8 +122,8 @@ export interface DefaultFontsFragment {
 }
 
 /**
- * Options shared by {@link loadDefaultFonts}, {@link installDefaultFontFaces} and
- * {@link defaultFonts}. Both fields are optional, so `{}` loads
+ * Options shared by {@link loadDefaultFonts} and {@link defaultFonts}.
+ * All fields are optional, so `{}` loads
  * {@link WORD_DOCUMENT_DEFAULT_FAMILIES} over the global `fetch`.
  */
 export interface LoadDefaultFontsOptions {
@@ -161,16 +161,6 @@ const assetHref = (file: string): string => {
   const value = assetUrl(file);
   return typeof value === 'string' ? value : value.href;
 };
-
-/**
- * A `FontFace` source naming one packaged face.
- *
- * The href is QUOTED. An unquoted CSS `url()` token forbids characters the URL parser
- * leaves alone, `(` and `)` among them, so a checkout under a path like `My (Docs)`
- * produced a token that failed to parse and silently dropped the face.
- */
-const assetFontFaceSource = (file: string): string =>
-  `url("${assetHref(file).replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\A ')}")`;
 
 /**
  * Directory URL of the packaged font files this package serves.
@@ -228,15 +218,8 @@ export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.fr
   'Century Gothic',
 ]);
 
-/**
- * Source id for a packaged file. Built here and parsed by {@link installDefaultFontFaces}
- * to find bytes it would otherwise refetch, so the two must not drift; keeping both sides
- * in one place is what stops them.
- */
-const SOURCE_ID_PREFIX = 'default-fonts:';
-const sourceIdForFile = (file: string): string => `${SOURCE_ID_PREFIX}${file}`;
-const fileFromSourceId = (id: string): string | undefined =>
-  id.startsWith(SOURCE_ID_PREFIX) ? id.slice(SOURCE_ID_PREFIX.length) : undefined;
+/** Stable source id for a packaged file. */
+const sourceIdForFile = (file: string): string => `default-fonts:${file}`;
 
 /**
  * Load the packaged substitute faces for the given Word families
@@ -329,103 +312,19 @@ export async function loadDefaultFonts(
 }
 
 /**
- * Registration starts already made per FontFaceSet, so overlapping calls (React
- * StrictMode's double effect is the concrete trigger) neither double-register nor
- * double-fetch: the synchronous `[...fontSet]` check cannot see a face whose async
- * `load()` has not resolved yet.
- */
-const startedInstalls = new WeakMap<FontFaceSet, Set<string>>();
-
-/**
- * OPTIONAL paint-side fidelity: register the packaged substitutes with the browser's
- * `FontFace` API under the WORD family names, so painted glyphs use the same metrics
- * layout measured with instead of whatever the platform substitutes for "Calibri".
- * Presentation-only, app-triggered, idempotent per document (overlapping calls
- * included); returns the number of faces registered. No-op outside a DOM environment.
+ * Compatibility stub for the removed page-wide font installer.
  *
- * This explicit helper changes page-wide CSS families. It can hide native glyphs
- * for scripts absent from a substitute. Normal editor use needs only the returned
- * font bytes: Core registers private aliases and keeps native family fallback available.
- * This helper alone does not supply measurement bytes to the editor.
- *
- * The return value counts faces THIS call registered, so `0` covers "no DOM
- * environment", "already registered", and "every face failed" alike; treat it as a
- * diagnostic hint rather than a success signal.
+ * @deprecated Does nothing and resolves to `0`. It does not fetch or register fonts.
+ * Remove this call. Supply {@link defaultFonts} or {@link packagedFonts} through the
+ * editor's `fonts` option for private font registration.
  */
 export async function installDefaultFontFaces(
-  options: LoadDefaultFontsOptions & {
+  _options: LoadDefaultFontsOptions & {
     readonly document?: Document;
-    /**
-     * Sources {@link loadDefaultFonts} already produced. A face found here registers from
-     * those bytes; anything missing still registers by URL, so a standalone call with no
-     * loader behind it behaves exactly as before.
-     */
     readonly loaded?: readonly DefaultFontSource[];
   } = {}
 ): Promise<number> {
-  const doc = options.document ?? (typeof document !== 'undefined' ? document : undefined);
-  const fontSet = (doc as { fonts?: FontFaceSet } | undefined)?.fonts;
-  if (!doc || !fontSet || typeof FontFace === 'undefined') return 0;
-  const preloaded = new Map<string, Uint8Array>();
-  for (const source of options.loaded ?? []) {
-    const file = fileFromSourceId(source.id);
-    if (file !== undefined) preloaded.set(file, source.bytes);
-  }
-  let started = startedInstalls.get(fontSet);
-  if (!started) {
-    started = new Set();
-    startedInstalls.set(fontSet, started);
-  }
-  const families = options.families ?? WORD_DOCUMENT_DEFAULT_FAMILIES;
-  let installed = 0;
-  const jobs: Promise<void>[] = [];
-  for (const family of families) {
-    const plan = FAMILY_PLANS.get(family);
-    if (!plan) continue;
-    for (const face of FACES) {
-      const file = planFaceFile(plan, face.suffix);
-      if (!manifestByFile.has(file)) continue;
-      const faceKey = `${family}#${face.weight}#${face.style}`;
-      if (started.has(faceKey)) continue;
-      const already = [...fontSet].some(
-        (existing) =>
-          existing.family === family &&
-          existing.weight === String(face.weight) &&
-          existing.style === face.style
-      );
-      if (already) continue;
-      started.add(faceKey);
-      jobs.push(
-        (async () => {
-          try {
-            const bytes = preloaded.get(file);
-            // A copy. These exact buffers also go to the engine as `FontSource.bytes` and
-            // get shaped there, so handing the original to the browser's font machinery
-            // would share one ArrayBuffer between the two. Unlike the engine's own
-            // registration, this is not guarding a windowed view — `bytes` is always a
-            // fresh full-length array — it is keeping the two consumers unaliased.
-            //
-            // No bytes means the face failed to load, and the URL form still registers it.
-            // That request is the one `fetcher` cannot intercept.
-            const source: string | ArrayBuffer = bytes
-              ? (bytes.slice().buffer as ArrayBuffer)
-              : assetFontFaceSource(file);
-            const fontFace = new FontFace(family, source, {
-              weight: String(face.weight),
-              style: face.style,
-            });
-            await fontFace.load();
-            fontSet.add(fontFace);
-            installed += 1;
-          } catch {
-            // Paint fidelity is best-effort; measurement does not depend on it.
-          }
-        })()
-      );
-    }
-  }
-  await Promise.all(jobs);
-  return installed;
+  return 0;
 }
 
 /**
@@ -433,8 +332,7 @@ export async function installDefaultFontFaces(
  *
  * The editor registers these bytes under private aliases for measurement and paint.
  * This loader leaves public CSS family names unchanged, so native fonts remain available
- * when a packaged substitute lacks a script. Use {@link installDefaultFontFaces} only
- * when a host explicitly needs page-wide registration under the Word family names.
+ * when a packaged substitute lacks a script.
  *
  * Non-cancellation face failures are WARNED, not thrown: one unavailable face degrades that
  * family to fixed-width measurement rather than refusing the document. Pass `onFailure` to route
@@ -555,15 +453,10 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * Set `true` to register substitutes under public Word family names through
-   * {@link installDefaultFontFaces}. Default: `false`. The editor registers private aliases
-   * itself, so normal editor use needs no page-wide registration. Public registration can
-   * hide native glyphs for scripts the substitutes do not cover.
+   * Legacy registration option, retained for source compatibility.
    *
-   * Registration reuses the bytes the resolver already loaded, so a face that loaded costs
-   * no second request and {@link PackagedFontsOptions.fetcher} sees every byte read for it.
-   * A face that FAILED to load has no bytes to reuse and still registers by URL, which
-   * `fetcher` cannot intercept. The registration is idempotent per document.
+   * @deprecated Ignored. Font registration is always private to the editor.
+   * Remove this option; `true` no longer enables page-wide registration.
    */
   readonly install?: boolean;
 }
@@ -684,11 +577,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
     }
-    // Public family replacement is an explicit host choice. Core registers private
-    // aliases for its own surface, preserving native glyph fallback and host-page fonts.
-    if (options.install === true) {
-      void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
-    }
+    // Core registers private aliases, preserving native glyph fallback and host-page fonts.
     return { ...fragment, families };
   }
 
