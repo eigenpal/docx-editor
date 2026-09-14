@@ -82,10 +82,12 @@ jobs:
           path: packages/editor-api/compat/reports/
           retention-days: 30
 
+  # Run these gates after failures, but let workflow cancellation stop them.
   shipped-advisories:
-    if: always() && github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:
@@ -93,9 +95,10 @@ jobs:
         run: test "$RESULT" = success
 
   api-changeset:
-    if: always() && github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:
@@ -105,9 +108,10 @@ jobs:
   # Preserve the existing required-check names. Never report skipped/cancelled
   # matrix work as success; a failure in any lane fails all aggregate gates.
   lint:
-    if: always() && github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:
@@ -115,9 +119,10 @@ jobs:
         run: test "$RESULT" = success
 
   test:
-    if: always() && github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:
@@ -125,9 +130,10 @@ jobs:
         run: test "$RESULT" = success
 
   build:
-    if: always() && github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:

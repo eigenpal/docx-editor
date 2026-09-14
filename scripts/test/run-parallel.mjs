@@ -141,10 +141,6 @@ function registerRun() {
         // A stale entry is cleaned up by the next run's liveness check.
       }
     });
-    // Signal death skips 'exit' handlers; route the common Ctrl+C through process.exit so the
-    // registry entry is removed instead of haunting every later run's split.
-    process.on('SIGINT', () => process.exit(130));
-    process.on('SIGTERM', () => process.exit(143));
   } catch {
     // No registry means no sharing, which only costs politeness between runs.
   }
@@ -278,7 +274,30 @@ function sampleRss(pid, onSample) {
 
 const children = new Set();
 
-function runFile(file, passthrough, onRss) {
+// Each POSIX worker owns a process group, including compilers/servers spawned by
+// its tests. Killing only Bun leaves those descendants running after fail-fast.
+function stopWorker(child) {
+  if (!child.pid) return;
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(-child.pid, 'SIGKILL');
+    }
+  } catch {
+    // The group may already have exited by the time cancellation reaches it.
+  }
+}
+
+// Covers fail-fast, external cancellation, and unexpected runner errors. This
+// must also run for SIGINT/SIGTERM, even if registering the run failed.
+process.on('exit', () => {
+  for (const child of children) stopWorker(child);
+});
+process.on('SIGINT', () => process.exit(130));
+process.on('SIGTERM', () => process.exit(143));
+
+function runFile(file, passthrough, failFast, onRss) {
   return new Promise((settle) => {
     const started = Date.now();
     let peak = 0;
@@ -291,6 +310,7 @@ function runFile(file, passthrough, onRss) {
     }
     const child = spawn('bun', [...args, ...passthrough], {
       cwd: ROOT,
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: process.stdout.isTTY ? '1' : '0' },
     });
@@ -308,6 +328,11 @@ function runFile(file, passthrough, onRss) {
       children.delete(child);
       clearInterval(sampler);
       settle({ file, output: `failed to spawn bun: ${error.message}`, code: 1, ms: 0, peak: 0 });
+    });
+    child.on('exit', (code) => {
+      // Descendants can inherit the worker's output pipes. Stop them on failure
+      // before waiting for 'close', or they can delay the first failure forever.
+      if (failFast && code !== 0) stopWorker(child);
     });
     child.on('close', (code) => {
       children.delete(child);
@@ -454,7 +479,7 @@ async function main() {
         continue;
       }
       const { file, entry } = picked;
-      const result = await runFile(file, passthrough, (rss) => (entry.rss = rss));
+      const result = await runFile(file, passthrough, failFast, (rss) => (entry.rss = rss));
       inFlight.delete(file);
       done += 1;
 
@@ -478,7 +503,6 @@ async function main() {
           // siblings immediately. Kill active Bun children; dispatch no more files.
           // Synchronous output survives process.exit even when CI captures a pipe.
           writeFileSync(2, `${result.output.trimEnd()}\n`);
-          for (const child of children) child.kill('SIGKILL');
           process.exit(1);
         }
       } else if (process.stdout.isTTY) {
