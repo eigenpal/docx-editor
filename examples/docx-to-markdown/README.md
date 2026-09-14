@@ -16,7 +16,7 @@ Markdown updates after you pause typing.
 ## Use
 
 - **Preview** renders Markdown by page.
-- **Source** shows the page Markdown.
+- **Source** shows the page Markdown. Switching between Preview and Source keeps your current page and approximate reading position.
 - **API** shows a Node.js example and the live JSON response. Click the install command to copy it.
 - **Copy** copies the active code, JSON, or full-document Markdown.
 - **Download** saves a ZIP with Markdown, image files, and JSON metadata when images are present. Otherwise, it saves Markdown.

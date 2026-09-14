@@ -86,6 +86,53 @@ try {
         .getByRole('group', { name: 'Demo view', exact: true })
         .getByRole('button', { name: 'Markdown', exact: true })
         .click();
+    // A mode switch must preserve the reader's page even when earlier pages change height.
+    for (const [number, fraction] of [
+      [2, 0.4],
+      [11, 0],
+      [27, 0.5],
+    ]) {
+      for (const mode of ['Source', 'Preview']) {
+        await page.locator('.md-preview-scroll').evaluate(
+          (scroller, { number, fraction }) => {
+            const article = scroller.querySelector(`#markdown-page-${number}`);
+            const bounds = article.getBoundingClientRect();
+            scroller.scrollTo({
+              top:
+                scroller.scrollTop +
+                bounds.top -
+                scroller.getBoundingClientRect().top +
+                bounds.height * fraction,
+              behavior: 'instant',
+            });
+          },
+          { number, fraction }
+        );
+        await page
+          .getByRole('group', { name: 'Markdown view', exact: true })
+          .getByRole('button', { name: mode, exact: true })
+          .click();
+        // Allow an erroneous scheduled smooth scroll to start before checking the position.
+        await page.waitForTimeout(350);
+        const position = await page.locator('.md-preview-scroll').evaluate((scroller) => {
+          const top = scroller.getBoundingClientRect().top;
+          const article = Array.from(scroller.querySelectorAll('.md-page-wrap')).find(
+            (candidate) => candidate.getBoundingClientRect().bottom > top
+          );
+          const bounds = article.getBoundingClientRect();
+          return { id: article.id, fraction: (top - bounds.top) / bounds.height };
+        });
+        assert.equal(
+          position.id,
+          `markdown-page-${number}`,
+          `${width}px ${mode} retains the visible page`
+        );
+        assert.ok(
+          Math.abs(position.fraction - fraction) < 0.02,
+          `${width}px ${mode} retains the reading position`
+        );
+      }
+    }
     for (const mode of ['Preview', 'Source']) {
       await page
         .getByRole('group', { name: 'Markdown view', exact: true })
@@ -123,7 +170,7 @@ try {
       assert.equal(await changesPanel.isVisible(), false);
     }
     console.log(
-      `${width}px: all 28 pages contain their content; review controls pass in Preview and Source`
+      `${width}px: all 28 pages contain their content; review controls and reading position pass in Preview and Source`
     );
   }
   assert.deepEqual(errors, []);

@@ -1,6 +1,14 @@
 import { MediaPreview } from './MediaPreview';
 import { useMarkdownDownload } from './useMarkdownDownload';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import { reviewModule } from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
@@ -26,7 +34,13 @@ import { developerPanelContent, type DeveloperPanelTab } from './developer-refer
 import { createLatestOperationGate } from './latest-operation';
 import { DeveloperView } from './DeveloperView';
 import { MarkdownPagePreview } from './MarkdownPagePreview';
-import { markdownPageToReveal, type PreviewMode } from './preview-navigation';
+import {
+  capturePreviewPosition,
+  restorePreviewPosition,
+  markdownPageToReveal,
+  type PreviewMode,
+  type PreviewPosition,
+} from './preview-navigation';
 import { indexPageReviewSelections } from './review-presentation';
 import {
   clampSplit,
@@ -141,6 +155,15 @@ export function MarkdownExportDemo() {
   const [document, setDocument] = useState<Uint8Array>();
   const [exportView, setExportView] = useState<ExportViewState>(EMPTY_EXPORT);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('rendered');
+  const pendingPreviewPosition = useRef<PreviewPosition | null>(null);
+  const changePreviewMode = (next: PreviewMode) => {
+    if (next === previewMode) return;
+    pendingPreviewPosition.current =
+      next !== 'developer' && previewMode !== 'developer'
+        ? capturePreviewPosition(previewScroll.current)
+        : null;
+    setPreviewMode(next);
+  };
   const [mobilePane, setMobilePane] = useState<MobilePane>('source');
   const [sourceWidth, setSourceWidth] = useState(50);
   const [splitBounds, setSplitBounds] = useState({
@@ -188,7 +211,13 @@ export function MarkdownExportDemo() {
     });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const position = pendingPreviewPosition.current;
+    if (position) {
+      pendingPreviewPosition.current = null;
+      restorePreviewPosition(previewScroll.current, position);
+      return;
+    }
     const pageNumber = markdownPageToReveal(
       previewMode,
       exportView.status,
@@ -565,21 +594,21 @@ export function MarkdownExportDemo() {
               <button
                 type="button"
                 aria-pressed={previewMode === 'rendered'}
-                onClick={() => setPreviewMode('rendered')}
+                onClick={() => changePreviewMode('rendered')}
               >
                 Preview
               </button>
               <button
                 type="button"
                 aria-pressed={previewMode === 'source'}
-                onClick={() => setPreviewMode('source')}
+                onClick={() => changePreviewMode('source')}
               >
                 Source
               </button>
               <button
                 type="button"
                 aria-pressed={previewMode === 'developer'}
-                onClick={() => setPreviewMode('developer')}
+                onClick={() => changePreviewMode('developer')}
               >
                 API
               </button>
