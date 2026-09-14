@@ -10,7 +10,7 @@
 import type { PageBorderFrameRecord, PageBorderStrokeRecord } from '../layout/semantic-records.ts';
 import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
 
-/** Six lowercase hex digits; anything else is not a colour this paints. */
+/** Six hex digits, either case; anything else is not a colour this paints. */
 const HEX = /^[0-9A-Fa-f]{6}$/;
 
 function paintPageBorderStroke(
