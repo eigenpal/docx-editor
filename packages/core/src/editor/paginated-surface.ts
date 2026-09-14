@@ -1,3 +1,4 @@
+import { registerSurfaceMeasurement } from './surface-measurement.ts';
 import {
   createContentControlWidgetSessions,
   contentControlWidgetItems,
@@ -365,17 +366,6 @@ export function mountPaginatedSurface(
   // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  /**
-   * Measurer identity, folded into every layout cache key so a later font resolution cannot
-   * serve stale layout.
-   *
-   * A HOST measurer answers in POINTS, so it means the same thing at every zoom: its identity
-   * is stable, and suffixing it with the scale re-measured the whole document on every zoom
-   * click while telling the cache two identical answers differed. The DEFAULT measurer is
-   * resolved AT a scale — the canvas one rounds against device pixels — so its identity
-   * carries that scale, and it is read from the resolution currently in force rather than from
-   * whichever one mount happened to get.
-   */
   function producerIdentity(): string {
     if (options.measurer) return options.producer ?? 'host-measurer';
     return `${options.producer ?? defaults?.producer ?? 'fixed-measurer'}@scale:${scale}`;
@@ -4587,11 +4577,7 @@ export function mountPaginatedSurface(
       // the guard, and the rollback carries its own.
       try {
         const scroller = surfaceScroller(container);
-        // The anchor is kept in LAYOUT coordinates, the frame `visiblePageSet` and
-        // `viewportPage` read. The scroller is not the surface's offset parent in a real host —
-        // toolbar and ruler chrome sit above it — so the container's own offset comes out
-        // before the divide and goes back in on the way out, or the page under the viewport
-        // centre changes as the scale does.
+        // Preserve the viewport centre in layout coordinates across the reflow.
         const anchor = scroller
           ? {
               x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
@@ -4606,17 +4592,8 @@ export function mountPaginatedSurface(
           });
           measurer = defaults.measurer;
         }
-        // Read from the resolution just made, not from mount's: a canvas that is available at
-        // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
-        // say so.
         producer = producerIdentity();
-        // EVERY input the mount-time source is given, not a subset. Rebuilt without the three
-        // drawing hooks, a header's inline pictures lost their layout context for the rest of
-        // the session the first time the user zoomed.
         furnitureSource = createCurrentFurnitureSource(revisionFilter());
-        // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
-        // flush that publishes nothing (a revision already superseded) would otherwise leave
-        // the overlay painting against them.
         materializedSet = undefined;
         materializedExtent = undefined;
         commentRectCache = null;
@@ -6315,5 +6292,28 @@ export function mountPaginatedSurface(
   surface.refreshTableInteractionLabels = () => {
     tableInteraction.refreshLabels();
   };
+  registerSurfaceMeasurement(
+    surface,
+    () => ({
+      measurer: options.measurer,
+      producer: options.producer,
+      fontAlias: options.fontAlias,
+      defaultFontFamily: options.defaultFontFamily,
+    }),
+    (next) => {
+      options = { ...options, ...next };
+      measurer = options.measurer ?? defaults!.measurer;
+      producer = producerIdentity();
+    },
+    () => {
+      if (destroyed) return;
+      furnitureSource = createCurrentFurnitureSource(revisionFilter());
+      materializedSet = undefined;
+      materializedExtent = undefined;
+      commentRectCache = null;
+      scheduler.invalidateAll(session.packageRevision(), 'fonts');
+      scheduler.flush();
+    }
+  );
   return { ok: true, surface };
 }

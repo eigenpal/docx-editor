@@ -241,7 +241,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     }
   });
 
-  test('exactly one shaped remount per load, and pre-resolution edits survive it', async () => {
+  test('font resolution keeps the session and pre-resolution edits', async () => {
     const container = document.createElement('div');
     const editor = createDocxEditor({
       container,
@@ -252,7 +252,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     const surfaceBeforeResolve = editor.surface;
     await fontsSettled(editor);
     const surfaceAfterResolve = editor.surface;
-    expect(surfaceAfterResolve).not.toBe(surfaceBeforeResolve);
+    expect(surfaceAfterResolve).toBe(surfaceBeforeResolve);
     expect(editor.surface!.session.bodyText()).toBe('Xbase');
     // Settled: no further remount happens once shaped layout is in place.
     await new Promise((resolve) => setTimeout(resolve, 100));

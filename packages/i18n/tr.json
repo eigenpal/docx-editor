@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Eş aralıklı",
-    "documentFonts": "Belge yazı tipleri"
+    "documentFonts": "Belge yazı tipleri",
+    "search": "Yazı tipi ara"
   },
   "fontSize": {
     "decrease": "Yazı tipi boyutunu küçült",

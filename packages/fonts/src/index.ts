@@ -580,6 +580,8 @@ export type PackagedFontsResolver = ((
 
 /** What one {@link packagedFonts} resolver call produced. */
 export interface PackagedFontsFragment extends DefaultFontsFragment {
+  /** Families this provider can serve, including faces not loaded by this request. */
+  readonly supportedFamilies?: readonly WordDefaultFamily[];
   /** The Word families this call actually loaded, in {@link ALL_WORD_DEFAULT_FAMILIES} order. */
   readonly families: readonly WordDefaultFamily[];
 }
@@ -639,6 +641,10 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
+  const supportedFamilies = Object.freeze(
+    ALL_WORD_DEFAULT_FAMILIES.filter((family) => !allowed || allowed.has(family.toLowerCase()))
+  );
+
   async function resolvePackagedFonts(request: FontOriginRequest): Promise<PackagedFontsFragment> {
     // Faces an earlier origin in the composition can already PAINT. Loading them again
     // would spend the bytes on a fragment first-wins composition is bound to drop.
@@ -672,7 +678,8 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // Stable order regardless of how the document happened to declare them, so the same
     // file composes to the same configuration on every load.
     const families = ALL_WORD_DEFAULT_FAMILIES.filter((family) => wanted.has(family));
-    if (families.length === 0) return { sources: [], substitutions: [], failures: [], families };
+    if (families.length === 0)
+      return { sources: [], substitutions: [], failures: [], families, supportedFamilies };
 
     const loadOptions = {
       families,
@@ -689,7 +696,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     if (options.install === true) {
       void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
     }
-    return { ...fragment, families };
+    return { ...fragment, families, supportedFamilies };
   }
 
   return markResolver(resolvePackagedFonts);

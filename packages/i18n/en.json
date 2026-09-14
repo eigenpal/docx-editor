@@ -159,7 +159,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "documentFonts": "Document fonts"
+    "documentFonts": "Document fonts",
+    "search": "Search fonts"
   },
   "fontSize": {
     "decrease": "Decrease font size",

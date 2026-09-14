@@ -62,9 +62,7 @@ test('regional date input keeps its meaning when fonts replace the focused surfa
   await page.keyboard.insertText('03/04/2030');
   await page.evaluate(() => window.__dateRemount.release());
   await page.waitForFunction(
-    () =>
-      !window.__dateRemount.previous.isConnected &&
-      window.__dateRemount.editor.fontMeasurement().measurer === 'shaped'
+    () => window.__dateRemount.editor.fontMeasurement().measurer === 'shaped'
   );
   await expect(page.locator('.docx-pages')).toBeFocused();
   await page.evaluate(() => {

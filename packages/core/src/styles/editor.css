@@ -3694,6 +3694,31 @@ a.docx-hyperlink:focus-visible {
   overflow-y: auto;
 }
 
+.docx-toolbar__font-family-content:has(> .docx-toolbar__font-search) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+}
+
+.docx-toolbar__font-search {
+  flex: none;
+  box-sizing: border-box;
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  font: inherit;
+}
+
+.docx-toolbar__font-options {
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .docx-toolbar__font-family-item,
 .docx-toolbar__style-item {
   display: flex;

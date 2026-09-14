@@ -176,6 +176,10 @@ const FONT_GROUPS = [
 function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps) {
   const context = useFontFamilyContext();
   const label = useToolbarLabel();
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (!context?.open) setQuery('');
+  }, [context?.open]);
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
@@ -193,7 +197,9 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
     const grouped = FONT_GROUPS.map((group) => ({
       ...group,
       fonts: context.options.filter(
-        (option) => (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
+        (option) =>
+          option.toLowerCase().includes(query.toLowerCase()) &&
+          (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
       ),
     })).filter((group) => group.fonts.length > 0);
     items = grouped.map((group, index) => (
@@ -209,10 +215,26 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
     ));
   }
   if (asChild) return <Slot {...shared}>{items}</Slot>;
-  return <div {...shared}>{items}</div>;
+  if (children !== undefined) return <div {...shared}>{items}</div>;
+  return (
+    <div className={shared.className}>
+      <input
+        type="search"
+        className="docx-toolbar__font-search"
+        aria-label={label('font.search')}
+        placeholder={label('font.search')}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <div role="listbox" className="docx-toolbar__font-options">
+        {items}
+      </div>
+    </div>
+  );
 }
 
 function FontFamilyItem({ value, asChild, className, children }: FontFamilyItemProps) {
+  const editor = useDocxEditor();
   const context = useFontFamilyContext();
   if (!context) return null;
   const selected = context.value === value;
@@ -224,6 +246,7 @@ function FontFamilyItem({ value, asChild, className, children }: FontFamilyItemP
     onClick: () => {
       context.setValue(value);
       context.setOpen(false);
+      editor?.focus();
     },
     className: `docx-toolbar__font-family-item${className ? ` ${className}` : ''}`,
   };

@@ -126,7 +126,8 @@
     "sansSerif": "Sans serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "documentFonts": "Font dokumen"
+    "documentFonts": "Font dokumen",
+    "search": "Cari font"
   },
   "fontSize": {
     "decrease": "Perkecil ukuran font",

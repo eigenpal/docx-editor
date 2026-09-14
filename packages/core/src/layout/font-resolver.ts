@@ -1,3 +1,4 @@
+import { supportedFontFamilies } from './supported-font-families.ts';
 // Telling an ON-DEMAND font resolver apart from a zero-argument font LOADER.
 //
 // Both are functions, and structurally TypeScript cannot separate them: `() => Fragment`
@@ -333,6 +334,7 @@ async function composeFontOriginsInternal(
   // consumed and committed strictly in authored order below.
   const observed = origins.map(observePromiseOrigin);
   let base: FontConfiguration | FontConfigurationFragment | undefined;
+  const catalogs: (readonly string[])[] = [];
   const winningSources: FontSource[] = [];
   const sourceFaces = new Map<string, FontFaceRequest>();
   const committedSourceKeys = new Set<string>();
@@ -426,6 +428,7 @@ async function composeFontOriginsInternal(
         reportOriginFailure(options, origin, originIndex, cause);
       }
       const sampled = sampledOrigin.fragment;
+      if (sampled.supportedFamilies) catalogs.push(sampled.supportedFamilies);
       failures.push(...partialFailures);
       const faces = (sampled.sources ?? []).map((source) => {
         fontRequestKey(source.request);
@@ -473,6 +476,7 @@ async function composeFontOriginsInternal(
   if (!base) return undefined;
   const { epoch: _perLoad, ...merged } = composeFontConfiguration({
     ...base,
+    supportedFamilies: supportedFontFamilies(catalogs),
     sources: winningSources,
     substitutions,
   });
@@ -752,6 +756,7 @@ function validateOriginAnswer(
   }
   return {
     fragment: Object.freeze({
+      supportedFamilies: supportedFontFamilies([answer.supportedFamilies]),
       sources: Object.freeze(sources),
       substitutions: Object.freeze(substitutions),
       ...(epochInput !== undefined ? { epoch: epochInput } : {}),

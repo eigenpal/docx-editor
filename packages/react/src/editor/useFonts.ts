@@ -71,9 +71,8 @@ export type FontsInput =
  * Order origins cheapest-first.
  *
  * The returned resolver never changes identity, so the editor is never rebuilt on account
- * of this prop — which also means the arguments are re-read per LOAD rather than per
- * render. Changing them mid-document does not re-resolve fonts; load a document, or
- * remount, for new fonts to take effect.
+ * of this prop. Arguments are re-read when opening a document or requesting a new family.
+ * Changing them alone does not replace already loaded faces; reload the document for that.
  *
  * It is marked (`defineFontResolver`), so it can itself be an origin of another list or
  * `useDocxSource`'s `fonts` option without being mistaken for a zero-argument loader.

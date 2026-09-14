@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monoespaçado",
-    "documentFonts": "Fontes do documento"
+    "documentFonts": "Fontes do documento",
+    "search": "Pesquisar fontes"
   },
   "fontSize": {
     "decrease": "Diminuir tamanho da fonte",

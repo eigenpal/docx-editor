@@ -5,10 +5,15 @@ import {
   usedNumberingFontFamilies,
 } from '../layout/synthesized-font-families.ts';
 
+const cache = new WeakMap<TreeDocxSessionView, { revision: number; families: readonly string[] }>();
+
 /** Rendered faces absent from declarations use the resolver's reserved share. */
 export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonly string[] {
+  const revision = session.packageRevision();
+  const cached = cache.get(session);
+  if (cached?.revision === revision) return cached.families;
   const roots = session.storyParts().map((part) => part.root);
-  return [
+  const families = [
     ...session.symbolFontFamilies(),
     ...eastAsianLanguageFontFamilies(roots, session.stylesRoot(), session.documentThemeFonts()),
     ...symbolFieldFontFamilies(roots),
@@ -19,4 +24,6 @@ export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonl
       session.documentThemeFonts()
     ),
   ];
+  cache.set(session, { revision, families });
+  return families;
 }

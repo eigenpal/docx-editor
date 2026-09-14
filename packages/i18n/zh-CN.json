@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "documentFonts": "文档字体"
+    "documentFonts": "文档字体",
+    "search": "搜索字体"
   },
   "fontSize": {
     "decrease": "减小字号",

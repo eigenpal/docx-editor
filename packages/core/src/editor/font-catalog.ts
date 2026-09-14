@@ -1,9 +1,10 @@
+import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 // Selectable families are independent of the document and loaded font bytes.
 // The standard choices match the standalone FontPicker. Configured and document
 // families extend them; listing a choice does not request its font bytes.
 // This list does not assert that a family is installed or has been downloaded.
 //
-// Substitution TARGETS are deliberately excluded: `Carlito` exists to render "Calibri",
+// Loaded substitution targets are excluded unless a provider or the document lists them: `Carlito` exists to render "Calibri",
 // and listing both would offer the same metrics twice under two names — the stand-in is
 // an implementation face, not a choice.
 //
@@ -69,6 +70,7 @@ export function availableFontFamilies(
     if (standIns.has(source.request.family.toLowerCase())) continue;
     add(source.request.family);
   }
+  for (const family of supportedFontFamilies([configuration?.supportedFamilies])) add(family);
   for (const family of STANDARD_FONT_FAMILIES) add(family);
   for (const family of documentFonts) add(family);
 

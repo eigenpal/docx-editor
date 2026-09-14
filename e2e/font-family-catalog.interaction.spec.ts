@@ -17,6 +17,10 @@ const STANDARD_FONTS = [
 
 for (const adapter of ['react', 'vue'] as const) {
   test(`${adapter}: new documents retain the standard font choices`, async ({ page }, testInfo) => {
+    let selectedFontRequests = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('TeXGyreAdventor')) selectedFontRequests++;
+    });
     const port = testInfo.config.metadata[`${adapter}Port`];
     await page.goto(`http://localhost:${port}/`);
     const trigger = page.locator('.docx-toolbar__font-family-trigger');
@@ -36,19 +40,26 @@ for (const adapter of ['react', 'vue'] as const) {
     const blankChoices = (await choices.allTextContents()).map((name) =>
       name.replace('✓', '').trim()
     );
-    expect(blankChoices.sort()).toEqual(STANDARD_FONTS);
+    expect(blankChoices.sort()).toEqual(expect.arrayContaining(STANDARD_FONTS));
 
-    await choices.filter({ hasText: /^Arial\s*✓?$/ }).click();
-    await expect(trigger).toHaveText('Arial');
+    const search = page.getByRole('searchbox', { name: 'Search fonts' });
+    await search.fill('Century Gothic');
+    await expect(choices).toHaveCount(1);
+    await expect(choices).toContainText('Century Gothic');
+    expect(selectedFontRequests).toBe(0);
+    await choices.click();
+    await expect.poll(() => selectedFontRequests).toBe(4);
+    await expect(trigger).toHaveText('Century Gothic');
     await expect(choices).toHaveCount(0);
-    await page.locator('.docx-pages').pressSequentially('Text in the selected font');
+    await expect(page.locator('.docx-pages')).toBeFocused();
+    await page.keyboard.type('Text in the selected font');
     await expect(page.locator('.docx-pages')).toContainText('Text in the selected font');
     await trigger.click();
     const populatedChoices = (await choices.allTextContents()).map((name) =>
       name.replace('✓', '').trim()
     );
-    expect(populatedChoices.sort()).toEqual(STANDARD_FONTS);
-    await expect(choices.filter({ hasText: /^Arial\s*✓?$/ })).toHaveAttribute(
+    expect(populatedChoices.sort()).toEqual(expect.arrayContaining(STANDARD_FONTS));
+    await expect(choices.filter({ hasText: /^Century Gothic\s*✓?$/ })).toHaveAttribute(
       'aria-selected',
       'true'
     );

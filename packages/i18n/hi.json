@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "documentFonts": "दस्तावेज़ फ़ॉन्ट"
+    "documentFonts": "दस्तावेज़ फ़ॉन्ट",
+    "search": "फ़ॉन्ट खोजें"
   },
   "fontSize": {
     "decrease": "फ़ॉन्ट आकार घटाएं",

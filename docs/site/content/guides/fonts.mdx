@@ -16,8 +16,17 @@ Word-compatible line wraps or page breaks.
 
 The toolbar always offers the standard font choices, including Arial, Calibri,
 Georgia, Times New Roman, and Courier New. Configured and document-specific
-families extend this list. Empty documents have the same standard choices as
-populated documents.
+families extend this list. Configured providers also contribute their supported
+families, even before those fonts load. The default dropdown includes a search
+field. Empty documents offer the same provider catalog as populated documents.
+
+`packagedFonts()` lists its supported Word families. `googleFonts()` lists the
+families in its pinned static-font catalog. Each provider applies its `allow`
+option; Google also applies custom `substitute` mappings.
+
+Custom resolvers can return `supportedFamilies: ['Brand Sans', 'Brand Serif']`
+alongside their `sources` and `substitutions`. A catalog-only result is valid.
+Listing a family does not require its bytes.
 
 A picker choice does not mean the font is installed or loaded. Opening the picker
 does not load font bytes. Your font configuration still controls measurement and
@@ -257,8 +266,14 @@ descriptors or bytes.
 ## Load fonts on demand
 
 `packagedFonts()` and `googleFonts()` are resolvers. The editor calls a resolver
-once per document load, after parsing, with the family names that document
-declares.
+after parsing, with the family names that document declares. It calls the resolver
+again when typing, formatting, or another edit introduces a new family. Selecting
+a font for an empty paragraph also requests it.
+
+Font arrivals update the current editing session. Selection, pending typing
+formatting, and undo history survive the reflow. Previously supplied faces are
+passed as `resolvedFaces`, so providers can skip redundant downloads. Failed
+families are attempted once per document load; reload the document to retry.
 
 `useDocxSource` handles the identity of a resolver for you. When you pass one
 directly to the `fonts` prop, use `useFonts` instead: an inline resolver is a new
@@ -318,13 +333,13 @@ googleFonts({
 An arbitrary substitute can change line breaks and pagination. Use a
 metric-compatible substitute when layout must remain stable.
 
-| Resolver constraint        | Required behavior                                                     |
-| -------------------------- | --------------------------------------------------------------------- |
-| File-supplied family names | Match them against a closed `Map` or catalog.                         |
-| URL construction           | Never build a URL from a document family name.                        |
-| Privacy                    | A remote font host can learn which families the document uses.        |
-| Updates                    | Load another document or remount to apply changed resolver arguments. |
-| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.          |
+| Resolver constraint        | Required behavior                                                             |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| File-supplied family names | Match them against a closed `Map` or catalog.                                 |
+| URL construction           | Never build a URL from a document family name.                                |
+| Privacy                    | A remote font host can learn which families the document uses.                |
+| Updates                    | New-family requests read current arguments. Reload to replace existing faces. |
+| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.                  |
 
 The editor caps the family list passed to a resolver.
 

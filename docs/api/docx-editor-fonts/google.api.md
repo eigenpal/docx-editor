@@ -46,6 +46,7 @@ export interface GoogleFontsFragment {
     readonly sources: readonly DefaultFontSource[];
     // (undocumented)
     readonly substitutions: readonly DefaultFontSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public
