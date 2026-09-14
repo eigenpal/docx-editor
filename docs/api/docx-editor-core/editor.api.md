@@ -2261,6 +2261,7 @@ export interface SectionProperties {
     readonly landscape: boolean;
     // (undocumented)
     readonly margins: SectionMargins;
+    readonly pageBorders?: SectionPageBorders;
     readonly pageNumbering?: SectionPageNumbering;
     // (undocumented)
     readonly pageSize: {

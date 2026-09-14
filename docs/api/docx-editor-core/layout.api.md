@@ -2257,7 +2257,48 @@ export type OperationSnapshotGuard = {
 };
 
 // @public
+export const PAGE_BORDER_SIDES: readonly ["top", "left", "bottom", "right"];
+
+// @public
 export function pageAtY(layout: SemanticLayout, sheetY: number): number;
+
+// @public
+export type PageBorderDisplay = 'allPages' | 'firstPage' | 'notFirstPage';
+
+// @public
+export function pageBorderFrame(borders: SectionPageBorders | undefined, geometry: PageGeometry, isFirstPageOfSection: boolean): PageBorderFrameRecord | undefined;
+
+// @public
+export interface PageBorderFrameRecord {
+    // (undocumented)
+    readonly display: PageBorderDisplay;
+    // (undocumented)
+    readonly strokes: readonly PageBorderStrokeRecord[];
+    // (undocumented)
+    readonly zOrder: PageBorderZOrder;
+}
+
+// @public
+export type PageBorderOffsetFrom = 'page' | 'text';
+
+// @public
+export function pageBordersFingerprint(borders: SectionPageBorders | undefined): string;
+
+// @public
+export type PageBorderSide = (typeof PAGE_BORDER_SIDES)[number];
+
+// @public
+export interface PageBorderStrokeRecord {
+    // (undocumented)
+    readonly box: LayoutBox;
+    // (undocumented)
+    readonly edge: ParagraphBorderEdge;
+    // (undocumented)
+    readonly side: PageBorderSide;
+}
+
+// @public
+export type PageBorderZOrder = 'front' | 'back';
 
 // @public
 export interface PageFurniture {
@@ -2308,6 +2349,7 @@ export interface PageRecord {
     // (undocumented)
     readonly index: number;
     readonly noteStream?: PageNoteStream;
+    readonly pageBorders?: PageBorderFrameRecord;
     readonly pageFieldSource?: {
         readonly format?: string;
         readonly pageNumber: number;
@@ -2602,6 +2644,9 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
 
 // @public
 export function parseAutonumInstruction(raw: string): AutonumFieldSpec | null;
+
+// @public
+export function parsePageBorders(sectPr: OoxmlNode): SectionPageBorders | undefined;
 
 // @public
 export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined;
@@ -3257,6 +3302,21 @@ export interface SectionMargins {
 }
 
 // @public
+export interface SectionPageBorders {
+    // (undocumented)
+    readonly bottom?: ParagraphBorderEdge;
+    readonly display: PageBorderDisplay;
+    // (undocumented)
+    readonly left?: ParagraphBorderEdge;
+    readonly offsetFrom: PageBorderOffsetFrom;
+    // (undocumented)
+    readonly right?: ParagraphBorderEdge;
+    // (undocumented)
+    readonly top?: ParagraphBorderEdge;
+    readonly zOrder: PageBorderZOrder;
+}
+
+// @public
 export interface SectionPageNumbering {
     readonly chapSep?: string;
     readonly chapStyle?: number;
@@ -3273,6 +3333,7 @@ export interface SectionProperties {
     readonly landscape: boolean;
     // (undocumented)
     readonly margins: SectionMargins;
+    readonly pageBorders?: SectionPageBorders;
     readonly pageNumbering?: SectionPageNumbering;
     // (undocumented)
     readonly pageSize: {
@@ -3443,6 +3504,7 @@ export interface SemanticLayoutOptions {
     readonly revisionAuthorFilter?: RevisionAuthorFilter;
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
+    readonly sectionPageBorders?: SectionPageBorders;
     readonly session?: LayoutSession;
     // @internal
     readonly showFieldCodes?: boolean;
