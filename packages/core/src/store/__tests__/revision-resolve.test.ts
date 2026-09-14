@@ -150,12 +150,34 @@ describe('nested revisions resolve by containment', () => {
     expect(out).not.toContain('>b<');
   });
 
-  test('a wrapper that was empty to begin with is a decision, not a container to sweep', () => {
-    // A paragraph-mark insertion is `w:pPr/w:rPr/w:ins` with no children by construction.
-    const marked = load(
-      `<w:p><w:pPr><w:rPr>${wrap('ins', QA, '')}</w:rPr></w:pPr>${wrap('del', DEV, delRun('x'))}</w:p><w:p>${run('next')}</w:p>`
+  test('a wrapper reduced to markers is hollow too, and the markers are hoisted', () => {
+    // Word writes proofing marks and bookmark / comment-range boundaries directly inside a
+    // wrapper, beside the runs. Striking the runs leaves the markers; each pairs with a
+    // counterpart elsewhere, so they stay in the paragraph while the wrapper goes.
+    for (const [open, close] of [
+      ['<w:proofErr w:type="spellStart"/>', '<w:proofErr w:type="spellEnd"/>'],
+      ['<w:bookmarkStart w:id="7" w:name="mark"/>', '<w:bookmarkEnd w:id="7"/>'],
+      ['<w:commentRangeStart w:id="3"/>', '<w:commentRangeEnd w:id="3"/>'],
+    ]) {
+      const nested = load(
+        `<w:p>${run('a')}${wrap('ins', QA, open + wrap('del', DEV, delRun('x')) + close)}${run('z')}</w:p>`
+      );
+      const out = xml(apply(nested, accept(DEV)));
+      expect(out).not.toContain('<w:ins');
+      expect(out).not.toContain('<w:del');
+      expect(out).toContain(open!);
+      expect(out).toContain(close!);
+      expect(out.indexOf(open!)).toBeLessThan(out.indexOf(close!));
+    }
+  });
+
+  test('a wrapper that arrived empty is not this decision’s to remove', () => {
+    // A producer-written hollow `<w:ins/>` at a content position stays: the sweep removes only
+    // what the resolution itself emptied, so an unrelated accept changes nothing else.
+    const hollow = load(
+      `<w:p>${wrap('ins', QA, '')}${wrap('del', DEV, delRun('x'))}${run('z')}</w:p>`
     );
-    const out = xml(apply(marked, accept(DEV)));
+    const out = xml(apply(hollow, accept(DEV)));
     expect(out).toContain('<w:ins');
     expect(out).not.toContain('<w:del');
   });
@@ -193,6 +215,32 @@ describe('a move is one decision', () => {
     expect(out).not.toContain('<w:moveTo w');
     expect(out.match(/here/g) ?? []).toHaveLength(1);
     expect(out).not.toContain('delText');
+  });
+
+  test('a half emptied by another author’s decision goes, and the other half still resolves', () => {
+    // Dev strikes the moved-to text; accepting that strike leaves QA's `w:moveTo` hollow. The
+    // range markers are the wrapper's SIBLINGS, so the surviving `w:moveFrom` still finds its
+    // name and resolves alone — no blank card, and no marker left over afterwards.
+    const struckDestination = load(
+      '<w:p>' +
+        `<w:moveFromRangeStart w:id="10" w:name="${MOVE_NAME}" w:author="QA" w:date="${QA.date}"/>` +
+        wrap('moveFrom', QA, delRun('here')) +
+        '<w:moveFromRangeEnd w:id="10"/>' +
+        '</w:p><w:p>' +
+        `<w:moveToRangeStart w:id="11" w:name="${MOVE_NAME}" w:author="QA" w:date="${QA.date}"/>` +
+        wrap('moveTo', QA, wrap('del', DEV, delRun('here'))) +
+        '<w:moveToRangeEnd w:id="11"/>' +
+        '</w:p>'
+    );
+    const afterStrike = apply(struckDestination, accept(DEV));
+    const out = xml(afterStrike);
+    expect(out).not.toContain('<w:moveTo w');
+    expect(out).toContain('<w:moveFrom w');
+    expect(out).toContain('moveToRangeStart');
+    const settled = xml(apply(afterStrike, accept(QA)));
+    expect(settled).not.toContain('<w:moveFrom w');
+    expect(settled).not.toContain('RangeStart');
+    expect(settled).not.toContain('here');
   });
 
   test('the range markers go with the move they described', () => {

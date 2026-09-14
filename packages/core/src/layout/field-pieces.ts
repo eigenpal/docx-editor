@@ -232,8 +232,8 @@ export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | 
 /**
  * What a piece emitter may attach beyond text, style and range.
  *
- * The vocabulary of `push` in the paragraph walk, kept here with the piece itself so the walk
- * spends its lines on the walk.
+ * The vocabulary of `push` in the paragraph walk (`field-projection.ts`), kept beside the
+ * piece it decorates.
  */
 export interface PieceEmitExtras {
   readonly positionalTab?: PositionalTab;

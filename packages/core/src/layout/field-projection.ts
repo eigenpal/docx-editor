@@ -231,13 +231,11 @@ export function piecesOfParagraph(
       authorFilter
     );
     if (published === null) return;
-    // Spread, not destructured: a rest pattern copies at runtime on every piece pushed.
-    const attribution = published.revisions ? { revisions: published.revisions } : {};
     const link = effectiveLink ? { link: effectiveLink } : {};
     if (projected) {
       pieces.push({
         text,
-        props: published.props,
+        ...published,
         style,
         start,
         end,
@@ -249,21 +247,19 @@ export function piecesOfParagraph(
         ...(extras?.equation ? { equation: extras.equation } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
-        ...attribution,
       });
       return;
     }
     if (text.length === 0) return;
     pieces.push({
       text,
-      props: published.props,
+      ...published,
       style,
       start,
       end,
       ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
       ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
       ...link,
-      ...attribution,
     });
   };
 
