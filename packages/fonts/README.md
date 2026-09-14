@@ -83,7 +83,7 @@ The `packagedFonts` option `install` is deprecated and ignored, including `true`
 Remove it while keeping your other loader options:
 
 ```diff
-- fonts: packagedFonts({ install: false, onFailure })
+- fonts: packagedFonts({ install: true, onFailure })
 + fonts: packagedFonts({ onFailure })
 ```
 
