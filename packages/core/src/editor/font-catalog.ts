@@ -1,12 +1,7 @@
-// The font catalog a picker offers: the families the editor can honour, not just the
-// families the document happens to declare.
-//
-// A brand-new document declares no `w:rFonts` anywhere, so a picker fed only the
-// document derivation opens empty — a dead control on the commonest document there is.
-// The editor, however, always has fonts: the configured default face, every Word-name
-// family its substitution map can stand in for, and any family the host registered
-// bytes for directly. Those are offerable regardless of what the file says, and the
-// document's own declared families join them.
+// Selectable families are independent of the document and loaded font bytes.
+// The standard choices match the standalone FontPicker. Configured and document
+// families extend them; listing a choice does not request its font bytes.
+// This list does not assert that a family is installed or has been downloaded.
 //
 // Substitution TARGETS are deliberately excluded: `Carlito` exists to render "Calibri",
 // and listing both would offer the same metrics twice under two names — the stand-in is
@@ -25,6 +20,21 @@ import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './fo
 
 export { configuredDefaultFontFamily, type FontCatalogConfiguration };
 
+const STANDARD_FONT_FAMILIES: readonly string[] = Object.freeze([
+  'Arial',
+  'Calibri',
+  'Cambria',
+  'Consolas',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Helvetica',
+  'Open Sans',
+  'Roboto',
+  'Times New Roman',
+  'Verdana',
+]);
+
 /**
  * The same family-name bound `document-catalog.ts` and the paint sink enforce: kept in
  * sync by value because each module re-validates at its own boundary (see the note
@@ -33,8 +43,8 @@ export { configuredDefaultFontFamily, type FontCatalogConfiguration };
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 
 /**
- * Every family a font picker can offer: the configured catalog (default face,
- * substitution Word-names, host-registered source families) merged with the document's
+ * Every family a font picker can offer: standard choices plus the configured catalog
+ * (default face, substitution Word-names, host-registered sources) merged with the document's
  * declared families. Deduplicated case-insensitively — configuration first, so its
  * casing wins over a document respelling — and sorted by code point for the same
  * deterministic order as the document derivation. Invalid names are dropped, never
@@ -59,6 +69,7 @@ export function availableFontFamilies(
     if (standIns.has(source.request.family.toLowerCase())) continue;
     add(source.request.family);
   }
+  for (const family of STANDARD_FONT_FAMILIES) add(family);
   for (const family of documentFonts) add(family);
 
   const fonts = [...byFold.values()];

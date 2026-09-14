@@ -8,8 +8,8 @@ import type { ReactNode } from 'react';
 // `FontFamily` (Trigger / Content / Item) is that hook plus open-state plumbing.
 //
 // Every option string comes from `Editor.getAvailableFonts()` — the configured font
-// catalog merged with the document's declared families, so a brand-new document still
-// offers a real list. The derivation validates font names at its boundary
+// catalog and standard choices merged with the document's declared families.
+// A brand-new document still offers a real list. The derivation validates font names at its boundary
 // (length-bounded, control characters dropped), so rendering an option in its own
 // typeface via a React `style` object is styling an already-sanitized name — and a
 // style OBJECT, never a CSS string sink.
@@ -44,7 +44,7 @@ export interface UseFontFamilyResult {
   readonly setValue: (family: string) => void;
   /**
    * The offerable font catalog (validated, deduplicated, sorted): the editor's
-   * configured families merged with the document's declared ones.
+   * standard and configured families merged with the document's declared ones.
    */
   readonly options: readonly string[];
   /** Whether the engine would honour a font change right now. */
@@ -246,7 +246,7 @@ function FontFamilyItem({ value, asChild, className, children }: FontFamilyItemP
 
 /**
  * The compound font-family picker. With no children it renders Trigger + Content with
- * an Item per document font; with children, compose `FontFamily.Trigger`,
+ * an Item per selectable font; with children, compose `FontFamily.Trigger`,
  * `FontFamily.Content`, and `FontFamily.Item` yourself around the shared state.
  *
  * @public

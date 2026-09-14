@@ -969,11 +969,17 @@ describe('setMarkAttr (value-typed run formatting)', () => {
     editor.surface!.selectAll();
     expect(editor.getDocumentFonts()).toEqual([]);
     expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
-    expect(editor.getAvailableFonts()).toEqual(['Calibri']);
+    const choices = editor.getAvailableFonts();
+    expect(choices).toContain('Arial');
+    expect(choices).toContain('Georgia');
     // Declaring a font in the document joins the catalog without displacing it.
     editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
     expect(editor.getDocumentFonts()).toEqual(['Georgia']);
-    expect(editor.getAvailableFonts()).toEqual(['Calibri', 'Georgia']);
+    expect(editor.getAvailableFonts()).toEqual(choices);
+    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Sagona' });
+    expect(editor.getAvailableFonts()).toEqual([...choices, 'Sagona'].sort());
+    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Arial' });
+    expect(editor.getAvailableFonts()).toEqual(choices);
   });
 
   test('a mixed-font selection still reports no agreed family', () => {
