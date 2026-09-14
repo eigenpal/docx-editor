@@ -178,7 +178,6 @@ const defaultFonts = createSuccessfulValueCache(async (signal): Promise<DefaultE
 
 const resolvePackagedFonts = packagedFonts({
   fetcher: packagedFileFetch,
-  install: false,
   // Core reports returned fragment failures without discarding successfully loaded faces.
   onFailure() {},
 });

@@ -152,15 +152,9 @@ const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, e
  * import.meta.url)` expression as a real `URL`. webpack and Turbopack replace the whole
  * expression with a bare path STRING for the asset they emitted, such as
  * `/_next/static/media/Caladea-Bold.d6e01b80.ttf`. Anything that needs a `URL` here has
- * to cope with both; see {@link assetHref} and {@link FONT_ASSET_ROOT}.
+ * to cope with both; see {@link FONT_ASSET_ROOT}.
  */
 const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
-
-/** Absolute-or-relative href for one packaged face, whatever shape the bundler left. */
-const assetHref = (file: string): string => {
-  const value = assetUrl(file);
-  return typeof value === 'string' ? value : value.href;
-};
 
 /**
  * Directory URL of the packaged font files this package serves.
