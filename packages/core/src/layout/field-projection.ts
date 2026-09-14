@@ -29,7 +29,6 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlProperty,
-  type HardBreakKind,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import {
@@ -81,16 +80,16 @@ import {
   appendModelRange,
   applyEastAsiaFontSlots,
   positionalTabOf,
-  type FieldAtomMarker,
   type FieldAwarePiece,
   type FieldLinkProjector,
   type HyperlinkProjector,
   type ModelRange,
   type MutableModelRange,
   type PendingFieldProjection,
+  type PieceEmitExtras,
   type PositionalTab,
 } from './field-pieces.ts';
-import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
+import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
@@ -221,24 +220,7 @@ export function piecesOfParagraph(
     projected: boolean,
     start: number,
     end: number,
-    extras?: {
-      readonly positionalTab?: PositionalTab;
-      readonly breakKind?: HardBreakKind;
-      readonly measureText?: string;
-      readonly noteNav?: FieldAwarePiece['noteNav'];
-      readonly inlineDrawing?: InlineDrawingLayoutInput;
-      readonly anchoredAtom?: true;
-      readonly equation?: FieldAwarePiece['equation'];
-      /**
-       * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
-       * walk has left the wrapper that owns it — a buffered field result is the only such
-       * case. Passing it here keeps `push` the single place a piece is attributed.
-       */
-      readonly revisionsOverride?: readonly RevisionAttribution[];
-      readonly linkOverride?: SpanLinkRecord;
-      /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
-      readonly fieldAtom?: FieldAtomMarker;
-    }
+    extras?: PieceEmitExtras
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const effectiveLink = extras?.linkOverride ?? currentLink;
@@ -249,12 +231,13 @@ export function piecesOfParagraph(
       authorFilter
     );
     if (published === null) return;
-    const { props: publishedProps, ...attribution } = published;
+    // Spread, not destructured: a rest pattern copies at runtime on every piece pushed.
+    const attribution = published.revisions ? { revisions: published.revisions } : {};
     const link = effectiveLink ? { link: effectiveLink } : {};
     if (projected) {
       pieces.push({
         text,
-        props: publishedProps,
+        props: published.props,
         style,
         start,
         end,
@@ -273,7 +256,7 @@ export function piecesOfParagraph(
     if (text.length === 0) return;
     pieces.push({
       text,
-      props: publishedProps,
+      props: published.props,
       style,
       start,
       end,
@@ -319,8 +302,8 @@ export function piecesOfParagraph(
     // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
     const { resultLink, linkSpec, resultRevisions, formField } = pending;
-    let carriedMemo: NonNullable<Parameters<typeof push>[6]> | undefined;
-    const carried = (): NonNullable<Parameters<typeof push>[6]> => {
+    let carriedMemo: PieceEmitExtras | undefined;
+    const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
       const fieldLink = !resultLink && linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
       const carriedLink = resultLink ?? fieldLink;
@@ -386,6 +369,8 @@ export function piecesOfParagraph(
         offset += piece.end - piece.start;
       }
       if (pending.cachedText.length > 0 && pending.buffered.length === 0) {
+        // The cache was captured from the first displayed result run, so its attribution is
+        // the captured one — not the live stack, which by now may be a later run's wrapper.
         push(
           pending.cachedText,
           pending.props,
@@ -393,7 +378,12 @@ export function piecesOfParagraph(
           false,
           offset,
           offset + pending.cachedText.length,
-          fieldLink ? { linkOverride: fieldLink } : undefined
+          {
+            ...(pending.capturedResultRevisions
+              ? { revisionsOverride: pending.resultRevisions }
+              : {}),
+            ...(fieldLink ? { linkOverride: fieldLink } : {}),
+          }
         );
         offset += pending.cachedText.length;
       }

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
-import { revisionAuthorFilter, type RevisionDisplayMode } from '../revision-projection.ts';
+import {
+  EMPTY_REVISION_AUTHOR_SET,
+  revisionAuthorFilter,
+  type RevisionDisplayMode,
+} from '../revision-projection.ts';
 import { storyBlocks } from '../story-roots.ts';
 import { projectedSectionSourceIndexes } from '../section-properties.ts';
 
@@ -195,6 +199,8 @@ describe('review author layout filter', () => {
         expect(result.every((piece) => piece.fieldAtom !== undefined)).toBe(true);
       });
 
+      // The two guards below pass on the old route too; they pin the boundary so the fix
+      // cannot over-filter a visible author or resurrect a hidden deletion.
       test(`a visible insertion inside ${label} keeps its attribution`, () => {
         const result = pieces(`<w:p>${wrap(run('A ') + ins('Ada', 'new'))}</w:p>`, ['Grace']);
         expect(attributionOf(result, 'new')).toEqual(['Ada']);
@@ -250,7 +256,7 @@ describe('review author layout filter', () => {
       const nodeId = pieces(body, []).find((piece) => piece.text === 'new')!.revisions![0]!.nodeId;
       const filterFor = (mode: 'proposed' | 'original') =>
         Object.freeze({
-          hiddenAuthors: revisionAuthorFilter(['nobody'])!.hiddenAuthors,
+          hiddenAuthors: EMPTY_REVISION_AUTHOR_SET,
           includes: (revision: { nodeId: string }) => revision.nodeId !== nodeId,
           includesNode: (id: string) => id !== nodeId,
           excludedNodeMode: () => mode,

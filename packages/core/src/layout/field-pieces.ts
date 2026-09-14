@@ -239,6 +239,31 @@ export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | 
  * The state only; the machinery that fills and flushes it stays closure-bound inside
  * `piecesOfParagraph`.
  */
+/**
+ * What a piece emitter may attach beyond text, style and range.
+ *
+ * The vocabulary of `push` in the paragraph walk, kept here with the piece itself so the walk
+ * spends its lines on the walk.
+ */
+export interface PieceEmitExtras {
+  readonly positionalTab?: PositionalTab;
+  readonly breakKind?: HardBreakKind;
+  readonly measureText?: string;
+  readonly noteNav?: FieldAwarePiece['noteNav'];
+  readonly inlineDrawing?: InlineDrawingLayoutInput;
+  readonly anchoredAtom?: true;
+  readonly equation?: FieldAwarePiece['equation'];
+  /**
+   * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the walk
+   * has left the wrapper that owns it — an atomic field's flushed result is the case. Passing
+   * it here keeps the projection in one place.
+   */
+  readonly revisionsOverride?: readonly RevisionAttribution[];
+  readonly linkOverride?: SpanLinkRecord;
+  /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
+  readonly fieldAtom?: FieldAtomMarker;
+}
+
 export interface PendingFieldProjection {
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;

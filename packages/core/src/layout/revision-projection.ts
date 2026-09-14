@@ -441,7 +441,7 @@ export function projectPieceAttribution(
   revisions: readonly RevisionAttribution[],
   props: readonly OoxmlProperty[],
   mode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionFilter
 ): PieceAttribution | null {
   const projected = projectedRevisions(revisions, mode, authorFilter);
   if (projected === null) return null;
