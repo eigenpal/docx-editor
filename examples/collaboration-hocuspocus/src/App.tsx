@@ -389,7 +389,7 @@ export function App() {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts() });
+  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts({ install: false }) });
 
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.

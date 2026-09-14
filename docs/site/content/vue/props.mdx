@@ -144,7 +144,7 @@ in one. That face is Calibri, so Carlito loads for every document.
 import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const fonts = useFonts(packagedFonts());
+const fonts = useFonts(packagedFonts({ install: false }));
 
 function reportFontError(error: { code: string }) {
   report(error.code);
@@ -161,7 +161,7 @@ Add an origin by adding an argument. Arguments compose first-wins:
 ```ts
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const fonts = useFonts(packagedFonts(), googleFonts());
+const fonts = useFonts(packagedFonts({ install: false }), googleFonts());
 ```
 
 `packagedFonts()` resolves after the document is parsed, so the first layout uses

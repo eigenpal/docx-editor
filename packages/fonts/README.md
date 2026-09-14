@@ -40,9 +40,8 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 // is a floor. `allow` narrows it further.
 function Editor({ bytes }: { bytes: Uint8Array }) {
   // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
-  // its identity changes, and `packagedFonts()` written inline is a new function
-  // on every render; `useFonts` keeps one for the component's life.
-  const fonts = useFonts(packagedFonts());
+  // its identity changes, and an inline resolver is a new function on every render; `useFonts` keeps one for the component's life.
+  const fonts = useFonts(packagedFonts({ install: false }));
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
 ```
@@ -50,7 +49,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 Same call shape as `googleFonts()` below, so composing the two is adding an argument:
 
 ```ts
-const fonts = useFonts(packagedFonts(), googleFonts());
+const fonts = useFonts(packagedFonts({ install: false }), googleFonts());
 ```
 
 (Both calls belong inside a component — `useFonts` is a hook.)
@@ -62,33 +61,22 @@ and 7.4 MB whichever document opens — use `defaultFonts()`:
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await defaultFonts(); // or { families: ['Calibri'] }
+const fonts = await defaultFonts({ install: false }); // Add families to load a subset.
 const editor = createDocxEditor({ document: bytes, fonts });
 ```
 
 ## Font registration
 
-`defaultFonts()` and `packagedFonts()` supply bytes to the editor, which registers
-fonts under private aliases. Public CSS family names remain unchanged. This keeps
-native fonts available for glyphs missing from the substitutes.
-`loadDefaultFonts()` returns the same fragment without reporting failures to the console.
+`defaultFonts()` and `packagedFonts()` register public CSS font names by default.
+This preserves existing behavior. No migration is required.
 
-Earlier loader behavior also registered substitutes under public names such as
-`Arial`. If your app relied on that registration outside the editor, enable it
-explicitly. The editor uses the supplied fonts without public registration.
+For editor use, set `install: false` on either loader. The editor registers the
+supplied bytes under private aliases. This keeps native fonts available for glyphs
+missing from the substitutes.
+This option does not remove fonts that other code already registered.
 
-Use `packagedFonts({ install: true })` for on-demand loading. For eager loading,
-register the loaded bytes:
-
-```ts
-import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
-
-const fonts = await defaultFonts();
-await installDefaultFontFaces({ loaded: fonts.sources });
-```
-
-Pass `fonts` to the editor's `fonts` option. Public registration affects the whole
-page and can hide native glyphs for scripts the substitutes do not cover.
+`loadDefaultFonts()` remains bytes-only. Use `installDefaultFontFaces()` when you
+want to register those bytes under public CSS names.
 
 Nothing loads until you call one of these: importing the package fetches no bytes, and
 the editor engine never calls in here on its own.

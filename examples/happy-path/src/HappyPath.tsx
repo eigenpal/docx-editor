@@ -47,7 +47,7 @@ export function HappyPath() {
   // re-paginates when the faces land; that remount rebuilds from the CURRENT tree, so an
   // edit made in between survives it — the undo stack behind it does not, which is the one
   // thing the eager `await defaultFonts()` still buys.
-  const fonts = useFonts(packagedFonts());
+  const fonts = useFonts(packagedFonts({ install: false }));
   const [name, setName] = useState('sample');
 
   useEffect(() => {

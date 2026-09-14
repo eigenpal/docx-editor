@@ -29,6 +29,7 @@ export interface DefaultFontLoadFailure {
 
 // @public
 export function defaultFonts(options?: LoadDefaultFontsOptions & {
+    readonly install?: boolean;
     readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
 }): Promise<DefaultFontsFragment>;
 

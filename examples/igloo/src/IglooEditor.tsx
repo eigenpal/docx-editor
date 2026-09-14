@@ -64,7 +64,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
     fonts,
     error,
   } = useDocxSource(fixtureUrl, {
-    fonts: packagedFonts(),
+    fonts: packagedFonts({ install: false }),
   });
 
   return (

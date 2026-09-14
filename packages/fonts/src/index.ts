@@ -431,10 +431,9 @@ export async function installDefaultFontFaces(
 /**
  * Load the default-font bytes and report failures for the editor's `fonts` prop.
  *
- * The editor registers these bytes under private aliases for measurement and paint.
- * This loader leaves public CSS family names unchanged, so native fonts remain available
- * when a packaged substitute lacks a script. Use {@link installDefaultFontFaces} only
- * when a host explicitly needs page-wide registration under the Word family names.
+ * Registers substitutes under public Word family names by default for compatibility.
+ * Set `install: false` for editor-only use: Core registers private aliases, preserving
+ * native glyph fallback and the host application's fonts.
  *
  * Non-cancellation face failures are WARNED, not thrown: one unavailable face degrades that
  * family to fixed-width measurement rather than refusing the document. Pass `onFailure` to route
@@ -444,16 +443,19 @@ export async function installDefaultFontFaces(
 export async function defaultFonts(
   options: LoadDefaultFontsOptions & {
     readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+    /** Register public Word family names. Default: `true`. Set `false` for private editor registration only. */
+    readonly install?: boolean;
   } = {}
 ): Promise<DefaultFontsFragment> {
-  const { onFailure, ...loadOptions } = options;
+  const { onFailure, install, ...loadOptions } = options;
   const fragment = await loadDefaultFonts(loadOptions);
   for (const failure of fragment.failures) {
     if (onFailure) onFailure(failure);
     else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
   }
-  // Core owns private face registration. A public Arial→Liberation Sans registration
-  // hides native Arial's Arabic glyphs, which Liberation Sans does not contain.
+  // Preserve the public registration side effect and asynchronous timing of existing calls.
+  // Editor-only callers can keep native glyph fallback by opting out of public registration.
+  if (install !== false) void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
   return fragment;
 }
 
@@ -555,10 +557,10 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * Set `true` to register substitutes under public Word family names through
-   * {@link installDefaultFontFaces}. Default: `false`. The editor registers private aliases
-   * itself, so normal editor use needs no page-wide registration. Public registration can
-   * hide native glyphs for scripts the substitutes do not cover.
+   * Register substitutes under public Word family names through {@link installDefaultFontFaces}.
+   * Default: `true`, preserving existing page-wide registration. Set `false` for editor-only
+   * use: Core registers private aliases itself. Public registration can hide native glyphs
+   * for scripts the substitutes do not cover.
    *
    * Registration reuses the bytes the resolver already loaded, so a face that loaded costs
    * no second request and {@link PackagedFontsOptions.fetcher} sees every byte read for it.
@@ -684,9 +686,8 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
     }
-    // Public family replacement is an explicit host choice. Core registers private
-    // aliases for its own surface, preserving native glyph fallback and host-page fonts.
-    if (options.install === true) {
+    // Preserve existing public registration unless the caller selects editor-only use.
+    if (options.install !== false) {
       void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
     }
     return { ...fragment, families };

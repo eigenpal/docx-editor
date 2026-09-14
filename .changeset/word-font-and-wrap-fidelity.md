@@ -3,4 +3,4 @@
 '@docx-editor.dev/fonts': minor
 ---
 
-Improve Word fidelity for theme fonts, RTL numbers, floating-table passages, and narrow CJK punctuation. Automatic font loaders use private editor aliases; enable public font registration with `packagedFonts({ install: true })` or explicit installers.
+Improve Word fidelity for theme fonts, RTL numbers, floating-table passages, and narrow CJK punctuation. Font loaders preserve public registration by default; use `install: false` with `defaultFonts()` or `packagedFonts()` for private editor registration.

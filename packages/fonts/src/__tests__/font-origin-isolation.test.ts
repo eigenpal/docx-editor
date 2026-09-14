@@ -13,10 +13,12 @@ const fetcher = (async (input: RequestInfo | URL) => {
 
 class TestFontFace {
   readonly family: string;
+  readonly source: unknown;
   readonly weight: string;
   readonly style: string;
-  constructor(family: string, _source: unknown, descriptors: Record<string, string>) {
+  constructor(family: string, source: unknown, descriptors: Record<string, string>) {
     this.family = family;
+    this.source = source;
     this.weight = descriptors.weight ?? '400';
     this.style = descriptors.style ?? 'normal';
   }
@@ -43,17 +45,22 @@ afterEach(() => {
 });
 
 const loaders = [
-  ['defaultFonts', () => defaultFonts({ families: ['Arial'], fetcher })],
+  [
+    'defaultFonts',
+    (options: { install?: boolean } = {}) =>
+      defaultFonts({ families: ['Arial'], fetcher, ...options }),
+  ],
   [
     'packagedFonts',
-    () => packagedFonts({ fetcher })({ families: ['Arial'], defaultFamily: 'Arial' }),
+    (options: { install?: boolean } = {}) =>
+      packagedFonts({ fetcher, ...options })({ families: ['Arial'], defaultFamily: 'Arial' }),
   ],
 ] as const;
 
 test.each(loaders)(
-  '%s preserves native family names and supplies privately paintable bytes',
+  '%s with install:false preserves native family names and supplies privately paintable bytes',
   async (_name, load) => {
-    const fragment = await load();
+    const fragment = await load({ install: false });
     // A public Arial face backed by Liberation Sans hides native Arabic glyphs. The
     // substitute has no Arabic coverage, so CSS then uses a different family's metrics.
     expect(fontSet.size).toBe(0);
@@ -74,14 +81,26 @@ test.each(loaders)(
   }
 );
 
-test('public family installation remains available through explicit install:true', async () => {
-  const fragment = await packagedFonts({ fetcher, install: true })({
-    families: ['Arial'],
-    defaultFamily: 'Arial',
+for (const [label, options] of [
+  ['omitted install', {}],
+  ['undefined install', { install: undefined }],
+  ['install:true', { install: true }],
+] as const) {
+  test.each(loaders)(`%s preserves public registration with ${label}`, async (_name, load) => {
+    const fragment = await load(options);
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.failures).toHaveLength(0);
+    expect([...fontSet].map((face) => face.family)).toEqual(['Arial', 'Arial', 'Arial', 'Arial']);
+    expect([...fontSet].every((face) => face.source instanceof ArrayBuffer)).toBe(true);
+    expect(new Set([...fontSet].map((face) => `${face.weight}/${face.style}`))).toEqual(
+      new Set(['400/normal', '700/normal', '400/italic', '700/italic'])
+    );
+    // Repeated legacy calls still reuse public registrations instead of replacing host faces.
+    const existingFaces = [...fontSet];
+    await load(options);
+    expect([...fontSet]).toEqual(existingFaces);
   });
-  expect(fragment.sources).toHaveLength(4);
-  expect([...fontSet].map((face) => face.family)).toEqual(['Arial', 'Arial', 'Arial', 'Arial']);
-});
+}
 
 test('an editor preserves Arabic fallback widths across font resolution and disposal', async () => {
   const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
@@ -127,7 +146,10 @@ test('an editor preserves Arabic fallback widths across font resolution and disp
   document.body.append(host);
   const hostFace = new TestFontFace('Host Page Face', null, {});
   fontSet.add(hostFace);
-  const editor = createDocxEditor({ document: bytes, fonts: packagedFonts({ fetcher }) });
+  const editor = createDocxEditor({
+    document: bytes,
+    fonts: packagedFonts({ fetcher, install: false }),
+  });
   try {
     editor.attach(host);
     const deadline = Date.now() + 8000;

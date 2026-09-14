@@ -14,7 +14,7 @@ import { revisionPresentation } from './revision-presentation';
 import { activeJob, api, newerJob, type Config, type Job, type Room } from './api';
 
 const MODULES = [reviewModule()];
-const FONTS = packagedFonts();
+const FONTS = packagedFonts({ install: false });
 const STARTERS = [
   'Make the terms more balanced',
   'Improve clarity and remove ambiguity',

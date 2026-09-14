@@ -43,7 +43,7 @@ export function PerformanceE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: defaultFonts,
+    fonts: () => defaultFonts({ install: false }),
   });
 
   return (
