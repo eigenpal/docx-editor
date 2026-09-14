@@ -139,7 +139,9 @@ for (const binding of result.reviewBindings) {
 }
 ```
 
-For source-aligned edits, require `coverage === 'complete'` and `precision === 'exact'`. For citations or display, you can use partial or `containing-construct` bindings if you retain that precision information. Unmapped artifacts include an `unmappedReason`.
+For source-aligned edits, require `coverage === 'complete'` and `precision === 'exact'`. For citations or display, you can use partial or `containing-construct` bindings if you retain that precision information. Existing bindings with no mapped ranges include an `unmappedReason`.
+
+Artifacts without occurrences have no bindings or `unmappedReason`. These include orphan comments and comments entirely hidden by the selected revision mode. Inspect `result.reviewArtifacts` as well as `result.reviewBindings` to retain them.
 
 Artifact IDs, occurrence indexes, page IDs, and offsets are valid only within this export.
 
@@ -163,6 +165,8 @@ Tracked changes also participate in layout through `displayMode`: `all-markup` (
 | `producer`              | Stable identity for a host-owned measurer and its cache entries.                              |
 | `imageDecodePort`       | Custom image metadata decoder. Defaults to the Node.js decoder.                               |
 | `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                      |
+
+`fontPolicy` and `onFontResolution` require immutable DOCX bytes with the default document-aware font resolution. Both options throw `TypeError` when used with a live `HeadlessDocumentView` or combined with a custom `measurer`, including an explicit `fontPolicy: 'best-effort'`.
 
 ### Tracked changes
 
@@ -216,6 +220,8 @@ Images affect page boundaries but are omitted from Markdown. If omitting an inli
 
 For malformed or unsupported DOCX input, `exportMarkdown` throws `DocumentOpenError`. `openDocumentForExport` returns `{ ok: false, reason, detail }` instead.
 
+Both workflows throw `TypeError` for unsupported option combinations described under [Options](#options), such as a custom `measurer` combined with `fontPolicy` or `onFontResolution`.
+
 Both workflows can throw `ExportResourceError` with one of these codes:
 
 - `aborted`, `timedOut`, `nonConvergent`, or `disposed`.
@@ -259,6 +265,7 @@ Fonts resolve in this order:
 1. Your `fonts` configuration or resolvers; earlier entries take priority.
 2. Bundled substitutes from `@docx-editor.dev/fonts`.
 3. Optional `fallbackFonts`.
+4. Document-embedded fonts for faces not resolved by earlier origins.
 
 The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono for Courier New. These fonts are bundled with the package.
 
@@ -307,11 +314,15 @@ const result = await exportMarkdown(docxBytes, {
 });
 ```
 
-Omit `fallbackFonts` to use only your fonts and bundled substitutes. For network-free exports, your own resolvers must also use local data.
+Omit `fallbackFonts` to use your fonts, bundled substitutes, and document-embedded fonts. For network-free exports, your own resolvers must also use local data.
 
-Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`, use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes precedence and bypasses both font options.
+Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`, use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes precedence and bypasses both font options. Omit `fontPolicy` and `onFontResolution` when using a custom measurer or live view; these combinations throw `TypeError`.
 
-`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic faces. Use `onFontResolution` to record resolved and substituted faces, and `googleFonts({ onFailure })` to log fallback failures. More than 64 candidate families causes `layoutFailed`. Failed or aborted Google Fonts requests are not cached.
+`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic faces in the resolution report. Font resolution uses at most 64 candidate families, prioritizing body content before headers and footers, then notes. Additional families are excluded from the candidate list rather than causing `layoutFailed`. The report and strict coverage checks cover this bounded list, so strict success does not guarantee coverage of every family in a document exceeding the limit.
+
+Use `onFontResolution` to record resolved and substituted faces. The callback's returned promises are not awaited; thrown errors and rejected promises are logged without failing the export. If report persistence must complete before continuing, await your own persistence operation using `result.fontResolution` after export.
+
+Use `googleFonts({ onFailure })` to log fallback failures. Failed or aborted Google Fonts requests are not cached.
 
 ### Font limits
 
@@ -323,7 +334,7 @@ The package exports these limits:
 
 Invalid or oversized origins are reported and skipped. Exceeding the process-wide lease budget causes `layoutFailed`. Return only requested faces from resolvers, limit concurrent exports, and dispose reusable sessions promptly. Use the exported constants in your code.
 
-Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor. Regular, bold, italic, and bold-italic embedded faces must pass the shared font limits.
+Document-embedded fonts are admitted after caller fonts, bundled substitutes, and optional fallback origins, using the same mapper as the browser editor. Regular, bold, italic, and bold-italic embedded faces must pass the shared font limits.
 
 ## Warnings
 

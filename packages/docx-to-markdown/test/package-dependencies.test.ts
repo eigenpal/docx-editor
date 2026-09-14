@@ -97,7 +97,9 @@ describe('engine dependency integrity', () => {
 
   test('documents the embedded-font parity boundary', () => {
     const readme = readFileSync(join(import.meta.dir, '..', 'docs', 'api.md'), 'utf8');
-    expect(readme).toContain('Document-embedded fonts are admitted after explicit origins');
+    expect(readme).toContain(
+      'Document-embedded fonts are admitted after caller fonts, bundled substitutes, and optional fallback origins'
+    );
     expect(readme).toContain('same mapper as the browser editor');
     expect(readme).toContain('host-owned');
   });
