@@ -26,6 +26,7 @@ import {
   type DocumentSection,
   type SectionColumns,
 } from './section-properties.ts';
+import { pageBordersFingerprint } from './page-borders.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
 import {
@@ -158,6 +159,9 @@ export function multiSectionStructureKey(
       ? `pn:${framedTokenJoin([pn.start ?? '', pn.fmt ?? '', pn.chapStyle ?? '', pn.chapSep ?? ''].map(String))}`
       : 'pn:';
     const columns = section.properties.columns;
+    // The frame is not in `geometry`, and no per-block key moves when it changes, so without
+    // this a `w:pgBorders` edit reuses every section's previous sheets with the old frame.
+    const bordersKey = `pgb:${pageBordersFingerprint(section.properties.pageBorders)}`;
     const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
     return framedTokenJoin(
       [
@@ -173,6 +177,7 @@ export function multiSectionStructureKey(
         furnitureGeometryFingerprint(furniture),
         pnKey,
         columnsKey,
+        bordersKey,
       ].map(String)
     );
   });
@@ -491,6 +496,9 @@ export function layoutMultiSectionDocument(
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
+      ...(section.properties.pageBorders
+        ? { sectionPageBorders: section.properties.pageBorders }
+        : {}),
       ...(balanceColumns ? { balanceColumns } : {}),
       lineCounterStart: lineCounter,
       // A continued section's local page 0 IS the host sheet, so its document page index
@@ -637,6 +645,9 @@ export function layoutMultiSectionDocument(
       retainKeys,
       geometry,
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+      ...(sections[0]?.properties.pageBorders
+        ? { sectionPageBorders: sections[0].properties.pageBorders }
+        : {}),
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });

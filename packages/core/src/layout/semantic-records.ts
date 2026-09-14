@@ -27,6 +27,7 @@ import type { ResolvedRunStyle } from './run-style.ts';
 import type { FontSlot } from './script-itemization.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
+import type { PageBorderDisplay, PageBorderSide, PageBorderZOrder } from './page-borders.ts';
 import type { SemanticReviewArtifactRecord } from './review-artifact-records.ts';
 
 export type {
@@ -42,6 +43,13 @@ export type {
   ParagraphSpacing,
 } from './paragraph-style.ts';
 export type { TabLeader } from './paragraph-tabs.ts';
+export type {
+  PageBorderDisplay,
+  PageBorderOffsetFrom,
+  PageBorderSide,
+  PageBorderZOrder,
+  SectionPageBorders,
+} from './page-borders.ts';
 export type {
   ResolvedCellBorders,
   ResolvedTableBorderEdge,
@@ -95,6 +103,38 @@ export interface ParagraphBorderStrokeRecord {
   readonly side: ParagraphBorderSide;
   readonly edge: ParagraphBorderEdge;
   readonly box: LayoutBox;
+}
+
+/**
+ * One `w:pgBorders` rule as layout published it.
+ *
+ * `box` is the stroke rectangle in PAGE-BOX-relative points — measured from the sheet's own
+ * top-left, not from the document-stacked absolute origin and not from the content box. That
+ * is what lets a reused sheet move down the stack (`remapPage`) without the frame being
+ * recomputed or shifted: the frame's place on the paper never depended on where the paper is.
+ *
+ * Paint MUST NOT re-derive the inset. `w:offsetFrom` decides whether `w:space` counts from the
+ * sheet edge or from the text, and resolving that needs the section margins, which is layout's
+ * to know — the same division `columnSeparators` already draws.
+ */
+export interface PageBorderStrokeRecord {
+  readonly side: PageBorderSide;
+  readonly edge: ParagraphBorderEdge;
+  readonly box: LayoutBox;
+}
+
+/**
+ * The page frame on one sheet, already filtered by `w:display`.
+ *
+ * Present only on the pages that actually carry it, so a consumer holding a single page record
+ * needs no section context to know what to draw. `display` rides along because a sheet MINTED
+ * after layout (note overflow) has to decide whether it inherits its template's frame, and a
+ * `firstPage` frame is the one that must not be inherited.
+ */
+export interface PageBorderFrameRecord {
+  readonly zOrder: PageBorderZOrder;
+  readonly display: PageBorderDisplay;
+  readonly strokes: readonly PageBorderStrokeRecord[];
 }
 
 /**
@@ -825,6 +865,8 @@ export interface PageRecord {
   readonly fragments: readonly BlockFragmentRecord[];
   /** Layout-owned vertical rules requested by `w:cols/@w:sep`, content-box relative. */
   readonly columnSeparators?: readonly LayoutBox[];
+  /** Layout-owned `w:pgBorders` frame for this sheet, page-box relative. Absent when none. */
+  readonly pageBorders?: PageBorderFrameRecord;
   /** Page-content anchored drawings on this sheet, absent when there are none. */
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /** Page furniture for this page's variant, absent when the document declares none. */

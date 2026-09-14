@@ -43,6 +43,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   revisionAuthorFilter: 'document-coordinator',
   sectionFurniture: 'document-coordinator',
   sectionColumns: 'layout-internal',
+  sectionPageBorders: 'layout-internal',
   styleCascade: 'document-coordinator',
   numberingIndex: 'document-coordinator',
   listItems: 'layout-internal',

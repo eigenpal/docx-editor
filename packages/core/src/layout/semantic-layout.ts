@@ -139,6 +139,8 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import { createSectionPageFurniture } from './section-page-furniture.ts';
 import { createPageContentInsets, registerOverflowPageShell } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
+import { pageBorderFrame } from './page-border-frame.ts';
+import { pageBordersFingerprint } from './page-borders.ts';
 import {
   attachContentControlBoundaries,
   contentControlContextToken,
@@ -486,6 +488,9 @@ export function layoutSemanticDocument(
       geometry,
       furniture,
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+      ...(section?.properties.pageBorders
+        ? { sectionPageBorders: section.properties.pageBorders }
+        : {}),
       ...(sectionNumbering?.fmt ? { bodyPageNumberFormat: sectionNumbering.fmt } : {}),
     });
     const numbering = sectionNumbering;
@@ -881,8 +886,15 @@ function layoutBlocksPass(
   const continuedContext = continuedInsets
     ? `|cont:${continuedInsets.top},${continuedInsets.height}`
     : '';
+  // A `w:pgBorders` edit moves NO paragraph key: the frame is drawn beside the text and never
+  // through it, so every per-block key and every checkpoint still matches and each reuse path
+  // would hand back the previous sheets carrying the previous frame. Geometry is already in
+  // this string for the same reason; the frame is geometry the flow happens not to read.
+  const pageBordersContext = options.sectionPageBorders
+    ? `|pgb:${pageBordersFingerprint(options.sectionPageBorders)}`
+    : '';
   const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}${pageBordersContext}`;
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );
@@ -1577,6 +1589,9 @@ function layoutBlocksPass(
     const footer = furnitureFor('footer', index, box);
     const { usedBottom, hasBodyPageFields } = summarizeFlushedPage(pageFragments, columnRegionTop);
     const insets = insetsFor(index);
+    // `index` is SECTION-local here (multi-section renumbers through `remapPage`), which is
+    // exactly what `w:display` asks about: the first page of this section, not of the document.
+    const borderFrame = pageBorderFrame(options.sectionPageBorders, geometry, index === 0);
     pages.push({
       id: `page-${index}`,
       index,
@@ -1599,6 +1614,7 @@ function layoutBlocksPass(
             })),
           }
         : {}),
+      ...(borderFrame ? { pageBorders: borderFrame } : {}),
       ...(pendingAnchoredDrawings.length > 0
         ? { anchoredDrawings: sortDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
@@ -2037,6 +2053,9 @@ function layoutBlocksPass(
           usedPageParity,
           markPageCount: mark.pageCount,
           continuedInsets: continuedInsets !== undefined,
+          firstPageBorders:
+            options.sectionPageBorders !== undefined &&
+            options.sectionPageBorders.display !== 'allPages',
           hasNoteReserves: pageBottomReserves !== undefined,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });

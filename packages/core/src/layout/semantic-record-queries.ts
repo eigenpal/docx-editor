@@ -185,6 +185,7 @@ const PAGE_RECORD_FIELD_ROLES = {
   contentBox: 'metadata',
   fragments: 'story',
   columnSeparators: 'metadata',
+  pageBorders: 'metadata',
   anchoredDrawings: 'story',
   header: 'story',
   footer: 'story',

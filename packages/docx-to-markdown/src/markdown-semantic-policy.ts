@@ -297,6 +297,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     contentBox: 'layout-only',
     fragments: 'represented',
     columnSeparators: 'explicitly-omitted',
+    pageBorders: 'explicitly-omitted',
     anchoredDrawings: 'represented',
     header: 'represented',
     footer: 'represented',

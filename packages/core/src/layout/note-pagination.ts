@@ -1386,6 +1386,11 @@ function cloneEmptyOverflowPage(
     box: template.box,
     contentBox,
     fragments: [],
+    // The frame belongs to the SHEET, so a minted overflow sheet carries its template's —
+    // except a `firstPage` frame, which the template holds precisely because it IS page 0.
+    ...(template.pageBorders && template.pageBorders.display !== 'firstPage'
+      ? { pageBorders: template.pageBorders }
+      : {}),
     ...(noteStream ? { noteStream } : {}),
     ...(header ? { header } : {}),
     ...(footer ? { footer } : {}),
