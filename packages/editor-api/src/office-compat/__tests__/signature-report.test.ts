@@ -3,7 +3,10 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import ts from 'typescript';
 import {
   createCompatibilityReport as buildReport,
@@ -273,19 +276,89 @@ describe('informational report', () => {
     );
   });
 
-  test('the full pin measures actual exports, beyond the selected conformance fixture', () => {
-    const actual = extractActualInventory();
-    const report = createCompatibilityReport(reference, actual, notes, editingScope);
-    expect(report.summary.total).toBe(editingScope.endpoints.length);
-    expect(report.summary.total).toBe(
-      report.summary.match + report.summary.different + report.summary.missing
+  // The actual inventory builds a TypeScript program over this package and every core source its
+  // tsconfig `paths` pull in: about two seconds on a fast machine, several times that on a loaded
+  // four-core CI runner sharing the box with three other test workers. The budget is set for the
+  // runner, not the laptop; the runner's 30 s default reported "slow" as "broken".
+  const ACTUAL_INVENTORY_BUDGET_MS = 120_000;
+
+  test(
+    'the full pin measures actual exports, beyond the selected conformance fixture',
+    () => {
+      const actual = extractActualInventory();
+      const report = createCompatibilityReport(reference, actual, notes, editingScope);
+      expect(report.summary.total).toBe(editingScope.endpoints.length);
+      expect(report.summary.total).toBe(
+        report.summary.match + report.summary.different + report.summary.missing
+      );
+      // Support can grow or shrink without a coverage gate. Only the inventory is exhaustive.
+      for (const uid of ['Word.Body#insertText', 'Word.Font#bold', 'Word.Table#addRows']) {
+        expect(report.endpoints.some((row) => row.uid === uid)).toBe(true);
+      }
+      expect(JSON.stringify(actual)).not.toContain(process.cwd());
+    },
+    ACTUAL_INVENTORY_BUDGET_MS
+  );
+
+  /** A throwaway package root: a tsconfig with no `paths`, the given sources, and nothing else. */
+  const scratchPackages: string[] = [];
+  afterAll(() => {
+    for (const packageRoot of scratchPackages)
+      rmSync(packageRoot, { recursive: true, force: true });
+  });
+  function scratchPackage(files: Record<string, string>) {
+    const packageRoot = mkdtempSync(join(tmpdir(), 'compat-inventory-'));
+    scratchPackages.push(packageRoot);
+    writeFileSync(
+      join(packageRoot, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          lib: ['ES2022'],
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+        },
+        include: ['src'],
+      })
     );
-    // Support can grow or shrink without a coverage gate. Only the inventory is exhaustive.
-    for (const uid of ['Word.Body#insertText', 'Word.Font#bold', 'Word.Table#addRows']) {
-      expect(report.endpoints.some((row) => row.uid === uid)).toBe(true);
+    for (const [name, source] of Object.entries(files)) {
+      mkdirSync(dirname(join(packageRoot, name)), { recursive: true });
+      writeFileSync(join(packageRoot, name), source);
     }
-    expect(JSON.stringify(actual)).not.toContain(process.cwd());
-  }, 30_000);
+    return packageRoot;
+  }
+
+  test('an unresolved import or a type error in the package refuses the inventory', () => {
+    const missing = scratchPackage({
+      'src/index.ts': "export { helper } from './helper';\n",
+      'src/helper.ts': "import { gone } from 'no-such-package';\nexport const helper = gone;\n",
+    });
+    expect(() => extractActualInventory(missing)).toThrow(
+      "cannot resolve module 'no-such-package'"
+    );
+    const broken = scratchPackage({
+      'src/index.ts': 'export const value: number = "text";\n',
+    });
+    expect(() => extractActualInventory(broken)).toThrow('TS2322');
+  });
+
+  test('a dependency without declarations resolves and its deliberate any never widens exports', () => {
+    const packageRoot = scratchPackage({
+      'node_modules/untyped/package.json': JSON.stringify({ name: 'untyped', main: 'index.js' }),
+      'node_modules/untyped/index.js': 'module.exports = { count: 1 };\n',
+      'src/index.ts': [
+        '// @ts-expect-error -- ships no declarations; narrowed to the subset used here.',
+        "import untyped from 'untyped';",
+        'export const count: number = (untyped as { count: number }).count;',
+        '',
+      ].join('\n'),
+    });
+    const rows = extractActualInventory(packageRoot);
+    expect(rows).toEqual([expect.objectContaining({ uid: 'DocxEditor.count', type: 'number' })]);
+  });
 });
 
 test('the useful editing profile keeps its denominator and cannot turn signature matches into runtime claims', () => {

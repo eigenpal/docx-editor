@@ -108,6 +108,78 @@ export function createCompatibilityReport(reference, actual, notes = {}, scope) 
   };
 }
 
+/** Every module specifier in a file: static imports, re-exports and literal dynamic imports. */
+function moduleSpecifiers(file) {
+  const specifiers = [];
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier))
+        specifiers.push(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      specifiers.push(node.moduleReference.expression);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return specifiers;
+}
+
+/**
+ * The checks that protect the inventory, and only those. A resolution error must never be
+ * counted as missing support or as a successful `any` match, so every import in the program has
+ * to resolve, and the package's own sources — whose exported signatures are what the report
+ * measures — have to type-check. The core sources that the tsconfig `paths` pull in are not
+ * checked here: a full semantic pass over them is most of a `tsc` run (hundreds of files, tens of
+ * seconds on a loaded CI runner) for no gain, because a resolved module never becomes `any` and
+ * core's own type errors are `bun run typecheck`'s gate, not this report's.
+ */
+function inventoryProblems(program, packageRoot) {
+  const checker = program.getTypeChecker();
+  const options = program.getCompilerOptions();
+  const resolutionCache = ts.createModuleResolutionCache(packageRoot, (name) => name, options);
+  const own = `${packageRoot.replaceAll('\\', '/')}/src/`;
+  const diagnostics = [
+    ...program.getConfigFileParsingDiagnostics(),
+    ...program.getOptionsDiagnostics(),
+    ...program.getGlobalDiagnostics(),
+  ];
+  const unresolved = [];
+  for (const file of program.getSourceFiles()) {
+    if (file.fileName.includes('/node_modules/')) continue;
+    diagnostics.push(...program.getSyntacticDiagnostics(file));
+    for (const specifier of moduleSpecifiers(file)) {
+      // A typed module or an ambient declaration gives the specifier a symbol. A dependency that
+      // ships no declarations has none, but it still resolves to a file on disk; that import is
+      // `any` on purpose (and says so with a suppression comment), not a resolution failure.
+      if (checker.getSymbolAtLocation(specifier)) continue;
+      const mode = program.getModeForUsageLocation(file, specifier);
+      const found = ts.resolveModuleName(
+        specifier.text,
+        file.fileName,
+        options,
+        ts.sys,
+        resolutionCache,
+        undefined,
+        mode
+      ).resolvedModule;
+      if (!found) unresolved.push(`${file.fileName}: cannot resolve module '${specifier.text}'`);
+    }
+    if (file.fileName.startsWith(own)) diagnostics.push(...program.getSemanticDiagnostics(file));
+  }
+  return { diagnostics, unresolved };
+}
+
 export function extractActualInventory(packageRoot = root) {
   const configPath = path.join(packageRoot, 'tsconfig.json');
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -117,8 +189,8 @@ export function extractActualInventory(packageRoot = root) {
   if (parsed.errors.length) throw new Error('Cannot parse editor-api tsconfig');
   const entry = path.join(packageRoot, 'src/index.ts');
   const program = ts.createProgram([entry], parsed.options);
-  // Resolution errors must never be counted as missing support or successful `any` matches.
-  const diagnostics = ts.getPreEmitDiagnostics(program);
+  const { diagnostics, unresolved } = inventoryProblems(program, packageRoot);
+  if (unresolved.length) throw new Error(unresolved.join('\n'));
   if (diagnostics.length)
     throw new Error(
       ts.formatDiagnosticsWithColorAndContext(diagnostics, {
