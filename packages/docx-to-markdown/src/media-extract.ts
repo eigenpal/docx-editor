@@ -39,6 +39,8 @@ export function imageOptions(options: MarkdownProjectionOptions): MarkdownImageO
   const value = images === true ? {} : images;
   if (value.resolveUrl !== undefined && typeof value.resolveUrl !== 'function')
     throw new TypeError('images.resolveUrl must be a function');
+  if (value.syntax !== undefined && value.syntax !== 'markdown' && value.syntax !== 'html')
+    throw new TypeError('images.syntax must be "markdown" or "html"');
   const limit = value.maxTotalBytes ?? 64 * 1024 * 1024;
   if (!Number.isSafeInteger(limit) || limit <= 0)
     throw new TypeError('images.maxTotalBytes must be a positive safe integer');
@@ -115,6 +117,9 @@ export function extractMedia(
         drawingNodeId: drawing.drawingNodeId,
         paragraphId: drawing.paragraphId,
         start: drawing.start,
+        displayWidthPx: drawing.width * (96 / 72),
+        displayHeightPx: drawing.height * (96 / 72),
+        kind: drawing.kind === 'inlineDrawing' ? 'inline' : 'anchored',
         decorative: drawing.accessibility.decorative,
         alt: drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? ''),
       })

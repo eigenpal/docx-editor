@@ -14,7 +14,74 @@ console.log(result.media); // Unique bytes, paths, URLs, dimensions, and occurre
 
 Each image contains `id`, `path`, `mimeType`, `bytes`, `byteLength`, `pixelWidth`, `pixelHeight`, `url`, and `occurrences`. The ID is the hexadecimal SHA-256 digest already computed by Core. Its `sha256:` prefix is removed for portable filenames; extraction does not hash bytes again. MIME types and extensions describe the exported bytes, including converted raster images.
 
-Occurrences contain `pageNumber`, `story`, `rootStory`, `partName`, `drawingNodeId`, `paragraphId`, `start`, `decorative`, and `alt`. Repeated headers and repeated uses of identical bytes share one asset, with separate occurrences and descriptions. Source offsets use UTF-16 code units. Occurrence/page identities describe this export snapshot; retain your document version for stored citations.
+Occurrences contain `pageNumber`, `story`, `rootStory`, `partName`, `drawingNodeId`, `paragraphId`, `start`, `displayWidthPx`, `displayHeightPx`, `kind`, `decorative`, and `alt`. Repeated headers and repeated uses of identical bytes share one asset, with separate occurrences and descriptions. Source offsets use UTF-16 code units. Occurrence/page identities describe this export snapshot; retain your document version for stored citations.
+
+## Preserve displayed image sizes
+
+An image file's `pixelWidth` and `pixelHeight` describe its intrinsic pixels. Word can display the same file at different sizes.
+Use each occurrence's `displayWidthPx` and `displayHeightPx` for the document's displayed size, in CSS pixels at 96 pixels per inch.
+These values retain fractional pixels. `kind` distinguishes inline and anchored drawings.
+
+Standard Markdown image syntax has no width or height attributes. To carry each occurrence's size into your Markdown renderer, select HTML image syntax:
+
+```ts
+const result = await exportMarkdown(docxBytes, {
+  images: { syntax: 'html' },
+});
+// <img src="media/<digest>.png" alt="Banner" width="300" height="80">
+```
+
+The converter escapes HTML attributes and rounds the display dimensions to whole CSS pixels. Extents smaller than half a pixel round to zero.
+This option works with local folders, ZIP downloads, and `resolveUrl` for server storage.
+The default `syntax: 'markdown'` keeps standard image links without dimensions.
+Both options return full occurrence metadata.
+
+Configure your renderer to parse HTML, sanitize it, and retain `img` attributes `src`, `alt`, `width`, and `height`.
+For example, [`react-markdown`](https://github.com/remarkjs/react-markdown#appendix-a-html-in-markdown) supports `rehype-raw` followed by [`rehype-sanitize`](https://github.com/rehypejs/rehype-sanitize); the default sanitizer retains these attributes.
+If your renderer disables HTML or removes size attributes, use the metadata in a custom preview.
+
+For a custom React preview, pass the selected occurrence and its asset's trusted preview URL:
+
+```tsx
+import type { MarkdownImageOccurrence } from '@docx-editor.dev/docx-to-markdown';
+
+function ImagePreview({
+  imageUrl,
+  occurrence,
+}: {
+  imageUrl: string;
+  occurrence: MarkdownImageOccurrence;
+}) {
+  const { displayWidthPx: width, displayHeightPx: height, alt } = occurrence;
+  return (
+    <img
+      src={imageUrl}
+      alt={alt}
+      width={width}
+      height={height}
+      style={{
+        display: 'inline',
+        width,
+        maxWidth: '100%',
+        height: width === 0 || height === 0 ? height : 'auto',
+        ...(width > 0 && height > 0 ? { aspectRatio: `${width} / ${height}` } : {}),
+      }}
+    />
+  );
+}
+```
+
+The explicit aspect ratio preserves Word's displayed proportions when the image shrinks, even if they differ from its intrinsic proportions.
+Use the same styles in a custom Markdown image component, with `width` and `height` from the generated HTML.
+Resolve `src` through your known asset URLs, as shown in the browser example.
+
+Do not use an asset's first occurrence to size every image with the same URL.
+Occurrences describe physical layout and include repeated headers; their order is not a Markdown image index.
+Use HTML syntax to attach the correct dimensions directly to each rendered image.
+For a preview built from occurrence metadata, identify the occurrence by its page, story, part, and drawing node.
+
+Displayed dimensions describe the drawing's extent before crop and rotation. They do not reproduce cropping, rotation, effects, alignment, or floating text wrapping.
+Anchored images appear at their source paragraph positions in Markdown.
 
 ## Save a local folder
 

@@ -152,6 +152,13 @@ Tracked changes also participate in layout through `displayMode`: `all-markup` (
 
 Enable `images: true` for relative image links and `result.media` bytes. Use `{ images: { resolveUrl, maxTotalBytes } }` for custom delivery. The default extracted-byte limit is 64 MiB; image extraction is opt-in. `exportMarkdownFrom(session, options)` accepts the same image options and an abort signal.
 
+Set `images: { syntax: 'html' }` to emit `<img>` tags with each occurrence's displayed width and height in whole CSS pixels.
+The default `syntax: 'markdown'` emits standard image links without size attributes.
+Your renderer must support sanitized HTML and retain `width` and `height`.
+Occurrences expose exact `displayWidthPx`, `displayHeightPx`, and `kind` (`inline` or `anchored`).
+Asset `pixelWidth` and `pixelHeight` describe the image bytes, not their displayed size.
+Crop, rotation, and floating text wrapping are not reproduced.
+
 `createMarkdownZip(result)` and `toMarkdownJSON(result)` are exported from the main package. `writeMarkdownBundle(result, { directory })` comes from `/node`. See [image APIs, errors, ownership, and runnable workflows](images.md).
 
 ## Options

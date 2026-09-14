@@ -619,7 +619,8 @@ function withDefinitions(markdown: MappedMarkdown, definitions: MappedMarkdown):
 /** Translate an immutable exporter-neutral layout snapshot without retaining its producer. @public */
 export function exportMarkdownLayout(
   layout: ExportSemanticLayout,
-  assets?: readonly MarkdownImageAsset[]
+  assets?: readonly MarkdownImageAsset[],
+  imageSyntax: 'markdown' | 'html' = 'markdown'
 ): MarkdownExportResult {
   // Core export sessions always publish the array. The fallback keeps detached layouts produced
   // by older/custom hosts translatable while preserving the same empty immutable contract.
@@ -627,7 +628,7 @@ export function exportMarkdownLayout(
   const displayMode = layout.displayMode ?? 'all-markup';
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
-  const media = assets === undefined ? undefined : createMediaRendering(assets);
+  const media = assets === undefined ? undefined : createMediaRendering(assets, imageSyntax);
   const context: TranslationContext = {
     media,
     anchors: anchorProjection(

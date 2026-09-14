@@ -626,6 +626,39 @@ button {
   width: min(100%, 816px);
 }
 
+.md-page-layout {
+  display: grid;
+  align-items: start;
+  gap: 18px;
+}
+
+.md-page-review {
+  min-width: 0;
+  padding: 4px 0;
+  color: var(--md-muted);
+}
+
+.md-page-review > summary {
+  padding: 8px 0 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.md-page-review > summary > span {
+  float: right;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--md-line);
+  font-size: 11px;
+}
+
+.md-page-review > summary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--md-accent);
+  outline-offset: 3px;
+}
+
 .md-page-meta {
   display: flex;
   height: 24px;
@@ -673,6 +706,7 @@ button {
 
 .md-page-sheet {
   display: flex;
+  min-width: 0;
   min-height: min(1056px, calc((100cqw - 108px) * 1.294));
   flex-direction: column;
   padding: clamp(38px, 5.4vw, 72px) clamp(34px, 6vw, 78px);
@@ -713,8 +747,9 @@ button {
 .md-review-artifacts {
   display: grid;
   gap: 16px;
-  width: min(100%, 420px);
-  margin: 10px 0 18px auto;
+  width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .md-review-group {
@@ -732,7 +767,7 @@ button {
 .md-review-artifacts__heading {
   justify-content: space-between;
   color: #607085;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.065em;
   text-transform: uppercase;
@@ -772,7 +807,7 @@ button {
 .md-review-selection > p {
   margin: 2px 0 0;
   color: #667384;
-  font-size: 9px;
+  font-size: 11px;
   font-style: italic;
   line-height: 1.4;
 }
@@ -782,11 +817,10 @@ button {
 }
 
 .md-review-message {
-  padding: 9px 10px;
-  border: 1px solid #dbe3ec;
-  border-radius: 6px;
-  background: #fbfcfe;
-  box-shadow: 0 1px 2px rgba(28, 39, 54, 0.04);
+  padding: 12px;
+  border: 1px solid var(--md-line);
+  border-radius: 8px;
+  background: var(--md-surface);
 }
 
 .md-review-message--reply {
@@ -808,7 +842,7 @@ button {
   height: 17px;
   flex: 0 0 17px;
   place-items: center;
-  border-radius: 50% 50% 50% 2px;
+  border-radius: 50%;
   background: #376f9f;
   color: #fff;
   font-size: 8px;
@@ -821,7 +855,7 @@ button {
 
 .md-review-message strong {
   color: #344252;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -835,13 +869,13 @@ button {
 .md-review-message p {
   margin: 4px 0 0;
   color: #4e5967;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .md-review-artifacts--source {
   width: 100%;
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .md-review-source {
@@ -944,11 +978,6 @@ button {
 
 .markdown-body pre {
   border: 1px solid #e4e7eb;
-}
-
-.markdown-body img {
-  max-height: 360px;
-  object-fit: contain;
 }
 
 .md-source {
@@ -1400,5 +1429,41 @@ button {
   .md-install-command:focus-visible .md-install-copy,
   .md-install-copy[data-visible='true'] {
     opacity: 1;
+  }
+}
+
+/* Keep review UI in the workspace gutter; the paper contains document content only. */
+@container (min-width: 680px) {
+  .md-pages:has(.md-page-wrap--with-review) {
+    --md-review-width: clamp(220px, 25cqw, 280px);
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .md-pages:has(.md-page-wrap--with-review) .md-page-wrap {
+    width: min(100%, 1120px);
+  }
+
+  .md-pages:has(.md-page-wrap--with-review) .md-page-layout {
+    grid-template-columns: minmax(0, 1fr) var(--md-review-width);
+    gap: 20px;
+  }
+
+  .md-pages:has(.md-page-wrap--with-review) .md-page-meta {
+    width: calc(100% - var(--md-review-width) - 20px);
+  }
+
+  .md-pages:has(.md-page-wrap--with-review) .md-page-sheet {
+    min-height: 0;
+    aspect-ratio: 17 / 22;
+    padding: clamp(24px, 4cqw, 56px);
+  }
+
+  .md-page-review {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100dvh - 160px);
+    overflow: auto;
+    scrollbar-width: thin;
   }
 }

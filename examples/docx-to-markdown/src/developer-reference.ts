@@ -36,7 +36,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 
 const docxBytes = await readFile(${JSON.stringify(filename)});
 const result = await exportMarkdown(docxBytes, {
-  images: true,
+  images: { syntax: 'html' }, // Preserve each image's displayed size.
   fallbackFonts: googleFonts(),
 });
 

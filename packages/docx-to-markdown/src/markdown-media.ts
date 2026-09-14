@@ -1,5 +1,5 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '@docx-editor.dev/core/layout';
-import type { MarkdownImageAsset } from './media-types.ts';
+import type { MarkdownImageAsset, MarkdownImageOptions } from './media-types.ts';
 import type { MarkdownWarning } from './markdown-types.ts';
 import { escapeText } from './markdown-inline.ts';
 
@@ -17,19 +17,23 @@ export function drawingKey(drawing: Drawing): string {
 }
 
 export interface MediaRendering {
+  readonly syntax: 'markdown' | 'html';
   readonly assets: readonly MarkdownImageAsset[];
   readonly byDrawing: ReadonlyMap<string, MarkdownImageAsset>;
   readonly represented: Set<string>;
   readonly warnings: MarkdownWarning[];
 }
 
-export function createMediaRendering(assets: readonly MarkdownImageAsset[]): MediaRendering {
+export function createMediaRendering(
+  assets: readonly MarkdownImageAsset[],
+  syntax: MarkdownImageOptions['syntax'] = 'markdown'
+): MediaRendering {
   const byDrawing = new Map<string, MarkdownImageAsset>();
   for (const asset of assets)
     for (const occurrence of asset.occurrences) {
       byDrawing.set(`${occurrence.partName}\0${occurrence.drawingNodeId}`, asset);
     }
-  return { assets, byDrawing, represented: new Set(), warnings: [] };
+  return { syntax, assets, byDrawing, represented: new Set(), warnings: [] };
 }
 
 export function imageMarkdown(
@@ -48,10 +52,21 @@ export function imageMarkdown(
   if (!asset) return '';
   media.represented.add(key);
   const alt = drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? '');
+  if (media.syntax === 'html') {
+    const width = Math.round(drawing.width * (96 / 72));
+    const height = Math.round(drawing.height * (96 / 72));
+    return `<img src="${imageAttribute(asset.url)}" alt="${imageAttribute(alt)}" width="${width}" height="${height}">`;
+  }
   // Markdown decodes character references in destinations, and GFM splits raw pipes
   // before parsing inline links. Preserve the URL while protecting both syntaxes.
   const url = destination(asset.url).replace(/&/g, '&amp;').replace(/\|/g, '%7C');
   return `![${escapeText(alt.replace(/[\r\n]+/g, ' '), tableCell)}](${url})`;
+}
+
+// Escape HTML attributes and GFM table delimiters. Encode line breaks so generated
+// tags stay on one line and cannot terminate a Markdown paragraph or table cell.
+function imageAttribute(value: string): string {
+  return value.replace(/[&"<>|\r\n\\]/g, (character) => `&#${character.charCodeAt(0)};`);
 }
 
 /** One projection's pending anchors. Shared by recursive table-cell renderers only. */

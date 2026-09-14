@@ -76,3 +76,29 @@ test('partial URL allocation is cleaned if a later allocation fails', () => {
     URL.revokeObjectURL = revoke;
   }
 });
+
+test('HTML previews keep occurrence sizes through sanitization and share one blob URL', async () => {
+  const result = { media: [asset] } as unknown as MarkdownExportResult;
+  const view = render(
+    createElement(MediaPreview, {
+      result,
+      children: createElement(MarkdownBlock, {
+        children:
+          'Inline: <img src="media/image.png" alt="small" width="24" height="12"> next <img src="media/image.png" alt="banner" width="300" height="80" onerror="bad()">',
+      }),
+    })
+  );
+  try {
+    await waitFor(() => expect(view.container.querySelectorAll('img')).toHaveLength(2));
+    const [small, banner] = Array.from(view.container.querySelectorAll('img'));
+    expect(small!.src).toBe(banner!.src);
+    expect([small!.width, small!.height]).toEqual([24, 12]);
+    expect([banner!.width, banner!.height]).toEqual([300, 80]);
+    expect(small!.style.display).toBe('inline');
+    expect(banner!.style.aspectRatio).toBe('300 / 80');
+    expect(banner!.hasAttribute('onerror')).toBe(false);
+  } finally {
+    view.unmount();
+    cleanup();
+  }
+});

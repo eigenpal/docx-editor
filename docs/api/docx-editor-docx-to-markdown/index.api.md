@@ -482,9 +482,7 @@ export interface MarkdownImageData {
     // (undocumented)
     readonly occurrences: readonly MarkdownImageOccurrence[];
     readonly path: string;
-    // (undocumented)
     readonly pixelHeight: number;
-    // (undocumented)
     readonly pixelWidth: number;
 }
 
@@ -494,8 +492,11 @@ export interface MarkdownImageOccurrence {
     readonly alt: string;
     // (undocumented)
     readonly decorative: boolean;
+    readonly displayHeightPx: number;
+    readonly displayWidthPx: number;
     // (undocumented)
     readonly drawingNodeId: string;
+    readonly kind: 'inline' | 'anchored';
     // (undocumented)
     readonly pageNumber: number;
     // (undocumented)
@@ -515,6 +516,7 @@ export interface MarkdownImageOptions {
     readonly resolveUrl?: (image: MarkdownImageData, context: {
         readonly signal?: AbortSignal;
     }) => string | Promise<string>;
+    readonly syntax?: 'markdown' | 'html';
 }
 
 // @public

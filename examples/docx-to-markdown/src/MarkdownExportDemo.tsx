@@ -11,7 +11,6 @@ import {
   type ExportFontResolutionReport,
   type MarkdownComment,
   type MarkdownExportResult,
-  type MarkdownPage,
 } from '@docx-editor.dev/docx-to-markdown';
 import { BrandLogo } from '../../shared/BrandLogo';
 import {
@@ -26,10 +25,9 @@ import {
 import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
 import { DeveloperView } from './DeveloperView';
-import { MarkdownBlock } from './MarkdownBlock';
-import { PageReviewArtifacts } from './PageReviewArtifacts';
+import { MarkdownPagePreview } from './MarkdownPagePreview';
 import { markdownPageToReveal, type PreviewMode } from './preview-navigation';
-import { indexPageReviewSelections, type PageReviewSelectionIndex } from './review-presentation';
+import { indexPageReviewSelections } from './review-presentation';
 import {
   clampSplit,
   desktopSplitBounds,
@@ -102,84 +100,6 @@ function MarkdownLoadingState() {
       <Spinner />
       <span className="md-visually-hidden">Building Markdown</span>
     </div>
-  );
-}
-
-function PageField({
-  kind,
-  markdown,
-  mode,
-}: {
-  readonly kind: 'header' | 'body' | 'footer';
-  readonly markdown: string;
-  readonly mode: Exclude<PreviewMode, 'developer'>;
-}) {
-  if (!markdown && kind !== 'body') return null;
-  return (
-    <section className={`md-page-field md-page-field--${kind}`} aria-label={`${kind} Markdown`}>
-      {mode === 'rendered' ? (
-        markdown ? (
-          <MarkdownBlock>{markdown}</MarkdownBlock>
-        ) : (
-          <p className="md-page-empty">No body content on this page</p>
-        )
-      ) : (
-        <pre className="md-source">
-          <code>{markdown || ' '}</code>
-        </pre>
-      )}
-    </section>
-  );
-}
-
-function MarkdownPagePreview({
-  page,
-  commentById,
-  selectionIndex,
-  mode,
-  showHeaders,
-  showFooters,
-  showComments,
-  showTrackedChanges,
-  onRevealDocumentPage,
-}: {
-  readonly page: MarkdownPage;
-  readonly commentById: ReadonlyMap<string, MarkdownComment>;
-  readonly selectionIndex: PageReviewSelectionIndex;
-  readonly mode: Exclude<PreviewMode, 'developer'>;
-  readonly showHeaders: boolean;
-  readonly showFooters: boolean;
-  readonly showComments: boolean;
-  readonly showTrackedChanges: boolean;
-  readonly onRevealDocumentPage: (pageNumber: number) => void;
-}) {
-  const revealPage = () => onRevealDocumentPage(page.number);
-  return (
-    <article className="md-page-wrap" id={`markdown-page-${page.number}`}>
-      <div className="md-page-meta">
-        <button type="button" onClick={revealPage}>
-          <span>Page {page.number}</span>
-          <span className="md-page-meta__action">View in DOCX</span>
-        </button>
-      </div>
-      <div className="md-page-sheet">
-        {showHeaders ? (
-          <PageField kind="header" markdown={page.headerMarkdown} mode={mode} />
-        ) : null}
-        <PageField kind="body" markdown={page.markdown} mode={mode} />
-        <PageReviewArtifacts
-          page={page}
-          commentById={commentById}
-          selectionIndex={selectionIndex}
-          showComments={showComments}
-          showTrackedChanges={showTrackedChanges}
-          mode={mode}
-        />
-        {showFooters ? (
-          <PageField kind="footer" markdown={page.footerMarkdown} mode={mode} />
-        ) : null}
-      </div>
-    </article>
   );
 }
 
@@ -331,7 +251,7 @@ export function MarkdownExportDemo() {
       setExportView((current) => ({ ...current, status: 'exporting', error: null }));
       try {
         const result = await exportMarkdown(bytes, {
-          images: true,
+          images: { syntax: 'html' },
           fallbackFonts: GOOGLE_FONT_FALLBACK,
           resourceTimeoutMs: 30_000,
           signal: controller.signal,

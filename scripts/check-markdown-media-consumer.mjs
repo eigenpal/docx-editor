@@ -63,6 +63,10 @@ async function main() {
   assert.equal(result.media.length, 1);
   assert.equal(result.media[0]!.byteLength, 789);
   assert.ok(result.markdown.includes('!['));
+  const sized = await api.exportMarkdown(await readFile('input.docx'), { images: { syntax: 'html' } });
+  assert.ok(sized.markdown.includes('<img '));
+  assert.ok(sized.markdown.includes('width="' + Math.round(sized.media[0]!.occurrences[0]!.displayWidthPx) + '"'));
+  assert.ok(sized.media[0]!.occurrences[0]!.displayHeightPx > 0);
   assert.ok((await api.createMarkdownZip(result)).length > 789);
   assert.ok((await api.createMarkdownZip({ ...result, markdown: 'Large ZIP payload\\n'.repeat(20000) })).length > 789);
   assert.ok(!('bytes' in api.toMarkdownJSON(result).media[0]!));

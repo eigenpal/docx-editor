@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MarkdownComment, MarkdownPage } from '@docx-editor.dev/docx-to-markdown';
+import { MarkdownPagePreview } from './MarkdownPagePreview';
 import { PageReviewArtifacts } from './PageReviewArtifacts';
 import { indexPageReviewSelections } from './review-presentation';
 
@@ -79,3 +80,42 @@ describe('PageReviewArtifacts', () => {
     }
   );
 });
+
+test.each(['rendered', 'source'] as const)(
+  'page review stays outside the document paper in %s mode',
+  (mode) => {
+    const root = comment('root', undefined, []);
+    const page: MarkdownPage = {
+      id: 'page-1',
+      number: 1,
+      markdown: 'Body content',
+      headerMarkdown: 'Header content',
+      footerMarkdown: 'Footer content',
+      comments: [root],
+      trackedChanges: [],
+    };
+    const preview = (showComments: boolean) =>
+      renderToStaticMarkup(
+        <MarkdownPagePreview
+          page={page}
+          commentById={new Map([[root.id, root]])}
+          selectionIndex={indexPageReviewSelections([page], [])}
+          mode={mode}
+          showHeaders
+          showFooters
+          showComments={showComments}
+          showTrackedChanges
+          onRevealDocumentPage={() => {}}
+        />
+      );
+    const document = new DOMParser().parseFromString(preview(true), 'text/html');
+    const paper = document.querySelector('.md-page-sheet')!;
+    const review = document.querySelector('details')!;
+    expect(paper.textContent).toContain('Footer content');
+    expect(paper.textContent).not.toContain('root text');
+    expect(review.textContent).toContain('root text');
+    expect(review.parentElement).toBe(paper.parentElement);
+    expect(review.querySelector('summary')?.textContent).toContain('Review · Page 1');
+    expect(preview(false)).not.toContain('<details');
+  }
+);

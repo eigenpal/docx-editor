@@ -370,7 +370,7 @@ export async function exportMarkdownFrom(
   checkExportAbort(options.signal);
   const data = extractMedia(layout, session, images);
   const media = images ? await resolveMedia(data, options) : undefined;
-  const result = translateMarkdownLayout(layout, media);
+  const result = translateMarkdownLayout(layout, media, images?.syntax);
   return withFontResolution(
     result,
     'fontResolution' in session
@@ -411,7 +411,7 @@ export async function exportMarkdown(
     opened.session.dispose();
   }
   const result = images
-    ? translateMarkdownLayout(layout, await resolveMedia(data, options))
+    ? translateMarkdownLayout(layout, await resolveMedia(data, options), images.syntax)
     : translateMarkdownLayout(layout);
   return withFontResolution(result, opened.session.fontResolution);
 }

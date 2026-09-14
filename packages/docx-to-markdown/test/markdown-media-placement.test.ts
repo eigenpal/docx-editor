@@ -41,6 +41,8 @@ function anchor(id: string, start: number, sourceOrder = 1): AnchoredDrawingReco
     ownerPartName: partName,
     start,
     sourceOrder,
+    width: 12,
+    height: 6,
     accessibility: { hidden: false, decorative: false, label: id },
     resource: { kind: 'ready' },
   } as unknown as AnchoredDrawingRecord;
@@ -63,62 +65,73 @@ function asset(ids: readonly string[]): MarkdownImageAsset {
       rootStory: 'body',
       paragraphId: 'p',
       start: 2,
+      displayWidthPx: 16,
+      displayHeightPx: 16,
+      kind: 'anchored',
       decorative: false,
       alt: drawingNodeId,
     })),
   };
 }
 
-test('mid-span anchors preserve bold, split hyperlinks, and retain exact text source offsets', () => {
-  const fragment = paragraph('ABCD');
-  const layout = {
-    revision: 1,
-    displayMode: 'original',
-    pages: [
-      { id: 'page', index: 0, fragments: [fragment], anchoredDrawings: [anchor('image', 2)] },
-    ],
-    reviewArtifacts: [
-      {
-        kind: 'comment',
-        id: 'comment',
-        author: 'Ada',
-        initials: 'AL',
-        text: 'Check D',
-        resolved: false,
-        replyIds: [],
-        orphaned: false,
-        occurrences: [
-          {
-            pageIndex: 0,
-            physicalPageNumber: 1,
-            story: 'body',
-            rootStory: 'body',
-            textboxPath: [],
-            noteScopeId: null,
-            noteAreaKind: null,
-            source: {
-              partName,
-              start: { paragraphId: 'p', offset: 3 },
-              end: { paragraphId: 'p', offset: 4 },
+test.each(['markdown', 'html'] as const)(
+  'mid-span anchors preserve bold, links, and exact source offsets with %s images',
+  (syntax) => {
+    const fragment = paragraph('ABCD');
+    const layout = {
+      revision: 1,
+      displayMode: 'original',
+      pages: [
+        { id: 'page', index: 0, fragments: [fragment], anchoredDrawings: [anchor('image', 2)] },
+      ],
+      reviewArtifacts: [
+        {
+          kind: 'comment',
+          id: 'comment',
+          author: 'Ada',
+          initials: 'AL',
+          text: 'Check D',
+          resolved: false,
+          replyIds: [],
+          orphaned: false,
+          occurrences: [
+            {
+              pageIndex: 0,
+              physicalPageNumber: 1,
+              story: 'body',
+              rootStory: 'body',
+              textboxPath: [],
+              noteScopeId: null,
+              noteAreaKind: null,
+              source: {
+                partName,
+                start: { paragraphId: 'p', offset: 3 },
+                end: { paragraphId: 'p', offset: 4 },
+              },
             },
-          },
-        ],
-      },
-    ],
-  } as unknown as ExportSemanticLayout;
-  const result = exportMarkdownLayout(layout, [asset(['image'])]);
-  expect(result.markdown).toBe(
-    '[**AB**](https://example.test)![image](/image.png)[**CD**](https://example.test)'
-  );
-  expect(fragment.lines[0]!.spans[0]!.text).toBe('ABCD');
-  for (const binding of result.reviewBindings) {
-    expect(
-      binding.ranges.map((range) => result.markdown.slice(range.start, range.end)).join('')
-    ).toBe('D');
-    expect(binding.ranges.every((range) => range.precision === 'exact')).toBe(true);
+          ],
+        },
+      ],
+    } as unknown as ExportSemanticLayout;
+    const result = exportMarkdownLayout(layout, [asset(['image'])], syntax);
+    const image =
+      syntax === 'html'
+        ? '<img src="/image.png" alt="image" width="16" height="8">'
+        : '![image](/image.png)';
+    expect(result.markdown).toBe(
+      `[**AB**](https://example.test)${image}[**CD**](https://example.test)`
+    );
+    expect(result.reviewBindings.length).toBeGreaterThan(0);
+    expect(fragment.lines[0]!.spans[0]!.text).toBe('ABCD');
+    for (const binding of result.reviewBindings) {
+      expect(
+        binding.ranges.map((range) => result.markdown.slice(range.start, range.end)).join('')
+      ).toBe('D');
+      expect(binding.ranges.every((range) => range.precision === 'exact')).toBe(true);
+    }
+    expect(result.warnings).toEqual([]);
   }
-  expect(result.warnings).toEqual([]);
-});
+);
 
 test('same-offset anchors use source order and render once', () => {
   const layout = {
