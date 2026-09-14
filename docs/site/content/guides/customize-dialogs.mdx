@@ -227,13 +227,25 @@ show an error; Cancel discards the draft. No separate session or opening state i
 
 ## Style and accessibility
 
-Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors.
-Optional tokens are `--doc-dialog-font-family`, `--doc-dialog-font-size`,
-`--doc-dialog-radius`, `--doc-dialog-padding`, and `--doc-dialog-gap`.
+Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors,
+so a dark editor gets a dark dialog. The default look follows Word and Google Docs:
+a white panel, bordered inputs, a filled primary button, and an outlined secondary one.
+
+Optional tokens adjust the panel without replacing any part:
+
+| Token                      | Controls                                                |
+| -------------------------- | ------------------------------------------------------- |
+| `--doc-dialog-font-family` | The panel font stack.                                   |
+| `--doc-dialog-font-size`   | The base size. Titles, labels, and hints scale from it. |
+| `--doc-dialog-radius`      | The panel corner radius. Inputs and buttons keep `4px`. |
+| `--doc-dialog-padding`     | The inline inset of the header, body, and footer.       |
+| `--doc-dialog-gap`         | The vertical distance between rows and sections.        |
 
 Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
 `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
-For example, style your replacement without `!important`:
+Every default rule has two-class specificity, such as `.docx-editor .docx-dialog__button`,
+so it survives element resets like Tailwind preflight. To override a part, anchor
+your selector with `.docx-editor` and style your replacement without `!important`:
 
 ```css
 .docx-editor [data-docx-dialog='pageSetup'] .app-apply {
@@ -241,6 +253,8 @@ For example, style your replacement without `!important`:
   padding-inline: 1.25rem;
 }
 ```
+
+A selector with one class, such as `.app-apply` alone, loses to the defaults.
 
 Automatic dialogs inherit their editor's theme. For external portals or Vue
 `Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance.

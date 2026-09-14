@@ -24,7 +24,8 @@
   --doc-primary-hover: #115b34;
   --doc-dialog-radius: 4px;
 }
-.brand-dialog-button {
+/* Anchored to `.docx-editor` so it outranks the packaged two-class defaults. */
+.docx-editor .brand-dialog-button {
   border: 0;
   border-radius: 6px;
   background: var(--doc-primary);
