@@ -40,7 +40,8 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 // is a floor. `allow` narrows it further.
 function Editor({ bytes }: { bytes: Uint8Array }) {
   // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
-  // its identity changes, and an inline resolver is a new function on every render; `useFonts` keeps one for the component's life.
+  // its identity changes. An inline resolver is a new function on every render.
+  // `useFonts` keeps one for the component's life.
   const fonts = useFonts(packagedFonts({ install: false }));
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
@@ -68,7 +69,6 @@ const editor = createDocxEditor({ document: bytes, fonts });
 ## Font registration
 
 `defaultFonts()` and `packagedFonts()` register public CSS font names by default.
-This preserves existing behavior. No migration is required.
 
 For editor use, set `install: false` on either loader. The editor registers the
 supplied bytes under private aliases. This keeps native fonts available for glyphs
