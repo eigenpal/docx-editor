@@ -28,6 +28,29 @@ function savedRoom(): Y.Doc {
   return doc;
 }
 
+test.each([
+  'collaboration-format-mismatch',
+  'protocol-version-mismatch',
+  'schema-version-mismatch',
+] as const)(
+  '%s includes actionable upgrade guidance without changing diagnostic fields',
+  (code) => {
+    const error = new CollaborationSchemaError(code, 'version diagnostic');
+    expect(error.code).toBe(code);
+    expect(error.detail).toBe('version diagnostic');
+    expect(error.message).toContain('Collaboration upgrade required');
+    expect(error.message).toContain('Save local changes');
+    expect(error.message).toContain(
+      'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions'
+    );
+  }
+);
+
+test('unrelated failures do not suggest a collaboration migration', () => {
+  const error = new CollaborationSchemaError('initialization-timeout', 'No response');
+  expect(error.message).toBe('initialization-timeout: No response');
+});
+
 test('the public format version survives a JSON handshake', () => {
   const { version } = JSON.parse(JSON.stringify({ version: COLLABORATION_FORMAT_VERSION }));
   expect(() => assertCollaborationFormatCompatibility(version)).not.toThrow();

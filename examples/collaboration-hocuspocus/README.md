@@ -85,7 +85,7 @@ Upgrade the app, room server, and export workers together, then reload every ope
 Clients that still advertise a different collaboration format version will be refused before sync.
 
 For saved rooms and offline work, follow the
-[collaboration upgrade guide](https://docx-editor.dev/docs/2.x/pro/collaboration-versions).
+[collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions).
 Pause editing and preserve pending work before exporting with the compatible previous build.
 Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
 

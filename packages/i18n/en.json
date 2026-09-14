@@ -827,6 +827,7 @@
     "guest": "Guest",
     "caretPages": "{count, plural, one {# page} other {# pages}}",
     "serverRecovery": {
+      "upgradeGuide": "Read the collaboration upgrade guide",
       "versionTitle": "This room needs a compatible app version.",
       "versionBody": "Save a copy of any local changes first. Update the app and room server to compatible builds, then reload every open tab. For an older saved room, export its DOCX using the matching older build and open that file in a new room. Keep the saved room until its content has been recovered.",
       "timeoutTitle": "Room synchronization did not finish.",

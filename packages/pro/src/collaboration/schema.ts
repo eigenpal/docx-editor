@@ -34,13 +34,30 @@ export interface CollaborationSchema {
   readonly paragraphs: Y.Map<Y.Text>;
 }
 
-/** Typed collaboration schema or trust-boundary failure. @public */
+const COLLABORATION_UPGRADE_GUIDE_URL =
+  'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions';
+
+/**
+ * Typed collaboration schema or trust-boundary failure.
+ * Version-mismatch messages include recovery guidance and a documentation link.
+ * Use `code` for application logic; `detail` remains diagnostic information.
+ * @public
+ */
 export class CollaborationSchemaError extends Error {
   constructor(
     readonly code: CollaborationFailureCode,
     readonly detail?: string
   ) {
-    super(detail ? `${code}: ${detail}` : code);
+    const versionMismatch =
+      code === 'collaboration-format-mismatch' ||
+      code === 'protocol-version-mismatch' ||
+      code === 'schema-version-mismatch';
+    const diagnostic = detail ? `${code}: ${detail}` : code;
+    super(
+      versionMismatch
+        ? `${diagnostic}\nCollaboration upgrade required. Save local changes and use a compatible app version, or upgrade the saved room. See ${COLLABORATION_UPGRADE_GUIDE_URL}`
+        : diagnostic
+    );
     this.name = 'CollaborationSchemaError';
   }
 }

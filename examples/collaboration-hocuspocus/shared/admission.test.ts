@@ -111,6 +111,10 @@ describe('demo version recovery', () => {
       expect(direct.body).toContain('matching older build');
       expect(direct.body).toContain('Keep the saved room');
       expect(direct.body).toContain('Save a copy of any local changes first');
+      expect(direct.documentation).toEqual({
+        url: 'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions',
+        label: 'Read the collaboration upgrade guide',
+      });
     });
   }
   test('old clients get upgrade recovery instead of a token error', () => {

@@ -7,6 +7,7 @@ export interface DemoFailureMessage {
   readonly title: string;
   readonly body: string;
   readonly command?: string;
+  readonly documentation?: { readonly url: string; readonly label: string };
 }
 
 /** English copy for this demo's recovery screen, shared with its admission tests. */
@@ -23,6 +24,10 @@ export function failureMessage(
     return {
       title: t('collaborationDemo.serverRecovery.versionTitle'),
       body: t('collaborationDemo.serverRecovery.versionBody'),
+      documentation: {
+        url: 'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions',
+        label: t('collaborationDemo.serverRecovery.upgradeGuide'),
+      },
     };
   }
   if (failure.code === 'saved-room-unavailable' || failure.code === 'invalid-saved-room') {

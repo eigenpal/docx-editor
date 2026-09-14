@@ -219,6 +219,12 @@ original room.
 Use the failure's `code` for application logic. Keep `detail` in diagnostic logs;
 show users an action they can take.
 
+A thrown `CollaborationSchemaError` for a version mismatch includes recovery
+instructions and this guide's URL in its `message`. Framework hooks expose a
+structured failure through `error`; render your own message and a link to
+[the collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions).
+Open the guide in a separate tab so users can keep their local document available.
+
 | Where compatibility fails                    | Suggested message                                                                                       | Application action                                                                                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | A client is refused before synchronization   | “This app version cannot join the document. Save any local work, then open the compatible app version.” | Offer the correct deployment link. If that deployment is already active, offer a reload after saving local work. |
@@ -236,7 +242,7 @@ reloading or replacing its session. Keep the copy if reconnection fails.
 Rejoining uses the room's document; it does not merge the saved local copy.
 
 For other failures, see
-[Recover a diverged replica](/docs/2.x/pro/collaboration#recover-a-diverged-replica).
+[Recover a diverged replica](/docs/latest/pro/collaboration#recover-a-diverged-replica).
 
 ## Preserve offline work across upgrades
 
