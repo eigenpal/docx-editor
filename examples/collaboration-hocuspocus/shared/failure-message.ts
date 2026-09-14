@@ -15,28 +15,17 @@ export function failureMessage(
   connection: { readonly serverUrl: string; readonly serverCommand: string },
   t: TFunction = english
 ): DemoFailureMessage {
-  const admissionCode =
-    failure.code === 'initialization-aborted'
-      ? /^authentication failed: (protocol-version-mismatch|schema-version-mismatch|collaboration-version-required)$/.exec(
-          failure.detail ?? ''
-        )?.[1]
-      : undefined;
   if (
+    failure.code === 'collaboration-format-mismatch' ||
     failure.code === 'protocol-version-mismatch' ||
-    failure.code === 'schema-version-mismatch' ||
-    admissionCode
+    failure.code === 'schema-version-mismatch'
   ) {
     return {
       title: t('collaborationDemo.serverRecovery.versionTitle'),
       body: t('collaborationDemo.serverRecovery.versionBody'),
     };
   }
-  if (
-    failure.code === 'initialization-aborted' &&
-    /^authentication failed: (saved-room-unavailable|invalid-saved-room)$/.test(
-      failure.detail ?? ''
-    )
-  ) {
+  if (failure.code === 'saved-room-unavailable' || failure.code === 'invalid-saved-room') {
     return {
       title: t('collaborationDemo.serverRecovery.savedRoomTitle'),
       body: t('collaborationDemo.serverRecovery.savedRoomBody'),
@@ -49,17 +38,14 @@ export function failureMessage(
       command: connection.serverCommand,
     };
   }
-  if (failure.code === 'initialization-aborted') {
+  if (failure.code === 'initialization-aborted' || failure.code === 'authentication-failed') {
     return {
-      title: 'The room server refused the connection.',
-      body:
-        failure.detail === 'authentication failed: invalid token' || !failure.detail
-          ? t('collaborationDemo.serverRecovery.tokenBody')
-          : failure.detail,
+      title: t('collaborationDemo.connectFailed'),
+      body: t('collaborationDemo.serverRecovery.tokenBody'),
     };
   }
   return {
-    title: 'Could not join the room.',
-    body: failure.detail ?? `The room reported ${failure.code}. Reload to try again.`,
+    title: t('collaborationDemo.connectFailed'),
+    body: t('collaborationDemo.serverRecovery.generalBody'),
   };
 }

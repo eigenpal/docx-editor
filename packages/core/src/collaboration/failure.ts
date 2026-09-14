@@ -44,6 +44,7 @@ export type CollaborationFailureCode =
   | 'blob-read'
   | 'blob-store-full'
   | 'blob-too-large'
+  | 'collaboration-format-mismatch'
   | 'collaboration-session-destroyed'
   | 'collaboration-session-not-attached'
   | 'collaboration-session-not-ready'
@@ -67,6 +68,7 @@ export type CollaborationFailureCode =
   | 'invalid-identity-color'
   | 'invalid-logical-id'
   | 'invalid-relationships'
+  | 'invalid-saved-room'
   | 'invalid-session-id'
   | 'invalid-shared-metadata'
   | 'invalid-string'
@@ -82,6 +84,7 @@ export type CollaborationFailureCode =
   | 'protocol-version-mismatch'
   | 'prototype-key'
   | 'remote-apply-failed'
+  | 'saved-room-unavailable'
   | 'schema-version-mismatch'
   | 'shared-schema-invalid'
   | 'text-too-long'
@@ -107,6 +110,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'blob-read': true,
   'blob-store-full': true,
   'blob-too-large': true,
+  'collaboration-format-mismatch': true,
   'collaboration-session-destroyed': true,
   'collaboration-session-not-attached': true,
   'collaboration-session-not-ready': true,
@@ -130,6 +134,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'invalid-identity-color': true,
   'invalid-logical-id': true,
   'invalid-relationships': true,
+  'invalid-saved-room': true,
   'invalid-session-id': true,
   'invalid-shared-metadata': true,
   'invalid-string': true,
@@ -145,6 +150,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'protocol-version-mismatch': true,
   'prototype-key': true,
   'remote-apply-failed': true,
+  'saved-room-unavailable': true,
   'schema-version-mismatch': true,
   'shared-schema-invalid': true,
   'text-too-long': true,

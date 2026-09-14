@@ -53,6 +53,7 @@
     "pro/custom-nodes",
     "pro/custom-nodes-reference",
     "pro/collaboration",
+    "pro/collaboration-versions",
     "---Editing API---",
     "editor-api/index",
     "editor-api/runtime",

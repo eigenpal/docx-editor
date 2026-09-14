@@ -31,7 +31,7 @@ for (const version of [2, DOCUMENT_COLLABORATION_VERSIONS.sharedSchemaVersion + 
       live.getMap('sentinel').set('value', 'unchanged');
       const before = Y.encodeStateAsUpdate(live);
       authenticateDemoToken(encodeDemoToken('secret'), 'secret');
-      expect(() => loadStoredDemoDocument(live, bytes)).toThrow('schema-version-mismatch');
+      expect(() => loadStoredDemoDocument(live, bytes)).toThrow('collaboration-format-mismatch');
       expect(Y.encodeStateAsUpdate(live)).toEqual(before);
       expect(bytes).toEqual(originalBytes);
     } finally {

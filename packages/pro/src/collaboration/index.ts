@@ -46,3 +46,8 @@ export {
   assertDocumentCollaborationCompatibility,
   type DocumentCollaborationVersions,
 } from './document-compatibility.ts';
+export {
+  COLLABORATION_FORMAT_VERSION,
+  assertCollaborationFormatCompatibility,
+  readCollaborationFormatVersion,
+} from './document-format.ts';
