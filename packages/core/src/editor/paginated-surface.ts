@@ -4061,10 +4061,23 @@ export function mountPaginatedSurface(
       if (!className) continue;
       // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
       // covering several sites, so the author comes from the decision, as the class does.
-      const item = byKey.get(rect.key.split(RANGE_SUFFIX)[0]!);
+      const decision = rect.key.split(RANGE_SUFFIX)[0]!;
+      const item = byKey.get(decision);
       const name = item ? reviewItemAuthor(item) : null;
       const reviewAuthor = name === null || name === '' ? undefined : roster.resolved.get(name);
-      bands.push({ ...rect, className, ...(reviewAuthor ? { reviewAuthor } : {}) });
+      // The author's own active background, on the OPEN revision's band only. The active
+      // test repeats the class's — the decision, not the site — so a multi-range decision
+      // tints every range it covers, and a comment band never takes a revision field.
+      const activeBackground =
+        item?.kind === 'revision' && active !== null && decision === reviewItemKey(active)
+          ? reviewAuthor?.style?.activeBackground
+          : undefined;
+      bands.push({
+        ...rect,
+        className,
+        ...(reviewAuthor ? { reviewAuthor } : {}),
+        ...(activeBackground !== undefined ? { activeBackground } : {}),
+      });
     }
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
       scale,

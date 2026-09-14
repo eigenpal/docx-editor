@@ -26,6 +26,7 @@ export const DocxEditorAuthorStyle = defineComponent({
     author: { type: String, required: true },
     color: { type: String, default: undefined },
     background: { type: String, default: undefined },
+    activeBackground: { type: String, default: undefined },
     spanClassName: { type: String, default: undefined },
     avatarUrl: { type: String, default: undefined },
   },
@@ -38,13 +39,15 @@ export const DocxEditorAuthorStyle = defineComponent({
           props.author,
           props.color,
           props.background,
+          props.activeBackground,
           props.spanClassName,
           props.avatarUrl,
         ] as const,
-      ([author, color, background, spanClassName, avatarUrl]) => {
+      ([author, color, background, activeBackground, spanClassName, avatarUrl]) => {
         registry?.register(id, author, {
           ...(color !== undefined ? { color } : {}),
           ...(background !== undefined ? { background } : {}),
+          ...(activeBackground !== undefined ? { activeBackground } : {}),
           ...(spanClassName !== undefined ? { spanClassName } : {}),
           ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         });

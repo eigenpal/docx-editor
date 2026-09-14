@@ -12,6 +12,7 @@ export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
 export interface OverlayRect {
+    readonly activeBackground?: string;
     readonly className?: string;
     // (undocumented)
     readonly height: number;
@@ -80,6 +81,7 @@ export interface RevisionAuthorAssignments {
 
 // @public
 export interface RevisionAuthorStyle {
+    activeBackground?: string;
     avatarUrl?: string;
     background?: string;
     color?: string;
