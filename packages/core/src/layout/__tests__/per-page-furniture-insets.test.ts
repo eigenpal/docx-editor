@@ -244,16 +244,20 @@ describe('convergence tail shift over a page-0 that differs from its neighbours'
   const base = {
     titlePage: false,
     continuedInsets: false,
+    firstPageBorders: false,
     evenAndOddHeaders: false,
     parityDependent: false,
     usedPageParity: false,
     hasNoteReserves: false,
     hasExclusionZones: false,
   };
-  // The two reasons index 0 resolves a box its neighbours do not.
+  // The three reasons index 0 differs from its neighbours. The third is not a content box:
+  // a `w:pgBorders` frame filtered by `w:display` is drawn — or not drawn — according to
+  // whether the sheet IS page 0, so a remapped tail carries the wrong frame across it.
   const reasons = [
     ['a title-page variant', { titlePage: true }],
     ['a continued host sheet', { continuedInsets: true }],
+    ['a first-page-filtered page border', { firstPageBorders: true }],
   ] as const;
 
   for (const [reason, special] of reasons) {
