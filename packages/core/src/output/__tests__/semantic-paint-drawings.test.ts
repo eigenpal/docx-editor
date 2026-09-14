@@ -261,9 +261,17 @@ describe('paints validated raster records', () => {
     );
     const element = paintRecord(drawing, fakeUrlPort().port);
     const frame = element.querySelector('.docx-drawing-image-frame') as HTMLElement;
-    expect(frame.style.filter).toContain('grayscale(1)');
-    expect(frame.style.filter).toContain('brightness(');
-    expect(frame.style.filter).toContain('contrast(');
+    expect(frame.style.filter).toBe('grayscale(1) contrast(0.625) brightness(0.48)');
+  });
+
+  test('washout lum keeps a white background white', () => {
+    const drawing = readyRecordFromXml(
+      inlinePictureXml({ lum: '<a:lum bright="70001" contrast="-70000"/>' })
+    );
+    const element = paintRecord(drawing, fakeUrlPort().port);
+    const frame = element.querySelector('.docx-drawing-image-frame') as HTMLElement;
+    // contrast() first keeps white inside [0, 1]; brightness() then lifts it back to 1.
+    expect(frame.style.filter).toBe('contrast(0.157067) brightness(1.910013)');
   });
 
   test('uses descr for aria-label and never name', () => {

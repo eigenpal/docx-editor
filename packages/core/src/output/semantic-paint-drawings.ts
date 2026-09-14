@@ -10,6 +10,7 @@ import type {
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { applyDrawingBilevelFilter } from './drawing-bilevel-filter.ts';
+import { drawingFilterStyle } from './drawing-lum-filter.ts';
 import type { DrawingPoint } from '../layout/drawing-geometry.ts';
 import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
 import type {
@@ -236,21 +237,6 @@ function imagePaintTransformStyle(
   });
 }
 
-function filterStyleOf(drawing: InlineDrawingRecord | AnchoredDrawingRecord): string | undefined {
-  const { effects } = drawing;
-  const parts: string[] = [];
-  if (effects.grayscale) parts.push('grayscale(1)');
-  if (effects.brightness !== 0 && Number.isFinite(effects.brightness)) {
-    const factor = 1 + effects.brightness / 100;
-    if (Number.isFinite(factor)) parts.push(`brightness(${finiteStyle(Math.max(0, factor))})`);
-  }
-  if (effects.contrast !== 0 && Number.isFinite(effects.contrast)) {
-    const factor = 1 + effects.contrast / 100;
-    if (Number.isFinite(factor)) parts.push(`contrast(${finiteStyle(Math.max(0, factor))})`);
-  }
-  return parts.length > 0 ? parts.join(' ') : undefined;
-}
-
 function cropImageStyles(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   resource: Extract<InlineDrawingRecord['resource'], { kind: 'ready' }>
@@ -367,7 +353,7 @@ function readyImagePaintSignature(
     content.width,
     content.height,
     cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], paint) ?? '',
-    filterStyleOf(drawing) ?? '',
+    drawingFilterStyle(drawing.effects) ?? '',
     drawing.effects.bilevel ?? '',
     imagePaintTransformStyle(drawing) ?? '',
     crop.width,
@@ -453,7 +439,7 @@ function paintReadyImage(
   inner.style.width = `${content.width * ctx.scale}px`;
   inner.style.height = `${content.height * ctx.scale}px`;
 
-  const filter = filterStyleOf(drawing);
+  const filter = drawingFilterStyle(drawing.effects);
   if (filter) inner.style.filter = filter;
 
   const transformStage = document.createElement('div');

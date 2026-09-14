@@ -11,11 +11,12 @@ export interface DrawingImageEffects {
   readonly bilevel?: number;
 }
 
+/** ST_FixedPercentage in 1/1000 %: `70001` reads as `70.001`, clamped to Word's [-100, 100]. */
 function parseLumPercent(value: string | undefined): number | null {
   if (value === undefined || !/^-?\d+$/.test(value)) return null;
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) return null;
-  return parsed / 1000;
+  return Math.max(-100, Math.min(100, parsed / 1000));
 }
 
 /** Bounded picture colour modes; projection never rewrites source media. */
