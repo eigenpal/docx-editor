@@ -5746,7 +5746,16 @@ export function mountPaginatedSurface(
     // it into view — to its top. The first click anywhere in a long document therefore
     // threw the reader back to page 1 before the caret it had just placed could be seen.
     // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
-    focus: () => pagesLayer.focus({ preventScroll: true }),
+    focus: () => {
+      // An already-focused surface may have a newer native selection or active IME
+      // composition. A redundant focus request must not overwrite either with the model.
+      if (document.activeElement === pagesLayer) return;
+      pagesLayer.focus({ preventScroll: true });
+      // Returning from a toolbar input can place the browser caret at the document's
+      // start. Restore the saved model range before selectionchange adopts that caret
+      // and follows it into view (including when no formatting command was executed).
+      selectionSync.mirrorToDom(true);
+    },
     setTableInteractionLabel(resolver) {
       tableLabelState.resolve = resolver;
     },

@@ -7,7 +7,6 @@ import {
   sameZoomMode,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -43,11 +42,6 @@ function parseTypedSize(text: string): number | null {
   const halfPoints = Math.round(points * 2);
   if (halfPoints < MIN_HALF_POINTS || halfPoints > MAX_HALF_POINTS) return null;
   return halfPoints;
-}
-
-function editorFocus(from: HTMLElement | null): void {
-  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
-  root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }
 
 const StepperShell = defineComponent({
@@ -130,7 +124,7 @@ export const ToolbarFontSize = defineComponent({
       open.value = false;
       draft.value = null;
       inputRef.value?.blur();
-      if (refocus) editorFocus(rootRef.value);
+      if (refocus) editorRef.value?.focus();
     };
 
     watch(open, (isOpen, _, onCleanup) => {
