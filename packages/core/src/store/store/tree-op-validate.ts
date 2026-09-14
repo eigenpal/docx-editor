@@ -46,6 +46,16 @@ import {
 } from './tree-op-nodes.ts';
 import { checkboxContentWritable, isInlineControl } from './content-control-checkbox.ts';
 import { valueContentWritable } from './content-control-value-content.ts';
+
+/** Control types whose value is display text, so a text-like write lands in their content. */
+const TEXT_VALUE_TYPES: ReadonlySet<ReturnType<typeof contentControlValueTypeOf>> = new Set([
+  'text',
+  'richText',
+  'other',
+  'dropdown',
+  'combo',
+  'date',
+]);
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import {
   validateTableRowOp,
@@ -285,14 +295,16 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (control.kind !== 'contentControl') return 'not-a-content-control';
     // After the type question, which the applier answers with `typeMismatch`: only a checkbox
     // control's content shape decides whether a checkbox value can be written in place.
+    // Only after the type question, which the applier answers with `typeMismatch`: the content
+    // shape decides whether a value the control's type accepts can be written in place.
     if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
+      const type = contentControlValueTypeOf(control);
       const inline = isInlineControl(part, control.id);
       const content = contentControlContentOf(control);
-      const checkbox = contentControlValueTypeOf(control) === 'checkbox';
       const writable =
         op.value.kind === 'checkbox'
-          ? !checkbox || checkboxContentWritable(content, inline)
-          : checkbox || valueContentWritable(content, inline);
+          ? type !== 'checkbox' || checkboxContentWritable(content, inline)
+          : !TEXT_VALUE_TYPES.has(type) || valueContentWritable(content, inline);
       if (!writable) return 'unsupported';
     }
     if (op.op === 'setContentControlProperties') {

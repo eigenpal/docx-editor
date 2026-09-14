@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test';
-import { contentControlsIn, readOoxmlPart, serializeOoxmlPart, type OoxmlPart } from '../index.ts';
+import {
+  contentControlsIn,
+  readOoxmlPart,
+  serializeOoxmlPart,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '../index.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
 import { validateTreeOp } from '../store/tree-op-validate.ts';
 import type { TreeDocOp } from '../store/tree-op-types.ts';
@@ -55,6 +61,21 @@ function load(body: string): OoxmlPart {
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   return parsed.part;
+}
+
+function firstParagraphId(part: OoxmlPart): string {
+  const find = (node: OoxmlNode): string | undefined => {
+    if (node.kind === 'textValue') return undefined;
+    if (node.kind === 'paragraph') return node.id;
+    for (const child of node.children) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  const id = find(part.root);
+  if (!id) throw new Error('no paragraph');
+  return id;
 }
 
 function write(part: OoxmlPart, kind: Kind, input: 'string' | 'typed'): string {
@@ -164,6 +185,159 @@ for (const input of ['string', 'typed'] as const) {
     expect(xml.match(/<w:tc>/g)).toHaveLength(2);
     expect(xml).toContain('<w:tcBorders>');
     expect(xml).toContain('<w:t>new</w:t>');
+  });
+
+  test(`text ${input} writes refuse a nested block control they cannot write, not flatten it`, () => {
+    // The nested control's paragraph holds an equation, so no value can stand in for it. The
+    // refusal must come back through the outer control instead of the inline fallback deleting
+    // the nested control and leaving a bare run at block level.
+    const nested =
+      '<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent><w:p><m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x</m:t></m:r></m:oMath><w:r><w:t>old</w:t></w:r></w:p></w:sdtContent></w:sdt>';
+    const part = load(control('text', nested));
+    const before = serializeOoxmlPart(part);
+    const node = contentControlsIn(part.root)[0]!.node;
+    const op = {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp;
+    expect(validateTreeOp(part, op)).toBe('unsupported');
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+    expect(serializeOoxmlPart(part)).toBe(before);
+  });
+
+  test(`text ${input} writes refuse an empty nested block control rather than dropping it`, () => {
+    const nested = '<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent/></w:sdt>';
+    const part = load(control('text', nested));
+    const node = contentControlsIn(part.root)[0]!.node;
+    const op = {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp;
+    expect(validateTreeOp(part, op)).toBe('unsupported');
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+  });
+
+  test(`text ${input} writes refuse a table beside the display paragraph`, () => {
+    // Keeping the table would leave the control's text different from the value written;
+    // dropping it is the data loss this walk exists to stop. Either order refuses.
+    const nestedTable = table(row(cell('<w:p><w:r><w:t>cell</w:t></w:r></w:p>')));
+    for (const body of [paragraph(run) + nestedTable, nestedTable + paragraph(run)]) {
+      const part = load(control('text', body));
+      const before = serializeOoxmlPart(part);
+      const node = contentControlsIn(part.root)[0]!.node;
+      const op = {
+        op: 'setContentControlValue',
+        controlId: node.id,
+        value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+      } as TreeDocOp;
+      expect(validateTreeOp(part, op)).toBe('unsupported');
+      expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+      expect(serializeOoxmlPart(part)).toBe(before);
+    }
+  });
+
+  test(`text ${input} writes prefer the paragraph with live text and take its face`, () => {
+    const empty = '<w:p><w:pPr><w:pStyle w:val="Empty"/></w:pPr></w:p>';
+    const xml = write(
+      load(table(row(control('text', cell(empty + paragraph(run)))))),
+      'text',
+      input
+    );
+    expect(xml).not.toContain('<w:pStyle w:val="Empty"/>');
+    expect(xml).toContain(
+      '<w:pStyle w:val="BOX"/></w:pPr><w:bookmarkStart w:id="0" w:name="Field"/><w:r><w:rPr><w:b/></w:rPr><w:t>new</w:t></w:r><w:bookmarkEnd w:id="0"/>'
+    );
+    expect(xml.match(/<w:tc>/g)).toHaveLength(2);
+  });
+
+  test(`text ${input} writes keep a comment anchor beside the value`, () => {
+    const commented =
+      '<w:commentRangeStart w:id="3"/><w:r><w:rPr><w:b/></w:rPr><w:t>old</w:t></w:r><w:commentRangeEnd w:id="3"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="3"/></w:r>';
+    const xml = write(load(paragraph(control('text', commented))), 'text', input);
+    expect(xml).toContain(
+      '<w:sdtContent><w:commentRangeStart w:id="3"/><w:r><w:rPr><w:b/></w:rPr><w:t>new</w:t></w:r><w:commentRangeEnd w:id="3"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="3"/></w:r></w:sdtContent>'
+    );
+  });
+
+  test(`text ${input} writes drop revision records and link styling from the inherited face`, () => {
+    const styled =
+      '<w:hyperlink w:anchor="x"><w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr><w:t>link</w:t></w:r></w:hyperlink><w:r><w:rPr><w:i/><w:rPrChange w:id="9" w:author="A" w:date="2024-01-01T00:00:00Z"><w:rPr/></w:rPrChange></w:rPr><w:t>old</w:t></w:r>';
+    const xml = write(load(paragraph(control('text', styled))), 'text', input);
+    expect(xml).toContain(
+      '<w:sdtContent><w:r><w:rPr><w:i/></w:rPr><w:t>new</w:t></w:r></w:sdtContent>'
+    );
+  });
+
+  test(`text ${input} writes refuse a complex field that reaches past the control`, () => {
+    const half =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> DATE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1/1</w:t></w:r>';
+    const part = load(
+      '<w:p>' + control('text', half) + '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    const node = contentControlsIn(part.root)[0]!.node;
+    const op = {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp;
+    expect(validateTreeOp(part, op)).toBe('unsupported');
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+  });
+
+  test(`typing into a ${input === 'string' ? 'cell' : 'row'} prompt keeps the structure it wraps`, () => {
+    const prompt = `<w:sdt><w:sdtPr><w:id w:val="1"/><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>${
+      input === 'string'
+        ? cell(
+            paragraph(
+              '<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Click here</w:t></w:r>'
+            )
+          )
+        : row(
+            cell(
+              paragraph(
+                '<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Click here</w:t></w:r>'
+              )
+            )
+          )
+    }</w:sdtContent></w:sdt>`;
+    const part = load(table(input === 'string' ? row(prompt) : prompt));
+    const promptParagraph = firstParagraphId(part);
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: promptParagraph,
+      offset: 0,
+      text: 'T',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const xml = serializeOoxmlPart(result.part);
+    expect(xml.match(/<w:tc>/g)).toHaveLength(2);
+    expect(xml).toContain('<w:tcBorders>');
+    expect(xml).toContain('Keep this label');
+    expect(xml).toContain('<w:pStyle w:val="BOX"/>');
+    expect(xml).toContain('<w:t>T</w:t>');
+    expect(xml).not.toContain('Click here');
+    expect(xml).not.toContain('PlaceholderText');
+    expect(xml).not.toContain('showingPlcHdr');
+  });
+
+  test(`typing into a prompt no value can stand in for is refused, not flattened (${input})`, () => {
+    const math =
+      '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x</m:t></m:r></m:oMath>';
+    const prompt = `<w:sdt><w:sdtPr><w:id w:val="1"/><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>${cell(
+      paragraph('<w:r><w:t>Click here</w:t></w:r>' + math)
+    )}</w:sdtContent></w:sdt>`;
+    const part = load(table(row(prompt)));
+    const before = serializeOoxmlPart(part);
+    const op = {
+      op: 'insertText',
+      paragraphId: firstParagraphId(part),
+      offset: input === 'string' ? 0 : 5,
+      text: 'T',
+    } as const;
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+    expect(serializeOoxmlPart(part)).toBe(before);
   });
 
   test(`text ${input} writes refuse opaque content without flattening it`, () => {

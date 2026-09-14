@@ -238,13 +238,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
     if (prompt) {
       const emptied = clearPlaceholder(part, prompt.control.id, options);
-      if (emptied) {
-        return applyTreeOp(
-          emptied,
-          { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
-          options
-        );
-      }
+      // A prompt whose content cannot be emptied in place is refused, not flattened by the
+      // insertion path below: that path would replace the wrapped cell along with the prompt.
+      if (!emptied) return { ok: false, reason: 'unsupported' };
+      return applyTreeOp(
+        emptied,
+        { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
+        options
+      );
     }
   }
 
@@ -1012,34 +1013,32 @@ function applyPlaceholderReplace(
   const nodes = builders.map((build) => build(nextId));
   const owner = parentOf(part, control.id);
   const inline = contentControlLevelOf(control) === 'inline';
-  const run = runElement(nextId, nodes);
-  const contentChildren = inline
-    ? [run]
-    : [
-        {
-          id: nextId(),
-          kind: 'paragraph',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'p',
-          prefix: 'w',
-          namespaceBindings: [],
-          attributes: [],
-          children: [run],
-        } as unknown as OoxmlNode,
-      ];
+  // The inserted content becomes the display run inside whatever the prompt wrapped, so a
+  // prompt around a cell keeps the cell. Content no insertion can stand in for is refused.
+  const contentChildren = valueContent(
+    contentControlContentOf(control),
+    (properties) => runElement(nextId, properties ? [properties, ...nodes] : nodes),
+    nextId,
+    inline
+  );
+  if (!contentChildren) return { ok: false, reason: 'unsupported' };
   let nextControl = replaceControlContent(control, contentChildren, nextId);
   nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
 
-  // A BLOCK placeholder replace deletes the prompt's paragraph(s) and mints a fresh one, so
-  // the paragraph set changes and the effect must say so. Reporting it as 'text-local' with
+  // A BLOCK placeholder replace can delete prompt paragraphs and mint a fresh one, so the
+  // paragraph set may change and the effect must say so. Reporting it as 'text-local' with
   // empty created/deleted told paragraph-keyed caches they could keep their answer, and a
   // retained review order index then had no entry for the minted paragraph — an item anchored
-  // in it listed in the rail but never activated from a caret. The inline branch really is
-  // text-local: the owner paragraph survives, only its runs are replaced.
+  // in it listed in the rail but never activated from a caret. Paragraphs kept in place are
+  // neither created nor deleted. The inline branch really is text-local: the owner paragraph
+  // survives, only its runs are replaced.
+  const before = placeholderParagraphIdsOf(control);
+  const after = placeholderParagraphIdsOf(nextControl);
   const effect: TreeOpEffect = {
-    dirty: owner ? [owner.id] : [control.id],
-    created: inline ? [] : contentChildren.map((child) => child.id),
-    deleted: inline ? [] : placeholderParagraphIdsOf(control),
+    // A prompt paragraph kept in place changed its runs, so it is dirty like the owner.
+    dirty: [owner ? owner.id : control.id, ...after.filter((id) => before.includes(id))],
+    created: inline ? [] : after.filter((id) => !before.includes(id)),
+    deleted: inline ? [] : before.filter((id) => !after.includes(id)),
     dependencyKeys: TEXT_DEPS,
     impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
   };

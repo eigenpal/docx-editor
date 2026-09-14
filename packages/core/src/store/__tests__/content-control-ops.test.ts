@@ -305,26 +305,30 @@ describe('placeholder and temporary state are transitions, not text', () => {
     expect(serializeOoxmlPart(next)).not.toContain('showingPlcHdr');
   });
 
-  test('a block placeholder replace reports the paragraph swap it performs', () => {
-    // A BLOCK control's prompt lives in its own paragraph, and the replace deletes it and
-    // mints a new one. Publishing that as 'text-local' with empty created/deleted told
-    // paragraph-keyed caches (the retained review order index) the paragraph set was intact,
-    // so the minted paragraph was invisible to them until the next structural commit.
+  test('a block placeholder replace keeps the prompt paragraph and reports it dirty', () => {
+    // A BLOCK control's prompt lives in its own paragraph. The replace keeps that paragraph,
+    // with its properties, and swaps its runs, so paragraph-keyed caches (the retained review
+    // order index) hear about it through `dirty`; a paragraph that does go is reported deleted
+    // and a minted one created, so the paragraph set is never silently wrong.
     const block = parseDoc(
       `<w:sdt><w:sdtPr><w:tag w:val="blockPrompt"/><w:showingPlcHdr/><w:text/></w:sdtPr>` +
-        `<w:sdtContent><w:p><w:r><w:t>Click here to enter text.</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+        `<w:sdtContent><w:p><w:pPr><w:pStyle w:val="Prompt"/></w:pPr><w:r><w:t>Click here to enter text.</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:t>Second prompt line.</w:t></w:r></w:p></w:sdtContent></w:sdt>`
     );
-    const promptParagraph = paragraphs(block)[0]!;
+    const [promptParagraph, secondParagraph] = paragraphs(block);
     const result = applyTreeOp(block, {
       op: 'insertHardBreak',
-      paragraphId: promptParagraph.id,
+      paragraphId: promptParagraph!.id,
       offset: 0,
     });
     if (!result.ok) throw new Error(`refused: ${result.reason}`);
-    const nextParagraph = paragraphs(result.part)[0]!;
-    expect(nextParagraph.id).not.toBe(promptParagraph.id);
-    expect(result.effect.deleted).toContain(promptParagraph.id);
-    expect(result.effect.created).toContain(nextParagraph.id);
+    const after = paragraphs(result.part);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.id).toBe(promptParagraph!.id);
+    expect(serializeOoxmlPart(result.part)).toContain('<w:pStyle w:val="Prompt"/>');
+    expect(result.effect.dirty).toContain(promptParagraph!.id);
+    expect(result.effect.deleted).toEqual([secondParagraph!.id]);
+    expect(result.effect.created).toEqual([]);
     expect(result.effect.impact).toBe('flow-structural');
   });
 
