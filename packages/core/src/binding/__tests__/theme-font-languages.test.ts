@@ -5,7 +5,10 @@ import {
   themeFontFamilyOf,
 } from '../../store/package/theme-font-scheme.ts';
 import { collectDocumentFonts } from '../document-catalog.ts';
-import { collectRenderedFontFamilies } from '../../store/package/rendered-fonts.ts';
+import {
+  collectRenderedFontFamilies,
+  collectRenderedFontFamilyCandidates,
+} from '../../store/package/rendered-fonts.ts';
 import { resolveRunStyle } from '../../layout/run-style.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -97,7 +100,12 @@ test('font catalogs and rendered style indexes invalidate when only the bidi fac
     [after, 'Times New Roman'],
   ] as const) {
     expect(collectDocumentFonts([body], fonts)).toEqual([family]);
-    expect(collectRenderedFontFamilies([body], null, fonts)).toEqual([family]);
+    // Default candidates remain visible even when a direct run font shadows them.
+    expect(collectRenderedFontFamilyCandidates([body], null, fonts)).toEqual({
+      direct: [family],
+      inherited: ['Latin Body'],
+    });
+    expect(collectRenderedFontFamilies([body], null, fonts)).toEqual([family, 'Latin Body'].sort());
     expect(collectRenderedFontFamilies([bareBody], styles, fonts)).toEqual([family]);
   }
 });
