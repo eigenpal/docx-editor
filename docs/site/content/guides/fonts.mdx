@@ -154,21 +154,32 @@ settle, so the reader never sees the text reflow. An on-demand resolver has
 nothing to hold for: the families it answers about come from the parse, so the
 bytes have to go through first.
 
-`defaultFonts()` and `packagedFonts()` supply bytes without changing public CSS
-family names. The editor registers private aliases for paint. This preserves native
-glyph fallback and the host application's fonts.
+## Control font registration
 
-Use `installDefaultFontFaces()` or `packagedFonts({ install: true })` only for an
-explicit page-wide font replacement. These register substitutes under Word family names.
-They can hide native glyphs for scripts the substitutes do not cover.
-To avoid another font request, pass already loaded bytes:
+`defaultFonts()` and `packagedFonts()` supply bytes to the editor, which registers
+fonts under private aliases. Public CSS family names remain unchanged. This keeps
+native fonts available for glyphs missing from the substitutes.
+
+### Update apps that use page-wide fonts
+
+Earlier loader behavior also registered substitutes under public names such as
+`Arial`. If your app relied on that registration outside the editor, enable it
+explicitly. The editor uses the supplied fonts without public registration.
+
+For on-demand loading, use `packagedFonts({ install: true })`.
+
+For eager loading, register the loaded bytes:
 
 ```ts
-import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
 
-const loaded = await loadDefaultFonts();
-await installDefaultFontFaces({ loaded: loaded.sources });
+const fonts = await defaultFonts();
+await installDefaultFontFaces({ loaded: fonts.sources });
 ```
+
+Pass `fonts` to the editor's `fonts` option. Reusing these bytes avoids another
+font request. Public registration affects the whole page and can hide native
+glyphs for scripts the substitutes do not cover.
 
 ## Load your own fonts
 

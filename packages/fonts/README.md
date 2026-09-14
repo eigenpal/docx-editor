@@ -66,22 +66,29 @@ const fonts = await defaultFonts(); // or { families: ['Calibri'] }
 const editor = createDocxEditor({ document: bytes, fonts });
 ```
 
-`defaultFonts()` and `packagedFonts()` supply font bytes. The editor registers those
-bytes under private aliases for paint. They leave public CSS family names unchanged,
-so substitutes cannot hide native glyphs or change the host application's fonts.
+## Font registration
+
+`defaultFonts()` and `packagedFonts()` supply bytes to the editor, which registers
+fonts under private aliases. Public CSS family names remain unchanged. This keeps
+native fonts available for glyphs missing from the substitutes.
 `loadDefaultFonts()` returns the same fragment without reporting failures to the console.
 
-For an explicit page-wide replacement, use `installDefaultFontFaces()` or
-`packagedFonts({ install: true })`. These options register substitutes under Word family
-names. They can hide native glyphs for scripts the substitutes do not cover.
-If you need this behavior, reuse loaded bytes to avoid another font request:
+Earlier loader behavior also registered substitutes under public names such as
+`Arial`. If your app relied on that registration outside the editor, enable it
+explicitly. The editor uses the supplied fonts without public registration.
+
+Use `packagedFonts({ install: true })` for on-demand loading. For eager loading,
+register the loaded bytes:
 
 ```ts
-import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
 
-const loaded = await loadDefaultFonts();
-await installDefaultFontFaces({ loaded: loaded.sources });
+const fonts = await defaultFonts();
+await installDefaultFontFaces({ loaded: fonts.sources });
 ```
+
+Pass `fonts` to the editor's `fonts` option. Public registration affects the whole
+page and can hide native glyphs for scripts the substitutes do not cover.
 
 Nothing loads until you call one of these: importing the package fetches no bytes, and
 the editor engine never calls in here on its own.
