@@ -59,6 +59,7 @@ To load Word's five document defaults up front instead — no re-pagination, all
 and 7.4 MB whichever document opens — use `defaultFonts()`:
 
 ```ts
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
 const fonts = await defaultFonts(); // or { families: ['Calibri'] }

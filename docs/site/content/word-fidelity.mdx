@@ -182,6 +182,7 @@ The document's `w:themeFontLang` selects supplemental theme fonts for its Latin,
 East Asian, and complex-script theme tokens. The resolver reads `val`, `eastAsia`,
 and `bidi` independently. It supports CJK languages, common complex-script languages,
 and explicit script subtags. Complex-script theme tokens also work on Latin font attributes.
+When no inherited or direct Latin font reference exists, the resolved body Latin theme supplies the default.
 When no style supplies an East Asian face, a resolved body East Asian theme face supplies the default.
 When the East Asian theme language is absent and its face is empty, inherited
 `w:lang/@w:eastAsia` selects the supplemental face. Chinese, Japanese, and Korean use named

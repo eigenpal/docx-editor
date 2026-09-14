@@ -172,7 +172,7 @@ describe('the w:rFonts eastAsia slot resolves beside the Latin one', () => {
   test('an explicit w:eastAsia resolves without touching the Latin family', () => {
     const style = resolved({ eastAsia: 'SimSun' });
     expect(style.fontFamilyEastAsia).toBe('SimSun');
-    expect(style.fontFamily).toBeNull();
+    expect(style.fontFamily).toBe('Grandview');
   });
 
   test('a Latin-only rFonts leaves the eastAsia slot inherited', () => {

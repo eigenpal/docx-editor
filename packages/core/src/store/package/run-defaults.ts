@@ -115,25 +115,39 @@ export function symbolFontFamily(raw: string | undefined): string | null {
   return validFontFamily(raw);
 }
 
+interface RunDefaultsEntry extends StyleRunDefaults {
+  readonly hasLatinFontReference: boolean;
+}
+
+function hasLatinReference(rFonts: OoxmlElement | undefined): boolean {
+  return (
+    rFonts !== undefined &&
+    ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+      Boolean(attributeValue(rFonts, name))
+    )
+  );
+}
+
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
 function rPrDefaults(
   rPr: OoxmlElement | undefined,
   themeFonts: DocumentThemeFonts
-): StyleRunDefaults {
-  if (!rPr) return { fontFamily: null, fontSizeHalfPoints: null };
+): RunDefaultsEntry {
+  if (!rPr) return { fontFamily: null, fontSizeHalfPoints: null, hasLatinFontReference: false };
   const rFonts = childElement(rPr, 'rFonts');
   const sz = childElement(rPr, 'sz');
   const rawSize = sz ? attributeValue(sz, 'val') : undefined;
   const size = rawSize !== undefined && /^\d{1,4}$/.test(rawSize) ? Number(rawSize) : null;
   return {
     fontFamily: rFonts ? familyFromRFonts(rFonts, themeFonts) : null,
+    hasLatinFontReference: hasLatinReference(rFonts),
     fontSizeHalfPoints: size !== null && size >= SZ_MIN && size <= SZ_MAX ? size : null,
   };
 }
 
 interface StyleEntry {
   readonly basedOn: string | null;
-  readonly own: StyleRunDefaults;
+  readonly own: RunDefaultsEntry;
 }
 
 /**
@@ -149,7 +163,11 @@ export function createRunDefaultsResolver(
   themeFonts: DocumentThemeFonts
 ): (styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults {
   const styles = new Map<string, StyleEntry>();
-  let docDefaults: StyleRunDefaults = { fontFamily: null, fontSizeHalfPoints: null };
+  let docDefaults: RunDefaultsEntry = {
+    fontFamily: null,
+    fontSizeHalfPoints: null,
+    hasLatinFontReference: false,
+  };
 
   if (stylesRoot) {
     const defaults = childElement(stylesRoot, 'docDefaults');
@@ -168,13 +186,14 @@ export function createRunDefaultsResolver(
     }
   }
 
-  const memo = new Map<string, StyleRunDefaults>();
-  const chainOf = (styleId: string | null): StyleRunDefaults => {
+  const memo = new Map<string, RunDefaultsEntry>();
+  const chainOf = (styleId: string | null): RunDefaultsEntry => {
     const key = styleId ?? '';
     const cached = memo.get(key);
     if (cached) return cached;
     let fontFamily: string | null = null;
     let fontSizeHalfPoints: number | null = null;
+    let hasLatinFontReference = docDefaults.hasLatinFontReference;
     const seen = new Set<string>();
     let at = styleId;
     for (let depth = 0; at !== null && depth < CHAIN_CAP && !seen.has(at); depth += 1) {
@@ -182,10 +201,12 @@ export function createRunDefaultsResolver(
       const entry = styles.get(at);
       if (!entry) break;
       fontFamily ??= entry.own.fontFamily;
+      hasLatinFontReference ||= entry.own.hasLatinFontReference;
       fontSizeHalfPoints ??= entry.own.fontSizeHalfPoints;
       at = entry.basedOn;
     }
-    const resolved: StyleRunDefaults = {
+    const resolved: RunDefaultsEntry = {
+      hasLatinFontReference,
       fontFamily: fontFamily ?? docDefaults.fontFamily,
       fontSizeHalfPoints: fontSizeHalfPoints ?? docDefaults.fontSizeHalfPoints,
     };
@@ -202,6 +223,15 @@ export function createRunDefaultsResolver(
       ? (themeFontFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
         themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
       : null;
-    return runTheme === null ? chain : { ...chain, fontFamily: runTheme };
+    const hasRunReference = ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+      Boolean(rFonts?.attributes?.[name])
+    );
+    return {
+      fontFamily:
+        runTheme ??
+        chain.fontFamily ??
+        (!chain.hasLatinFontReference && !hasRunReference ? themeFonts.minor : null),
+      fontSizeHalfPoints: chain.fontSizeHalfPoints,
+    };
   };
 }

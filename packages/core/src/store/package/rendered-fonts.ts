@@ -461,6 +461,15 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     docDefaultEastAsiaFamily = rPrEastAsiaFamily(rPrDefault, themeFonts);
   }
 
+  const defaultRPr = rPrDefault ? childElement(rPrDefault, 'rPr') : undefined;
+  const defaultRFonts = defaultRPr ? childElement(defaultRPr, 'rFonts') : undefined;
+  const hasLatinReference =
+    defaultRFonts &&
+    ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+      Boolean(attributeValue(defaultRFonts, name))
+    );
+  if (!hasLatinReference) docDefaultFamily ??= themeFonts.minor;
+
   let counted = 0;
   for (const child of stylesRoot.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.localName !== 'style') continue;
@@ -538,7 +547,11 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
 }
 
 function styleIndexOf(stylesRoot: OoxmlElement | null, themeFonts: DocumentThemeFonts): StyleIndex {
-  if (!stylesRoot) return EMPTY_STYLE_INDEX;
+  if (!stylesRoot)
+    return {
+      ...EMPTY_STYLE_INDEX,
+      docDefaultFamilies: themeFonts.minor ? [themeFonts.minor] : [],
+    };
   const cached = styleIndexMemos.get(stylesRoot);
   if (
     cached &&

@@ -86,8 +86,8 @@ The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes
 | Courier New     | Liberation Mono   | SIL OFL           | Yes               |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License | No                |
 
-The first five match advance widths exactly. Rare kerning differences can still
-change an edge case.
+The first five match advance widths for the glyphs they cover. Kerning differences
+can still change line breaks.
 
 TeX Gyre Adventor is close, not exact. It runs slightly narrow against Century
 Gothic across the recorded samples: 0.22%, 0.34%, 0.67%, and 0.85% at 40 pt
@@ -97,6 +97,7 @@ that is a fraction of a character, and a wrap point can still move.
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs.
 The editor preserves native family fallback for missing glyphs. Exact metrics still
 depend on the available font for that script.
+
 Supply licensed font bytes when pixels must match the original face.
 
 `defaultFonts()` loads the five families Word applies to a document by default.
@@ -551,6 +552,22 @@ The shaper rejects a missing, stale, or version-mismatched binary. An npm
 
 For engine implementation details, see
 [Architecture](/docs/2.x/core/architecture).
+
+## Custom text measurement
+
+If you supply a custom `TextMeasurer`, you can implement the optional
+`inkBounds(text, style)` method for more accurate CJK punctuation fitting.
+The built-in canvas and HarfBuzz measurers provide this information when available.
+
+Return `{ left, right }` as conservative horizontal ink coordinates for one
+grapheme, in points from its origin. Include font size and horizontal scale,
+but exclude trailing character spacing. These coordinates describe the visible
+ink, not the glyph's advance width. Return `undefined` when you cannot provide
+reliable bounds; the editor keeps its advance-based layout behavior.
+
+For canvas metrics, measure left-aligned text and negate `actualBoundingBoxLeft`.
+Convert both coordinates from pixels to points before applying the horizontal scale.
+Supplying bounds enables supported optical CJK fits, so line breaks can change.
 
 ## Arabic and bidirectional paragraphs
 
