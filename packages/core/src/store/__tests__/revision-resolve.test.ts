@@ -171,15 +171,18 @@ describe('nested revisions resolve by containment', () => {
     }
   });
 
-  test('a wrapper that arrived empty is not this decision’s to remove', () => {
-    // A producer-written hollow `<w:ins/>` at a content position stays: the sweep removes only
-    // what the resolution itself emptied, so an unrelated accept changes nothing else.
-    const hollow = load(
-      `<w:p>${wrap('ins', QA, '')}${wrap('del', DEV, delRun('x'))}${run('z')}</w:p>`
-    );
-    const out = xml(apply(hollow, accept(DEV)));
-    expect(out).toContain('<w:ins');
-    expect(out).not.toContain('<w:del');
+  test('a wrapper that arrived hollow is not this decision’s to remove', () => {
+    // A producer-written `<w:ins/>` at a content position, empty or holding only a marker,
+    // stays: the sweep removes only what the resolution itself emptied, so an unrelated
+    // accept by another author changes nothing else.
+    for (const inner of ['', '<w:proofErr w:type="spellStart"/>']) {
+      const hollow = load(
+        `<w:p>${wrap('ins', QA, inner)}${wrap('del', DEV, delRun('x'))}${run('z')}</w:p>`
+      );
+      const out = xml(apply(hollow, accept(DEV)));
+      expect(out).toContain('<w:ins');
+      expect(out).not.toContain('<w:del');
+    }
   });
 });
 

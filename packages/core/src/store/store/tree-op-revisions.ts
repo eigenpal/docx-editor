@@ -696,7 +696,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
       hollow !== null &&
       child.kind !== 'textValue' &&
       isContentRevisionKind(child.kind) &&
-      child.children.length > 0 &&
+      child.children.some((entry) => !isInertMarker(entry)) &&
       hollow.children.every(isInertMarker)
     ) {
       for (const marker of hollow.children) out.push(marker);
