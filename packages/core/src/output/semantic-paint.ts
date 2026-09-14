@@ -1936,6 +1936,7 @@ function paintParagraphBorder(
 }
 
 import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
+import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
@@ -2109,6 +2110,14 @@ function paintPage(
     });
   }
 
+  // `w:zOrder` is a position in the sheet's child order, not a z-index: `back` goes under the
+  // content (but over the behind-doc drawings already appended, which are the paper's own
+  // watermarks), `front` over it and still under the in-front drawing layer.
+  const borderLayer = page.pageBorders
+    ? paintPageBorderFrame(document, page.pageBorders, options.scale)
+    : null;
+  if (borderLayer && page.pageBorders?.zOrder === 'back') element.append(borderLayer);
+
   const content = document.createElement('div');
   content.className = 'docx-page-content';
   content.style.position = 'absolute';
@@ -2146,6 +2155,7 @@ function paintPage(
     painted.blocks = blocks;
   }
   element.append(content);
+  if (borderLayer && page.pageBorders?.zOrder === 'front') element.append(borderLayer);
 
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
 
