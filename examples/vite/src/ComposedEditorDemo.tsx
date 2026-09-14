@@ -632,13 +632,13 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   //
   // The trade is one reflow. Nothing can know the families before the parse, so the
   // document opens on the fixed measurer and re-paginates when the faces land; the eager
-  // An eager font loader still holds `document` back until fonts settle, at the cost
+  // `{ fonts: defaultFonts }` still holds `document` back until fonts settle, at the cost
   // of all 20 eager faces on every document.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(fixtureUrl, { fonts: [packagedFonts({ install: false }), googleFonts()] });
+  } = useDocxSource(fixtureUrl, { fonts: [packagedFonts(), googleFonts()] });
 
   const activeDocument = collaboration.document ?? bytes;
 

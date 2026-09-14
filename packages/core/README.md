@@ -88,7 +88,7 @@ const bytes = new Uint8Array(await readFile('contract.docx'));
 const opened = await openFontBackedDocumentForExport(bytes, {
   // First wins: put caller-supplied licensed fonts first, bundled metric substitutes next,
   // and an optional network resolver last.
-  fonts: [callerFonts, packagedFonts({ install: false }), optionalNetworkFonts],
+  fonts: [callerFonts, packagedFonts(), optionalNetworkFonts],
   fontPolicy: 'strict',
   onFontResolution: (report) => auditLogger.info(report),
 });

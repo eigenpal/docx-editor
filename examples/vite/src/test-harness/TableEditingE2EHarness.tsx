@@ -35,7 +35,7 @@ export function TableEditingE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: () => defaultFonts({ install: false }),
+    fonts: defaultFonts,
   });
 
   return (

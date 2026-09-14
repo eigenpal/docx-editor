@@ -20,7 +20,7 @@ another origin, add another argument.
 ```ts
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const { document, fonts } = useDocxSource(url, { fonts: packagedFonts({ install: false }) });
+const { document, fonts } = useDocxSource(url, { fonts: packagedFonts() });
 ```
 
 ```ts
@@ -28,7 +28,7 @@ import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
 const { document, fonts } = useDocxSource(url, {
-  fonts: [packagedFonts({ install: false }), googleFonts()],
+  fonts: [packagedFonts(), googleFonts()],
 });
 ```
 
@@ -107,7 +107,7 @@ load, so you opt in:
 ```ts
 import { ALL_WORD_DEFAULT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await defaultFonts({ install: false, families: ALL_WORD_DEFAULT_FAMILIES });
+const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
 ```
 
 `googleFonts()` covers it on demand instead. It serves Century Gothic from the
@@ -118,7 +118,7 @@ third-party request for it.
 that document's default face. Narrow it further with `allow`:
 
 ```ts
-const fonts = packagedFonts({ install: false, allow: ['Calibri'] });
+const fonts = packagedFonts({ allow: ['Calibri'] });
 ```
 
 Font binaries load as separate assets. Importing the package fetches nothing.
@@ -146,7 +146,7 @@ Use `packagedFonts()` otherwise.
 ```ts
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const { document, fonts } = useDocxSource(url, { fonts: () => defaultFonts({ install: false }) });
+const { document, fonts } = useDocxSource(url, { fonts: defaultFonts });
 ```
 
 With `defaultFonts`, `useDocxSource` holds `document` back until the fonts
@@ -154,24 +154,20 @@ settle, so the reader never sees the text reflow. An on-demand resolver has
 nothing to hold for: the families it answers about come from the parse, so the
 bytes have to go through first.
 
-## Control font registration
+## Editor-scoped fonts
 
-`defaultFonts()` and `packagedFonts()` register public CSS font names by default.
+`defaultFonts()` and `packagedFonts()` supply font bytes for the editor. By default,
+Core registers these bytes under private font names. Your app's header and sidebar
+keep their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
 
-For editor use, set `install: false` on either loader. The editor registers the
-supplied bytes under private aliases. This keeps native fonts available for glyphs
-missing from the substitutes.
-This option does not remove fonts that other code already registered.
+`packagedFonts` retains its `install` option, which defaults to `false`.
+Use `packagedFonts({ install: true })` only for legacy public font registration.
+This registers CSS font names across the whole page, including headers and sidebars.
+It can change text widths, wrapping, and fallback for missing glyphs outside the editor.
 
-```ts
-import { defaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
-
-const onDemandFonts = packagedFonts({ install: false });
-const eagerFonts = await defaultFonts({ install: false });
-```
-
-`loadDefaultFonts()` remains bytes-only. Use `installDefaultFontFaces()` when you
-want to register those bytes under public CSS names.
+`defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
+The standalone `installDefaultFontFaces()` helper still registers public CSS names.
+If your app relied on public fonts from eager loading, configure its fonts separately.
 
 ## Load your own fonts
 
@@ -206,7 +202,7 @@ compose any two origins, and put it first so your own faces win:
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
 const { document, fonts } = useDocxSource(url, {
-  fonts: [brand, packagedFonts({ install: false })],
+  fonts: [brand, packagedFonts()],
 });
 ```
 
@@ -267,7 +263,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(packagedFonts({ install: false }), googleFonts());
+  const fonts = useFonts(packagedFonts(), googleFonts());
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
 ```
@@ -282,7 +278,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
-const fonts = useFonts(packagedFonts({ install: false }), googleFonts());
+const fonts = useFonts(packagedFonts(), googleFonts());
 </script>
 
 <template>
@@ -312,13 +308,13 @@ googleFonts({
 An arbitrary substitute can change line breaks and pagination. Use a
 metric-compatible substitute when layout must remain stable.
 
-| Resolver constraint        | Required behavior                                                              |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| File-supplied family names | Match them against a closed `Map` or catalog.                                  |
-| URL construction           | Never build a URL from a document family name.                                 |
-| Privacy                    | A remote font host can learn which families the document uses.                 |
-| Updates                    | Load another document or remount to apply changed resolver arguments.          |
-| Composition                | `useFonts(packagedFonts({ install: false }), googleFonts())` combines sources. |
+| Resolver constraint        | Required behavior                                                     |
+| -------------------------- | --------------------------------------------------------------------- |
+| File-supplied family names | Match them against a closed `Map` or catalog.                         |
+| URL construction           | Never build a URL from a document family name.                        |
+| Privacy                    | A remote font host can learn which families the document uses.        |
+| Updates                    | Load another document or remount to apply changed resolver arguments. |
+| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.          |
 
 The editor caps the family list passed to a resolver.
 
@@ -360,10 +356,10 @@ bytes, so a substituted or corrupted file fails loudly rather than rendering.
 `packagedFonts()` and `defaultFonts()` accept `fetcher` too, and their assets
 ship inside the package, so they read your own origin with or without it.
 
-With `install: false`, both loaders pass bytes to the editor for private registration.
-Public registration, enabled by default, also reuses loaded bytes. If bytes are
-unavailable, registration can use the browser's `FontFace` loader outside your
-`fetcher`. `installDefaultFontFaces()` follows the same rule.
+Core reuses the loaded bytes for private registration without another request.
+If you call `installDefaultFontFaces()` without bytes, it can fetch through the
+browser's `FontFace` loader, outside your `fetcher`.
+The legacy `packagedFonts({ install: true })` option follows the same registration path.
 
 Use `fetcher` for caching too. `googleFonts()` keeps its catalog fetches in
 memory, keyed by the fetcher you passed, which is what a browser tab needs.
@@ -423,7 +419,7 @@ In Vue, a function origin is always the value, never a getter to call. To build 
 origin lazily, use a `computed`:
 
 ```ts
-const fonts = useFonts(computed(() => packagedFonts({ install: false })));
+const fonts = useFonts(computed(() => packagedFonts()));
 ```
 
 `useFonts(() => packagedFonts())` cannot work: nothing distinguishes it from a

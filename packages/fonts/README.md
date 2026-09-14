@@ -42,7 +42,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
   // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
   // its identity changes. An inline resolver is a new function on every render.
   // `useFonts` keeps one for the component's life.
-  const fonts = useFonts(packagedFonts({ install: false }));
+  const fonts = useFonts(packagedFonts());
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
 ```
@@ -50,7 +50,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 Same call shape as `googleFonts()` below, so composing the two is adding an argument:
 
 ```ts
-const fonts = useFonts(packagedFonts({ install: false }), googleFonts());
+const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
 (Both calls belong inside a component — `useFonts` is a hook.)
@@ -62,21 +62,24 @@ and 7.4 MB whichever document opens — use `defaultFonts()`:
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await defaultFonts({ install: false }); // Add families to load a subset.
+const fonts = await defaultFonts(); // Add families to load a subset.
 const editor = createDocxEditor({ document: bytes, fonts });
 ```
 
 ## Font registration
 
-`defaultFonts()` and `packagedFonts()` register public CSS font names by default.
+`defaultFonts()` and `packagedFonts()` supply font bytes for the editor. By default,
+Core registers these bytes under private font names. Your app's header and sidebar
+keep their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
 
-For editor use, set `install: false` on either loader. The editor registers the
-supplied bytes under private aliases. This keeps native fonts available for glyphs
-missing from the substitutes.
-This option does not remove fonts that other code already registered.
+`packagedFonts` retains its `install` option, which defaults to `false`.
+Use `packagedFonts({ install: true })` only for legacy public font registration.
+This registers CSS font names across the whole page, including headers and sidebars.
+It can change text widths, wrapping, and fallback for missing glyphs outside the editor.
 
-`loadDefaultFonts()` remains bytes-only. Use `installDefaultFontFaces()` when you
-want to register those bytes under public CSS names.
+`defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
+The standalone `installDefaultFontFaces()` helper still registers public CSS names.
+If your app relied on public fonts from eager loading, configure its fonts separately.
 
 Nothing loads until you call one of these: importing the package fetches no bytes, and
 the editor engine never calls in here on its own.

@@ -39,7 +39,7 @@ const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 const MAX_DOCUMENT_BYTES = 64 * 1024 * 1024;
 const LIVE_EXPORT_DELAY_MS = 550;
 const REVIEW_MODULES = [reviewModule()];
-const EDITOR_PACKAGED_FONTS = packagedFonts({ install: false });
+const EDITOR_PACKAGED_FONTS = packagedFonts();
 const GOOGLE_FONT_FALLBACK = googleFonts({
   onFailure: (failure) => console.warn(`[google-fonts] ${failure.diagnostic}`),
 });

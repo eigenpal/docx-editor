@@ -137,7 +137,7 @@ const {
   fonts,
   error: loadError,
 } = useDocxSource(props.fixtureUrl, {
-  fonts: [packagedFonts({ install: false }), googleFonts()],
+  fonts: [packagedFonts(), googleFonts()],
 });
 
 function onFontError(error: { code: string; message: string }): void {

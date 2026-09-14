@@ -193,7 +193,7 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(packagedFonts({ install: false }));
+  const fonts = useFonts(packagedFonts());
   return <DocxEditor document={bytes} fonts={fonts} />;
 }
 ```
@@ -206,7 +206,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const fonts = useFonts(packagedFonts({ install: false }));
+const fonts = useFonts(packagedFonts());
 </script>
 
 <template>
