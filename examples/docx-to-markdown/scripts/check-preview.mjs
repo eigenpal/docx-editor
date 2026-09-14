@@ -86,6 +86,10 @@ try {
         .getByRole('group', { name: 'Demo view', exact: true })
         .getByRole('button', { name: 'Markdown', exact: true })
         .click();
+    await page
+      .getByRole('group', { name: 'Markdown view', exact: true })
+      .getByRole('button', { name: 'Preview', exact: true })
+      .click();
     // A mode switch must preserve the reader's page even when earlier pages change height.
     for (const [number, fraction] of [
       [2, 0.4],
