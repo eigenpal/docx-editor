@@ -160,12 +160,27 @@ bytes have to go through first.
 registers these bytes under private font names. Your app's header and sidebar keep
 their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
 
-The `packagedFonts` option `install` is deprecated and ignored, even when `true`.
-Remove it from loader options. `defaultFonts()` has no `install` option.
+### Upgrade from page-wide registration
 
-`installDefaultFontFaces()` is a deprecated no-op that resolves to `0` without fetching or registering fonts.
-Remove helper calls and pass the font configuration through the editor's `fonts` option.
-Define fonts for the rest of your app separately. `loadDefaultFonts()` remains bytes-only.
+Earlier loaders could register substitutes under public names such as `Arial`.
+Font loaders now supply bytes for private editor registration only.
+Existing calls still compile, but public registration no longer occurs.
+If you already pass `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option, keep that configuration.
+
+The `packagedFonts` option `install` is deprecated and ignored, including `true`.
+Remove it while keeping your other loader options:
+
+```diff
+- fonts: packagedFonts({ install: false, onFailure })
++ fonts: packagedFonts({ onFailure })
+```
+
+`installDefaultFontFaces()` is deprecated. It does nothing and resolves to `0`, without fetching or registering fonts.
+Remove its calls and supply `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option instead.
+`defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
+
+If surrounding app text relied on these public fonts, configure those fonts separately with your app's CSS or font loader.
+Check headers, sidebars, and other app text after upgrading; their previous fonts become available again.
 
 ## Load your own fonts
 
