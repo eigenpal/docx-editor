@@ -486,9 +486,9 @@ export function MarkdownExportDemo() {
   const canCopy = canCopyExport(exportView.status, exportView.result !== null);
   const exportStatusLabel =
     exportView.status === 'queued'
-      ? 'Waiting for your pause'
+      ? 'Changes pending'
       : exportView.status === 'exporting'
-        ? 'Updating Markdown export'
+        ? 'Updating Markdown'
         : exportView.status === 'error'
           ? exportView.result
             ? 'Export failed; showing the last successful snapshot'
@@ -852,9 +852,7 @@ export function MarkdownExportDemo() {
                   <div className="md-live-update" role="status">
                     <Spinner />
                     <span>
-                      {exportView.status === 'queued'
-                        ? 'Changes pending—Markdown will update when you pause'
-                        : 'Updating page-aware Markdown'}
+                      {exportView.status === 'queued' ? 'Changes pending' : 'Updating Markdown'}
                     </span>
                   </div>
                 ) : null}
@@ -893,7 +891,7 @@ export function MarkdownExportDemo() {
                 ) : exportView.error ? null : (
                   <div className="md-empty-state" role="status">
                     <Spinner />
-                    <span>Preparing Markdown…</span>
+                    <span>Preparing Markdown</span>
                   </div>
                 )}
               </>

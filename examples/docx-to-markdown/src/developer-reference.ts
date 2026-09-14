@@ -71,9 +71,9 @@ function responsePreview(
     return `// The current DOCX export failed. No stale API response is shown.\n// ${error ?? 'Unknown export error'}`;
   }
   if (status === 'queued' || status === 'exporting') {
-    return '// Updating the DOCX export… The live API response will appear when it is ready.';
+    return '// Updating export.';
   }
-  if (!result) return '// The live API response appears here after the DOCX export completes.';
+  if (!result) return '// Waiting for export.';
   try {
     return responseJson(toMarkdownJSON(result));
   } catch (error) {
