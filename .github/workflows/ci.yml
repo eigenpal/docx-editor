@@ -1,8 +1,8 @@
 name: CI
 
 # Source checks, browser checks, and package verification run concurrently.
-# A failed verification lane cancels the other matrix lanes; the stable
-# lint/test/build gates require every lane to pass before merging.
+# Each matrix entry is one named check. A failure cancels its siblings;
+# the stable test gate requires every verification lane to pass.
 #
 # Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
 # bun.lock first and then runs the same checks inline), so we skip them
@@ -26,12 +26,7 @@ concurrency:
 
 jobs:
   checks:
-    if: github.actor != 'dependabot[bot]'
-    # The called workflow defaults to contents: read; only its advisory job
-    # requests security-events: write to publish SARIF (read-only on forks).
-    permissions:
-      contents: read
-      security-events: write
+    if: "github.actor != 'dependabot[bot]'"
     strategy:
       fail-fast: true
       matrix:
@@ -50,10 +45,145 @@ jobs:
             shard: 3/4
           - check: unit
             shard: 4/4
-    uses: ./.github/workflows/ci-check.yml
-    with:
-      check: ${{ matrix.check }}
-      shard: ${{ matrix.shard || '1/1' }}
+    name: "${{ matrix.check == 'unit' && format('unit ({0})', matrix.shard) || matrix.check }}"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: "${{ matrix.check == 'api-changeset' && '0' || '1' }}"
+      - name: Setup Bun
+        if: "matrix.check != 'api-changeset'"
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        if: "matrix.check != 'api-changeset' && matrix.check != 'shipped-advisories'"
+        run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+        if: "matrix.check == 'lint'"
+      - name: Lane boundary compile check
+        run: bun run check:lane-boundaries
+        if: "matrix.check == 'lint'"
+      - name: tsconfig lib floor check
+        run: bun run check:tsconfig-lib-floor
+        if: "matrix.check == 'lint'"
+      - name: Format check
+        run: bun run format:check
+        if: "matrix.check == 'lint'"
+      - name: Type check
+        if: "matrix.check == 'typecheck'"
+        run: bun run typecheck
+      - name: i18n locale + typed-exports sync check
+        if: "matrix.check == 'typecheck'"
+        run: bun run i18n:validate
+      - name: CLA logic tests
+        if: "matrix.check == 'typecheck'"
+        run: bash .github/cla/cla.test.sh
+      - name: Run unit test shard
+        if: "matrix.check == 'unit'"
+        env:
+          TEST_SHARD: '${{ matrix.shard }}'
+        run: 'bun run test --shard "$TEST_SHARD" --fail-fast'
+      - name: Demo apps build
+        if: "matrix.check == 'browser'"
+        run: bun run check:app-build
+      - name: Install Chromium for Markdown preview checks
+        if: "matrix.check == 'browser'"
+        run: bunx playwright install --with-deps chromium
+      - name: Check Markdown page layout and review controls
+        if: "matrix.check == 'browser'"
+        run: "bun run --filter './examples/docx-to-markdown' check:preview"
+      - name: Build packages
+        run: bun run build:packages
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+        if: "matrix.check == 'build'"
+      - name: Check editor API consumers against published declarations
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published"
+        if: "matrix.check == 'build'"
+      - name: Setup Node for server agent integration
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+        if: "matrix.check == 'build'"
+      - name: Server agent lifecycle integration
+        run: "bun run --filter './examples/server-agent-review' test:lifecycle"
+        if: "matrix.check == 'build'"
+      - name: Editor API public consumer workflows
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
+        if: "matrix.check == 'build'"
+      - name: Package size report
+        run: bun run check:package-size --out package-sizes.json
+        if: "matrix.check == 'build'"
+      - name: Upload package size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-sizes
+          path: package-sizes.json
+          overwrite: true
+        if: "matrix.check == 'build'"
+      - name: API report check
+        run: bun run api:check
+        if: "matrix.check == 'build'"
+      - name: Parity gates
+        run: bun run check:parity
+        if: "matrix.check == 'build'"
+      - name: Third-party notices generate (gate)
+        run: bun run notices:generate
+        if: "matrix.check == 'build'"
+      - name: Published-package artifact check
+        run: bun run check:package-artifacts
+        if: "matrix.check == 'build'"
+      - name: Shipped text-shaper check
+        run: bun run check:shipped-shaper
+        if: "matrix.check == 'build'"
+      - name: Published-package consumer check
+        run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
+        if: "matrix.check == 'build'"
+      - name: i18n per-locale bundle size check
+        run: bun run check:i18n-bundle-size
+        if: "matrix.check == 'build'"
+      - name: Fonts package manifest check
+        run: bun run check:fonts-manifest
+        if: "matrix.check == 'build'"
+      - name: Fonts package Google catalog check
+        run: bun run check:google-catalog
+        if: "matrix.check == 'build'"
+      - name: Word font width fidelity
+        timeout-minutes: 5
+        run: bun run check:font-width-fidelity
+        if: "matrix.check == 'build'"
+      - name: Docs JSON generation (smoke test)
+        run: bun run docs:json
+        if: "matrix.check == 'build'"
+      - name: Docs MDX check
+        run: bun run check:docs-mdx
+        if: "matrix.check == 'build'"
+      - name: Docs chrome slot coverage
+        run: bun run check:docs-chrome-slots
+        if: "matrix.check == 'build'"
+      - name: Docs Vue ref check
+        run: bun run check:docs-vue-refs
+        if: "matrix.check == 'build'"
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+        if: "matrix.check == 'shipped-advisories'"
+        id: advisories
+      - name: Require a changeset when docs/api changed
+        run: 'node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"'
+        if: "matrix.check == 'api-changeset' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !(startsWith(github.head_ref, 'changeset-release/') &&\n  github.event.pull_request.head.repo.full_name == github.repository)"
+      - name: Save advisory report
+        if: "${{ !cancelled() && matrix.check == 'shipped-advisories' && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') }}"
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: shipped-advisories-sarif
+          path: shipped-advisories.sarif
+          if-no-files-found: ignore
+          overwrite: true
 
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
@@ -82,42 +212,6 @@ jobs:
           path: packages/editor-api/compat/reports/
           retention-days: 30
 
-  # Run these gates after failures, but let workflow cancellation stop them.
-  shipped-advisories:
-    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
-    needs: checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 5
-    steps:
-      - name: Require all verification lanes to pass
-        env:
-          RESULT: ${{ needs.checks.result }}
-        run: test "$RESULT" = success
-
-  api-changeset:
-    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
-    needs: checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 5
-    steps:
-      - name: Require all verification lanes to pass
-        env:
-          RESULT: ${{ needs.checks.result }}
-        run: test "$RESULT" = success
-
-  # Preserve the existing required-check names. Never report skipped/cancelled
-  # matrix work as success; a failure in any lane fails all aggregate gates.
-  lint:
-    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
-    needs: checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 5
-    steps:
-      - name: Require all verification lanes to pass
-        env:
-          RESULT: ${{ needs.checks.result }}
-        run: test "$RESULT" = success
-
   test:
     if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: checks
@@ -129,26 +223,10 @@ jobs:
           RESULT: ${{ needs.checks.result }}
         run: test "$RESULT" = success
 
-  build:
-    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
-    needs: checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 5
-    steps:
-      - name: Require all verification lanes to pass
-        env:
-          RESULT: ${{ needs.checks.result }}
-        run: test "$RESULT" = success
-
-  # Diffs the PR's published-package sizes against the latest successful main
-  # run and keeps ONE sticky PR comment up to date. Fails on huge tarball
-  # growth (thresholds in scripts/check-package-size.mjs) unless the PR
-  # carries the `size-increase-expected` label. Separate from `build` so that
-  # job keeps its read-only token; only this one gets `pull-requests: write`.
   package-size:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
+    needs: checks
     permissions:
       contents: read
       actions: read # download the baseline artifact from a main run
@@ -218,3 +296,28 @@ jobs:
           else
             gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@size-comment.md
           fi
+
+  # Publishing SARIF needs a write token; all verification jobs stay read-only.
+  # This informational upload cannot change the advisory gate result.
+  security-report:
+    name: Security report
+    if: "${{ !cancelled() && github.actor != 'dependabot[bot]' }}"
+    needs: checks
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Download advisory report
+        uses: actions/download-artifact@v8
+        with:
+          name: shipped-advisories-sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories
