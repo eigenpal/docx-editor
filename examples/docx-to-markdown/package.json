@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:preview": "node scripts/check-preview.mjs"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",

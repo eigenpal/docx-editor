@@ -31,6 +31,14 @@ Images use `images: { syntax: 'html' }` to preserve each occurrence's displayed 
 The preview keeps inline images beside their surrounding text and shrinks oversized images to fit.
 Image metadata includes intrinsic pixel dimensions and each occurrence's displayed dimensions in CSS pixels.
 See the [image API guide](../../packages/docx-to-markdown/docs/images.md) for custom previews and server delivery.
-Comments and tracked changes appear outside the paper, in a sidebar on wide previews or a collapsible panel on narrow previews.
+Use **See comments** or **See tracked changes** beside a page number to expand its review panel.
+Panels start closed and appear outside the paper in both Preview and Source views.
 Nested tables use inline HTML. Cropping, rotation, and floating text wrapping are not reproduced.
 The preview sanitizes HTML before rendering it.
+
+## Check preview layout
+
+Run `bun run --filter './examples/docx-to-markdown' check:preview` from the repository root.
+The check starts its own Vite server and uses Playwright Chromium.
+It verifies all sample pages, review controls, and content containment at desktop and mobile widths in Preview and Source views.
+CI runs this check after the demo builds.
