@@ -749,11 +749,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Page borders',
     category: 'layout',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page borders render with z-order, offset modes, and first-page filters. You cannot edit them from the UI.',
+      'Page borders draw a frame on every sheet of their section. Offset modes, z-order, and the first-page filter apply. Art borders do not draw. You cannot edit page borders from the UI.',
   },
   {
     id: 'layout.line-numbers',
