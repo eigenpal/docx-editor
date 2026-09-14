@@ -77,3 +77,49 @@ export function borderStrokeWidthPt(val: string, widthPt: number): number {
   if (isCompoundBorderVal(val)) return computeDoubleBorderMetricsPt(widthPt).extentPt;
   return widthPt;
 }
+
+/**
+ * Every `ST_Border` value that is a LINE (ECMA-376 §17.18.2), `nil` / `none` excluded.
+ *
+ * The rest of the enumeration — `apples`, `cabins`, `iceCreamCones`, another ninety of them —
+ * are ART borders: repeated bitmap tiles, not strokes. They carry a `w:sz` and a `w:color`
+ * like any other edge, so nothing about the attributes says which kind an edge is, and a
+ * reader that only checks for `none` paints a row of apples as a plain black rule.
+ *
+ * Page borders are where this bites: art borders are legal ONLY on `w:pgBorders`, and a
+ * decorative frame silently degraded to a box is a worse answer than no frame at all.
+ * Paragraph and table borders keep their existing fall-through-to-solid behaviour, which for
+ * them is unreachable by the schema anyway.
+ */
+const LINE_BORDER_VALS = new Set([
+  'single',
+  'thick',
+  'double',
+  'dotted',
+  'dashed',
+  'dotDash',
+  'dotDotDash',
+  'triple',
+  'thinThickSmallGap',
+  'thickThinSmallGap',
+  'thinThickThinSmallGap',
+  'thinThickMediumGap',
+  'thickThinMediumGap',
+  'thinThickThinMediumGap',
+  'thinThickLargeGap',
+  'thickThinLargeGap',
+  'thinThickThinLargeGap',
+  'wave',
+  'doubleWave',
+  'dashSmallGap',
+  'dashDotStroked',
+  'threeDEmboss',
+  'threeDEngrave',
+  'outset',
+  'inset',
+]);
+
+/** True when `ST_Border` names a line style rather than a decorative art border. */
+export function isLineBorderVal(val: string): boolean {
+  return LINE_BORDER_VALS.has(val);
+}
