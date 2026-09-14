@@ -57,8 +57,8 @@ function ImagePreview({
     <img
       src={imageUrl}
       alt={alt}
-      width={width}
-      height={height}
+      width={Math.round(width)}
+      height={Math.round(height)}
       style={{
         display: 'inline',
         width,
