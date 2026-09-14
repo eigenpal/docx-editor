@@ -108,20 +108,28 @@ function mount(bytes: Uint8Array): {
 } {
   const container = document.createElement('div');
   document.body.append(container);
-  const editor = createDocxEditor({
-    container,
-    document: bytes,
-    author: 'Grace Hopper',
-    modules: [reviewModule()],
-  });
-  if (!editor.surface) throw new Error('surface failed to mount');
+  let editor: DocxEditorInstance | undefined;
+  try {
+    editor = createDocxEditor({
+      container,
+      document: bytes,
+      author: 'Grace Hopper',
+      modules: [reviewModule()],
+    });
+    if (!editor.surface) throw new Error('surface failed to mount');
+  } catch (error) {
+    editor?.destroy();
+    container.remove();
+    throw error;
+  }
+  const mounted = editor;
   // `destroy` unmounts the editor, not the host: the container must leave `document` too, or
   // every test after this one queries a page the previous test painted.
   const dispose = () => {
-    editor.destroy();
+    mounted.destroy();
     container.remove();
   };
-  return { editor, container, dispose };
+  return { editor: mounted, container, dispose };
 }
 
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;

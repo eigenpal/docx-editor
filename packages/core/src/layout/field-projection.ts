@@ -301,14 +301,17 @@ export function piecesOfParagraph(
     // `w:hyperlink` captured into `resultLink` wins, exactly as it does for every other field.
     // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
-    const { resultLink, linkSpec, resultRevisions, formField } = pending;
+    const { resultLink, linkSpec, resultRevisions, capturedResultRevisions, formField } = pending;
     let carriedMemo: PieceEmitExtras | undefined;
     const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
       const fieldLink = !resultLink && linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
       const carriedLink = resultLink ?? fieldLink;
+      // Gated on the CAPTURE, not on the stack being non-empty: an untracked first result run
+      // captures an empty stack, and that empty stack is the answer — not whatever wrapper the
+      // walk happens to be inside when `end` arrives.
       carriedMemo = {
-        ...(resultRevisions.length > 0 ? { revisionsOverride: resultRevisions } : {}),
+        ...(capturedResultRevisions ? { revisionsOverride: resultRevisions } : {}),
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
         fieldAtom: { formField },
       };

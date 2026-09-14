@@ -199,16 +199,16 @@ describe('review author layout filter', () => {
         expect(result.every((piece) => piece.fieldAtom !== undefined)).toBe(true);
       });
 
+      test(`a hidden move-to inside ${label} paints as ordinary text`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + moveTo('Ada', 'moved'))}</w:p>`, ['Ada']);
+        expect(attributionOf(result, 'moved')).toBeUndefined();
+      });
+
       // The two guards below pass on the old route too; they pin the boundary so the fix
       // cannot over-filter a visible author or resurrect a hidden deletion.
       test(`a visible insertion inside ${label} keeps its attribution`, () => {
         const result = pieces(`<w:p>${wrap(run('A ') + ins('Ada', 'new'))}</w:p>`, ['Grace']);
         expect(attributionOf(result, 'new')).toEqual(['Ada']);
-      });
-
-      test(`a hidden move-to inside ${label} paints as ordinary text`, () => {
-        const result = pieces(`<w:p>${wrap(run('A ') + moveTo('Ada', 'moved'))}</w:p>`, ['Ada']);
-        expect(attributionOf(result, 'moved')).toBeUndefined();
       });
 
       test(`a hidden deletion inside ${label} leaves the text flow`, () => {
@@ -300,6 +300,20 @@ describe('review author layout filter', () => {
       );
       expect(rejected.map((piece) => piece.text)).toEqual(['A ']);
     });
+  });
+
+  test('a deleted positional tab follows the display mode like the text beside it', () => {
+    // `w:ptab` is pushed without its own visibility gate; the projection in `push` is what
+    // resolves it away, so a struck tab must vanish from the proposed view with its words.
+    const struck = `<w:p>${run('A')}<w:del w:id="6" w:author="Ada"><w:r><w:ptab w:alignment="right" w:relativeTo="margin"/></w:r></w:del>${run('B')}</w:p>`;
+    const shown = pieces(struck, []);
+    expect(shown.some((piece) => piece.positionalTab !== undefined)).toBe(true);
+    expect(shown.find((piece) => piece.positionalTab)!.revisions?.[0]?.kind).toBe('delete');
+    const proposed = pieces(struck, [], 'proposed');
+    expect(proposed.map((piece) => piece.text)).toEqual(['A', 'B']);
+    expect(proposed.some((piece) => piece.positionalTab !== undefined)).toBe(false);
+    const hidden = pieces(struck, ['Ada']);
+    expect(hidden.some((piece) => piece.positionalTab !== undefined)).toBe(false);
   });
 
   test('projected sections retain the canonical source index of their surviving break', () => {

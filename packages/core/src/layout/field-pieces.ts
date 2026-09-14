@@ -230,16 +230,6 @@ export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
 
 /**
- * Pending live or inert-cache projection for one atomic field unit.
- *
- * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
- * is not independently addressable — it only donates display text and result-run style.
- * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
- *
- * The state only; the machinery that fills and flushes it stays closure-bound inside
- * `piecesOfParagraph`.
- */
-/**
  * What a piece emitter may attach beyond text, style and range.
  *
  * The vocabulary of `push` in the paragraph walk, kept here with the piece itself so the walk
@@ -264,6 +254,16 @@ export interface PieceEmitExtras {
   readonly fieldAtom?: FieldAtomMarker;
 }
 
+/**
+ * Pending live or inert-cache projection for one atomic field unit.
+ *
+ * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
+ * is not independently addressable — it only donates display text and result-run style.
+ * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
+ *
+ * The state only; the machinery that fills and flushes it stays closure-bound inside
+ * `piecesOfParagraph`.
+ */
 export interface PendingFieldProjection {
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
