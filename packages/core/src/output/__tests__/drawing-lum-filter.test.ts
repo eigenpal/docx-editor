@@ -197,8 +197,10 @@ describe('drawingFilterStyle', () => {
     );
   });
 
-  test('is stable across calls for the paint fingerprint', () => {
-    const effects = { grayscale: false, brightness: 70.001, contrast: -70 };
-    expect(drawingFilterStyle(effects)).toBe(drawingFilterStyle({ ...effects }));
+  test('rounds float noise out of the paint fingerprint string', () => {
+    // 1 + -70 / 100 is 0.30000000000000004; the string must not carry that.
+    expect(drawingFilterStyle({ grayscale: false, brightness: 70.001, contrast: -70 })).toBe(
+      'contrast(0.157067) brightness(1.910013)'
+    );
   });
 });
