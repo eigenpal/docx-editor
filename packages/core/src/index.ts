@@ -74,6 +74,9 @@ export type * from './contracts/editor.ts';
 export {
   WORD_DEFAULT_FONT,
   loadFonts,
+  customFonts,
+  type CustomFontsOptions,
+  type CustomFontsResolver,
   createFontSource,
   FONT_RESOLVER_BRAND,
   FONT_RESOLVER_MARK_KEY,

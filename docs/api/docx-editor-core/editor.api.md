@@ -909,6 +909,17 @@ export function cropPermilleFromPercent(percent: number): number;
 export function cssPixelsToLayoutPoints(pixels: number, paintScale: number): number;
 
 // @public
+export function customFonts(options: CustomFontsOptions): CustomFontsResolver;
+
+// @public
+export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
+    readonly onFailure?: (failure: FontLoadFailure) => void;
+}
+
+// @public
+export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
+
+// @public
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits;
 
 // @public
@@ -1420,6 +1431,7 @@ export interface LoadFontsRequest {
     readonly cacheName?: string;
     readonly fetcher?: typeof fetch;
     readonly maxFontBytes?: number;
+    readonly signal?: AbortSignal;
     // (undocumented)
     readonly sources: readonly FontUrlSource[];
 }

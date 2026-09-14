@@ -787,6 +787,17 @@ export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
 };
 
 // @public
+export function customFonts(options: CustomFontsOptions): CustomFontsResolver;
+
+// @public
+export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
+    readonly onFailure?: (failure: FontLoadFailure) => void;
+}
+
+// @public
+export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
+
+// @public
 export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
@@ -2225,6 +2236,7 @@ export interface LoadFontsRequest {
     readonly cacheName?: string;
     readonly fetcher?: typeof fetch;
     readonly maxFontBytes?: number;
+    readonly signal?: AbortSignal;
     // (undocumented)
     readonly sources: readonly FontUrlSource[];
 }

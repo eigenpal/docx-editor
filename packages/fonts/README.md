@@ -43,7 +43,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
   // its identity changes. An inline resolver is a new function on every render.
   // `useFonts` keeps one for the component's life.
   const fonts = useFonts(packagedFonts());
-  return <DocxEditor.Root document={bytes} fonts={fonts} />;
+  return <DocxEditor document={bytes} fonts={fonts} />;
 }
 ```
 
@@ -65,6 +65,57 @@ import { defaultFonts } from '@docx-editor.dev/fonts';
 const fonts = await defaultFonts(); // Add families to load a subset.
 const editor = createDocxEditor({ document: bytes, fonts });
 ```
+
+## Custom fonts for the editor
+
+Use `customFonts()` to supply brand fonts or licensed Word fonts to the editor.
+Put it first so your supplied faces take precedence.
+
+```tsx
+import { customFonts } from '@docx-editor.dev/core/editor';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(
+    customFonts({
+      sources: [
+        {
+          url: '/fonts/AcmeSans-Regular.ttf',
+          family: 'Acme Sans',
+          weight: 400,
+          style: 'normal',
+        },
+        {
+          url: '/fonts/AcmeSans-Bold.ttf',
+          family: 'Acme Sans',
+          weight: 700,
+          style: 'normal',
+        },
+      ],
+      onFailure: (failure) => console.warn(failure.request.family, failure.reason),
+    }),
+    packagedFonts(),
+    googleFonts()
+  );
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
+```
+
+`customFonts()` loads all configured faces when the editor resolves its fonts.
+Creating the resolver fetches nothing. It skips faces already supplied by earlier origins,
+matching family names without case sensitivity, plus weight and style.
+
+Loaded company fonts become available for selection, including in blank documents.
+Loading fonts does not apply them to document text.
+
+The helper uses `loadFonts` for validation and caching. `onFailure` receives each
+failed face and defaults to `console.warn`. Cancellation does not trigger `onFailure`.
+Core registers the supplied bytes under private names, without changing fonts elsewhere in your app.
+
+`loadFonts()` from Core remains the lower-level eager loader. It starts loading
+every listed source when called and returns admitted bytes with a typed `failures` list.
 
 ## Font registration
 
@@ -106,12 +157,14 @@ family. Each face's `sha256:` hash is baked at packaging time
 `@docx-editor.dev/fonts/google` ships nothing in the bundle and fetches nothing until a
 document names a family the catalog covers.
 
-```ts
+```tsx
 import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
-// A resolver, not a value: the editor calls it once per load with the families
-// the file declares plus its default face, and only those are fetched.
-<DocxEditor.Root document={bytes} fonts={googleFonts()} />;
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(googleFonts());
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
 ```
 
 Open a file that uses only Calibri and one family is fetched (Carlito, its

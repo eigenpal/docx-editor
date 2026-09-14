@@ -75,6 +75,9 @@ function aliasForFamily(hashes: readonly string[]): string {
   return `docx-embedded-${digest.toString(36)}`;
 }
 
+/** Match the family normalization used by measurement's fontRequestKey. */
+const familyKey = (family: string): string => family.trim().toLowerCase();
+
 function defaultEnvironment(): EmbeddedFontFaceEnvironment {
   const doc = typeof document !== 'undefined' ? document : undefined;
   const fontSet = (doc as { fonts?: FontFaceSetLike } | undefined)?.fonts;
@@ -114,7 +117,7 @@ export async function registerEmbeddedFontFaces(
   // One alias per declared family, covering all of that family's faces.
   const byFamily = new Map<string, FontSource[]>();
   for (const source of sources) {
-    const family = source.request.family;
+    const family = familyKey(source.request.family);
     const list = byFamily.get(family);
     if (list) list.push(source);
     else byFamily.set(family, [source]);
@@ -154,15 +157,16 @@ export async function registerEmbeddedFontFaces(
   // never displaces a face registered under that name directly — a real Calibri beats a
   // stand-in for Calibri, the same precedence composition already applies to bytes.
   for (const substitution of substitutions) {
-    if (aliases.has(substitution.from.family)) continue;
-    const alias = aliases.get(substitution.to.family);
-    if (alias !== undefined) aliases.set(substitution.from.family, alias);
+    const from = familyKey(substitution.from.family);
+    if (aliases.has(from)) continue;
+    const alias = aliases.get(familyKey(substitution.to.family));
+    if (alias !== undefined) aliases.set(from, alias);
   }
 
   let disposed = false;
   return {
     installed: added.length,
-    alias: (family) => (disposed ? undefined : aliases.get(family)),
+    alias: (family) => (disposed ? undefined : aliases.get(familyKey(family))),
     dispose() {
       if (disposed) return;
       disposed = true;

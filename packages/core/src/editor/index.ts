@@ -60,6 +60,7 @@ export { partOfNodeId } from './surface-scope.ts';
  * against that member could otherwise not name what it gets back.
  */
 export type { SectionAnchor } from './section-scope.ts';
+export { customFonts, type CustomFontsOptions, type CustomFontsResolver } from './custom-fonts.ts';
 export {
   createFontSource,
   loadFonts,

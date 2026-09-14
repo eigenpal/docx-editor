@@ -48,6 +48,7 @@ origin in a browser. No optional font source is enabled by default.
 | `packagedFonts()`          | No                           | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
 | `defaultFonts()`           | No                           | All 20 faces of the five defaults, every time       | Uses metric-compatible substitutes |
 | `googleFonts()`            | Yes, for catalogued families | The catalog families in use, plus the default face  | Uses the fetched faces             |
+| `customFonts()`            | Depends on your URLs         | All configured faces when the editor resolves fonts | Uses admitted files                |
 | `loadFonts` with your URLs | Depends on your URLs         | The URLs you list                                   | Uses admitted files                |
 | No usable source           | No                           | Nothing                                             | Canvas or fixed fallback           |
 
@@ -184,39 +185,73 @@ Check headers, sidebars, and other app text after upgrading; their previous font
 
 ## Load your own fonts
 
-Use `loadFonts` for brand fonts or licensed Word fonts.
+Use `customFonts()` to supply brand fonts or licensed Word fonts to the editor.
+Put it first so your supplied faces take precedence.
 
-```ts
-import { loadFonts } from '@docx-editor.dev/core/editor';
+```tsx
+import { customFonts } from '@docx-editor.dev/core/editor';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
-const brand = await loadFonts({
-  sources: [
-    {
-      url: '/fonts/AcmeSans-Regular.ttf',
-      family: 'Acme Sans',
-      weight: 400,
-      style: 'normal',
-    },
-    {
-      url: '/fonts/AcmeSans-Bold.ttf',
-      family: 'Acme Sans',
-      weight: 700,
-      style: 'normal',
-      hash: 'sha256:…',
-    },
-  ],
-});
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(
+    customFonts({
+      sources: [
+        {
+          url: '/fonts/AcmeSans-Regular.ttf',
+          family: 'Acme Sans',
+          weight: 400,
+          style: 'normal',
+        },
+        {
+          url: '/fonts/AcmeSans-Bold.ttf',
+          family: 'Acme Sans',
+          weight: 700,
+          style: 'normal',
+        },
+      ],
+      onFailure: (failure) => console.warn(failure.request.family, failure.reason),
+    }),
+    packagedFonts(),
+    googleFonts()
+  );
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
 ```
 
-`brand` is a fragment. Compose it with the packaged substitutes the same way you
-compose any two origins, and put it first so your own faces win:
+`customFonts()` loads all configured faces when the editor resolves its fonts.
+Creating the resolver fetches nothing. It skips faces already supplied by earlier origins,
+matching family names without case sensitivity, plus weight and style.
+
+Loaded company fonts become available for selection, including in blank documents.
+Loading fonts does not apply them to document text.
+
+The helper uses `loadFonts` for validation and caching. `onFailure` receives each
+failed face and defaults to `console.warn`. Cancellation does not trigger `onFailure`.
+Core registers the supplied bytes under private names, without changing fonts elsewhere in your app.
+
+### Load font bytes eagerly
+
+`loadFonts()` remains the lower-level eager loader. It starts loading every listed
+source when called and returns admitted bytes with a typed `failures` list.
+Use it when you need font bytes before opening a document.
 
 ```ts
-import { packagedFonts } from '@docx-editor.dev/fonts';
+import { createDocxEditor, loadFonts, type FontUrlSource } from '@docx-editor.dev/core/editor';
 
-const { document, fonts } = useDocxSource(url, {
-  fonts: [brand, packagedFonts()],
-});
+const sources: FontUrlSource[] = [
+  { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
+];
+
+async function mountEditor(container: HTMLElement, bytes: Uint8Array) {
+  const editor = createDocxEditor({
+    document: bytes,
+    fonts: await loadFonts({ sources }),
+  });
+  editor.attach(container);
+  return editor;
+}
 ```
 
 | `loadFonts` behavior | Result                                                                 |
@@ -259,9 +294,9 @@ descriptors or bytes.
 
 ## Load fonts on demand
 
-`packagedFonts()` and `googleFonts()` are resolvers. The editor calls a resolver
-once per document load, after parsing, with the family names that document
-declares.
+`customFonts()`, `packagedFonts()`, and `googleFonts()` return resolvers.
+Creating them fetches nothing. When the editor resolves fonts, `customFonts()` loads all configured faces.
+`packagedFonts()` and `googleFonts()` load families requested by the document or its default font.
 
 `useDocxSource` handles the identity of a resolver for you. When you pass one
 directly to the `fonts` prop, use `useFonts` instead: an inline resolver is a new
@@ -277,7 +312,7 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
   const fonts = useFonts(packagedFonts(), googleFonts());
-  return <DocxEditor.Root document={bytes} fonts={fonts} />;
+  return <DocxEditor document={bytes} fonts={fonts} />;
 }
 ```
 
