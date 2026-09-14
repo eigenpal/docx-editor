@@ -1,7 +1,7 @@
 import { numberingFontInputs } from './numbering-font-inputs.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import type { ThemeFonts } from '../layout/run-style.ts';
-import { eastAsianLanguageFontFamilies } from '../layout/east-asian-font-families.ts';
+import { createEastAsianLanguageFontScanner } from '../layout/east-asian-font-families.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   symbolFieldFontFamilies,
@@ -11,6 +11,7 @@ import {
 const cache = new WeakMap<
   TreeDocxSessionView,
   {
+    eastAsianFonts: ReturnType<typeof createEastAsianLanguageFontScanner>;
     revision: number;
     families: readonly string[];
     numberingInputs: readonly string[];
@@ -26,6 +27,7 @@ export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonl
   const revision = session.packageRevision();
   const cached = cache.get(session);
   if (cached?.revision === revision) return cached.families;
+  const eastAsianFonts = cached?.eastAsianFonts ?? createEastAsianLanguageFontScanner();
   const roots = session.storyParts().map((part) => part.root);
   const stylesRoot = session.stylesRoot();
   const numberingRoot = session.numberingRoot();
@@ -43,11 +45,12 @@ export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonl
     : usedNumberingFontFamilies(roots, numberingRoot, stylesRoot, theme);
   const families = [
     ...session.symbolFontFamilies(),
-    ...eastAsianLanguageFontFamilies(roots, stylesRoot, theme),
+    ...eastAsianFonts(roots, stylesRoot, theme),
     ...symbolFieldFontFamilies(roots),
     ...numberingFamilies,
   ];
   cache.set(session, {
+    eastAsianFonts,
     revision,
     families,
     numberingInputs,

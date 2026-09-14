@@ -23,7 +23,7 @@ interface ScanContext {
   readonly depth: number;
 }
 
-const scan = createFontFamilyTreeCache<ScanContext>((node, context) => {
+function inspectFontNode(node: OoxmlElement, context: ScanContext) {
   const { styles, theme, supplementalFamilies, depth } = context;
   if (node.kind === 'table') {
     const structure = readTableStructure(node, 468, depth, styles);
@@ -72,31 +72,38 @@ const scan = createFontFamilyTreeCache<ScanContext>((node, context) => {
       ? { ...context, cellStyle: undefined, key: `${context.baseKey}|${depth}|undefined` }
       : context;
   return { families: [...families], children: fontScanChildren(node, next).reverse() };
-});
+}
 
-let previousContext: ScanContext | undefined;
-let previousStylesRoot: OoxmlElement | null | undefined;
+/** Reusable discovery belongs to the live editor session that needs incremental updates. */
+export function createEastAsianLanguageFontScanner(): typeof eastAsianLanguageFontFamilies {
+  const scan = createFontFamilyTreeCache(inspectFontNode);
+  let previousContext: ScanContext | undefined;
+  let previousStylesRoot: OoxmlElement | null | undefined;
+  return (roots, stylesRoot, theme) => {
+    if (!previousContext || previousStylesRoot !== stylesRoot || previousContext.theme !== theme) {
+      const styles = buildStyleCascadeTable(stylesRoot, theme);
+      previousStylesRoot = stylesRoot;
+      previousContext = {
+        key: `${styles.cacheToken}|0|undefined`,
+        baseKey: styles.cacheToken,
+        styles,
+        theme,
+        depth: 0,
+        supplementalFamilies: new Set([
+          ...Object.values(theme.majorSupplemental ?? {}),
+          ...Object.values(theme.minorSupplemental ?? {}),
+        ]),
+      };
+    }
+    return scan([...roots].reverse(), previousContext);
+  };
+}
 
-/** Font origins must receive language-selected faces before the first shaping pass. */
+/** One-shot export discovery releases its subtree cache before layout allocates its live set. */
 export function eastAsianLanguageFontFamilies(
   roots: readonly OoxmlElement[],
   stylesRoot: OoxmlElement | null,
   theme: ThemeFonts
 ): readonly string[] {
-  if (!previousContext || previousStylesRoot !== stylesRoot || previousContext.theme !== theme) {
-    const styles = buildStyleCascadeTable(stylesRoot, theme);
-    previousStylesRoot = stylesRoot;
-    previousContext = {
-      key: `${styles.cacheToken}|0|undefined`,
-      baseKey: styles.cacheToken,
-      styles,
-      theme,
-      depth: 0,
-      supplementalFamilies: new Set([
-        ...Object.values(theme.majorSupplemental ?? {}),
-        ...Object.values(theme.minorSupplemental ?? {}),
-      ]),
-    };
-  }
-  return scan([...roots].reverse(), previousContext);
+  return createEastAsianLanguageFontScanner()(roots, stylesRoot, theme);
 }
