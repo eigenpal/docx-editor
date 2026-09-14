@@ -45,7 +45,7 @@ function open(bytes = formFieldDocx(true)) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       expect(editor.fontMeasurement().measurer).toBe('shaped');
-      expect(editor.surface).not.toBe(previous);
+      expect(editor.surface).toBe(previous);
     },
     dispose() {
       release();

@@ -38,6 +38,7 @@ describe('the paint-reuse key', () => {
     const base = keyOf({ authors: { Ada: { color: '#111' } } });
     expect(keyOf({ authors: { Ada: { color: '#222' } } })).not.toBe(base);
     expect(keyOf({ authors: { Ada: { color: '#111', background: '#eee' } } })).not.toBe(base);
+    expect(keyOf({ authors: { Ada: { color: '#111', activeBackground: '#eee' } } })).not.toBe(base);
     expect(keyOf({ authors: { Ada: { color: '#111', spanClassName: 'x' } } })).not.toBe(base);
     // Two class lists differing only near the end: the digest is uncapped for style fields
     // precisely so this cannot collide.

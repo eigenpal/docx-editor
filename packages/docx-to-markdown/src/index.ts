@@ -1,3 +1,21 @@
+import {
+  checkExportAbort,
+  extractMedia,
+  imageOptions,
+  resolveMedia,
+  withExportAbort,
+} from './media-extract.ts';
+import type { MarkdownImageData, MarkdownProjectionOptions } from './media-types.ts';
+export type {
+  MarkdownImageData,
+  MarkdownImageAsset,
+  MarkdownImageOccurrence,
+  MarkdownImageOptions,
+  MarkdownProjectionOptions,
+} from './media-types.ts';
+export { MarkdownMediaError, MarkdownBundleError } from './media-errors.ts';
+export { toMarkdownJSON, createMarkdownZip } from './markdown-bundle.ts';
+export type { MarkdownJSONResult, MarkdownJSONImage } from './markdown-bundle.ts';
 /**
  * Server-first DOCX to Markdown conversion over the shared semantic layout engine.
  *
@@ -26,10 +44,7 @@ import {
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { FONT_ASSET_ROOT, loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
-import {
-  exportMarkdownFrom as translateMarkdown,
-  exportMarkdownLayout as translateMarkdownLayout,
-} from './markdown.ts';
+import { exportMarkdownLayout as translateMarkdownLayout } from './markdown.ts';
 import type {
   MarkdownExportOptions,
   MarkdownExportResult,
@@ -345,14 +360,21 @@ export async function openDocumentForExport(
 }
 
 /** Translate an existing shared export session without reopening or re-laying out it. @public */
-export function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult> {
-  return translateMarkdown(session).then((result) =>
-    withFontResolution(
-      result,
-      'fontResolution' in session
-        ? (session as MarkdownExportSession).fontResolution
-        : result.fontResolution
-    )
+export async function exportMarkdownFrom(
+  session: ExportSession,
+  options: MarkdownProjectionOptions = {}
+): Promise<MarkdownExportResult> {
+  const images = imageOptions(options);
+  const layout = await withExportAbort(() => session.layout(), options.signal);
+  checkExportAbort(options.signal);
+  const data = extractMedia(layout, session, images);
+  const media = images ? await resolveMedia(data, options) : undefined;
+  const result = translateMarkdownLayout(layout, media, images?.syntax);
+  return withFontResolution(
+    result,
+    'fontResolution' in session
+      ? (session as MarkdownExportSession).fontResolution
+      : result.fontResolution
   );
 }
 
@@ -366,7 +388,10 @@ export async function exportMarkdown(
   source: ExportDocumentSource,
   options: MarkdownExportOptions = {}
 ): Promise<MarkdownExportResult> {
-  const opened = await openDocumentForExport(source, options);
+  const images = imageOptions(options);
+  checkExportAbort(options.signal);
+  const { images: _images, ...openOptions } = options;
+  const opened = await openDocumentForExport(source, openOptions);
   if (!opened.ok) {
     if (opened.reason === 'aborted') {
       throw new ExportResourceError('aborted', 'Export was aborted before layout', {
@@ -376,10 +401,16 @@ export async function exportMarkdown(
     throw new DocumentOpenError(opened.reason, opened.detail);
   }
   let layout: ExportSemanticLayout;
+  let data: readonly MarkdownImageData[];
   try {
     layout = await opened.session.layout();
+    checkExportAbort(options.signal);
+    data = extractMedia(layout, opened.session, images);
   } finally {
     opened.session.dispose();
   }
-  return withFontResolution(translateMarkdownLayout(layout), opened.session.fontResolution);
+  const result = images
+    ? translateMarkdownLayout(layout, await resolveMedia(data, options), images.syntax)
+    : translateMarkdownLayout(layout);
+  return withFontResolution(result, opened.session.fontResolution);
 }

@@ -116,6 +116,7 @@ export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsReso
 // @public
 export interface PackagedFontsFragment extends DefaultFontsFragment {
     readonly families: readonly WordDefaultFamily[];
+    readonly supportedFamilies?: readonly WordDefaultFamily[];
 }
 
 // @public

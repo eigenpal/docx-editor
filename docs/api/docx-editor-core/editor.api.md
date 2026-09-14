@@ -1137,6 +1137,7 @@ export interface FontConfigurationFragment {
     readonly sources?: readonly FontSource[];
     // (undocumented)
     readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public
@@ -2126,6 +2127,7 @@ export interface RevisionAuthorAssignments {
 
 // @public
 export interface RevisionAuthorStyle {
+    activeBackground?: string;
     avatarUrl?: string;
     background?: string;
     color?: string;

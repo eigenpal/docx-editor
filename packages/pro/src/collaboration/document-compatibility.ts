@@ -20,7 +20,7 @@ export interface DocumentCollaborationVersions {
 /**
  * Versions supported by this full-document collaboration release.
  *
- * Compare all four fields before admitting a client to synchronization. These values
+ * Use assertDocumentCollaborationCompatibility before admitting a client to synchronization. These values
  * describe the application schema, not the DOCX format or the Yjs binary update format.
  * Releases with the same tuple can share rooms. A changed tuple requires a coordinated
  * upgrade. This descriptor does not migrate persisted rooms or authenticate clients.

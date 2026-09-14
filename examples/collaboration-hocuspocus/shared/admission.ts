@@ -1,7 +1,8 @@
 import {
   assertDocumentCollaborationCompatibility,
+  assertCollaborationFormatCompatibility,
   CollaborationSchemaError,
-  DOCUMENT_COLLABORATION_VERSIONS,
+  COLLABORATION_FORMAT_VERSION,
 } from '@docx-editor.dev/pro/collaboration';
 
 export function admissionError(reason: string): Error & { readonly reason: string } {
@@ -11,14 +12,14 @@ export function admissionError(reason: string): Error & { readonly reason: strin
 
 /** This example's authentication envelope; the provider's public token contract stays a string. */
 export function encodeDemoToken(token: string): string {
-  return JSON.stringify({ token, versions: DOCUMENT_COLLABORATION_VERSIONS });
+  return JSON.stringify({ token, collaborationVersion: COLLABORATION_FORMAT_VERSION });
 }
 
 /** Authenticate and reject incompatible clients before Hocuspocus allows document sync. */
 export function authenticateDemoToken(encoded: string, expectedToken: string): void {
   // A valid raw secret from the previous demo is still an incompatible handshake,
   // including secrets that themselves happen to be valid JSON.
-  if (encoded === expectedToken) throw admissionError('collaboration-version-required');
+  if (encoded === expectedToken) throw admissionError('collaboration-format-mismatch');
   let envelope: unknown;
   try {
     envelope = JSON.parse(encoded);
@@ -34,9 +35,15 @@ export function authenticateDemoToken(encoded: string, expectedToken: string): v
   ) {
     throw admissionError('invalid token');
   }
-  if (!('versions' in envelope)) throw admissionError('collaboration-version-required');
   try {
-    assertDocumentCollaborationCompatibility(envelope.versions);
+    if ('collaborationVersion' in envelope) {
+      assertCollaborationFormatCompatibility(envelope.collaborationVersion);
+    } else if ('versions' in envelope) {
+      // Retain admission for compatible clients using this demo's previous envelope.
+      assertDocumentCollaborationCompatibility(envelope.versions);
+    } else {
+      throw admissionError('collaboration-format-mismatch');
+    }
   } catch (error) {
     // Hocuspocus sends .reason as the authentication failure reason. Preserve a stable
     // code for this demo's recovery screen without changing the library transport contract.

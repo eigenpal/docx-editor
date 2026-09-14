@@ -14,7 +14,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
+import {
+  isCollaborationFailureCode,
+  type CollaborationIdentity,
+} from '@docx-editor.dev/core/collaboration';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
@@ -109,9 +112,9 @@ const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
  * A joiner that never syncs would otherwise wait forever on a room the server does not
  * hold. The same bounded-wait rule the bootstrap paths already use applies here, with the
  * same failure code. A server that rejects the auth token never syncs either, so
- * `authenticationFailed` rejects immediately — code `initialization-aborted`, because the
- * server ended this initialization, with a detail naming authentication — instead of
- * burning the whole timeout.
+ * `authenticationFailed` rejects immediately. Preserve known collaboration failure codes
+ * so a version refusal cannot be mistaken for an expired credential. Other reasons keep
+ * `initialization-aborted` and diagnostic detail instead of burning the whole timeout.
  */
 function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -132,7 +135,7 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
       cleanup();
       reject(
         new CollaborationSchemaError(
-          'initialization-aborted',
+          isCollaborationFailureCode(event.reason) ? event.reason : 'initialization-aborted',
           `authentication failed: ${event.reason}`
         )
       );
@@ -205,8 +208,11 @@ export async function createHocuspocusCollaboration(
   connectedProvider.on('status', onStatus);
   // A token the server later rejects (an expired JWT on reconnect) stops replication for
   // good: surface it as a terminal session error rather than a silent stall.
-  const onAuthenticationFailed = (): void => {
-    session.setTransportStatus('error', 'authentication-failed');
+  const onAuthenticationFailed = (event: { readonly reason: string }): void => {
+    session.setTransportStatus(
+      'error',
+      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed'
+    );
   };
   connectedProvider.on('authenticationFailed', onAuthenticationFailed);
 

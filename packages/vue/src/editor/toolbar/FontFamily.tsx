@@ -1,3 +1,4 @@
+import { useDocxEditor } from '../context';
 import {
   computed,
   defineComponent,
@@ -109,6 +110,13 @@ const FontFamilyContent = defineComponent({
   setup(props, { slots }) {
     const context = useFontFamilyContext();
     const label = useToolbarLabel();
+    const query = ref('');
+    watch(
+      () => context?.open.value,
+      (open) => {
+        if (!open) query.value = '';
+      }
+    );
     return () => {
       if (!context || !context.open.value) return null;
       const shared = {
@@ -124,7 +132,9 @@ const FontFamilyContent = defineComponent({
         const grouped = FONT_GROUPS.map((group) => ({
           ...group,
           fonts: context.options.value.filter(
-            (option) => (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
+            (option) =>
+              option.toLowerCase().includes(query.value.toLowerCase()) &&
+              (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
           ),
         })).filter((group) => group.fonts.length > 0);
         items = grouped.flatMap((group, index) => {
@@ -142,7 +152,24 @@ const FontFamilyContent = defineComponent({
         });
       }
       if (props.asChild) return <Slot {...shared}>{items}</Slot>;
-      return <div {...shared}>{items}</div>;
+      if (slots.default) return <div {...shared}>{items}</div>;
+      return (
+        <div class={shared.class}>
+          <input
+            type="search"
+            class="docx-toolbar__font-search"
+            aria-label={label('font.search')}
+            placeholder={label('font.search')}
+            value={query.value}
+            onInput={(event) => {
+              query.value = (event.target as HTMLInputElement).value;
+            }}
+          />
+          <div role="listbox" class="docx-toolbar__font-options">
+            {items}
+          </div>
+        </div>
+      );
     };
   },
 });
@@ -155,6 +182,7 @@ const FontFamilyItem = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
+    const editor = useDocxEditor();
     const context = useFontFamilyContext();
     return () => {
       if (!context) return null;
@@ -167,6 +195,7 @@ const FontFamilyItem = defineComponent({
         onClick: () => {
           context.setValue(props.value);
           context.setOpen(false);
+          editor.value?.focus();
         },
         class: `docx-toolbar__font-family-item${props.className ? ` ${props.className}` : ''}`,
       };

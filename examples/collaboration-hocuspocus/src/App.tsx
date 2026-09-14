@@ -368,6 +368,11 @@ function RoomBar({
         <aside className="collab-recovery" role="alert">
           <strong>{recovery.title}</strong>
           <p>{recovery.body}</p>
+          {recovery.documentation ? (
+            <a href={recovery.documentation.url} target="_blank" rel="noopener noreferrer">
+              {recovery.documentation.label}
+            </a>
+          ) : null}
         </aside>
       ) : null}
     </>
@@ -453,6 +458,11 @@ export function App() {
         <div className="collab-message__inner">
           <h2>{message.title}</h2>
           <p>{message.body}</p>
+          {message.documentation ? (
+            <a href={message.documentation.url} target="_blank" rel="noopener noreferrer">
+              {message.documentation.label}
+            </a>
+          ) : null}
           {message.command ? <code>{message.command}</code> : null}
         </div>
       </div>

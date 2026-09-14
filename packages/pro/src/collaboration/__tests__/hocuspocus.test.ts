@@ -135,6 +135,58 @@ describe('createHocuspocusCollaboration', () => {
     expect(provider?.init.document.isDestroyed).toBe(true);
   });
 
+  test.each([
+    'collaboration-format-mismatch',
+    'protocol-version-mismatch',
+    'schema-version-mismatch',
+    'invalid-saved-room',
+    'saved-room-unavailable',
+  ] as const)('preserves server refusal %s during join and reconnect', async (code) => {
+    let joining: FakeProvider | undefined;
+    await expect(
+      createHocuspocusCollaboration(
+        optionsWithFactory(
+          {
+            url: URL,
+            roomId: ROOM_ID,
+            identity: IDENTITY,
+            bootstrap: { kind: 'join' },
+            syncedTimeoutMs: 60_000,
+          },
+          (init) => {
+            joining = new FakeProvider(init);
+            setTimeout(() => joining!.emit('authenticationFailed', { reason: code }), 1);
+            return joining;
+          }
+        )
+      )
+    ).rejects.toMatchObject({ code });
+    expect(joining?.destroyCount).toBe(1);
+
+    let connected: FakeProvider | undefined;
+    const room = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create', document: collaborationDocx() },
+        },
+        (init) => {
+          connected = new FakeProvider(init);
+          return connected;
+        }
+      )
+    );
+    try {
+      connected!.emit('authenticationFailed', { reason: code });
+      expect(room.session.statusSnapshot()).toMatchObject({ status: 'error', reason: { code } });
+      expect(room.ydoc.isDestroyed).toBe(false);
+    } finally {
+      room.destroy();
+    }
+  });
+
   test('an authenticationFailed after the join flips the session to error', async () => {
     let provider: FakeProvider | undefined;
     const room = await createHocuspocusCollaboration(

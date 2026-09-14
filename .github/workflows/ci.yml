@@ -116,6 +116,12 @@ jobs:
       - name: Demo apps build
         run: bun run check:app-build
 
+      - name: Install Chromium for Markdown preview checks
+        run: bunx playwright install --with-deps chromium
+
+      - name: Check Markdown page layout and review controls
+        run: bun run --filter './examples/docx-to-markdown' check:preview
+
       # The three Chromium gates that used to run here (`verify:a11y-tree`,
       # `verify:real-adapter-smoke`, `verify:real-adapter-gate`) drove the legacy editor
       # lane and went away with it — the scripts no longer exist, so the steps could only

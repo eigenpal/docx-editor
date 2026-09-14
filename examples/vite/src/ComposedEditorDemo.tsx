@@ -19,7 +19,6 @@ import {
   useDocxSource,
   useEditorCaret,
   useEditorEvent,
-  useFontFamily,
   type EditorCaret,
 } from '@docx-editor.dev/react';
 // PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
@@ -96,31 +95,6 @@ function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // Toolbar customization: the in-place FontFamily override with typeface previews
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Custom items for the FontFamily popup: each offerable font as a single-line row
- * rendered in its own typeface, reference-picker style (the selected row gets the
- * library's right-aligned check). Options come from `useFontFamily()` — the editor's
- * configured catalog merged with the document's declared fonts, so a brand-new
- * document still lists real choices; the list follows edits.
- */
-function FontPreviewItems() {
-  const { options } = useFontFamily();
-  if (options.length === 0) {
-    return <div className="demo-font-empty">No fonts declared in this document</div>;
-  }
-  return (
-    <>
-      {options.map((family) => (
-        <DocxEditor.Toolbar.FontFamily.Item key={family} value={family} className="demo-font-item">
-          <span className="demo-font-item__name" style={{ fontFamily: family }}>
-            {family}
-          </span>
-        </DocxEditor.Toolbar.FontFamily.Item>
-      ))}
-    </>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Perf HUD: the surface's own pass timings, bottom-left, chip-collapsed
@@ -550,9 +524,7 @@ function EditorChrome({
       <DocxEditor.Toolbar className="demo-toolbar" onSave={saveDocument}>
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
-          <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
-            <FontPreviewItems />
-          </DocxEditor.Toolbar.FontFamily.Content>
+          <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu" />
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
 

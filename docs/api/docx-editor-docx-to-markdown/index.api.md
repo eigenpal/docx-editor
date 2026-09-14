@@ -44,6 +44,9 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
 
 export { createFontSource }
 
+// @public
+export function createMarkdownZip(result: MarkdownExportResult): Promise<Uint8Array>;
+
 export { defineFontResolver }
 
 // @public
@@ -203,7 +206,7 @@ export interface ExportFontResolutionReport {
 export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownExportOptions): Promise<MarkdownExportResult>;
 
 // @public
-export function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult>;
+export function exportMarkdownFrom(session: ExportSession, options?: MarkdownProjectionOptions): Promise<MarkdownExportResult>;
 
 // @public
 export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
@@ -420,16 +423,31 @@ export interface LayoutBox {
 }
 
 // @public
+export class MarkdownBundleError extends Error {
+    constructor(code: 'invalid-media-path' | 'duplicate-output-path' | 'non-portable-image-url' | 'output-not-empty' | 'write-failed' | 'archive-failed', message: string, details?: {
+        readonly cause?: unknown;
+        readonly path?: string;
+    });
+    // (undocumented)
+    readonly code: 'invalid-media-path' | 'duplicate-output-path' | 'non-portable-image-url' | 'output-not-empty' | 'write-failed' | 'archive-failed';
+    // (undocumented)
+    readonly name = "MarkdownBundleError";
+    // (undocumented)
+    readonly path?: string;
+}
+
+// @public
 export type MarkdownComment = SemanticCommentArtifactRecord;
 
 // @public
-export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {
+export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions, MarkdownProjectionOptions {
 }
 
 // @public
 export interface MarkdownExportResult {
     readonly fontResolution: ExportFontResolutionReport | null;
     readonly markdown: string;
+    readonly media: readonly MarkdownImageAsset[];
     readonly pages: readonly MarkdownPage[];
     readonly pagination: MarkdownPaginationInfo;
     readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
@@ -449,6 +467,94 @@ export type MarkdownFontOrigin = FontOrigin;
 export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrigin[];
 
 // @public
+export interface MarkdownImageAsset extends MarkdownImageData {
+    readonly url: string;
+}
+
+// @public
+export interface MarkdownImageData {
+    // (undocumented)
+    readonly byteLength: number;
+    readonly bytes: Uint8Array;
+    readonly id: string;
+    // (undocumented)
+    readonly mimeType: string;
+    // (undocumented)
+    readonly occurrences: readonly MarkdownImageOccurrence[];
+    readonly path: string;
+    readonly pixelHeight: number;
+    readonly pixelWidth: number;
+}
+
+// @public
+export interface MarkdownImageOccurrence {
+    // (undocumented)
+    readonly alt: string;
+    // (undocumented)
+    readonly decorative: boolean;
+    readonly displayHeightPx: number;
+    readonly displayWidthPx: number;
+    // (undocumented)
+    readonly drawingNodeId: string;
+    readonly kind: 'inline' | 'anchored';
+    // (undocumented)
+    readonly pageNumber: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly rootStory: SemanticDrawingVisit['rootStory'];
+    readonly start: number;
+    // (undocumented)
+    readonly story: SemanticDrawingVisit['story'];
+}
+
+// @public
+export interface MarkdownImageOptions {
+    readonly maxTotalBytes?: number;
+    readonly resolveUrl?: (image: MarkdownImageData, context: {
+        readonly signal?: AbortSignal;
+    }) => string | Promise<string>;
+    readonly syntax?: 'markdown' | 'html';
+}
+
+// @public
+export type MarkdownJSONImage = Omit<MarkdownImageAsset, 'bytes'>;
+
+// @public
+export type MarkdownJSONResult = Omit<MarkdownExportResult, 'media' | 'fontResolution'> & {
+    readonly fontResolution: (Omit<NonNullable<MarkdownExportResult['fontResolution']>, 'originFailures'> & {
+        readonly originFailures: readonly {
+            readonly cause: string;
+            readonly originIndex: number;
+            readonly originName?: string;
+        }[];
+    }) | null;
+    readonly media: readonly MarkdownJSONImage[];
+};
+
+// @public
+export class MarkdownMediaError extends Error {
+    constructor(code: 'media-limit' | 'url-resolution-failed' | 'invalid-image-url' | 'image-bytes-unavailable', message: string, details?: {
+        readonly actualBytes?: number;
+        readonly assetId?: string;
+        readonly cause?: unknown;
+        readonly limitBytes?: number;
+    });
+    // (undocumented)
+    readonly actualBytes?: number;
+    // (undocumented)
+    readonly assetId?: string;
+    // (undocumented)
+    readonly code: 'media-limit' | 'url-resolution-failed' | 'invalid-image-url' | 'image-bytes-unavailable';
+    // (undocumented)
+    readonly limitBytes?: number;
+    // (undocumented)
+    readonly name = "MarkdownMediaError";
+}
+
+// @public
 export interface MarkdownPage {
     readonly comments: readonly MarkdownComment[];
     readonly footerMarkdown: string;
@@ -465,6 +571,12 @@ export interface MarkdownPaginationInfo {
     readonly layoutRevision: number;
     readonly scope: 'export-snapshot';
     readonly source: 'layout-engine';
+}
+
+// @public
+export interface MarkdownProjectionOptions {
+    readonly images?: boolean | MarkdownImageOptions;
+    readonly signal?: AbortSignal;
 }
 
 // @public
@@ -516,7 +628,7 @@ export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
 
 // @public
 export interface MarkdownWarning {
-    readonly code: 'omitted-drawing' | 'omitted-textbox' | 'font-origin-failed' | 'incomplete-font' | 'content-scan-limit';
+    readonly code: 'omitted-drawing' | 'omitted-textbox' | 'font-origin-failed' | 'incomplete-font' | 'content-scan-limit' | 'image-placement-fallback';
     readonly message: string;
     readonly pageNumber?: number;
     readonly partName?: string;
@@ -772,6 +884,9 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
 }
+
+// @public
+export function toMarkdownJSON(result: MarkdownExportResult): MarkdownJSONResult;
 
 // @public
 export interface VectorShapeProjection {

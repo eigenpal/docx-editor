@@ -1,6 +1,8 @@
 import * as Y from 'yjs';
 import {
   CollaborationSchemaError,
+  assertCollaborationFormatCompatibility,
+  readCollaborationFormatVersion,
   readCollaborationDocument,
 } from '@docx-editor.dev/pro/collaboration';
 import { admissionError } from '../shared/admission.ts';
@@ -10,13 +12,16 @@ export function loadStoredDemoDocument(document: Y.Doc, stored: Uint8Array): voi
   const candidate = new Y.Doc();
   try {
     Y.applyUpdate(candidate, stored);
+    assertCollaborationFormatCompatibility(readCollaborationFormatVersion(candidate));
     // This public read validates persisted versions and package state. Client compatibility
     // alone cannot admit an older room, and this demo does not migrate saved Yjs snapshots.
     readCollaborationDocument(candidate);
   } catch (error) {
     if (
       error instanceof CollaborationSchemaError &&
-      (error.code === 'protocol-version-mismatch' || error.code === 'schema-version-mismatch')
+      (error.code === 'collaboration-format-mismatch' ||
+        error.code === 'protocol-version-mismatch' ||
+        error.code === 'schema-version-mismatch')
     ) {
       throw admissionError(error.code);
     }

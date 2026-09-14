@@ -8,7 +8,13 @@ import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 // @public
+export function assertCollaborationFormatCompatibility(version: unknown): void;
+
+// @public
 export function assertDocumentCollaborationCompatibility(versions: unknown): void;
+
+// @public
+export const COLLABORATION_FORMAT_VERSION: string;
 
 // @public
 export type CollaborationBootstrap = {
@@ -178,6 +184,9 @@ export const PROTOCOL_VERSION = 1;
 
 // @public
 export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
+
+// @public
+export function readCollaborationFormatVersion(ydoc: Y.Doc): string;
 
 // @public
 export function readCollaborationResourceUsage(ydoc: Y.Doc): CollaborationResourceUsage;

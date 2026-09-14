@@ -5,7 +5,7 @@ import {
   exportMarkdownFrom,
   type MarkdownExportOptions,
   type MarkdownExportResult,
-} from '../src/markdown.ts';
+} from '../src/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

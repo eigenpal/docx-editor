@@ -39,6 +39,16 @@ export interface OverlayRect {
    * layer's own: one person is one object everywhere the review surface describes them.
    */
   readonly reviewAuthor?: ReviewAuthorInfo;
+  /**
+   * Background for the OPEN revision's band, from the author's declared
+   * `activeBackground`. Applied inline, so it outranks the kind tokens in the
+   * stylesheet, and the kind-coloured rule under the band is cleared with it.
+   *
+   * Set ONLY on an active revision band. A pending band keeps its transparent
+   * default, and comment bands keep their yellow — this field carries no opinion
+   * about either.
+   */
+  readonly activeBackground?: string;
 }
 
 /**
@@ -108,6 +118,13 @@ export function paintSelectionOverlay(
       // of them.
       element.dataset.reviewAuthorSlot = String(rect.reviewAuthor.slot % REVIEW_AUTHOR_SLOTS);
       element.style.setProperty('--doc-review-author-current', rect.reviewAuthor.color);
+    }
+    // The author's own active background, when the caller resolved one. Inline, so it beats
+    // the kind tokens — and the rule with it, for the reason the style field's own comment
+    // gives. A host value, but through `style`, so an unparsable one is dropped silently.
+    if (rect.activeBackground !== undefined) {
+      element.style.backgroundColor = rect.activeBackground;
+      element.style.boxShadow = 'none';
     }
     painted.push(element);
   }

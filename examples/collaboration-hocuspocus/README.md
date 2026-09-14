@@ -53,14 +53,15 @@ it.
 The app wraps the token in this demo's JSON authentication envelope:
 
 ```ts
-{ token, versions: DOCUMENT_COLLABORATION_VERSIONS }
+{ token, collaborationVersion: COLLABORATION_FORMAT_VERSION }
 ```
 
 `shared/admission.ts` creates and validates that envelope. In `onAuthenticate`, the server
-checks the secret and calls `assertDocumentCollaborationCompatibility(versions)` before
-Hocuspocus allows document synchronization. All four advertised versions must match. Older
-raw-token clients, missing versions, and older or future version tuples are refused.
-The provider's public `token` option remains a string; this envelope is an example policy.
+checks the secret and calls `assertCollaborationFormatCompatibility(collaborationVersion)`
+before Hocuspocus allows synchronization. Import the version from the installed package;
+transmit it unchanged. Missing, malformed, and incompatible versions are refused.
+The example also accepts compatible clients using its previous `versions` envelope.
+The provider's public `token` option remains a string.
 
 These self-reported versions prevent accidental connections between incompatible builds.
 They do not prove which code a client runs. A production server should verify a signed token,
@@ -70,7 +71,9 @@ derive identity and room permissions from it, and enforce its deployment policy 
 
 The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a room opens.
 It also exports a `.docx` file beside each Yjs document. Before admitting a saved snapshot,
-`server/stored-room.ts` validates it in a temporary document with `readCollaborationDocument`.
+`server/stored-room.ts` checks its version with `readCollaborationFormatVersion` and
+`assertCollaborationFormatCompatibility` in a temporary document. It then validates the
+compatible document with `readCollaborationDocument`.
 An incompatible or invalid snapshot is refused before its state reaches the live room;
 client version compatibility does not upgrade persisted data.
 
@@ -79,19 +82,16 @@ Replace `onLoadDocument` and `onStoreDocument` when you need database or object 
 ### Recover after a version mismatch
 
 Upgrade the app, room server, and export workers together, then reload every open browser tab.
-Clients that still advertise a different tuple will be refused before sync.
+Clients that still advertise a different collaboration format version will be refused before sync.
 
-A saved room from an incompatible version needs a separate recovery step:
+For saved rooms and offline work, follow the
+[collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions).
+Pause editing and preserve pending work before exporting with the compatible previous build.
+Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
 
-1. Keep a backup of its `.ydoc` and any exported `.docx` file.
-2. Use the matching older build to export the room to DOCX, or use its last successful DOCX export.
-3. Create a new room on the updated deployment and use that DOCX as the bootstrap document.
-4. Check the new document before retiring the old room.
-
-The exported DOCX preserves document content; creating a new room does not carry over Yjs undo
-history or live presence. This demo does not automatically migrate or delete incompatible rooms.
-Its sample app seeds new rooms from `DOCUMENT_URL`; change that source to the recovered DOCX
-when opening the replacement room.
+This demo does not automatically migrate or delete incompatible rooms. Its sample app seeds
+rooms from `DOCUMENT_URL`; change that source to the verified DOCX for the replacement room.
+Keep the old room and its backups until you accept the migration.
 
 ### Check admission and recovery
 
@@ -103,8 +103,7 @@ The tests exercise admission and saved-room refusal without starting a server. T
 matching, missing, older, future, and malformed version claims; incorrect secrets; and
 preservation of live state when a saved room is refused.
 
-The server never parses Office Open XML (OOXML). Hocuspocus stores the canonical package as an
-opaque `Y.Doc`. `readCollaborationDocument` creates the DOCX export from that replica.
+Hocuspocus stores room snapshots. `readCollaborationDocument` exports a room to DOCX.
 
 ## Customize people and carets
 

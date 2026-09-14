@@ -1,4 +1,4 @@
-import type { MarkdownExportResult } from '@docx-editor.dev/docx-to-markdown';
+import { toMarkdownJSON, type MarkdownExportResult } from '@docx-editor.dev/docx-to-markdown';
 import type { ExportStatus } from './export-state';
 
 export type DeveloperPanelTab = 'example' | 'response';
@@ -36,6 +36,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 
 const docxBytes = await readFile(${JSON.stringify(filename)});
 const result = await exportMarkdown(docxBytes, {
+  images: { syntax: 'html' }, // Preserve each image's displayed size.
   fallbackFonts: googleFonts(),
 });
 
@@ -70,11 +71,11 @@ function responsePreview(
     return `// The current DOCX export failed. No stale API response is shown.\n// ${error ?? 'Unknown export error'}`;
   }
   if (status === 'queued' || status === 'exporting') {
-    return '// Updating the DOCX export… The live API response will appear when it is ready.';
+    return '// Updating export.';
   }
-  if (!result) return '// The live API response appears here after the DOCX export completes.';
+  if (!result) return '// Waiting for export.';
   try {
-    return responseJson(result);
+    return responseJson(toMarkdownJSON(result));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return `// The live API response could not be formatted safely.\n// ${message}`;

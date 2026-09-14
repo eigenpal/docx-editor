@@ -185,6 +185,8 @@ export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<Googl
 
 /** What one resolver call produced, for callers that want it without the editor. */
 export interface GoogleFontsFragment {
+  /** Families this provider can serve after applying allow and substitute options. */
+  readonly supportedFamilies?: readonly string[];
   readonly sources: readonly DefaultFontSource[];
   readonly substitutions: readonly DefaultFontSubstitution[];
   readonly failures: readonly GoogleFontLoadFailure[];
@@ -428,6 +430,24 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
+  const supportedFamilies = Object.freeze(
+    [
+      ...new Set([
+        ...GOOGLE_FONT_FAMILIES,
+        ...PACKAGED_ONLY_FAMILIES,
+        ...Object.keys({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }),
+      ]),
+    ].filter((family) => {
+      const target = substitutes.get(family.toLowerCase());
+      const bundled =
+        target === undefined ? PACKAGED_ONLY_BY_NAME.get(family.toLowerCase()) : undefined;
+      const resolved = bundled
+        ? FAMILY_PLANS.get(bundled)?.substitute
+        : catalogByFamily.get((target ?? family).toLowerCase())?.[0]?.family;
+      return resolved !== undefined && (!allowed || allowed.has(resolved.toLowerCase()));
+    })
+  );
+
   async function resolveGoogleFonts(request: FontOriginRequest): Promise<GoogleFontsFragment> {
     // Faces an earlier origin can already PAINT. Skipping them is not only bytes: a face
     // the composition would drop anyway is a CDN request that tells a third party which
@@ -559,7 +579,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     // Deterministic regardless of which response landed first, so the same document
     // composes to the same configuration fingerprint on every load.
     sources.sort((left, right) => left.id.localeCompare(right.id));
-    return { sources, substitutions, failures };
+    return { sources, substitutions, failures, supportedFamilies };
   }
 
   const descriptor = { value: true, enumerable: false, configurable: true } as const;

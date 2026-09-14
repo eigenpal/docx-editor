@@ -1,3 +1,8 @@
+import { supportedFontFamilies } from '../layout/supported-font-families.ts';
+import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
+import { updateSurfaceMeasurement } from './surface-measurement.ts';
+import { createLiveFontResolution } from './live-font-resolution.ts';
+import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import { createReviewCommands } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
@@ -83,7 +88,6 @@ import {
   HARD_MAX_FONT_BYTES,
   HarfBuzzShapingError,
   fontRequestKey,
-  createLayoutShapedMeasurer,
   resolveDefaultSurfaceMeasurer,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
@@ -190,7 +194,6 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
-  type DrawingSelectionIntent,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type RemoteCaretLabelHost,
@@ -338,7 +341,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
-  let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
   const popupChrome = createEditorPopupChrome();
   const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
@@ -353,39 +355,46 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * Owned per load: a replaced document and `destroy()` remove exactly these faces.
    */
   let embeddedFaces: EmbeddedFontFaceRegistration | null = null;
+  let disposeShapedFonts = (): void => {};
+  let fontMeasurementEpoch = 0;
   function disposeEmbeddedFaces(): void {
     embeddedFaces?.dispose();
     embeddedFaces = null;
   }
-  /**
-   * Which DOCUMENT the shaped measurer belongs to. Embedded faces are a property of the
-   * loaded file, so `loadSeq` bumps per `load()` (and per constructor document) and every
-   * async resolution carries the sequence it was started for — a resolution that lands
-   * after the next `load()` must not install the previous document's fonts.
-   */
+  // Each async result belongs to one document load.
   let loadSeq = 0;
-  /**
-   * What the app's font configuration turned out to BE for the loaded document.
-   *
-   * Identical to `config.fonts` when that is a value; the resolver's answer when it is a
-   * function, which is only known once a document has been parsed. Reads that describe
-   * the editor's font capability — the picker catalog, the reported default face — go
-   * through {@link fontConfiguration} so the on-demand form does not report an empty
-   * catalog for the whole of a document's life.
-   */
+  // Retain catalog metadata separately from byte admission and shaping.
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
-  /**
-   * The sequence font resolution has been KICKED for. Checked inside `mountBytes` so the
-   * shaped remount (which goes back through `mountBytes` with the same document) and an
-   * `attach` of the same document never restart resolution — restarting from the shaped
-   * remount would resolve → remount → resolve forever.
-   */
-  let fontKickSeq = -1;
-  /** True from the moment a load starts font work until it lands (or fails). */
+  const liveFonts = createLiveFontResolution(
+    () => {
+      if (destroyed || !surface) return null;
+      const { session } = surface;
+      const [selected] = supportedFontFamilies([[snapshotNow().formatting?.fontFamily]]);
+      return {
+        generation: loadSeq,
+        dynamic: typeof config.fonts === 'function',
+        families: () =>
+          fontResolverFamilies(
+            [
+              ...new Set([
+                ...(selected && selected !== configuredDefaultFontFamily(fontConfiguration())
+                  ? [selected]
+                  : []),
+                ...session.documentFonts(),
+              ]),
+            ],
+            resolverGlyphFontFamilies(session),
+            MAX_RESOLVER_FAMILIES
+          ),
+      };
+    },
+    async (families) => {
+      if (surface) await resolveDocumentFonts(loadSeq, surface, families);
+    }
+  );
   let fontsResolving = false;
-
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
    * container's document and dropped with it — a probe answers for ONE platform's font
@@ -533,7 +542,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         : {}),
       reviewAuthorSlots,
       revisionAuthorVisibility: reviewAuthorVisibility,
-      initialDrawingSelectionIntent: remountDrawingIntent,
       initialSelection,
       initialTextFormInput,
       editingMode:
@@ -601,6 +609,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
+        liveFonts.schedule();
         const displayModeMoved =
           reviewEnabled && reviewDisplayMode !== surface.revisionDisplayMode();
         if (displayModeMoved) reviewDisplayMode = surface.revisionDisplayMode();
@@ -681,13 +690,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     bump();
     emitDocumentChange({ revision: surface.session.packageRevision() });
     emitSelectionChange();
-    // Fonts resolve per DOCUMENT (embedded faces live in the file), and only once per
-    // load: the shaped remount re-enters this function with `fontKickSeq` already
-    // current, so it mounts under the measurer it carries instead of restarting.
-    if (fontKickSeq !== loadSeq) {
-      fontKickSeq = loadSeq;
-      void resolveDocumentFonts(loadSeq, surface);
-    }
+    liveFonts.schedule(true);
   }
 
   /** A NEW document: forget the previous document's measurer, then mount. */
@@ -708,6 +711,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     resolvedFontConfiguration = undefined;
     coveredFontFamilies = new Set();
     disposeEmbeddedFaces();
+    disposeShapedFonts();
+    disposeShapedFonts = () => {};
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
@@ -768,14 +773,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
   // the document editable on the fixed measurer.
-  async function resolveDocumentFonts(seq: number, mounted: PaginatedSurface): Promise<void> {
-    // A bare fragment ({ sources, substitutions }) is a valid base: every other
-    // configuration field takes the documented defaults, with the load sequence as the
-    // epoch when the app pinned none.
+  async function resolveDocumentFonts(
+    seq: number,
+    mounted: PaginatedSurface,
+    families: readonly string[]
+  ): Promise<void> {
     const configured = config.fonts;
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
-    // hashing, no HarfBuzz initialization, no remount.
     if (!configured && embedded.length === 0) return;
     fontsResolving = true;
     bump();
@@ -785,19 +790,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // the resolver is told what the file actually asks for and can skip everything
       // else. A resolver that throws lands in this function's catch and degrades to the
       // fixed measurer, exactly like a failed byte source.
+      const request = { families, defaultFamily: configuredDefaultFontFamily(fontConfiguration()) };
+      const raw =
+        typeof configured !== 'function'
+          ? configured
+          : resolvedFontConfiguration
+            ? await composeFontOrigins(
+                [resolvedFontConfiguration, defineFontResolver((next) => configured(next))],
+                request,
+                { onOriginFailure: ({ cause }) => reportFontError(toEditorFontError(cause)) }
+              )
+            : await configured(request);
       const explicit: FontConfigurationBase | undefined =
-        typeof configured === 'function'
-          ? normalizeFontResolverResult(
-              await configured({
-                families: fontResolverFamilies(
-                  mounted.session.documentFonts(),
-                  resolverGlyphFontFamilies(mounted.session),
-                  MAX_RESOLVER_FAMILIES
-                ),
-                defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
-              })
-            )
-          : configured;
+        typeof configured === 'function' ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
       // destroyed) while the resolver ran, and installing its answer would overwrite a
       // newer document's fonts.
@@ -805,12 +810,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (seq === loadSeq) fontsResolving = false;
         return;
       }
-      resolvedFontConfiguration = explicit;
-      // An empty resolver result is normal whether spelled `undefined` or as a fragment;
-      // sources, substitutions, or populated failures retain the genuine error path below.
-      if (!explicit && embedded.length === 0) {
+      resolvedFontConfiguration = raw;
+      if (
+        embedded.length === 0 &&
+        (!explicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
+      ) {
         fontsResolving = false;
         bump();
+        emitSelectionChange();
         return;
       }
       const maxFontBytes =
@@ -979,88 +986,68 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         supersededNow();
         return;
       }
-      disposeEmbeddedFaces();
-      embeddedFaces = registration;
-      coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
-      // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
-      // still name a locally installed browser face (Helvetica is the common macOS case):
-      // paint resolves that face through CSS, so falling back to the deterministic monospace
-      // grid here makes every later caret drift farther from the glyphs. Resolve the fallback
-      // through the same browser canvas + alias stack the unshaped surface uses. Headless
-      // environments still receive the fixed measurer from this resolver.
-      const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
-        context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
-        ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
-      });
-      const resolvedFonts = new Map<
-        string,
-        Exclude<ReturnType<typeof shaping.fonts.resolve>, FontResolutionError> | null
-      >();
-      shapedMeasurer = createLayoutShapedMeasurer(shaping, {
-        resolveFont: (style) => {
-          // The run family is FILE-DERIVED and reaches `resolve` on every measured run.
-          // `resolve` ASSERTS its request (a whitespace-only family throws), and the
-          // measurer calls this outside its own guard, so an unusable family must return
-          // the fixed fallback here rather than throw through layout — which would fail
-          // the remount and take the mounted document with it.
-          const family = style.fontFamily ?? fonts.defaultFont.family;
-          if (family.trim().length === 0) return null;
-          const request = {
-            family,
-            weight: style.bold ? 700 : 400,
-            style: style.italic ? ('italic' as const) : ('normal' as const),
-          };
-          const key = fontRequestKey(request);
-          if (resolvedFonts.has(key)) return resolvedFonts.get(key) ?? null;
-          let resolved: ReturnType<typeof shaping.fonts.resolve>;
-          try {
-            resolved = shaping.fonts.resolve(request);
-          } catch {
-            resolvedFonts.set(key, null);
-            return null;
-          }
-          const usable = resolved instanceof FontResolutionError ? null : resolved;
-          resolvedFonts.set(key, usable);
-          return usable;
-        },
-        fallback: fallbackResolution.measurer,
-      });
-      // The fallback is part of the geometry producer: the same HarfBuzz faces over a
-      // different unresolved-family measurer must never share paragraph-cache entries.
-      shapedProducer =
-        `shaped:${shaping.operation.extensionFingerprint}` +
-        `+algorithm:${shaping.operation.shapingHash}` +
-        `+producer:${shaping.operation.producerVersion}` +
-        `+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
-      fontsResolving = false;
-      if (surface) {
-        // Retain the document and pending field input before the remount destroys the surface.
-        surface.flushPendingInput();
-        const saved = surface.session.save();
-        const savedTextFormInput = container ? snapshotTextFormInput(container) : undefined;
-        const savedSelection = surface.state().selection;
-        remountDrawingIntent = surface.drawingSelectionIntent();
-        const activeElement = container?.ownerDocument.activeElement;
-        const hadFocus = !!activeElement && !!container?.contains(activeElement);
-        try {
-          mountBytes(saved, savedSelection, savedTextFormInput);
-        } catch (remountError) {
-          shapedMeasurer = undefined;
-          shapedProducer = undefined;
-          if (!surface) {
-            pendingBytes = saved;
-            mountBytes(saved, savedSelection, savedTextFormInput);
-          }
-          reportFontError(toEditorFontError(remountError));
+      const previous = {
+        embeddedFaces,
+        coveredFontFamilies,
+        shapedMeasurer,
+        shapedProducer,
+        disposeShapedFonts,
+      };
+      try {
+        embeddedFaces = registration;
+        coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
+        // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
+        // still name a locally installed browser face (Helvetica is the common macOS case):
+        // paint resolves that face through CSS, so falling back to the deterministic monospace
+        // grid here makes every later caret drift farther from the glyphs. Resolve the fallback
+        // through the same browser canvas + alias stack the unshaped surface uses. Headless
+        // environments still receive the fixed measurer from this resolver.
+        const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
+          context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+          ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+        });
+        const measurement = resolvedFontMeasurement(
+          shaping,
+          fonts,
+          fallbackResolution,
+          scaleOf(),
+          ++fontMeasurementEpoch
+        );
+        shapedMeasurer = measurement.measurer;
+        shapedProducer = measurement.producer;
+        fontsResolving = false;
+        if (surface) {
+          updateSurfaceMeasurement(surface, {
+            measurer: shapedMeasurer,
+            producer: shapedProducer,
+            fontAlias: embeddedFaces?.alias,
+            defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
+          });
         }
-        // Mount seeds the saved range without claiming focus. Chromium focuses editable
-        // DOM selections, so only explicitly restore one when the old surface had focus.
-        if (hadFocus) {
-          surface?.focus();
-          surface?.setSelection(savedSelection);
+        if (destroyed || seq !== loadSeq) {
+          registration.dispose();
+          disposeLayoutShaping(shaping);
+          return;
         }
-        remountDrawingIntent = { kind: 'none' }; // consumed; a plain open starts deselected
-      } else bump();
+      } catch (error) {
+        if (!destroyed && seq === loadSeq) {
+          ({
+            embeddedFaces,
+            coveredFontFamilies,
+            shapedMeasurer,
+            shapedProducer,
+            disposeShapedFonts,
+          } = previous);
+        }
+        registration.dispose();
+        disposeLayoutShaping(shaping);
+        throw error;
+      }
+      disposeShapedFonts = () => disposeLayoutShaping(shaping);
+      previous.disposeShapedFonts();
+      previous.embeddedFaces?.dispose();
+      bump();
+      emitSelectionChange();
     } catch (error) {
       if (destroyed || seq !== loadSeq) return;
       fontsResolving = false;
@@ -1150,9 +1137,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the previous `formatting`/`page` sub-objects (or the whole previous snapshot) when
    * value-equal, so references only change when values do.
    */
+  let cachedFontConfiguration: FontConfigurationBase | undefined;
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
+    const fontsUnmoved = fontConfiguration() === cachedFontConfiguration;
+    cachedFontConfiguration = fontConfiguration();
     const authorUnmoved = author === cachedAuthor;
     cachedAuthor = author;
     const caret = surface?.state().selection ?? null;
@@ -1201,7 +1191,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
       // the button pressed, and one Increase Indent that reached the deepest level a
       // definition declares left the button live for a press that could only be refused.
-      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved && authorUnmoved) {
+      if (
+        snapshotsEqual(next, previous) &&
+        caretUnmoved &&
+        documentUnmoved &&
+        authorUnmoved &&
+        fontsUnmoved
+      ) {
         next = previous;
       }
     }
@@ -2627,6 +2623,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       openScheduler.cancel();
       zoomLane.detach();
       disposeEmbeddedFaces();
+      disposeShapedFonts();
+      disposeShapedFonts = () => {};
       teardownSurface();
       container = null;
       pendingBytes = null;

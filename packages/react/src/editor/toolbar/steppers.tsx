@@ -16,7 +16,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -153,12 +152,15 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   );
 
   /** Leave the box: drop the draft, close the list, hand the caret back to the document. */
-  const dismiss = useCallback((refocus: boolean) => {
-    setOpen(false);
-    setDraft(null);
-    inputRef.current?.blur();
-    if (refocus) editorFocus(rootRef.current);
-  }, []);
+  const dismiss = useCallback(
+    (refocus: boolean) => {
+      setOpen(false);
+      setDraft(null);
+      inputRef.current?.blur();
+      if (refocus) editor?.focus();
+    },
+    [editor]
+  );
 
   // Outside mousedown closes the list, the same pattern the zoom menu uses.
   useEffect(() => {
@@ -294,20 +296,6 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
       ) : null}
     </span>
   );
-}
-
-/**
- * Hand the caret back to the document after a toolbar control is done with it.
- *
- * The pages layer is the focusable surface; without this a picked or typed size left focus
- * in the toolbar, so the next keystroke went to the box rather than the document.
- */
-function editorFocus(from: HTMLElement | null): void {
-  // NOT a bare `closest('.docx-editor')`: the toolbar's own root self-emits that class and
-  // contains no pages, so the scope must be the instance container around both.
-  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
-  const pages = root?.querySelector<HTMLElement>('.docx-pages');
-  pages?.focus();
 }
 
 /** The font-size stepper part (`DocxEditorToolbar.FontSize`): wired to `font.size`. */

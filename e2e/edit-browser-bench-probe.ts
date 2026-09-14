@@ -159,6 +159,9 @@ export async function runEdit(
   expect(prepared).not.toBeNull();
   await twoFrames(page);
 
+  const fullPassesBefore = await page.evaluate(
+    () => window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!.fullPasses
+  );
   const sampleCount = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.length);
   await page.keyboard.insertText(text);
   await page.waitForFunction(
@@ -166,6 +169,7 @@ export async function runEdit(
     sampleCount
   );
   const sample = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.at(-1)!);
+  expect(sample.engine.fullPasses, 'typing must not add a full layout pass').toBe(fullPassesBefore);
   // Both benchmark fixtures are long documents; the plain one holds 3,200
   // paragraphs and the tracked/numbered one 620 much larger clauses.
   expect(sample.engine.total).toBeGreaterThan(600);

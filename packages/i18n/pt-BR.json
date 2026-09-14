@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monoespaçado",
-    "documentFonts": "Fontes do documento"
+    "documentFonts": "Fontes do documento",
+    "search": "Pesquisar fontes"
   },
   "fontSize": {
     "decrease": "Diminuir tamanho da fonte",
@@ -858,7 +859,9 @@
       "versionBody": null,
       "versionTitle": null,
       "savedRoomBody": null,
-      "savedRoomTitle": null
+      "savedRoomTitle": null,
+      "generalBody": null,
+      "upgradeGuide": null
     }
   },
   "collaboration": {

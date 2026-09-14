@@ -1,6 +1,8 @@
+import { render, fireEvent, cleanup } from '@testing-library/react';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MarkdownComment, MarkdownPage } from '@docx-editor.dev/docx-to-markdown';
+import { MarkdownPagePreview } from './MarkdownPagePreview';
 import { PageReviewArtifacts } from './PageReviewArtifacts';
 import { indexPageReviewSelections } from './review-presentation';
 
@@ -79,3 +81,60 @@ describe('PageReviewArtifacts', () => {
     }
   );
 });
+
+test.each(['rendered', 'source'] as const)(
+  'page review starts closed and expands outside the paper in %s mode',
+  (mode) => {
+    const root = comment('root', undefined, []);
+    const page: MarkdownPage = {
+      id: 'page-1',
+      number: 1,
+      markdown: 'Body content',
+      headerMarkdown: 'Header content',
+      footerMarkdown: 'Footer content',
+      comments: [root],
+      trackedChanges: [],
+    };
+    let revealed = 0;
+    const preview = (showComments: boolean) => (
+      <MarkdownPagePreview
+        page={page}
+        commentById={new Map([[root.id, root]])}
+        selectionIndex={indexPageReviewSelections([page], [])}
+        mode={mode}
+        showHeaders
+        showFooters
+        showComments={showComments}
+        showTrackedChanges
+        onRevealDocumentPage={(number) => {
+          revealed = number;
+        }}
+      />
+    );
+    const view = render(preview(true));
+    try {
+      const paper = view.container.querySelector('.md-page-sheet')!;
+      expect(paper.textContent).toContain('Footer content');
+      const button = view.getByRole('button', { name: 'See comments 1' });
+      expect(button.getAttribute('aria-expanded')).toBe('false');
+      expect(view.queryByText('root text')).toBeNull();
+      fireEvent.click(button);
+      expect(button.getAttribute('aria-expanded')).toBe('true');
+      const panel = view.getByRole('region', { name: 'Page 1 comments' });
+      expect(panel.id).toBe(button.getAttribute('aria-controls')!);
+      expect(panel.textContent).toContain('root text');
+      expect(panel.querySelector('.md-review-message')).not.toBeNull();
+      expect(paper.textContent).not.toContain('root text');
+      expect(panel.parentElement).toBe(paper.parentElement);
+      fireEvent.click(view.getByRole('button', { name: 'View in DOCX, page 1' }));
+      expect(revealed).toBe(1);
+      fireEvent.click(button);
+      expect(view.queryByText('root text')).toBeNull();
+      view.rerender(preview(false));
+      expect(view.queryByRole('button', { name: /comments/ })).toBeNull();
+    } finally {
+      view.unmount();
+      cleanup();
+    }
+  }
+);

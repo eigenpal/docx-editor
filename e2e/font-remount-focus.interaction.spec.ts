@@ -91,7 +91,6 @@ for (const target of ['textarea', 'input', 'button', 'button-empty-selection', '
     await page.evaluate(() => window.__fontFocus.releaseFonts());
     await page.waitForFunction(
       () =>
-        !window.__fontFocus.oldPages.isConnected &&
         window.__fontFocus.editor.fontMeasurement().measurer === 'shaped' &&
         !window.__fontFocus.editor.fontMeasurement().resolving
     );

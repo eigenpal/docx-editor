@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: { index: 'src/index.ts' },
+  entry: { index: 'src/index.ts', node: 'src/node.ts' },
   platform: 'node',
   format: ['cjs', 'esm'],
   // Advanced live-view types share browser contracts with Core. Declare that type-only

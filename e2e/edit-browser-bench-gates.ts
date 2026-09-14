@@ -3,12 +3,18 @@ import { type TimingSummary } from './edit-browser-bench-harness.js';
 import { type ScenarioReport, type SustainedReport } from './edit-browser-bench-probe.js';
 import { type BurstReport } from './edit-browser-burst.js';
 
-/** Matches headless `bench:edit` steady-middle-text on the synthetic fixture. */
+/**
+ * Paragraph/page work matches headless `bench:edit`. Browser startup performs two
+ * full layouts: canvas before font resolution, then shaped text after it. Keeping
+ * the surface alive retains both in the counter; the previous font remount reset
+ * it between those same two passes. Typing must add no full passes (runEdit checks
+ * the before/after delta), and the pins below also bound cumulative startup work.
+ */
 export const EXPECTED_LAYOUT_WORK = {
   placed: 13,
   total: 3200,
   reusedPages: 154,
-  fullPasses: 1,
+  fullPasses: 2,
 } as const;
 
 export interface ExpectedLayoutWork {
@@ -30,8 +36,8 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
   // more pages of the tail survive. `placed`, `total` and `fullPasses` are unchanged, which
   // is what makes it a like-for-like comparison — the same work over a shorter document
   // would have moved `total` too.
-  'tracked-editing-character': { placed: 3, total: 620, reusedPages: 151, fullPasses: 1 },
-  'tracked-suggesting-character': { placed: 3, total: 620, reusedPages: 151, fullPasses: 1 },
+  'tracked-editing-character': { placed: 3, total: 620, reusedPages: 151, fullPasses: 2 },
+  'tracked-suggesting-character': { placed: 3, total: 620, reusedPages: 151, fullPasses: 2 },
   // A 100-character tracked insert used to reflow roughly half the numbered clauses (311 of
   // 620). Word's cell margins took 6pt off every row of this fixture's tables, and the
   // cascade collapsed with them: 8 placed, and 150 of the tail reused instead of 72.
@@ -47,7 +53,7 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
   //     is the blast radius a cell-margin change should have.
   //   - the insert still wraps: it places more than the single-character scenario beside it
   //     (8 against 3 here, 15 against 2 at 0.6), so it has not degenerated into a no-op.
-  'tracked-suggesting-wrap': { placed: 8, total: 620, reusedPages: 150, fullPasses: 1 },
+  'tracked-suggesting-wrap': { placed: 8, total: 620, reusedPages: 150, fullPasses: 2 },
 };
 
 /**
@@ -59,13 +65,13 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
  * note-reserve reflow used to force a second full pass because the document-wide reserve
  * map was folded into every section's context key; the key now folds only the reserve
  * slots a section's own pass can read, so the reflow's second body pass reuses every
- * section and only the first pass is full — the same deliberate 2 -> 1 move as the
- * settle-bench gate.
+ * section. Each font-measurement phase contributes one full pass; the browser
+ * retains both phases in one session. The headless settle-bench has one phase.
  */
 export const PINNED_HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
-  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
-  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
+  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
 };
 
 /**
@@ -79,12 +85,12 @@ export const HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
   // Placed 2 -> 4 and 6 -> 17: an insert lands in a shorter row, so the paragraphs it
   // displaces sit differently against the page boundary below it. Reuse rose in step
   // (995 -> 1038, 994 -> 1035), which is the half that says this is less work and not more.
-  'huge-suggesting-character': { placed: 4, total: 4250, reusedPages: 1038, fullPasses: 1 },
-  'huge-suggesting-wrap': { placed: 17, total: 4250, reusedPages: 1035, fullPasses: 1 },
+  'huge-suggesting-character': { placed: 4, total: 4250, reusedPages: 1038, fullPasses: 2 },
+  'huge-suggesting-wrap': { placed: 17, total: 4250, reusedPages: 1035, fullPasses: 2 },
   // A 50k-character paste re-places 2,126 paragraphs and reflows half the
   // thousand pages — the standing tough case this fixture exists to watch.
   // The paste itself is unchanged at 2,126; only the tail it can keep moved, 497 -> 519.
-  'huge-paste-50k': { placed: 2126, total: 4250, reusedPages: 519, fullPasses: 1 },
+  'huge-paste-50k': { placed: 2126, total: 4250, reusedPages: 519, fullPasses: 2 },
 };
 
 /** p95 may spike on loaded CI; 3× median plus 50 ms catches sustained regressions without pinning wall clock. */

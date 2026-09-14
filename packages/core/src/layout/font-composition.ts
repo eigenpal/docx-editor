@@ -1,3 +1,4 @@
+import { supportedFontFamilies } from './supported-font-families.ts';
 // Font configuration composition — the ONE documented way the three font origins
 // (explicit app bytes, embedded document faces, substitute packages) become a single
 // immutable `FontConfiguration`.
@@ -29,6 +30,8 @@ import { HARD_MAX_FONT_BYTES, fontRequestKey } from './font-resource.ts';
  * same way.
  */
 export interface FontConfigurationFragment {
+  /** Selectable provider families, independent of loaded bytes. Listing them performs no fetch. */
+  readonly supportedFamilies?: readonly string[];
   readonly sources?: readonly FontSource[];
   readonly substitutions?: readonly FontSourceSubstitution[];
 }
@@ -93,8 +96,8 @@ export interface FontResolutionRequest {
 /**
  * Resolve fonts once the document's needs are known, instead of ahead of them.
  *
- * Called once per load, AFTER the file is parsed and mounted, with the families it
- * declares; whatever it returns composes exactly like a statically supplied fragment.
+ * Called after the file is mounted and again when editing requests a new family.
+ * Results compose with previously supplied faces; resolvedFaces identifies that coverage.
  * Returning nothing is a valid answer — it means "I cover none of this", and the
  * document stays on the fixed measurer.
  *
@@ -185,7 +188,11 @@ export function composeFontConfiguration(
     }
   }
 
+  const supportedFamilies = supportedFontFamilies(
+    origins.map((origin) => origin.supportedFamilies)
+  );
   return Object.freeze({
+    ...(supportedFamilies.length ? { supportedFamilies } : {}),
     epoch: base.epoch ?? 0,
     maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
     sources: Object.freeze(sources),

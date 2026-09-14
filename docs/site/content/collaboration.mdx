@@ -63,7 +63,7 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
   });
 
   if (error) {
-    return <p>{error.detail ?? error.code}</p>;
+    return <p>Could not join this document. Save any local work and contact support.</p>;
   }
   if (pending || !document) {
     return <p>Connecting…</p>;
@@ -91,6 +91,8 @@ Configure your own signaling URLs and TURN servers for production.
 
 ## Continue the setup
 
+- [Collaboration versions and upgrades](/docs/latest/pro/collaboration-versions):
+  check compatibility before deploying updates or reopening saved rooms.
 - [Production WebRTC setup](/docs/2.x/pro/collaboration#use-your-own-signaling):
   configure signaling and TURN servers.
 - [Hocuspocus setup](/docs/2.x/pro/collaboration#connect-to-a-hocuspocus-server):

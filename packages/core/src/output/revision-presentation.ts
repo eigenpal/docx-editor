@@ -41,6 +41,14 @@ export interface RevisionAuthorStyle {
   /** Background wash behind this author's changes in the document. */
   background?: string;
   /**
+   * Background of the highlight band over this author's OPEN change — the one the caret
+   * is in. Applied inline, so it outranks the `--doc-revision-*-active-bg` kind tokens,
+   * and the kind-coloured rule under the band goes with it: a custom background with a
+   * green or red rule beneath it would contradict the decoration it sits behind, and a
+   * `transparent` that left a floating rule would not read as cleared at all.
+   */
+  activeBackground?: string;
+  /**
    * Class names added to every painted span of this author's changes, for styling the
    * typed fields do not cover. Keep the rules metric-safe (outlines, shadows, accents):
    * the engine measures the text it paints, and a class that resizes glyphs drifts the
@@ -132,6 +140,11 @@ export interface ReviewAuthorInfo {
 const STYLE_KEY_REACH = {
   color: 'painted',
   background: 'painted',
+  // The band is its own layer with its own invalidation (the roster's identity), so the
+  // page key need not move for it — but the choice here is binary, and 'card-only' would
+  // claim a painted pixel it does move. A redundant page repaint on a host-driven style
+  // change is the safe direction for the one field that lands off the page layer.
+  activeBackground: 'painted',
   spanClassName: 'painted',
   avatarUrl: 'card-only',
 } as const satisfies Record<keyof Required<RevisionAuthorStyle>, 'painted' | 'card-only'>;

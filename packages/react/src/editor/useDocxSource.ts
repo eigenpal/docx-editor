@@ -125,7 +125,7 @@ function fontOrigins(source: DocxFontsSource): readonly DocxFontOrigin[] {
 
 /**
  * A loader sitting in an ON-DEMAND list is still a loader: wrapped so it is called with no
- * argument, once per load, and so a throw lands in `composeFontOrigins`' per-origin catch
+ * argument, per font request, and so a throw lands in `composeFontOrigins`' per-origin catch
  * rather than escaping the surrounding `.map`.
  */
 function asFontOrigin(origin: DocxFontOrigin): FontOrigin {

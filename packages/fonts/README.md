@@ -33,7 +33,7 @@ it from these same packaged bytes only when a document names it.
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
-// A resolver: the editor calls it once per load with the families the file
+// A resolver: the editor calls it on load and when new families are selected, with the families the file
 // declares, so a document using only Times New Roman loads Liberation Serif and
 // Carlito rather than all 20 eager faces. A family loads when the document names
 // it, or when it is that document's default face — which is Calibri, so Carlito
@@ -166,6 +166,8 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
   return <DocxEditor document={bytes} fonts={fonts} />;
 }
 ```
+
+The editor requests fonts on load and when edits or font selection introduce new families.
 
 Open a file that uses only Calibri and one family is fetched (Carlito, its
 metric-compatible stand-in). A document's DEFAULT face counts as declared, and that

@@ -966,9 +966,9 @@ describe('the FontFamily compound', () => {
   test('options are the offerable catalog; selecting applies and closes', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, FONTED_SOURCE);
     expect(editor().getDocumentFonts()).toEqual(['Courier New', 'Georgia']);
-    // The catalog never collapses to the document alone: with no `fonts` configured,
-    // the default face is still offerable alongside the declared families.
-    expect(editor().getAvailableFonts()).toEqual(['Calibri', 'Courier New', 'Georgia']);
+    expect(editor().getAvailableFonts()).toEqual(
+      expect.arrayContaining(['Arial', 'Calibri', 'Courier New', 'Georgia'])
+    );
     await act(async () => {
       editor().surface!.selectAll();
     });
@@ -983,13 +983,20 @@ describe('the FontFamily compound', () => {
       trigger.click();
     });
     const listbox = view.container.querySelector('[role="listbox"]')!;
-    // The default menu is the GROUPED picker: classified families under small gray
-    // headings in the chrome spec's group order (serif before monospace), not one flat
-    // alphabetical list.
+    // Standard choices keep the grouped menu order.
     const options = [...listbox.querySelectorAll('[role="option"]')];
     expect(options.map((option) => option.textContent)).toEqual([
+      'Arial',
       'Calibri',
+      'Helvetica',
+      'Open Sans',
+      'Roboto',
+      'Verdana',
+      'Cambria',
+      'Garamond',
       'Georgia',
+      'Times New Roman',
+      'Consolas',
       'Courier New',
     ]);
     expect(
@@ -1001,25 +1008,21 @@ describe('the FontFamily compound', () => {
     ]);
 
     await act(async () => {
-      (options[1] as HTMLButtonElement).click();
+      (options.find((option) => option.textContent === 'Georgia') as HTMLButtonElement).click();
     });
-    // Applied through can-before-exec, popup closed, trigger shows the new value.
     expect(editor().snapshot().formatting?.fontFamily).toBe('Georgia');
     expect(view.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toBe('Georgia');
-    // Reopened, the OPTIONS FOLLOWED THE EDIT: applying Georgia to the whole selection
-    // rewrote both runs' rFonts, so Courier New left the document half of the catalog —
-    // the list re-derives from the document, not from a mount-time snapshot. The
-    // configured default face stays offerable, and the applied option is marked
-    // selected.
     await act(async () => {
       trigger.click();
     });
     const reopened = [...view.container.querySelectorAll('[role="option"]')];
-    // The selected row carries the right-edge ✓ (part of its text content).
-    expect(reopened.map((option) => option.textContent)).toEqual(['Calibri', 'Georgia✓']);
-    expect(reopened[1]!.hasAttribute('data-selected')).toBe(true);
-    expect(reopened[1]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
+    expect(reopened.map((option) => option.textContent?.replace('✓', ''))).toEqual(
+      options.map((option) => option.textContent)
+    );
+    const selected = reopened.find((option) => option.textContent === 'Georgia✓')!;
+    expect(selected.hasAttribute('data-selected')).toBe(true);
+    expect(selected.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {

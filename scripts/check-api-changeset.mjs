@@ -13,6 +13,8 @@
  * changeset-release/* branches, where consumed changesets legitimately disappear).
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { PACKAGES } from './lib/packages.mjs';
 
 const baseIndex = process.argv.indexOf('--base');
 const base = baseIndex > -1 ? process.argv[baseIndex + 1] : null;
@@ -27,9 +29,20 @@ const diff = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
   .split('\n')
   .filter(Boolean);
 
-const apiChanges = diff.filter((path) => path.startsWith('docs/api/'));
+// Ignored packages do not participate in Changesets releases. Keep their API
+// snapshots checked without requiring a changeset that cannot version them.
+const config = JSON.parse(
+  readFileSync(new URL('../.changeset/config.json', import.meta.url), 'utf8')
+);
+const ignoredReports = PACKAGES.filter((pkg) => config.ignore?.includes(pkg.name)).map(
+  (pkg) => `docs/api/${pkg.pkgSlug}/`
+);
+const apiChanges = diff.filter(
+  (path) =>
+    path.startsWith('docs/api/') && !ignoredReports.some((prefix) => path.startsWith(prefix))
+);
 if (apiChanges.length === 0) {
-  console.log('api-changeset: no docs/api change in this PR — nothing to require.');
+  console.log('api-changeset: no versioned package API change in this PR — nothing to require.');
   process.exit(0);
 }
 

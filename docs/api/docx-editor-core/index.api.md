@@ -1927,6 +1927,7 @@ export interface FontConfiguration {
     readonly sources: readonly FontSource[];
     // (undocumented)
     readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public
@@ -1943,6 +1944,7 @@ export interface FontConfigurationFragment {
     readonly sources?: readonly FontSource[];
     // (undocumented)
     readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public

@@ -12,6 +12,26 @@ measurement.
 The document still opens with fallback measurement. Neither fallback guarantees
 Word-compatible line wraps or page breaks.
 
+## Font picker choices
+
+The toolbar always offers the standard font choices, including Arial, Calibri,
+Georgia, Times New Roman, and Courier New. Configured and document-specific
+families extend this list. Configured providers also contribute their supported
+families, even before those fonts load. The default dropdown includes a search
+field. Empty documents offer the same provider catalog as populated documents.
+
+`packagedFonts()` lists its supported Word families. `googleFonts()` lists the
+families in its pinned static-font catalog. Each provider applies its `allow`
+option; Google also applies custom `substitute` mappings.
+
+Custom resolvers can return `supportedFamilies: ['Brand Sans', 'Brand Serif']`
+alongside their `sources` and `substitutions`. A catalog-only result is valid.
+Listing a family does not require its bytes.
+
+A picker choice does not mean the font is installed or loaded. Opening the picker
+does not load font bytes. Your font configuration still controls measurement and
+font resolution.
+
 ## Start here
 
 Every font origin has the same shape: call it, and pass the result. To add
@@ -135,7 +155,7 @@ share. They differ in when they run, what they cover, and what that costs.
 | Covers                       | All six substituted families                        | The five Word applies by default |
 | Loads                        | The families in the document, plus the default face | All 20 faces, 7.4 MB             |
 | First layout                 | Fixed measurement, then re-paginates                | Correct on the first pass        |
-| Undo history across the swap | Cleared when the faces arrive                       | Kept                             |
+| Undo history across the swap | Kept when the faces arrive                          | Kept                             |
 
 Century Gothic is the family that difference is for. `defaultFonts()` leaves it out
 because it would cost every document about 709 KB for a family most never name.
@@ -297,6 +317,13 @@ descriptors or bytes.
 `customFonts()`, `packagedFonts()`, and `googleFonts()` return resolvers.
 Creating them fetches nothing. When the editor resolves fonts, `customFonts()` loads all configured faces.
 `packagedFonts()` and `googleFonts()` load families requested by the document or its default font.
+The editor calls resolvers again when typing, formatting, or another edit introduces a new family.
+Selecting a font for an empty paragraph also requests it.
+
+Font arrivals update the current editing session. Selection, pending typing
+formatting, and undo history survive the reflow. Previously supplied faces are
+passed as `resolvedFaces`, so providers can skip redundant downloads.
+The editor requests each document family once per load. Reload the document to retry a failed request.
 
 `useDocxSource` handles the identity of a resolver for you. When you pass one
 directly to the `fonts` prop, use `useFonts` instead: an inline resolver is a new
@@ -356,13 +383,13 @@ googleFonts({
 An arbitrary substitute can change line breaks and pagination. Use a
 metric-compatible substitute when layout must remain stable.
 
-| Resolver constraint        | Required behavior                                                     |
-| -------------------------- | --------------------------------------------------------------------- |
-| File-supplied family names | Match them against a closed `Map` or catalog.                         |
-| URL construction           | Never build a URL from a document family name.                        |
-| Privacy                    | A remote font host can learn which families the document uses.        |
-| Updates                    | Load another document or remount to apply changed resolver arguments. |
-| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.          |
+| Resolver constraint        | Required behavior                                                             |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| File-supplied family names | Match them against a closed `Map` or catalog.                                 |
+| URL construction           | Never build a URL from a document family name.                                |
+| Privacy                    | A remote font host can learn which families the document uses.                |
+| Updates                    | New-family requests read current arguments. Reload to replace existing faces. |
+| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.                  |
 
 The editor caps the family list passed to a resolver.
 

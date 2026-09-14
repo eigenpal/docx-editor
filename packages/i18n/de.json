@@ -126,7 +126,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "documentFonts": "Dokumentschriftarten"
+    "documentFonts": "Dokumentschriftarten",
+    "search": "Schriftarten suchen"
   },
   "fontSize": {
     "decrease": "Schriftgrad verkleinern",
@@ -858,7 +859,9 @@
       "versionBody": null,
       "versionTitle": null,
       "savedRoomBody": null,
-      "savedRoomTitle": null
+      "savedRoomTitle": null,
+      "generalBody": null,
+      "upgradeGuide": null
     }
   },
   "collaboration": {

@@ -20,6 +20,31 @@ const result = await exportMarkdown(docxBytes);
 console.log(result.markdown);
 ```
 
+## Keep images
+
+Pass `{ images: true }` to return image links and `result.media` bytes. Use `createMarkdownZip(result)` for portable downloads, or provide `images.resolveUrl` to save images and return hosted URLs. Use `toMarkdownJSON(result)` for responses without binary arrays.
+
+See [image workflows](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/images.md) for browser, local Node.js, and server examples.
+
+### Preserve displayed image sizes
+
+Use HTML image syntax to include each occurrence's displayed size:
+
+```ts
+const result = await exportMarkdown(docxBytes, {
+  images: { syntax: 'html' },
+});
+```
+
+Generated `img` tags include `width` and `height`, rounded to whole CSS pixels.
+Configure your renderer to parse sanitized HTML and retain those attributes.
+The default `images: true` uses standard Markdown image syntax without size attributes.
+
+Use each occurrence's `displayWidthPx` and `displayHeightPx` for exact displayed dimensions in custom previews.
+Asset `pixelWidth` and `pixelHeight` describe the image file, which Word can display at different sizes.
+Crop, rotation, and floating text wrapping are not reproduced.
+See [custom image previews](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/images.md#preserve-displayed-image-sizes) for renderer setup and responsive sizing.
+
 ## Keep the page numbers
 
 The document layout engine calculates page breaks.

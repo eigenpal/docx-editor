@@ -1,3 +1,4 @@
+import { numberingFontInputs } from '../numbering-font-inputs.ts';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
@@ -229,4 +230,33 @@ test('resolves a used marker through paragraph style and numbering-level overrid
       minorEastAsia: null,
     })
   ).toEqual(['Marker Face']);
+});
+
+test('text edits reuse marker inputs and paragraph formatting refreshes marker faces', () => {
+  const opened = openTreeSession(withNumbering('<w:p><w:r><w:t>item</w:t></w:r></w:p>'));
+  if (!opened.ok) throw new Error(opened.reason);
+  const session = opened.session;
+  const paragraphId = session.paragraphIds()[0]!;
+  const inputs = () => numberingFontInputs(session.storyParts().map((part) => part.root));
+  const before = inputs();
+  expect(resolverGlyphFontFamilies(session)).not.toContain('Wingdings');
+  expect(
+    session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'new ' }]).committed
+  ).toBe(true);
+  expect(inputs()).toEqual(before);
+  expect(resolverGlyphFontFamilies(session)).not.toContain('Wingdings');
+  expect(
+    session.applyTreeOps([{ op: 'setListNumbering', paragraphId, numId: '1', level: 0 }]).committed
+  ).toBe(true);
+  expect(inputs()).not.toEqual(before);
+  expect(resolverGlyphFontFamilies(session)).toContain('Wingdings');
+});
+
+test('a new paragraph without properties can introduce default-style marker fonts', () => {
+  const original = root(
+    `<w:body xmlns:w="${W}"><w:p><w:pPr><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr></w:p></w:body>`
+  );
+  const bare = root(`<w:body xmlns:w="${W}"><w:p/></w:body>`).children[0]!;
+  const edited = { ...original, children: [...original.children, bare] };
+  expect(numberingFontInputs([edited])).not.toEqual(numberingFontInputs([original]));
 });

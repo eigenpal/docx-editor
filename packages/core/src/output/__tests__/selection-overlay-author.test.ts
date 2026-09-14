@@ -64,6 +64,36 @@ describe('an overlay rectangle carries its review author', () => {
     expect(rect.style.getPropertyValue('--doc-review-author-current')).toBe('');
   });
 
+  test('a declared active background paints inline and clears the kind rule', () => {
+    // The open revision's band. Inline, so it outranks the kind tokens — and the rule
+    // with it, so `transparent` clears the whole band rather than leaving a floating
+    // underline.
+    const layer = paint([
+      {
+        ...RECT,
+        className: 'docx-revision-band docx-revision-band--insert docx-revision-band--active',
+        reviewAuthor: { author: 'Ada Lovelace', slot: 0, color: '#c0392b' },
+        activeBackground: 'rgba(1, 2, 3, 0.25)',
+      },
+    ]);
+    const band = layer.firstElementChild as HTMLElement;
+    expect(band.style.backgroundColor).toBe('rgba(1, 2, 3, 0.25)');
+    expect(band.style.boxShadow).toBe('none');
+  });
+
+  test('a band without a declared background leaves the stylesheet in charge', () => {
+    const layer = paint([
+      {
+        ...RECT,
+        className: 'docx-revision-band docx-revision-band--insert docx-revision-band--active',
+        reviewAuthor: { author: 'Ada Lovelace', slot: 0, color: '#c0392b' },
+      },
+    ]);
+    const band = layer.firstElementChild as HTMLElement;
+    expect(band.style.backgroundColor).toBe('');
+    expect(band.style.boxShadow).toBe('');
+  });
+
   test('an author name from the file is set as a value, never as markup', () => {
     // `w:author` is attacker-controlled. The name goes through `dataset`, so a name shaped
     // like a tag is a string, not an element.

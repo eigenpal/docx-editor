@@ -233,6 +233,12 @@
       "id": 325109917,
       "signed_at": "2026-09-05T01:27:14Z",
       "pull_request_no": 732
+    },
+    {
+      "name": "biejia-manus",
+      "id": 251161311,
+      "signed_at": "2026-09-14T09:10:10Z",
+      "pull_request_no": 818
     }
   ]
 }
