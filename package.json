@@ -142,7 +142,7 @@
     "@testing-library/react": "^16.0.0",
     "@types/bun": "^1.0.0",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
+    "@types/react-dom": "19.2.7",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-react": "^6.0.2",
