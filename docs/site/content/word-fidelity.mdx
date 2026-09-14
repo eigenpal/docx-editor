@@ -74,6 +74,7 @@ Its complete authored grid must equal the text-column width plus those margins.
 Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.
 
 Body text wraps beside supported floating tables and below tables that cover the text column.
+Passages of a quarter inch or less remain empty. Captions and headings clear these narrow gaps.
 The table's text distances keep the authored gap between its border and surrounding text.
 Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.
 Negative offsets remain in place when they clear preceding text.
@@ -143,6 +144,13 @@ The configured font resolver also receives faces used by SYMBOL fields and numbe
 Your host must supply usable font bytes for those faces when they are unavailable locally.
 Unused numbering definitions do not add font requests.
 
+Paragraph `w:bidi` controls alignment and the order of groups with different run directions.
+Run `w:rtl` controls the directional context within each group.
+Unmarked numeric text such as `1 980` keeps its left-to-right order in right-to-left paragraphs.
+Arabic, Hebrew, and Arabic-Indic digits retain their Unicode direction within that context.
+Authored Unicode direction controls use paragraph-wide Unicode ordering.
+Selection and caret positions follow the displayed text without changing source offsets.
+
 East Asian layout keeps punctuation, graphemes, and full-width number groups
 together across formatting changes. Justified lines distribute inter-character
 spacing through the same geometry used for paint and caret placement.
@@ -155,21 +163,31 @@ Existing document settings control kinsoku, Japanese strict rules, custom
 language-specific break restrictions, Korean character wrapping, punctuation
 overflow, and punctuation or kana compression. Punctuation compression removes shared
 side bearings and preserves the ink position during native text selection.
-Compression applies only between adjacent punctuation. Paragraph and manual-line
+Shared-bearing compression applies between adjacent punctuation. Paragraph and manual-line
 boundaries retain their advances. Colons can compress before opening brackets,
-bounded by the following bracket's available bearing. Other centered punctuation,
-ordinary text, authored spaces, outlined text, decorated text, and tracked changes
+bounded by the following bracket's available bearing. With measured glyph bounds,
+colons also compress before closing punctuation. This pair rule halves the colon's
+advance, including authored character spacing. Other centered punctuation,
+authored spaces, outlined text, decorated text, and tracked changes
 retain their advances.
 Colons with highlight or shading retain their advances. If wrapping separates a
 compressed colon from its opening bracket, the paragraph uses natural colon advances.
-Kana uses deterministic advance reductions. Soft-wrap edge compression and
-font-specific optical compression are not modeled.
+Narrow plain LTR East Asian paragraphs can also use measured punctuation bearings to fit the next ordinary glyph
+and its protected punctuation group. Fitting uses measured glyph bounds and preserves source positions.
+Mixed Latin text, fields, decorations, revisions, RTL text, float passages,
+and measurers without ink bounds retain conservative fitting.
+Kana uses deterministic advance reductions.
 
-The document's `w:themeFontLang/@w:eastAsia` selects its language-specific theme face.
-When that setting is absent and the East Asian theme face is empty, inherited
+The document's `w:themeFontLang` selects supplemental theme fonts for its Latin,
+East Asian, and complex-script theme tokens. The resolver reads `val`, `eastAsia`,
+and `bidi` independently. It supports CJK languages, common complex-script languages,
+and explicit script subtags. Complex-script theme tokens also work on Latin font attributes.
+When no style supplies an East Asian face, a resolved body East Asian theme face supplies the default.
+When the East Asian theme language is absent and its face is empty, inherited
 `w:lang/@w:eastAsia` selects the supplemental face. Chinese, Japanese, and Korean use named
-CJK defaults when neither the theme nor the run supplies a face. Font origins receive
-these candidates before shaping. Supply suitable CJK fonts for exact glyph metrics.
+CJK defaults when neither the theme nor the run supplies a face. Word can supply different
+missing-language defaults from its installation language and keyboards. Font origins receive
+these candidates before shaping. Supply suitable fonts for exact glyph metrics.
 
 The feature matrix lists the support limits for East Asian typography.
 

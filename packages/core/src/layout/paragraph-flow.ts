@@ -1,12 +1,6 @@
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
-import type { Alignment } from './paragraph-alignment.ts';
-export { paragraphAlignment, type Alignment } from './paragraph-alignment.ts';
-import {
-  bidiPieces,
-  paragraphIsRtl,
-  reorderBidiSpans,
-  splitBidiTrailingWhitespace,
-} from './rtl-paragraph.ts';
+export { paragraphAlignment, alignSpans, type Alignment } from './paragraph-alignment.ts';
+import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 // Body and table paragraphs share line breaking and its position-independent cache.
 
 import {
@@ -39,11 +33,16 @@ import {
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
 import { cjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
-import { justifyCjkSpans } from './cjk-justify.ts';
+import {
+  createCjkOpticalFitter,
+  appendOpticalCjkCandidate,
+  canFitCjkOptically,
+} from './cjk-optical-fit.ts';
 import {
   compressCjkPieces,
   canHangCjkPunctuation,
   colonLostOpeningBearing,
+  cjkColonNaturalWidths,
 } from './cjk-spacing.ts';
 import { resolveCjkTypography, type CjkParagraphTypography } from './cjk-typography.ts';
 import {
@@ -62,7 +61,6 @@ import {
 import {
   DEFAULT_RUN_STYLE,
   displayText,
-  measureDisplayText,
   resolveRunStyle,
   type ResolvedRunStyle,
   type ThemeFonts,
@@ -75,7 +73,6 @@ import {
   inlineDrawingVerticalLayout,
   measureInlineDrawing,
   repositionInlineDrawingsForBaseline,
-  shiftInlineDrawingRecord,
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
   type InlineDrawingLayoutContext,
@@ -427,135 +424,7 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
   return { left, right };
 }
 
-/**
- * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
- *
- * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
- * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
- * none and shifted every later span — caret mid-word drifted by a multiple of the step while
- * the highlight (DOM) stayed on the glyphs.
- */
-function endsWithExpandableSpace(text: string): boolean {
-  return text.endsWith(' ');
-}
-
-/**
- * Align logical spans before bidi reordering. Layout publishes the shared geometry.
- * Justification expands inter-word spaces, matching paint's CSS word-spacing.
- * Empty lines stay unchanged; callers publish their aligned origin as contentX.
- */
-function alignLogicalSpans(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer,
-  indentLeft: number,
-  available: number,
-  alignment: Alignment,
-  isLastLine: boolean,
-  lineUsedWidth?: number
-): readonly StyleSpanRecord[] {
-  if (spans.length === 0) return spans;
-  if (alignment === 'left') return spans;
-
-  let trailingEnd = spans.length;
-  while (
-    trailingEnd > 0 &&
-    spans[trailingEnd - 1]!.box.width === 0 &&
-    (spans[trailingEnd - 1]!.text === '\n' || spans[trailingEnd - 1]!.text === PAGE_BREAK_CHAR)
-  ) {
-    trailingEnd -= 1;
-  }
-  let trailingStart = trailingEnd;
-  while (trailingStart > 0 && spans[trailingStart - 1]!.lineEndWhitespace) {
-    trailingStart -= 1;
-  }
-  const lastContentSpan = spans[trailingEnd - 1];
-  // Clipped whitespace runs hang past the content: with two of them the last one is a
-  // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
-  // content ends where the first hanging span starts, whatever hangs after it.
-  const hangingStart =
-    trailingStart < spans.length ? spans[trailingStart]!.box.x - indentLeft : undefined;
-  const spansReachLineEnd =
-    lineUsedWidth !== undefined &&
-    lastContentSpan !== undefined &&
-    Math.abs(lastContentSpan.box.x + lastContentSpan.box.width - indentLeft - lineUsedWidth) <=
-      OVERFLOW_TOLERANCE_PT;
-  if (
-    trailingStart < trailingEnd &&
-    spansReachLineEnd &&
-    (alignment === 'center' || alignment === 'right')
-  ) {
-    const slack = available - hangingStart!;
-    if (slack <= 0) return spans;
-    const offset = alignment === 'center' ? slack / 2 : slack;
-    const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
-    let fillX = spans[trailingStart]!.box.x + offset;
-    return spans.map((span, index) => {
-      if (index < trailingStart) return { ...span, box: { ...span.box, x: span.box.x + offset } };
-      if (!clipsAtMargin) return { ...span, box: { ...span.box, x: span.box.x + offset } };
-      const width = Math.min(span.box.width, Math.max(0, indentLeft + available - fillX));
-      const aligned = { ...span, box: { ...span.box, x: fillX, width } };
-      fillX += width;
-      return aligned;
-    });
-  }
-
-  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
-  // is what Word does and what stops a line ending in a space from looking misaligned.
-  const last = spans[spans.length - 1]!;
-  // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
-  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
-  // total with a source-measured visible part reports nearly the whole span as whitespace.
-  // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
-  // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
-  // over-stretches the line. Measured only on that path.
-  const contentEndWithoutTrailingWhitespace = (): number => {
-    const visible = last.text.replace(/\s+$/, '');
-    const trailing =
-      visible === last.text
-        ? 0
-        : last.box.width -
-          measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-    return last.box.x - indentLeft + last.box.width - trailing;
-  };
-  const used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
-  const slack = available - used;
-  if (slack <= 0) return spans;
-
-  // The last line of a justified paragraph is set flush left, never stretched.
-  if (alignment === 'both') {
-    if (isLastLine) return spans;
-    const justified = justifyCjkSpans(spans, measurer, slack);
-    if (justified) return justified;
-    // Only boundaries after an expandable space receive slack — the same slots paint stretches
-    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
-    // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
-    // slots either: a boundary between two of them took a share of the slack from the words.
-    const gapBefore: number[] = [];
-    for (let index = 1; index < trailingStart; index += 1) {
-      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
-    }
-    if (gapBefore.length === 0) return spans;
-    const step = slack / gapBefore.length;
-    const gapSet = new Set(gapBefore);
-    let shift = 0;
-    return spans.map((span, index) => {
-      if (gapSet.has(index)) shift += step;
-      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
-    });
-  }
-
-  const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
-}
-
-/** Shift inline drawing boxes for paragraph alignment the same way {@link alignSpans} does. */
-export function alignDrawings(
-  drawings: readonly InlineDrawingRecord[],
-  offset: number
-): readonly InlineDrawingRecord[] {
-  if (offset === 0 || drawings.length === 0) return drawings;
-  return drawings.map((drawing) => shiftInlineDrawingRecord(drawing, offset, 0));
-}
+export { alignDrawings } from './pending-line.ts';
 
 /**
  * Measure and break one paragraph into pending lines at `available` width.
@@ -640,8 +509,22 @@ export function breakParagraph(
       )
     );
   const pieces = compressCjkPieces(visiblePieces, typography, measurer, preserveColonAdvances);
+  const colonNaturalWidths = cjkColonNaturalWidths(pieces, visiblePieces, measurer);
+  const opticalParagraph =
+    typography.settings?.compression !== undefined &&
+    typography.settings.compression !== 'doNotCompress' &&
+    !flow?.pageExclusionZones?.length &&
+    measurer.inkBounds !== undefined &&
+    canFitCjkOptically(allPieces);
+  const opticalCompression = opticalParagraph && !preserveColonAdvances;
   const placeableSuffixes = placeableContentSuffixes(pieces);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
+  const fitCjkOptically = createCjkOpticalFitter(
+    pieces,
+    cjkBreaks,
+    measurer,
+    typography.overflowPunctuation
+  );
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
     piece.equation ? layoutEquation(piece.equation, piece.style) : null;
@@ -669,6 +552,7 @@ export function breakParagraph(
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
   const contentOriginX = flow?.contentOriginX ?? 0;
+  const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
   const lines: PendingLine[] = [];
   let line: PendingLine = {
     spans: [],
@@ -732,6 +616,7 @@ export function breakParagraph(
   ];
 
   const anchorLineStartByOffset = anchorLineStartsByModelOffset({
+    colonNaturalWidths,
     typography,
     cjkBreaks,
     pieces,
@@ -827,7 +712,7 @@ export function breakParagraph(
     top: currentLineTopY,
     zones: activeExclusionZones,
     left: () => Math.max(contentLeft, lineOrigin()),
-    right: contentRight,
+    right: wrapRight,
     emptyStyle,
     measurer,
     lineSpacing,
@@ -843,12 +728,7 @@ export function breakParagraph(
     const zones = activeExclusionZones();
     if (zones.length === 0) return true;
     applyTopAndBottomSkipIfNeeded();
-    const intervals = mergeAvailableIntervalsAtY(
-      exclusionProbeY(),
-      zones,
-      contentLeft,
-      contentRight
-    );
+    const intervals = mergeAvailableIntervalsAtY(exclusionProbeY(), zones, contentLeft, wrapRight);
     const currentX = lineOrigin() + line.width;
     const snap = snapXToAvailableInterval(currentX, intervals);
     if (!snap) return false;
@@ -872,12 +752,7 @@ export function breakParagraph(
     if (zones.length === 0) return base;
     applyTopAndBottomSkipIfNeeded();
     if (!snapLineToAvailableInterval()) return 0;
-    const intervals = mergeAvailableIntervalsAtY(
-      exclusionProbeY(),
-      zones,
-      contentLeft,
-      contentRight
-    );
+    const intervals = mergeAvailableIntervalsAtY(exclusionProbeY(), zones, contentLeft, wrapRight);
     const origin = lineOrigin() + line.width;
     const remaining = remainingWidthAtX(origin, intervals);
     if (remaining <= 0.001) return 0;
@@ -898,12 +773,7 @@ export function breakParagraph(
       (zone) => zone.anchorParagraphId !== paragraphId || line.end > zone.anchorModelStart
     );
     if (!zoneIsOpen) return false;
-    const intervals = mergeAvailableIntervalsAtY(
-      exclusionProbeY(),
-      zones,
-      contentLeft,
-      contentRight
-    );
+    const intervals = mergeAvailableIntervalsAtY(exclusionProbeY(), zones, contentLeft, wrapRight);
     const currentX = lineOrigin() + line.width;
     let foundCurrent = false;
     for (const interval of intervals) {
@@ -933,12 +803,7 @@ export function breakParagraph(
     );
     if (zones.length === 0) return;
     applyTopAndBottomSkipIfNeeded();
-    const intervals = mergeAvailableIntervalsAtY(
-      exclusionProbeY(),
-      zones,
-      contentLeft,
-      contentRight
-    );
+    const intervals = mergeAvailableIntervalsAtY(exclusionProbeY(), zones, contentLeft, wrapRight);
     const currentX = lineOrigin() + line.width;
     let containingIndex = -1;
     for (let index = 0; index < intervals.length; index += 1) {
@@ -1471,8 +1336,15 @@ export function breakParagraph(
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
+      // A space belongs to a following protected group even across a source-run seam.
+      const protectedEnd =
+        opticalParagraph &&
+        sameParagraphAnchorStarts.length === 0 &&
+        boundary === piece.text.length &&
+        pieces[pieceIndex + 1] !== undefined &&
+        cjkBreaks?.decision(pieces[pieceIndex + 1]!, 0) === 'forbidden';
       const clippedWordEnd =
-        !layoutOwned && piece.measureText === undefined
+        !layoutOwned && piece.measureText === undefined && !protectedEnd
           ? lineEndSpaces.clipWordEnd(
               candidate,
               width,
@@ -1482,8 +1354,41 @@ export function breakParagraph(
             )
           : undefined;
       width = clippedWordEnd?.width ?? width;
+      const hangs =
+        typography.overflowPunctuation &&
+        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
+      const applyOpticalFit =
+        opticalCompression && sameParagraphAnchorStarts.length === 0
+          ? () => {
+              const fit = fitCjkOptically(
+                line,
+                pieceIndex,
+                candidate,
+                spanRange,
+                width,
+                lineOrigin() + line.width,
+                lineAvailable(),
+                !lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) ||
+                  (opensWord && placeableSuffixes[pieceIndex]![boundary] === 1)
+              );
+              if (fit) {
+                width = fit.width;
+                if (wordStartSpan >= 0 && fit.spanStarts) {
+                  wordStartSpan = fit.spanStarts[wordStartSpan]!;
+                  wordStartWidth =
+                    wordStartSpan < line.spans.length
+                      ? line.spans[wordStartSpan]!.box.x - lineOrigin()
+                      : line.width;
+                }
+              }
+              return fit;
+            }
+          : undefined;
+      const opticalSourceLine = line;
+      let opticalFit = applyOpticalFit?.();
       // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
+        !protectedEnd &&
         lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
         (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
           (!layoutOwned &&
@@ -1492,12 +1397,12 @@ export function breakParagraph(
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
       }
-      const hangs =
-        typography.overflowPunctuation &&
-        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
+      // Word tests a centred colon's natural advance before applying the shared
+      // bearing on its destination line. Keep the compressed advance for paint.
+      const fitWidth = opticalFit ? width : (colonNaturalWidths.get(piece) ?? width);
       if (
         !hangs &&
-        line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
+        line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
         if (openDecision === 'forbidden' && wordStartSpan <= 0) {
@@ -1507,11 +1412,11 @@ export function breakParagraph(
           // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
           tryAdvanceToNextPassage();
         } else if (opensWord || wordStartSpan < 0) {
-          if (tryAdvanceToNextPassage() && line.width + width <= lineAvailable() + 0.001) {
+          if (tryAdvanceToNextPassage() && line.width + fitWidth <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
           } else {
             closeLine();
-            if (!ensurePlacementWidth(width)) continue;
+            if (!ensurePlacementWidth(fitWidth)) continue;
             wordStartSpan = 0;
             wordStartWidth = 0;
             wordStartEnd = line.end;
@@ -1548,10 +1453,12 @@ export function breakParagraph(
       } else if (
         line.spans.length === 0 &&
         line.drawings.length === 0 &&
-        width > lineAvailable() + 0.001
+        fitWidth > lineAvailable() + 0.001
       ) {
-        if (!ensurePlacementWidth(width)) continue;
+        if (!ensurePlacementWidth(fitWidth)) continue;
       }
+      // A protected group that moves must also fit against its destination line.
+      if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
       // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
@@ -1636,7 +1543,8 @@ export function breakParagraph(
           ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
           ...revisionsOf(piece),
         };
-        lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
+        if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
+        else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
@@ -1671,30 +1579,4 @@ export function breakParagraph(
   if (cacheKey !== null && cache)
     cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
   return lines;
-}
-
-export function alignSpans(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer,
-  indentLeft: number,
-  available: number,
-  alignment: Alignment,
-  isLastLine: boolean,
-  lineUsedWidth?: number
-): readonly StyleSpanRecord[] {
-  const effective =
-    alignment === 'both' && isLastLine && spans.some((span) => span.style.shaping?.baseLevel === 1)
-      ? 'right'
-      : alignment;
-  return reorderBidiSpans(
-    alignLogicalSpans(
-      splitBidiTrailingWhitespace(spans, measurer),
-      measurer,
-      indentLeft,
-      available,
-      effective,
-      isLastLine,
-      lineUsedWidth
-    )
-  );
 }

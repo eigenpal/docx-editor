@@ -168,3 +168,67 @@ test('empty theme mixed Chinese and Latin wraps exactly like an explicit CJK fac
   };
   expect(await signature('')).toEqual(await signature('SimSun'));
 });
+
+test.each([
+  ['w:val="ja-JP" w:eastAsia="zh-CN"', 'minorHAnsi', 'Hiragino Mincho ProN'],
+  ['w:val="fr-FR" w:bidi="ar-SA"', 'majorBidi', 'Times New Roman'],
+])('exports request and apply the language-selected %s theme', async (language, token, family) => {
+  const files = unzipSync(themedBytes());
+  files['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="styles" Type="${OFFICE_REL}/styles" Target="styles.xml"/>` +
+      `<Relationship Id="theme" Type="${OFFICE_REL}/theme" Target="theme/theme1.xml"/>` +
+      `<Relationship Id="settings" Type="${OFFICE_REL}/settings" Target="settings.xml"/>` +
+      '</Relationships>'
+  );
+  files['word/settings.xml'] = strToU8(
+    `<w:settings xmlns:w="${W}"><w:themeFontLang ${language}/></w:settings>`
+  );
+  files['word/theme/theme1.xml'] = strToU8(
+    `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="Languages">` +
+      ['majorFont', 'minorFont']
+        .map(
+          (slot) =>
+            `<a:${slot}><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface="Courier New"/>` +
+            '<a:font script="Arab" typeface="Times New Roman"/><a:font script="Jpan" typeface="Hiragino Mincho ProN"/>' +
+            `<a:font script="Hans" typeface="Songti SC"/></a:${slot}>`
+        )
+        .join('') +
+      '</a:fontScheme></a:themeElements></a:theme>'
+  );
+  files['word/styles.xml'] = strToU8(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+      `<w:rFonts w:ascii="Calibri" w:asciiTheme="${token}" w:hAnsiTheme="${token}"/>` +
+      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>'
+  );
+  files['word/document.xml'] = strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Hamburgefonts 012345 日本語</w:t></w:r></w:p></w:body></w:document>`
+  );
+  let requested: readonly string[] = [];
+  const opened = await openFontBackedDocumentForExport(zipSync(files), {
+    fonts: defineFontResolver((request) => {
+      requested = request.families;
+      return { sources: [], defaultFont: { family: 'Calibri', sizeHalfPoints: 22 } };
+    }),
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    expect(requested).toContain(family);
+    const families = new Set<string | null>();
+    forEachSemanticSpan(await opened.session.layout(), ({ span }) =>
+      families.add(span.style.fontFamily)
+    );
+    expect([...families]).toEqual([family]);
+    if (token === 'minorHAnsi') {
+      expect(requested).toContain('Songti SC');
+      const eastAsianFamilies = new Set<string | null>();
+      forEachSemanticSpan(await opened.session.layout(), ({ span }) => {
+        if (span.fontSlot === 'eastAsia') eastAsianFamilies.add(span.style.fontFamilyEastAsia);
+      });
+      expect([...eastAsianFamilies]).toEqual(['Songti SC']);
+    }
+  } finally {
+    opened.session.dispose();
+  }
+});

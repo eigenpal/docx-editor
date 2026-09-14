@@ -463,3 +463,39 @@ describe('METRIC_COMPATIBLE_FALLBACK_FAMILIES', () => {
     }
   });
 });
+
+test('canvas ink bounds convert physical bearings without removing authored tracking', () => {
+  const context: CanvasTextContext = {
+    font: '',
+    measureText: () => ({ width: 24, actualBoundingBoxLeft: -14, actualBoundingBoxRight: 22 }),
+  };
+  const measure = tryCreateCanvasMeasurer({ context, scale: 2 })!;
+  const style = { ...DEFAULT_RUN_STYLE, horizontalScalePercent: 50, characterSpacingPt: -3 };
+  expect(measure.inkBounds!('（', style)).toEqual({ left: 3.5, right: 5.5 });
+  expect(
+    tryCreateCanvasMeasurer({ context: mockContext() })!.inkBounds!('（', style)
+  ).toBeUndefined();
+  context.measureText = () => ({
+    width: 24,
+    actualBoundingBoxLeft: NaN,
+    actualBoundingBoxRight: 22,
+  });
+  expect(measure.inkBounds!('（', style)).toBeUndefined();
+});
+
+test('canvas ink bounds normalize and restore the injected text origin', () => {
+  const context: CanvasTextContext = {
+    font: '',
+    textAlign: 'right',
+    direction: 'rtl',
+    measureText() {
+      expect(this.textAlign).toBe('left');
+      expect(this.direction).toBe('ltr');
+      return { width: 12, actualBoundingBoxLeft: -8, actualBoundingBoxRight: 11 };
+    },
+  };
+  const measure = tryCreateCanvasMeasurer({ context })!;
+  expect(measure.inkBounds!('（', DEFAULT_RUN_STYLE)).toEqual({ left: 8, right: 11 });
+  expect(context.textAlign).toBe('right');
+  expect(context.direction).toBe('rtl');
+});

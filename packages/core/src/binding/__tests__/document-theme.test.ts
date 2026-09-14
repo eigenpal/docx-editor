@@ -97,6 +97,8 @@ test('theme fonts accept faces only beneath their schema slot', () => {
     minor: 'Valid Minor',
     majorEastAsia: null,
     minorEastAsia: 'Valid EA',
+    majorBidi: null,
+    minorBidi: null,
   });
 });
 

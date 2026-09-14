@@ -625,7 +625,8 @@ function placeCellParagraph(
       lineAvailableWidth,
       alignment,
       isLastLine,
-      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+      rtl
     );
     // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
     const alignOffset =

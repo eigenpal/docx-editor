@@ -939,6 +939,12 @@ export interface TextMeasurer {
    * interiors may share an edge. Undefined selects a bounded approximate fallback.
    */
   caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+  /**
+   * Optional conservative ink bounds for one grapheme, in points from its origin.
+   * Includes size and horizontal scale, but not trailing character spacing.
+   * Undefined keeps layout on the advance-only path.
+   */
+  inkBounds?(text: string, style: ResolvedRunStyle): { left: number; right: number } | undefined;
   /** Line height and baseline for the resolved style. */
   lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
 }

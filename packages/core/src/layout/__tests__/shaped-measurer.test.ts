@@ -791,3 +791,21 @@ describe('whole-span Arabic caret advances', () => {
     }
   );
 });
+
+test('single-glyph ink bounds use the admitted outline and preserve tracking', () => {
+  const measure = measurer();
+  const natural = measure.inkBounds!('(', style())!;
+  // DejaVu Sans parenleft outline: xMin=176, xMax=635, unitsPerEm=2048.
+  expect(natural.left).toBeCloseTo((176 * 11) / 2048, 5);
+  expect(natural.right).toBeCloseTo((635 * 11) / 2048, 5);
+  expect(measure.inkBounds!('(', style({ characterSpacingPt: -3 }))).toEqual(natural);
+  const scaled = measure.inkBounds!('(', style({ horizontalScalePercent: 50 }))!;
+  expect(scaled.left).toBeCloseTo(natural.left / 2, 5);
+  expect(scaled.right).toBeCloseTo(natural.right / 2, 5);
+  const raised = measure.inkBounds!('(', style({ verticalAlign: 'superscript' }))!;
+  expect(raised.right).toBeCloseTo(natural.right * 0.75, 5);
+  expect(measure.inkBounds!('word', style())).toBeUndefined();
+  expect(
+    measure.inkBounds!('(', style({ shaping: { script: 'Arab', direction: 'rtl' } }))
+  ).toBeUndefined();
+});

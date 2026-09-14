@@ -6,7 +6,7 @@ import { caretAt, documentOrder } from '../../layout/semantic-interaction.ts';
 import { selectionRects } from '../../layout/selection-rects.ts';
 import { collapseHorizontalSelection } from '../surface-selection-collapse.ts';
 const paragraph = (text: string, rtl = true) =>
-  `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+  `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:rPr>${rtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 for (const reversed of [false, true]) {
   test(`plain arrows collapse RTL selection at the selected physical edge (reversed=${reversed})`, () => {
     const { surface } = mount(paragraph('אבג'));

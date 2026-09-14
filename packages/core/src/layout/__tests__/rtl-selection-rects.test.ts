@@ -12,9 +12,9 @@ import {
 } from '../selection-rects.ts';
 
 const measurer = createFixedMeasurer(6, 14);
-function layout(text: string, width = 120, next = '', rtl = true) {
+function layout(text: string, width = 120, next = '', rtl = true, runRtl = rtl) {
   const paragraph = (value: string) =>
-    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${value}</w:t></w:r></w:p>`;
+    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:rPr><w:sz w:val="22"/>${runRtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r></w:p>`;
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraph(text)}${next ? paragraph(next) : ''}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'application/xml' }
@@ -25,8 +25,8 @@ function layout(text: string, width = 120, next = '', rtl = true) {
     geometry: { width, height: 300, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
   });
 }
-function bands(text: string, start: number, end: number) {
-  const doc = layout(text);
+function bands(text: string, start: number, end: number, runRtl = true) {
+  const doc = layout(text, 120, '', true, runRtl);
   const order = everyStoryOrder(doc);
   const selection = {
     anchor: { paragraphId: order[0]!, offset: start },
@@ -142,4 +142,9 @@ test('LTR paragraph marks follow the visual right edge after a Hebrew ending', (
   );
   expect(marks).toHaveLength(1);
   expect(marks[0]!.x).toBe(42);
+});
+
+test('unmarked mixed Hebrew uses Word LTR run context while selection remains source-based', () => {
+  for (const actual of bands('אבג ABC דהו', 0, 5, false))
+    expect(actual).toEqual([{ x: 54, width: 30 }]);
 });

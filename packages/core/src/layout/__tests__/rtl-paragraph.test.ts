@@ -193,3 +193,200 @@ test('scaled RTL ink preserves the published outer band width', () => {
   expect(ink.style.transformOrigin).toBe('right');
   expect(parseFloat(ink.style.width) * 2).toBeCloseTo(span.box.width);
 });
+
+// Word PDF controls: /tmp/docx-word-compare/word-followup-numeric-bidi-reference.pdf.
+// Each label is a separate paragraph. Expected orders come from physical word bounds.
+test.each([
+  ['1 980', ['1', '980'], ['980', '1']],
+  ['1 980 200', ['1', '980', '200'], ['200', '980', '1']],
+  ['١ ٩٨٠', ['٩٨٠', '١'], ['٩٨٠', '١']],
+  ['(1 980)', ['1', '980'], ['980', '1']],
+  ['العربية 1 980', ['980', '1'], ['980', '1']],
+  ['1 980 العربية', ['1', '980'], ['980', '1']],
+])('numeric groups match Word physical order for %s', (text, ordinaryOrder, rtlOrder) => {
+  for (const rPr of ['', '<w:rtl/>', '<w:rtl w:val="0"/>']) {
+    const line = linesOf(layout(text, '<w:jc w:val="both"/>', false, 180, rPr))[0]!;
+    const groups = Array.from(text.matchAll(/[0-9\u0660-\u0669]+/gu)).map((match) => {
+      const start = match.index;
+      const end = start + match[0].length;
+      const source = line.spans.find((span) => span.range.start <= start && span.range.end >= end)!;
+      return { text: match[0], x: spanOffsetX(source, start, measurer) };
+    });
+    expect(groups.sort((a, b) => a.x - b.x).map((group) => group.text)).toEqual(
+      rPr === '<w:rtl/>' ? rtlOrder : ordinaryOrder
+    );
+    expect(line.spans.map((span) => span.text).join('')).toBe(text);
+    expect(Math.max(...line.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(180);
+    if (text === '1 980 العربية') {
+      const arabic = line.spans.find((span) => span.text.includes('العربية'))!;
+      const numeric = line.spans.find((span) => span.text.includes('980'))!;
+      expect(arabic.box.x > numeric.box.x).toBe(rPr !== '<w:rtl/>');
+    }
+  }
+});
+
+test.each([false, true])(
+  'grouped numeric text keeps ascending caret offsets in body/table=%s',
+  (table) => {
+    const result = layout('1 980', '<w:jc w:val="both"/>', table);
+    const line = linesOf(result)[0]!;
+    const positions = Array.from({ length: 6 }, (_, offset) => {
+      const span = line.spans.find(
+        (candidate) => candidate.range.start <= offset && candidate.range.end >= offset
+      )!;
+      return spanOffsetX(span, offset, measurer);
+    });
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    for (let offset = 0; offset < 5; offset++) {
+      const hit = hitTestPage(
+        result,
+        0,
+        { x: positions[offset]! + 1, y: line.box.y + line.box.height / 2 },
+        { measurer }
+      );
+      expect(hit?.position.offset).toBe(offset);
+    }
+  }
+);
+
+test.each([
+  [
+    [
+      ['1', ''],
+      [' ', ''],
+      ['980', ''],
+    ],
+    ['1', '980'],
+    undefined,
+  ],
+  [
+    [
+      ['1 980', ''],
+      [' العربية', '<w:rtl/>'],
+    ],
+    ['1', '980'],
+    'left',
+  ],
+  [
+    [
+      ['1 980', '<w:rtl w:val="0"/>'],
+      [' العربية', '<w:rtl/>'],
+    ],
+    ['1', '980'],
+    'left',
+  ],
+  [
+    [
+      ['العربية ', '<w:rtl/>'],
+      ['1 980', ''],
+    ],
+    ['1', '980'],
+    'right',
+  ],
+  [
+    [
+      ['1', ''],
+      [' ', '<w:rtl/>'],
+      ['980', ''],
+    ],
+    ['980', '1'],
+    undefined,
+  ],
+  [
+    [
+      ['1', '<w:rtl/>'],
+      [' ', '<w:rtl w:val="0"/>'],
+      ['980', '<w:rtl/>'],
+    ],
+    ['980', '1'],
+    undefined,
+  ],
+] as const)(
+  'run direction boundaries keep numeric units in Word order: %j',
+  (runs, expected, arabicSide) => {
+    const text = runs.map(([text]) => text).join('');
+    const xml = runs
+      .map(
+        ([text, properties]) =>
+          `<w:r><w:rPr>${properties}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`
+      )
+      .join('');
+    const result = layoutSemanticDocument(
+      part(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:bidi/><w:jc w:val="both"/></w:pPr>${xml}</w:p></w:body></w:document>`
+      ),
+      0,
+      { measurer }
+    );
+    const line = linesOf(result)[0]!;
+    const positions = [...text.matchAll(/[0-9]+/gu)].map((match) => {
+      const span = line.spans.find(
+        (span) => span.range.start <= match.index && span.range.end >= match.index + match[0].length
+      )!;
+      return { text: match[0], x: spanOffsetX(span, match.index, measurer) };
+    });
+    expect(positions.sort((a, b) => a.x - b.x).map((group) => group.text)).toEqual([...expected]);
+    expect(line.spans.map((span) => span.text).join('')).toBe(text);
+    if (arabicSide) {
+      const arabic = line.spans.find((span) => span.text.includes('العربية'))!;
+      expect(arabic.box.x < positions[0]!.x).toBe(arabicSide === 'left');
+    }
+  }
+);
+
+test.each(['', '<w:rtl w:val="0"/>'])(
+  'unmarked Arabic punctuation retains its LTR run context: %s',
+  (rPr) => {
+    const line = linesOf(layout('العربية.', '', false, 120, rPr))[0]!;
+    const period = line.spans.find((span) => span.text === '.')!;
+    const arabic = line.spans.find((span) => span.text.includes('العربية'))!;
+    expect(period.box.x).toBeGreaterThan(arabic.box.x);
+    expect(period.style.shaping?.direction).toBe('ltr');
+    expect(arabic.style.shaping?.direction).toBe('rtl');
+  }
+);
+
+test('explicit run direction uses the final inherited property and resets across manual breaks', () => {
+  const line = linesOf(layout('1 980', '', false, 120, '<w:rtl/><w:rtl w:val="0"/>'))[0]!;
+  expect(line.spans.find((span) => span.text.includes('1'))!.box.x).toBeLessThan(
+    line.spans.find((span) => span.text.includes('980'))!.box.x
+  );
+  const result = layoutSemanticDocument(
+    part(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:bidi/></w:pPr><w:r><w:t>1 980</w:t><w:br/><w:t>2 409</w:t></w:r></w:p></w:body></w:document>`
+    ),
+    0,
+    { measurer }
+  );
+  const lines = linesOf(result);
+  expect(lines).toHaveLength(2);
+  for (const line of lines) {
+    const digits = line.spans.filter((span) => /[0-9]/u.test(span.text));
+    expect(digits.map((span) => span.box.x)).toEqual(
+      digits.map((span) => span.box.x).sort((a, b) => a - b)
+    );
+  }
+});
+
+test('authored Unicode controls keep the paragraph policy after wrapping beyond their source position', () => {
+  const text = '\u202bאבג 1 980 abc def ghi jkl mno pqr\u202c';
+  const result = layout(text, '', false, 90);
+  const lines = linesOf(result);
+  expect(lines.length).toBeGreaterThan(1);
+  expect(lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toBe(text);
+  for (const line of lines) {
+    for (const span of line.spans) expect(span.style.shaping?.runDirection).toBeUndefined();
+  }
+});
+
+test.each(['', '<w:rtl/>', '<w:rtl w:val="0"/>'])(
+  'mixed Hebrew follows the authored run context: %s',
+  (rPr) => {
+    const line = linesOf(layout('אבג ABC דהו', '', false, 120, rPr))[0]!;
+    const first = line.spans.find((span) => span.text.includes('אבג'))!;
+    const latin = line.spans.find((span) => span.text.includes('ABC'))!;
+    const last = line.spans.find((span) => span.text.includes('דהו'))!;
+    expect(first.box.x < latin.box.x).toBe(rPr !== '<w:rtl/>');
+    expect(last.box.x > latin.box.x).toBe(rPr !== '<w:rtl/>');
+  }
+);

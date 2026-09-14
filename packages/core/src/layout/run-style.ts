@@ -53,6 +53,8 @@ export interface ResolvedRunStyle {
     readonly direction: 'ltr' | 'rtl';
     readonly level: number;
     readonly baseLevel: number;
+    /** Resolved w:rtl context; absent when authored Unicode controls govern the paragraph. */
+    readonly runDirection?: 'ltr' | 'rtl';
     readonly wordSpacingPt?: number;
   };
   /** Points. `w:sz` is half-points, so 22 becomes 11. */
@@ -154,6 +156,9 @@ export interface ThemeFonts {
   readonly majorEastAsia?: string | null;
   /** `a:minorFont` east asian typeface (`a:ea`) — body text. Optional for back-compat. */
   readonly minorEastAsia?: string | null;
+  /** Complex-script heading and body theme faces. */
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
   /** Language-specific theme faces, keyed by ISO 15924 script. */
   readonly majorSupplemental?: Readonly<Record<string, string>>;
   readonly minorSupplemental?: Readonly<Record<string, string>>;
@@ -312,7 +317,11 @@ export function resolveRunStyle(
         break;
     }
   }
-  style.fontFamilyEastAsia ??= eastAsianDefaultFamily(eastAsiaLanguage);
+  // Word uses the document body East Asian face when the entire style cascade
+  // omits this slot, including runs whose Latin font uses a heading theme token.
+  // Only use a concrete theme face here; absent theme languages remain host-independent.
+  style.fontFamilyEastAsia ??=
+    themeFonts?.minorEastAsia ?? eastAsianDefaultFamily(eastAsiaLanguage);
   return style;
 }
 
@@ -370,6 +379,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.shaping?.direction === b.shaping?.direction &&
     a.shaping?.level === b.shaping?.level &&
     a.shaping?.baseLevel === b.shaping?.baseLevel &&
+    a.shaping?.runDirection === b.shaping?.runDirection &&
     a.shaping?.wordSpacingPt === b.shaping?.wordSpacingPt &&
     a.fontFamily === b.fontFamily &&
     a.fontFamilyEastAsia === b.fontFamilyEastAsia &&

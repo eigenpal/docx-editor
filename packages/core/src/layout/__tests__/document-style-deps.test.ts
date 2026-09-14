@@ -132,3 +132,17 @@ test('theme language changes select new supplemental faces and unchanged roots r
   expect(view.documentThemeFonts().minorEastAsia).toBe('Generic EA');
   expect(view.documentThemeFonts().minorSupplemental).toBeUndefined();
 });
+
+test('changing only a complex-script theme face invalidates layout styles', () => {
+  let theme: HeadlessThemeFonts = { major: null, minor: null, majorBidi: 'First' };
+  const dependencies = createDocumentStyleDependencies({
+    stylesRoot: () => null,
+    settingsRoot: () => null,
+    numberingRoot: () => null,
+    documentThemeFonts: () => theme,
+  } as unknown as HeadlessDocumentView);
+  const first = dependencies.styleCascade();
+  theme = { ...theme, majorBidi: 'Second' };
+  expect(dependencies.styleCascade()).not.toBe(first);
+  expect(dependencies.styleCascade()?.themeFonts.majorBidi).toBe('Second');
+});

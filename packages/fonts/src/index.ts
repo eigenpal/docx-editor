@@ -3,8 +3,8 @@
  *
  * Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are proprietary
  * and cannot ship in an open package. What CAN ship are the faces built to MATCH THEIR METRICS:
- * identical advance widths, so wrap and pagination land where Word puts them even though the
- * glyph outlines differ slightly.
+ * matching advance widths for the glyphs they cover, though outlines differ slightly.
+ * Scripts outside that coverage still need a suitable native or app-supplied font.
  *
  * Nothing loads until an app calls in. Importing this module fetches no bytes, and the editor
  * engine never calls it on its own.
@@ -31,8 +31,8 @@
 //
 // Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are
 // proprietary and cannot ship in an open package. What CAN ship are the faces built to
-// MATCH THEIR METRICS — identical advance widths, so wrap and pagination land where Word
-// puts them even though the glyph outlines differ slightly:
+// MATCH THEIR METRICS for the glyphs they cover. Scripts outside that coverage still
+// need a suitable native or app-supplied font:
 //
 //   Calibri         → Carlito            (SIL OFL)
 //   Cambria         → Caladea            (SIL OFL)
@@ -343,9 +343,10 @@ const startedInstalls = new WeakMap<FontFaceSet, Set<string>>();
  * Presentation-only, app-triggered, idempotent per document (overlapping calls
  * included); returns the number of faces registered. No-op outside a DOM environment.
  *
- * NOT a substitute for {@link loadDefaultFonts}. This affects painting only — calling it
- * alone leaves the engine measuring on the fixed fallback, which looks right and
- * paginates wrong. Pair it with `loadDefaultFonts()` fed to the editor's `fonts` prop.
+ * This explicit helper changes page-wide CSS families. It can hide native glyphs
+ * for scripts absent from a substitute. Normal editor use needs only the returned
+ * font bytes: Core registers private aliases and keeps native family fallback available.
+ * This helper alone does not supply measurement bytes to the editor.
  *
  * The return value counts faces THIS call registered, so `0` covers "no DOM
  * environment", "already registered", and "every face failed" alike; treat it as a
@@ -428,13 +429,12 @@ export async function installDefaultFontFaces(
 }
 
 /**
- * The whole default-font boot, in one call: load the bytes, register the paint-side faces,
- * and hand back the fragment for the editor's `fonts` prop.
+ * Load the default-font bytes and report failures for the editor's `fonts` prop.
  *
- * The two halves have to happen together and almost nobody wants them apart —
- * {@link loadDefaultFonts} alone measures correctly and paints with whatever the platform
- * substitutes; {@link installDefaultFontFaces} alone paints correctly and paginates wrong.
- * Every host was writing the same six lines to pair them, so this is that pairing.
+ * The editor registers these bytes under private aliases for measurement and paint.
+ * This loader leaves public CSS family names unchanged, so native fonts remain available
+ * when a packaged substitute lacks a script. Use {@link installDefaultFontFaces} only
+ * when a host explicitly needs page-wide registration under the Word family names.
  *
  * Non-cancellation face failures are WARNED, not thrown: one unavailable face degrades that
  * family to fixed-width measurement rather than refusing the document. Pass `onFailure` to route
@@ -452,11 +452,8 @@ export async function defaultFonts(
     if (onFailure) onFailure(failure);
     else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
   }
-  // Not awaited: painting can start on the platform's substitute and swap when the real
-  // face arrives, and blocking the document on it would delay first paint for nothing.
-  // The fragment goes with it, so registration reuses these bytes rather than asking the
-  // browser to fetch each face a second time.
-  void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
+  // Core owns private face registration. A public Arial→Liberation Sans registration
+  // hides native Arial's Arabic glyphs, which Liberation Sans does not contain.
   return fragment;
 }
 
@@ -558,9 +555,10 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * Set `false` to skip the paint-side `FontFace` registration
-   * {@link installDefaultFontFaces} performs. Measurement is unaffected; painted glyphs
-   * fall back to whatever the platform substitutes for the Word family name.
+   * Set `true` to register substitutes under public Word family names through
+   * {@link installDefaultFontFaces}. Default: `false`. The editor registers private aliases
+   * itself, so normal editor use needs no page-wide registration. Public registration can
+   * hide native glyphs for scripts the substitutes do not cover.
    *
    * Registration reuses the bytes the resolver already loaded, so a face that loaded costs
    * no second request and {@link PackagedFontsOptions.fetcher} sees every byte read for it.
@@ -686,9 +684,9 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
     }
-    // Not awaited, exactly as in `defaultFonts`: painting can start on the platform's
-    // substitute and swap when the real face arrives.
-    if (options.install !== false) {
+    // Public family replacement is an explicit host choice. Core registers private
+    // aliases for its own surface, preserving native glyph fallback and host-page fonts.
+    if (options.install === true) {
       void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
     }
     return { ...fragment, families };

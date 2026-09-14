@@ -49,6 +49,7 @@
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
+import { segmentGraphemes } from './grapheme.ts';
 
 /**
  * The stack used when a run names no font (or names one the sink refuses).
@@ -151,6 +152,8 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
  */
 export interface CanvasTextMetrics {
   readonly width: number;
+  readonly actualBoundingBoxLeft?: number;
+  readonly actualBoundingBoxRight?: number;
   readonly fontBoundingBoxAscent?: number;
   readonly fontBoundingBoxDescent?: number;
 }
@@ -163,6 +166,8 @@ export interface CanvasTextMetrics {
  */
 export interface CanvasTextContext {
   font: string;
+  textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
+  direction?: 'ltr' | 'rtl' | 'inherit';
   measureText(text: string): CanvasTextMetrics;
 }
 
@@ -297,6 +302,39 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       const width = ctx.measureText(text).width;
       widthCache.set(key, width);
       return scaled(width, text, style);
+    },
+    inkBounds(text, style) {
+      if (
+        !text ||
+        text.length > 2 ||
+        style.shaping?.direction === 'rtl' ||
+        segmentGraphemes(text).length !== 1
+      )
+        return undefined;
+      ctx.font = fontOf(style);
+      // Canvas bearings are relative to textAlign. Paint uses a left glyph origin.
+      const alignment = ctx.textAlign;
+      const direction = ctx.direction;
+      let metrics: CanvasTextMetrics;
+      try {
+        if (alignment !== undefined) ctx.textAlign = 'left';
+        if (direction !== undefined) ctx.direction = 'ltr';
+        metrics = ctx.measureText(text);
+      } finally {
+        if (alignment !== undefined) ctx.textAlign = alignment;
+        if (direction !== undefined) ctx.direction = direction;
+      }
+      const left = metrics.actualBoundingBoxLeft;
+      const right = metrics.actualBoundingBoxRight;
+      if (
+        left === undefined ||
+        right === undefined ||
+        !Number.isFinite(left) ||
+        !Number.isFinite(right)
+      )
+        return undefined;
+      const factor = style.horizontalScalePercent / (100 * scale);
+      return { left: -left * factor, right: right * factor };
     },
     lineMetrics(style) {
       const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75);

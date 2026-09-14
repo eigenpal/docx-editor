@@ -58,6 +58,28 @@ test('a full-width table clears its anchor without chasing the displaced line', 
   expect(paragraphs(layout)[1]!.lines[0]!.box.y).toBeGreaterThanOrEqual(52);
 });
 
+test('near-full-width floating tables keep their caption and heading below the table', () => {
+  for (const rtl of [false, true]) {
+    const source = part(
+      p('Lead') +
+        table(184).replace('w:tblpX="0"', 'w:tblpXSpec="center"') +
+        p('Source caption') +
+        p(rtl ? 'ما يقرب من سبعين بالمئة' : 'A complete heading', rtl ? '<w:bidi/>' : '')
+    );
+    const session = createLayoutSession();
+    const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+    for (let revision = 0; revision < 2; revision++) {
+      const layout = layoutSemanticDocument(source, revision, { ...options, session, cache });
+      const floating = tables(layout)[0]!;
+      const [caption, heading] = paragraphs(layout).slice(1);
+      expect(caption!.lines[0]!.box.y).toBeGreaterThanOrEqual(floating.box.y + floating.box.height);
+      expect(caption!.lines).toHaveLength(1);
+      expect(heading!.lines).toHaveLength(1);
+      expect(layout.pages).toEqual(render(source).pages);
+    }
+  }
+});
+
 test('top, bottom and side text distances expand the wrap region', () => {
   const layout = render(
     part(

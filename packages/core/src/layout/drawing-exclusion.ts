@@ -371,10 +371,16 @@ export function mergeAvailableIntervalsAtY(
   contentRight: number
 ): readonly ScanlineInterval[] {
   let available: ScanlineInterval[] = [{ start: contentLeft, end: contentRight }];
+  let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
     if (y < band.y || y >= band.y + band.height) continue;
     const atY = availableTextIntervalsOnScanline(y, zone.input);
+    if (
+      zone.sourceKind === 'table' &&
+      !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
+    )
+      wrapsTable = true;
     const next: ScanlineInterval[] = [];
     for (const base of available) {
       for (const clip of atY) {
@@ -386,6 +392,11 @@ export function mergeAvailableIntervalsAtY(
     available = next;
     if (available.length === 0) break;
   }
+  // Word leaves passages of a quarter inch or less beside floating tables empty,
+  // even when individual letters fit. Apply this after all exclusions intersect,
+  // so a second float cannot reduce an admitted passage to a column of letters.
+  if (wrapsTable)
+    available = available.filter((interval) => interval.end - interval.start > 18.001);
   return Object.freeze(available);
 }
 

@@ -25,6 +25,8 @@ export function createDocumentStyleDependencies(
   let styleThemeMinor: string | null | undefined;
   let styleThemeMajorEastAsia: string | null | undefined;
   let styleThemeMinorEastAsia: string | null | undefined;
+  let styleThemeMajorBidi: string | null | undefined;
+  let styleThemeMinorBidi: string | null | undefined;
   let majorSupplemental: Readonly<Record<string, string>> | undefined;
   let minorSupplemental: Readonly<Record<string, string>> | undefined;
   let styles: StyleCascadeTable | undefined;
@@ -46,6 +48,8 @@ export function createDocumentStyleDependencies(
         theme.minor !== styleThemeMinor ||
         theme.majorEastAsia !== styleThemeMajorEastAsia ||
         theme.minorEastAsia !== styleThemeMinorEastAsia ||
+        theme.majorBidi !== styleThemeMajorBidi ||
+        theme.minorBidi !== styleThemeMinorBidi ||
         theme.majorSupplemental !== majorSupplemental ||
         theme.minorSupplemental !== minorSupplemental
       ) {
@@ -54,6 +58,8 @@ export function createDocumentStyleDependencies(
         styleThemeMinor = theme.minor;
         styleThemeMajorEastAsia = theme.majorEastAsia;
         styleThemeMinorEastAsia = theme.minorEastAsia;
+        styleThemeMajorBidi = theme.majorBidi;
+        styleThemeMinorBidi = theme.minorBidi;
         majorSupplemental = theme.majorSupplemental;
         minorSupplemental = theme.minorSupplemental;
         typographyRoot = currentSettings;

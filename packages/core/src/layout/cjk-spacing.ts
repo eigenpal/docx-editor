@@ -30,6 +30,27 @@ export function colonLostOpeningBearing(
   );
 }
 
+/** Natural widths used to decide whether a centred colon needs the next line. */
+export function cjkColonNaturalWidths(
+  pieces: readonly FieldAwarePiece[],
+  originals: readonly FieldAwarePiece[],
+  measurer: TextMeasurer
+): ReadonlyMap<FieldAwarePiece, number> {
+  const widths = new Map<FieldAwarePiece, number>();
+  let originalIndex = 0;
+  for (const piece of pieces) {
+    if (piece.glyphOffsetPt !== 0 || piece.text !== '：') continue;
+    while (originalIndex + 1 < originals.length && originals[originalIndex]!.end <= piece.start)
+      originalIndex++;
+    const original = originals[originalIndex]!;
+    widths.set(
+      piece,
+      measureDisplayText(piece.text, styleForFontSlot(original.style, original.fontSlot), measurer)
+    );
+  }
+  return widths;
+}
+
 const compressible = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
   // Outlined ink extends into the nominal bearing; keep its complete advance.
@@ -94,7 +115,7 @@ function compressionSlices(
         // Retain the following opening's left bearing. It receives a centred
         // colon's overhang without moving or clipping the colon's native ink.
         (cluster.text === '：' &&
-          OPENING.test(next) &&
+          (OPENING.test(next) || CLOSING.test(next)) &&
           !preserveColonAdvances &&
           !base.style.highlight &&
           !base.style.shading));
@@ -112,20 +133,47 @@ function compressionSlices(
         ? measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
         : advance;
     let bearing = naturalAdvance * fraction;
-    if (cluster.text === '：' && next !== undefined && OPENING.test(next)) {
+    if (cluster.text === '：' && next !== undefined) {
       let nextPieceIndex = pieceIndex;
       const nextFrom = clusters[clusterIndex + 1]!.utf16From;
       while (nextPieceIndex + 1 < pieces.length && starts[nextPieceIndex + 1]! <= nextFrom)
         nextPieceIndex++;
       const nextPiece = pieces[nextPieceIndex]!;
       const nextFace = styleForFontSlot(nextPiece.style, nextPiece.fontSlot);
-      // A smaller following bracket cannot receive a larger colon's whole half-em.
-      const nextAdvance = measureDisplayText(
-        next,
-        { ...nextFace, characterSpacingPt: 0 },
-        measurer
-      );
-      bearing = Math.min(bearing, Math.max(0, nextAdvance / 2));
+      if (OPENING.test(next)) {
+        // A smaller following bracket cannot receive a larger colon's whole half-em.
+        const nextAdvance = measureDisplayText(
+          next,
+          { ...nextFace, characterSpacingPt: 0 },
+          measurer
+        );
+        bearing = Math.min(bearing, Math.max(0, nextAdvance / 2));
+      } else {
+        // Word halves the complete colon cell before closing punctuation, including
+        // authored spacing. Word permits overlapping horizontal bounds here:
+        // centered colon dots and low closing ink occupy different vertical bands.
+        // Keep native ink within the pair; the natural-width wrap guard prevents
+        // a colon from losing this following cell across a line or float passage.
+        const ink = measurer.inkBounds?.(cluster.text, face);
+        const nextInk = measurer.inkBounds?.(next, nextFace);
+        const nextAdvance = measureDisplayText(next, nextFace, measurer);
+        if (
+          !ink ||
+          !nextInk ||
+          ![ink.left, ink.right, nextInk.left, nextInk.right].every(Number.isFinite) ||
+          ink.left < 0 ||
+          nextInk.left < 0 ||
+          ink.right < ink.left ||
+          nextInk.right < nextInk.left ||
+          ink.right > naturalAdvance ||
+          ink.right > advance / 2 + nextAdvance ||
+          nextInk.right > nextAdvance ||
+          nextPiece.style.highlight ||
+          nextPiece.style.shading
+        )
+          continue;
+        bearing = advance / 2;
+      }
     }
     const reduction = Math.max(0, Math.min(advance, bearing)) / cluster.text.length;
     for (

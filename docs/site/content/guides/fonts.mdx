@@ -94,6 +94,9 @@ Gothic across the recorded samples: 0.22%, 0.34%, 0.67%, and 0.85% at 40 pt
 bold. `bun run check:font-width-fidelity` holds it within 1%. Over a long line
 that is a fraction of a character, and a wrap point can still move.
 
+Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs.
+The editor preserves native family fallback for missing glyphs. Exact metrics still
+depend on the available font for that script.
 Supply licensed font bytes when pixels must match the original face.
 
 `defaultFonts()` loads the five families Word applies to a document by default.
@@ -150,8 +153,14 @@ settle, so the reader never sees the text reflow. An on-demand resolver has
 nothing to hold for: the families it answers about come from the parse, so the
 bytes have to go through first.
 
-If you load default bytes separately, pass them to the paint-side installer.
-This avoids a second request for the same font files:
+`defaultFonts()` and `packagedFonts()` supply bytes without changing public CSS
+family names. The editor registers private aliases for paint. This preserves native
+glyph fallback and the host application's fonts.
+
+Use `installDefaultFontFaces()` or `packagedFonts({ install: true })` only for an
+explicit page-wide font replacement. These register substitutes under Word family names.
+They can hide native glyphs for scripts the substitutes do not cover.
+To avoid another font request, pass already loaded bytes:
 
 ```ts
 import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
@@ -345,12 +354,11 @@ bytes, so a substituted or corrupted file fails loudly rather than rendering.
 `packagedFonts()` and `defaultFonts()` accept `fetcher` too, and their assets
 ship inside the package, so they read your own origin with or without it.
 
-Both also register faces for painting, and that step can reach the browser's own
-`FontFace` loader, which takes a URL rather than your function. To be certain
-every byte goes through `fetcher`, pass `install: false` to `packagedFonts()`.
-Measurement is unaffected: painted glyphs then fall back to whatever the
-platform substitutes for the family name. `defaultFonts()` has no such option,
-so call `loadDefaultFonts()` instead when you need that guarantee.
+Both pass loaded bytes to the editor, which registers private aliases without
+another request. The explicit `installDefaultFontFaces()` helper reuses supplied bytes.
+If a face has no supplied bytes, that helper can load its URL through the browser's
+`FontFace` loader, outside your `fetcher`. The same applies to
+`packagedFonts({ install: true })`.
 
 Use `fetcher` for caching too. `googleFonts()` keeps its catalog fetches in
 memory, keyed by the fetcher you passed, which is what a browser tab needs.

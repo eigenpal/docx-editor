@@ -190,13 +190,21 @@ export interface CanvasMeasurerOptions {
 // @public
 export interface CanvasTextContext {
     // (undocumented)
+    direction?: 'ltr' | 'rtl' | 'inherit';
+    // (undocumented)
     font: string;
     // (undocumented)
     measureText(text: string): CanvasTextMetrics;
+    // (undocumented)
+    textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
 }
 
 // @public
 export interface CanvasTextMetrics {
+    // (undocumented)
+    readonly actualBoundingBoxLeft?: number;
+    // (undocumented)
+    readonly actualBoundingBoxRight?: number;
     // (undocumented)
     readonly fontBoundingBoxAscent?: number;
     // (undocumented)
@@ -2841,6 +2849,7 @@ export interface ResolvedRunStyle {
         readonly baseLevel: number;
         readonly direction: 'ltr' | 'rtl';
         readonly level: number;
+        readonly runDirection?: 'ltr' | 'rtl';
         readonly script: string;
         readonly wordSpacingPt?: number;
     };
@@ -4276,6 +4285,10 @@ export type TextDirection = 'ltr' | 'rtl';
 // @public
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+    inkBounds?(text: string, style: ResolvedRunStyle): {
+        left: number;
+        right: number;
+    } | undefined;
     lineMetrics(style: ResolvedRunStyle): {
         baseline: number;
         height: number;

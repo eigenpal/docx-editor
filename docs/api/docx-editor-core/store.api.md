@@ -1696,10 +1696,13 @@ export interface HeadlessDocumentView {
 export interface HeadlessThemeFonts {
     // (undocumented)
     readonly major: string | null;
+    readonly majorBidi?: string | null;
     readonly majorEastAsia?: string | null;
     readonly majorSupplemental?: Readonly<Record<string, string>>;
     // (undocumented)
     readonly minor: string | null;
+    // (undocumented)
+    readonly minorBidi?: string | null;
     readonly minorEastAsia?: string | null;
     // (undocumented)
     readonly minorSupplemental?: Readonly<Record<string, string>>;

@@ -27,6 +27,9 @@ export interface ThemeSchemeFaces {
   readonly majorEastAsia?: string | null;
   /** `a:minorFont` east asian typeface (`a:ea`). */
   readonly minorEastAsia?: string | null;
+  /** Complex-script heading and body faces (`a:cs`). */
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
   /** Language-specific theme faces, keyed by ISO 15924 script. */
   readonly majorSupplemental?: Readonly<Record<string, string>>;
   readonly minorSupplemental?: Readonly<Record<string, string>>;
@@ -73,7 +76,7 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 function schemeTypeface(
   scheme: OoxmlElement,
   slot: 'majorFont' | 'minorFont',
-  face: 'latin' | 'ea'
+  face: 'latin' | 'ea' | 'cs'
 ): string | null {
   const font = child(scheme, slot);
   const element = font ? child(font, face) : null;
@@ -98,6 +101,8 @@ function collectRawThemeSchemeFaces(themeRoot: OoxmlElement | null): DocumentThe
     minor: schemeTypeface(scheme, 'minorFont', 'latin'),
     majorEastAsia: schemeTypeface(scheme, 'majorFont', 'ea'),
     minorEastAsia: schemeTypeface(scheme, 'minorFont', 'ea'),
+    majorBidi: schemeTypeface(scheme, 'majorFont', 'cs'),
+    minorBidi: schemeTypeface(scheme, 'minorFont', 'cs'),
     ...supplementalFaces(scheme),
   });
   if (themeRoot) schemeFacesMemo.set(themeRoot, faces);
@@ -116,30 +121,44 @@ const EMPTY_THEME_FACES: DocumentThemeFonts = Object.freeze({
   minorEastAsia: null,
 });
 
-/** Resolve document theme languages before run-language fallback is considered. */
+/**
+ * Resolve document theme languages before run-language fallback is considered.
+ * ISO/IEC 29500-1 themeFontLang maps val, eastAsia, and bidi to separate theme slots.
+ * https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.themefontlanguages
+ */
 export function collectThemeSchemeFaces(
   themeRoot: OoxmlElement | null,
   settingsRoot: OoxmlElement | null = null
 ): DocumentThemeFonts {
   const faces = themeRoot ? collectRawThemeSchemeFaces(themeRoot) : EMPTY_THEME_FACES;
-  const language =
-    settingsRoot &&
-    child(settingsRoot, 'themeFontLang')?.attributes.find(
-      (attribute) => attribute.localName === 'eastAsia'
-    )?.value;
-  if (language == null || !settingsRoot) return faces;
+  const languages = settingsRoot ? child(settingsRoot, 'themeFontLang') : null;
+  if (!languages || !settingsRoot) return faces;
   let byTheme = languageFacesMemo.get(settingsRoot);
   if (!byTheme) languageFacesMemo.set(settingsRoot, (byTheme = new WeakMap()));
   const cached = byTheme.get(faces);
   if (cached) return cached;
-  const script = eastAsianScript(language);
-  // themeFontLang selects the supplemental face for the entire document. Do not
-  // let a run's proofing language select a different supplemental face afterward.
+  const language = (slot: string) =>
+    languages.attributes.find((attribute) => attribute.localName === slot)?.value;
+  const latinScript = themeLanguageScript(language('val'));
+  const bidiScript = themeLanguageScript(language('bidi'));
+  const eastAsiaLanguage = language('eastAsia');
+  const eastAsiaScript = eastAsianScript(eastAsiaLanguage);
+  const selected = (major: boolean, script: string | null, fallback: string | null | undefined) =>
+    (script && (major ? faces.majorSupplemental : faces.minorSupplemental)?.[script]) ||
+    fallback ||
+    null;
+  // Each setting selects its own token slot, independent of the run attribute
+  // carrying that token. An absent East Asian setting keeps the run-language fallback.
   const resolved = Object.freeze({
-    major: faces.major,
-    minor: faces.minor,
-    majorEastAsia: (script && faces.majorSupplemental?.[script]) || faces.majorEastAsia,
-    minorEastAsia: (script && faces.minorSupplemental?.[script]) || faces.minorEastAsia,
+    major: selected(true, latinScript, faces.major),
+    minor: selected(false, latinScript, faces.minor),
+    majorEastAsia: selected(true, eastAsiaScript, faces.majorEastAsia),
+    minorEastAsia: selected(false, eastAsiaScript, faces.minorEastAsia),
+    majorBidi: selected(true, bidiScript, faces.majorBidi),
+    minorBidi: selected(false, bidiScript, faces.minorBidi),
+    ...(eastAsiaLanguage === undefined
+      ? { majorSupplemental: faces.majorSupplemental, minorSupplemental: faces.minorSupplemental }
+      : {}),
   });
   byTheme.set(faces, resolved);
   return resolved;
@@ -158,8 +177,8 @@ const TOKEN_FACE: ReadonlyMap<string, (faces: ThemeSchemeFaces) => string | null
   // attribute carried it does not.
   ['minorEastAsia', (faces: ThemeSchemeFaces) => faces.minorEastAsia ?? null],
   ['majorEastAsia', (faces: ThemeSchemeFaces) => faces.majorEastAsia ?? null],
-  // `minorBidi`/`majorBidi` name the `a:cs` face no lane harvests yet; an honest null —
-  // which falls back to the explicit attribute beside the token — beats the wrong font.
+  ['minorBidi', (faces: ThemeSchemeFaces) => faces.minorBidi ?? null],
+  ['majorBidi', (faces: ThemeSchemeFaces) => faces.majorBidi ?? null],
 ]);
 
 /** A `w:rFonts` theme token resolved to its theme face, or null when it names none we hold. */
@@ -194,6 +213,28 @@ export function eastAsianScript(language: string | undefined): string | null {
   return parts.some((part) => ['tw', 'hk', 'mo'].includes(part)) ? 'Hant' : 'Hans';
 }
 
+// These complex-script language tags select supplemental Office theme faces. Explicit scripts
+// also cover less common document languages without host-locale inference.
+const THEME_LANGUAGE_SCRIPTS = new Map([
+  ['ar', 'Arab'],
+  ['fa', 'Arab'],
+  ['ur', 'Arab'],
+  ['ps', 'Arab'],
+  ['he', 'Hebr'],
+  ['yi', 'Hebr'],
+  ['dv', 'Thaa'],
+  ['syr', 'Syrc'],
+]);
+
+function themeLanguageScript(language: string | undefined): string | null {
+  if (!language || language.length > 85) return null;
+  const parts = language.toLowerCase().split('-');
+  // A script subtag precedes region and extension subtags.
+  if (parts[1] && /^[a-z]{4}$/.test(parts[1]))
+    return parts[1][0]!.toUpperCase() + parts[1].slice(1);
+  return eastAsianScript(language) ?? THEME_LANGUAGE_SCRIPTS.get(parts[0]!) ?? null;
+}
+
 const EAST_ASIAN_DEFAULTS = new Map([
   ['Hans', 'SimSun'],
   ['Hant', 'PMingLiU'],
@@ -220,7 +261,7 @@ function supplementalFaces(scheme: OoxmlElement): Partial<ThemeSchemeFaces> {
       if (!isElement(node) || node.localName !== 'font') continue;
       const script = node.attributes.find((a) => a.localName === 'script')?.value;
       const face = node.attributes.find((a) => a.localName === 'typeface')?.value;
-      if (script && EAST_ASIAN_DEFAULTS.has(script) && face && FONT_NAME.test(face))
+      if (script && /^[A-Z][a-z]{3}$/.test(script) && face && FONT_NAME.test(face))
         faces[script] = face;
     }
     if (Object.keys(faces).length) result[key] = Object.freeze(faces);

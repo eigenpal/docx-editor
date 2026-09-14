@@ -22,6 +22,8 @@ import {
 
 import type { FontResourceSnapshot, ResolvedFont } from './font-resource.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { shapedClusterInkBounds } from './glyph-ink-bounds.ts';
+import { segmentGraphemes } from './grapheme.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { OperationSnapshot } from './resolved-cache.ts';
 import {
@@ -311,6 +313,33 @@ export function createShapedMeasurer(
       );
     },
 
+    inkBounds(text, style) {
+      if (
+        !text ||
+        text.length > 2 ||
+        style.shaping?.direction === 'rtl' ||
+        segmentGraphemes(text).length !== 1
+      )
+        return undefined;
+      const font = resolveFontCached(style);
+      if (!font) return fallback.inkBounds?.(text, style);
+      try {
+        if (
+          style.smallCaps &&
+          !layoutFaceHasSmallCaps(shaper, baseEnvironment, font, style, smallCapsSupportByFont)
+        )
+          return fallback.inkBounds?.(text, style);
+        const run = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
+        return shapedClusterInkBounds(
+          run,
+          layoutRunHalfPointsOf(style) / 2,
+          baseEnvironment.fixedPointScale,
+          (sizeFactorOf(style) * style.horizontalScalePercent) / 100
+        );
+      } catch {
+        return undefined;
+      }
+    },
     caretAdvances(text, style) {
       const font = resolveFontCached(style);
       if (!font) return fallbackAdvances(text, style);

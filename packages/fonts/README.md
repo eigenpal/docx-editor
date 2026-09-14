@@ -12,11 +12,15 @@ measurement in the docx-editor engine.
 | Courier New     | Liberation Mono   | SIL OFL           |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
-The first five substitutes use identical advance widths. TeX Gyre Adventor is close but
+The first five substitutes target identical advance widths for the glyphs they cover. TeX Gyre Adventor is close but
 not identical: `bun run check:font-width-fidelity` holds it to within 1% of Word's own
 Century Gothic advances, and the widest sample is -0.85% (`of work` at 40 pt bold). That
 1% is the gate's bound, not a description of it. Documents that need exact glyphs can
 supply licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
+
+Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs.
+The editor keeps native family fallback available for missing glyphs. Exact metrics still
+depend on the font available for that script.
 
 `loadDefaultFonts()` and `defaultFonts()` load the five families Word applies to a
 document by default. Century Gothic is not one of them and adds about 709 KB, so it is
@@ -55,16 +59,21 @@ To load Word's five document defaults up front instead — no re-pagination, all
 and 7.4 MB whichever document opens — use `defaultFonts()`:
 
 ```ts
-import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const fragment = await defaultFonts(); // or { families: ['Calibri'] }
-
-// `defaultFonts` already registers the paint-side faces. `loadDefaultFonts` is the
-// same load without that half, and `installDefaultFontFaces` is that half alone.
-await installDefaultFontFaces();
+const fonts = await defaultFonts(); // or { families: ['Calibri'] }
+const editor = createDocxEditor({ document: bytes, fonts });
 ```
 
-If you call `loadDefaultFonts()`, reuse its bytes for paint registration:
+`defaultFonts()` and `packagedFonts()` supply font bytes. The editor registers those
+bytes under private aliases for paint. They leave public CSS family names unchanged,
+so substitutes cannot hide native glyphs or change the host application's fonts.
+`loadDefaultFonts()` returns the same fragment without reporting failures to the console.
+
+For an explicit page-wide replacement, use `installDefaultFontFaces()` or
+`packagedFonts({ install: true })`. These options register substitutes under Word family
+names. They can hide native glyphs for scripts the substitutes do not cover.
+If you need this behavior, reuse loaded bytes to avoid another font request:
 
 ```ts
 import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';

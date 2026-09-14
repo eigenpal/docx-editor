@@ -77,6 +77,8 @@ interface SubtreeFontsMemo {
   readonly minor: string | null;
   readonly majorEastAsia: string | null;
   readonly minorEastAsia: string | null;
+  readonly majorBidi: string | null;
+  readonly minorBidi: string | null;
   readonly byFold: ReadonlyMap<string, string>;
 }
 const subtreeFontsMemos = new WeakMap<OoxmlElement, SubtreeFontsMemo>();
@@ -102,13 +104,17 @@ function subtreeFontsOf(
   // faces than the resolution reads would answer stale fonts after a retheme.
   const majorEastAsia = themeFonts?.majorEastAsia ?? null;
   const minorEastAsia = themeFonts?.minorEastAsia ?? null;
+  const majorBidi = themeFonts?.majorBidi ?? null;
+  const minorBidi = themeFonts?.minorBidi ?? null;
   const cached = subtreeFontsMemos.get(subtree);
   if (
     cached &&
     cached.major === major &&
     cached.minor === minor &&
     cached.majorEastAsia === majorEastAsia &&
-    cached.minorEastAsia === minorEastAsia
+    cached.minorEastAsia === minorEastAsia &&
+    cached.majorBidi === majorBidi &&
+    cached.minorBidi === minorBidi
   ) {
     return cached.byFold;
   }
@@ -124,7 +130,15 @@ function subtreeFontsOf(
         if (!merged.has(fold)) merged.set(fold, family);
       }
     }
-    subtreeFontsMemos.set(subtree, { major, minor, majorEastAsia, minorEastAsia, byFold: merged });
+    subtreeFontsMemos.set(subtree, {
+      major,
+      minor,
+      majorEastAsia,
+      minorEastAsia,
+      majorBidi,
+      minorBidi,
+      byFold: merged,
+    });
     return merged;
   }
   const byFold = new Map<string, string>();
@@ -156,7 +170,15 @@ function subtreeFontsOf(
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
   }
-  subtreeFontsMemos.set(subtree, { major, minor, majorEastAsia, minorEastAsia, byFold });
+  subtreeFontsMemos.set(subtree, {
+    major,
+    minor,
+    majorEastAsia,
+    minorEastAsia,
+    majorBidi,
+    minorBidi,
+    byFold,
+  });
   return byFold;
 }
 

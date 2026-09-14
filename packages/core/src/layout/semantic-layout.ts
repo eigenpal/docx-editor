@@ -110,6 +110,7 @@ import {
   collectExclusionZonesByPageMemoized,
   DrawingExclusionConvergenceError,
   exclusionLayoutToken,
+  localizeExclusionZones,
   exclusionMapsEqual,
   exclusionMapsToken,
   MAX_ANCHOR_PAGE_DEFERRALS,
@@ -1760,7 +1761,10 @@ function layoutBlocksPass(
       if (columnCount > 1 && zone.columnIndex !== flowColumnIndex) return false;
       return true;
     });
-    const exclusionToken = exclusionLayoutToken(pageZones);
+    // Breaks publish column-local spans; placement adds the column origin once.
+    const localPageZones =
+      columnX === 0 ? pageZones : localizeExclusionZones(pageZones, columnX, 0);
+    const exclusionToken = exclusionLayoutToken(localPageZones);
     // `entry.key` already folds the content, the cascade props, the tab stops, and the
     // list/textbox/drawing/REF tokens — `prepareBlock` memo-validates each per pass, and
     // `refFields` is one frozen projection per pass, so nothing here can drift from the
@@ -1780,7 +1784,6 @@ function layoutBlocksPass(
       });
       rememberBreakKey(paragraphId, cacheKey);
     }
-    const usePageColumnCoords = columnCount > 1;
     return breakPreparedParagraph({
       paragraph: entry.paragraph,
       paragraphId,
@@ -1809,12 +1812,11 @@ function layoutBlocksPass(
         ...(options.inlineDrawingLayout
           ? { inlineDrawingLayout: options.inlineDrawingLayout }
           : {}),
-        contentLeft: usePageColumnCoords ? columnX : 0,
-        contentRight: usePageColumnCoords
-          ? columnX + columnWidth()
-          : entry.indent.left + available + entry.indent.right,
+        contentLeft: 0,
+        contentRight:
+          columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,
         paragraphStartY: cursorY,
-        ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+        ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       },
     });
@@ -2782,7 +2784,8 @@ function layoutBlocksPass(
         lineAvailableWidth,
         alignment,
         isLastLine,
-        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+        rtl
       );
       // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
       // content — and so the caret — at the middle of the measure, not at the left edge.

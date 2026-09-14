@@ -18,6 +18,43 @@ export function paragraphIsRtl(props: readonly OoxmlProperty[]): boolean {
   return rtl;
 }
 
+function runIsRtl(props: readonly OoxmlProperty[]): boolean {
+  let rtl = false;
+  for (const prop of props) {
+    if (prop.localName !== 'rtl') continue;
+    const value = prop.attributes?.val;
+    rtl = value === undefined || value === '1' || value === 'true' || value === 'on';
+  }
+  return rtl;
+}
+
+const HAS_BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
+
+/** Resolve contiguous run-direction groups without changing source text or offsets. */
+function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rtl: boolean) {
+  const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
+  // Keep authored Unicode controls on the established full-paragraph UAX #9 path.
+  if (HAS_BIDI_CONTROLS.test(text)) return embedding;
+  let offset = 0;
+  for (let start = 0; start < pieces.length; ) {
+    const direction = runIsRtl(pieces[start]!.props);
+    let end = start;
+    let length = 0;
+    while (end < pieces.length && runIsRtl(pieces[end]!.props) === direction) {
+      length += pieces[end]!.text.length;
+      end++;
+    }
+    const context = bidiAlgorithm.getEmbeddingLevels(
+      text.slice(offset, offset + length),
+      direction ? 'rtl' : 'ltr'
+    );
+    embedding.levels.set(context.levels, offset);
+    offset += length;
+    start = end;
+  }
+  return embedding;
+}
+
 /** Resolve paragraph-wide levels before wrapping; source offsets remain logical. */
 export function bidiPieces(
   pieces: readonly FieldAwarePiece[],
@@ -25,7 +62,12 @@ export function bidiPieces(
   sourceBoundaries?: ReadonlySet<number>
 ): readonly FieldAwarePiece[] {
   const text = pieces.map((piece) => piece.text).join('');
-  if (!rtl && !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text)) return pieces;
+  if (
+    !rtl &&
+    !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
+    !pieces.some((piece) => runIsRtl(piece.props))
+  )
+    return pieces;
   // Atom and tab placement have separate advances and are not ordinary text runs.
   if (
     pieces.some(
@@ -40,7 +82,11 @@ export function bidiPieces(
     )
   )
     return pieces;
-  const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
+  // Contiguous runs with the same w:rtl state share one directional context.
+  // Unmarked runs use LTR context; strong Arabic and Arabic-Indic digits retain
+  // their Unicode classes inside it. Paragraph bidi still controls outer layout.
+  const embedding = runDirectionLevels(pieces, text, rtl);
+  const usesRunGroups = !HAS_BIDI_CONTROLS.test(text);
   const result: FieldAwarePiece[] = [];
   let offset = 0;
   for (const piece of coalesceBidiPieces(pieces, sourceBoundaries)) {
@@ -58,6 +104,9 @@ export function bidiPieces(
           direction: item.direction,
           level: item.bidiLevel,
           baseLevel: rtl ? 1 : 0,
+          ...(usesRunGroups
+            ? { runDirection: runIsRtl(piece.props) ? ('rtl' as const) : ('ltr' as const) }
+            : {}),
         },
       };
       result.push({
@@ -73,36 +122,28 @@ export function bidiPieces(
   return result;
 }
 
-/** UAX #9 L1/L2 at the line boundary. Keep the array in source order for selection. */
-export function reorderBidiSpans(spans: readonly StyleSpanRecord[]): readonly StyleSpanRecord[] {
-  if (!spans.some((s) => s.style.shaping)) return spans;
-  // Exclusion passages have fixed physical gaps. Reorder only within each passage.
-  if (spans.some((span, index) => index > 0 && (span.wrapAdvanceBefore ?? 0) > 0)) {
-    const result: StyleSpanRecord[] = [];
-    let start = 0;
-    for (let end = 1; end <= spans.length; end++) {
-      if (end < spans.length && !(spans[end]!.wrapAdvanceBefore! > 0)) continue;
-      for (const span of reorderBidiSpans(spans.slice(start, end))) result.push(span);
-      start = end;
-    }
-    return result;
-  }
-  const levels = spans.map((s) => s.style.shaping?.level ?? 0);
+function bidiOrder(
+  spans: readonly StyleSpanRecord[],
+  levels: number[],
+  start: number,
+  end: number,
+  rtl: boolean
+): number[] {
   for (
-    let i = spans.length - 1;
-    i >= 0 &&
-    Array.from(spans[i]!.text).every((char) =>
-      ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(char))
+    let index = end - 1;
+    index >= start &&
+    Array.from(spans[index]!.text).every((character) =>
+      ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(character))
     );
-    i--
+    index--
   )
-    levels[i] = spans[i]!.style.shaping?.baseLevel ?? 0;
-  const order = spans.map((_, i) => i);
+    levels[index] = rtl ? 1 : 0;
+  const order = Array.from({ length: end - start }, (_, index) => start + index);
   let maximum = 0;
   let lowestOdd = Infinity;
-  for (const level of levels) {
-    maximum = Math.max(maximum, level);
-    if (level % 2) lowestOdd = Math.min(lowestOdd, level);
+  for (let index = start; index < end; index++) {
+    maximum = Math.max(maximum, levels[index]!);
+    if (levels[index]! % 2) lowestOdd = Math.min(lowestOdd, levels[index]!);
   }
   for (let level = maximum; level >= lowestOdd; level--) {
     for (let i = 0; i < order.length; ) {
@@ -115,6 +156,59 @@ export function reorderBidiSpans(spans: readonly StyleSpanRecord[]): readonly St
       for (let left = i, right = end - 1; left < right; left++, right--)
         [order[left], order[right]] = [order[right]!, order[left]!];
       i = end;
+    }
+  }
+  return order;
+}
+
+/** UAX #9 L1/L2 at the line boundary. Keep the array in source order for selection. */
+export function reorderBidiSpans(
+  spans: readonly StyleSpanRecord[],
+  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1)
+): readonly StyleSpanRecord[] {
+  if (!spans.some((s) => s.style.shaping)) return spans;
+  // Exclusion passages have fixed physical gaps. Reorder only within each passage.
+  if (spans.some((span, index) => index > 0 && (span.wrapAdvanceBefore ?? 0) > 0)) {
+    const result: StyleSpanRecord[] = [];
+    let start = 0;
+    for (let end = 1; end <= spans.length; end++) {
+      if (end < spans.length && !(spans[end]!.wrapAdvanceBefore! > 0)) continue;
+      for (const span of reorderBidiSpans(spans.slice(start, end), paragraphRtl)) result.push(span);
+      start = end;
+    }
+    return result;
+  }
+  const levels = spans.map((s) => s.style.shaping?.level ?? 0);
+  const order: number[] = [];
+  if (!spans.every((span) => span.style.shaping?.runDirection !== undefined)) {
+    for (const index of bidiOrder(spans, levels, 0, spans.length, paragraphRtl)) order.push(index);
+  } else {
+    // L1 puts line-ending whitespace back in the paragraph context, outside
+    // the run-direction group whose visible text precedes it.
+    let trailing = spans.length;
+    while (
+      trailing > 0 &&
+      Array.from(spans[trailing - 1]!.text).every((character) =>
+        ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(character))
+      )
+    )
+      trailing--;
+    const directionAt = (index: number) =>
+      index >= trailing ? paragraphRtl : spans[index]!.style.shaping?.runDirection === 'rtl';
+    const groups: Array<{ start: number; end: number; rtl: boolean }> = [];
+    for (let start = 0; start < spans.length; ) {
+      const direction = directionAt(start);
+      let end = start + 1;
+      while (end < spans.length && directionAt(end) === direction) end++;
+      groups.push({ start, end, rtl: direction });
+      start = end;
+    }
+    // Word places direction groups in paragraph order, then resolves each group's
+    // internal Unicode order. A numeric LTR group remains intact beside an RTL run.
+    if (paragraphRtl) groups.reverse();
+    for (const group of groups) {
+      for (const index of bidiOrder(spans, levels, group.start, group.end, group.rtl))
+        order.push(index);
     }
   }
   const result = [...spans];

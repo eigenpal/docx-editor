@@ -31,6 +31,9 @@ export interface HeadlessThemeFonts {
   readonly majorEastAsia?: string | null;
   /** East Asian body face; optional for backwards-compatible custom views. */
   readonly minorEastAsia?: string | null;
+  /** Complex-script heading and body theme faces. */
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
   /** Language-specific theme faces, keyed by ISO 15924 script. */
   readonly majorSupplemental?: Readonly<Record<string, string>>;
   readonly minorSupplemental?: Readonly<Record<string, string>>;

@@ -5,7 +5,7 @@
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import type { InlineDrawingRecord } from './drawing-layout.ts';
+import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 
@@ -223,4 +223,13 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
   }) as PendingLine;
+}
+
+/** Shift inline drawing boxes by the paragraph text alignment offset. */
+export function alignDrawings(
+  drawings: readonly InlineDrawingRecord[],
+  offset: number
+): readonly InlineDrawingRecord[] {
+  if (offset === 0 || drawings.length === 0) return drawings;
+  return drawings.map((drawing) => shiftInlineDrawingRecord(drawing, offset, 0));
 }
