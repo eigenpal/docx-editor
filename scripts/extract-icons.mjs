@@ -9,12 +9,15 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = resolve(ROOT, 'packages/react/src/components/ui/Icons.tsx');
+const SRC_REVIEW = resolve(ROOT, 'packages/react/src/components/ui/IconsReview.tsx');
 const OUT = resolve(ROOT, 'packages/vue/src/components/ui/icon-paths.json');
 
-const src = readFileSync(SRC, 'utf8');
+// Both icon sources: the map lives in Icons.tsx, the review set in IconsReview.tsx.
+const src = readFileSync(SRC, 'utf8') + '\n' + readFileSync(SRC_REVIEW, 'utf8');
 
 // Match each `export function IconFoo(props: IconProps) { return (<SvgIcon ...>BODY</SvgIcon>...`
-const fnRe = /export function (Icon\w+)\(props: IconProps\)\s*\{\s*return\s*\(\s*<SvgIcon[^>]*>([\s\S]*?)<\/SvgIcon>/g;
+const fnRe =
+  /export function (Icon\w+)\(props: IconProps\)\s*\{\s*return\s*\(\s*<SvgIcon[^>]*>([\s\S]*?)<\/SvgIcon>/g;
 const fnPaths = {};
 for (const m of src.matchAll(fnRe)) {
   const [, fn, body] = m;
@@ -55,5 +58,7 @@ const banner = [
 ].join('\n');
 writeFileSync(SHARED_OUT, `${banner}${JSON.stringify(out, null, 2)} as const;\n`);
 
-console.log(`extracted ${Object.keys(fnPaths).length} icons, mapped ${Object.keys(out).length} names → ${OUT}`);
+console.log(
+  `extracted ${Object.keys(fnPaths).length} icons, mapped ${Object.keys(out).length} names → ${OUT}`
+);
 console.log(`shared module → ${SHARED_OUT}`);

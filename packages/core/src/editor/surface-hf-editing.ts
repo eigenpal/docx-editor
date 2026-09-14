@@ -388,6 +388,7 @@ export type SurfaceLifecycleOp = Extract<
   | { op: 'linkToPrevious' }
   | { op: 'unlinkFromPrevious' }
   | { op: 'setSectionFurnitureOptions' }
+  | { op: 'setDocumentProtection' }
 >;
 
 function resolveFurnitureByRId(

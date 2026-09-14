@@ -813,8 +813,11 @@ export interface PaginatedSurface {
       | 'deleteHeaderFooter'
       | 'linkToPrevious'
       | 'unlinkFromPrevious'
-      | 'setSectionFurnitureOptions';
+      | 'setSectionFurnitureOptions'
+      | 'setDocumentProtection';
     readonly sectionIndex?: number;
+    /** `setDocumentProtection` only: enforce filling-in-forms protection, or lift it. */
+    readonly enforce?: boolean;
     readonly kind?: 'header' | 'footer';
     readonly variant?: 'default' | 'first' | 'even';
     readonly titlePage?: boolean;

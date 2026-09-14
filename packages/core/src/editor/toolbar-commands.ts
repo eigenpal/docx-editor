@@ -58,6 +58,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // `isActive` rather than from a flag each host keeps for itself.
   'review.comments': { type: 'toggleReviewPane' },
   'review.paragraphMarks': { type: 'toggleParagraphMarks' },
+  'review.protectDocument': { type: 'toggleDocumentProtection' },
   'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
   'review.noMarkup': { type: 'setReviewDisplayMode', mode: 'proposed' },
   'review.original': { type: 'setReviewDisplayMode', mode: 'original' },
@@ -575,6 +576,7 @@ export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
   return (
     command?.type === 'toggleMark' ||
     command?.type === 'toggleParagraphMarks' ||
+    command?.type === 'toggleDocumentProtection' ||
     command?.type === 'setReviewDisplayMode' ||
     command?.type === 'setAlignment'
   );

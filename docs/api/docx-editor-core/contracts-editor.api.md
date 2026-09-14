@@ -832,6 +832,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         cols: number;
         rows: number;
     };
+    toggleDocumentProtection: Record<never, never>;
     // (undocumented)
     toggleHeaderRow: Record<never, never>;
     // (undocumented)
@@ -1079,6 +1080,7 @@ export interface EditorSnapshot {
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
     readonly collaborationStatus: CollaborationStatus | 'inactive';
+    readonly documentProtection?: DocumentProtectionState | null;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];

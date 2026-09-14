@@ -22,6 +22,7 @@ import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
+import { documentProtectionRefusal } from './forms-protection.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import {
   formsProtectionRefusal,
@@ -576,16 +577,18 @@ export class TreeDocumentStore {
       // Forms protection lives in `settings.xml`, one part up from the op, so it is resolved
       // HERE rather than in the per-part applier: a part alone cannot see whether the document
       // it belongs to is protected.
-      const protection = formsProtectionRefusal(
-        target,
-        this.settingsPartOverride?.() ?? settingsPartOf(working),
-        op,
-        fillingField?.partName === partName &&
-          'paragraphId' in op &&
-          fillingField.paragraphId === op.paragraphId
-          ? fillingField.fieldNodeId
-          : undefined
-      );
+      const protection =
+        documentProtectionRefusal(this.settingsPartOverride?.() ?? settingsPartOf(working), op) ??
+        formsProtectionRefusal(
+          target,
+          this.settingsPartOverride?.() ?? settingsPartOf(working),
+          op,
+          fillingField?.partName === partName &&
+            'paragraphId' in op &&
+            fillingField.paragraphId === op.paragraphId
+            ? fillingField.fieldNodeId
+            : undefined
+        );
       if (protection) {
         failure = { reason: protection };
         return false;

@@ -7,13 +7,13 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 79,
+    "treeDocOpKinds": 80,
     "singlePartApply": 67,
-    "headerFooterLifecycle": 5,
+    "headerFooterLifecycle": 6,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 65,
-    "chromeCommandWired": 37,
+    "chromeSlots": 66,
+    "chromeCommandWired": 38,
     "chromeProbe": 6,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 12,
@@ -122,7 +122,8 @@
       "deleteHeaderFooter",
       "linkToPrevious",
       "unlinkFromPrevious",
-      "setSectionFurnitureOptions"
+      "setSectionFurnitureOptions",
+      "setDocumentProtection"
     ],
     "noteLifecycle": [
       "insertNote",
@@ -189,6 +190,7 @@
     "linkToPrevious",
     "unlinkFromPrevious",
     "setSectionFurnitureOptions",
+    "setDocumentProtection",
     "insertNote",
     "deleteNote",
     "convertNote",
@@ -855,6 +857,15 @@
       "openSpec": ["scoped-header-footer-editing"]
     },
     {
+      "kind": "setDocumentProtection",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["toggleDocumentProtection"],
+      "packageIntents": ["withPart", "withNewPart", "withContentTypeOverride", "withRelationship"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
       "kind": "insertNote",
       "commitPath": "applyLifecycleOp",
       "storyScopes": ["body"],
@@ -1221,6 +1232,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.protectDocument",
       "review.comments",
       "review.authors",
       "review.editingMode",
@@ -1279,6 +1291,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.protectDocument",
       "review.comments",
       "contentControl.remove",
       "insert.footnote",

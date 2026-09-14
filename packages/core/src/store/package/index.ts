@@ -452,6 +452,12 @@ export {
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
 export {
+  NO_DOCUMENT_PROTECTION,
+  readDocumentProtection,
+  type DocumentProtectionEdit,
+  type DocumentProtectionState,
+} from './document-protection.ts';
+export {
   DEFAULT_VIEW_SETTINGS,
   readViewSettings,
   type DocumentViewSettings,

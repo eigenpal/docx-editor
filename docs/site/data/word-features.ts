@@ -1050,7 +1050,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Protection settings round-trip. Forms protection is enforced: only addressed control content stays editable, and the rest of the document is read-only. Other protection modes are not enforced, and inline permission ranges may be dropped.',
+      'Protection settings round-trip. Forms protection is enforced: only form-field and addressed control content stays editable, the rest of the document is read-only, and suggesting mode is refused, as Word disables Track Changes there. Read-only and comments-only protection refuse every content edit; comments-only still admits comment anchors. Tracked-changes protection forces suggesting mode. Exception ranges (w:permStart) are not honored, so an edit inside one is refused rather than allowed. Review → Protect Document toggles filling-in-forms protection as one undoable edit; lifting keeps the recorded mode with enforcement off, and a password-protected document refuses to lift. Other protection modes cannot be set from the editor.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------

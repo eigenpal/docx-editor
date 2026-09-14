@@ -757,6 +757,7 @@ export type ChromeSlotId =
   | 'format.clear'
   | 'review.comments'
   | 'review.paragraphMarks'
+  | 'review.protectDocument'
   | 'review.allMarkup'
   | 'review.noMarkup'
   | 'review.original'
@@ -1050,6 +1051,8 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'review.rejectAllChanges' },
       { kind: 'separator' },
       { kind: 'item', slot: 'review.paragraphMarks' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.protectDocument' },
     ],
   },
   {

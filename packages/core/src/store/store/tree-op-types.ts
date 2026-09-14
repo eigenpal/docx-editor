@@ -805,6 +805,16 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Word's Protect Document: enforce or lift `w:documentProtection` in `settings.xml`.
+       * Enforcing writes `w:edit="forms"` (filling in forms, the one restriction the store
+       * applies); lifting keeps the recorded mode and clears `w:enforcement`, as Word's Stop
+       * Protection does. A password-protected file refuses to lift. Package-level.
+       */
+      readonly op: 'setDocumentProtection';
+      readonly enforce: boolean;
+    }
+  | {
+      /**
        * Insert a footnote or endnote: body reference + notes-part body (+ create the
        * notes part/rel/content-type when missing). Package-level; one ModelChange.
        */
@@ -1057,94 +1067,7 @@ export type DrawingTreeDocOp = Extract<
 /** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];
 
-/** Every {@link TreeDocOpKind}, for validation and exhaustiveness checks. */
-export const TREE_DOC_OP_KINDS = [
-  'replaceStoryBlocks',
-  'insertText',
-  'deleteText',
-  'setParagraphMarkRevision',
-  'proposeParagraphMerge',
-  'insertCommentMarker',
-  'acceptRevision',
-  'rejectRevision',
-  'acceptAllRevisions',
-  'rejectAllRevisions',
-  'insertTab',
-  'insertHardBreak',
-  'insertPageBreak',
-  'insertPageField',
-  'setFieldCode',
-  'setListLevel',
-  'setListNumbering',
-  'setParagraphTabStops',
-  'setParagraphMarkProperties',
-  'splitParagraph',
-  'splitParagraphMany',
-  'joinParagraphs',
-  'setRunProperties',
-  'setParagraphProperties',
-  'setSectionProperties',
-  'setSectionMark',
-  'insertHyperlink',
-  'setHyperlinkTarget',
-  'removeHyperlink',
-  'setMathEquation',
-  'removeMathEquation',
-  'setContentControlValue',
-  'removeContentControl',
-  'insertInlineContentControl',
-  'addRepeatingSectionItem',
-  'removeRepeatingSectionItem',
-  'deleteBlock',
-  'insertTable',
-  'insertTableRow',
-  'deleteTableRow',
-  'insertTableColumn',
-  'deleteTableColumn',
-  'setTableColumnWidths',
-  'setTableRightEdgeWidth',
-  'setTableRowHeight',
-  'setTableProperties',
-  'authorTable',
-  'setTableCellBorders',
-  'setTableCellFill',
-  'setTableCellVerticalAlignment',
-  'createHeaderFooter',
-  'deleteHeaderFooter',
-  'linkToPrevious',
-  'unlinkFromPrevious',
-  'setSectionFurnitureOptions',
-  'insertNote',
-  'deleteNote',
-  'convertNote',
-  'convertAllNotes',
-  'setNoteProperties',
-  'setContentControlProperties',
-  'insertContentControl',
-  'insertFragment',
-  'insertDrawing',
-  'replaceDrawingResource',
-  'deleteDrawing',
-  'resizeDrawing',
-  'cropDrawing',
-  'positionDrawing',
-  'setDrawingWrap',
-  'setDrawingMetadata',
-  'setDrawingLocks',
-  'transformDrawing',
-  'insertToc',
-  'replaceTocResult',
-  'rewriteTocPageNumbers',
-  'refreshFieldResults',
-  'setTextFormFieldDefault',
-  'commitTextFormField',
-] as const satisfies readonly TreeDocOpKind[];
-
-// Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
-// listed here or this fails to typecheck, so it can never be silently unvalidated.
-type _MissingTreeOp = Exclude<TreeDocOpKind, (typeof TREE_DOC_OP_KINDS)[number]>;
-const _treeOpsExhaustive: _MissingTreeOp extends never ? true : ['missing', _MissingTreeOp] = true;
-void _treeOpsExhaustive;
+export { TREE_DOC_OP_KINDS } from './tree-op-kinds.ts';
 
 /**
  * How far a committed op can reach, so layout can scope its work (task 5.2).

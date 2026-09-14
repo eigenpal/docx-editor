@@ -1,5 +1,29 @@
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { readDocumentProtection } from '../package/document-protection.ts';
+import type { TreeDocOp } from './tree-op-types.ts';
+import type { TreeOpRejection } from './tree-op-validate.ts';
+
+/**
+ * The refusal an enforced `readOnly` or `comments` protection gives a story op.
+ *
+ * Read-only admits no edit at all. Comments-only admits the comment anchor and nothing
+ * else; the comment text itself lives in `comments.xml` and never passes through here.
+ * Coarser than Word in one respect: Word lets an edit through inside a `w:permStart`
+ * exception range, and this editor refuses there too — a refusal the reader can see beats
+ * a write the protection was meant to stop. `forms` and `trackedChanges` are answered
+ * elsewhere: forms by `formsProtectionRefusal`, tracked changes by the editing-mode gate.
+ */
+export function documentProtectionRefusal(
+  settings: OoxmlPart | null | undefined,
+  op: TreeDocOp
+): TreeOpRejection | null {
+  const protection = readDocumentProtection(settings?.root);
+  if (!protection.enforced) return null;
+  if (protection.edit === 'readOnly') return 'locked';
+  if (protection.edit === 'comments' && op.op !== 'insertCommentMarker') return 'locked';
+  return null;
+}
 
 /**
  * Whether `settings.xml` enforces `w:documentProtection w:edit="forms"` (§17.15.1.29).

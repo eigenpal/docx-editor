@@ -55,6 +55,7 @@ import type {
   FormatPainterSurfaceState,
 } from './editor-format-painter.ts';
 import type { ImageWrapTarget } from '../store/package/drawing-projection.ts';
+import type { DocumentProtectionState } from '../store/package/document-protection.ts';
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
@@ -1031,6 +1032,8 @@ export interface EditorCommands
   toggleReviewPane: Record<never, never>;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
+  /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
+  toggleDocumentProtection: Record<never, never>;
   /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve all document changes, including hidden authors and other stories, in one undo step. */
@@ -1606,6 +1609,8 @@ export interface EditorSnapshot {
   readonly reviewPaneOpen?: boolean;
   /** Whether Show/Hide paragraph marks is enabled. */
   readonly showParagraphMarks?: boolean;
+  /** The document's `w:documentProtection`, as the file states it; null with no document. */
+  readonly documentProtection?: DocumentProtectionState | null;
   /** The displayed revision projection. The document and its revision history stay unchanged. */
   readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
   /**

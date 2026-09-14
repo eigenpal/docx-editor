@@ -32,6 +32,7 @@ import {
   settingsOnOff as onOff,
 } from './settings-onoff.ts';
 import type { OoxmlNode } from './ooxml-tree.ts';
+import { readDocumentProtection } from './document-protection.ts';
 
 /** What the document asks for. Every field defaults to "the document said nothing". */
 export interface DocumentTrackingSettings {
@@ -43,6 +44,13 @@ export interface DocumentTrackingSettings {
    * Advisory. Presenting it as enforcement would be a lie about a file anyone can edit.
    */
   readonly restrictedToTrackedChanges: boolean;
+  /**
+   * `w:documentProtection/@w:edit="forms"` enforced — Track Changes is UNAVAILABLE.
+   *
+   * Word greys the control out under filling-in-forms protection and refuses to turn it on;
+   * a document protected this way never carries a tracked edit made inside Word.
+   */
+  readonly restrictedToForms: boolean;
   /** `w:doNotTrackMoves` — write a move as a delete and an insert. */
   readonly doNotTrackMoves: boolean;
   /** `w:doNotTrackFormatting` — apply formatting without recording a `w:rPrChange`. */
@@ -53,6 +61,7 @@ export interface DocumentTrackingSettings {
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings = Object.freeze({
   trackRevisions: false,
   restrictedToTrackedChanges: false,
+  restrictedToForms: false,
   doNotTrackMoves: false,
   doNotTrackFormatting: false,
 });
@@ -73,10 +82,12 @@ export function readTrackingSettings(
     enforcement !== '0' &&
     enforcement !== 'false' &&
     enforcement !== 'off';
+  const documentProtection = readDocumentProtection(settingsRoot);
   return {
     trackRevisions: onOff(settingsRoot, 'trackRevisions'),
     restrictedToTrackedChanges:
       enforcing && protection !== null && attributeValue(protection, 'edit') === 'trackedChanges',
+    restrictedToForms: documentProtection.edit === 'forms' && documentProtection.enforced,
     doNotTrackMoves: onOff(settingsRoot, 'doNotTrackMoves'),
     doNotTrackFormatting: onOff(settingsRoot, 'doNotTrackFormatting'),
   };

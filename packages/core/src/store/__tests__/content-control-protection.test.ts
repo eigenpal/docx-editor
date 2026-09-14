@@ -118,8 +118,22 @@ describe('forms protection inverts what is editable', () => {
     ).toBeNull();
   });
 
-  test('a protection mode that is not forms leaves the document editable', () => {
-    const pkg = build(BODY, '<w:documentProtection w:edit="comments" w:enforcement="1"/>');
+  // Read-only and comments-only are document-wide, not inverted: nothing is editable, not
+  // even inside a control. The tracked-changes mode is answered by the editing-mode gate.
+  for (const mode of ['readOnly', 'comments'] as const) {
+    test(`enforced ${mode} protection refuses every content edit, inside a control too`, () => {
+      const pkg = build(BODY, `<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`);
+      const [inside, outside] = paragraphIds(pkg);
+      for (const paragraphId of [inside!, outside!]) {
+        expect(refusal(pkg, { op: 'insertText', paragraphId, offset: 0, text: 'x' })).toBe(
+          'locked'
+        );
+      }
+    });
+  }
+
+  test('enforced tracked-changes protection leaves the store editable', () => {
+    const pkg = build(BODY, '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>');
     const outside = paragraphIds(pkg)[1]!;
     expect(
       refusal(pkg, { op: 'insertText', paragraphId: outside, offset: 0, text: 'x' })

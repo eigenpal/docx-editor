@@ -69,6 +69,16 @@ export const SUGGESTING_AUTHOR_REASON =
 const DOCUMENT_TRACKING_AUTHOR_REASON =
   'this document asks for tracked changes, but no author is configured';
 
+/**
+ * The refusal suggesting gets under enforced filling-in-forms protection.
+ *
+ * Word greys Track Changes out there and refuses to turn it on, so a document protected this
+ * way never carries a tracked edit made in Word. Entering suggesting used to succeed and then
+ * refuse every keystroke: the pill read Suggesting while the document ignored typing.
+ */
+export const FORMS_PROTECTION_SUGGESTING_REASON =
+  'this document is protected for filling in forms, which does not track changes';
+
 /** What a decision asks the facade to do: adopt a mode, publish a refusal, or neither. */
 export interface OpeningModeDecision {
   /** The mode to open in, or null to leave the current mode alone. */
@@ -191,8 +201,18 @@ export function documentTrackingAdoption(
     readonly trackRevisions: boolean;
     /** Enforced `w:documentProtection w:edit="trackedChanges"` — see the module comment. */
     readonly restrictedToTrackedChanges: boolean;
+    /** Enforced `w:documentProtection w:edit="forms"` — tracking is unavailable. */
+    readonly restrictedToForms: boolean;
   }
 ): OpeningModeDecision {
+  // Forms protection outranks every request for suggesting, the reader's included: Word
+  // greys Track Changes out there, and a session already suggesting cannot go on into a
+  // document every keystroke would refuse. Editing is the one mode still permitted.
+  if (input.restrictedToForms) {
+    return input.currentMode === 'suggesting' && !input.viewOnly
+      ? { mode: 'editing', rejection: FORMS_PROTECTION_SUGGESTING_REASON }
+      : NO_DECISION;
+  }
   if (input.viewOnly || input.currentMode !== 'editing' || input.readerChoseMode) {
     return NO_DECISION;
   }
@@ -203,11 +223,17 @@ export function documentTrackingAdoption(
   return { mode: 'suggesting', rejection: null };
 }
 
-/** Refuse editing when document protection permits tracked changes only. */
+/**
+ * Refuse a mode the document's protection rules out: editing when only tracked changes are
+ * permitted, suggesting when filling-in-forms protection makes tracking unavailable.
+ */
 export function documentEditingModeRestriction(
   tracking: DocumentTrackingSettings,
   next: DocumentEditingMode
 ): CommandRefusal | null {
+  if (next === 'suggesting' && tracking.restrictedToForms) {
+    return { ok: false, code: 'locked', reason: FORMS_PROTECTION_SUGGESTING_REASON };
+  }
   if (next !== 'editing' || !tracking.restrictedToTrackedChanges) return null;
   return {
     ok: false,
@@ -236,8 +262,11 @@ export function resolveHostEditingMode(
   });
   if (document.mode !== null) mode = document.mode;
   const restriction = documentEditingModeRestriction(tracking, mode);
+  // A refused mode falls back to the one the protection permits: editing when suggesting is
+  // ruled out (forms), the mode already in force when editing is (tracked changes only).
+  const permitted = mode === 'suggesting' ? 'editing' : currentMode;
   return {
-    mode: restriction === null ? mode : currentMode,
+    mode: restriction === null ? mode : permitted,
     rejection: document.rejection ?? restriction?.reason ?? null,
     configurationRejection: host.rejection,
   };

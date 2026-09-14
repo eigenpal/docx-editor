@@ -1147,9 +1147,20 @@ export interface DocumentProperties {
 }
 
 // @public
+export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+
+// @public
+export interface DocumentProtectionState {
+    readonly edit: DocumentProtectionEdit;
+    readonly enforced: boolean;
+    readonly password: boolean;
+}
+
+// @public
 export interface DocumentTrackingSettings {
     readonly doNotTrackFormatting: boolean;
     readonly doNotTrackMoves: boolean;
+    readonly restrictedToForms: boolean;
     readonly restrictedToTrackedChanges: boolean;
     readonly trackRevisions: boolean;
 }
@@ -1609,6 +1620,9 @@ export type HeaderFooterLifecycleOp = {
     readonly op: 'setSectionFurnitureOptions';
     readonly sectionIndex?: number;
     readonly titlePage?: boolean;
+} | {
+    readonly enforce: boolean;
+    readonly op: 'setDocumentProtection';
 };
 
 // @public
@@ -2274,6 +2288,9 @@ export type NameResult = {
 
 // @public
 export function nextCommentId(part: OoxmlPart | undefined, actorId?: string): string;
+
+// @public
+export const NO_DOCUMENT_PROTECTION: DocumentProtectionState;
 
 // @public
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings;
@@ -3375,6 +3392,9 @@ export function propertyContainer(parent: OoxmlNode | null | undefined, kind: 'p
 export function readCustomXmlNode(pkg: OoxmlPackage, partName: string, nodeId: string): CustomXmlNode | null;
 
 // @public
+export function readDocumentProtection(settingsRoot: OoxmlNode | null | undefined): DocumentProtectionState;
+
+// @public
 export function readEmbeddedFonts(pkg: OoxmlPackage, fontTable: OoxmlPart | undefined, options?: ReadEmbeddedFontsOptions): EmbeddedFont[];
 
 // @public
@@ -4250,7 +4270,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -4563,6 +4583,9 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly op: 'setSectionFurnitureOptions';
     readonly sectionIndex?: number;
     readonly titlePage?: boolean;
+} | {
+    readonly enforce: boolean;
+    readonly op: 'setDocumentProtection';
 } | {
     readonly noteKind: 'footnote' | 'endnote';
     readonly offset: number;

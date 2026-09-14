@@ -346,6 +346,15 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }, {
+        readonly defaultToolbar: false;
+        readonly id: "protectDocument";
+        readonly labelKey: "review.protectDocument";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "comments";
         readonly labelKey: "formattingBar.commentsAndChanges";
         readonly paths: readonly string[];
@@ -665,7 +674,7 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
@@ -1586,6 +1595,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         cols: number;
         rows: number;
     };
+    toggleDocumentProtection: Record<never, never>;
     // (undocumented)
     toggleHeaderRow: Record<never, never>;
     // (undocumented)
@@ -1843,6 +1853,7 @@ export interface EditorSnapshot {
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
     readonly collaborationStatus: CollaborationStatus | 'inactive';
+    readonly documentProtection?: DocumentProtectionState | null;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];

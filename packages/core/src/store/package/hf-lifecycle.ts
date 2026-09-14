@@ -18,7 +18,6 @@ import {
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode, type OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
-import { resolveRelationship } from './relationships.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { withoutPart } from './package-edit.ts';
 import {
@@ -34,6 +33,12 @@ import {
   type HeaderFooterKind,
   type HeaderFooterVariant,
 } from './hf-references.ts';
+import {
+  applyDocumentProtection,
+  sectionElement,
+  settingsPartForWrite,
+  wmlAttribute,
+} from './settings-write.ts';
 
 /** Lifecycle impact — furniture always reaches multiple pages; never narrower than flow-structural. */
 export type HeaderFooterLifecycleImpact = 'flow-structural' | 'global';
@@ -44,15 +49,10 @@ const HEADER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-const SETTINGS_REL_TYPE =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
 const HEADER_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
 const FOOTER_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
-const SETTINGS_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
-const SETTINGS_PART = '/word/settings.xml';
 
 /** Cap on header/footer part numbers scanned when allocating a free name. */
 const MAX_PART_NUMBER = 10_000;
@@ -103,6 +103,14 @@ export type HeaderFooterLifecycleOp =
       readonly evenAndOddHeaders?: boolean;
       readonly headerDistanceTwips?: number;
       readonly footerDistanceTwips?: number;
+    }
+  | {
+      /**
+       * A `settings.xml` write like `evenAndOddHeaders`, so it rides the same package-level
+       * undo unit and the same routing rather than growing a second lifecycle lane.
+       */
+      readonly op: 'setDocumentProtection';
+      readonly enforce: boolean;
     };
 
 /** Why a header/footer lifecycle op was refused. */
@@ -129,6 +137,7 @@ const LIFECYCLE_OPS = new Set([
   'linkToPrevious',
   'unlinkFromPrevious',
   'setSectionFurnitureOptions',
+  'setDocumentProtection',
 ]);
 
 /** Whether an op is a header/footer lifecycle op rather than a story-level one. */
@@ -195,6 +204,8 @@ export function applyHeaderFooterLifecycleOp(
       return applyUnlink(pkg, op);
     case 'setSectionFurnitureOptions':
       return applyFurnitureOptions(pkg, op);
+    case 'setDocumentProtection':
+      return applyDocumentProtection(pkg, op);
   }
 }
 
@@ -716,24 +727,9 @@ function patchSectionFurniture(
 // ---------------------------------------------------------------------------
 
 function setEvenAndOddHeaders(pkg: OoxmlPackage, enabled: boolean): OoxmlPackage | null {
-  let next = pkg;
-  const relationships = next.relationships.get(next.mainDocumentPart) ?? [];
-  let settingsRel = relationships.find((rel) => rel.type === SETTINGS_REL_TYPE);
-  if (!settingsRel) {
-    const ensured = ensureSettingsPart(next);
-    if (!ensured) return null;
-    next = ensured;
-    settingsRel = (next.relationships.get(next.mainDocumentPart) ?? []).find(
-      (rel) => rel.type === SETTINGS_REL_TYPE
-    );
-    if (!settingsRel) return null;
-  }
-
-  const resolved = resolveRelationship(settingsRel);
-  if (resolved.mode !== 'Internal' || !resolved.target.ok) return null;
-  const settingsName = resolved.target.partName;
-  const settings = next.parts.get(settingsName);
-  if (!settings) return null;
+  const located = settingsPartForWrite(pkg);
+  if (!located) return null;
+  const { package: next, settings } = located;
 
   const nextId = createNodeIdAllocator(settings);
   let children = settings.root.children.filter(
@@ -746,32 +742,6 @@ function setEvenAndOddHeaders(pkg: OoxmlPackage, enabled: boolean): OoxmlPackage
   const replaced = replaceChildren(settings, settings.root.id, children);
   if (!replaced.ok) return null;
   return withPart(next, replaced.part);
-}
-
-function ensureSettingsPart(pkg: OoxmlPackage): OoxmlPackage | null {
-  if (pkg.parts.has(SETTINGS_PART)) {
-    // Part exists but no rel — add the relationship only.
-    const related = withStoryRelationship(
-      pkg,
-      freeRelationshipId(pkg),
-      SETTINGS_REL_TYPE,
-      'settings.xml'
-    );
-    return related;
-  }
-  const xml = `<w:settings xmlns:w="${W}"></w:settings>`;
-  const read = readOoxmlPart(xml, { name: SETTINGS_PART, contentType: SETTINGS_CONTENT_TYPE });
-  if (!read.ok) return null;
-  let next = withPart(pkg, read.part);
-  const related = withStoryRelationship(
-    next,
-    freeRelationshipId(next),
-    SETTINGS_REL_TYPE,
-    'settings.xml'
-  );
-  if (!related) return null;
-  next = related;
-  return withContentTypeOverride(next, SETTINGS_PART, SETTINGS_CONTENT_TYPE);
 }
 
 // ---------------------------------------------------------------------------
@@ -825,34 +795,6 @@ function findBody(root: OoxmlNode): OoxmlElement | undefined {
     if (found) return found;
   }
   return undefined;
-}
-
-function wmlAttribute(localName: string, value: string) {
-  return {
-    kind: 'genericExtension' as const,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    value,
-  };
-}
-
-function sectionElement(
-  id: string,
-  localName: string,
-  attributes: readonly unknown[],
-  children: readonly OoxmlNode[]
-): OoxmlNode {
-  return {
-    id,
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes,
-    children,
-  } as unknown as OoxmlNode;
 }
 
 /**

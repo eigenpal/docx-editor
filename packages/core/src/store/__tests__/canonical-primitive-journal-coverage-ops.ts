@@ -560,6 +560,10 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       sectionIndex: 0,
       titlePage: true,
     })),
+    lifecycle('setDocumentProtection', plainDoc(), () => ({
+      op: 'setDocumentProtection',
+      enforce: true,
+    })),
     lifecycle('insertNote', plainDoc(), (store) => ({
       op: 'insertNote',
       noteKind: 'footnote',

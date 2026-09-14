@@ -352,6 +352,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'linkToPrevious' ||
     op.op === 'unlinkFromPrevious' ||
     op.op === 'setSectionFurnitureOptions' ||
+    op.op === 'setDocumentProtection' ||
     op.op === 'insertNote' ||
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||

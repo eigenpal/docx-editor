@@ -14,6 +14,7 @@
     "components/ui/FontPicker",
     "components/ui/FontSizePicker",
     "components/ui/IconGridDropdown",
+    "components/ui/IconsReview",
     "components/ui/ImageTransformDropdown",
     "components/ui/ImageWrapDropdown",
     "components/ui/LineSpacingPicker",

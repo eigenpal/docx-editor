@@ -70,6 +70,16 @@ export const REVIEW_CHROME_GROUP = {
       state: { kind: 'command' },
     },
     {
+      // Word's Protect Document, reduced to the one restriction the engine enforces: filling
+      // in forms. Pressed while the document enforces any protection; a document edit, undoable.
+      id: 'protectDocument',
+      shape: 'icon',
+      labelKey: 'review.protectDocument',
+      defaultToolbar: false,
+      paths: GENERATED_ICON_PATHS['lock'],
+      state: { kind: 'command' },
+    },
+    {
       id: 'comments',
       shape: 'icon',
       labelKey: 'formattingBar.commentsAndChanges',

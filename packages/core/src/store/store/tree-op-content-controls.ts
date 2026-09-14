@@ -542,6 +542,7 @@ const TREE_OP_REACH: {
   // no content, so no control's lock speaks to them; forms protection still does.
   setSectionProperties: () => ({ kind: 'documentProperties' }),
   setSectionFurnitureOptions: () => ({ kind: 'documentProperties' }),
+  setDocumentProtection: () => ({ kind: 'documentProperties' }),
   setNoteProperties: () => ({ kind: 'documentProperties' }),
   // A note's own id is not a body address, and removing or converting one rewrites the run that
   // referenced it — wherever that run happens to be.
