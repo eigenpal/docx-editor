@@ -155,6 +155,147 @@ describe('review author layout filter', () => {
     ).toHaveLength(2);
   });
 
+  describe('editable and demoted field results', () => {
+    // A FORMTEXT result is EDITABLE, so its runs keep real model offsets and the walk buffers
+    // them instead of pushing; the same route serves a demoted (unterminated) field. Both
+    // once bypassed the reviewer projection that `push` applies, so a hidden author's change
+    // kept its colour on the page while the review list had dropped it.
+    const FORMTEXT_OPEN =
+      '<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Text1"/><w:enabled/>' +
+      '<w:calcOnExit w:val="0"/><w:textInput><w:default w:val="x"/></w:textInput></w:ffData>' +
+      '</w:fldChar></w:r><w:r><w:instrText xml:space="preserve"> FORMTEXT </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+    const FIELD_END = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const formText = (result: string) => `${FORMTEXT_OPEN}${result}${FIELD_END}`;
+    const DEMOTED_OPEN =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> REF _Ref1 \\h </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+    const change = '<w:rPrChange w:id="3" w:author="Ada"><w:rPr><w:i/></w:rPr></w:rPrChange>';
+    const insRaw = (author: string, inner: string) =>
+      `<w:ins w:id="1" w:author="${author}">${inner}</w:ins>`;
+    const moveTo = (author: string, text: string) =>
+      `<w:moveTo w:id="5" w:author="${author}">${run(text)}</w:moveTo>`;
+    const symbol = '<w:r><w:sym w:font="Symbol" w:char="F0B7"/></w:r>';
+    const attributionOf = (result: ReturnType<typeof pieces>, text: string) =>
+      result.find((piece) => piece.text === text)!.revisions?.map((r) => r.author);
+    /** `push`'s verdict for the same change in an ordinary run: the buffered route must match. */
+    const pushed = (inner: string, hidden: readonly string[] = ['Ada']) =>
+      pieces(`<w:p>${run('A ')}${inner}</w:p>`, hidden);
+
+    for (const [label, wrap] of [
+      ['a FORMTEXT result', formText],
+      ['a demoted field result', (result: string) => `${DEMOTED_OPEN}${result}`],
+    ] as const) {
+      test(`a hidden insertion inside ${label} paints as ordinary text`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + ins('Ada', 'new'))}</w:p>`, ['Ada']);
+        expect(result.map((piece) => piece.text)).toEqual(['A ', 'new']);
+        expect(attributionOf(result, 'new')).toBeUndefined();
+        expect(attributionOf(pushed(ins('Ada', 'new')), 'new')).toBeUndefined();
+        expect(result.every((piece) => piece.fieldAtom !== undefined)).toBe(true);
+      });
+
+      test(`a visible insertion inside ${label} keeps its attribution`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + ins('Ada', 'new'))}</w:p>`, ['Grace']);
+        expect(attributionOf(result, 'new')).toEqual(['Ada']);
+      });
+
+      test(`a hidden move-to inside ${label} paints as ordinary text`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + moveTo('Ada', 'moved'))}</w:p>`, ['Ada']);
+        expect(attributionOf(result, 'moved')).toBeUndefined();
+      });
+
+      test(`a hidden deletion inside ${label} leaves the text flow`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + del('Ada', 'old'))}</w:p>`, ['Ada']);
+        expect(result.map((piece) => piece.text)).toEqual(['A ']);
+      });
+
+      test(`a hidden formatting change inside ${label} keeps the format, drops the record`, () => {
+        const [piece] = pieces(`<w:p>${wrap(run('styled', `<w:b/>${change}`))}</w:p>`, ['Ada']);
+        expect(piece!.style.bold).toBe(true);
+        expect(piece!.props.some((property) => property.localName === 'rPrChange')).toBe(false);
+        const [shown] = pieces(`<w:p>${wrap(run('styled', `<w:b/>${change}`))}</w:p>`, ['Grace']);
+        expect(shown!.props.some((property) => property.localName === 'rPrChange')).toBe(true);
+      });
+
+      test(`a hidden symbol insertion inside ${label} paints as ordinary text`, () => {
+        const result = pieces(`<w:p>${wrap(run('A ') + insRaw('Ada', symbol))}</w:p>`, ['Ada']);
+        const glyph = result.find((piece) => piece.projected);
+        expect(glyph).toBeDefined();
+        expect(glyph!.revisions).toBeUndefined();
+        const shown = pieces(`<w:p>${wrap(run('A ') + insRaw('Ada', symbol))}</w:p>`, ['Grace']);
+        expect(shown.find((piece) => piece.projected)!.revisions?.[0]?.author).toBe('Ada');
+      });
+    }
+
+    test('a hidden insertion around a whole FORMTEXT field paints as ordinary text', () => {
+      const result = pieces(`<w:p>${run('A ')}${insRaw('Ada', formText(run('new')))}</w:p>`, [
+        'Ada',
+      ]);
+      expect(result.map((piece) => piece.text)).toEqual(['A ', 'new']);
+      expect(attributionOf(result, 'new')).toBeUndefined();
+    });
+
+    test('a hidden inner insertion inside a FORMTEXT keeps a visible outer deletion', () => {
+      const nested = `<w:p>${formText(`<w:del w:id="1" w:author="Grace"><w:ins w:id="2" w:author="Ada">` + `${run('word')}</w:ins></w:del>`)}</w:p>`;
+      const result = pieces(nested, ['Ada']);
+      expect(result[0]!.text).toBe('word');
+      expect(attributionOf(result, 'word')).toEqual(['Grace']);
+    });
+
+    test('a node filter in accept mode drops the attribution inside a FORMTEXT', () => {
+      // The shape `setTrackedChangesFilter` builds: nothing hidden by author, one revision
+      // node excluded, projected as accepted.
+      const body = `<w:p>${formText(run('A ') + ins('Ada', 'new'))}</w:p>`;
+      const nodeId = pieces(body, []).find((piece) => piece.text === 'new')!.revisions![0]!.nodeId;
+      const filterFor = (mode: 'proposed' | 'original') =>
+        Object.freeze({
+          hiddenAuthors: revisionAuthorFilter(['nobody'])!.hiddenAuthors,
+          includes: (revision: { nodeId: string }) => revision.nodeId !== nodeId,
+          includesNode: (id: string) => id !== nodeId,
+          excludedNodeMode: () => mode,
+          cacheKey: `node:${mode}`,
+        });
+      const accepted = piecesOfParagraph(
+        paragraph(body),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'all-markup',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        filterFor('proposed')
+      );
+      expect(accepted.map((piece) => piece.text)).toEqual(['A ', 'new']);
+      expect(attributionOf(accepted, 'new')).toBeUndefined();
+      const rejected = piecesOfParagraph(
+        paragraph(body),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'all-markup',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        filterFor('original')
+      );
+      expect(rejected.map((piece) => piece.text)).toEqual(['A ']);
+    });
+  });
+
   test('projected sections retain the canonical source index of their surviving break', () => {
     const section = (width: number, text: string, markRevision = '') =>
       `<w:p><w:pPr><w:sectPr><w:pgSz w:w="${width}" w:h="15840"/></w:sectPr>${markRevision}</w:pPr>${run(text)}</w:p>`;

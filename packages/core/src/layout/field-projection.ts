@@ -108,8 +108,7 @@ import {
   NO_REVISIONS,
   isRevisionWrapper,
   revisionAttributionOf,
-  projectedRevisions,
-  projectedRevisionProperties,
+  projectPieceAttribution,
   revisionsAreDeletion,
   revisionsVisible,
   withRevision,
@@ -243,14 +242,15 @@ export function piecesOfParagraph(
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const effectiveLink = extras?.linkOverride ?? currentLink;
-    const authoredRevisions = extras?.revisionsOverride ?? revisions;
-    const effectiveRevisions = authorFilter
-      ? projectedRevisions(authoredRevisions, displayMode, authorFilter)
-      : authoredRevisions;
-    if (effectiveRevisions === null) return;
-    const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
+    const published = projectPieceAttribution(
+      extras?.revisionsOverride ?? revisions,
+      props,
+      displayMode,
+      authorFilter
+    );
+    if (published === null) return;
+    const { props: publishedProps, ...attribution } = published;
     const link = effectiveLink ? { link: effectiveLink } : {};
-    const attribution = effectiveRevisions.length === 0 ? {} : { revisions: effectiveRevisions };
     if (projected) {
       pieces.push({
         text,
@@ -707,19 +707,25 @@ export function piecesOfParagraph(
           }
           // Demoted / editable-result field: the sym paints the way it does in an ordinary
           // run — a projected zero-width glyph piece — instead of vanishing with the atomic
-          // skips. Buffered like the surrounding result text, so it flushes with it.
+          // skips. Buffered like the surrounding result text, so it flushes with it — and
+          // projected here, because the flush never runs `push`.
           const glyph = symbolGlyphOf(grand);
-          if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter))
-            continue;
+          if (!glyph || style.hidden) continue;
           const sym = symbolRunStyle(props, glyph, themeFonts);
+          const symAttribution = projectPieceAttribution(
+            revisions,
+            sym.props,
+            displayMode,
+            authorFilter
+          );
+          if (symAttribution === null) continue;
           pending.buffered.push({
             text: glyph.text,
-            props: sym.props,
             style: sym.style,
             start: offset,
             end: offset,
             projected: true,
-            ...(revisions.length > 0 ? { revisions } : {}),
+            ...symAttribution,
             ...(currentLink ? { link: currentLink } : {}),
             fieldAtom: { formField: pending.formField },
           });
@@ -734,9 +740,10 @@ export function piecesOfParagraph(
         // wrapper and `revisions` is empty again. Apply the suppression at buffer time or a
         // deleted field's result survives the proposed result the deletion was accepted into.
         const fieldDeleted = revisionsAreDeletion(revisions);
+        // `null` is this view removing the content — the same verdict `push` returns on.
+        const attribution = projectPieceAttribution(revisions, props, displayMode, authorFilter);
         const fieldSuppressed =
-          !revisionsVisible(revisions, displayMode, authorFilter) ||
-          (grand.kind === 'deletedText' && !fieldDeleted);
+          attribution === null || (grand.kind === 'deletedText' && !fieldDeleted);
 
         // The result EXISTS in this display mode, whatever hides it below (vanish included) —
         // the flush needs the distinction to keep synthesis from painting over a result the
@@ -802,18 +809,17 @@ export function piecesOfParagraph(
           pending.style = style;
           pending.capturedResultStyle = true;
         }
-        // Buffered rather than pushed, so it does not pass through `push` and has to carry its
-        // own attribution. Here the walk is STILL inside the wrapper, so the live stack is the
-        // right one — unlike the atomic flush, which happens after the walk has left it. The
-        // link matters for the same reason: a demoted field inside a `w:hyperlink` lost its
-        // href here while every ordinary run in the same link kept one.
+        // Buffered rather than pushed, so it does not pass through `push` and carries its own
+        // attribution — PROJECTED through the reviewer view as `push` would, never the raw
+        // stack. The walk is STILL inside the wrapper here, so the live stack is the right one,
+        // unlike the atomic flush, which runs after the walk has left it. The link matters for
+        // the same reason: a demoted field inside a `w:hyperlink` lost its href here once.
         pending.buffered.push({
           text,
-          props,
           style,
           start: offset,
           end: offset + text.length,
-          ...(revisions.length > 0 ? { revisions } : {}),
+          ...attribution,
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
           // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
