@@ -88,7 +88,12 @@ export function narrowRectangularWrapSkip(
   right: number,
   glyphWidth: number
 ): number {
-  if (!(height > 0 && glyphWidth > 0 && glyphWidth <= right - left) || zones.length === 0) return 0;
+  if (
+    !(height > 0 && glyphWidth >= 0 && glyphWidth <= right - left) ||
+    !Number.isFinite(glyphWidth) ||
+    zones.length === 0
+  )
+    return 0;
   // Rectangles alone can prove that no passage fits. A curved contour can only
   // remove more space; it cannot reopen those passages as its later bands widen.
   const rectangular = zones.filter(
@@ -122,6 +127,9 @@ export function narrowRectangularWrapSkip(
     const wrapsTable = active.some(
       (zone) => zone.sourceKind === 'table' && crossesContent(zone, left, right)
     );
+    // A leading control still needs the table's minimum passage. Clear before
+    // publishing its zero-width span, which would prevent later line clearance.
+    if (glyphWidth === 0 && !wrapsTable && !combinedBlocked) return current - y;
 
     // A line can start above the float while its lower glyph band intersects it.
     // Intersect all relevant scanlines instead of probing only the line's top.
