@@ -657,7 +657,19 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     // accepting leaves a hollow one still occupying the model position the reviewer agreed to
     // remove. A `w:hyperlink` with no runs is a link to nowhere holding a relationship alive.
     // Word drops both, and an untracked delete over the same range already does.
-    if (child.kind === 'fldSimple' || child.kind === 'hyperlink') {
+    //
+    // A revision wrapper the resolution emptied goes the same way. Accepting one author's
+    // deletion of another author's insertion removes the deleted runs and leaves the `w:ins`
+    // holding nothing: no characters left to decide about, yet a card with no text and a
+    // document that still reports tracked changes. Only a wrapper THIS resolution emptied
+    // counts — a `w:ins` or `w:del` that never had children is a paragraph-mark or table-row
+    // decision in its own right, and those are resolved by name above, never swept. Move
+    // halves are left alone: a move resolves as a pair through its named range, and dropping
+    // one hollow half would orphan the markers of the other.
+    const emptiedWrapper =
+      (child.kind === 'revisionInsert' || child.kind === 'revisionDelete') &&
+      child.children.length > 0;
+    if (child.kind === 'fldSimple' || child.kind === 'hyperlink' || emptiedWrapper) {
       const survivor = rebuilt[0];
       if (
         rebuilt.length === 1 &&

@@ -121,6 +121,44 @@ describe('nested revisions resolve by containment', () => {
     const outerOnly = xml(apply(doc(), accept(DEV)));
     expect(innerFirst).toBe(outerOnly);
   });
+
+  // Resolving the INNER wrapper can leave the outer one holding nothing. A wrapper with no
+  // content is not a decision anyone can take — it carded as a blank entry and kept the
+  // document reporting tracked changes — so it goes with the content it wrapped.
+  test('accepting the inner deletion drops the outer insertion it emptied', () => {
+    const nested = load(
+      `<w:p>${run('keep ')}${wrap('ins', QA, wrap('del', DEV, delRun('new')))}${run(' end')}</w:p>`
+    );
+    const out = xml(apply(nested, accept(DEV)));
+    expect(out).not.toContain('<w:ins');
+    expect(out).not.toContain('<w:del');
+    expect(out).toContain('keep ');
+    expect(out).toContain(' end');
+  });
+
+  test('rejecting the inner insertion drops the outer deletion it emptied', () => {
+    const out = xml(apply(doc(), reject(QA)));
+    expect(out).not.toContain('<w:ins');
+    expect(out).not.toContain('<w:del');
+  });
+
+  test('an outer wrapper that still holds content keeps it, pending', () => {
+    const nested = load(`<w:p>${wrap('ins', QA, run('a') + wrap('del', DEV, delRun('b')))}</w:p>`);
+    const out = xml(apply(nested, accept(DEV)));
+    expect(out).toContain('<w:ins');
+    expect(out).toContain('>a<');
+    expect(out).not.toContain('>b<');
+  });
+
+  test('a wrapper that was empty to begin with is a decision, not a container to sweep', () => {
+    // A paragraph-mark insertion is `w:pPr/w:rPr/w:ins` with no children by construction.
+    const marked = load(
+      `<w:p><w:pPr><w:rPr>${wrap('ins', QA, '')}</w:rPr></w:pPr>${wrap('del', DEV, delRun('x'))}</w:p><w:p>${run('next')}</w:p>`
+    );
+    const out = xml(apply(marked, accept(DEV)));
+    expect(out).toContain('<w:ins');
+    expect(out).not.toContain('<w:del');
+  });
 });
 
 describe('a move is one decision', () => {
