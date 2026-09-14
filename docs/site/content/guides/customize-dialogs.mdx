@@ -89,6 +89,11 @@ const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
 Custom button components must forward refs, attributes, and listeners to their
 native button. Preserve the supplied handler and disabled state.
 
+With `asChild`, your element receives the wiring (`type`, `onClick`, `disabled`,
+`data-docx-part`) and none of the packaged `docx-dialog__*` classes, so your own
+styles or utility classes apply as written. To keep the packaged look and adjust
+it, pass `className` to the part instead of `asChild`.
+
 Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
 React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
 components, not render callbacks.
@@ -233,28 +238,44 @@ a white panel, bordered inputs, a filled primary button, and an outlined seconda
 
 Optional tokens adjust the panel without replacing any part:
 
-| Token                      | Controls                                                |
-| -------------------------- | ------------------------------------------------------- |
-| `--doc-dialog-font-family` | The panel font stack.                                   |
-| `--doc-dialog-font-size`   | The base size. Titles, labels, and hints scale from it. |
-| `--doc-dialog-radius`      | The panel corner radius. Inputs and buttons keep `4px`. |
-| `--doc-dialog-padding`     | The inline inset of the header, body, and footer.       |
-| `--doc-dialog-gap`         | The vertical distance between rows and sections.        |
+| Token                         | Controls                                                |
+| ----------------------------- | ------------------------------------------------------- |
+| `--doc-dialog-font-family`    | The panel font stack.                                   |
+| `--doc-dialog-font-size`      | The base size. Titles, labels, and hints scale from it. |
+| `--doc-dialog-radius`         | The panel corner radius.                                |
+| `--doc-dialog-control-radius` | The corner radius of inputs, selects, and buttons.      |
+| `--doc-dialog-padding`        | The inline inset of the header, body, and footer.       |
+| `--doc-dialog-gap`            | The vertical distance between rows and sections.        |
 
 Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
 `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
-Every default rule has two-class specificity, such as `.docx-editor .docx-dialog__button`,
-so it survives element resets like Tailwind preflight. To override a part, anchor
-your selector with `.docx-editor` and style your replacement without `!important`:
+
+There are two ways to change how a part looks:
+
+- **Adjust the packaged part.** Pass `className` to the part. Every default rule
+  has two-class specificity, such as `.docx-editor .docx-dialog__button`, so it
+  survives element resets like Tailwind preflight. Anchor your selector with
+  `.docx-editor` and style it without `!important`. A selector with one class,
+  such as `.app-rounded` alone, loses to the defaults.
+- **Bring your own element.** Pass `asChild`. The packaged classes stay off your
+  element, so a single class or utility classes style it as written.
 
 ```css
-.docx-editor [data-docx-dialog='pageSetup'] .app-apply {
+/* className="app-rounded" on the packaged Apply part */
+.docx-editor [data-docx-dialog='pageSetup'] .app-rounded {
   border-radius: 999px;
   padding-inline: 1.25rem;
 }
-```
 
-A selector with one class, such as `.app-apply` alone, loses to the defaults.
+/* asChild with <button class="app-apply">, as in the example above */
+.app-apply {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 20px;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+```
 
 Automatic dialogs inherit their editor's theme. For external portals or Vue
 `Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance.

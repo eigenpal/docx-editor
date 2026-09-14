@@ -110,8 +110,20 @@ export function createDialogParts<Name extends string, State>() {
         style: { ...(original.props.style as CSSProperties), ...style },
       };
       if (asChild) {
-        const { children: _defaultChildren, ...wiring } = shared;
-        return <Slot {...wiring}>{children}</Slot>;
+        // The host owns the element's look: forward the wiring and the host's own
+        // presentation props, never the packaged `docx-dialog__*` classes, so a design
+        // system button styled by single-class utilities is not outranked by the defaults.
+        const {
+          children: _defaultChildren,
+          className: _presetClassName,
+          style: _presetStyle,
+          ...wiring
+        } = shared;
+        return (
+          <Slot {...wiring} {...(className ? { className } : {})} {...(style ? { style } : {})}>
+            {children}
+          </Slot>
+        );
       }
       return cloneElement(
         original,

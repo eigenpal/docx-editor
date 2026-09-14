@@ -6742,7 +6742,8 @@ a.docx-hyperlink:focus-visible {
    Tokens:
      --doc-dialog-font-family  panel font stack
      --doc-dialog-font-size    base size; titles, labels and hints scale in em
-     --doc-dialog-radius       panel corner radius (controls keep 4px)
+     --doc-dialog-radius       panel corner radius
+     --doc-dialog-control-radius  input and button corner radius
      --doc-dialog-padding      panel inline inset (header, body, footer)
      --doc-dialog-gap          vertical rhythm between rows and sections */
 
@@ -6923,7 +6924,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   background: var(--doc-surface);
   border: 1px solid var(--doc-border-input);
-  border-radius: 4px;
+  border-radius: var(--doc-dialog-control-radius, 4px);
   outline: none;
   box-shadow: none;
   transition:
@@ -7024,7 +7025,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   background: var(--doc-surface);
   border: 1px solid var(--doc-border-input);
-  border-radius: 4px;
+  border-radius: var(--doc-dialog-control-radius, 4px);
   cursor: pointer;
   appearance: none;
   transition:
@@ -7064,7 +7065,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-primary);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--doc-dialog-control-radius, 4px);
   cursor: pointer;
   appearance: none;
 }
@@ -7118,7 +7119,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   background: var(--doc-surface);
   border: 1px solid var(--doc-border-input);
-  border-radius: 4px;
+  border-radius: var(--doc-dialog-control-radius, 4px);
   outline: none;
 }
 .docx-editor .docx-content-control-widget-popup > :where(input, select):where(:focus-visible) {
@@ -7133,7 +7134,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--doc-dialog-control-radius, 4px);
   cursor: pointer;
   appearance: none;
 }

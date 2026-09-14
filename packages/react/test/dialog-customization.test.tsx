@@ -52,6 +52,10 @@ test('custom Apply preserves one default action and writes one undo step', async
     </Page>
   );
   expect(view.container.querySelectorAll('[data-docx-part="apply"]').length).toBe(1);
+  // `asChild` hands the look to the host: the packaged classes stay off its element.
+  const brand = view.container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
+  expect(brand.classList.contains('brand-button')).toBe(true);
+  expect(brand.classList.contains('docx-dialog__button')).toBe(false);
   await act(async () => {
     fireEvent.change(view.getByLabelText('Top'), { target: { value: '0.5' } });
   });

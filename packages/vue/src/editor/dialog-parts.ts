@@ -112,7 +112,15 @@ export function createDialogComposition<
               'data-docx-part': partName.toLowerCase(),
               ...(p.name ? { 'data-docx-field': p.name } : {}),
             };
-            if (p.asChild) return h(Slot, merged, { default: () => children });
+            // With `asChild` the host owns the element's look: forward the wiring and the
+            // host's own classes, never the packaged `docx-dialog__*` classes, so a design
+            // system button styled by single-class utilities is not outranked by the defaults.
+            if (p.asChild)
+              return h(
+                Slot,
+                { ...merged, class: [attrs.class, p.className], style: p.style },
+                { default: () => children }
+              );
             if (original) {
               // Recreate the node so Vue derives the child type from the replacement slot.
               // Mutating a clone retains the default text-child flag for VNode arrays.
