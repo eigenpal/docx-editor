@@ -17,7 +17,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./node": {
+      "require": {
+        "types": "./types/node.d.cts",
+        "default": "./dist/node.cjs"
+      },
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
   },
   "files": [
     "dist",
@@ -31,18 +39,19 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown"
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown",
+    "check:consumer": "node ../../scripts/check-markdown-media-consumer.mjs"
   },
   "peerDependencies": {
     "@docx-editor.dev/core": "~2.17.0"
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.17.0"
+    "@docx-editor.dev/fonts": "~2.17.0",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.3",
     "@docx-editor.dev/core": "workspace:*",
-    "fflate": "^0.8.2",
     "micromark": "^4.0.2",
     "micromark-extension-gfm": "^3.0.0",
     "typescript": "^5.3.3"

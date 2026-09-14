@@ -1,3 +1,4 @@
+import type { MediaRendering, AnchorProjection } from './markdown-media.ts';
 // Logical-block grouping and table emission over published semantic records.
 //
 // Split-table fragments merge back into logical rows here, and both GFM and nested-table
@@ -23,6 +24,8 @@ import { nestedTableHtml, tableWidth } from './markdown-nested-table.ts';
 import type { MarkdownSourceCapture } from './markdown-inline.ts';
 
 export interface TranslationContext {
+  readonly media?: MediaRendering;
+  readonly anchors?: AnchorProjection;
   readonly noteLabelByScope: Map<string, string>;
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;

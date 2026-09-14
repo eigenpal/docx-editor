@@ -17,3 +17,10 @@ export declare const DocumentOpenError: typeof API.DocumentOpenError;
 export type DocumentOpenError = API.DocumentOpenError;
 export declare const ExportResourceError: typeof API.ExportResourceError;
 export type ExportResourceError = API.ExportResourceError;
+
+export declare const createMarkdownZip: typeof API.createMarkdownZip;
+export declare const toMarkdownJSON: typeof API.toMarkdownJSON;
+export declare const MarkdownMediaError: typeof API.MarkdownMediaError;
+export type MarkdownMediaError = API.MarkdownMediaError;
+export declare const MarkdownBundleError: typeof API.MarkdownBundleError;
+export type MarkdownBundleError = API.MarkdownBundleError;

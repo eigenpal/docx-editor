@@ -1,3 +1,4 @@
+import type { MarkdownImageAsset, MarkdownProjectionOptions } from './media-types.ts';
 import type {
   ExportFontResolutionReport,
   OpenDocumentForExportOptions,
@@ -57,7 +58,8 @@ export interface MarkdownWarning {
     | 'omitted-textbox'
     | 'font-origin-failed'
     | 'incomplete-font'
-    | 'content-scan-limit';
+    | 'content-scan-limit'
+    | 'image-placement-fallback';
   /** Human-readable description of the limitation. */
   readonly message: string;
   /** One-based page number, when the warning concerns a drawing occurrence. */
@@ -68,6 +70,8 @@ export interface MarkdownWarning {
 
 /** Full logical document plus page-scoped projections. @public */
 export interface MarkdownExportResult {
+  /** Unique extracted images; empty unless images are enabled. */
+  readonly media: readonly MarkdownImageAsset[];
   /** Omitted content and font problems that may affect completeness or pagination. */
   readonly warnings: readonly MarkdownWarning[];
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
@@ -124,4 +128,5 @@ export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExp
 }
 
 /** Layout and resource controls for one-shot Markdown export. @public */
-export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {}
+export interface MarkdownExportOptions
+  extends OpenMarkdownDocumentForExportOptions, MarkdownProjectionOptions {}

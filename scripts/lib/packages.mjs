@@ -244,6 +244,8 @@ export const PACKAGES = [
     forgottenExports: {
       logLevel: 'warning',
       allowlist: {
+        // The filesystem subpath consumes the result type exported by the main facade.
+        node: ['MarkdownExportResult'],
         index: [
           'BlockFragmentRecord',
           'ContentControlBoundaryRecord',

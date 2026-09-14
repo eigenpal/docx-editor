@@ -1,6 +1,6 @@
 # Integrations
 
-Use `result.markdown` for text and `result.pages` for page citations.
+Use `result.markdown` for text and `result.pages` for page citations. See [image delivery](images.md) for browser ZIP downloads, local folders, and server URLs with JSON metadata.
 
 ## LangChain
 

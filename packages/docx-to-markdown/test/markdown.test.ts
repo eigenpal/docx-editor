@@ -13,7 +13,7 @@ import {
   exportMarkdownLayout,
   type MarkdownExportOptions,
   type MarkdownExportResult,
-} from '../src/markdown.ts';
+} from '../src/index.ts';
 
 async function exportMarkdown(
   source: ExportDocumentSource,

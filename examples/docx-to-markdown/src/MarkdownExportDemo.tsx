@@ -1,3 +1,5 @@
+import { MediaPreview } from './MediaPreview';
+import { useMarkdownDownload } from './useMarkdownDownload';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import { reviewModule } from '@docx-editor.dev/pro';
@@ -329,6 +331,7 @@ export function MarkdownExportDemo() {
       setExportView((current) => ({ ...current, status: 'exporting', error: null }));
       try {
         const result = await exportMarkdown(bytes, {
+          images: true,
           fallbackFonts: GOOGLE_FONT_FALLBACK,
           resourceTimeoutMs: 30_000,
           signal: controller.signal,
@@ -502,16 +505,7 @@ export function MarkdownExportDemo() {
       .catch((error) => console.warn(`[clipboard] ${errorMessage(error)}`));
   }, [exportView, previewMode, developerPanelTab, previewFields, filename]);
 
-  const downloadMarkdown = () => {
-    const markdown = copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
-    if (markdown === null) return;
-    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
-    const link = window.document.createElement('a');
-    link.href = url;
-    link.download = filename.replace(/\.docx$/i, '') + '.md';
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
+  const download = useMarkdownDownload(exportView.result, filename);
 
   const fontStatus = coverageLabel(exportView.fontReport);
   const commentById = useMemo(() => {
@@ -723,13 +717,18 @@ export function MarkdownExportDemo() {
             </details>
           </div>
           <div className="md-preview-actions">
+            {download.error ? <span role="alert">{download.error}</span> : null}
             <button
               type="button"
               className="md-icon-button"
-              onClick={downloadMarkdown}
-              disabled={!canCopy}
-              aria-label="Download Markdown"
-              title="Download .md"
+              onClick={() => void download.download()}
+              disabled={!canCopy || download.busy}
+              aria-label={
+                exportView.result?.media.length
+                  ? 'Download Markdown and images'
+                  : 'Download Markdown'
+              }
+              title={exportView.result?.media.length ? 'Download .zip' : 'Download .md'}
             >
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 3v10m0 0 3.5-3.5M10 13 6.5 9.5M4 13v4h12v-4" />
@@ -925,20 +924,22 @@ export function MarkdownExportDemo() {
                   <div
                     className={`md-pages${busyPresentation === 'overlay' ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
                   >
-                    {exportView.result.pages.map((page) => (
-                      <MarkdownPagePreview
-                        key={page.id}
-                        page={page}
-                        commentById={commentById}
-                        selectionIndex={reviewSelectionIndex}
-                        mode={previewMode}
-                        showHeaders={showHeaders}
-                        showFooters={showFooters}
-                        showComments={showComments}
-                        showTrackedChanges={showTrackedChanges}
-                        onRevealDocumentPage={revealDocumentPage}
-                      />
-                    ))}
+                    <MediaPreview result={exportView.result}>
+                      {exportView.result.pages.map((page) => (
+                        <MarkdownPagePreview
+                          key={page.id}
+                          page={page}
+                          commentById={commentById}
+                          selectionIndex={reviewSelectionIndex}
+                          mode={previewMode}
+                          showHeaders={showHeaders}
+                          showFooters={showFooters}
+                          showComments={showComments}
+                          showTrackedChanges={showTrackedChanges}
+                          onRevealDocumentPage={revealDocumentPage}
+                        />
+                      ))}
+                    </MediaPreview>
                   </div>
                 ) : exportView.error ? null : (
                   <div className="md-empty-state" role="status">
