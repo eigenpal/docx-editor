@@ -10,6 +10,7 @@ import type { PageFurniture } from './page-furniture-insets.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { SectionColumns } from './section-properties.ts';
+import type { SectionPageBorders } from './page-borders.ts';
 import type { PageGeometry, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 
@@ -89,6 +90,13 @@ export interface SemanticLayoutOptions {
   readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
   /** Authored column count/gap for anchored `relativeFrom="column"` frame resolution. */
   readonly sectionColumns?: SectionColumns;
+  /**
+   * This section's resolved `w:pgBorders`, for the frame each of its sheets publishes.
+   *
+   * Section-scoped, not document-scoped: `w:display="firstPage"` means the first page of THIS
+   * section, and multi-section layout hands each pass its own.
+   */
+  readonly sectionPageBorders?: SectionPageBorders;
   /**
    * Styles-part cascade table (docDefaults + `w:style` last-wins). Absent keeps direct
    * formatting only — the pre-cascade behaviour, used by unit tests that never open a
