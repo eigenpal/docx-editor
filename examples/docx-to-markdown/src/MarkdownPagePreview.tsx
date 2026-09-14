@@ -82,7 +82,7 @@ export function MarkdownPagePreview({
           className="md-page-reveal"
           type="button"
           onClick={() => onRevealDocumentPage(page.number)}
-          aria-label={`View page ${page.number} in DOCX`}
+          aria-label={`View in DOCX, page ${page.number}`}
         >
           View in DOCX
         </button>

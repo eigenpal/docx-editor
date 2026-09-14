@@ -126,7 +126,7 @@ test.each(['rendered', 'source'] as const)(
       expect(panel.querySelector('.md-review-message')).not.toBeNull();
       expect(paper.textContent).not.toContain('root text');
       expect(panel.parentElement).toBe(paper.parentElement);
-      fireEvent.click(view.getByRole('button', { name: 'View page 1 in DOCX' }));
+      fireEvent.click(view.getByRole('button', { name: 'View in DOCX, page 1' }));
       expect(revealed).toBe(1);
       fireEvent.click(button);
       expect(view.queryByText('root text')).toBeNull();
