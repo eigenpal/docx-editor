@@ -63,6 +63,17 @@ function load(body: string): OoxmlPart {
   return parsed.part;
 }
 
+function paragraphIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') ids.push(node.id);
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return ids;
+}
+
 function firstParagraphId(part: OoxmlPart): string {
   const find = (node: OoxmlNode): string | undefined => {
     if (node.kind === 'textValue') return undefined;
@@ -338,6 +349,139 @@ for (const input of ['string', 'typed'] as const) {
     } as const;
     expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
     expect(serializeOoxmlPart(part)).toBe(before);
+  });
+
+  test(`typing into an empty leading prompt paragraph keeps the caret's paragraph (${input})`, () => {
+    // The caret's paragraph is the display paragraph even when a later one holds the prompt
+    // text, so the insert that follows still finds it.
+    const prompt =
+      '<w:sdt><w:sdtPr><w:id w:val="1"/><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
+      '<w:p><w:pPr><w:pStyle w:val="Lead"/></w:pPr></w:p>' +
+      '<w:p><w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Click here</w:t></w:r></w:p>' +
+      '</w:sdtContent></w:sdt>';
+    const part = load(input === 'string' ? prompt : table(row(cell(prompt))));
+    const lead = firstParagraphId(part);
+    const result = applyTreeOp(part, { op: 'insertText', paragraphId: lead, offset: 0, text: 'T' });
+    if (!result.ok) throw new Error(result.reason);
+    const xml = serializeOoxmlPart(result.part);
+    expect(xml).toContain('<w:pStyle w:val="Lead"/></w:pPr><w:r><w:t>T</w:t></w:r></w:p>');
+    expect(xml).not.toContain('Click here');
+    // The prompt's second paragraph is gone; the label cell's paragraph stays in the table.
+    expect(xml.match(/<w:p>/g)).toHaveLength(input === 'string' ? 1 : 2);
+    expect(result.effect.dirty).toContain(lead);
+    expect(result.effect.deleted).toHaveLength(1);
+    expect(result.effect.impact).toBe('flow-structural');
+  });
+
+  test(`typing into a row prompt from its second cell lands there (${input})`, () => {
+    const prompt =
+      '<w:sdt><w:sdtPr><w:id w:val="1"/><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
+      row(cell('<w:p><w:r><w:t>Click here</w:t></w:r></w:p>')) +
+      '</w:sdtContent></w:sdt>';
+    const part = load(table(prompt));
+    const ids = paragraphIds(part);
+    const second = ids[1]!;
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: second,
+      offset: input === 'string' ? 0 : 4,
+      text: 'T',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const xml = serializeOoxmlPart(result.part);
+    expect(xml.match(/<w:tc>/g)).toHaveLength(2);
+    expect(xml).toContain(input === 'string' ? '<w:t>T</w:t>' : '<w:t>T</w:t>');
+    expect(xml).toContain('Click here');
+    expect(xml).not.toContain('showingPlcHdr');
+  });
+
+  test(`${input} value writes report dropped and kept paragraphs in their effect`, () => {
+    const two = paragraph(run) + '<w:p><w:r><w:t>second</w:t></w:r></w:p>';
+    const part = load(control('text', two));
+    const [first, second] = paragraphIds(part);
+    const node = contentControlsIn(part.root)[0]!.node;
+    const result = applyTreeOp(part, {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.effect.dirty).toContain(first!);
+    expect(result.effect.deleted).toEqual([second!]);
+    expect(result.effect.created).toEqual([]);
+
+    const empty = load(control('text', ''));
+    const emptyNode = contentControlsIn(empty.root)[0]!.node;
+    const minted = applyTreeOp(empty, {
+      op: 'setContentControlValue',
+      controlId: emptyNode.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp);
+    if (!minted.ok) throw new Error(minted.reason);
+    expect(minted.effect.created).toEqual(paragraphIds(minted.part));
+    expect(minted.effect.deleted).toEqual([]);
+  });
+
+  test(`text ${input} writes prefer a paragraph with characters over one with an empty run`, () => {
+    const emptyRun =
+      '<w:p><w:pPr><w:pStyle w:val="First"/></w:pPr><w:r><w:rPr><w:b/></w:rPr></w:r></w:p>';
+    const real =
+      '<w:p><w:pPr><w:pStyle w:val="Second"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>real</w:t></w:r></w:p>';
+    const xml = write(load(control('text', emptyRun + real)), 'text', input);
+    expect(xml).toContain(
+      '<w:pStyle w:val="Second"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>new</w:t></w:r>'
+    );
+    expect(xml).not.toContain('<w:pStyle w:val="First"/>');
+  });
+
+  test(`text ${input} writes over a plain run stay plain, whatever the paragraph mark says`, () => {
+    const marked = '<w:p><w:pPr><w:rPr><w:i/></w:rPr></w:pPr><w:r><w:t>old</w:t></w:r></w:p>';
+    const xml = write(load(control('text', marked)), 'text', input);
+    expect(xml).toContain('</w:pPr><w:r><w:t>new</w:t></w:r></w:p>');
+  });
+
+  test(`text ${input} writes into a row control land in the first cell that holds text`, () => {
+    const emptyCell = cell('<w:p><w:pPr><w:pStyle w:val="Empty"/></w:pPr></w:p>');
+    const body = table(control('text', row(emptyCell + cell(paragraph(run)))));
+    const xml = write(load(body), 'text', input);
+    expect(xml).toContain('<w:pStyle w:val="Empty"/></w:pPr></w:p>');
+    expect(xml).toContain(
+      '<w:bookmarkStart w:id="0" w:name="Field"/><w:r><w:rPr><w:b/></w:rPr><w:t>new</w:t></w:r><w:bookmarkEnd w:id="0"/>'
+    );
+    expect(xml).not.toContain('<w:t>old</w:t>');
+    expect(xml.match(/<w:tc>/g)).toHaveLength(3);
+  });
+
+  test(`text ${input} writes refuse an unknown block beside the display paragraph`, () => {
+    const part = load(
+      control(
+        'text',
+        paragraph(run) +
+          '<w:altChunk r:id="rId9" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>'
+      )
+    );
+    const node = contentControlsIn(part.root)[0]!.node;
+    const op = {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp;
+    expect(validateTreeOp(part, op)).toBe('unsupported');
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
+  });
+
+  test(`text ${input} writes refuse a run that mixes a comment anchor with text`, () => {
+    const mixed =
+      '<w:commentRangeStart w:id="3"/><w:r><w:t>old</w:t></w:r><w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/><w:t>tail</w:t></w:r>';
+    const part = load(paragraph(control('text', mixed)));
+    const node = contentControlsIn(part.root)[0]!.node;
+    const op = {
+      op: 'setContentControlValue',
+      controlId: node.id,
+      value: input === 'string' ? 'new' : { kind: 'text', text: 'new' },
+    } as TreeDocOp;
+    expect(validateTreeOp(part, op)).toBe('unsupported');
+    expect(applyTreeOp(part, op)).toEqual({ ok: false, reason: 'unsupported' });
   });
 
   test(`text ${input} writes refuse opaque content without flattening it`, () => {
