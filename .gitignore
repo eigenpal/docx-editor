@@ -118,3 +118,9 @@ e2e/fixtures/synthetic-massive-singlesection.docx
 examples/collaboration-hocuspocus/server/.data/
 # Generated informational Office.js reports (the reference inventory is committed).
 packages/editor-api/compat/reports/
+
+# Isolated collaboration candidates and diagnostic traces.
+.cache/collaboration/
+
+# Frozen published-client dependency graphs are test fixtures.
+!.collaboration/releases/*/package-lock.json

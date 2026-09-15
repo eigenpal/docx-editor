@@ -117,7 +117,7 @@
     "prepare": "husky && bun run --filter '@docx-editor.dev/i18n' build",
     "preview": "bun run build && bunx serve examples/parity/dist -p 4173",
     "reference:fetch": "node scripts/fetch-reference.mjs",
-    "release": "bun run build:packages && bun run notices:generate && changeset publish",
+    "release": "bun run build:packages && bun run notices:generate && bun run collaboration:check --release && node scripts/collaboration/cli.mjs pack && bun run collaboration:test --all --candidate .cache/collaboration/publish && node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish && changeset publish",
     "test": "node scripts/test/run-parallel.mjs",
     "test:serial": "bun test",
     "test:e2e:collab": "playwright test --config e2e/collaboration.config.ts",
@@ -130,7 +130,11 @@
     "typecheck:root": "tsc -p tsconfig.json --noEmit",
     "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
     "dev:server-agent-review": "bun run build:packages && node examples/server-agent-review/dev.mjs",
-    "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts"
+    "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts",
+    "collaboration:change": "node scripts/collaboration/cli.mjs change",
+    "collaboration:check": "node scripts/collaboration/cli.mjs check",
+    "collaboration:catalog": "node scripts/collaboration/cli.mjs catalog",
+    "collaboration:test": "node scripts/collaboration/test.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

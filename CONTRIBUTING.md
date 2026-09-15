@@ -173,3 +173,11 @@ Every issue needs a `Bug`, `Feature`, or `Task` type. Maintainers also assign on
 ## License
 
 By contributing, you agree that your contributions are licensed under [Apache 2.0](LICENSE), except contributions to `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License.
+
+## Collaboration compatibility
+
+After 2.18, changes to shared document behavior need an explicit compatibility
+assessment. Run `bun run collaboration:change`, then follow the
+[collaboration compatibility policy](docs/architecture/collaboration-compatibility.md).
+The policy covers version decisions, published-release tests, migration rehearsal,
+and release checks. Public document APIs must retain the Office.js contract.

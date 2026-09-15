@@ -1,0 +1,41 @@
+{
+  "baseline": "2.18.0",
+  "releases": [
+    {
+      "version": "2.18.0",
+      "commit": "f7a3b9af3453aab3a7508785997e3ea4dfb6f7e9",
+      "sourceLockHash": "74b955a2231b4598301e103c2f1ffe5c49dc1f5b5f6435f8d5d37725731c586a",
+      "format": "docx-collaboration:1.3.1.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 3,
+        "repairVersion": 1,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.18.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.18.0.tgz",
+          "integrity": "sha512-VumfBQLF0l5Qm333+kPEZ5/RCyD4Z2sqbIIpXjVbY8uzQrb4z8ljM+HOEX+da76V8YqwR6P5z4RyXhvB6Agk0Q=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.18.0.tgz",
+          "integrity": "sha512-RR4EVNigbUmetqjPG01TalcMMocuM4zy/Dm3T6rK6qQxeFFb5smGP/ladRAuJGrnQ2lMSeE4WA16Uy3d64g8Vg=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.18.0.tgz",
+          "integrity": "sha512-vgz3bJZuDjJeL71HMMbrrVtuTyHO/GIjvDmOhSX8TSltwUTXl7DkNYknxGzCCo1/tWSUxHBTafVhA5wLCmi/uQ=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.18.0.tgz",
+          "integrity": "sha512-yZB1kjpn2y1yOwcL9JeOGpqtmusqwH72gPZ7h24fnawpZbrZmaAMVGm/ivKvUxV4mGfTi8HSPl7s1VyPW6NK0g=="
+        }
+      },
+      "hashes": {
+        "package.json": "9bc43ba38435e58083f749efa1caeba30e25fb7f280fc3cf31a54c4746073d80",
+        "package-lock.json": "48439164d74a2d4b899707f736cad3071aaaebee00ede77b4c9bf8aa785f24bb",
+        "fixture.json": "f3be4f3a03db12da3312f59edee3d4dba4793755b6acf2f9be965d68988611ea"
+      }
+    }
+  ]
+}
