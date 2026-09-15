@@ -1,0 +1,127 @@
+---
+title: Markdown integrations
+description: Add DOCX to Markdown conversion to Node.js serverless functions, Next.js routes, and LangChain retrieval pipelines while preserving page metadata for citations.
+category: Export formats
+---
+
+Call the converter from your Node.js application and map its pages into your storage or retrieval model. Conversion uses bundled fonts and WebAssembly in the same process, so there is no office application or PDF conversion service to provision.
+
+Start with the [installation requirements and package availability](/docs/2.x/export/markdown#get-started).
+
+## Node.js and serverless functions
+
+Use a Node.js runtime that allows WebAssembly and retain the packages' font and WASM assets in the deployed artifact. Edge runtimes are unsupported. The default font sources are bundled; remote fallback is opt-in through `fallbackFonts`.
+
+Conversion parses and lays out the document in memory. Limit upload size and concurrent conversions, and measure cold and warm duration and peak memory on representative documents. For large files, run a background job that reads from object storage and stores the resulting export.
+
+`resourceTimeoutMs` limits resource-wait phases, not total conversion time. An `AbortSignal` cannot interrupt synchronous parsing or layout. For a hard deadline, run conversion in a worker thread or separate process and terminate it from the parent on timeout.
+
+### Next.js endpoint
+
+Keep packages external so Node.js can load their font and WASM files:
+
+```js
+// next.config.mjs
+export default {
+  serverExternalPackages: [
+    '@docx-editor.dev/docx-to-markdown',
+    '@docx-editor.dev/core',
+    '@docx-editor.dev/fonts',
+  ],
+};
+```
+
+See Next.js's [serverExternalPackages reference](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverExternalPackages). Validate a conversion from your production build to confirm that deployment tracing retained the assets.
+
+This route accepts DOCX bytes as the request body and returns the [JSON response model](/docs/2.x/export/markdown/api#response-model):
+
+```ts
+// app/api/convert/route.ts
+import {
+  DocumentOpenError,
+  exportMarkdown,
+  toMarkdownJSON,
+} from '@docx-editor.dev/docx-to-markdown';
+
+export const runtime = 'nodejs';
+
+export async function POST(request: Request) {
+  try {
+    const result = await exportMarkdown(new Uint8Array(await request.arrayBuffer()), {
+      displayMode: 'proposed',
+      signal: request.signal,
+      resourceTimeoutMs: 15_000,
+    });
+    return Response.json(toMarkdownJSON(result));
+  } catch (error) {
+    if (error instanceof DocumentOpenError) {
+      return Response.json({ error: 'Document could not be opened' }, { status: 422 });
+    }
+    throw error;
+  }
+}
+```
+
+The example buffers the request. Apply authentication and upload limits before reading the body, and handle resource failures through your application's error handling. `toMarkdownJSON` excludes binary image bytes; if you enable images, deliver their assets separately or use a ZIP.
+
+With your development server running, send a local DOCX file and save the response:
+
+```sh
+curl --fail-with-body http://localhost:3000/api/convert \
+  -H 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document' \
+  --data-binary @contract.docx \
+  --output contract.json
+```
+
+## Retrieval pipelines
+
+Create one text record per page before splitting it into chunks. Preserve source, document version, and page metadata so that an answer can cite the passage's location. Keep headers and footers separately if you want to avoid embedding repeated labels with body text.
+
+For example, LangChain's JavaScript `Document` and `RecursiveCharacterTextSplitter` can consume the page output directly:
+
+```sh
+npm install @langchain/core @langchain/textsplitters
+```
+
+```ts
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
+import { Document } from '@langchain/core/documents';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { exportMarkdown, toMarkdownJSON } from '@docx-editor.dev/docx-to-markdown';
+
+const source = 'contract.docx';
+const bytes = await readFile(source);
+const documentVersion = createHash('sha256').update(bytes).digest('hex');
+const exportId = randomUUID();
+const result = await exportMarkdown(bytes, { displayMode: 'proposed' });
+
+// Retain the export so retrieved citations can reopen the same page text.
+const snapshot = { exportId, source, documentVersion, result: toMarkdownJSON(result) };
+await writeFile('contract.export.json', JSON.stringify(snapshot));
+
+const documents = result.pages
+  .filter((page) => page.markdown.trim().length > 0)
+  .map(
+    (page) =>
+      new Document({
+        pageContent: page.markdown,
+        metadata: { source, documentVersion, exportId, page: page.number, pageId: page.id },
+      })
+  );
+
+const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1500, chunkOverlap: 150 });
+const chunks = await splitter.splitDocuments(documents);
+console.log(`Created ${chunks.length} chunks from ${result.pages.length} pages`);
+```
+
+Pass `chunks` to your vector store and retain the snapshot in your document storage. Record your package versions and font configuration with it if you need to reproduce the export. `splitDocuments` copies metadata to the resulting chunks and splits each page separately, keeping overlap within page boundaries. The sizes above are example character counts; see LangChain's [recursive splitter guide](https://docs.langchain.com/oss/javascript/integrations/splitters/recursive_text_splitter).
+
+Build citations from retrieved chunk metadata, rather than asking the model to infer page numbers. If a clause continues across pages, retrieve neighboring pages from the stored snapshot and retain each contributing page reference. Store warnings with that snapshot and account for the [pagination limits](/docs/2.x/export/markdown/api#pages-and-citations).
+
+The same mapping works in other retrieval frameworks. A pipeline using MarkItDown, Docling, or Unstructured for other formats can use this step for DOCX. For a Python application, call a Node.js conversion endpoint and map its JSON pages into your framework's document type.
+
+## Next steps
+
+- [Look up response fields and export options](/docs/2.x/export/markdown/api).
+- [Review the conversion quickstart](/docs/2.x/export/markdown).

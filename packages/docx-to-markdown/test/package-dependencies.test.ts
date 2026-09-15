@@ -75,17 +75,23 @@ describe('engine dependency integrity', () => {
     );
     expect(coreExportSource).not.toMatch(/Markdown|\.\/markdown/);
     expect(existsSync(join(repositoryRoot, 'packages/core/src/export/markdown.ts'))).toBe(false);
-    expect(existsSync(join(repositoryRoot, 'docs/site/content/export/markdown.mdx'))).toBe(true);
+    expect(existsSync(join(repositoryRoot, 'docs/site/content/export/markdown/index.mdx'))).toBe(
+      true
+    );
     const navigation = JSON.parse(
       readFileSync(join(repositoryRoot, 'docs/site/content/meta.json'), 'utf8')
     );
     const exportNavigation = JSON.parse(
       readFileSync(join(repositoryRoot, 'docs/site/content/export/meta.json'), 'utf8')
     );
+    const markdownNavigation = JSON.parse(
+      readFileSync(join(repositoryRoot, 'docs/site/content/export/markdown/meta.json'), 'utf8')
+    );
     expect(navigation.pages).toContain('export');
     expect(navigation.pages).not.toContain('export/markdown');
     expect(exportNavigation.title).toBe('Export formats');
     expect(exportNavigation.pages).toContain('markdown');
+    expect(markdownNavigation.pages).toContain('index');
   });
 
   test('confines packaged fonts through the fonts package asset-root contract', () => {
