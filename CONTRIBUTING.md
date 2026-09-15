@@ -46,6 +46,18 @@ bun run lint:fix
 bun run format
 ```
 
+The pre-commit hook formats and lints staged files, then runs the full typecheck,
+parity, license, API, formatting, and lint checks. It prints the duration of each
+step. Local commits use TypeScript's incremental build information and
+content-based ESLint and Prettier caches; CI runs the uncached package commands.
+The first commit after creating or clearing these caches takes longer.
+
+ESLint and Prettier caches live under the root `node_modules/.cache/precommit/`.
+TypeScript writes build information under each workspace's
+`node_modules/.cache/precommit/`, outside the source and license scans.
+To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`,
+or `bun run format:check` without the hook's cache flags.
+
 ## Contributor License Agreement
 
 You must sign the [Contributor License Agreement](CLA.md). The CLA assistant
