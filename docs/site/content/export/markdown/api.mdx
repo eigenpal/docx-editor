@@ -80,7 +80,7 @@ The exporter calculates pages with its layout engine. `page.number` is a one-bas
 
 Store your source identifier, document version or hash, and an application-owned export ID with page citations. Retain the result, package versions, font configuration, and `displayMode` under that export ID. `pagination.layoutRevision` is a Core revision, not your file or package version.
 
-Fonts and revision visibility affect page breaks. The default uses bundled substitutes, such as Carlito for Calibri. Supply the author's fonts when licensed to do so, inspect `fontResolution`, and validate representative documents against Word if readers need matching page references. `fontPolicy: 'strict'` checks font resolution; it does not guarantee Word-identical pagination. See [Configure fonts for accurate layout](/docs/2.x/export/markdown#configure-fonts-for-accurate-layout) for the role of fallback fonts and a Google Fonts example.
+Fonts and revision visibility affect page breaks. Use the [font setup and troubleshooting guide](/docs/2.x/export/markdown/fonts) to configure font sources, inspect `fontResolution`, and validate page references against Word.
 
 ### Comments and tracked changes
 
@@ -126,7 +126,7 @@ import { createMarkdownZip } from '@docx-editor.dev/docx-to-markdown';
 await writeFile('contract.zip', await createMarkdownZip(result));
 ```
 
-JSON and ZIP helpers come from the main package. Portable bundles require generated relative image URLs. See [image delivery examples](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/images.md) for storage callbacks and renderer setup.
+JSON and ZIP helpers come from the main package. Portable bundles require generated relative image URLs. See [image delivery examples](/docs/2.x/export/markdown/images) for storage callbacks and renderer setup.
 
 ## Errors and output limits
 

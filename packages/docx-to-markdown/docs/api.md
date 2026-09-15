@@ -279,74 +279,11 @@ try {
 
 Core resolves fonts, images, document geometry, and `displayMode` before pagination. Markdown uses that immutable layout. `signal` and `resourceTimeoutMs` cover resource processing.
 
-Fonts resolve in this order:
-
-1. Your `fonts` configuration or resolvers; earlier entries take priority.
-2. Bundled substitutes from `@docx-editor.dev/fonts`.
-3. Optional `fallbackFonts`.
-4. Document-embedded fonts for faces not resolved by earlier origins.
-
-The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono for Courier New. These fonts are bundled with the package.
-
-Font measurements determine line wrapping, table row heights, and page boundaries. Markdown does not preserve the DOCX font family, but it uses the pages calculated from those measurements. Bundled substitutes target matching character widths; differences can still change page breaks.
-
-If you need page references that match Word, supply the author's licensed fonts through `fonts`, save the font-resolution report, pin the exporter, Core, and font catalog versions, and compare representative documents with Word. The default `best-effort` policy uses approximate measurements for unresolved fonts. `fontPolicy: 'strict'` checks font resolution; it does not guarantee the same pagination as Word.
-
-Use `fallbackFonts` for faces that your `fonts` configuration and bundled substitutes do not provide. Fallback sources do not replace faces already resolved by earlier sources. A fallback can improve measurement only when it supplies a missing face; Google Fonts cannot supply fonts outside its catalog.
-
-To enable Google Fonts as a fallback, pass `googleFonts()` through `fallbackFonts`. It uses a pinned catalog and verified content hashes. Requests disclose requested font families to the CDN:
-
-```ts
-import { readFile } from 'node:fs/promises';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-import {
-  createFontSource,
-  exportMarkdown,
-  type ExportFontResolutionReport,
-} from '@docx-editor.dev/docx-to-markdown';
-
-const faceSpecs = [
-  ['Aptos.ttf', 400, 'normal'],
-  ['Aptos-Bold.ttf', 700, 'normal'],
-  ['Aptos-Italic.ttf', 400, 'italic'],
-  ['Aptos-BoldItalic.ttf', 700, 'italic'],
-] as const;
-
-const sources = [];
-for (const [file, weight, style] of faceSpecs) {
-  const admitted = createFontSource(new Uint8Array(await readFile(file)), {
-    family: 'Aptos',
-    weight,
-    style,
-  });
-  if ('failure' in admitted)
-    throw new Error(admitted.failure.diagnostic ?? admitted.failure.reason);
-  sources.push(admitted.source);
-}
-
-let fontReport: ExportFontResolutionReport | undefined;
-
-const result = await exportMarkdown(docxBytes, {
-  fonts: { sources },
-  // Consulted only for faces application fonts and bundled substitutes cannot paint.
-  fallbackFonts: googleFonts({ onFailure: (failure) => console.error(failure) }),
-  fontPolicy: 'strict',
-  onFontResolution: (report) => {
-    fontReport = report;
-  },
-});
-```
-
-Omit `fallbackFonts` to use your fonts, bundled substitutes, and document-embedded fonts. For network-free exports, your own resolvers must also use local data.
+See [Configure fonts for Markdown layout](fonts.md) for resolution order, bundled substitutes, separate Google Fonts and custom-font examples, strict mode, and troubleshooting.
 
 Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`, use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes precedence and bypasses both font options. Omit `fontPolicy` and `onFontResolution` when using a custom measurer or live view; these combinations throw `TypeError`.
 
-`fontPolicy: 'strict'` rejects font-source failures or missing regular, bold, italic, or bold-italic faces in the resolution report.
-Font resolution checks at most 64 families, prioritizing the body, then headers and footers, then notes.
-Additional families are excluded without causing `layoutFailed`. Strict success therefore covers only the candidate list, not every family in a larger document.
-
-Use `onFontResolution` to observe resolved and substituted faces. The exporter does not await callback promises.
-Callback errors are logged without failing the export. To wait for report storage, save `result.fontResolution` after export and await that operation.
+Use `onFontResolution` to observe resolved and substituted faces. The exporter does not await callback promises. Callback errors are logged without failing the export. To wait for report storage, save `result.fontResolution` after export and await that operation.
 
 Use `googleFonts({ onFailure })` to log fallback failures. Failed or aborted Google Fonts requests are not cached.
 

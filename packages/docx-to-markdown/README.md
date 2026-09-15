@@ -17,7 +17,7 @@ The converter requires WebAssembly and uses bundled fonts by default.
 npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
 ```
 
-`@docx-editor.dev/core` is a required peer dependency. Use the same release version for both packages.
+`@docx-editor.dev/core` is a required peer dependency. Install a version that satisfies the converter's peer dependency range and commit your lockfile.
 
 ## Convert a DOCX file
 
@@ -70,23 +70,11 @@ For search and AI ingestion, use `{ displayMode: 'proposed' }` to show pending i
 
 ## Configure fonts for accurate layout
 
-Fonts affect line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout before generating Markdown.
+Fonts determine line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout.
 
-Bundled substitutes, such as Carlito for Calibri, target matching character widths for common Word fonts. Differences can still change page breaks. If you need page references that match Word, supply the author's licensed fonts through `fonts` and compare representative documents with Word.
+Start with the bundled substitutes for common Word fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
 
-Use `fallbackFonts` for font faces that your `fonts` configuration and bundled substitutes do not provide. To enable Google Fonts fallback, run `npm install @docx-editor.dev/fonts`, then add the following import and option to the conversion example:
-
-```ts
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-const result = await exportMarkdown(docxBytes, {
-  fallbackFonts: googleFonts(),
-});
-```
-
-Google Fonts fallback requires network access and only supplies faces available in its catalog. It does not override faces already resolved by your fonts or bundled substitutes.
-
-Inspect `result.fontResolution` and `result.warnings` for font problems. The default `fontPolicy: 'best-effort'` allows approximate measurement for unresolved fonts. Strict mode checks font resolution but does not guarantee Word-identical pagination. See [font resolution order, strict mode, and custom fonts](docs/api.md#layout-and-fonts).
+See [font setup and troubleshooting](docs/fonts.md) for runnable examples, resolution reports, and guidance on matching page references to Word.
 
 ## Runtime and output
 
@@ -98,6 +86,8 @@ The package uses the Apache 2.0 license, including comment and tracked-change ex
 Bundled fonts retain their own open-source licenses.
 
 ## Next steps
+
+- [Configure fonts and troubleshoot page layout](docs/fonts.md).
 
 - [Include and deliver images](docs/images.md).
 - [Connect the converter to your application](docs/integrations.md).

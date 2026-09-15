@@ -45,42 +45,11 @@ Run `node convert.mjs` from that directory. The output includes each page's body
 
 ## Configure fonts for accurate layout
 
-Fonts affect the page boundaries in `result.pages`. The converter measures text before generating Markdown. A font with different character widths can wrap a paragraph onto another line, increase a table row's height, and move content to the next page. Markdown does not preserve the DOCX font family; your Markdown renderer controls the displayed font.
+Fonts determine line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout.
 
-The converter includes substitutes for common Word fonts, such as Carlito for Calibri and Liberation Serif for Times New Roman. These substitutes target matching character widths, but font differences can still change line and page breaks. If you need page references that match Word, supply the author's fonts through `fonts` when your license permits it, and compare representative documents with Word.
+Start with the bundled substitutes for common Word fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
 
-### Add fallback fonts
-
-Use `fallbackFonts` to resolve font faces that your `fonts` configuration and bundled substitutes do not provide. Fallback fonts improve measurement when a requested font is available from another source. They do not replace faces that an earlier source has already resolved or guarantee matching Word pagination.
-
-To use the Google Fonts catalog as a fallback, add the fonts package to your application:
-
-```sh
-npm install @docx-editor.dev/fonts
-```
-
-Pass DOCX bytes to `exportMarkdown` and configure `googleFonts()` through `fallbackFonts`:
-
-```ts
-import { readFile } from 'node:fs/promises';
-import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-const docxBytes = await readFile('document.docx');
-const result = await exportMarkdown(docxBytes, {
-  fallbackFonts: googleFonts(),
-});
-
-console.log(result.markdown);
-console.log(result.fontResolution);
-console.log(result.warnings);
-```
-
-Google Fonts fallback requires network access and fetches matching faces from a pinned catalog. It cannot supply every font. Omit `fallbackFonts` to use the bundled and document-embedded fonts, plus any fonts you supply. For offline conversion, your own font resolvers must also use local data.
-
-Inspect `result.fontResolution` for substitutions and incomplete font families. The default `fontPolicy: 'best-effort'` allows approximate measurement when fonts remain unresolved. Use `fontPolicy: 'strict'` to reject font-source failures or missing regular, bold, italic, or bold-italic faces among the checked families. Strict mode checks font resolution; it does not guarantee the same page breaks as Word.
-
-See [font resolution order, custom fonts, and limits](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#layout-and-fonts).
+See [font setup and troubleshooting](/docs/2.x/export/markdown/fonts) for runnable examples, resolution reports, and guidance on matching page references to Word.
 
 ## When to use it
 
@@ -95,6 +64,9 @@ Page numbers describe the export snapshot and can differ from Microsoft Word bec
 The converter uses the Apache 2.0 license, including review extraction. Bundled fonts retain their own open-source licenses. For interactive document editing with comments and tracked changes, see [Pro](/docs/2.x/pro).
 
 ## Next steps
+
+- [Configure fonts and troubleshoot page layout](/docs/2.x/export/markdown/fonts).
+- [Include and deliver images](/docs/2.x/export/markdown/images).
 
 - [API reference](/docs/2.x/export/markdown/api): options, response fields, pagination, and images.
 - [Integrations](/docs/2.x/export/markdown/integrations): serverless deployment, Next.js, and retrieval pipelines.

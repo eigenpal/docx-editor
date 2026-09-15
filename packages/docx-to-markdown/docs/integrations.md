@@ -60,22 +60,47 @@ export default {
 
 ```ts
 // app/api/convert/route.ts
-import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import {
+  DocumentOpenError,
+  exportMarkdown,
+  toMarkdownJSON,
+} from '@docx-editor.dev/docx-to-markdown';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const docxBytes = new Uint8Array(await request.arrayBuffer());
-  const result = await exportMarkdown(docxBytes, { signal: request.signal });
-  return Response.json(result);
+  try {
+    const result = await exportMarkdown(new Uint8Array(await request.arrayBuffer()), {
+      displayMode: 'proposed',
+      signal: request.signal,
+      resourceTimeoutMs: 15_000,
+    });
+    return Response.json(toMarkdownJSON(result));
+  } catch (error) {
+    if (error instanceof DocumentOpenError) {
+      return Response.json({ error: 'Document could not be opened' }, { status: 422 });
+    }
+    throw error;
+  }
 }
 ```
 
-Send the DOCX as the request body. Apply your application's upload limits and error handling. For self-hosted standalone output, add `output: 'standalone'`; retain the traced package assets. See [Next.js serverExternalPackages](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverExternalPackages).
+The example buffers the request. Apply authentication and upload limits before reading the body, and handle resource failures through your application's error handling. `toMarkdownJSON` excludes binary image bytes; if you enable images, deliver their assets separately or use a ZIP.
+
+With your development server running, send a local DOCX file and save the response:
+
+```sh
+curl --fail-with-body http://localhost:3000/api/convert \
+  -H 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document' \
+  --data-binary @contract.docx \
+  --output contract.json
+```
+
+For self-hosted standalone output, add `output: 'standalone'` to your Next.js configuration and retain the traced package assets. See [Next.js serverExternalPackages](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverExternalPackages).
 
 ## Serverless functions and worker threads
 
-Use a Node.js runtime that allows WebAssembly and includes the packages' font and WASM assets. The converter uses bundled fonts by default. Configure `fallbackFonts` to use remote fonts.
+Use a Node.js runtime that allows WebAssembly and includes the packages' font and WASM assets. The converter uses bundled fonts by default. See [font setup](fonts.md) to configure remote fallback or local custom fonts.
 
 `resourceTimeoutMs` limits resource waits, including font provisioning. It is not a deadline for the whole conversion. Parsing and layout run synchronously; `AbortSignal` cannot interrupt JavaScript that is already running. For a hard deadline, run conversion in a worker thread and terminate the worker on timeout. Limit upload size and concurrent conversions to fit your deployment's memory budget.
 

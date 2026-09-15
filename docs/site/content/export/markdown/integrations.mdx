@@ -10,7 +10,7 @@ Start with the [installation requirements](/docs/2.x/export/markdown#get-started
 
 ## Node.js and serverless functions
 
-Use a Node.js runtime that allows WebAssembly and retain the packages' font and WASM assets in the deployed artifact. Edge runtimes are unsupported. The default font sources are bundled; remote fallback is opt-in through `fallbackFonts`.
+Use a Node.js runtime that allows WebAssembly and retain the packages' font and WASM assets in the deployed artifact. Edge runtimes are unsupported. The default font sources are bundled; see [font setup](/docs/2.x/export/markdown/fonts) to configure remote fallback or local custom fonts.
 
 Conversion parses and lays out the document in memory. Limit upload size and concurrent conversions, and measure cold and warm duration and peak memory on representative documents. For large files, run a background job that reads from object storage and stores the resulting export.
 
