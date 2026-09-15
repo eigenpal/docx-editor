@@ -1615,7 +1615,6 @@ export interface PaginatedSurface {
     focus(): void;
     readonly formatPainter: FormatPainterOps;
     formatting(): SurfaceFormatting;
-    formsProtectionRefusesWrite(): boolean;
     headerFooterState(): {
         readonly editing: 'header' | 'footer' | null;
         readonly evenAndOddHeaders?: boolean;

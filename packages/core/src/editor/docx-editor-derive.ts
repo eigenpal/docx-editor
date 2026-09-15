@@ -301,24 +301,6 @@ export function gateCommand(
       refusal: { ok: false, code: 'locked', reason: 'the document is read-only' },
     };
   }
-  // Forms protection is caret-dependent, so it is asked of the SURFACE rather than read from
-  // the mode. Refusing here is what makes it visible: the store already dropped these writes,
-  // and without this the command reported success while the toolbar offered Bold on a
-  // document that could not take it.
-  // History is exempt: undo and redo reverse whatever was committed, at no caret position,
-  // and the protection itself is undoable — a gate that caught them would trap the reader in
-  // a document they had just protected by mistake.
-  const history = command.type === 'undo' || command.type === 'redo';
-  if (support.mutating && !history && surface.formsProtectionRefusesWrite?.()) {
-    return {
-      ok: false,
-      refusal: {
-        ok: false,
-        code: 'locked',
-        reason: 'this document is protected for filling in forms; edit inside a form field',
-      },
-    };
-  }
   // History commands are gated on the HISTORY, not just the mode: `can` drives the
   // toolbar's enabled state, and an undo button that stays live over an empty stack
   // silently no-ops — Word greys it out.
