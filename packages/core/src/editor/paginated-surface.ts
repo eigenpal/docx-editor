@@ -4925,7 +4925,7 @@ export function mountPaginatedSurface(
       const head = selection.head;
       // Stopped at a struck half's edge, like every other word walk: Ctrl+Backspace at the
       // end of a replacement's new text must not reach back through the old text with it.
-      const target = wordBoundary(
+      const target = (textFormInteraction?.wordDeletionBoundary ?? wordBoundary)(
         textOf(head.paragraphId),
         head.offset,
         -1,
@@ -4949,7 +4949,7 @@ export function mountPaginatedSurface(
     deleteWordForward() {
       if (surface.deleteSelection()) return;
       const head = selection.head;
-      const target = wordBoundary(
+      const target = (textFormInteraction?.wordDeletionBoundary ?? wordBoundary)(
         textOf(head.paragraphId),
         head.offset,
         1,

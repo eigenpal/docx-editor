@@ -102,7 +102,9 @@ zero means unlimited. React and Vue share the same default behavior.
 
 In an unprotected document, partial edits keep the field definition; replacing
 its whole result removes it. Typing at the end boundary inserts ordinary text
-after the field, including at the end of a paragraph. In a document protected for forms, editing keeps
+after the field, including at the end of a paragraph. Word-delete shortcuts remove
+the complete field from its boundary. Backspace and Shift+Backspace first select
+the field, then remove it on the next press. In a document protected for forms, editing keeps
 the definition. Tab and Shift+Tab move between enabled text fields.
 
 Protected fields validate and format input when you leave. Pasted text is limited

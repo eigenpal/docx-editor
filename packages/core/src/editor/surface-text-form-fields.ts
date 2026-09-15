@@ -18,7 +18,7 @@ import {
   type TreeDocOp,
   type TextFormFieldRange,
 } from '@docx-editor.dev/core/store';
-import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import { wordBoundary, type SemanticSelection } from '@docx-editor.dev/core/layout';
 import { planTextFormSave } from './text-form-save-plan.ts';
 
 /** Input provenance belongs to the open document, including during a font remount. */
@@ -75,6 +75,12 @@ export function createTextFormFieldInteraction(
   doubleClick(event: MouseEvent): boolean;
   pointerUp(event: PointerEvent): void;
   selectForDeletion(direction: 'backward' | 'forward'): boolean;
+  wordDeletionBoundary(
+    text: string,
+    offset: number,
+    direction: -1 | 1,
+    stops: ReadonlySet<number>
+  ): number;
   annotate(ops: readonly TreeDocOp[]): readonly TreeDocOp[];
   afterApply(committed: boolean): void;
   restoreAfterHistory(): SemanticSelection | null;
@@ -455,6 +461,30 @@ export function createTextFormFieldInteraction(
       // Word selects a field before deleting from its boundary. Interior edits remain text edits.
       select(paragraphId, field);
       return true;
+    },
+    wordDeletionBoundary(text, offset, direction, stops) {
+      const target = wordBoundary(text, offset, direction, stops);
+      const paragraphId = host.selection().head.paragraphId;
+      if (host.protected(paragraphId)) return target;
+      const paragraph = findNode(host.part(paragraphId), paragraphId);
+      if (paragraph?.kind !== 'paragraph') return target;
+      const fields = textFormFieldsOf(paragraph);
+      const beside = fields.find(
+        (field) =>
+          field.start < field.end &&
+          (direction === -1 ? field.end === offset : field.start === offset)
+      );
+      // A word-delete gesture consumes the complete field from its outer edge.
+      // From outside text, stop at the edge first; interior words remain editable.
+      if (beside) return direction === -1 ? beside.start : beside.end;
+      let boundary = target;
+      for (const field of fields) {
+        for (const edge of [field.start, field.end]) {
+          if (direction === -1 && edge < offset && edge > boundary) boundary = edge;
+          if (direction === 1 && edge > offset && edge < boundary) boundary = edge;
+        }
+      }
+      return boundary;
     },
     beforeSelect(next) {
       const accept = (value: SemanticSelection): SemanticSelection => {

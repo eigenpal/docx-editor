@@ -9,7 +9,8 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const field =
   '<w:bookmarkStart w:id="1" w:name="Input"/><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Input"/><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:bookmarkEnd w:id="1"/>';
 
-function setup(protectedForm = false, wrapped = false) {
+function setup(protectedForm = false, wrapped = false, value = 'Sample', suffix = ' right') {
+  const fieldXml = field.replaceAll('Sample', value);
   const bytes = zipSync({
     '[Content_Types].xml': strToU8(
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'
@@ -24,7 +25,7 @@ function setup(protectedForm = false, wrapped = false) {
       `<w:settings xmlns:w="${W}">${protectedForm ? '<w:documentProtection w:edit="forms" w:enforcement="1"/>' : ''}</w:settings>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t xml:space="preserve">Left </w:t></w:r>${wrapped ? `<w:smartTag>${field}</w:smartTag>` : field}<w:r><w:t xml:space="preserve"> right</w:t></w:r></w:p></w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t xml:space="preserve">Left </w:t></w:r>${wrapped ? `<w:smartTag>${fieldXml}</w:smartTag>` : fieldXml}<w:r><w:t xml:space="preserve">${suffix}</w:t></w:r></w:p></w:body></w:document>`
     ),
   });
   const container = document.createElement('div');
@@ -55,7 +56,7 @@ function setup(protectedForm = false, wrapped = false) {
 }
 
 for (const backward of [true, false]) {
-  for (const input of ['surface', 'keyboard', 'beforeinput'] as const) {
+  for (const input of ['surface', 'keyboard', 'shift-keyboard', 'beforeinput'] as const) {
     test(`${input} ${backward ? 'Backspace' : 'Delete'} selects the boundary field before removing it`, () => {
       const host = setup();
       try {
@@ -64,10 +65,11 @@ for (const backward of [true, false]) {
           if (input === 'surface') {
             if (backward) host.surface.deleteBackward();
             else host.surface.deleteForward();
-          } else if (input === 'keyboard') {
+          } else if (input === 'keyboard' || input === 'shift-keyboard') {
             host.pages.dispatchEvent(
               new KeyboardEvent('keydown', {
                 key: backward ? 'Backspace' : 'Delete',
+                shiftKey: input === 'shift-keyboard',
                 bubbles: true,
                 cancelable: true,
               })
@@ -175,3 +177,85 @@ for (const action of ['Cancel', 'Escape', 'OK']) {
     }
   });
 }
+
+for (const backward of [true, false]) {
+  for (const input of ['surface', 'alt-keyboard', 'ctrl-keyboard', 'beforeinput'] as const) {
+    test(`${input} word deletion removes the complete multiword field ${backward ? 'backward' : 'forward'}`, () => {
+      const host = setup(false, true, 'Several words');
+      try {
+        host.caret(backward ? 18 : 5);
+        if (input === 'surface') {
+          if (backward) host.surface.deleteWordBackward();
+          else host.surface.deleteWordForward();
+        } else if (input === 'beforeinput') {
+          host.pages.dispatchEvent(
+            new InputEvent('beforeinput', {
+              inputType: backward ? 'deleteWordBackward' : 'deleteWordForward',
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+        } else {
+          host.pages.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              key: backward ? 'Backspace' : 'Delete',
+              altKey: input === 'alt-keyboard',
+              ctrlKey: input === 'ctrl-keyboard',
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+        }
+        expect(host.text()).toBe('Left  right');
+        expect(host.fields()).toHaveLength(0);
+        host.surface.undo();
+        expect(host.text()).toBe('Left Several words right');
+        expect(host.fields()).toHaveLength(1);
+        host.surface.redo();
+        expect(host.fields()).toHaveLength(0);
+      } finally {
+        host.cleanup();
+      }
+    });
+  }
+
+  test(`protected word deletion keeps the field definition ${backward ? 'backward' : 'forward'}`, () => {
+    const host = setup(true, false, 'Several words');
+    try {
+      host.caret(backward ? 18 : 5);
+      if (backward) host.surface.deleteWordBackward();
+      else host.surface.deleteWordForward();
+      expect(host.text()).toBe(backward ? 'Left Several  right' : 'Left  words right');
+      expect(host.fields()).toHaveLength(1);
+    } finally {
+      host.cleanup();
+    }
+  });
+}
+
+test('word deletion removes attached outside text before deleting the field', () => {
+  const host = setup(false, false, 'Several words', 'tail');
+  try {
+    host.caret(22);
+    host.surface.deleteWordBackward();
+    expect(host.text()).toBe('Left Several words');
+    expect(host.fields()).toHaveLength(1);
+    host.surface.deleteWordBackward();
+    expect(host.text()).toBe('Left ');
+    expect(host.fields()).toHaveLength(0);
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('word deletion inside a field remains a partial edit', () => {
+  const host = setup(false, false, 'Several words');
+  try {
+    host.caret(12);
+    host.surface.deleteWordBackward();
+    expect(host.text()).toBe('Left  words right');
+    expect(host.fields()).toHaveLength(1);
+  } finally {
+    host.cleanup();
+  }
+});
