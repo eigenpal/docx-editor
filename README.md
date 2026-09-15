@@ -34,16 +34,16 @@ packages with their build tool.
 
 ## Packages
 
-| Package                                                                                    | Description                                                 | Docs                                                      |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React editor components and hooks.                          | [Docs](https://www.docx-editor.dev/docs/2.x/react)        |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | Vue 3 editor components and composables.                    | [Docs](https://www.docx-editor.dev/docs/2.x/vue)          |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | DOCX parsing, editing, and rendering.                       | [Docs](https://www.docx-editor.dev/docs/2.x/core)         |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Translations and locale types.                              | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)         |
-| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)           | Open-licensed substitutes for Word fonts.                   | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
-| `@docx-editor.dev/docx-to-markdown`                                                        | Convert DOCX to Markdown.                                   | Private preview                                           |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, collaboration, and custom nodes. | [Docs](https://www.docx-editor.dev/docs/2.x/pro)          |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible API for browser and server editing.    | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)   |
+| Package                                                                                                | Description                                                 | Docs                                                                          |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)                       | React editor components and hooks.                          | [Docs](https://www.docx-editor.dev/docs/2.x/react)                            |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)                           | Vue 3 editor components and composables.                    | [Docs](https://www.docx-editor.dev/docs/2.x/vue)                              |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)                         | DOCX parsing, editing, and rendering.                       | [Docs](https://www.docx-editor.dev/docs/2.x/core)                             |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)                         | Translations and locale types.                              | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)                             |
+| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)                       | Open-licensed substitutes for Word fonts.                   | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts)                     |
+| [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output.        | [Markdown export guide](https://www.docx-editor.dev/docs/2.x/export/markdown) |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)                           | Tracked changes, comments, collaboration, and custom nodes. | [Docs](https://www.docx-editor.dev/docs/2.x/pro)                              |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api)             | Office.js-compatible API for browser and server editing.    | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)                       |
 
 `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 

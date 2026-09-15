@@ -1,5 +1,6 @@
-# Images in browsers, Node.js, and server responses
+# Include images in Markdown exports
 
+Before you begin, [install the converter](../README.md#install-the-package).
 Set `images: true` to include image links and extracted bytes:
 
 ```ts
@@ -106,7 +107,9 @@ Files use `0o600` permissions where supported. JSON includes page, review, and i
 
 ## Convert and download in the browser
 
-Use the same public package with your bundler's font and WASM asset handling. The existing [runtime configuration](integrations.md) still applies; extraction does not require a server or a storage service.
+Configure your bundler to serve the package's font and WebAssembly assets.
+For a working configuration, see the [browser demo](https://github.com/eigenpal/docx-editor/tree/main/examples/docx-to-markdown).
+Image extraction runs in the browser without a server or storage service.
 
 ```ts
 import { exportMarkdown, createMarkdownZip } from '@docx-editor.dev/docx-to-markdown';
@@ -197,3 +200,8 @@ The resolver gets a separate byte copy. Mutations cannot corrupt returned assets
 Extraction covers validated ready images published by layout, including the body, headers, footers, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.
 
 Inline and anchored images appear at their source paragraph positions, including table cells. Anchors within projected field results follow the field; display text cannot provide an exact source position. Decorative images have empty alternative text. Text-box content and note separators remain outside Markdown, although their image bytes and occurrences remain available. Unplaced anchors use an explicit `image-placement-fallback` warning. The logical document and affected page emit separate fallback warnings; page warnings include `pageNumber`. Cropping, rotation, and drawing effects are not reproduced.
+
+## Next steps
+
+- [Review export options and warnings](api.md).
+- [Configure your application runtime](integrations.md).
