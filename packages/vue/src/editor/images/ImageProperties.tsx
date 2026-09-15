@@ -281,6 +281,10 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
       () => [props.open, dialogRef.value] as const,
       async ([isOpen, dialog], _, onCleanup) => {
         if (!isOpen || !dialog) return;
+        // A host may render this dialog outside the editor. Carry the scope class to the
+        // overlay so the packaged rules still match, as NativeDialog does for native dialogs.
+        const overlay = dialog.parentElement;
+        if (overlay && !overlay.closest('.docx-editor')) overlay.classList.add('docx-editor');
         let disposed = false;
         let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
         onCleanup(() => {

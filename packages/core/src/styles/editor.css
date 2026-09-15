@@ -6787,7 +6787,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The image properties dialog is a plain element under its own overlay. */
-.docx-editor .docx-dialog-overlay {
+.docx-editor .docx-dialog-overlay,
+.docx-editor.docx-dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: var(--doc-z-overlay);
@@ -6796,7 +6797,8 @@ a.docx-hyperlink:focus-visible {
   justify-content: center;
   background: var(--doc-overlay);
 }
-.docx-editor .docx-dialog-overlay .docx-dialog {
+.docx-editor .docx-dialog-overlay .docx-dialog,
+.docx-editor.docx-dialog-overlay .docx-dialog {
   position: relative;
   inset: auto;
   display: flex;
@@ -6806,7 +6808,8 @@ a.docx-hyperlink:focus-visible {
 /* Header and title */
 .docx-editor .docx-dialog__header {
   flex-shrink: 0;
-  padding: 20px var(--doc-dialog-padding, 24px) 4px;
+  padding-block: 20px 4px;
+  padding-inline: var(--doc-dialog-padding, 24px);
   color: var(--doc-text);
 }
 .docx-editor .docx-dialog__title {
@@ -6828,7 +6831,8 @@ a.docx-hyperlink:focus-visible {
   flex-direction: column;
   gap: var(--doc-dialog-gap, 12px);
   min-height: 0;
-  padding: 12px var(--doc-dialog-padding, 24px) 8px;
+  padding-block: 12px 8px;
+  padding-inline: var(--doc-dialog-padding, 24px);
   overflow-y: auto;
 }
 .docx-editor .docx-dialog__columns {
@@ -6885,6 +6889,11 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label,
 .docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label {
   width: 132px;
+}
+/* Outside a row the label stacks above its control, so it sizes to its text. */
+.docx-editor .docx-dialog__section > .docx-dialog__label,
+.docx-editor .docx-dialog__section > .docx-dialog__field-label {
+  width: auto;
 }
 .docx-editor .docx-dialog__unit {
   flex: 0 0 auto;
@@ -6998,7 +7007,8 @@ a.docx-hyperlink:focus-visible {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px var(--doc-dialog-padding, 24px) 20px;
+  padding-block: 12px 20px;
+  padding-inline: var(--doc-dialog-padding, 24px);
 }
 .docx-editor .docx-dialog__error {
   margin: 0 auto 0 0;
@@ -7150,7 +7160,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Alt text popover: a stacked label, text area and footer inside the toolbar panel. */
-.docx-editor .docx-toolbar__alt-text-panel .docx-dialog__label {
+.docx-editor .docx-toolbar__alt-text-panel > .docx-dialog__label {
   display: block;
   width: auto;
   margin-bottom: 6px;

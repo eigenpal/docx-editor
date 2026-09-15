@@ -273,6 +273,10 @@ export function DocxEditorImagePropertiesDialog({
     if (!open) return undefined;
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
+    // A host may render this dialog outside the editor. Carry the scope class to the
+    // overlay so the packaged rules still match, as DialogFrame does for native dialogs.
+    const overlay = dialog.parentElement;
+    if (overlay && !overlay.closest('.docx-editor')) overlay.classList.add('docx-editor');
     const focusables = dialogFocusables(dialog);
     const initial =
       focusables.find(

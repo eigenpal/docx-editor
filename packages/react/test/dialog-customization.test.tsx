@@ -44,7 +44,7 @@ test('custom Apply preserves one default action and writes one undo step', async
     closed = 0;
   const { view, editor } = mount(
     <Page open onClose={() => closed++}>
-      <Page.Apply asChild>
+      <Page.Apply asChild className="paired-class">
         <button className="brand-button" onClick={() => clicked++}>
           Save page
         </button>
@@ -55,6 +55,7 @@ test('custom Apply preserves one default action and writes one undo step', async
   // `asChild` hands the look to the host: the packaged classes stay off its element.
   const brand = view.container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
   expect(brand.classList.contains('brand-button')).toBe(true);
+  expect(brand.classList.contains('paired-class')).toBe(true);
   expect(brand.classList.contains('docx-dialog__button')).toBe(false);
   await act(async () => {
     fireEvent.change(view.getByLabelText('Top'), { target: { value: '0.5' } });
