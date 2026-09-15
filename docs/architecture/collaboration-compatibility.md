@@ -1,189 +1,402 @@
 # Collaboration compatibility policy
 
-This process starts with the published 2.18.0 release. It covers full-document
-collaboration, including clients, servers, export workers, and background agents.
+Use this process when you change how full-document collaboration stores, edits,
+or synchronizes a document. It starts with the published 2.18.0 release. It covers
+clients, servers, export workers, and background agents.
+
+If you operate an application, see
+[Collaboration versions and upgrades](../site/content/pro/collaboration-versions.mdx).
 Experimental text collaboration has a separate contract.
+
+## Choose your task
+
+| If you need to…                           | Go to…                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Understand what makes a change breaking   | [Understand compatibility](#understand-compatibility)                           |
+| Submit a fix or feature                   | [Contributor workflow](#contributor-workflow)                                   |
+| Change the collaboration format           | [Document a migration](#document-a-migration)                                   |
+| Diagnose a failed check                   | [Troubleshoot a compatibility check](#troubleshoot-a-compatibility-check)       |
+| Prepare a release or capture its baseline | [Release gate and baseline maintenance](#release-gate-and-baseline-maintenance) |
+| Upgrade stored collaboration data         | [Operator migration checklist](#operator-migration-checklist)                   |
+
+## Understand compatibility
+
+A collaboration room contains shared editing state. Each participant holds a copy,
+called a _replica_. Participants exchange updates to keep their replicas in sync.
+Yjs is the library that manages those shared updates.
+
+A saved room includes collaboration identities and history. A DOCX export contains
+the document content, but does not carry that room's synchronization or undo history.
+Changing a package version does not convert the saved room.
+
+### Package version and collaboration format
+
+A _package version_, such as `2.18.0`, identifies an npm release. A _collaboration
+format_ identifies the rules that participants use to interpret shared data.
+
+Two package releases can share a format. They can use compatible rooms even when
+one release contains bug fixes that the other lacks. Different formats must refuse
+synchronization before shared updates enter a room.
+
+The published 2.18.0 format is `docx-collaboration:1.3.1.1`. Its four numbers come
+from `DOCUMENT_COLLABORATION_VERSIONS`, in this order:
+
+| Field                   | What it describes                                                      | Example of an incompatible change                                    |
+| ----------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `protocolVersion`       | How participants exchange and interpret synchronization messages.      | A message field has a different meaning.                             |
+| `sharedSchemaVersion`   | How shared nodes, characters, and identities are stored.               | An existing stored identity uses a different representation.         |
+| `repairVersion`         | How participants resolve invalid or conflicting structures.            | Two versions choose different surviving nodes for the same conflict. |
+| `canonicalModelVersion` | How the editor represents document content in its authoritative model. | The same shared content maps to different document structures.       |
+
+These examples explain when to review a field. They do not require a bump for
+every change in the named area.
+
+In application connection checks, compare the complete exported format value.
+Do not parse the numbers or override the installed package's value.
+
+### Why a bug fix can require a migration
+
+Compatibility includes behavior, not only the names of stored fields. For example,
+a fix can change how participants interpret text offsets or choose a conflict winner.
+If old and replacement code assign different meanings to the same state, the fix
+requires a format change and a saved-room migration.
+
+A fix can also preserve the format. For example, a split operation can stop writing
+incorrect replacement identities for text that it moves to another paragraph.
+Released readers already understand the corrected writes. The old writer still has
+its original bug, but that does not make the corrected representation incompatible.
+
+Test the fixed writer against released readers. Also test ordinary editing with both
+versions as writers. Do not require released code to contain a later fix.
 
 ## Decide whether a change is compatible
 
-A format identifies shared behavior as well as stored fields. A bug fix can change
-how clients interpret identities, text offsets, conflicts, or repair rules. That
-change can require a migration without adding or removing a stored field.
+Choose a decision based on shared behavior:
 
-| Decision             | Requirement                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `no-impact`          | Explain why the change cannot affect shared state or synchronization.                 |
-| `compatible`         | Explain why released clients retain the same shared meaning. Add regression evidence. |
-| `migration-required` | Identify affected format fields. Add migration instructions and regression evidence.  |
+| Decision             | Use it when…                                                               | Evidence to provide                                                            |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `no-impact`          | The change cannot affect shared state or synchronization.                  | Explain why. A documentation tooling change is one example.                    |
+| `compatible`         | Released participants retain the same meaning for shared data and updates. | Explain why and identify regression tests.                                     |
+| `migration-required` | Participants would interpret shared data or updates differently.           | Identify affected format fields, regression tests, and migration instructions. |
 
-An existing bug in an old release does not itself make a fix incompatible. A fix
-that preserves shared meaning can keep the format. Test its corrected writes against
-released readers. Keep ordinary editing tests in both writer directions. Do not
-require old code to implement the new fix.
+Passing tests supports your decision. It does not replace a review of shared
+behavior. If a test fails, investigate it before deciding to change the format.
 
-Passing tests supports the decision. It does not replace a review of shared behavior.
-Do not change a format merely to avoid an unexplained test failure.
+For incompatible changes, increment each affected field. Never decrease a field or
+reuse a previously published format after changing away from it. Several changes
+can share one increment before that format is published. Record each change
+separately and check the complete release before publication.
 
-Keep the existing `DOCUMENT_COLLABORATION_VERSIONS` fields:
-
-| Field                   | Bump when incompatible changes affect                         |
-| ----------------------- | ------------------------------------------------------------- |
-| `protocolVersion`       | Transport message interpretation or synchronization protocol. |
-| `sharedSchemaVersion`   | Shared node, character, identity, or storage representation.  |
-| `repairVersion`         | Deterministic structural repair behavior.                     |
-| `canonicalModelVersion` | The document model that each replica interprets.              |
-
-Increment each affected field. Never decrease a field or reuse a published format.
-Several changes in one unreleased format can share the same increment. Explain each
-change in its own decision record. Check the combined release before publication.
-
-Package versions and collaboration formats are separate. A format change requires
-at least a minor package release. It must include a **Breaking collaboration upgrade**
-notice. Public document APIs retain their separate version policy and Office.js
-compatibility requirements. Format changes do not permit document API changes.
+A format change requires at least a minor package release and a
+`Breaking collaboration upgrade` notice. This project tracks room compatibility
+separately from package versions. A minor release can therefore require room migration.
+Public document APIs retain their separate version policy and Office.js compatibility
+requirements.
 
 ## Contributor workflow
 
-1. Add regression coverage for the behavior you change.
-2. Run `bun run collaboration:change`.
-3. Review the generated decision and Changeset.
-4. Run `bun run collaboration:check --base origin/main`.
-5. Build packages and generate notices.
-6. Run `bun run collaboration:test --release 2.18.0` during development.
-7. Run `bun run collaboration:test --all` before requesting review.
-8. Review your final diff. Fix findings and rerun the affected checks.
+### Before you begin
 
-The full commands for steps 5–7 are:
+Run commands from the repository root. Install the repository's Bun dependencies
+with `bun install --frozen-lockfile`. Use Node.js 24 and npm for the isolated
+published-package checks. You also need Git history and access to the npm registry.
+
+Fetch the base branch and release tags:
 
 ```sh
-bun run build:packages
-bun run notices:generate
-bun run collaboration:test --all
+git fetch origin main --tags
 ```
 
-The helper supports noninteractive flags. For example:
-
-```sh
-bun run collaboration:change \
-  --id preserve-shared-offsets \
-  --impact compatible \
-  --before 'Concurrent formatting can lose shared text.' \
-  --after 'Concurrent formatting preserves the same shared text.' \
-  --reason 'The fix preserves the released offset and identity interpretation.' \
-  --tests packages/pro/src/collaboration/__tests__/document-repeated-run-format.test.ts \
-  --summary 'Preserve shared text during concurrent formatting.'
-```
-
-This example shows the record structure. Review the compatibility claim for the
-actual fix. Do not copy its decision without checking the behavior.
-
-For a migration, add a release-specific heading in the public upgrade guide first.
-Use `--impact migration-required`, `--fields sharedSchemaVersion`, and
-`--migration <heading-anchor>`. The helper creates a minor Changeset with the warning
-and guide link. It does not modify runtime version constants for you.
-
-The checked-in record includes the decision, before/after behavior, reasoning, test
-paths, Changeset identifier, and migration heading. Keep records after Changesets
-consumes their release notes. Do not modify a decision already merged into the base
-branch. Add a new decision for a later correction.
+A _decision record_ explains the compatibility impact of your change. A _Changeset_
+is a release-note file that selects a package version bump. They have different
+lifetimes: decision records remain after Changesets generates the changelog.
 
 ### Which PRs need a decision?
 
-The policy checks document-model, editing, collaboration, review, persistence,
-provider integration, package configuration, and compatibility-tooling changes.
-Its path rules live in `scripts/collaboration/policy.mjs`.
+A pull request (PR) needs a decision if it changes a path covered by
+[the compatibility policy](../../scripts/collaboration/policy.mjs). Covered paths
+include document editing, collaboration, review, provider integration, package
+configuration, and the compatibility tools.
 
-Lockfile and root package changes require a decision. This is conservative because
-transitive runtime changes can affect compatibility. A tooling-only dependency
-update can declare `no-impact`. Renames check both the removed and added paths.
+Root package and lockfile changes also need a decision. Dependencies can affect
+shared behavior even when editor source files stay unchanged. A tooling-only update
+can declare `no-impact`. Renames check both the removed and added paths.
 
-Docs-only PRs and catalog-only updates need no decision. The existing Changeset
-requirements still apply to production code. Test/docs/CI-only records can omit a
-Changeset. Dependency-update PRs use the same policy after refreshing the lockfile.
+Docs-only PRs and catalog-only updates need no decision. Test/docs/CI-only records
+can omit a Changeset. Production-code changes still need the repository's normal
+Changeset. Dependency-update PRs follow the policy after refreshing their lockfile.
 
-A maintainer must review the decision and evidence before merging. The author must
-resolve self-review findings first. A green test run alone is not release approval.
+### Record and test your change
+
+1. Add regression coverage for the behavior you change.
+2. Create a decision with the interactive helper:
+
+   ```sh
+   bun run collaboration:change
+   ```
+
+   Enter a unique identifier, impact, before/after behavior, reason, and test paths.
+   If your change affects production code, provide a consumer release summary.
+
+   The helper writes `.collaboration/changes/IDENTIFIER.json`. When you provide a
+   summary, it also writes `.changeset/IDENTIFIER.md`. Review both files.
+
+3. Check your decision against the PR base:
+
+   ```sh
+   bun run collaboration:check --base origin/main
+   ```
+
+   Success prints `Compatibility policy passed`, followed by decision and changed-field
+   counts. A failure identifies the requirement you need to resolve.
+
+4. Build the packages and generate their third-party license notices:
+
+   ```sh
+   bun run build:packages
+   bun run notices:generate
+   ```
+
+   The tests use packed packages. Rebuild after changing package source.
+
+5. Test against one published release while developing:
+
+   ```sh
+   bun run collaboration:test --release 2.18.0
+   ```
+
+   Use a cataloged version relevant to your change. A single-release run does not
+   replace the complete check.
+
+6. Before requesting review, run the full catalog:
+
+   ```sh
+   bun run collaboration:test --all
+   ```
+
+   Success prints `Compatibility passed` with the number of releases checked.
+   Reports are written under `.cache/collaboration/`.
+
+7. Review your final diff. Resolve findings and rerun the affected checks.
+
+A maintainer reviews the decision and its evidence before merging. Passing continuous
+integration (CI) checks alone is not release approval.
+
+### Read a decision record
+
+The following example describes the compatible split fix. Use evidence for your own
+change rather than copying its compatibility claim:
+
+```json
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Splitting formatted text can hide text moved to another paragraph.",
+  "after": "The split preserves the moved text.",
+  "reason": "Released readers already understand the corrected identities.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-split-relocated-format.test.ts"],
+  "changeset": "quiet-runs-travel",
+  "migration": null
+}
+```
+
+| Field             | What you provide                                                          |
+| ----------------- | ------------------------------------------------------------------------- |
+| `impact`          | One of the three compatibility decisions.                                 |
+| `fields`          | Format fields that require an increment. Leave empty for other decisions. |
+| `before`, `after` | Observable behavior before and after your change.                         |
+| `reason`          | Why released code can share the state, or why migration is necessary.     |
+| `tests`           | Paths to regression tests that support the decision.                      |
+| `changeset`       | The release-note identifier without `.md`, or `null` when allowed.        |
+| `migration`       | A release-specific upgrade-guide heading anchor, or `null`.               |
+
+Keep records after Changesets consumes their release notes. If a decision has
+already merged, add another record for a later correction. Do not rewrite history.
+
+### Document a migration
+
+1. Add a release-specific heading to
+   [Collaboration versions and upgrades](../site/content/pro/collaboration-versions.mdx).
+   Name the affected formats, required content checks, and recovery steps.
+2. Increment the affected constants in
+   [the compatibility version source](../../packages/pro/src/collaboration/document-compatibility.ts).
+3. Run `bun run collaboration:change`. Select `migration-required`, name the affected
+   fields, and provide the heading anchor and a consumer summary.
+
+   For noninteractive use, the corresponding flags are `--impact`, `--fields`,
+   `--migration`, and `--summary`. The helper still requires the other record fields.
+
+   The helper creates a minor Changeset with the warning and guide link. It does not
+   change runtime constants for you.
+
+4. Complete the policy and package checks in [Contributor workflow](#contributor-workflow).
+
+When Changesets generates the release changelog, retain the migration warning and
+link. The release gate checks them after the individual Changeset file is consumed.
 
 ## Published-package test contract
 
-The release catalog contains every stable Pro release from 2.18.0 onward. Each entry
-records npm artifact integrity, source commit, source lock hash, format fields,
-installation lock, and genuine saved-room fixtures.
+A _candidate_ is the package build you want to release. A _baseline_ is a captured
+published release used as a reference. The _release catalog_ lists every stable Pro
+release from 2.18.0 onward.
 
-Run released and candidate clients in separate processes. Each process has one core
-runtime and one Yjs runtime. Install published releases from their frozen npm locks.
-Do not import workspace source into released workers. Do not regenerate old fixtures
-with current code or edit their format metadata.
+A _fixture_ is saved test data. Each baseline includes a real saved room created by
+that published code, using a synthetic document. It also includes an installation
+lock and package provenance: the source commit, source lock hash, and npm integrity.
+An _integrity value_ is a content hash used to detect different package bytes.
 
-For every release sharing the candidate format, test both room-creation directions.
-Test three clients with concurrent edits, delayed and duplicate updates, reordered
-delivery, undo/redo, splits/joins, and persistence reload. Check explicit text outcomes,
-replica convergence, and export fidelity. Preserve comments, tracked changes, tables,
-and embedded binary parts in the fixture.
+Historical fixtures are immutable. Do not recreate them with candidate code or edit
+their format metadata. Doing so would stop the test from representing a saved room
+created by a released application.
 
-Different formats must refuse synchronization before updates enter a room. For saved
-rooms, inspect without mutation and rehearse export with the compatible old build.
-Reseed a separate room, verify empty undo history, and check editing with two new clients.
-The rehearsal tests the reference admission boundary. Production provider and storage
-configuration remain the application's responsibility.
+### What the matrix checks
 
-Each failure records its release, deterministic seed, error, and update trace under
-`.cache/collaboration/`. Reproduce one case with:
+The _compatibility matrix_ is the set of candidate-versus-release test combinations.
+Each version runs in its own process, with one core runtime and one Yjs runtime.
+Frozen npm locks select exact dependencies. Workspace imports cannot replace
+published code in a released worker.
+
+| Case                                           | Required checks                                                                                                                                                       |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Candidate with itself                          | Exercise editing regressions even when its format differs from all published formats.                                                                                 |
+| Candidate with each release sharing its format | Create rooms in both directions. Use three participants to test concurrent edits, delayed, duplicate, and reordered updates, reconnects, undo/redo, and splits/joins. |
+| Saved room from each cataloged release         | Inspect it without mutation. Export with compatible code, reseed a separate room, confirm empty undo history, and edit with two replacement clients.                  |
+| Incompatible formats or room identities        | Refuse updates before they enter the destination room.                                                                                                                |
+
+_Convergence_ means replicas reach the same document state after exchanging updates.
+Convergence alone is insufficient: replicas could agree on a damaged document.
+Tests also check expected text, export structure, comments, tracked changes, tables,
+and binary assets.
+
+CI divides the work into four _shards_, or parallel jobs. Together they cover the full
+catalog. The aggregate `test` check requires every shard to pass. As the catalog
+grows, keep every compatible stable release in the matrix rather than sampling it.
+
+The migration rehearsal tests the reference admission boundary: the point where a
+connection or update is accepted. Your application remains responsible for its
+production provider, authorization, and storage configuration.
+
+## Troubleshoot a compatibility check
+
+A _seed_ is a number that selects a repeatable test sequence. On failure, the runner
+saves the error and update trace in `.cache/collaboration/failure.json`. A trace
+records the operations and update bytes needed to investigate the sequence.
+
+To reproduce a failure against 2.18.0 with seed 592, run:
 
 ```sh
 bun run collaboration:test --release 2.18.0 --seed 592
 ```
 
-CI runs four shards. Each shard selects its complete portion of the release catalog.
-The aggregate check requires all shards. Do not replace old versions with samples as
-the catalog grows. npm caches verified downloads; peer installations remain isolated.
-Tests use synthetic documents. Never put customer documents in diagnostic fixtures.
+Replace the version and seed with the values from your failure. For failures in the
+candidate-only scenarios, run `bun run collaboration:test --all --seed 592` instead.
+
+| Failure                                                              | What you do                                                                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A compatibility decision is missing                                  | Run `collaboration:change`, then explain the impact of this PR. An earlier PR's record does not cover your change.  |
+| A migration heading or release warning is missing                    | Add the release-specific guide section and check the linked Changeset or generated changelog.                       |
+| The release table is stale                                           | Run `bun run collaboration:catalog --table` and review the generated table.                                         |
+| A published release is missing from the catalog                      | Capture its baseline and merge the catalog update before publishing another release.                                |
+| A registry request or package install fails                          | Restore registry access and rerun. The gate does not treat unavailable evidence as a pass.                          |
+| A package export is missing or the packed format differs from source | Rebuild packages, regenerate notices, and create another candidate.                                                 |
+| The publication payload differs from the tested candidate            | Repeat candidate preparation and compatibility tests after the package change. Do not publish the untested payload. |
+| A PR preview cannot pass the publication check                       | Use the release workflow after Changesets applies package versions.                                                 |
+| Replicas disagree or document content changes unexpectedly           | Reproduce the seed, inspect the trace, and add a regression test before choosing a fix or migration.                |
+
+Use synthetic documents in fixtures and traces. Do not commit customer documents
+or diagnostic traces containing customer content.
 
 ## Release gate and baseline maintenance
 
-The release gate checks all changes since the last published release. It verifies
-records after Changesets consumes their files. A migration must retain its warning
-and guide link in the generated release changelog.
+### Verify the release candidate
 
-For contributor PRs, stage package versions from the Changesets release plan in
-temporary tarballs. Match internal peer versions within that isolated installation.
-The workspace remains unchanged. These preview packages cannot pass the publication check.
+A _release gate_ is a required check before publication. It reviews the combined
+changes since the last published release, including records whose Changesets have
+already become changelog entries.
 
-For a final release, build once, generate notices, and pack the candidate. Run compatibility tests on those
-packages. Before publishing, compare package integrity with the tested payload.
-Do not rebuild between testing and publication. Missing catalog entries, unavailable
-packages, failed comparisons, and missing evidence block publication.
+A _fixed release group_ is a set of packages that Changesets versions together.
+The preview uses that plan rather than calculating each package's version separately.
+A _peer dependency_ tells the application which compatible shared runtime to supply.
+Matching peer versions helps each test installation resolve one core runtime.
 
-Capture a new baseline only after npm publication and the umbrella tag exist:
+The pipeline prepares and verifies packages as follows:
 
-```sh
-git fetch origin --tags
-bun run collaboration:catalog --capture 2.18.0
-bun run collaboration:catalog
-```
+1. For a contributor PR, Changesets calculates the full pending release plan,
+   including notes already merged on main. The tool stages those versions in
+   temporary package archives, called _tarballs_. Internal dependency and peer
+   versions match that preview. Workspace manifests stay unchanged.
+2. For a final release, Changesets has applied the versions. The pipeline builds,
+   generates notices, packs the candidate, and runs the compatibility matrix.
+3. Before publication, the gate compares the publication payload with the tested
+   package hashes. After publication, it compares npm integrity values as well.
 
-Replace the version for later releases. Capture releases in order. The capture command
-refuses to overwrite existing entries. Review the generated lock, fixture, metadata,
-and public release table together. Capture uses published packages, not a tag rebuild.
-The source lock pins direct test runtimes; the committed installation lock pins the
-resolved transitive dependency graph.
+PR previews cannot pass the final publication check. Do not rebuild between testing
+and publication. Missing catalog entries, unavailable packages, and failed evidence
+or integrity checks block publication.
 
-The catalog workflow prepares this update after publication. It also supports manual
-retry. Merge the catalog PR before publishing another release. A missing update fails
-closed. CI must run on the catalog PR; the release App token triggers that CI.
+### Capture a published baseline
+
+The catalog workflow prepares a baseline PR after publication. Review and merge
+that PR before publishing another release. Its release App token allows CI to run
+on the generated PR. The workflow also supports a manual retry.
+
+For a manual capture:
+
+1. Confirm that the release is published on npm and its `vX.Y.Z` tag exists.
+2. Fetch release tags:
+
+   ```sh
+   git fetch origin --tags
+   ```
+
+3. Capture the release. The following command shows the initial baseline version:
+
+   ```sh
+   bun run collaboration:catalog --capture 2.18.0
+   ```
+
+   Replace `2.18.0` with the uncaptured published version. The initial baseline is
+   already recorded; capturing it again fails by design. Capture releases in order.
+
+4. Validate the catalog:
+
+   ```sh
+   bun run collaboration:catalog
+   ```
+
+5. Review the generated installation lock, fixture, metadata, and public release
+   table together. Submit and merge the catalog PR after CI passes.
+
+Capture installs the actual npm packages. It does not rebuild a source tag. The
+source lock selects direct test runtimes; the installation lock freezes their
+resolved dependency graph. Existing entries and fixtures cannot be overwritten.
 
 ## Operator migration checklist
 
-Follow the public [saved-room upgrade guide](https://docx-editor.dev/pro/collaboration-versions#upgrade-saved-rooms).
-Each release-specific section must name the affected formats and content checks.
+_Export and reseed_ means exporting a DOCX with the compatible build, then using
+that DOCX to initialize a separate room. The replacement room has fresh collaboration
+identities and an empty undo history.
 
-Pause editing and background writers. Drain accepted updates. Recover offline edits
-before migration. Back up room state, assets, and the compatible application build.
-Export with that build and verify the DOCX. Create fresh room and persistence keys.
-Deploy matching clients, servers, export workers, and agents. Reconnect participants
-and verify edits and export. Keep old rooms read-only until migration is accepted.
+A _persistence key_ is the storage identifier for saved room state or queued updates.
+Use fresh room and persistence keys so old updates cannot enter the replacement room.
 
-Before new edits, rollback can route to the old room. After new edits, preserve and
-reconcile those edits before rollback. Do not copy old queued Yjs updates into the new
-room. Collaboration undo history resets. This process does not automate production
-storage migration or format negotiation.
+For the complete procedure, see
+[Upgrade saved rooms](../site/content/pro/collaboration-versions.mdx#upgrade-saved-rooms).
+Before applying a migration in production, rehearse it on a backup:
+
+1. Pause clients and background writers. Let accepted updates finish, and recover
+   offline edits in the compatible deployment or as separate DOCX exports.
+2. Back up room state, assets, and the application build that can read them.
+3. Export with that build. Reopen the DOCX and verify the expected content.
+4. Create fresh room and persistence keys. Initialize the replacement room from
+   the verified DOCX.
+5. Deploy matching clients, servers, export workers, and agents. Verify editing and
+   export, then keep the original room read-only until you accept the migration.
+
+Before replacement-room editing starts, rollback can route users to the original
+room. After editing starts, preserve and reconcile those edits before rollback.
+Never copy queued updates between the rooms.
+
+This process provides policy, automated checks, and a migration rehearsal. Operators
+perform production migration. It does not add a production migration command or
+negotiate compatibility between different formats.

@@ -14,6 +14,47 @@ The installed package supplies the collaboration version.
 Changing that value does not upgrade a saved room.
 Ordinary DOCX files do not need a collaboration upgrade.
 
+## Understand the terms
+
+A collaboration deployment includes every program that reads or writes shared
+room state. Include browsers, servers, export workers, and background agents when
+you plan an upgrade.
+
+| Term                 | Meaning                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Package version      | The npm release you install, such as `2.18.0`.                                                                                                       |
+| Collaboration format | The rules your installed code uses to interpret shared data and updates. Compare the complete exported value when admitting a connection.            |
+| Room                 | Shared editing state for one collaborative document. It includes identities and history that an ordinary DOCX export does not retain.                |
+| Replica              | A participant's local copy of the shared room state. Participants exchange updates to keep their copies synchronized.                                |
+| Saved room           | A persisted snapshot of collaboration state. Upgrading application packages does not convert this data.                                              |
+| Export and reseed    | Export a DOCX with a compatible build, then use it to initialize a separate room. The replacement room starts with empty collaboration undo history. |
+| Persistence key      | The storage identifier for saved room state or queued updates. Use fresh keys during migration to keep updates from different rooms separate.        |
+
+### Understand the format value
+
+The 2.18.0 release uses `docx-collaboration:1.3.1.1`. The four numbers identify
+synchronization rules, shared storage structure, conflict-repair rules, and the
+editor's document model, in that order.
+
+Treat the complete value as one compatibility identifier. Import it from the
+installed package; do not construct it yourself. Changing the stored value does
+not convert the data or make incompatible code safe to use.
+
+### Decide whether a fix requires migration
+
+A fix can keep the same format when released code already understands its corrected
+writes. For example, a paragraph-split fix can preserve text without changing its
+shared representation. Older writers still have their original bug.
+
+A fix requires a format change when it changes the meaning of shared data or
+updates. For example, two versions might choose different surviving text for the
+same conflict, even though the stored fields have the same names.
+
+Package versions and room compatibility have separate policies. A minor package
+release can require a saved-room migration. Check the release notes for a
+`Breaking collaboration upgrade` notice and its release-specific instructions.
+The public document API retains its own compatibility policy.
+
 ## Published collaboration formats
 
 The upgrade column describes moving from the previous stable release.
