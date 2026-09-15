@@ -89,11 +89,15 @@ const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
 Custom button components must forward refs, attributes, and listeners to their
 native button. Preserve the supplied handler and disabled state.
 
-In the Page Setup, Paragraph Options, and Field Options parts, `asChild` gives your
-element the wiring (`type`, `onClick`, `disabled`, `data-docx-part`) and none of the
-packaged `docx-dialog__*` classes, so your own styles or utility classes apply as
-written. To keep the packaged look and adjust it, pass `className` to the part
-instead of `asChild`. Other popups still pass their own classes through `asChild`.
+`asChild` forwards a part's behavior and geometry, never its decoration. Your element
+gets the wiring (`type`, `onClick`, `disabled`, and the part's data attributes) and the
+part's own `className`, but not the packaged class, so your styles or utility classes
+apply as written. To keep the packaged look and adjust it, pass `className` to the part
+instead of `asChild`.
+
+The one part that keeps its packaged class is the hyperlink popup's `Root`, because that
+class positions and stacks the panel rather than decorating it. Override its appearance
+with your own anchored `.docx-hyperlink-popup` rule.
 
 Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
 React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
