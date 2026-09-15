@@ -1160,7 +1160,9 @@ export interface DocumentProtectionState {
 export interface DocumentTrackingSettings {
     readonly doNotTrackFormatting: boolean;
     readonly doNotTrackMoves: boolean;
+    readonly restrictedToComments: boolean;
     readonly restrictedToForms: boolean;
+    readonly restrictedToReadOnly: boolean;
     readonly restrictedToTrackedChanges: boolean;
     readonly trackRevisions: boolean;
 }

@@ -49,13 +49,20 @@ toolbar exposes the same command in `review.editingMode`.
 If you omit `mode`, the root honors `w:trackRevisions` when a review module and
 an `author` are present. An explicit `mode` overrides this document setting.
 
-The `<DocxEditor>` convenience component defaults to `mode="edit"`. Enforced
-document protection can also restrict the available mode: tracked-changes
-protection forces suggesting, and filling-in-forms protection refuses it with
-`{ ok: false, code: 'locked' }`, because Word does not track changes in a
-document protected for forms. Turning protection on from **Review → Protect
-Document** while suggesting returns the editor to editing mode and publishes
-the reason.
+The `<DocxEditor>` convenience component defaults to `mode="edit"`.
+
+Enforced document protection restricts the available modes:
+
+- Tracked-changes protection forces suggesting mode.
+- Filling-in-forms protection refuses suggesting mode. Word does not track
+  changes in a document protected for forms. The refusal is
+  `{ ok: false, code: 'locked' }` with the reason.
+- Read-only and comments-only protection open the document in viewing mode.
+  Every other mode is refused.
+
+Turning protection on from **Review → Protect Document for Forms** while
+suggesting returns the editor to editing mode. The editor publishes the reason
+as `lastRejection`.
 
 ### Suggesting needs an author
 

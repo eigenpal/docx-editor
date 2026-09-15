@@ -23,9 +23,37 @@ import {
 } from '../store/package/document-protection.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
-/** The published reason when enforcing protection ends a suggesting session. */
+/**
+ * The published reason when enforcing protection ends a suggesting session.
+ *
+ * Distinct from the gate's own refusal: that one answers "why can I not enter this mode", this
+ * one answers "why did the mode I was in just change under me".
+ */
 export const PROTECTION_ENDS_SUGGESTING_REASON =
   'this document is protected for filling in forms; suggestions cannot be tracked here';
+
+/** A store rejection code turned into a sentence a reader can act on. */
+function refusalFor(reason: string): ExecResult {
+  if (reason === 'password') {
+    return { ok: false, code: 'locked', reason: PASSWORD_PROTECTION_REASON };
+  }
+  if (reason === 'other-restriction') {
+    return {
+      ok: false,
+      code: 'locked',
+      reason:
+        'this document declares a different editing restriction; open it in Word to change that',
+    };
+  }
+  if (reason === 'no-change') {
+    return { ok: false, code: 'invalidArgs', reason: 'the document protection is already set' };
+  }
+  return { ok: false, code: 'unsupported', reason: 'document protection could not be written' };
+}
+
+/** Word asks for the password before it stops the protection; this editor verifies none. */
+const PASSWORD_PROTECTION_REASON =
+  'this document is protected with a password; open it in Word to change that';
 
 export interface DocumentProtectionCommands {
   /** The document's protection, reference-stable while the settings part is unchanged. */
@@ -44,9 +72,12 @@ export function createDocumentProtectionCommands(deps: {
   readonly editingMode: () => DocumentEditingMode;
   /** True when the facade was constructed `mode: 'view'`: read-only for the session. */
   readonly hostViewOnly: () => boolean;
-  /** Leave suggesting for editing and publish why; called when protection goes on. */
-  readonly leaveSuggesting: (reason: string) => void;
-  readonly publish: () => void;
+  /**
+   * Publish the outcome: enter `mode` when one is named, publish `reason` or clear the
+   * standing one, then notify. One port, because the two outcomes are one moment — enforcing
+   * protection ENDS a suggesting session, and lifting it clears the reason that said so.
+   */
+  readonly settle: (mode: DocumentEditingMode | null, reason: string | null) => void;
 }): DocumentProtectionCommands {
   let seenRoot: unknown = undefined;
   let seenState: DocumentProtectionState | null = null;
@@ -68,19 +99,27 @@ export function createDocumentProtectionCommands(deps: {
     }
     const current = state();
     if (current === null) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
+    // `mode: 'view'` is the HOST declaring the session read-only, and it outranks everything.
     if (deps.hostViewOnly()) {
       return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
     }
-    if (deps.editingMode() === 'viewing') {
-      return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
-    }
+    // Viewing MODE is deliberately not a refusal. A read-only document opens viewing BECAUSE
+    // it is protected, so refusing here would leave the reader looking at a lock with no way
+    // to open it — and Word keeps Restrict Editing reachable whatever the view.
     // Word asks for the password before it stops the protection. This editor never verifies
     // one, so it never lifts a protection that was set with one.
     if (current.enforced && current.password) {
+      return { ok: false, code: 'locked', reason: PASSWORD_PROTECTION_REASON };
+    }
+    // A document that declares a different restriction is not this row's to rewrite: enforcing
+    // `forms` over `readOnly` would WEAKEN it, and the pressed state would make off-then-on
+    // look like a round trip.
+    if (!current.enforced && current.edit !== 'none' && current.edit !== 'forms') {
       return {
         ok: false,
         code: 'locked',
-        reason: 'this document is protected with a password; open it in Word to change that',
+        reason:
+          'this document declares a different editing restriction; open it in Word to change that',
       };
     }
     return null;
@@ -106,14 +145,15 @@ export function createDocumentProtectionCommands(deps: {
       if (!applied) {
         return { ok: false, code: 'unsupported', reason: 'document protection is not available' };
       }
-      if (!applied.ok) return { ok: false, code: 'locked', reason: applied.reason };
+      if (!applied.ok) return refusalFor(applied.reason);
       // Word greys Track Changes out under forms protection; a session that was suggesting
       // cannot go on suggesting into a document that now refuses to track. Editing mode is the
       // one mode still permitted, and the pill says why it moved.
-      if (enforce && deps.editingMode() === 'suggesting') {
-        deps.leaveSuggesting(PROTECTION_ENDS_SUGGESTING_REASON);
-      }
-      deps.publish();
+      // Enforcing protection ends a suggesting session, because Word does not track changes
+      // in a document protected for forms. Lifting clears the reason that said so: left
+      // standing, the snapshot told the host the document was protected after it was not.
+      const ends = enforce && deps.editingMode() === 'suggesting';
+      deps.settle(ends ? 'editing' : null, ends ? PROTECTION_ENDS_SUGGESTING_REASON : null);
       return { ok: true, changed: true };
     },
   };

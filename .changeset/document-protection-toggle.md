@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add Review → Protect Document, the `toggleDocumentProtection` command, and the `documentProtection` snapshot field to enforce or lift filling-in-forms protection as one undoable edit. Enforced read-only and comments-only protection now refuse content edits, and suggesting mode is refused under forms protection, as in Word. Fixes #836.
+Add Review → Protect Document for Forms, and enforce every document protection Word records: read-only and comments-only documents open in viewing mode, and a forms-protected document refuses suggesting. Fixes #836.

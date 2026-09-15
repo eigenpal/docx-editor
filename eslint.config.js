@@ -371,7 +371,7 @@ export default [
       'packages/core/src/store/store/tree-op-types.ts',
     ],
     rules: {
-      'max-lines': ['error', { max: 1300, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1310, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -487,7 +487,7 @@ export default [
   {
     files: ['packages/core/src/editor/docx-editor.ts'],
     rules: {
-      'max-lines': ['error', { max: 2650, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2660, skipBlankLines: false, skipComments: false }],
     },
   },
 

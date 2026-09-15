@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import {
   applyHeaderFooterLifecycleOp,
+  formsProtectionEnabled,
   readDocumentProtection,
   readOoxmlPackage,
   readTrackingSettings,
@@ -71,6 +72,7 @@ function refuse(pkg: OoxmlPackage, enforce: boolean): string {
 }
 
 const FORMS = '<w:documentProtection w:edit="forms" w:enforcement="1"/>';
+const insertOp = { op: 'insertText', paragraphId: 'p', offset: 0, text: 'x' } as const;
 const PASSWORD =
   '<w:documentProtection w:edit="forms" w:enforcement="1" w:cryptProviderType="rsaAES" ' +
   'w:cryptAlgorithmClass="hash" w:cryptAlgorithmType="typeAny" w:cryptAlgorithmSid="14" ' +
@@ -88,6 +90,54 @@ describe('reading document protection', () => {
       settingsRoot(build('<w:documentProtection w:edit="forms" w:enforcement="0"/>'))
     );
     expect(lifted).toEqual({ edit: 'forms', enforced: false, password: false });
+  });
+
+  test('an absent @w:enforcement is not enforced, for every restriction', () => {
+    // `ST_OnOff` ATTRIBUTE, not a `CT_OnOff` element: there is no presence to read as a yes,
+    // and Word writes `w:enforcement="1"` whenever it protects. Reading absence as enforced
+    // would make a document from a producer that omits one attribute completely dead.
+    for (const edit of ['readOnly', 'comments', 'trackedChanges', 'forms'] as const) {
+      const state = readDocumentProtection(
+        settingsRoot(build(`<w:documentProtection w:edit="${edit}"/>`))
+      );
+      expect(state).toEqual({ edit, enforced: false, password: false });
+    }
+    // And the document is editable, rather than locked by an omission.
+    const settings = build('<w:documentProtection w:edit="readOnly"/>').parts.get(
+      '/word/settings.xml'
+    );
+    expect(documentProtectionRefusal(settings, insertOp)).toBeNull();
+    expect(
+      readTrackingSettings(settingsRoot(build('<w:documentProtection w:edit="forms"/>')))
+        .restrictedToForms
+    ).toBe(false);
+  });
+
+  test('one reading of @w:enforcement, so the menu and the store cannot disagree', () => {
+    for (const inner of [
+      '<w:documentProtection w:edit="forms"/>',
+      '<w:documentProtection w:edit="forms" w:enforcement="1"/>',
+      '<w:documentProtection w:edit="trackedChanges"/>',
+      '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>',
+    ]) {
+      const root = settingsRoot(build(inner));
+      const state = readDocumentProtection(root);
+      const tracking = readTrackingSettings(root);
+      expect(formsProtectionEnabled(root)).toBe(state.edit === 'forms' && state.enforced);
+      expect(tracking.restrictedToForms).toBe(state.edit === 'forms' && state.enforced);
+      expect(tracking.restrictedToTrackedChanges).toBe(
+        state.edit === 'trackedChanges' && state.enforced
+      );
+    }
+  });
+
+  test('a password attribute outside the WML namespace is not a password', () => {
+    // A `.docx` is a zip of XML the sender controls, and one foreign attribute named `salt`
+    // would otherwise disable Stop Protection for good on a document with no password.
+    const foreign = build(
+      '<w:documentProtection xmlns:x="urn:example" w:edit="forms" w:enforcement="1" x:salt="zzz"/>'
+    );
+    expect(readDocumentProtection(settingsRoot(foreign)).password).toBe(false);
   });
 
   test('every ST_DocProtect value reads back, and an unknown one reads as none', () => {
@@ -159,18 +209,30 @@ describe('the setDocumentProtection op', () => {
     });
   });
 
-  test('lifting any enforced mode works; re-enforcing replaces it with forms', () => {
+  test('lifting any enforced mode works, and re-enforcing over it is refused', () => {
     const readOnly = build('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>');
-    expect(readDocumentProtection(settingsRoot(apply(readOnly, false)))).toEqual({
+    const lifted = apply(readOnly, false);
+    expect(readDocumentProtection(settingsRoot(lifted))).toEqual({
       edit: 'readOnly',
       enforced: false,
       password: false,
     });
-    expect(readDocumentProtection(settingsRoot(apply(readOnly, true)))).toEqual({
-      edit: 'forms',
-      enforced: true,
-      password: false,
-    });
+    // This row applies ONE restriction. Re-enforcing would rewrite the author's `readOnly`
+    // into the weaker `forms`, so off-then-on would look like a round trip and would not be.
+    expect(refuse(lifted, true)).toBe('invalidArgs:other-restriction');
+    expect(refuse(readOnly, true)).toBe('invalidArgs:other-restriction');
+  });
+
+  test('enforcing keeps every attribute it does not decide', () => {
+    // `@w:formatting` is Word's separate "limit formatting to a selection of styles"
+    // restriction. A reader locking the form fields must not turn it off as a side effect.
+    const styled = build(
+      '<w:documentProtection w:edit="forms" w:formatting="1" w:enforcement="0"/>'
+    );
+    const out = settingsXml(apply(styled, true));
+    expect(out).toContain('w:formatting="1"');
+    expect(out).toContain('w:enforcement="1"');
+    expect(settingsXml(apply(build(FORMS), false))).toContain('w:edit="forms"');
   });
 
   test('enforcing drops the password a lifted protection left behind', () => {
@@ -224,6 +286,46 @@ describe('read-only and comments-only refusals', () => {
     const comments = settings('<w:documentProtection w:edit="comments" w:enforcement="1"/>');
     expect(documentProtectionRefusal(comments, insert)).toBe('locked');
     expect(documentProtectionRefusal(comments, marker as never)).toBeNull();
+  });
+
+  test('a write that is not a story op is refused too', () => {
+    // Furniture and note lifecycle never reach the per-op applier. Gating only that one left
+    // "Remove header" deleting a part out of a document the same protection refused a
+    // keystroke in.
+    for (const mode of ['readOnly', 'comments'] as const) {
+      const inner = `<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`;
+      expect(documentProtectionRefusal(settings(inner))).toBe('locked');
+      const store = new TreePackageStore(
+        build(inner),
+        build(inner).parts.get('/word/document.xml')!
+      );
+      expect(
+        store.applyLifecycleOp({
+          op: 'createHeaderFooter',
+          sectionIndex: 0,
+          kind: 'header',
+          variant: 'default',
+        }).ok
+      ).toBe(false);
+      expect(
+        store.applyLifecycleOp({
+          op: 'insertNote',
+          noteKind: 'footnote',
+          paragraphId: 'p',
+          offset: 0,
+        }).ok
+      ).toBe(false);
+    }
+  });
+
+  test('the protection toggle itself is never refused, or the document could not be unlocked', () => {
+    for (const mode of ['readOnly', 'comments', 'forms'] as const) {
+      const inner = `<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`;
+      const pkg = build(inner);
+      const store = new TreePackageStore(pkg, pkg.parts.get(pkg.mainDocumentPart)!);
+      expect(store.applyLifecycleOp({ op: 'setDocumentProtection', enforce: false }).ok).toBe(true);
+      expect(readDocumentProtection(settingsRoot(store.currentPackage())).enforced).toBe(false);
+    }
   });
 
   test('forms, tracked changes, lifted and absent protection are answered elsewhere', () => {

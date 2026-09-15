@@ -96,6 +96,12 @@ export {
   type FontLoadFailure,
 } from './editor/index.ts';
 export type { FontConfiguration, FontSource, FontFaceRequest } from './contracts/editor.ts';
+// The shape `snapshot().documentProtection` carries. Declared in the store lane, named here
+// so a consumer of this package can type the field without reaching into a subpath.
+export type {
+  DocumentProtectionEdit,
+  DocumentProtectionState,
+} from './store/package/document-protection.ts';
 
 // ─── Chrome registry: what a toolbar is built from ───────────────────────────
 export {

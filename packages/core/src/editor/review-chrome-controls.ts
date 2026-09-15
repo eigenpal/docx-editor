@@ -70,8 +70,10 @@ export const REVIEW_CHROME_GROUP = {
       state: { kind: 'command' },
     },
     {
-      // Word's Protect Document, reduced to the one restriction the engine enforces: filling
-      // in forms. Pressed while the document enforces any protection; a document edit, undoable.
+      // Word's Protect Document (Restrict Editing on Windows), reduced to the one restriction
+      // this row applies: filling in forms. The label says so, because the row offers no
+      // choice of restriction and one click makes ordinary prose untypable. Pressed while the
+      // document enforces a protection; a document edit, undoable.
       id: 'protectDocument',
       shape: 'icon',
       labelKey: 'review.protectDocument',

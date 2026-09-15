@@ -1106,6 +1106,16 @@ export interface DocumentHandle {
 }
 
 // @public
+export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+
+// @public
+export interface DocumentProtectionState {
+    readonly edit: DocumentProtectionEdit;
+    readonly enforced: boolean;
+    readonly password: boolean;
+}
+
+// @public
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 // @public

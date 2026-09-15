@@ -1,5 +1,8 @@
 // The `settings.xml` writes: locating (or creating) the part, and the one element whose
-// position in `CT_Settings` sequence order Word actually checks.
+// position in `CT_Settings` sequence order matters. It also holds `sectionElement`, the
+// `w:`-prefixed generic element factory both this module and the section writes in
+// `hf-lifecycle.ts` build their elements with — one factory, so the two cannot disagree about
+// how an engine-authored element is shaped.
 //
 // Split out of `hf-lifecycle.ts`, which owns the header/footer lifecycle and was against its
 // line cap. The document-protection write lives here rather than beside its reader in
@@ -17,7 +20,7 @@ import {
   withContentTypeOverride,
   withStoryRelationship,
 } from './hf-lifecycle-shell.ts';
-import { readDocumentProtection } from './document-protection.ts';
+import { PASSWORD_ATTRIBUTES, readDocumentProtection } from './document-protection.ts';
 import type { HeaderFooterLifecycleOp, HeaderFooterLifecycleResult } from './hf-lifecycle.ts';
 
 const W = WML_NAMESPACE_URI;
@@ -174,11 +177,21 @@ const SETTINGS_BEFORE_PROTECTION: ReadonlySet<string> = new Set([
 /**
  * Enforce filling-in-forms protection, or lift whatever protection is enforced.
  *
- * Enforcing writes a fresh `w:edit="forms" w:enforcement="1"` element and drops any password
- * attributes a lifted protection left behind: re-arming an old hash would lock the document
- * behind a password the reader never typed. Lifting keeps `@w:edit` and sets
- * `w:enforcement="0"`, which is what Word's Stop Protection writes, and refuses when the
- * element carries a password — Word asks for it, and this editor never verifies one.
+ * Enforcing keeps every attribute the element already carried except the three it decides:
+ * `@w:edit` becomes `forms`, `@w:enforcement` becomes on, and the `AG_Password` group goes,
+ * because re-arming an old hash would lock the document behind a password the reader never
+ * typed. `@w:formatting` is Word's separate "limit formatting to a selection of styles"
+ * restriction and survives: rebuilding the element from scratch turned it off in a house-style
+ * template whose user only wanted the form fields locked.
+ *
+ * Enforcing over a RECORDED restriction that is not `forms` is refused rather than performed.
+ * This row applies one restriction, and quietly rewriting `readOnly` into `forms` would
+ * WEAKEN a protection the author declared — off and on would look like a round trip and would
+ * not be one.
+ *
+ * Lifting keeps `@w:edit` and sets `w:enforcement="0"`, which is what Word's Stop Protection
+ * writes, and refuses when the element carries a password: Word asks for it, and this editor
+ * never verifies one.
  */
 export function applyDocumentProtection(
   pkg: OoxmlPackage,
@@ -190,6 +203,9 @@ export function applyDocumentProtection(
     return refuse('invalidArgs', 'no-change');
   }
   if (!op.enforce && current.password) return refuse('invalidArgs', 'password');
+  if (op.enforce && current.edit !== 'none' && current.edit !== 'forms') {
+    return refuse('invalidArgs', 'other-restriction');
+  }
 
   const located = settingsPartForWrite(pkg);
   if (!located) return refuse('tree-invariant', 'settings-part');
@@ -202,10 +218,21 @@ export function applyDocumentProtection(
       child.localName === 'documentProtection'
   );
   const kept = existing && 'attributes' in existing ? existing.attributes : [];
+  const decided = (attribute: { localName: string; namespaceUri?: string }): boolean =>
+    attribute.namespaceUri === W &&
+    (attribute.localName === 'edit' ||
+      attribute.localName === 'enforcement' ||
+      PASSWORD_ATTRIBUTES.has(attribute.localName));
   const attributes = op.enforce
-    ? [wmlAttribute('edit', 'forms'), wmlAttribute('enforcement', '1')]
+    ? [
+        ...kept.filter((attribute) => !decided(attribute)),
+        wmlAttribute('edit', 'forms'),
+        wmlAttribute('enforcement', '1'),
+      ]
     : [
-        ...kept.filter((attribute) => attribute.localName !== 'enforcement'),
+        ...kept.filter(
+          (attribute) => !(attribute.namespaceUri === W && attribute.localName === 'enforcement')
+        ),
         wmlAttribute('enforcement', '0'),
       ];
   const element = sectionElement(existing?.id ?? nextId(), 'documentProtection', attributes, []);
@@ -215,7 +242,13 @@ export function applyDocumentProtection(
   } else {
     let at = 0;
     for (const [index, child] of children.entries()) {
-      if (child.kind !== 'textValue' && SETTINGS_BEFORE_PROTECTION.has(child.localName)) {
+      // Namespace-checked: a `w14:zoom` is not the `w:zoom` this sequence is about, and
+      // counting it would move the insertion point past a member that does not precede us.
+      if (
+        child.kind !== 'textValue' &&
+        child.namespaceUri === W &&
+        SETTINGS_BEFORE_PROTECTION.has(child.localName)
+      ) {
         at = index + 1;
       }
     }

@@ -12,7 +12,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { unzipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { FORMS_PROTECTION_SUGGESTING_REASON } from '../opening-editing-mode.ts';
+import {
+  FORMS_PROTECTION_SUGGESTING_REASON,
+  READ_ONLY_PROTECTION_REASON,
+} from '../opening-editing-mode.ts';
 import { PROTECTION_ENDS_SUGGESTING_REASON } from '../docx-editor-protection.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { chromeMenuSlots } from '../chrome-controls.ts';
@@ -131,10 +134,33 @@ describe('toggling protection', () => {
       document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>'),
     });
     expect(protection(editor)).toEqual({ edit: 'readOnly', enforced: true, password: false });
-    expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: false });
     expect(editor.exec(TOGGLE)).toEqual({ ok: true, changed: true });
     expect(protection(editor)).toEqual({ edit: 'readOnly', enforced: false, password: false });
+    // Lifting restores the mode as well as the write: the document opened viewing because it
+    // permitted no edit, and now it permits one.
+    expect(editor.setEditingMode('editing').ok).toBe(true);
     expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: true });
+  });
+
+  test('refuses to enforce over a document that declares another restriction', () => {
+    const editor = mount({
+      document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="0"/>'),
+    });
+    expect(protection(editor)).toEqual({ edit: 'readOnly', enforced: false, password: false });
+    const refusal = editor.can(TOGGLE);
+    expect(refusal.ok).toBe(false);
+    if (!refusal.ok) expect(refusal.code).toBe('locked');
+    expect(editor.exec(TOGGLE).ok).toBe(false);
+    expect(toolbarCommandState(editor, 'review.protectDocument').enabled).toBe(false);
+  });
+
+  test('lifting clears the reason enforcing published', () => {
+    const editor = mount({ document: docx(paragraph('Body')) });
+    expect(editor.setEditingMode('suggesting').ok).toBe(true);
+    expect(editor.exec(TOGGLE).ok).toBe(true);
+    expect(editor.snapshot().lastRejection).toBe(PROTECTION_ENDS_SUGGESTING_REASON);
+    expect(editor.exec(TOGGLE).ok).toBe(true);
+    expect(editor.snapshot().lastRejection).toBeNull();
   });
 
   test('refuses to lift a password-protected document, and says why', () => {
@@ -148,11 +174,17 @@ describe('toggling protection', () => {
     expect(protection(editor)?.enforced).toBe(true);
   });
 
-  test('is refused in viewing mode and on a view-only host, with no document, and after destroy', () => {
+  test('stays available in viewing mode, so a protected document can be unlocked', () => {
+    // A read-only document OPENS viewing because it is protected. Refusing here would leave
+    // the reader looking at a lock with no way to open it.
     const viewing = mount({ document: docx(paragraph('Body')) });
     viewing.setEditingMode('viewing');
-    expect(viewing.can(TOGGLE)).toMatchObject({ ok: false, code: 'locked' });
+    expect(viewing.can(TOGGLE)).toEqual({ ok: true });
+    expect(viewing.exec(TOGGLE)).toEqual({ ok: true, changed: true });
+    expect(protection(viewing)?.enforced).toBe(true);
+  });
 
+  test('is refused on a view-only host, with no document, and after destroy', () => {
     const viewOnly = mount({ document: docx(paragraph('Body')), mode: 'view' });
     expect(viewOnly.can(TOGGLE)).toMatchObject({ ok: false, code: 'locked' });
 
@@ -207,6 +239,25 @@ describe('forms protection and suggesting mode', () => {
     expect(editor.setEditingMode('suggesting').ok).toBe(true);
   });
 
+  test('an author arriving does not complete a suggesting request the document refuses', () => {
+    // The request is refused for the AUTHOR first, which arms it; completing it unasked put
+    // the editor in a mode its own `can` refuses, with nothing published saying so. The
+    // adapters apply `author` from a later effect, so this is the ordinary React/Vue path.
+    const container = document.createElement('div');
+    document.body.append(container);
+    containers.push(container);
+    const editor = createDocxEditor({
+      container,
+      document: trackedDocx(FORMS),
+      modules: [stubReviewModule()],
+    });
+    editors.push(editor);
+    expect(editor.setEditingMode('suggesting').ok).toBe(false);
+    editor.setAuthor('Grace Hopper');
+    expect(editor.snapshot().editingMode).toBe('editing');
+    expect(editor.snapshot().lastRejection).toBe(FORMS_PROTECTION_SUGGESTING_REASON);
+  });
+
   test('tracked-changes protection still forces suggesting', () => {
     const editor = mount({
       document: trackedDocx('<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>'),
@@ -221,14 +272,54 @@ describe('forms protection and suggesting mode', () => {
 
 describe('read-only and comments-only protection', () => {
   for (const mode of ['readOnly', 'comments'] as const) {
-    test(`${mode}: typing is refused everywhere, in editing and suggesting mode`, () => {
+    // The document permits no edit, so it opens VIEWING. An editing pill over a document that
+    // refuses every keystroke is the silent-drop shape issue #836 was filed about; the mode
+    // pill is where the reader can SEE that the document is protected.
+    test(`${mode}: the document opens viewing and every other mode is refused`, () => {
       const editor = mount({
         document: trackedDocx(`<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`),
       });
-      expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: false });
-      expect(editor.setEditingMode('suggesting').ok).toBe(true);
-      expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: false });
+      expect(editor.snapshot().editingMode).toBe('viewing');
+      expect(editor.snapshot().lastRejection).toBe(READ_ONLY_PROTECTION_REASON);
+      for (const next of ['editing', 'suggesting'] as const) {
+        expect(editor.can({ type: 'setEditingMode', mode: next })).toEqual({
+          ok: false,
+          code: 'locked',
+          reason: READ_ONLY_PROTECTION_REASON,
+        });
+      }
+    });
+
+    test(`${mode}: a refused edit says so rather than reporting success`, () => {
+      const editor = mount({
+        document: trackedDocx(`<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`),
+      });
+      expect(editor.can({ type: 'insertText', text: 'x' }).ok).toBe(false);
+      expect(typeAt(editor, 0, 0, 'x').ok).toBe(false);
+      expect(toolbarCommandState(editor, 'text.bold').enabled).toBe(false);
+      expect(toolbarCommandState(editor, 'text.bold').disabledReason).not.toBeNull();
       expect(editor.surface!.session.bodyText()).toBe('tracked');
     });
+
+    test(`${mode}: a header cannot be created or removed either`, () => {
+      const editor = mount({
+        document: trackedDocx(`<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`),
+      });
+      expect(
+        editor.exec({
+          type: 'setHeaderFooterOptions',
+          sectionIndex: 0,
+          titlePage: true,
+        }).ok
+      ).toBe(false);
+    });
   }
+
+  test('an unenforced protection restricts nothing', () => {
+    const editor = mount({
+      document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="0"/>'),
+    });
+    expect(editor.snapshot().editingMode).toBe('editing');
+    expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: true });
+  });
 });

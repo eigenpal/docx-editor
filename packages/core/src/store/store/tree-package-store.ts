@@ -19,6 +19,7 @@ import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { packageEditTouchesShell } from './package-shell-delta.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
+import { lifecycleProtectionRefusal } from './forms-protection.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship } from '../package/relationships.ts';
@@ -726,6 +727,9 @@ export class TreePackageStore {
     op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
   ): PackageTransactResult {
     const before = this.currentPackage();
+
+    const locked = lifecycleProtectionRefusal(settingsPartOf(before), op);
+    if (locked) return { ok: false, reason: locked };
 
     if (isNoteLifecycleOp(op)) {
       const result = applyNoteLifecycleOp(before, op);

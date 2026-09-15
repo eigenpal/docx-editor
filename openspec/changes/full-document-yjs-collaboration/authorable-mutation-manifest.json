@@ -863,7 +863,7 @@
       "storyParity": "n/a",
       "commandExposure": ["toggleDocumentProtection"],
       "packageIntents": ["withPart", "withNewPart", "withContentTypeOverride", "withRelationship"],
-      "openSpec": ["scoped-header-footer-editing"]
+      "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {
       "kind": "insertNote",

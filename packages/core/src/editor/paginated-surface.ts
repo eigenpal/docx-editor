@@ -220,7 +220,10 @@ import {
 } from './surface-scope.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
-import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
+import {
+  createHeaderFooterScopeController,
+  isDocumentProtectionBatch,
+} from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
@@ -3012,7 +3015,7 @@ export function mountPaginatedSurface(
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
     // left the document fully typeable while the toolbar reported it read-only.
-    if (editingMode === 'view') return VIEWING_REFUSAL;
+    if (editingMode === 'view' && !isDocumentProtectionBatch(ops)) return VIEWING_REFUSAL;
     if (
       edits &&
       ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))

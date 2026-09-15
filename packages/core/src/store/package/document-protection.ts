@@ -8,16 +8,23 @@
 //     comments only, tracked changes only, or filling in forms.
 //   - `@w:enforcement`: whether that restriction is IN FORCE. Word keeps the mode a document
 //     was last protected with after Stop Protection, so a file with `w:enforcement="0"` is an
-//     ordinary editable document that remembers a preference.
-//   - `AG_Password` (`@w:hash`, `@w:salt`, the `crypt*` and `algorithm*` attributes): whether
-//     lifting the protection needs a password. The hash is never verified here — protection
-//     is advisory, not a security boundary, and the file is editable by anyone holding it —
-//     but a protection Word would ask a password for is not one this editor lifts silently.
+//     ordinary editable document that remembers a preference. ABSENT is the same answer: this
+//     is an `ST_OnOff` ATTRIBUTE, not a `CT_OnOff` element, so there is no presence to read as
+//     a yes, and Word writes `w:enforcement="1"` whenever it protects. Reading absence as
+//     enforced makes a document from a producer that omits one attribute completely dead.
+//   - `AG_Password` (`@w:hash`, `@w:salt`, the newer `algorithm*`/`hashValue`/`saltValue`
+//     group, and the 2007 `crypt*` set): whether lifting the protection needs a password. The
+//     hash is never verified here — protection is advisory, not a security boundary, and the
+//     file is editable by anyone holding it — but a protection Word would ask a password for
+//     is not one this editor lifts silently.
 //
-// Reading only. The write is a package-level lifecycle op in `hf-lifecycle.ts`, beside the
-// other `settings.xml` write, because it has to land in `CT_Settings` sequence order.
+// THE ONLY reader of this element. `enforcesFormsProtection` and `readTrackingSettings` both
+// answer from it, because two readings of `@w:enforcement` meant a document could be protected
+// to the Review menu and unprotected to the store. Reading only; the write is
+// `applyDocumentProtection` in `settings-write.ts`, which needs the package plumbing.
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { isSettingsElement, settingsAttributeValue, settingsChildNamed } from './settings-onoff.ts';
 
 /** `ST_DocProtect`: the restriction a document asks for. `none` also stands for "no element". */
@@ -49,10 +56,13 @@ const EDIT_VALUES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The `AG_Password` attribute group on `CT_DocProtect`, both the legacy pair and the
- * `crypt*` / `algorithm*` forms Word writes since 2007.
+ * The `AG_Password` attribute group on `CT_DocProtect`: the `algorithm*` group the schema
+ * declares, the older `hash`/`salt` pair, and the 2007 transitional `crypt*` set.
+ *
+ * Exported so the write can strip exactly this group when it re-arms a protection, rather
+ * than restating the list and drifting from it.
  */
-const PASSWORD_ATTRIBUTES: ReadonlySet<string> = new Set([
+export const PASSWORD_ATTRIBUTES: ReadonlySet<string> = new Set([
   'hash',
   'salt',
   'algorithmName',
@@ -71,26 +81,27 @@ const PASSWORD_ATTRIBUTES: ReadonlySet<string> = new Set([
   'cryptProviderTypeExtSource',
 ]);
 
-/** Whether the element carries any password attribute. */
+/**
+ * Whether the element carries any password attribute.
+ *
+ * Namespace-checked like every other read here. Matching on the local name alone let one
+ * foreign-namespace attribute named `salt` — which costs a sender nothing to add — disable
+ * Stop Protection for good on a document that has no password at all.
+ */
 export function protectionHasPassword(element: OoxmlElement): boolean {
   return element.attributes.some(
     (attribute) =>
+      attribute.namespaceUri === WML_NAMESPACE_URI &&
       PASSWORD_ATTRIBUTES.has(attribute.localName) &&
       attribute.value !== undefined &&
       attribute.value !== ''
   );
 }
 
-/**
- * `@w:enforcement` as an `ST_OnOff` attribute: absent means ON.
- *
- * The same reading forms protection has always used, so a document the store refuses to edit
- * outside its form fields is also one this state reports as enforced — the two must not
- * disagree, or the Review menu offers to lift a protection the editor is not applying.
- */
+/** `@w:enforcement`: an optional `ST_OnOff` attribute, so absent is not enforced. */
 function enforcementOf(element: OoxmlElement): boolean {
   const value = settingsAttributeValue(element, 'enforcement');
-  if (value === undefined) return true;
+  if (value === undefined) return false;
   return value !== '0' && value !== 'false' && value !== 'off';
 }
 

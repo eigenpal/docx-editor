@@ -8,34 +8,34 @@
 import type { CSSProperties } from 'react';
 import { SvgIcon, type IconProps } from './icon-base';
 import {
-  IconDoneAll,
-  IconCheckCircle,
-  IconChatBubbleOutline,
-  IconChatBubbleCheck,
-  IconCheck,
-  IconClose,
   IconAddComment,
+  IconChatBubbleCheck,
+  IconChatBubbleOutline,
+  IconCheck,
+  IconCheckCircle,
+  IconClose,
   IconComment,
+  IconDoneAll,
   IconEditNote,
+  IconLock,
   IconRateReview,
   IconVisibility,
-  IconLock,
 } from './IconsReview';
 
 export {
-  IconDoneAll,
-  IconCheckCircle,
-  IconChatBubbleOutline,
-  IconChatBubbleCheck,
-  IconCheck,
-  IconClose,
   IconAddComment,
+  IconChatBubbleCheck,
+  IconChatBubbleOutline,
+  IconCheck,
+  IconCheckCircle,
+  IconClose,
   IconComment,
+  IconDoneAll,
   IconEditNote,
+  IconLock,
   IconRateReview,
   IconVisibility,
-  IconLock,
-} from './IconsReview';
+};
 
 export type { IconProps };
 // ============================================================================

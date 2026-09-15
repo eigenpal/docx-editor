@@ -79,6 +79,18 @@ const DOCUMENT_TRACKING_AUTHOR_REASON =
 export const FORMS_PROTECTION_SUGGESTING_REASON =
   'this document is protected for filling in forms, which does not track changes';
 
+/**
+ * The refusal every mode but viewing gets under enforced read-only or comments-only
+ * protection.
+ *
+ * The document permits no edit (or only a comment), so the editor opens VIEWING rather than
+ * presenting an editing pill over a document that refuses every keystroke. That silent-drop
+ * shape is the defect this gate exists to prevent: a reader has to be able to SEE that the
+ * document is protected, and the mode pill is where the engine says so.
+ */
+export const READ_ONLY_PROTECTION_REASON =
+  'this document is protected against editing; open it in Word to change that';
+
 /** What a decision asks the facade to do: adopt a mode, publish a refusal, or neither. */
 export interface OpeningModeDecision {
   /** The mode to open in, or null to leave the current mode alone. */
@@ -203,8 +215,19 @@ export function documentTrackingAdoption(
     readonly restrictedToTrackedChanges: boolean;
     /** Enforced `w:documentProtection w:edit="forms"` — tracking is unavailable. */
     readonly restrictedToForms: boolean;
+    /** Enforced `w:edit="readOnly"` — no edit at all. */
+    readonly restrictedToReadOnly: boolean;
+    /** Enforced `w:edit="comments"` — comments only. */
+    readonly restrictedToComments: boolean;
   }
 ): OpeningModeDecision {
+  // A document that permits no editing opens VIEWING, whatever anyone asked for. Every other
+  // outcome puts an editing pill over a document whose every write the store refuses.
+  if (input.restrictedToReadOnly || input.restrictedToComments) {
+    return input.currentMode === 'viewing'
+      ? NO_DECISION
+      : { mode: 'viewing', rejection: READ_ONLY_PROTECTION_REASON };
+  }
   // Forms protection outranks every request for suggesting, the reader's included: Word
   // greys Track Changes out there, and a session already suggesting cannot go on into a
   // document every keystroke would refuse. Editing is the one mode still permitted.
@@ -224,6 +247,23 @@ export function documentTrackingAdoption(
 }
 
 /**
+ * What an arriving author does to a suggesting request that was refused for the want of one.
+ *
+ * The request was refused for the AUTHOR, which means the DOCUMENT's own rules were never
+ * asked. Completing it unasked put the editor in a mode its own `can` refuses — and the
+ * adapters apply `author` from a later effect, so a Suggesting click that lands before the
+ * prop arrives takes exactly this path.
+ */
+export function completePendingSuggesting(refusal: CommandRefusal | null): {
+  readonly enter: boolean;
+  readonly rejection: string | null;
+} {
+  return refusal === null
+    ? { enter: true, rejection: null }
+    : { enter: false, rejection: refusal.reason };
+}
+
+/**
  * Refuse a mode the document's protection rules out: editing when only tracked changes are
  * permitted, suggesting when filling-in-forms protection makes tracking unavailable.
  */
@@ -231,6 +271,9 @@ export function documentEditingModeRestriction(
   tracking: DocumentTrackingSettings,
   next: DocumentEditingMode
 ): CommandRefusal | null {
+  if (next !== 'viewing' && (tracking.restrictedToReadOnly || tracking.restrictedToComments)) {
+    return { ok: false, code: 'locked', reason: READ_ONLY_PROTECTION_REASON };
+  }
   if (next === 'suggesting' && tracking.restrictedToForms) {
     return { ok: false, code: 'locked', reason: FORMS_PROTECTION_SUGGESTING_REASON };
   }
@@ -262,9 +305,10 @@ export function resolveHostEditingMode(
   });
   if (document.mode !== null) mode = document.mode;
   const restriction = documentEditingModeRestriction(tracking, mode);
-  // A refused mode falls back to the one the protection permits: editing when suggesting is
-  // ruled out (forms), the mode already in force when editing is (tracked changes only).
-  const permitted = mode === 'suggesting' ? 'editing' : currentMode;
+  // A refused mode falls back to the one the protection permits: viewing when nothing may be
+  // edited, otherwise the mode already in force.
+  const permitted =
+    tracking.restrictedToReadOnly || tracking.restrictedToComments ? 'viewing' : currentMode;
   return {
     mode: restriction === null ? mode : permitted,
     rejection: document.rejection ?? restriction?.reason ?? null,

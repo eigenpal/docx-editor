@@ -665,6 +665,17 @@ export class TreeDocumentStore {
       applyTo: (partName, op) => applyToPart(partName, op),
       applyPackage: (edit) => {
         if (failure) return false;
+        // The package channel imports and rewrites whole parts, so it needs the document-wide
+        // refusal as much as the per-op one does: comment deletion and thread resolution reach
+        // the story's own `w:commentRangeStart` through here, and nothing else would stop them
+        // in a document protected read-only.
+        const packageProtection = documentProtectionRefusal(
+          this.settingsPartOverride?.() ?? settingsPartOf(working)
+        );
+        if (packageProtection) {
+          failure = { reason: packageProtection };
+          return false;
+        }
         // The SECOND write channel, and it imports whole parts — a pasted fragment carries
         // its own revision ids. The shared id is taken from the part it first saw, so it goes
         // here for the same reason a non-property op drops it.

@@ -6,6 +6,7 @@ import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import { createReviewCommands } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
+import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 // The Editor facade owns the document session, semantic layout, and painted pages.
@@ -458,17 +459,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     bump();
     emitSelectionChange();
   });
-  // Closures only: every dependency is read when a command runs, never at construction.
+  // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({
     surface: () => surface,
     destroyed: () => destroyed,
     editingMode: () => editingMode,
     hostViewOnly: () => hostConfig.mode() === 'view',
-    leaveSuggesting: (reason) => {
-      applyEditingMode('editing');
-      facadeRejection = reason;
-    },
-    publish: () => {
+    settle: (mode, reason) => {
+      if (mode) applyEditingMode(mode);
+      facadeRejection = reason ?? standingRejection(null);
       bump();
       emitSelectionChange();
     },
@@ -1661,6 +1660,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       trackRevisions: tracking.trackRevisions,
       restrictedToTrackedChanges: tracking.restrictedToTrackedChanges,
       restrictedToForms: tracking.restrictedToForms,
+      restrictedToReadOnly: tracking.restrictedToReadOnly,
+      restrictedToComments: tracking.restrictedToComments,
     });
   }
 
@@ -2209,8 +2210,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Preserve pending host intent and adopted document modes across author-only changes.
       if (author !== undefined && pendingSuggestingRequest) {
         pendingSuggestingRequest = false;
-        readerChoseMode = true;
-        applyEditingMode('suggesting');
+        const pending = completePendingSuggesting(editingModeRefusal('suggesting'));
+        if (pending.enter) {
+          readerChoseMode = true;
+          applyEditingMode('suggesting');
+        } else {
+          facadeRejection = pending.rejection;
+          bump();
+          emitSelectionChange();
+          return;
+        }
       } else if (!readerChoseMode) {
         const fallback = pendingHostModeFallback ?? editingMode;
         applyHostModeDecision(hostConfig.mode() === undefined ? fallback : 'editing');

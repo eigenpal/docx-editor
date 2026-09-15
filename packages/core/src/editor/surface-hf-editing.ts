@@ -380,6 +380,18 @@ export function createHeaderFooterScopeController(deps: {
   };
 }
 
+/**
+ * Whether a batch is the PROTECTION write and nothing else.
+ *
+ * The one write a document open for viewing still takes: a read-only document opens viewing
+ * because it is protected, so refusing this would leave the reader at a lock with no key.
+ * `length > 0` is load-bearing — `every` on no ops is vacuously true, and the refusal it
+ * guards is asked with none (a selection probe, a keystroke gate).
+ */
+export function isDocumentProtectionBatch(ops: readonly { readonly op: string }[]): boolean {
+  return ops.length > 0 && ops.every((op) => op.op === 'setDocumentProtection');
+}
+
 /** Lifecycle op kinds the surface may commit as package-level undo units. */
 export type SurfaceLifecycleOp = Extract<
   TreeDocOp,

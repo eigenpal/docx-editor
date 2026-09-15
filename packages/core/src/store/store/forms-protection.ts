@@ -5,23 +5,41 @@ import type { TreeDocOp } from './tree-op-types.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
 /**
- * The refusal an enforced `readOnly` or `comments` protection gives a story op.
+ * The refusal an enforced `readOnly` or `comments` protection gives a write.
  *
- * Read-only admits no edit at all. Comments-only admits the comment anchor and nothing
- * else; the comment text itself lives in `comments.xml` and never passes through here.
- * Coarser than Word in one respect: Word lets an edit through inside a `w:permStart`
- * exception range, and this editor refuses there too — a refusal the reader can see beats
- * a write the protection was meant to stop. `forms` and `trackedChanges` are answered
- * elsewhere: forms by `formsProtectionRefusal`, tracked changes by the editing-mode gate.
+ * Read-only admits no edit at all. Comments-only admits the comment anchor and nothing else;
+ * the comment text itself lives in `comments.xml` and never passes through here. Coarser than
+ * Word in one respect: Word lets an edit through inside a `w:permStart` exception range, and
+ * this editor refuses there too — a refusal the reader can see beats a write the protection
+ * was meant to stop. `forms` and `trackedChanges` are answered elsewhere: forms by
+ * `formsProtectionRefusal`, tracked changes by the editing-mode gate.
+ *
+ * `op` is omitted for a write that is not a single story op — a package edit, or a furniture
+ * or note lifecycle commit. Those carry no comment anchor, so both protections refuse them.
+ * EVERY write lane asks this: gating only the per-part applier left "Remove header" deleting
+ * a part out of a document the same protection refused a keystroke in.
  */
+/**
+ * The refusal a PACKAGE-level commit gets: furniture and note lifecycle, which never reach
+ * `transact`. The protection toggle is exempt — it is the command that LIFTS the lock, and a
+ * guard that trapped it would leave the reader with no way back into the document.
+ */
+export function lifecycleProtectionRefusal(
+  settings: OoxmlPart | null | undefined,
+  op: { readonly op: string }
+): TreeOpRejection | null {
+  if (op.op === 'setDocumentProtection') return null;
+  return documentProtectionRefusal(settings);
+}
+
 export function documentProtectionRefusal(
   settings: OoxmlPart | null | undefined,
-  op: TreeDocOp
+  op?: TreeDocOp
 ): TreeOpRejection | null {
   const protection = readDocumentProtection(settings?.root);
   if (!protection.enforced) return null;
   if (protection.edit === 'readOnly') return 'locked';
-  if (protection.edit === 'comments' && op.op !== 'insertCommentMarker') return 'locked';
+  if (protection.edit === 'comments' && op?.op !== 'insertCommentMarker') return 'locked';
   return null;
 }
 
@@ -37,22 +55,16 @@ export function enforcesFormsProtection(settings: OoxmlPart | null | undefined):
   return formsProtectionEnabled(settings?.root);
 }
 
-/** Read forms protection from the settings root. */
+/**
+ * Read forms protection from the settings root.
+ *
+ * Delegates to the ONE parse of `w:documentProtection` rather than reading the element again:
+ * a second reading of `@w:enforcement` is how a document ends up protected to the Review menu
+ * and unprotected to the store.
+ */
 export function formsProtectionEnabled(root: OoxmlNode | null | undefined): boolean {
-  if (!root || root.kind === 'textValue') return false;
-  for (const child of root.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'documentProtection') {
-      continue;
-    }
-    const attribute = (name: string): string | undefined =>
-      child.attributes.find(
-        (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
-      )?.value;
-    if (attribute('edit') !== 'forms') return false;
-    return isTrue(attribute('enforcement'));
-  }
-  return false;
+  const protection = readDocumentProtection(root);
+  return protection.edit === 'forms' && protection.enforced;
 }
 
 /** `ST_OnOff`: absent means on for a flag element, and "0"/"false"/"off" always means off. */
