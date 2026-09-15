@@ -1,5 +1,15 @@
 # @docx-editor.dev/pro
 
+## 2.19.0
+
+### Patch Changes
+
+- fb596a6: Preserve formatted text when splitting a paragraph in a collaboration room.
+- af15667: Reject oversized collaboration edits before allocating their shared-state projection.
+- @docx-editor.dev/core@2.19.0
+  - @docx-editor.dev/react@2.19.0
+  - @docx-editor.dev/vue@2.19.0
+
 ## 2.18.0
 
 ### Minor Changes
