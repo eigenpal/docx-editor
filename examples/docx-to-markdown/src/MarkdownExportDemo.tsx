@@ -136,7 +136,7 @@ function carriesFiles(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes('Files');
 }
 
-export function MarkdownExportDemo() {
+export function MarkdownExportDemo({ embedded = false }: { embedded?: boolean }) {
   const editor = useRef<DocxEditorRef>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const workbench = useRef<HTMLElement>(null);
@@ -512,7 +512,7 @@ export function MarkdownExportDemo() {
 
   return (
     <div
-      className={`md-demo${resizing ? ' md-demo--resizing' : ''}`}
+      className={`md-demo${embedded ? ' md-demo--embedded' : ''}${resizing ? ' md-demo--resizing' : ''}`}
       data-mobile-pane={mobilePane}
       style={layoutStyle}
       onDragEnter={(event) => {
@@ -541,12 +541,18 @@ export function MarkdownExportDemo() {
     >
       <header className="md-topbar">
         <div className="md-topbar-pane md-topbar-pane--source">
-          <div className="md-brand-lockup">
-            <BrandLogo />
-            <div className="md-product-title">
-              <strong>DOCX to Markdown</strong>
+          {embedded ? (
+            <div className="md-export-identity md-source-identity">
+              <strong>Word document</strong>
             </div>
-          </div>
+          ) : (
+            <div className="md-brand-lockup">
+              <BrandLogo />
+              <div className="md-product-title">
+                <strong>DOCX to Markdown</strong>
+              </div>
+            </div>
+          )}
           <div className="md-mobile-tabs" role="group" aria-label="Demo view">
             <button
               type="button"
@@ -566,13 +572,15 @@ export function MarkdownExportDemo() {
             </button>
           </div>
           <div className="md-source-actions">
-            <button
-              type="button"
-              className="md-button md-button--compact md-button--quiet"
-              onClick={() => loadSample()}
-            >
-              Reset
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className="md-button md-button--compact md-button--quiet"
+                onClick={() => loadSample()}
+              >
+                Reset
+              </button>
+            )}
             <button
               type="button"
               className="md-button md-button--compact md-button--primary"

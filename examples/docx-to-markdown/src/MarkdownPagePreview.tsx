@@ -108,7 +108,26 @@ export function MarkdownPagePreview({
             ) : null}
           </section>
         ))}
-        <div className="md-page-sheet">
+        <div
+          className="md-page-sheet"
+          onClick={(event) => {
+            if (
+              event.defaultPrevented ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey ||
+              (event.target instanceof Element &&
+                event.target.closest(
+                  'a, button, input, select, textarea, summary, [contenteditable="true"]'
+                )) ||
+              window.getSelection()?.isCollapsed === false
+            )
+              return;
+            onRevealDocumentPage(page.number);
+          }}
+        >
           {showHeaders ? (
             <PageField kind="header" markdown={page.headerMarkdown} mode={mode} />
           ) : null}

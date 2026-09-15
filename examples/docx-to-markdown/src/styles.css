@@ -1413,3 +1413,39 @@ button {
     opacity: 1;
   }
 }
+
+/* The host supplies branding; retain all document and export controls. */
+.md-demo--embedded .md-topbar,
+.md-demo--embedded .md-topbar-pane {
+  min-height: 44px;
+}
+.md-demo--embedded .md-topbar {
+  box-shadow: none;
+}
+.md-demo--embedded .md-source-actions .md-button--primary {
+  border: 1px solid #d6dce3;
+  background: #f1f3f5;
+  box-shadow: 0 1px 1px rgb(31 35 40 / 4%);
+  color: #303944;
+}
+@media (min-width: 901px) {
+  .md-demo--embedded .md-topbar-pane--source {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .md-demo--embedded .md-source-actions {
+    grid-column: 2;
+    justify-self: center;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .md-demo--embedded .md-source-actions .md-button--primary:hover {
+    border-color: #c5ced8;
+    background: #e7ebef;
+  }
+}
+@media (max-width: 760px) {
+  .md-demo--embedded .md-source-identity {
+    display: none;
+  }
+}

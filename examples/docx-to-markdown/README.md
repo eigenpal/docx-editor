@@ -24,6 +24,12 @@ Markdown updates after you pause typing.
 Preview settings select which page fields to show. They don't change the API response.
 Full-document Markdown excludes repeated headers and footers.
 
+Click a Markdown page to reveal the corresponding Word page, or use **View in DOCX** with the keyboard. Links, modified clicks, and text selections keep their normal behavior. On narrow screens, page navigation switches back to the Word pane.
+
+## Embed the converter
+
+Add `?embed=1` to the demo URL when the host page supplies its own branding. Embedded mode removes the duplicate logo and Reset button and centers a lighter **Open DOCX** button above the Word pane. Standalone mode retains the original header and Reset control.
+
 ## Output details
 
 Fonts use packaged substitutes, then Google Fonts, which requires network access.

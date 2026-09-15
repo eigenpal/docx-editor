@@ -173,6 +173,39 @@ try {
       await changes.click();
       assert.equal(await changesPanel.isVisible(), false);
     }
+    // Clicking the Markdown paper reveals its corresponding Word page, including
+    // switching back to the source pane on a narrow viewport.
+    for (const [mode, number] of [
+      ['Preview', 10],
+      ['Source', 20],
+    ]) {
+      if (width <= 900) {
+        await page
+          .getByRole('group', { name: 'Demo view', exact: true })
+          .getByRole('button', { name: 'Markdown', exact: true })
+          .click();
+      }
+      await page
+        .getByRole('group', { name: 'Markdown view', exact: true })
+        .getByRole('button', { name: mode, exact: true })
+        .click();
+      await page
+        .locator(`#markdown-page-${number} .md-page-sheet`)
+        .click({ position: { x: 12, y: 12 } });
+      await page.waitForFunction((index) => {
+        const viewport = document.querySelector('.docx-editor__scroll-container');
+        const target = document.querySelector(`.docx-page[data-page-index="${index}"]`);
+        if (!viewport || !target) return false;
+        const box = viewport.getBoundingClientRect();
+        const pageBox = target.getBoundingClientRect();
+        return (
+          box.height > 0 &&
+          pageBox.height > 0 &&
+          pageBox.top < box.bottom &&
+          pageBox.bottom > box.top
+        );
+      }, number - 1);
+    }
     console.log(
       `${width}px: all 28 pages contain their content; review controls and reading position pass in Preview and Source`
     );
