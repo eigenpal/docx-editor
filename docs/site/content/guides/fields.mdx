@@ -101,7 +101,8 @@ maximum length, format, and **Fill-in enabled** setting. A maximum length of
 zero means unlimited. React and Vue share the same default behavior.
 
 In an unprotected document, partial edits keep the field definition; replacing
-its whole result removes it. In a document protected for forms, editing keeps
+its whole result removes it. Typing at the end boundary inserts ordinary text
+after the field, including at the end of a paragraph. In a document protected for forms, editing keeps
 the definition. Tab and Shift+Tab move between enabled text fields.
 
 Protected fields validate and format input when you leave. Pasted text is limited

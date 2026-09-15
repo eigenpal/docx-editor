@@ -15,6 +15,7 @@ import {
 } from '../package/drawing-projection.ts';
 import {
   atomicFieldSpansOf,
+  parsedFieldSpansOf,
   isFieldChrome,
   isFldChar,
   isFldSimple,
@@ -454,6 +455,8 @@ export type InsertionSite =
   | { readonly kind: 'atBoundary'; readonly segment: Segment }
   /** Past every segment in scope: the content is appended to this run. */
   | { readonly kind: 'appendToRun'; readonly run: OoxmlElement }
+  /** Between run children, after zero-width field chrome. */
+  | { readonly kind: 'atRunIndex'; readonly run: OoxmlElement; readonly index: number }
   /** No run in scope holds the offset: a run is minted in this node at `index`. */
   | { readonly kind: 'newRun'; readonly holder: OoxmlElement; readonly index?: number };
 
@@ -471,8 +474,9 @@ export function insertionSite(
   bias: 'left' | 'right' = 'left'
 ): InsertionSite {
   const site = rawInsertionSite(paragraph, offset, owner, bias);
-  if (owner !== null || site.kind !== 'newRun') return site;
-  const ancestors = [site.holder, ...inlineContainersOf(paragraph, site.holder.id)];
+  if (owner !== null || (site.kind !== 'newRun' && site.kind !== 'atRunIndex')) return site;
+  const target = site.kind === 'newRun' ? site.holder : site.run;
+  const ancestors = [target, ...inlineContainersOf(paragraph, target.id)];
   if (
     !ancestors.some((node) => node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom')
   ) {
@@ -485,6 +489,20 @@ export function insertionSite(
   const index = holder.children.findIndex((child) => child.id === revision.id);
   const span = paragraphOffsetIndex(paragraph).spanOf(revision);
   return { kind: 'newRun', holder, index: index + (span && offset > span.start ? 1 : 0) };
+}
+
+/** The closing marker at a legacy text form's trailing caret boundary. */
+export function textFormFieldEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  const offsets = paragraphOffsetIndex(paragraph);
+  for (const field of parsedFieldSpansOf(paragraph)) {
+    if (field.addressing !== 'editable-result') continue;
+    const endId = field.removeNodeIds.at(-1);
+    if (endId && offsets.spanOf(endId)?.end === offset) return endId;
+  }
+  return undefined;
 }
 
 function rawInsertionSite(
@@ -502,6 +520,29 @@ function rawInsertionSite(
     if (segment.node.kind !== 'textValue') continue;
     if (offset <= segment.start || offset >= segment.end) continue;
     return { kind: 'withinValue', segment };
+  }
+  {
+    const endId = textFormFieldEndAt(paragraph, offset);
+    const run = endId ? directParentOf(paragraph, endId) : null;
+    if (run?.kind === 'run' && (owner === null || containsNode(owner, run.id))) {
+      if (owner !== null || offsets.spanOf(run)?.end !== offset) {
+        return {
+          kind: 'atRunIndex',
+          run,
+          index: run.children.findIndex((node) => node.id === endId) + 1,
+        };
+      }
+      // Field chrome has no width. Do not append to the visible result before it.
+      // Escape wrappers that end here, and keep closing bookmarks before the new run.
+      const exited =
+        inlineContainersOf(paragraph, run.id)
+          .filter((node) => offsets.spanOf(node)?.end === offset)
+          .at(-1) ?? run;
+      const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+      let index = holder.children.findIndex((node) => node.id === exited.id) + 1;
+      while (holder.children[index]?.kind === 'bookmarkEnd') index += 1;
+      return { kind: 'newRun', holder, index };
+    }
   }
   const boundary = segments.find((segment) => segment.start === offset);
   if (owner === null && boundary) {
@@ -638,7 +679,7 @@ export function insertionDestination(
   const landingNodeId =
     site.kind === 'withinValue' || site.kind === 'atBoundary'
       ? segmentAncestryNodeId(site.segment)
-      : site.kind === 'appendToRun'
+      : site.kind === 'appendToRun' || site.kind === 'atRunIndex'
         ? site.run.id
         : site.holder.id;
   const path = new Set<string>();

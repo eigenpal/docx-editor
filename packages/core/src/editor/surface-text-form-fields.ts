@@ -372,7 +372,12 @@ export function createTextFormFieldInteraction(
     if (p?.kind !== 'paragraph') return null;
     const start = Math.min(selected.anchor.offset, selected.head.offset);
     const end = Math.max(selected.anchor.offset, selected.head.offset);
-    const fields = textFormFieldsOf(p).filter((f) => f.start <= start && f.end >= end);
+    const fields = textFormFieldsOf(p).filter(
+      (f) =>
+        f.start <= start &&
+        f.end >= end &&
+        (f.start === f.end || start !== end || start < f.end || host.protected(paragraphId))
+    );
     const field =
       fields.find(
         (f) => active?.paragraphId === paragraphId && f.fieldNodeId === active.fieldNodeId

@@ -543,3 +543,15 @@ test('custom Field Options retains the opening regional date locale', () => {
     host.cleanup();
   }
 });
+
+test('an unprotected empty field keeps its keyboard options action', () => {
+  const host = setup(false, true);
+  try {
+    host.select(0);
+    expect(host.interaction.canEdit()).toBe(true);
+    expect(host.interaction.edit()).toBe(true);
+    expect(host.container.querySelector('dialog')).not.toBeNull();
+  } finally {
+    host.cleanup();
+  }
+});

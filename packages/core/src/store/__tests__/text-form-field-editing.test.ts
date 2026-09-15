@@ -717,3 +717,59 @@ test('forms protection blocks default metadata edits through an unlocked content
     }
   }
 });
+
+for (const wrapper of ['', 'smartTag', 'customXml', 'dir', 'bdo']) {
+  for (const trailing of [false, true]) {
+    test(`typing after a text form stays outside (${wrapper || 'plain'}, trailing=${trailing})`, () => {
+      const part = fromXml(
+        serializeOoxmlPart(fixture(wrapper)).replace(
+          '<w:r><w:t>Z</w:t></w:r>',
+          trailing ? '<w:r><w:t>Z</w:t></w:r>' : ''
+        )
+      );
+      const p = paragraph(part);
+      const result = applyTreeOp(part, {
+        op: 'insertText',
+        paragraphId: p.id,
+        offset: 7,
+        text: 'Outside',
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(paragraphTextOf(result.part, p.id)).toBe(`ASampleOutside${trailing ? 'Z' : ''}`);
+      expect(textFormFieldsOf(paragraph(result.part))[0]).toMatchObject({
+        start: 1,
+        end: 7,
+        defaultText: 'Sample',
+      });
+      const xml = serializeOoxmlPart(result.part);
+      expect(xml.indexOf('Outside')).toBeGreaterThan(xml.indexOf('w:fldCharType="end"'));
+      const reopened = fromXml(xml);
+      expect(textFormFieldsOf(paragraph(reopened))[0]?.end).toBe(7);
+    });
+  }
+}
+
+for (const trailing of [false, true]) {
+  test(`closing marker and result share a run, trailing=${trailing}`, () => {
+    const part = fromXml(
+      serializeOoxmlPart(fixture())
+        .replace('<w:t>Sample</w:t></w:r><w:r>', '<w:t>Sample</w:t>')
+        .replace(
+          '<w:fldChar w:fldCharType="end"/></w:r><w:bookmarkEnd w:id="42"/><w:r><w:t>Z</w:t></w:r>',
+          `<w:fldChar w:fldCharType="end"/>${trailing ? '<w:t>Z</w:t>' : ''}</w:r><w:bookmarkEnd w:id="42"/>`
+        )
+    );
+    const p = paragraph(part);
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: p.id,
+      offset: 7,
+      text: 'Outside',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(paragraphTextOf(result.part, p.id)).toBe(`ASampleOutside${trailing ? 'Z' : ''}`);
+    expect(textFormFieldsOf(paragraph(result.part))[0]?.end).toBe(7);
+  });
+}

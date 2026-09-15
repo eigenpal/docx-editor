@@ -52,6 +52,7 @@ import {
   applyInsertTracked,
   applyInsertTrackedElement,
   applyInsertTrackedElements,
+  insertedRunProperties,
 } from './tree-op-tracked.ts';
 import {
   applyParagraphMarkRevision,
@@ -131,6 +132,7 @@ import {
 } from './tree-op-content-controls.ts';
 import {
   insertionDestination,
+  textFormFieldEndAt,
   isParagraph,
   paragraphLength,
   runsUnder,
@@ -700,6 +702,17 @@ function applyInsertContent(
     return finishContentEdit(inserted, control, options);
   }
 
+  if (site.kind === 'atRunIndex') {
+    return finishContentEdit(
+      fromEdit(
+        insertChildren(part, site.run.id, site.index, nodes, deferOptions(options, control)),
+        effect
+      ),
+      control,
+      options
+    );
+  }
+
   if (inside !== undefined) {
     if (site.kind === 'atBoundary') {
       const plain = insertIntoText(site.segment);
@@ -751,9 +764,11 @@ function applyInsertContent(
     const leftRun = leftSegment ? findNode(part, leftSegment.runId) : null;
     const inheritedProperties =
       leftRun && leftRun.kind === 'run'
-        ? leftRun.children
-            .filter((child) => child.kind === 'runProperties')
-            .map((child) => withFreshIds(child, nextId))
+        ? textFormFieldEndAt(paragraph, offset)
+          ? insertedRunProperties(nextId, leftRun)
+          : leftRun.children
+              .filter((child) => child.kind === 'runProperties')
+              .map((child) => withFreshIds(child, nextId))
         : [];
     inserted = fromEdit(
       insertChildren(
@@ -788,6 +803,7 @@ function applyInsertContent(
     bias === 'left' &&
     before &&
     before.removeNodeIds === undefined &&
+    !textFormFieldEndAt(paragraph, offset) &&
     !crossesContentControlBoundary(part, before, after) &&
     !leavesInlineContainer(paragraph, before, after)
   ) {

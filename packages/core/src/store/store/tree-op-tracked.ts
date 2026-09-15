@@ -33,12 +33,18 @@ import {
   nextInlineContainerDepth,
 } from '../package/ooxml-shared.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
-import { createNodeIdAllocator, replaceChildren, type EditOptions } from '../package/ooxml-edit.ts';
+import {
+  createNodeIdAllocator,
+  findNode,
+  replaceChildren,
+  type EditOptions,
+} from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
   insertionDestination,
+  textFormFieldEndAt,
   paragraphOffsetIndex,
   trailingInsertionDestination,
   type ParagraphOffsetIndex,
@@ -89,7 +95,7 @@ export function isRunProperties(node: OoxmlNode): boolean {
  * while their own insertion card was still unanswered. The mirror of `insideOwnInsertion`,
  * which refuses to WRITE a record in the same position.
  */
-function insertedRunProperties(mint: () => string, run: OoxmlNode): OoxmlNode[] {
+export function insertedRunProperties(mint: () => string, run: OoxmlNode): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   for (const child of childrenOf(run)) {
     if (!isRunProperties(child)) continue;
@@ -383,6 +389,15 @@ function applyTrackedInsertion(
     ? Math.max(aim, replacedEnd(paragraph, offsets, replaced!, revision.author, aim))
     : aim;
   const trailingDestination = trailingInsertionDestination(paragraph, offset);
+  const fieldDestination = textFormFieldEndAt(paragraph, offset)
+    ? insertionDestination(paragraph, offset, null)
+    : null;
+  const fieldSite = fieldDestination?.site;
+  const fieldLeftRunId = fieldDestination
+    ? [...offsets.segments].reverse().find((segment) => segment.end === offset)?.runId
+    : undefined;
+  const fieldLeftRun = fieldLeftRunId ? findNode(part, fieldLeftRunId) : null;
+  const fieldProperties = () => (fieldLeftRun ? insertedRunProperties(mint, fieldLeftRun) : []);
   const rightBiasedDestination =
     bias === 'right' ? insertionDestination(paragraph, offset, null, bias) : null;
   // Minted LAZILY, on the first wrapper actually built: `nextRevisionId` walks the whole
@@ -506,6 +521,56 @@ function applyTrackedInsertion(
       const start = cursor.offset;
       const end = start + length;
 
+      if (fieldDestination) {
+        // An offset cannot distinguish the result from its closing chrome. Use the
+        // same structural insertion site as plain typing, including shared runs.
+        if (
+          fieldSite?.kind === 'newRun' &&
+          fieldSite.holder.id === (parent?.id ?? paragraph.id) &&
+          node.id ===
+            fieldSite.holder.children[fieldSite.index ?? fieldSite.holder.children.length]?.id
+        ) {
+          const inserted =
+            insertionAuthor(stack) === revision.author
+              ? payload.nodes
+                ? runOf(mint, [...fieldProperties(), ...payload.nodes(mint)])
+                : payload.run!(mint)
+              : wrap(fieldProperties(), containerDepth);
+          out.push(inserted, node);
+          placed = true;
+          cursor.offset = end;
+          continue;
+        }
+        if (fieldSite?.kind === 'atRunIndex' && node.id === fieldSite.run.id) {
+          const children = childrenOf(node);
+          const properties = () => insertedRunProperties(mint, node);
+          const head = runOf(mint, children.slice(0, fieldSite.index));
+          const tail = runOf(mint, [
+            ...children.filter(isRunProperties).map((child) => copy(mint, child)),
+            ...children.slice(fieldSite.index),
+          ]);
+          const own = insertionAuthor([...stack, node]) === revision.author;
+          const inserted = own
+            ? payload.nodes
+              ? runOf(mint, [...properties(), ...payload.nodes(mint)])
+              : payload.run!(mint)
+            : wrap(properties(), containerDepth);
+          out.push(
+            ...(contentOf(head).length ? [head] : []),
+            inserted,
+            ...(contentOf(tail).length ? [tail] : [])
+          );
+          placed = true;
+          cursor.offset = end;
+          continue;
+        }
+        if (!fieldDestination.path.has(node.id)) {
+          out.push(node);
+          cursor.offset = end;
+          continue;
+        }
+      }
+
       // Atom chrome measures zero at one offset. Let all of it pass before inserting, or the
       // new text lands inside the field and remains invisible.
       if (isAtomTailRun(node, atoms)) {
@@ -563,7 +628,11 @@ function applyTrackedInsertion(
       if (
         container &&
         ((offset > start && offset < end) ||
-          ((ownInsertion || holdsReplaced || sharedTrailingOwner || rightBiasedOwner) &&
+          ((ownInsertion ||
+            holdsReplaced ||
+            sharedTrailingOwner ||
+            rightBiasedOwner ||
+            fieldDestination?.path.has(node.id)) &&
             offset >= start &&
             offset <= end))
       ) {
@@ -580,7 +649,12 @@ function applyTrackedInsertion(
           (holdsReplaced || (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
           offset === cursor.offset
         ) {
-          rebuilt.push(wrap([], nextInlineContainerDepth(node, containerDepth)));
+          rebuilt.push(
+            wrap(
+              fieldDestination ? fieldProperties() : [],
+              nextInlineContainerDepth(node, containerDepth)
+            )
+          );
           placed = true;
         }
         out.push({ ...node, children: rebuilt } as OoxmlNode);
@@ -697,7 +771,7 @@ function applyTrackedInsertion(
     if (offset !== cursor.offset) {
       return { ok: false, reason: 'offset-out-of-range', detail: 'offset past the paragraph' };
     }
-    children = [...children, wrap([], 0)];
+    children = [...children, wrap(fieldDestination ? fieldProperties() : [], 0)];
   }
   if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);

@@ -132,6 +132,9 @@ export function insertRunPayloadAtOffset(
   if (site.kind === 'appendToRun') {
     return insertChildren(part, site.run.id, site.run.children.length, payload, options);
   }
+  if (site.kind === 'atRunIndex') {
+    return insertChildren(part, site.run.id, site.index, payload, options);
+  }
 
   return insertChildren(
     part,

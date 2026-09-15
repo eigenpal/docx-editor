@@ -34,7 +34,7 @@ import {
   listItemsOf,
   parseCheckboxValue,
 } from './tree-op-nodes.ts';
-import { segmentsOf } from './tree-op-segments.ts';
+import { insertionDestination, segmentsOf, textFormFieldEndAt } from './tree-op-segments.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
 
 /**
@@ -56,6 +56,12 @@ export function contentControlAtCaret(
   }
   if (start !== end) {
     return innermostContentControlAround(part, paragraph.id);
+  }
+  if (textFormFieldEndAt(paragraph, start)) {
+    return innermostContentControlAround(
+      part,
+      insertionDestination(paragraph, start, null, bias).landingNodeId
+    );
   }
   const after = segments.find((segment) => segment.start === start);
   const before = [...segments].reverse().find((segment) => segment.end === start);
@@ -109,6 +115,12 @@ export function rangeTouchesContentRestriction(
   end: number,
   bias?: 'left' | 'right'
 ): TreeOpRejection | null {
+  if (start === end && textFormFieldEndAt(paragraph, start)) {
+    return nodeTouchesContentRestriction(
+      part,
+      insertionDestination(paragraph, start, null, bias).landingNodeId
+    );
+  }
   const segments = segmentsOf(paragraph);
   const overlappingRunIds = new Set(
     segments.filter((segment) => segment.start < end && segment.end > start).map((s) => s.runId)
