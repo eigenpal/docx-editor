@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Give the packaged dialogs Word-like default styles with bordered inputs and visible buttons that survive host CSS resets such as Tailwind preflight. Popup parts now forward `id`, `aria-*`, and `data-*` attributes to the rendered element, and parts rendered with `asChild` keep the packaged classes off your own element.
+Style packaged dialogs with bordered inputs and visible buttons that withstand host CSS resets. Forward `id`, `aria-*`, and `data-*` attributes through popup parts, and omit decorative classes when using `asChild`.

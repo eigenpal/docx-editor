@@ -31,7 +31,7 @@ Obtain model objects from `context.document`; do not construct them.
 | `ClientResult`                                                                       | `value`, `isLoaded`; support type with no public document-method producer      | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `TrackedObjects`                                                                     | `add`, `remove`, each accepting one object or an array                         | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `LoadOption`, `LoadQueryOptions`                                                     | Explicit property names; `select`, `top`, `skip`; reserved `expand`            | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
-| `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `isDocxEditorError` | Stable refusal codes, `target`, resource limit, and revision metadata          | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
+| `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `isDocxEditorError` | Stable error codes, `target`, resource limit, and revision metadata            | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 
 ## Document and text objects
 
@@ -72,7 +72,7 @@ Each collection also exposes loaded, read-only `items`.
 | Object or type                                                                                  | Public members beyond inherited members                                                                                                                                                            | Guide                                                                   |
 | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `Field`, `FieldCollection`                                                                      | Field `code`, `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject`                                                                            | [Fields and pagination](/docs/2.x/editor-api/fields)                    |
-| `FieldType`, `FieldTypeLiteral`                                                                 | Office-shaped field vocabulary; authoring supports only the documented page-field subset                                                                                                           | [Fields and pagination](/docs/2.x/editor-api/fields)                    |
+| `FieldType`, `FieldTypeLiteral`                                                                 | Office.js-compatible field vocabulary; authoring supports only the documented page-field subset                                                                                                    | [Fields and pagination](/docs/2.x/editor-api/fields)                    |
 | `Section`, `SectionCollection`                                                                  | Section `body`, `pageSetup`, `getHeader`, `getFooter`, `getNext`; collection `getFirst`                                                                                                            | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `PageSetup`                                                                                     | `pageWidth`, `pageHeight`, `orientation`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin`                                                                                                 | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `HeaderFooterType`, `PageOrientation`, `BreakType`                                              | Story variants, orientation, and break vocabulary                                                                                                                                                  | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
@@ -97,5 +97,8 @@ Each collection also exposes loaded, read-only `items`.
 Host factories, runtime capabilities, input budgets, and collaboration setup are DocxEditor infrastructure.
 They do not represent Microsoft Office add-in APIs.
 Body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates include documented differences.
+
+## Next steps
+
 See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) before migrating Office.js code.
 The generated reference remains the declaration authority; runtime notes and tests establish supported behavior.

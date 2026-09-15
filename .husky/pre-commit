@@ -1,65 +1,33 @@
 #!/bin/sh
 
-# Run type checking
-echo "Running TypeScript type check..."
-bun run typecheck
-if [ $? -ne 0 ]; then
-  echo "TypeScript type check failed. Please fix the errors before committing."
-  exit 1
-fi
+# Keep every whole-repository gate. Local caches avoid rechecking unchanged files;
+# the package scripts and CI still run without these cache flags.
+run_check() {
+  check_label="$1"
+  shift
+  check_started=$(date +%s)
+  printf '\nRunning %s...\n' "$check_label"
+  if "$@"; then
+    printf 'Passed %s (%ss)\n' "$check_label" "$(($(date +%s) - check_started))"
+  else
+    check_status=$?
+    printf 'Failed %s (%ss, exit %s)\n' "$check_label" "$(($(date +%s) - check_started))" "$check_status" >&2
+    exit "$check_status"
+  fi
+}
 
-# Parity gate — blocks drift between the React and Vue adapter exports. The Vue package
-# ships, so the drift is a consumer-facing break, and CI runs the same check; failing here
-# saves the round-trip.
-# Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
-echo "Running parity gates..."
-bun run check:parity
-if [ $? -ne 0 ]; then
-  echo "Parity gates failed. Fix the drift or document it in notes/intentional-export-divergence.md."
-  exit 1
-fi
+# Fix staged formatting first, then validate the resulting source with every gate.
+run_check 'staged formatting and lint' npx lint-staged
 
-# The license-header checks used to ride along inside `check:parity`. They have
-# nothing to do with React/Vue parity, so they stay wired up on their own.
-echo "Running license header checks..."
-bun run check:license-headers
-if [ $? -ne 0 ]; then
-  echo "License header check failed. Run 'bun run fix:pro-license-headers' / 'bun run fix:editor-api-license-headers'."
-  exit 1
-fi
+# Each workspace gets compiler-managed build info under its own node_modules.
+# TypeScript tracks imported files and compiler options, not just the staged paths.
+run_check 'TypeScript type check' bun run typecheck --incremental --tsBuildInfoFile node_modules/.cache/precommit/typecheck.tsbuildinfo
+run_check 'parity gates' bun run check:parity
+run_check 'license header checks' bun run check:license-headers
+run_check 'API snapshot check' bun run api:check
 
-# API snapshot gate — catches changes to any @public symbol that the
-# committer forgot to regenerate. CI runs the same `api:check`, so failing
-# here saves a round-trip. Fix is `bun run api:extract` then
-# `git add docs/api/` and `git commit --amend --no-edit` (or re-stage on
-# a fresh commit).
-echo "Running API snapshot check..."
-bun run api:check
-if [ $? -ne 0 ]; then
-  echo "API snapshot drift. Run 'bun run api:extract' and commit the updated docs/api/*.api.md files."
-  exit 1
-fi
-
-# Formatting, over the whole source tree rather than the staged subset. `lint-staged` runs
-# prettier on what you staged; this catches a file an earlier command rewrote and you did not.
-echo "Checking formatting..."
-bun run format:check
-if [ $? -ne 0 ]; then
-  echo "Formatting drift. Run 'bun run format' and re-stage."
-  exit 1
-fi
-
-# Lint, over the whole source tree for the same reason — and because the rules that matter here
-# are WHOLE-FILE ones. `max-lines` cannot be seen by typecheck or by the test suite, and
-# `eslint --fix` cannot fix it, so without this a commit that grows a large file passes every
-# other gate and fails CI.
-echo "Running lint..."
-bun run lint
-if [ $? -ne 0 ]; then
-  echo "Lint failed. 'max-lines' is fixed by extracting a module, not by raising the cap."
-  exit 1
-fi
-
-# Run lint-staged (prettier + eslint on staged files)
-echo "Running lint-staged..."
-npx lint-staged
+# Content hashes survive branch switches and catch edits even when mtimes match.
+# These still walk the entire source tree, including unstaged files. The lint
+# script also runs the whole-file max-lines guard on every invocation.
+run_check 'formatting check' bun run format:check --cache --cache-strategy content --cache-location node_modules/.cache/precommit/prettier
+run_check 'lint' bun run lint --cache --cache-strategy content --cache-location node_modules/.cache/precommit/eslint

@@ -21,7 +21,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core   # React
 npm install @docx-editor.dev/vue @docx-editor.dev/core     # Vue
 ```
 
-See the [React](#react) or [Vue](#vue) quick start below.
+See the [React](#react) or [Vue](#vue) quick start.
 
 For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the
 packages with their build tool.
@@ -117,8 +117,9 @@ Pass usable font bytes for Word-accurate line and page breaks. Without them, the
 editor uses fallback measurement that does not guarantee Word-compatible
 layout.
 
-Use `packagedFonts()` from `@docx-editor.dev/fonts` for local substitutes. Add
-`googleFonts()` only when your application accepts third-party font requests.
+Use `packagedFonts()` from `@docx-editor.dev/fonts` for packaged substitutes.
+Use `customFonts()` from `@docx-editor.dev/core/editor` for your own font files.
+Add `googleFonts()` when your application accepts third-party font requests.
 
 See [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 

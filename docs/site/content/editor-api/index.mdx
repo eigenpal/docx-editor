@@ -1,6 +1,6 @@
 ---
 title: 'Overview'
-description: 'Office.js-compatible editing API: an object model that batches its work, running on a server over bytes or in a page against an editor already open.'
+description: 'Edit DOCX text, formatting, tables, and review data with an Office.js-compatible API on a server or in an open browser editor.'
 category: 'Editing API'
 order: 50
 seoTitle: 'Office.js-compatible DOCX editing API'
@@ -20,14 +20,12 @@ for supported members and differences from Word.
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 ```
 
-`@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
-project must resolve exactly one copy of it, shared with any editor adapter you install.
+The API and editor adapters must share one resolved copy of the `@docx-editor.dev/core` peer dependency.
 
 ## Guides by task
 
 Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and
 [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
-Every example uses the supported public model and explicit sync boundaries.
 
 | Task                                                      | Guide                                                                   |
 | --------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -41,60 +39,25 @@ Every example uses the supported public model and explicit sync boundaries.
 | Set page geometry and edit headers, footers, or notes     | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | Fill template controls and edit their metadata            | [Content controls](/docs/2.x/editor-api/content-controls)               |
 | Discuss content and manage threads                        | [Comments](/docs/2.x/editor-api/comments)                               |
-| Create, inspect, and decide redlines                      | [Tracked changes](/docs/2.x/editor-api/revisions)                       |
+| Create, inspect, accept, or reject tracked changes        | [Tracked changes](/docs/2.x/editor-api/revisions)                       |
 | Find any public object, method, property, or support type | [API member directory](/docs/2.x/editor-api/reference)                  |
-
-## Effective document editing
-
-The supported subset includes text, extended font formatting, lists, rectangular tables, inline PNG/JPEG pictures,
-page setup, content controls, review operations, and plain PAGE/NUMPAGES fields.
-Some parameter values and document structures remain unsupported.
-See the [compatibility matrix](/docs/2.x/editor-api/office-js-api#compatibility-matrix) for those limits.
-
-Batch independent reads and writes. Supported read-derived proxies resolve before the atomic write transaction.
-Sync after insertion before configuring the returned object.
-Structural edits sharing a paragraph can conflict. Different list levels can batch after list creation completes.
-Field result updates cannot share a sync with layout-changing writes.
-
-Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` from the repository root.
-The fixed 81-member profile appears in `packages/editor-api/compat/reports/agent-editing-summary.md`.
-Endpoint details appear in `agent-editing-report.md` and `agent-editing-report.json` in that directory.
-The exhaustive editing report is `report.md`.
-CI reports percentages informationally; presence and matching signatures do not prove runtime equivalence with Word.
-Per-endpoint runtime domains and differences live in `packages/editor-api/compat/runtime-notes.json`.
-
-Server page-field evaluation needs explicit pagination with a measurer using registered font resources.
-The [font-backed pagination guide](/docs/2.x/editor-api/office-js-api#measured-page-fields-on-a-server)
-links a complete runnable agent that loads fonts, edits a report, evaluates fields, and saves the result.
 
 ## Choose a host
 
-| `DocumentCapabilities` field | Server runtime | Browser runtime |
-| ---------------------------- | -------------- | --------------- |
-| `document`                   | Yes            | Yes             |
-| `save`                       | Yes            | No              |
-| `events`                     | Yes            | Yes             |
-| `selection`                  | No             | Yes             |
-| `scrolling`                  | No             | Yes             |
-| `layout`                     | No             | Yes             |
+Use the root entry for server jobs and `/browser` to edit an open editor.
+For shared documents, use `DocxEditor.createCollaborative()` with your collaboration session.
 
-`runtime.capabilities` reports these values. The values remain fixed for the
-runtime's lifetime.
+| Host          | Save through      | Requirements                                   |
+| ------------- | ----------------- | ---------------------------------------------- | --- | --------- |
+| Server        | `runtime.save()`  | DOCX bytes and Node.js `^20.16.0               |     | >=22.3.0` |
+| Browser       | The owning editor | An attached core, React, or Vue editor         |
+| Collaborative | `runtime.save()`  | DOCX bytes and an `EditorCollaborationSession` |
 
-The current mode and document state can still refuse writes. These dynamic
-permissions are not capability fields.
+Supply an `author` for comments, replies, and tracked edits.
+Browser review writes also require the Pro review module and an editable document.
+Capabilities describe host features; handle write errors from the call or `sync()`.
 
-Use these prerequisites:
-
-| Task                      | Prerequisite                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------ |
-| Create a server runtime   | DOCX bytes and one resolved copy of `@docx-editor.dev/core`                                      |
-| Create a browser runtime  | An attached editor from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, or the core editor API |
-| Write a comment or reply  | A non-empty `author`                                                                             |
-| Write browser review data | The Pro review module, an editable mode, and a host that accepts the write                       |
-| License and support       | See the [pricing page](https://www.docx-editor.dev/pricing)                                      |
-
-A refusal from `sync()` is authoritative.
+See [Runtime and setup](/docs/2.x/editor-api/runtime) for capabilities, parsing limits, and resource cleanup.
 
 ## On a server
 
@@ -122,55 +85,8 @@ try {
 }
 ```
 
-`createServer` completes its bounded parse before it resolves and does not retain the input
-`Uint8Array`; the caller may reuse or transfer that buffer afterward. Each `save()` returns a fresh,
-caller-owned `Uint8Array`. Mutating or transferring one save result cannot change the runtime or a
-later save.
-
-The server runtime is detached from every live editor. To load the result into a live editor, make
-that replacement explicit:
-
-```ts
-const source = new Uint8Array(await editor.save());
-const detached = await DocxEditor.createServer(source);
-try {
-  // inspect, search, and edit with detached.run(...)
-  const result = await detached.save();
-  editor.load(result); // the live document changes only here
-} finally {
-  detached.dispose();
-}
-```
-
-To discover bookmarks without first knowing their text, enumerate the story that owns them:
-
-```ts
-await runtime.run(async (context) => {
-  const bookmarks = context.document.body.bookmarks;
-  bookmarks.load('items');
-  await context.sync();
-
-  for (const bookmark of bookmarks.items) bookmark.load('name');
-  await context.sync();
-
-  console.log(bookmarks.items.map(({ name }) => name));
-});
-```
-
-`document.body.bookmarks` covers only the main body story. A header or footer `Body` has its own
-collection; this accessor never combines separate stories into a document-wide answer.
-
-### Handle resource limits
-
-`DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
-Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
-The XML reader uses the engine's default budget of 10,000,000 elements per part.
-Set `limits.xml.maxElements` to lower that budget for untrusted input or raise it for larger documents,
-up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
-The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
-These budgets do not guarantee that a document fits in the host's memory.
-Counts and byte budgets must be finite nonnegative integers; compression ratios may be fractional.
-Malformed input and invalid budget options reject with `InvalidArgument`.
+`createServer()` finishes parsing before it resolves. Each `save()` returns a fresh byte array.
+To update an open editor from a detached server job, load the saved bytes into that editor.
 
 ## Create tracked changes on a server
 
@@ -180,7 +96,8 @@ the runtime. The mode applies to that runtime and persists across `run()` calls.
 
 Tracked edits support text within one paragraph, including table cells. Edits
 that touch pending revisions, structural edits, and formatting edits are rejected
-atomically. `TrackAll` and browser runtime tracking-mode control are unsupported.
+atomically. `TrackAll` is unsupported. Browser tracked writes require the Pro review module;
+the runtime setting does not change the editor UI mode.
 
 A pending row insertion or deletion blocks tracked edits throughout that row,
 including other cells and nested tables.
@@ -192,215 +109,55 @@ To publish suggestions to a shared document, use
 
 ## In the browser
 
-The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits apply to the open document with the reader's undo stack intact, so there is no `save()`: the host continues to call its existing save path.
+Pass an open core, React, or Vue editor to `createBrowser()`.
+Edits use that editor's undo history.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
-await runtime.run(async (context) => {
-  const heading = context.document.body.paragraphs.getFirstOrNullObject();
-  heading.load('text');
-  await context.sync();
+try {
+  await runtime.run(async (context) => {
+    const heading = context.document.body.paragraphs.getFirstOrNullObject();
+    heading.load('text');
+    await context.sync();
 
-  if (!heading.isNullObject) heading.font.bold = true;
-  await context.sync();
-});
-```
-
-The `/browser` entry includes integration with the painted engine. Import the root entry on servers
-to keep that browser code out of the bundle.
-
-The optional `author` has the same meaning as it does for `createServer`.
-It supplies the identity for comments. Server runtimes also require it for tracked text edits.
-
-## Delete comments and Undo
-
-Deleting a top-level `Comment` removes its entire thread and story anchors. Deleting a
-`CommentReply` removes only that reply and preserves its parent and siblings. Queue multiple
-deletions before one `sync()` when they should be one atomic browser Undo unit:
-
-```ts
-const comments = context.document.comments;
-comments.load('items');
-await context.sync();
-
-for (const comment of comments.items.slice(0, 2)) comment.delete();
-await context.sync(); // one transaction; editor Undo restores both threads
-```
-
-The server runtime supports the same object-model calls without a browser module.
-
-## Range snapshots
-
-Ranges retain the paragraph offsets where they were found.
-They do not follow later text edits inside those paragraphs, even when their proxies are tracked.
-After editing a paragraph, search again before acting on another target there.
-Use the range returned by `insertText()` after sync to address its inserted text.
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for snapshot and same-batch editing limits.
-
-## Programming model
-
-- Reading a property you did not `load()` throws. This catches typos before they affect later writes.
-- Navigation-property expansion is not supported. A non-empty `LoadQueryOptions.expand` is
-  rejected with `InvalidArgument`; load the navigation object or collection explicitly instead.
-- `sync()` resolves supported prerequisite reads and commits one atomic write transaction. It can use several transport calls. A refused write batch applies no writes.
-- Objects are proxies into a document the runtime owns. They remain valid across `sync()` calls within one
-  `run`. To carry one into a later `run`, track it and pass it to
-  `runtime.run(object, callback)` for adoption. No proxy remains valid after `dispose()`.
-- `getFirstOrNullObject` and `getLastOrNullObject` return an object whose `isNullObject` is `true` after the sync, which is the difference between an absent heading and a thrown error.
-
-For content-control writes, load `isBound` with the other properties and skip controls where it is
-true. That boolean is safe preflight metadata, not a write guarantee: `sync()` always checks the
-current document again and atomically refuses the batch if a control is bound by then.
-
-## Entries
-
-| Entry                                 | Use when                                             |
-| ------------------------------------- | ---------------------------------------------------- |
-| `@docx-editor.dev/editor-api`         | Servers, workers, build scripts: bytes in, bytes out |
-| `@docx-editor.dev/editor-api/browser` | A page, driving an editor the host already created   |
-
-Both export the same vocabulary (the lifecycle types, the object model, the error type) so consumer code compiles against either. They differ by one member: `createBrowser`.
-
-## Integrate with an application model
-
-This package ships no model integration, tool catalog or chat UI. The application that owns the
-model defines which operations to expose, how to describe them and how to handle refusals. A tool
-such as `add_comment` performs its document work inside a `run` block. Keep its chat UI with the
-application's other chrome.
-
-### Expose focused tools to an agent
-
-Give each tool one document task. Validate its input before the tool reaches the document. Keep the
-complete read or write inside one `run` callback.
-
-This AI SDK example exposes one read tool and two small writing tools:
-
-```ts
-import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
-import { tool } from 'ai';
-import { z } from 'zod';
-
-export function createDocumentTools(runtime: DocxEditorRuntime) {
-  return {
-    read_document: tool({
-      description: 'Read the current document text.',
-      inputSchema: z.object({}),
-      execute: async () =>
-        runtime.run(async (context) => {
-          const body = context.document.body;
-          body.load('text');
-          await context.sync();
-          return { text: body.text };
-        }),
-    }),
-
-    append_paragraph: tool({
-      description: 'Add one paragraph to the end of the document.',
-      inputSchema: z.object({
-        text: z.string().min(1),
-      }),
-      execute: async ({ text }) =>
-        runtime.run(async (context) => {
-          context.document.body.insertParagraph(text, 'End');
-          await context.sync();
-          return { inserted: true };
-        }),
-    }),
-
-    replace_exact_text: tool({
-      description: 'Replace one exact phrase when it occurs once.',
-      inputSchema: z.object({
-        search: z.string().min(1),
-        replacement: z.string(),
-      }),
-      execute: async ({ search, replacement }) =>
-        runtime.run(async (context) => {
-          const matches = context.document.body.search(search, {
-            matchCase: true,
-          });
-          matches.load('items');
-          await context.sync();
-
-          if (matches.items.length !== 1) {
-            return {
-              replaced: false,
-              reason: `Expected one match, found ${matches.items.length}.`,
-            };
-          }
-
-          matches.items[0].insertText(replacement, 'Replace');
-          await context.sync();
-          return { replaced: true };
-        }),
-    }),
-  };
+    if (!heading.isNullObject) heading.font.bold = true;
+    await context.sync();
+  });
+} finally {
+  runtime.dispose();
 }
 ```
 
-Return structured results instead of free-form status text. Refuse ambiguous writes instead of
-choosing a match for the agent. Use separate tools for comments, tracked proposals, tables, and
-content controls.
+Dispose the runtime when you finish. Save browser edits through the owning editor.
 
-For the full walkthrough, see [Build a DOCX agent](/docs/2.x/build-a-docx-agent).
-For a complete tool catalog, see the
-[writer agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/write-agent).
+## Editing rules
 
-### Choose one revision text projection
+- Load properties before reading them. Load a collection's `items`, sync, then load each item's properties.
+- Batch independent writes. Each `sync()` commits all queued writes or none; earlier successful syncs remain committed.
+- Sync after insertion before using the returned object.
+- After editing a paragraph, search again before editing another target there. Ranges retain their original offsets.
+- Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.
+- Handle errors by `code`. On `StaleDocument`, read again and reconsider the edit.
 
-The runtime uses the `allMarkup` text projection by default. Select one
-projection when you create the runtime:
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+for recovery and [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for batching limits.
 
-| Content             | `allMarkup`            | `original`                      |
-| ------------------- | ---------------------- | ------------------------------- |
-| Ordinary text       | Visible and searchable | Visible and searchable          |
-| Pending deletion    | Visible and searchable | Visible and searchable          |
-| Pending insertion   | Visible and searchable | Hidden and not searchable       |
-| Pending replacement | Shows both sides       | Shows the deleted original only |
+## Build an agent
 
-`original` matches Word's **Original** review view.
+Define application tools around individual document tasks. Validate inputs and return plain data from each `runtime.run()` callback.
+Use `revisionTextView` to choose whether reads include pending insertions.
+Keep chat UI, model calls, and collaboration transport in your application.
 
-```ts
-const runtime = DocxEditor.createBrowser(editor, {
-  revisionTextView: 'original',
-});
-
-await runtime.run(async (context) => {
-  const body = context.document.body;
-  body.load('text');
-  const matches = body.search('original phrase');
-  matches.load('items');
-  await context.sync();
-
-  console.log(body.text);
-});
-```
-
-`revisionTextView` is a DocxEditor runtime option. It does not belong to the Office.js object model.
-Office.js provides display controls through `document.activeWindow.view.revisionsFilter`. It does
-not provide a text-projection API for the values returned by text reads.
-
-A range returned by a search uses the runtime's text projection. Its `text` property and nested
-searches use the same projection. The range endpoints remain model offsets, so `insertText()`,
-`insertComment()`, and `select()` target the text that the search returned.
-
-Selection does not change the insertion rule. `range.select()` selects the full range, so the
-reader's next text insertion replaces that phrase. Use `range.select('End')` to collapse the caret
-and insert after the phrase.
-
-<Cards>
-  <Card title="Build a DOCX agent" href="/docs/2.x/build-a-docx-agent">
-    Define app-owned tools, choose a runtime, and keep tracked changes reviewable.
-  </Card>
-  <Card title="Office.js compatibility" href="/docs/2.x/editor-api/office-js-api">
-    The supported subset, how compatibility is verified, and what it omits.
-  </Card>
-</Cards>
+See [Build a DOCX agent](/docs/2.x/build-a-docx-agent) for a walkthrough,
+or the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md)
+for tracked edits and recovery.
 
 ## License
 
-This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
+See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
 ## Next steps
 

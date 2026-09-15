@@ -121,6 +121,49 @@ describe('Enter and the style for the following paragraph', () => {
     expect(authoredStyles(surface)).toEqual(['Heading1', null]);
   });
 
+  test('typing after a heading inherits the follower style, not the heading size', () => {
+    const styles =
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+      STYLES;
+    const { surface } = mount(docx(styles, HEADING));
+    pressEnterAt(surface, 0, 5);
+    expect(authoredStyles(surface)).toEqual(['Heading1', null]);
+    expect(surface.formatting().fontSizeHalfPoints).toBe(22);
+    surface.type('Body');
+    expect(surface.formatting().fontSizeHalfPoints).toBe(22);
+  });
+
+  test('Shift+Enter stays inside the heading and keeps its size', () => {
+    const { surface } = mount(docx(STYLES, HEADING));
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    surface.insertLineBreak();
+    surface.type('More title');
+    expect(authoredStyles(surface)).toEqual(['Heading1']);
+    expect(surface.formatting().fontSizeHalfPoints).toBe(40);
+  });
+
+  test('direct run formatting survives repeated Enter, typing, and save/reopen', async () => {
+    const body = '<w:p><w:r><w:rPr><w:sz w:val="32"/><w:i/></w:rPr><w:t>Hello</w:t></w:r></w:p>';
+    const { editor, surface } = mount(docx(STYLES, body));
+    pressEnterAt(surface, 0, 5);
+    surface.splitParagraph();
+    surface.type('More');
+    surface.splitParagraph();
+    surface.type('Still formatted');
+    const reopened = mount(new Uint8Array(await editor.save()));
+    const id = reopened.surface.session.paragraphIds()[3]!;
+    reopened.surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    expect(reopened.surface.formatting().fontSizeHalfPoints).toBe(32);
+    expect(reopened.surface.formatting().italic).toBe(true);
+  });
+
   test('Enter inside a heading gives two headings', () => {
     const { surface } = mount(docx(STYLES, HEADING));
     pressEnterAt(surface, 0, 2);

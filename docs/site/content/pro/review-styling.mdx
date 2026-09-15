@@ -127,9 +127,8 @@ effect. Unmatched authors keep ramp colors unless `ColorByChangeType` is mounted
 | `spanClassName` / `span-class-name` | Adds classes to painted change spans.             |
 | `avatarUrl` / `avatar-url`          | Sets the review sidebar avatar.                   |
 
-`background` tints every change. `activeBackground` replaces the band over the
-open change only, with the rule under it. Set both to `transparent` to clear
-the whole treatment.
+`background` tints all changes by that author. `activeBackground` sets the open
+change's highlight band and removes its default underline. Set both to `transparent` to clear the backgrounds.
 
 Keep span CSS metric-safe. Do not change font size, weight, or family. Such
 changes make painted text differ from measured layout.

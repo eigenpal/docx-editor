@@ -9,8 +9,8 @@ A `List` groups paragraphs by their numbering definition within a body story.
 Use `Body.lists` to discover existing lists, or `Paragraph.startNewList()` to create one.
 List levels use zero-based indexes from `0` through `8`.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Create and configure a list
 
@@ -49,7 +49,7 @@ Load a list's `id` before using its numeric value.
 `List.getLevelParagraphs(level)` returns the paragraphs at one level.
 Load collection items, then load their text or formatting properties.
 
-To attach an existing paragraph, pass a loaded list id and defined level:
+To attach an existing paragraph, pass a loaded list ID and defined level:
 
 ```ts
 const list = context.document.body.lists.getFirst();
@@ -61,9 +61,9 @@ await context.sync();
 
 `Paragraph.attachToList(listId, level)` returns the addressed `List`.
 `Paragraph.detachFromList()` removes that paragraph's list membership.
-`Paragraph.list` resolves its existing list; a paragraph without a list refuses with `InvalidArgument`.
+`Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`.
 `Paragraph.listItem.level` reads or writes its level.
-Existing lists can omit levels; assigning a missing level refuses.
+Existing lists can omit levels. The runtime rejects assignments to a missing level.
 There is no marker-text `listString` or `siblingIndex` property in this subset.
 
 ## Choose level markers
@@ -84,7 +84,7 @@ Picture bullets are unavailable.
 `ListNumbering` provides `None`, `Arabic`, `UpperRoman`, `LowerRoman`, `UpperLetter`, and `LowerLetter`.
 Numeric entries in `formatString` reference zero-based levels.
 For example, `[0, '.', 1, ')']` combines level counters with literal punctuation.
-Provide valid level references and counters; unsupported values refuse.
+The runtime validates level references and counters and rejects unsupported values.
 
 ## Respect batching and tracking limits
 
@@ -95,13 +95,14 @@ Different proxies that write the same list level still conflict.
 Structural changes sharing a paragraph can also conflict.
 Sync list creation before attaching paragraphs or changing level properties.
 
-List authoring is a structural edit. Runtime-local tracking mode refuses it.
-Protected paragraphs and unsupported numbering structures can also refuse.
-List formatting refuses numbering instances shared across separate stories, including the main body and notes.
-It also refuses instances referenced by styles because inherited membership can affect protected paragraphs.
-This conservative refusal includes references in unused styles.
+The runtime rejects list creation and formatting while tracking changes.
+Edits to protected paragraphs and unsupported numbering structures also fail.
+The runtime rejects formatting for numbering instances shared across stories, such as the main body and notes.
+It also rejects instances referenced by styles, including unused styles, because inherited membership can affect protected paragraphs.
 On a conflict, read the document again before separating the proposed operations.
 Do not remove existing numbering structure to force a write.
+
+## Next steps
 
 See [Formatting and styles](/docs/2.x/editor-api/formatting),
 [Fields and pagination](/docs/2.x/editor-api/fields), and [API member directory](/docs/2.x/editor-api/reference).

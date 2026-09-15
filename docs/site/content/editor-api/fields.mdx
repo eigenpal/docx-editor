@@ -7,11 +7,11 @@ order: 59
 
 A field stores an instruction and cached result text.
 Reading a field does not execute its instruction.
-The authoring and evaluation subset supports plain `PAGE` and `NUMPAGES` instructions, without switches.
-Other field instructions remain inert; unsupported authoring or evaluation refuses.
+You can insert and evaluate plain `PAGE` and `NUMPAGES` fields without switches.
+The runtime preserves other instructions but rejects attempts to create or evaluate them.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Insert a page field
 
@@ -19,7 +19,7 @@ Unless shown otherwise, `context` and existing proxies belong to an active `runt
 It accepts `Before`, `After`, `Start`, `End`, or `Replace`.
 Use `Page` or `NumPages`, or `Empty` with the text `PAGE` or `NUMPAGES`.
 Omitting the type also requires supported instruction text.
-`removeFormatting: true` refuses.
+The runtime rejects `removeFormatting: true`.
 
 Resolve an anchor, insert the field, then update its result in a separate sync:
 
@@ -42,10 +42,10 @@ Insertion does not calculate pagination.
 `Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint.
 `Replace` requires an eligible span in one paragraph.
 
-`FieldType` exports the Office-shaped field vocabulary.
+`FieldType` exports the Office.js-compatible field vocabulary.
 `FieldTypeLiteral` provides corresponding string literals.
 The presence of an enum value does not mean its instruction can run.
-For example, `FieldType.page` works within this subset; unrelated field types refuse authoring.
+For example, `FieldType.page` is supported. The runtime rejects creation of fields outside the `PAGE` and `NUMPAGES` subset.
 
 ## Read and change instructions
 
@@ -69,7 +69,7 @@ await runtime.run(async (context) => {
 `Field.code = 'PAGE'` or `'NUMPAGES'` changes a supported page-field instruction.
 It preserves the field identity and cached result until explicit evaluation.
 Supported simple fields and ordinary complex fields with sibling runs can accept code changes.
-Protected fields, unsupported instruction shapes, and tracked mutations refuse.
+The runtime rejects edits to protected fields, unsupported instructions, and edits made while tracking changes.
 `Field.delete()` removes the field and its cached result through the supported deletion path.
 Deleted field proxies become invalid.
 
@@ -111,7 +111,7 @@ A browser runtime uses its attached editor's layout.
 ## Update results after document edits
 
 `Field.updateResult()` computes cached text from measured pagination, including supported section page-number formats.
-Save and reopen preserve that computed cache.
+The computed result remains in the DOCX after saving and reopening.
 Load the owning body's text after evaluation when you need the visible result.
 The `Field` object exposes `code`, not a separate `result` property.
 
@@ -120,8 +120,11 @@ They can share queries, but cannot share other document writes.
 Finish text, table, picture, font, and page-layout edits first.
 Then evaluate fields in a separate transaction.
 
-Missing pagination, unsupported instructions, and non-rewritable cached results refuse with `NotSupported`.
+Updates fail with `NotSupported` if pagination is missing, the instruction is unsupported, or the cached result cannot be rewritten.
 The server does not guess a page count or automatically resolve external field instructions.
 On refusal, preserve the document and provide valid measurement resources or select an eligible field.
+
+## Next steps
+
 See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) and
 [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

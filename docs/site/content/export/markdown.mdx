@@ -22,7 +22,9 @@ console.log(result.markdown);
 
 ## Keep images
 
-Pass `{ images: true }` to return image links and `result.media` bytes. Use `createMarkdownZip(result)` for portable downloads, or provide `images.resolveUrl` to save images and return hosted URLs. Use `toMarkdownJSON(result)` for responses without binary arrays.
+Pass `{ images: true }` to return image links and bytes in `result.media`.
+Use `createMarkdownZip(result)` for downloads or `images.resolveUrl` to return URLs from your storage service.
+For JSON responses without image bytes, use `toMarkdownJSON(result)`.
 
 See [image workflows](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/images.md) for browser, local Node.js, and server examples.
 

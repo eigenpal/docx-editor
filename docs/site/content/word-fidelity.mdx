@@ -74,7 +74,8 @@ Its complete authored grid must equal the text-column width plus those margins.
 Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.
 
 Body text wraps beside supported floating tables and below tables that cover the text column.
-Passages of a quarter inch or less remain empty. Captions and headings clear these narrow gaps.
+Text does not wrap into gaps of 0.25 inches or less beside floating tables.
+Captions and headings move past these gaps.
 The table's text distances keep the authored gap between its border and surrounding text.
 Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.
 Negative offsets remain in place when they clear preceding text.
@@ -163,8 +164,8 @@ Existing document settings control kinsoku, Japanese strict rules, custom
 language-specific break restrictions, Korean character wrapping, punctuation
 overflow, and punctuation or kana compression. Punctuation compression removes shared
 side bearings and preserves the ink position during native text selection.
-Shared-bearing compression applies between adjacent punctuation. Paragraph and manual-line
-boundaries retain their advances. Colons can compress before opening brackets,
+Compression removes shared spacing between adjacent punctuation.
+Paragraph and manual line-break boundaries retain their advance widths. Colons can compress before opening brackets,
 bounded by the following bracket's available bearing. With measured glyph bounds,
 colons also compress before closing punctuation. This pair rule halves the colon's
 advance, including authored character spacing. Other centered punctuation,
@@ -172,9 +173,9 @@ authored spaces, outlined text, decorated text, and tracked changes
 retain their advances.
 Colons with highlight or shading retain their advances. If wrapping separates a
 compressed colon from its opening bracket, the paragraph uses natural colon advances.
-Narrow plain LTR East Asian paragraphs can also use measured punctuation bearings to fit the next ordinary glyph
+Narrow plain left-to-right (LTR) East Asian paragraphs can also use measured punctuation bearings to fit the next ordinary glyph
 and its protected punctuation group. Fitting uses measured glyph bounds and preserves source positions.
-Mixed Latin text, fields, decorations, revisions, RTL text, float passages,
+Mixed Latin text, fields, decorations, revisions, right-to-left (RTL) text, gaps beside floating objects,
 and measurers without ink bounds retain conservative fitting.
 Kana uses deterministic advance reductions.
 
@@ -186,9 +187,8 @@ When no inherited or direct Latin font reference exists, the resolved body Latin
 When no style supplies an East Asian face, a resolved body East Asian theme face supplies the default.
 When the East Asian theme language is absent and its face is empty, inherited
 `w:lang/@w:eastAsia` selects the supplemental face. Chinese, Japanese, and Korean use named
-CJK defaults when neither the theme nor the run supplies a face. Word can supply different
-missing-language defaults from its installation language and keyboards. Font origins receive
-these candidates before shaping. Supply suitable fonts for exact glyph metrics.
+CJK defaults when neither the theme nor the run supplies a face. Word's default language can depend on its installation language and keyboards.
+Font resolvers receive the selected candidates before shaping. Supply suitable fonts for matching glyph metrics.
 
 The feature matrix lists the support limits for East Asian typography.
 

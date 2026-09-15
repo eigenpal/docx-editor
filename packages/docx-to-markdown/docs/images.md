@@ -1,6 +1,6 @@
 # Images in browsers, Node.js, and server responses
 
-Enable image extraction with one option:
+Set `images: true` to include image links and extracted bytes:
 
 ```ts
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
@@ -10,11 +10,15 @@ console.log(result.markdown); // ![Description](media/<digest>.png)
 console.log(result.media); // Unique bytes, paths, URLs, dimensions, and occurrences.
 ```
 
-`images: true` and `images: {}` use portable relative URLs. Existing calls omit images and return `media: []`.
+`images: true` and `images: {}` use relative URLs. If you omit `images`, the result contains no image links and returns `media: []`.
 
-Each image contains `id`, `path`, `mimeType`, `bytes`, `byteLength`, `pixelWidth`, `pixelHeight`, `url`, and `occurrences`. The ID is the hexadecimal SHA-256 digest already computed by Core. Its `sha256:` prefix is removed for portable filenames; extraction does not hash bytes again. MIME types and extensions describe the exported bytes, including converted raster images.
+Each image contains its ID, path, URL, MIME type, bytes, intrinsic dimensions, and occurrences.
+The ID is a hexadecimal SHA-256 digest without the `sha256:` prefix. MIME types and extensions describe the exported bytes, including converted images.
 
-Occurrences contain `pageNumber`, `story`, `rootStory`, `partName`, `drawingNodeId`, `paragraphId`, `start`, `displayWidthPx`, `displayHeightPx`, `kind`, `decorative`, and `alt`. Repeated headers and repeated uses of identical bytes share one asset, with separate occurrences and descriptions. Source offsets use UTF-16 code units. Occurrence/page identities describe this export snapshot; retain your document version for stored citations.
+Each occurrence records its page, story, source position, displayed dimensions, drawing kind, and alternative text.
+Repeated uses of identical bytes share one asset with separate occurrences. Source offsets use UTF-16 code units.
+Keep the document version with stored citations: occurrence and page identifiers belong to that export snapshot.
+See the [image types](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/src/media-types.ts) for all returned fields.
 
 ## Preserve displayed image sizes
 
@@ -85,6 +89,8 @@ Anchored images appear at their source paragraph positions in Markdown.
 
 ## Save a local folder
 
+Use `writeMarkdownBundle()` to save Markdown, JSON metadata, and image files:
+
 ```ts
 import { readFile } from 'node:fs/promises';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
@@ -94,7 +100,9 @@ const result = await exportMarkdown(await readFile('input.docx'), { images: true
 await writeMarkdownBundle(result, { directory: './output' });
 ```
 
-The helper writes `document.md`, `document.json`, and `media/`. The parent directory must exist. The output directory can be new or empty; existing files are never overwritten. Files use private permissions (`0o600`, subject to platform support). The JSON file includes full page/review metadata and image metadata, without binary bytes.
+The helper writes `document.md`, `document.json`, and `media/`.
+The parent directory must exist, and the output directory must be new or empty. Existing files are not overwritten.
+Files use `0o600` permissions where supported. JSON includes page, review, and image metadata without image bytes.
 
 ## Convert and download in the browser
 
@@ -165,6 +173,8 @@ Serve untrusted media from an isolated origin without application cookies, or th
 
 ## Sessions, limits, and failure handling
 
+For an existing export session, pass image options to `exportMarkdownFrom()`:
+
 ```ts
 const result = await exportMarkdownFrom(session, {
   images: { maxTotalBytes: 128 * 1024 * 1024 },
@@ -174,7 +184,7 @@ const result = await exportMarkdownFrom(session, {
 
 `exportMarkdownFrom` leaves the caller's session open. Returned bytes survive disposal. `exportMarkdownLayout` remains synchronous and text-only because detached layouts do not own image bytes.
 
-The default limit is **64 MiB of unique extracted bytes**, including assets from omitted text-box stories. It is not a total parsing, layout, or transient-memory limit. `maxTotalBytes` must be a positive safe integer. A limit failure rejects the export before any resolver runs. It does not return partial Markdown. Raise the limit or use `images: false`.
+The default limit is 64 MiB of unique extracted bytes, including assets from omitted text-box stories. It is not a total parsing, layout, or transient-memory limit. `maxTotalBytes` must be a positive safe integer. A limit failure rejects the export before any resolver runs. It does not return partial Markdown. Raise the limit or use `images: false`.
 
 `MarkdownMediaError.code` is `media-limit`, `url-resolution-failed`, `invalid-image-url`, or `image-bytes-unavailable`. Limit errors include `limitBytes` and `actualBytes`, the total observed when the limit was exceeded. Resolver failures retain `cause` and the asset ID. Cancellation uses the existing `ExportResourceError` with code `aborted`; a resolver receives the signal and pending callback waits end promptly. Cancellation cannot interrupt synchronous parsing/layout or undo completed uploads.
 
@@ -184,6 +194,6 @@ The resolver gets a separate byte copy. Mutations cannot corrupt returned assets
 
 ## Output limits
 
-Extraction covers validated ready images published by layout, including body, furniture, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.
+Extraction covers validated ready images published by layout, including the body, headers, footers, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.
 
-Inline and anchored images appear at their source paragraph positions, including table cells. Anchors within projected field results follow the field; display text cannot provide an exact source position. Decorative images have empty alternative text. Text-box content and note separators remain outside Markdown, although their image bytes and occurrences remain available. Unplaced anchors use an explicit `image-placement-fallback` warning. The logical document and affected page emit separate fallback warnings; page warnings include `pageNumber`. Cropping, rotation, and drawing effects are not reproduced. This is not a raw archive extractor.
+Inline and anchored images appear at their source paragraph positions, including table cells. Anchors within projected field results follow the field; display text cannot provide an exact source position. Decorative images have empty alternative text. Text-box content and note separators remain outside Markdown, although their image bytes and occurrences remain available. Unplaced anchors use an explicit `image-placement-fallback` warning. The logical document and affected page emit separate fallback warnings; page warnings include `pageNumber`. Cropping, rotation, and drawing effects are not reproduced.

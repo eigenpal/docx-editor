@@ -9,8 +9,8 @@ The API edits inline PNG and JPEG pictures.
 Use `Body.inlinePictures` or `Range.inlinePictures` to discover pictures.
 Floating shapes, picture bullets, and a general `Shape` object are outside this subset.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Insert image bytes
 
@@ -40,7 +40,7 @@ await runtime.run(async (context) => {
 ```
 
 The runtime validates the image format and bytes.
-Unsupported formats and invalid payloads refuse; changing the filename does not convert an image.
+The runtime rejects unsupported formats and invalid image bytes.
 The API adds package media resources through its document transaction.
 
 ## Read picture properties
@@ -79,19 +79,22 @@ A range collection includes pictures fully contained within that range.
 | `delete()`             | Delete the addressed picture                          |
 
 When aspect locking applies, changing one dimension preserves the ratio.
-Contradictory width and height assignments under the lock refuse.
+If aspect ratio is locked, the runtime rejects conflicting width and height assignments.
 Batch compatible settings on the same picture proxy.
 Use a description that conveys the image's purpose to a reader.
 
-## Handle refusals
+## Handle errors
 
 Newly inserted pictures need sync before resizing, loading, or deleting them.
-Protected, unsupported, or revision-bearing targets can refuse mutation.
-Runtime-local tracking does not support image insertion, removal, or formatting.
+Edits can fail if the target is protected, unsupported, or contains pending revisions.
+The runtime's tracking mode does not support image insertion, removal, or formatting.
 A failed write batch applies none of its document changes.
 Earlier successful syncs remain committed.
 
 For another picture variant, prepare supported PNG or JPEG bytes before insertion.
 This API does not expose cropping, rotation, replacement-by-URL, or floating-picture positioning methods.
+
+## Next steps
+
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
 [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [API member directory](/docs/2.x/editor-api/reference).

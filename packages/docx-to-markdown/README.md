@@ -19,18 +19,22 @@ console.log(result.markdown);
 
 ## Keep images
 
+Set `images: true` to include image links and extracted bytes:
+
 ```ts
 const result = await exportMarkdown(docxBytes, { images: true });
 ```
 
-Get relative image links and `result.media` bytes with page occurrences. Save a folder, download a ZIP in the browser, or return hosted URLs from your server. See [image workflows](docs/images.md).
+`result.media` contains image bytes and their page occurrences.
+See [image workflows](docs/images.md) to save a folder, download a ZIP, or return hosted URLs.
 
 ### Preserve image sizes
 
 Use `images: { syntax: 'html' }` to include each image's displayed width and height in generated `<img>` tags.
 Dimensions use whole CSS pixels. Configure your Markdown renderer to allow sanitized HTML and retain `width` and `height`.
 The default `images: true` uses standard Markdown image syntax, which has no size attributes.
-Each asset's occurrences also expose exact `displayWidthPx` and `displayHeightPx`, separate from intrinsic `pixelWidth` and `pixelHeight`.
+For custom previews, use each occurrence's `displayWidthPx` and `displayHeightPx`.
+Asset `pixelWidth` and `pixelHeight` describe the image file's dimensions.
 Crop, rotation, and floating text wrapping are not reproduced.
 See [displayed image sizes and custom previews](docs/images.md#preserve-displayed-image-sizes).
 

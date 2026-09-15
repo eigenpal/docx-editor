@@ -3,5 +3,4 @@
 '@docx-editor.dev/editor-api': minor
 ---
 
-Add an Office.js-shaped document-editing profile, dedicated API guides, and informational signature coverage for ordinary document workflows.
-Fix batching, text preservation, structural editing, and stable refusals found through independent consumer applications and Word round-trip review.
+Expand the Office.js-compatible API for text, formatting, lists, tables, pictures, fields, and review workflows, with task guides and compatibility reports. Fix batching errors and preserve document content during structural edits.

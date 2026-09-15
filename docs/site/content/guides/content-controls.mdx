@@ -53,19 +53,14 @@ try {
 
 `getByTag(tag)` narrows the collection directly when you know what you are looking for, and `getById(id)` / `getFirstOrNullObject()` address a single control.
 
-Writing a value to a control in a table preserves its enclosing cell, row, and formatting,
-including after you save and reopen the document. A text, dropdown, combo box, or date value
-becomes one run in the control's display paragraph: the first paragraph that holds text, or
-else the first paragraph, searching cells that hold text first. That paragraph keeps its
-properties, bookmarks, and comment anchors. Other paragraphs beside it are removed, so the
-control's text equals the value you wrote. A checkbox toggle rewrites only the run that
-shows the state glyph.
+Writing a control value preserves its enclosing table cell, row, and formatting after saving and reopening.
+Text, dropdown, combo box, and date values replace the display paragraph's content with one run.
+The editor selects the first paragraph with text, or the first paragraph if none has text, checking cells with text first.
+It keeps that paragraph's properties, bookmarks, and comment anchors and removes sibling paragraphs.
+Checkbox updates change only the state-glyph run.
 
-The write is refused, and the document left unchanged, when the value cannot stand in for
-the content: a table or nested control beside the display paragraph, a field that begins
-inside the control and ends outside it, or content the editor does not recognize, such as
-foreign markup. Word replaces such content when you type over it; the editor refuses
-instead, so that a cell or a table never disappears from a document by accident.
+The editor rejects a value update if it would remove a sibling table or nested control,
+cross a field boundary, or discard unsupported markup. A failed update leaves the document unchanged.
 
 ## Values are typed
 
@@ -280,14 +275,14 @@ These interactions apply to content controls. For legacy Word form fields, see
 - Control creation, filling, and removal do not create revisions in suggesting
   mode.
 
-## Next steps
-
-- [Editing API](/docs/2.x/editor-api): the full object model and its batching rules
-- [Custom nodes](/docs/2.x/pro/custom-nodes): your own typed inline nodes over the same OOXML primitive
-- [React hooks](/docs/2.x/react/hooks) and [Vue composables](/docs/2.x/vue/composables)
-
 ## Customize control popups
 
 Use `popups.contentControl` for the control popup and `popups.contentControlWidget`
 for dropdown, combo box, and date entry. Omitted entries retain their default UI.
 See [Customize popups](/docs/2.x/guides/customize-dialogs) for renderer ownership and sessions.
+
+## Next steps
+
+- [Editing API](/docs/2.x/editor-api): the full object model and its batching rules
+- [Custom nodes](/docs/2.x/pro/custom-nodes): your own typed inline nodes over the same OOXML primitive
+- [React hooks](/docs/2.x/react/hooks) and [Vue composables](/docs/2.x/vue/composables)

@@ -26,17 +26,17 @@ the repository's Carlito font files and disposes shaping resources after the
 runtime; callers outside this repository should supply their own font paths.
 The browser gets measured pagination from the configured editor.
 
-See the `*-feedback.md` files for findings and rerun outcomes, and
-`openspec/changes/agent-editing-subset/consumer-review.md` for API fixes and
-remaining explicit runtime differences.
+The `*-feedback.md` files record historical findings and rerun results.
+See [Consumer review](../../openspec/changes/agent-editing-subset/consumer-review.md)
+for fixes and remaining runtime differences.
 
 The default `typecheck` uses workspace source exports and runs before builds in CI.
 `typecheck:published` uses built declarations and runs after package builds in CI.
 
-## Fresh developer audits
+## Test published package exports
 
-Two further agents started with public docs and declarations only. Their programs
-retain the original semantic assertions and document each discovered failure:
+The contract and table workflows test public package exports and preserve their
+original assertions from the independent review:
 
 ```sh
 bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
@@ -50,11 +50,11 @@ fixes, remaining explicit batching limits, and the scope of the developer-experi
 
 ## Manual Microsoft Word round trip
 
-Generate the fresh contract fixture with `test:published` first.
-Copy its `contract-pending.docx` into a disposable directory.
-Open that copy in local Word, append ` — WORD CHECK` to `SERVICE AGREEMENT`, and verify undo and redo.
-Save the document in Word, leaving its tracked changes pending.
-Then run the checker against built package exports:
+1. Generate the contract fixture with `test:published`.
+2. Copy `contract-pending.docx` into a temporary directory.
+3. Open the copy in Word. Append ` — WORD CHECK` to `SERVICE AGREEMENT`, and verify undo and redo.
+4. Save the document with tracked changes pending.
+5. Run the checker against built package exports:
 
 ```sh
 node examples/editor-api-consumers/word-roundtrip-check.ts /path/to/disposable-directory

@@ -46,6 +46,18 @@ bun run lint:fix
 bun run format
 ```
 
+The pre-commit hook formats and lints staged files, then runs the full typecheck,
+parity, license, API, formatting, and lint checks. It prints the duration of each
+step. Local commits use TypeScript's incremental build information and
+content-based ESLint and Prettier caches; CI runs the uncached package commands.
+The first commit after creating or clearing these caches takes longer.
+
+ESLint and Prettier caches live under the root `node_modules/.cache/precommit/`.
+TypeScript writes build information under each workspace's
+`node_modules/.cache/precommit/`, outside the source and license scans.
+To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`,
+or `bun run format:check` without the hook's cache flags.
+
 ## Contributor License Agreement
 
 You must sign the [Contributor License Agreement](CLA.md). The CLA assistant
@@ -81,6 +93,24 @@ reconstructs the canonical tree.
 
 See the [engine architecture](docs/architecture/production-engine-packages.md)
 and [public architecture guide](docs/site/content/core/architecture.mdx).
+
+## Write documentation
+
+Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights)
+for READMEs, guides, developer docs, feature descriptions, and release notes.
+Lead with the task or behavior. Use active voice, sentence-case headings, and short paragraphs.
+Name the operation that fails and explain how to recover. Keep prerequisites, defaults, units, and limits close to their examples.
+Link to detailed guides instead of repeating them in overviews. Keep implementation history in design and review records.
+
+Before submitting, check examples against the public API, review links, and remove repeated explanations.
+For MDX, follow [Site documentation source](docs/site/README.md) and run the documentation checks:
+
+```bash
+bun run check:docs-mdx
+bun run check:docs-chrome-slots
+bun run check:docs-vue-refs
+bun run check:public-docs-surface
+```
 
 ## Public API surface
 

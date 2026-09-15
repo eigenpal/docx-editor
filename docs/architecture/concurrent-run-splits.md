@@ -1,12 +1,10 @@
 # Concurrent run splits
 
-Issue #592 concerns repeated formatting of the same run by different peers.
-Canonical formatting replaces runs with partitioned text copies. The previous shared
-representation also treated those copies as independent character sequences.
-It hid losing run sets after the first race, but later journals addressed visible
-child indices against arrays that still contained hidden runs.
+Concurrent formatting can split the same text run on several peers.
+Before the fix for #592, later edits addressed visible child indexes in arrays
+that still contained hidden runs, which could duplicate text.
 
-The shared schema now separates run structure from character ownership:
+The shared schema separates run structure from character ownership:
 
 - Each split generation records its immediate origin and immutable ancestry.
   The earliest replica identifier wins each generation. Losing descendants stay
@@ -34,8 +32,8 @@ Single text edits do not traverse historical split branches. Structural and
 provenance changes invalidate the split visibility cache. Boundary edits avoid
 rewriting unchanged anchors, including source start and end sentinels.
 
-Compatibility is the full tuple `(protocolVersion, sharedSchemaVersion,
-repairVersion, canonicalModelVersion)`, currently `(1, 3, 1, 1)`. The public
+The compatibility tuple is `(protocolVersion, sharedSchemaVersion,
+repairVersion, canonicalModelVersion)`. Release 2.18.0 uses `(1, 3, 1, 1)`. The public
 `DOCUMENT_COLLABORATION_VERSIONS` descriptor exposes the installed package's
 supported tuple. The legacy `SCHEMA_VERSION` and `PROTOCOL_VERSION` exports belong
 to experimental text-only collaboration and must not be used for full-document
@@ -49,26 +47,17 @@ can omit characters. These checks are not transport admission control. The host
 must reject incompatible participants before accepting their Yjs updates, and
 must apply the same policy to export jobs and returning offline clients.
 
-Upgrade persisted rooms through a verified DOCX rather than relabeling Yjs state:
+## Upgrade saved rooms
 
-1. Freeze old-room writes and drain accepted updates. Back up its authoritative
-   persisted Yjs state, external blobs if applicable, and readable version tuple.
-   Resolve outstanding offline work before selecting the migration snapshot.
-2. Export with the runtime compatible with that snapshot. Reopen the DOCX and
-   verify expected text and document structures before using it as a baseline.
-3. Deploy compatible participants and workers, then seed an empty Yjs document
-   under a new provider room/storage key. Route the application document to that
-   room. Do not rewrite version fields or replay old updates into it.
-4. Verify the new room and export, then admit writes. Retain the old room and
-   backup read-only. Keep stale clients and queued offline updates out; local
-   persistence keys must distinguish the old and new room generations.
+Export rooms with a compatible build and seed fresh rooms from verified DOCX files.
+Keep the old rooms and unsynchronized edits available for recovery. Do not relabel
+Yjs state or replay old updates into the replacement rooms.
 
-This transfers document content and starts new shared undo history. Before new
-edits, rollback restores the old runtime and old snapshot together. After new
-edits, first freeze and export or reconcile that work; v3 updates cannot be
-replayed into a v2 room. A schema-mismatch error needs a compatible runtime or
-this migration, not a reconnect to the same incompatible persisted room.
-The public collaboration guide contains the host-facing upgrade procedure.
+Follow [Collaboration versions and upgrades](../site/content/pro/collaboration-versions.mdx)
+for client checks, backups, migration, and rollback. Use `COLLABORATION_FORMAT_VERSION`
+and `assertCollaborationFormatCompatibility()` for connection checks.
+
+## Verification and known limits
 
 Regression coverage includes multiple formatting rounds, concurrent typing and
 deletion, both replica winner orders, undo/redo, cold joins, saved package

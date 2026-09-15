@@ -11,8 +11,8 @@ Use `Body` for a story, `Paragraph` for a paragraph, and `Range` for an addresse
 They do not aggregate headers, footers, or notes.
 See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) for those bodies.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Refresh ranges after edits
 
@@ -119,11 +119,10 @@ Multiple insertions at one explicit snapshot point keep their call order.
 `'End'` appends on each call.
 This behavior does not make old ranges follow later batches.
 
-Overlapping edits refuse atomically.
-Text edits mixed with formatting, hyperlink, or structural changes in the same paragraph also refuse.
+The runtime rejects overlapping edits and batches that combine text edits with formatting, hyperlinks, or structural changes in the same paragraph.
 Use separate syncs, then obtain fresh ranges before the dependent operation.
 Rich paragraphs and browser suggesting edits support one text edit per paragraph per sync.
-On `ConflictingChanges`, read again and reconsider the batch instead of blindly replaying it.
+On `ConflictingChanges`, read again and revise the batch before retrying.
 
 ## Clear or delete content
 
@@ -134,7 +133,7 @@ On `ConflictingChanges`, read again and reconsider the batch instead of blindly 
 | `Paragraph.delete()`                | Deletes the addressed paragraph                               |
 | `Range.clear()` or `Range.delete()` | Deletes the addressed range content                           |
 
-A body without any paragraph refuses `clear()` with `InvalidArgument`.
+If a body has no paragraphs, `clear()` fails with `InvalidArgument`.
 These methods do not flatten protected or unsupported structures to force an edit.
 Cross-cell boundaries, pending revisions, and preserved structures can cause atomic refusal.
 Read the target again before choosing another edit.
@@ -153,3 +152,8 @@ Whole-body replacement and paragraph deletion are outside that tracked subset.
 A range can create a table, picture, field, content control, comment, or break through its insertion methods.
 `Paragraph` exposes `font`, `style`, `list`, and `listItem`.
 Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+
+## Next steps
+
+- [Editing API overview](/docs/2.x/editor-api)
+- [API member directory](/docs/2.x/editor-api/reference)

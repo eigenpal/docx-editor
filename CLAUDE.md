@@ -37,7 +37,8 @@ Keep host creation, collaboration transport, and job orchestration separate from
 These infrastructure APIs have no Office.js equivalent. Do not claim full Office.js compatibility from subset conformance.
 
 Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` to check document editing methods and property writes against pinned Office.js signatures.
-The exhaustive editing scope is `packages/editor-api/compat/editing-scope.json`; the same command also reports the fixed 81-member profile in `compat/agent-editing-scope.json`. Reads and infrastructure are excluded.
+The command checks both the broad editing inventory and an 81-member profile. Reads and host setup are excluded.
+See [Compatibility reports](packages/editor-api/compat/README.md) for scope definitions and maintenance.
 CI reports editing percentages without blocking merges. Full results are in `packages/editor-api/compat/reports/`.
 Record per-endpoint runtime differences in `packages/editor-api/compat/runtime-notes.json`; signature matches do not prove runtime equivalence.
 
@@ -318,8 +319,8 @@ time. Feature-support claims live in `docs/site/data/word-features.ts` (typed
 matrix), never hand-written in prose. A PR that changes user-visible behavior
 updates both.
 
-**Docs prose follows the
-[Google developer documentation style guide](https://developers.google.com/style)**
+READMEs, guides, developer docs, feature descriptions, and release notes follow the
+[Google developer documentation style guide](https://developers.google.com/style)
 ([highlights](https://developers.google.com/style/highlights) is the summary):
 
 - [Voice and tone](https://developers.google.com/style/tone) — conversational
