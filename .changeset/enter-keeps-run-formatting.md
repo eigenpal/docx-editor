@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Preserve font size, font family, and other direct text formatting when pressing Enter after formatted text, including formatting applied to a selection. Keep paragraph style transitions such as headings followed by body text.
+Keep direct text formatting, including font family and size, when you press Enter after formatted text. Preserve paragraph style transitions, such as a heading followed by body text.

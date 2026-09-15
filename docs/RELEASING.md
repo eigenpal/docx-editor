@@ -2,11 +2,11 @@
 
 This document explains how releases work for the DOCX editor, what every contributor needs to do per PR, and what the maintainer does to ship.
 
-Releases follow the canonical [`changesets/action@v1`](https://github.com/changesets/action) flow:
+The [Release workflow](../.github/workflows/release.yml) uses Changesets:
 
 1. Every code-touching PR drops a `.changeset/*.md` describing its change.
 2. Pushes to `main` open or update a `chore: release` PR aggregating those entries.
-3. Merging that PR publishes to npm and creates a GitHub Release.
+3. Merging that PR starts prepublish checks. After they pass, the workflow publishes to npm and creates a GitHub Release.
 
 ## Packages
 
@@ -61,10 +61,16 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
 3. **Before the first `@docx-editor.dev/editor-api` release, configure its npm Trusted Publisher.** It must authorize repo `eigenpal/docx-editor` and workflow `release.yml`; the release workflow has no `NPM_TOKEN` fallback.
 4. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-5. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@docx-editor.dev/react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+5. **Wait for the Release workflow.** With an empty changeset queue, it runs independent checks and builds in parallel. After all jobs pass, it publishes the validated artifacts through npm Trusted Publishing, creates package tags, and creates a GitHub Release with the changelog entries. Check the workflow result before announcing the release.
 6. **After the renamed package is available, deprecate `@docx-editor.dev/agents` on npm.** Point consumers to `@docx-editor.dev/editor-api`; this is a one-time maintainer action outside the release workflow.
 
-That's the entire release. One PR merge.
+While changesets are pending, the workflow updates the release PR without
+running prepublish checks or builds. Contributor PRs run their own CI checks.
+
+The publish path runs lint, formatting, type checks, tests, parity, license,
+and translation checks. A separate job builds packages and demos, validates a
+consumer install, and generates third-party notices. Publishing uses those
+artifacts only after every required job succeeds.
 
 ### Common situations
 

@@ -51,22 +51,14 @@ an `author` are present. An explicit `mode` overrides this document setting.
 
 The `<DocxEditor>` convenience component defaults to `mode="edit"`.
 
-Enforced document protection restricts the available modes:
+Tracked-changes protection requires suggesting mode for edits. The review
+module and author are still required. Forms and comments-only protection
+refuse suggesting mode; read-only protection opens in viewing mode.
 
-- Tracked-changes protection forces suggesting mode.
-- Filling-in-forms protection refuses suggesting mode. Word does not track
-  changes in a document protected for forms. The refusal is
-  `{ ok: false, code: 'locked' }` with the reason.
-- Read-only protection opens the document in viewing mode. Every other mode is refused.
-- Comments-only protection permits comment work in editing mode. You can add, reply to,
-  resolve, reopen, and delete comments. Content edits and suggesting mode are refused.
-  Explicit viewing still refuses comment writes.
-- Under forms protection, commands outside fillable fields return `locked` with a
-  readable reason. Their controls are disabled. Valid field fills remain available.
-
-Turning protection on from **Review → Protect Document for Forms** while
-suggesting returns the editor to editing mode. The editor publishes the reason
-as `lastRejection`.
+Turning on **Review > Protect Document for Forms** while suggesting switches
+to editing mode. `snapshot().lastRejection` explains the change. For allowed
+edits, password limits, and custom controls, see
+[Document protection](/docs/2.x/guides/document-protection).
 
 ### Suggesting needs an author
 

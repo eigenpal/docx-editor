@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Permit comment work in comments-only documents, and report refused forms-protected commands with readable reasons and disabled controls while preserving valid field fills. Fixes #844 and #845.
+Allow adding, replying to, resolving, reopening, and deleting comments in comments-only documents. Disable commands that forms protection refuses and return a readable reason. Keep supported form fields, unlocked content controls, and unprotected sections editable.

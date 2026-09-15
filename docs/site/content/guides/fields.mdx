@@ -100,12 +100,21 @@ the context menu. Set its default value, type (regular text, number, or date),
 maximum length, format, and **Fill-in enabled** setting. A maximum length of
 zero means unlimited. React and Vue share the same default behavior.
 
-In an unprotected document, partial edits keep the field definition; replacing
-its whole result removes it. Typing at the end boundary inserts ordinary text
-after the field, including at the end of a paragraph. Word-delete shortcuts remove
-the complete field from its boundary. Backspace and Shift+Backspace first select
-the field, then remove it on the next press. In a document protected for forms, editing keeps
-the definition. Tab and Shift+Tab move between enabled text fields.
+### Edit an unprotected field
+
+Partial edits keep the field definition; replacing its whole result removes it.
+Typing at the end of the field inserts ordinary text after it, including at the
+end of a paragraph.
+
+Deleting a word from a field boundary removes the complete field. Backspace
+at the end, or Delete at the start, first selects the field. Press again to
+remove it. Shift+Backspace follows the same behavior as Backspace.
+
+### Fill a protected field
+
+Use **Review > Protect Document for Forms** to enable
+[forms protection](/docs/2.x/guides/document-protection). Filling a protected
+field keeps its definition. Tab and Shift+Tab move between enabled text fields.
 
 Protected fields validate and format input when you leave. Pasted text is limited
 to the remaining capacity. Invalid numbers or dates open an alert; acknowledging

@@ -28,6 +28,11 @@ Comments require the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 OOXML requires `w:author` for each comment and reply. The engine refuses a
 write without an author.
 
+Comments-only document protection permits these comment actions while keeping
+document content locked. Read-only protection and `mode="view"` refuse comment
+writes. See [Document protection](/docs/2.x/guides/document-protection) for the
+rules for each restriction.
+
 For module registration and licensing, see the
 [Pro package documentation](/docs/2.x/pro).
 
