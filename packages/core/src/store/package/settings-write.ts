@@ -236,7 +236,16 @@ export function applyDocumentProtection(
         wmlAttribute('enforcement', '0'),
       ];
   const element = sectionElement(existing?.id ?? nextId(), 'documentProtection', attributes, []);
-  const children = [...settings.root.children];
+  // Every one of them, not just the first: `CT_Settings` allows a single
+  // `w:documentProtection`, so a file that carries two is answered with ONE, never a third.
+  const duplicates = settings.root.children.filter(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === W &&
+      child.localName === 'documentProtection' &&
+      child !== existing
+  );
+  const children = [...settings.root.children].filter((child) => !duplicates.includes(child));
   if (existing) {
     children.splice(children.indexOf(existing), 1, element);
   } else {

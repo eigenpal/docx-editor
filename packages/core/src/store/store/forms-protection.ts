@@ -5,33 +5,42 @@ import type { TreeDocOp } from './tree-op-types.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
 /**
- * The refusal an enforced `readOnly` or `comments` protection gives a write.
+ * The refusal a PACKAGE-level commit gets: furniture and note lifecycle, and the package edit
+ * channel, none of which reach the per-op applier.
  *
- * Read-only admits no edit at all. Comments-only admits the comment anchor and nothing else;
- * the comment text itself lives in `comments.xml` and never passes through here. Coarser than
- * Word in one respect: Word lets an edit through inside a `w:permStart` exception range, and
- * this editor refuses there too — a refusal the reader can see beats a write the protection
- * was meant to stop. `forms` and `trackedChanges` are answered elsewhere: forms by
- * `formsProtectionRefusal`, tracked changes by the editing-mode gate.
+ * FORMS protection refuses here as well, which `documentProtectionRefusal` alone does not do.
+ * Forms protection inverts the usual rule — the document is read-only EXCEPT inside a form
+ * field — and a package-level commit is never inside one: creating a header, inserting a note
+ * or setting a section flag is document-scoped by construction. Reading only the two
+ * document-wide modes let a forms-protected document answer "Insert footnote" with a new
+ * `footnotes.xml` while refusing a keystroke in the same paragraph.
  *
- * `op` is omitted for a write that is not a single story op — a package edit, or a furniture
- * or note lifecycle commit. Those carry no comment anchor, so both protections refuse them.
- * EVERY write lane asks this: gating only the per-part applier left "Remove header" deleting
- * a part out of a document the same protection refused a keystroke in.
- */
-/**
- * The refusal a PACKAGE-level commit gets: furniture and note lifecycle, which never reach
- * `transact`. The protection toggle is exempt — it is the command that LIFTS the lock, and a
- * guard that trapped it would leave the reader with no way back into the document.
+ * The protection toggle is exempt, and the exemption is the point: it is the command that
+ * LIFTS the lock, and a guard that trapped it would leave the reader with no way back in.
  */
 export function lifecycleProtectionRefusal(
   settings: OoxmlPart | null | undefined,
   op: { readonly op: string }
 ): TreeOpRejection | null {
   if (op.op === 'setDocumentProtection') return null;
+  const protection = readDocumentProtection(settings?.root);
+  if (protection.enforced && protection.edit === 'forms') return 'locked';
   return documentProtectionRefusal(settings);
 }
 
+/**
+ * The refusal an enforced `readOnly` or `comments` protection gives a write.
+ *
+ * Read-only admits no edit at all. Comments-only admits the comment ANCHOR and nothing else.
+ * Adding a comment is still refused overall: its text lands in `comments.xml` through the
+ * package channel, which carries no `op` and so cannot claim the exemption — the narrowing is
+ * recorded in the feature matrix rather than worked around here. Coarser than Word in one more
+ * respect: Word lets an edit through inside a `w:permStart` exception range, and this editor
+ * refuses there too, because a refusal the reader can see beats a write the protection was
+ * meant to stop. `forms` and `trackedChanges` are answered elsewhere: forms by
+ * `formsProtectionRefusal` and by `lifecycleProtectionRefusal` above, tracked changes by the
+ * editing-mode gate.
+ */
 export function documentProtectionRefusal(
   settings: OoxmlPart | null | undefined,
   op?: TreeDocOp

@@ -22,7 +22,7 @@ import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
-import { documentProtectionRefusal } from './forms-protection.ts';
+import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import {
   formsProtectionRefusal,
@@ -669,8 +669,9 @@ export class TreeDocumentStore {
         // refusal as much as the per-op one does: comment deletion and thread resolution reach
         // the story's own `w:commentRangeStart` through here, and nothing else would stop them
         // in a document protected read-only.
-        const packageProtection = documentProtectionRefusal(
-          this.settingsPartOverride?.() ?? settingsPartOf(working)
+        const packageProtection = lifecycleProtectionRefusal(
+          this.settingsPartOverride?.() ?? settingsPartOf(working),
+          { op: 'applyPackage' }
         );
         if (packageProtection) {
           failure = { reason: packageProtection };

@@ -3015,9 +3015,14 @@ export function mountPaginatedSurface(
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
     // left the document fully typeable while the toolbar reported it read-only.
-    if (editingMode === 'view' && !isDocumentProtectionBatch(ops)) return VIEWING_REFUSAL;
+    // The PROTECTION write is document-wide, so neither the view nor where the caret happens
+    // to sit has anything to say about it. Without the second exemption a caret parked in a
+    // table of contents refused it with a reason about the table of contents.
+    const protectionWrite = isDocumentProtectionBatch(ops);
+    if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
     if (
       edits &&
+      !protectionWrite &&
       ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))
     ) {
       return TOC_READ_ONLY_REFUSAL;

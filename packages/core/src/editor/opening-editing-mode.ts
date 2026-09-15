@@ -219,6 +219,8 @@ export function documentTrackingAdoption(
     readonly restrictedToReadOnly: boolean;
     /** Enforced `w:edit="comments"` — comments only. */
     readonly restrictedToComments: boolean;
+    /** True when the ENGINE put the editor in viewing, because a protection demanded it. */
+    readonly engineAdoptedViewing?: boolean;
   }
 ): OpeningModeDecision {
   // A document that permits no editing opens VIEWING, whatever anyone asked for. Every other
@@ -228,6 +230,16 @@ export function documentTrackingAdoption(
       ? NO_DECISION
       : { mode: 'viewing', rejection: READ_ONLY_PROTECTION_REASON };
   }
+  // ...and the adoption ENDS with the restriction that caused it. Without this the mode
+  // outlived its document: opening a read-only file and then an ordinary one left the second
+  // one read-only, with no reason published and no way back but a manual mode change. Undo of
+  // a protection change is the same story from the other side.
+  let current = input.currentMode;
+  let released: DocumentEditingMode | null = null;
+  if (input.engineAdoptedViewing && current === 'viewing' && !input.viewOnly) {
+    released = 'editing';
+    current = 'editing';
+  }
   // Forms protection outranks every request for suggesting, the reader's included: Word
   // greys Track Changes out there, and a session already suggesting cannot go on into a
   // document every keystroke would refuse. Editing is the one mode still permitted.
@@ -236,13 +248,13 @@ export function documentTrackingAdoption(
       ? { mode: 'editing', rejection: FORMS_PROTECTION_SUGGESTING_REASON }
       : NO_DECISION;
   }
-  if (input.viewOnly || input.currentMode !== 'editing' || input.readerChoseMode) {
-    return NO_DECISION;
-  }
+  const settled: OpeningModeDecision =
+    released === null ? NO_DECISION : { mode: released, rejection: null };
+  if (input.viewOnly || current !== 'editing' || input.readerChoseMode) return settled;
   const asks = input.trackRevisions && !input.hostChoseMode;
-  if (!asks && !input.restrictedToTrackedChanges) return NO_DECISION;
-  if (!input.reviewEnabled) return NO_DECISION;
-  if (!input.hasAuthor) return { mode: null, rejection: DOCUMENT_TRACKING_AUTHOR_REASON };
+  if (!asks && !input.restrictedToTrackedChanges) return settled;
+  if (!input.reviewEnabled) return settled;
+  if (!input.hasAuthor) return { mode: released, rejection: DOCUMENT_TRACKING_AUTHOR_REASON };
   return { mode: 'suggesting', rejection: null };
 }
 

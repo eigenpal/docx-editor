@@ -16,7 +16,6 @@ import {
   FORMS_PROTECTION_SUGGESTING_REASON,
   READ_ONLY_PROTECTION_REASON,
 } from '../opening-editing-mode.ts';
-import { PROTECTION_ENDS_SUGGESTING_REASON } from '../docx-editor-protection.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { chromeMenuSlots } from '../chrome-controls.ts';
 import { docx, paragraph, trackedDocx } from './paginated-surface-fixtures.ts';
@@ -158,7 +157,7 @@ describe('toggling protection', () => {
     const editor = mount({ document: docx(paragraph('Body')) });
     expect(editor.setEditingMode('suggesting').ok).toBe(true);
     expect(editor.exec(TOGGLE).ok).toBe(true);
-    expect(editor.snapshot().lastRejection).toBe(PROTECTION_ENDS_SUGGESTING_REASON);
+    expect(editor.snapshot().lastRejection).toBe(FORMS_PROTECTION_SUGGESTING_REASON);
     expect(editor.exec(TOGGLE).ok).toBe(true);
     expect(editor.snapshot().lastRejection).toBeNull();
   });
@@ -229,7 +228,7 @@ describe('forms protection and suggesting mode', () => {
     expect(editor.snapshot().editingMode).toBe('suggesting');
     expect(editor.exec(TOGGLE)).toEqual({ ok: true, changed: true });
     expect(editor.snapshot().editingMode).toBe('editing');
-    expect(editor.snapshot().lastRejection).toBe(PROTECTION_ENDS_SUGGESTING_REASON);
+    expect(editor.snapshot().lastRejection).toBe(FORMS_PROTECTION_SUGGESTING_REASON);
     expect(editor.can({ type: 'setEditingMode', mode: 'suggesting' })).toMatchObject({
       ok: false,
       code: 'locked',
@@ -314,6 +313,52 @@ describe('read-only and comments-only protection', () => {
       ).toBe(false);
     });
   }
+
+  test('the viewing adoption ends with the document that caused it', () => {
+    // The mode outlived its document: opening a read-only file and then an ordinary one left
+    // the second one read-only, with no reason published and no way back but a manual change.
+    const editor = mount({
+      document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>'),
+    });
+    expect(editor.snapshot().editingMode).toBe('viewing');
+    editor.load(docx(paragraph('Ordinary')));
+    expect(editor.snapshot().editingMode).toBe('editing');
+    expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: true });
+  });
+
+  test('undo of a protection change restores the mode as well as the setting', () => {
+    // Undo writes `settings.xml` back, so the mode has to be re-decided: an editing pill over
+    // a restored read-only document is the silent drop this gate exists to prevent.
+    const editor = mount({
+      document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>'),
+    });
+    expect(editor.exec(TOGGLE)).toEqual({ ok: true, changed: true });
+    expect(editor.setEditingMode('editing').ok).toBe(true);
+    editor.exec({ type: 'undo' });
+    expect(protection(editor)?.enforced).toBe(true);
+    expect(editor.snapshot().editingMode).toBe('viewing');
+    expect(typeAt(editor, 0, 0, 'x').ok).toBe(false);
+  });
+
+  test('undo of an enforcement clears the reason it published', () => {
+    const editor = mount({ document: docx(paragraph('Body')) });
+    expect(editor.setEditingMode('suggesting').ok).toBe(true);
+    expect(editor.exec(TOGGLE).ok).toBe(true);
+    expect(editor.snapshot().lastRejection).toBe(FORMS_PROTECTION_SUGGESTING_REASON);
+    editor.exec({ type: 'undo' });
+    expect(protection(editor)?.enforced).toBe(false);
+    expect(editor.snapshot().lastRejection).toBeNull();
+  });
+
+  test('forms protection refuses a lifecycle command too', () => {
+    // Forms protection inverts the rule — editable only inside a form field — and a
+    // package-level commit is never inside one.
+    const editor = mount({ document: trackedDocx(FORMS) });
+    expect(
+      editor.exec({ type: 'setHeaderFooterOptions', sectionIndex: 0, titlePage: true }).ok
+    ).toBe(false);
+    expect(editor.exec({ type: 'insertNote', noteKind: 'footnote' }).ok).toBe(false);
+  });
 
   test('an unenforced protection restricts nothing', () => {
     const editor = mount({

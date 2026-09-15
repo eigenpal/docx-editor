@@ -314,6 +314,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * for, and the reader saying otherwise outranks it for the rest of the session.
    */
   let readerChoseMode = false;
+  /** True while the editor sits in viewing because a protection put it there, not the reader. */
+  let engineAdoptedViewing = false;
+
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
 
@@ -465,9 +468,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroyed: () => destroyed,
     editingMode: () => editingMode,
     hostViewOnly: () => hostConfig.mode() === 'view',
-    settle: (mode, reason) => {
-      if (mode) applyEditingMode(mode);
-      facadeRejection = reason ?? standingRejection(null);
+    publish: (clearReason) => {
+      if (clearReason) facadeRejection = standingRejection(null);
+      bump();
+      emitSelectionChange();
+    },
+    decision: () => documentTrackingDecision(),
+    tracking: documentTracking,
+    adopt: (decision) => {
+      facadeRejection = decision.rejection ?? standingRejection(null);
+      if (decision.mode !== null) {
+        engineAdoptedViewing = decision.mode === 'viewing';
+        applyEditingMode(decision.mode);
+      }
       bump();
       emitSelectionChange();
     },
@@ -625,6 +638,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
+        protection.sync();
         liveFonts.schedule();
         const displayModeMoved =
           reviewEnabled && reviewDisplayMode !== surface.revisionDisplayMode();
@@ -648,6 +662,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    // Before anything can publish: the mount decides the mode itself just below, and a sync
+    // firing in between would decide a second time and clear what the first one published.
+    protection.prime();
     // Keep the loading page centred and its comments control inactive until the review
     // model exists. Once open completes, show the pane only when the model found content.
     reviewPaneOpen = reviewEnabled && surface.session.reviewItems().length > 0;
@@ -1662,6 +1679,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       restrictedToForms: tracking.restrictedToForms,
       restrictedToReadOnly: tracking.restrictedToReadOnly,
       restrictedToComments: tracking.restrictedToComments,
+      engineAdoptedViewing,
     });
   }
 
@@ -1686,6 +1704,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const decision = documentTrackingDecision();
     facadeRejection = standingRejection(decision.rejection);
     if (decision.mode === null) return;
+    engineAdoptedViewing = decision.mode === 'viewing';
     applyEditingMode(decision.mode);
   }
 

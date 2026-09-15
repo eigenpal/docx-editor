@@ -487,7 +487,7 @@ export default [
   {
     files: ['packages/core/src/editor/docx-editor.ts'],
     rules: {
-      'max-lines': ['error', { max: 2660, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2675, skipBlankLines: false, skipComments: false }],
     },
   },
 

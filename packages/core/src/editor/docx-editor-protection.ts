@@ -16,21 +16,14 @@ import type {
   EditorCommand,
   ExecResult,
 } from '../contracts/editor.ts';
+import type { DocumentTrackingSettings } from '../store/package/tracking-settings.ts';
+import type { OpeningModeDecision } from './opening-editing-mode.ts';
 import {
   NO_DOCUMENT_PROTECTION,
   readDocumentProtection,
   type DocumentProtectionState,
 } from '../store/package/document-protection.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-
-/**
- * The published reason when enforcing protection ends a suggesting session.
- *
- * Distinct from the gate's own refusal: that one answers "why can I not enter this mode", this
- * one answers "why did the mode I was in just change under me".
- */
-export const PROTECTION_ENDS_SUGGESTING_REASON =
-  'this document is protected for filling in forms; suggestions cannot be tracked here';
 
 /** A store rejection code turned into a sentence a reader can act on. */
 function refusalFor(reason: string): ExecResult {
@@ -56,6 +49,23 @@ const PASSWORD_PROTECTION_REASON =
   'this document is protected with a password; open it in Word to change that';
 
 export interface DocumentProtectionCommands {
+  /**
+   * Re-decide the editing mode when the document's protection MOVED.
+   *
+   * The mode is decided at mount, but `settings.xml` changes under the editor: this toggle
+   * writes it, and undo and redo write it back. Re-deciding only at mount left an undone
+   * protection restored in the file with the editor still in the mode it had left — an
+   * editing pill over a document that refuses every keystroke, the silent drop this gate
+   * exists to prevent.
+   */
+  sync(): void;
+  /**
+   * Record what the mount just decided against, without deciding again.
+   *
+   * Called before anything can publish. A sync firing in between would decide a second time
+   * and clear the reason the mount had published.
+   */
+  prime(): void;
   /** The document's protection, reference-stable while the settings part is unchanged. */
   state(): DocumentProtectionState | null;
   /** Whether the toggle renders pressed: protection is enforced. */
@@ -73,12 +83,31 @@ export function createDocumentProtectionCommands(deps: {
   /** True when the facade was constructed `mode: 'view'`: read-only for the session. */
   readonly hostViewOnly: () => boolean;
   /**
-   * Publish the outcome: enter `mode` when one is named, publish `reason` or clear the
-   * standing one, then notify. One port, because the two outcomes are one moment — enforcing
-   * protection ENDS a suggesting session, and lifting it clears the reason that said so.
+   * Notify, and on a LIFT clear the standing reason.
+   *
+   * Only the clear, because the mode itself is not this command's to decide: the protection
+   * write publishes a change, and the editor's own protection sync re-runs the mode decision
+   * off the new `settings.xml`. Deciding here as well meant two English sentences for one
+   * fact, and whichever ran second won.
    */
-  readonly settle: (mode: DocumentEditingMode | null, reason: string | null) => void;
+  readonly publish: (clearReason: boolean) => void;
+  /** The document's own mode request, re-asked against the settings as they are now. */
+  readonly decision: () => OpeningModeDecision;
+  /** Enter the decided mode and publish its reason. */
+  readonly adopt: (decision: OpeningModeDecision) => void;
+  /** What the mode decision reads, so a move in it can be detected. */
+  readonly tracking: () => DocumentTrackingSettings;
 }): DocumentProtectionCommands {
+  let seenRestrictions: string | null = null;
+  const restrictionKey = (): string => {
+    const tracking = deps.tracking();
+    return [
+      tracking.restrictedToReadOnly,
+      tracking.restrictedToComments,
+      tracking.restrictedToForms,
+      tracking.restrictedToTrackedChanges,
+    ].join('|');
+  };
   let seenRoot: unknown = undefined;
   let seenState: DocumentProtectionState | null = null;
 
@@ -126,6 +155,17 @@ export function createDocumentProtectionCommands(deps: {
   };
 
   return {
+    sync() {
+      const key = restrictionKey();
+      if (key === seenRestrictions) return;
+      seenRestrictions = key;
+      // Only ever called because the protection moved, so a reason derived from the old one
+      // is stale by construction: the adopter recomputes rather than preserving.
+      deps.adopt(deps.decision());
+    },
+    prime: () => {
+      seenRestrictions = restrictionKey();
+    },
     state,
     isActive: () => state()?.enforced === true,
     can(command) {
@@ -149,11 +189,11 @@ export function createDocumentProtectionCommands(deps: {
       // Word greys Track Changes out under forms protection; a session that was suggesting
       // cannot go on suggesting into a document that now refuses to track. Editing mode is the
       // one mode still permitted, and the pill says why it moved.
-      // Enforcing protection ends a suggesting session, because Word does not track changes
-      // in a document protected for forms. Lifting clears the reason that said so: left
-      // standing, the snapshot told the host the document was protected after it was not.
-      const ends = enforce && deps.editingMode() === 'suggesting';
-      deps.settle(ends ? 'editing' : null, ends ? PROTECTION_ENDS_SUGGESTING_REASON : null);
+      // Enforcing ends a suggesting session, because Word does not track changes in a
+      // document protected for forms — the mode sync does that from the written setting.
+      // Lifting clears the reason that said so: left standing, the snapshot told the host the
+      // document was protected after it was not.
+      deps.publish(!enforce);
       return { ok: true, changed: true };
     },
   };
