@@ -1,6 +1,6 @@
 name: Release
 
-# Two triggers, one flow across three jobs:
+# Two triggers, one flow across the mode, prepublish, and release jobs:
 # 1. Every push to main → if there are pending changesets in `.changeset/`,
 #    open or update a "chore: release" PR with the version bumps and CHANGELOG
 #    entries applied. The PR sits there until a maintainer merges it.
@@ -11,17 +11,18 @@ name: Release
 # Job split and runner choice:
 # - `mode` decides which path this run takes (pending changesets ⇒ PR-update,
 #   none ⇒ publish).
-# - `gate` runs the heavy prepublish checks (lint, format, typecheck, tests,
-#   build, parity, notices) on Blacksmith for speed, publish path only, and
-#   hands the built `dist/` + generated notices to `release` as an artifact.
+# - `checks` runs lint, format, typecheck, tests, parity, license, and i18n
+#   checks in a fail-fast matrix on Blacksmith. `build` runs the package and
+#   demo builds plus consumer validation in parallel, then hands the validated
+#   artifact to `release`.
 # - `release` runs the changesets action and everything after it on a
 #   GitHub-hosted runner: npm rejects provenance bundles from self-hosted
 #   runners (E422 "Unsupported GitHub Actions runner environment"), and
 #   Trusted Publishing always signs provenance. Blacksmith counts as
 #   self-hosted, so the publish must not run there.
 #
-# The heavy gate only guards the PUBLISH path. On the PR-update path it is
-# skipped: `changeset version` just rewrites versions + CHANGELOGs, needs no
+# The checks and build jobs only guard the PUBLISH path. On the PR-update path
+# they are skipped: `changeset version` just rewrites versions + CHANGELOGs, needs no
 # build, and the work is already validated by each contributing PR's own CI.
 # Skipping keeps PR-update runs short so they finish before the next push to
 # main supersedes them in the `release` concurrency group — otherwise slow
@@ -39,8 +40,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
-  # publish path (run the full gate before publishing to npm). README.md /
+  # Pending changesets ⇒ PR-update path (skip checks/build); none ⇒
+  # publish path (run the prepublish jobs before publishing to npm). README.md /
   # config.json are not changesets.
   mode:
     name: Detect release mode
@@ -65,15 +66,61 @@ jobs:
             echo "publishing=true" >> "$GITHUB_OUTPUT"
           fi
 
-  # The heavy prepublish gate, on Blacksmith for speed. Publish path only —
-  # its `dist/` and third-party notices travel to the release job by artifact.
-  gate:
-    name: Prepublish gate
+  # Independent checks run concurrently. Publish path only — contributor PRs
+  # already run the same checks, and the PR-update path only rewrites versions.
+  checks:
+    name: Prepublish ${{ matrix.label }}
+    needs: mode
+    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - label: lint
+            command: bun run lint
+          - label: format
+            command: bun run format:check
+          - label: typecheck
+            command: bun run typecheck
+          - label: tests
+            command: bun run test
+          - label: parity
+            command: bun run check:parity
+          - label: license headers
+            command: bun run check:license-headers
+          - label: i18n
+            command: bun run i18n:validate
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run check
+        run: ${{ matrix.command }}
+
+  # Build and artifact generation run alongside the checks. The release job
+  # publishes exactly this output after all prepublish jobs pass.
+  build:
+    name: Prepublish build
     needs: mode
     if: ${{ needs.mode.outputs.publishing == 'true' }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
-    # a runner for hours. A healthy run finishes in well under 10 min.
     timeout-minutes: 30
     permissions:
       contents: read
@@ -94,18 +141,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Format check
-        run: bun run format:check
-
-      - name: Type check
-        run: bun run typecheck
-
-      - name: Run tests
-        run: bun run test
-
       - name: Build packages (publish reuses the dist/)
         run: bun run build:packages
         env:
@@ -113,8 +148,15 @@ jobs:
           # core's 67 entries OOM under the default 1.5 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
 
-      - name: Parity prepublish gate
-        run: bun run parity:prepublish
+      - name: Build demos and parity bundle
+        run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Consumer install check
+        run: bun run check:consumer-install
+        env:
+          SKIP_CONSUMER_INSTALL_BUILD: '1'
 
       # Emit `packages/<pkg>/THIRD_PARTY_NOTICES.md` from the build that is about
       # to be packed. The published bundles inline third-party source (the
@@ -131,7 +173,7 @@ jobs:
       - name: Generate third-party notices
         run: bun run notices:generate
 
-      # Hand the exact build the gate validated to the release job. Both path
+      # Hand the exact build the prepublish job validated to the release job. Both path
       # patterns share `packages/` as their common ancestor, so the artifact
       # keeps the `<pkg>/dist/...` layout and unpacks back into `packages/`.
       - name: Upload publish artifacts
@@ -148,10 +190,10 @@ jobs:
   # GitHub-hosted runner — see the header comment.
   release:
     name: Release
-    needs: [mode, gate]
-    # Run on both paths: `gate` is skipped on the PR-update path by design,
-    # so accept skipped as well as success.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}
+    needs: [mode, checks, build]
+    # Run on both paths: checks/build are skipped on the PR-update path by
+    # design, so accept skipped as well as success.
+    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -200,7 +242,7 @@ jobs:
       # `chore: release` commit, where it both fails (api:check needs a build
       # this job doesn't run, and breaks on any pre-existing snapshot drift on
       # main) and is redundant: ci.yml already runs these on contributor PRs,
-      # and the publish path runs them in the gate job. Neuter hooks for the job.
+      # and the publish path runs them in the prepublish jobs. Neuter hooks for the job.
       - name: Disable git hooks for automated commits
         run: git config core.hooksPath /dev/null
 
@@ -523,7 +565,7 @@ jobs:
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
   # Distinguish three failure modes when notifying Slack:
-  #   - MODE=pre-release → the gate job failed, or a release-job step failed
+  #   - MODE=pre-release → a prepublish job failed, or a release-job step failed
   #     before the changesets step ever ran (install, checkout, artifact
   #     download).
   #   - MODE=release-pr  → changesets step failed AND pending changesets
@@ -531,11 +573,11 @@ jobs:
   #     (no publish was attempted).
   #   - MODE=publish     → changesets step failed AND no pending changesets,
   #     so the run was trying to publish to npm and failed mid-publish.
-  # Lives in its own job so a gate failure on Blacksmith still alerts — the
+  # Lives in its own job so a prepublish failure on Blacksmith still alerts — the
   # release job never starts in that case.
   notify-failure:
     name: Notify Slack — workflow failed
-    needs: [mode, gate, release]
+    needs: [mode, checks, build, release]
     if: ${{ failure() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -549,14 +591,15 @@ jobs:
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GATE_RESULT: ${{ needs.gate.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
           PUBLISHING: ${{ needs.mode.outputs.publishing }}
           CHANGESETS_OUTCOME: ${{ needs.release.outputs.changesets_outcome }}
         run: |
           if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
-            detail="A step before the changesets action failed (gate: lint, format check, typecheck, tests, build, parity — or release-job setup). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
+            detail="A parallel prepublish check or build failed (checks: $CHECKS_RESULT; build: $BUILD_RESULT), or release-job setup failed. No release PR was updated and no publish was attempted. Check the run logs for the failing step."
           elif [ "$PUBLISHING" = "false" ]; then
             mode="release-pr"
             title=":warning: docx-editor — failed to update release PR"
