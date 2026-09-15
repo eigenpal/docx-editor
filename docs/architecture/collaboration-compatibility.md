@@ -111,6 +111,16 @@ A _decision record_ explains the compatibility impact of your change. A _Changes
 is a release-note file that selects a package version bump. They have different
 lifetimes: decision records remain after Changesets generates the changelog.
 
+To inspect commands without building packages or accessing the registry, run:
+
+```sh
+bun run collaboration:change --help
+bun run collaboration:test --help
+```
+
+Unknown flags, duplicate options, and invalid seeds or shard numbers fail before
+package preparation. An argument error leaves your previous failure report intact.
+
 ### Which PRs need a decision?
 
 A pull request (PR) needs a decision if it changes a path covered by
@@ -166,7 +176,7 @@ Changeset. Dependency-update PRs follow the policy after refreshing their lockfi
    ```
 
    Use a cataloged version relevant to your change. A single-release run does not
-   replace the complete check.
+   replace the complete check. Targeted runs still validate historical fixture hashes.
 
 6. Before requesting review, run the full catalog:
 
@@ -279,8 +289,14 @@ production provider, authorization, and storage configuration.
 ## Troubleshoot a compatibility check
 
 A _seed_ is a number that selects a repeatable test sequence. On failure, the runner
-saves the error and update trace in `.cache/collaboration/failure.json`. A trace
-records the operations and update bytes needed to investigate the sequence.
+saves the error and update trace in `.cache/collaboration/failure.json`. The report
+includes the test phase, release, seed, shard, and a reproduction command. For a
+mixed-version scenario, it also records which version created the room. A trace
+contains the operations and update bytes for the failing scenario.
+
+For a package setup or saved-room failure, the seed is `null` because that phase
+does not use a random sequence. If you used `--candidate`, retain that directory
+and add it to the reproduction command to reuse the same package build.
 
 To reproduce a failure against 2.18.0 with seed 592, run:
 
@@ -338,7 +354,10 @@ or integrity checks block publication.
 
 The catalog workflow prepares a baseline PR after publication. Review and merge
 that PR before publishing another release. Its release App token allows CI to run
-on the generated PR. The workflow also supports a manual retry.
+on the generated PR. The workflow also supports a manual retry. If the branch push succeeds but PR
+creation fails, retrying reuses and validates the captured baseline before creating
+the PR. It does not recapture or force-push the release. If the PR was closed,
+restore or reopen it before retrying.
 
 For a manual capture:
 

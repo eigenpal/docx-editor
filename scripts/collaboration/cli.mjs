@@ -5,8 +5,30 @@ import { capture, updateTable, verifyCatalog } from './catalog.mjs';
 import { check } from './policy.mjs';
 import { createChange } from './change.mjs';
 import { packCandidate, verifyCandidate, verifyPublishedCandidate } from './installation.mjs';
+import { CLI_HELP, COMMAND_FLAGS, parseOptions } from './arguments.mjs';
 try {
-  switch (process.argv[2]) {
+  const command = process.argv[2];
+  if (!command || command === '--help') {
+    console.log(CLI_HELP);
+    process.exit(0);
+  }
+  if (!Object.hasOwn(COMMAND_FLAGS, command))
+    throw new Error(`Unknown command: ${command}. Use --help for supported commands.`);
+  const args = parseOptions(process.argv.slice(3), COMMAND_FLAGS[command]);
+  if (args.help) {
+    console.log(CLI_HELP);
+    process.exit(0);
+  }
+  if (command === 'check' && args.base && args.release)
+    throw new Error('Select --base or --release, not both');
+  if (
+    command === 'catalog' &&
+    [args.capture, args.table, args['allow-current']].filter(Boolean).length > 1
+  )
+    throw new Error('Select one catalog mode: --capture, --table, or --allow-current');
+  if (command.startsWith('verify') && !args.candidate)
+    throw new Error('--candidate DIR is required');
+  switch (command) {
     case 'pack': {
       const packed = await packCandidate();
       const target = resolve(ROOT, '.cache/collaboration/publish');

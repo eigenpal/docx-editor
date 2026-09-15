@@ -32,6 +32,24 @@ import { Peer } from './peer.mjs';
 export function catalog() {
   return json(CATALOG);
 }
+export function verifyReleaseFiles(entry) {
+  assert.equal(
+    entry.directory,
+    `.collaboration/releases/${entry.version}`,
+    'Unexpected release artifact path'
+  );
+  assert.deepEqual(
+    Object.keys(entry.hashes).sort(),
+    ['fixture.json', 'package-lock.json', 'package.json'],
+    'Missing fixture hashes'
+  );
+  for (const [file, hash] of Object.entries(entry.hashes))
+    assert.equal(
+      sha(read(`${entry.directory}/${file}`)),
+      hash,
+      `Changed historical file: ${entry.version}/${file}`
+    );
+}
 export async function verifyCatalog({ allowCurrent = false } = {}) {
   const value = catalog();
   assert.equal(value.baseline, '2.18.0');
@@ -58,11 +76,7 @@ export async function verifyCatalog({ allowCurrent = false } = {}) {
     if (previousVersion)
       assert.ok(compareVersions(entry.version, previousVersion) > 0, 'Catalog must be ordered');
     previousVersion = entry.version;
-    assert.equal(
-      entry.directory,
-      `.collaboration/releases/${entry.version}`,
-      'Unexpected release artifact path'
-    );
+    verifyReleaseFiles(entry);
     assert.deepEqual(
       Object.keys(entry.versions).sort(),
       [...FIELDS].sort(),
@@ -73,11 +87,6 @@ export async function verifyCatalog({ allowCurrent = false } = {}) {
         (field) => Number.isSafeInteger(entry.versions[field]) && entry.versions[field] >= 0
       ),
       'Invalid format fields'
-    );
-    assert.deepEqual(
-      Object.keys(entry.hashes).sort(),
-      ['fixture.json', 'package-lock.json', 'package.json'],
-      'Missing fixture hashes'
     );
     assert.deepEqual(
       Object.keys(entry.packages).sort(),
@@ -99,12 +108,6 @@ export async function verifyCatalog({ allowCurrent = false } = {}) {
       published.versions[entry.version].dist.integrity,
       entry.packages['@docx-editor.dev/pro'].integrity
     );
-    for (const [file, hash] of Object.entries(entry.hashes))
-      assert.equal(
-        sha(read(`${entry.directory}/${file}`)),
-        hash,
-        `Changed historical file: ${entry.version}/${file}`
-      );
   }
   return value;
 }

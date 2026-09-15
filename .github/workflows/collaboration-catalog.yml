@@ -55,19 +55,33 @@ jobs:
             exit 0
           fi
           branch="automation/collaboration-catalog-$version"
-          if gh pr list --head "$branch" --state all --json number --jq 'length' | grep -qv '^0$'; then
+          pr_state=$(gh pr list --head "$branch" --state all --json state --jq '.[0].state // ""')
+          if [ "$pr_state" = OPEN ]; then
             echo "A catalog PR already exists for $version. Review that PR."
             exit 0
           fi
-          git switch -c "$branch"
-          node scripts/collaboration/cli.mjs catalog --capture "$version"
-          node scripts/collaboration/cli.mjs catalog
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git config core.hooksPath /dev/null
-          git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx
-          git commit -m "test: capture collaboration baseline $version"
-          git push origin "$branch"
+          if [ -n "$pr_state" ]; then
+            echo "The catalog PR is $pr_state but the baseline is absent from main. Restore or reopen that PR before retrying."
+            exit 1
+          fi
+          remote_branch=$(git ls-remote --heads origin "refs/heads/$branch")
+          if [ -n "$remote_branch" ]; then
+            # Resume after a successful push followed by a failed PR creation.
+            # Reuse the captured bytes; never regenerate or force-push a baseline.
+            git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            git switch --track -c "$branch" "origin/$branch"
+            node scripts/collaboration/cli.mjs catalog
+          else
+            git switch -c "$branch"
+            node scripts/collaboration/cli.mjs catalog --capture "$version"
+            node scripts/collaboration/cli.mjs catalog
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git config core.hooksPath /dev/null
+            git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx
+            git commit -m "test: capture collaboration baseline $version"
+            git push origin "$branch"
+          fi
           cat > /tmp/collaboration-catalog-pr.md <<'BODY'
           Record the published collaboration packages, frozen installation, and saved-room fixture. Review the artifact integrity and generated release table before the next release.
           BODY

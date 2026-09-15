@@ -19,11 +19,13 @@ export async function createChange() {
     const reason = await ask('reason', 'Why can released clients safely share rooms, or why not');
     const tests = (await ask('tests', 'Regression test paths, comma separated', ''))
       .split(',')
+      .map((value) => value.trim())
       .filter(Boolean);
     const fields =
       impact === 'migration-required'
         ? (await ask('fields', 'Changed version fields, comma separated', ''))
             .split(',')
+            .map((value) => value.trim())
             .filter(Boolean)
         : [];
     const migration =
