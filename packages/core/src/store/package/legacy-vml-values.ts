@@ -52,7 +52,10 @@ export function styleOf(node: OoxmlElement): ReadonlyMap<string, string> | null 
   return styles;
 }
 export function color(value: string | undefined, fallback: string): string | null {
-  const raw = (value ?? fallback).replace(/\s+\[\d+\]$/, '').toLowerCase();
+  const input = value ?? fallback;
+  // Anchor the color token so malformed suffixes cannot rescan each whitespace position.
+  const indexed = input.match(/^(\S+)\s+\[\d+\]$/);
+  const raw = (indexed?.[1] ?? input).toLowerCase();
   if (/^#[\da-f]{6}$/.test(raw)) return raw;
   return (
     new Map([
