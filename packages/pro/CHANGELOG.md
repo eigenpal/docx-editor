@@ -1,5 +1,43 @@
 # @docx-editor.dev/pro
 
+## 2.18.0
+
+### Minor Changes
+
+- c6a829d: Add collaboration format checks for clients and saved rooms, with errors linking to the upgrade guide. Preserve Hocuspocus server error codes during connection and reconnection to distinguish version mismatches from rejected credentials.
+- f56f0b6: Preserve text across repeated concurrent formatting, typing, deletion, and undo, and add collaboration compatibility checks. This is a breaking collaboration upgrade: export existing rooms with the previous release, then create replacement rooms with fresh collaboration undo history; fixes #592.
+
+### Patch Changes
+
+- Updated dependencies [ded420d]
+- Updated dependencies [d2d3824]
+- Updated dependencies [b5bf09f]
+- Updated dependencies [10a3d41]
+- Updated dependencies [e78dc17]
+- Updated dependencies [84c4622]
+- Updated dependencies [564182f]
+- Updated dependencies [d4daf40]
+- Updated dependencies [f2dfcac]
+- Updated dependencies [758551b]
+- Updated dependencies [452312f]
+- Updated dependencies [5598465]
+- Updated dependencies [60b9163]
+- Updated dependencies [59520ce]
+- Updated dependencies [95db5eb]
+- Updated dependencies [1e36856]
+- Updated dependencies [6eb1eb4]
+- Updated dependencies [37be540]
+- Updated dependencies [9198848]
+- Updated dependencies [2cea799]
+- Updated dependencies [f23f974]
+- Updated dependencies [7c2b4aa]
+- Updated dependencies [90ea211]
+- Updated dependencies [f10341d]
+- Updated dependencies [040e653]
+  - @docx-editor.dev/core@2.18.0
+  - @docx-editor.dev/react@2.18.0
+  - @docx-editor.dev/vue@2.18.0
+
 ## 2.17.0
 
 ### Patch Changes

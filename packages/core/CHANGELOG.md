@@ -1,5 +1,43 @@
 # @docx-editor.dev/core
 
+## 2.18.0
+
+### Minor Changes
+
+- ded420d: Render Arabic text paragraphs with script-aware measurement, inherited RTL alignment, and matching caret geometry. Fixes #773.
+- 564182f: Add `customFonts()` to supply company fonts alongside packaged and Google fonts, with validation and failure reporting. Support cancellation in `loadFonts()` and custom font resolution, and match font names consistently during measurement and painting.
+- f2dfcac: Style packaged dialogs with bordered inputs and visible buttons that withstand host CSS resets. Forward `id`, `aria-*`, and `data-*` attributes through popup parts, and omit decorative classes when using `asChild`.
+- 758551b: Add Review > Protect Document for Forms to enable forms protection or stop an enforced restriction without a password. Each toggle supports undo and persists on save. Enforce read-only and comments-only restrictions, and disable suggesting mode under forms protection.
+- 6eb1eb4: Expand the Office.js-compatible API for text, formatting, lists, tables, pictures, fields, and review workflows, with task guides and compatibility reports. Fix batching errors and preserve document content during structural edits.
+- 9198848: Show configured providers’ supported fonts in the searchable font dropdown without preloading their bytes. Load newly selected fonts on demand while preserving selection and undo history.
+- f23f974: Render visually RTL table columns, merged cells, borders, interaction geometry, and HTML clipboard direction in the correct order. Fixes #774.
+- 040e653: Improve Word fidelity for theme fonts, RTL numbers, floating-table passages, and narrow CJK punctuation.
+
+  Use editor-scoped fonts; `packagedFonts.install` and `installDefaultFontFaces()` are deprecated and inert, so configure app fonts separately.
+
+### Patch Changes
+
+- d2d3824: Add `activeBackground` to author styles to set the open change's highlight band per author.
+- b5bf09f: Preserve table structure and formatting when toggling checkbox content controls. Fixes #817.
+- 10a3d41: Fix automated checkbox updates to save Word symbol glyphs with the declared state font, matching editor toggles. Fixes #754.
+- e78dc17: Keep the toolbar's standard font choices available in empty and populated documents. Merge configured and document-specific fonts into that list without loading unused font bytes.
+- 84c4622: Preserve the table cell or row a text, dropdown, combo box, or date content control wraps when its value changes. Fixes #825.
+- 452312f: Keep direct text formatting, including font family and size, when you press Enter after formatted text. Preserve paragraph style transitions, such as a heading followed by body text.
+- 5598465: Fix CJK punctuation spacing and overlap when `characterSpacingControl` enables compression, while preserving authored spaces and paragraph boundaries.
+- 60b9163: Release temporary font-discovery caches before export layout to keep large documents within constrained memory limits.
+- 59520ce: Apply reviewer filters and display modes inside legacy text form fields and tracked positional tabs, and remove empty revision cards after nested changes are resolved. Fixes #826. Fixes #829.
+- 95db5eb: Fix declaration builds and text-shaper initialization with bidi-js 1.1.0 and harfbuzzjs 1.6.1.
+- 1e36856: Match Word's picture brightness and contrast so washout watermarks retain a white background. Fixes #821.
+- 37be540: Allow adding, replying to, resolving, reopening, and deleting comments in comments-only documents. Disable commands that forms protection refuses and return a readable reason. Keep supported form fields, unlocked content controls, and unprotected sections editable.
+- 2cea799: Resolve missing East Asian fonts from document theme languages, inherited language hints, and supplemental theme fonts. Load the selected Chinese, Japanese, and Korean fonts before shaping in editors and exports.
+- 7c2b4aa: Keep typing at the end of an unprotected legacy text form field outside its result, matching Word. Preserve protected filling, surrounding locks, and tracked changes at the boundary.
+
+  Treat unprotected form fields as complete units for word-delete shortcuts. Preserve Word’s select-then-delete behavior for Backspace and Shift+Backspace.
+
+- 90ea211: Preserve the document's scroll position and text selection when picking or typing a font size, or dismissing the font-size input with Escape. Restore the saved selection when returning focus to the editor from toolbar inputs.
+- f10341d: Prevent excessive processing time when documents contain malformed VML color values with long whitespace sequences.
+- @docx-editor.dev/i18n@2.18.0
+
 ## 2.17.0
 
 ### Patch Changes
