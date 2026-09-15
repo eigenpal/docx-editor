@@ -65,11 +65,11 @@ export function releaseInstallation(entry) {
     throw error;
   }
 }
-export function packCandidate(destination = resolve(CACHE, 'candidate')) {
+export async function packCandidate(destination = resolve(CACHE, 'candidate')) {
   mkdirSync(destination, { recursive: true });
   const directory = mkdtempSync(join(destination, 'pack-'));
   const packages = {};
-  const plannedVersions = pendingVersions();
+  const plannedVersions = await pendingVersions();
   const preview = Object.keys(plannedVersions).length > 0;
   // Pack every public package so the publication check covers the whole release.
   const group = json('.changeset/config.json').fixed.flat();

@@ -33,7 +33,8 @@ export function run(command, args, cwd = ROOT) {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    throw new Error(`${command} ${args.join(' ')} failed:\n${error.stderr ?? error.message}`);
+    const diagnostics = [error.stdout, error.stderr].filter(Boolean).join('\n').trim();
+    throw new Error(`${command} ${args.join(' ')} failed:\n${diagnostics || error.message}`);
   }
 }
 export const git = (...args) => run('git', args).trim();

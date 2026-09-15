@@ -8,7 +8,7 @@ import { packCandidate, verifyCandidate, verifyPublishedCandidate } from './inst
 try {
   switch (process.argv[2]) {
     case 'pack': {
-      const packed = packCandidate();
+      const packed = await packCandidate();
       const target = resolve(ROOT, '.cache/collaboration/publish');
       rmSync(target, { recursive: true, force: true });
       mkdirSync(target, { recursive: true });

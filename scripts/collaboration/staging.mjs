@@ -3,21 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ROOT, run, writeJSON } from './common.mjs';
 
-// Use Changesets' own release plan. Do not independently calculate fixed-group versions.
-export function pendingVersions() {
+// Read the full pending plan, including notes already merged on main. Unlike the
+// status CLI, this API does not require a local base branch in detached CI checkouts.
+export async function pendingVersions() {
   const pending = readdirSync(join(ROOT, '.changeset')).some(
     (file) => file.endsWith('.md') && file !== 'README.md'
   );
-  if (!pending) return {}; // Changesets status exits nonzero once release notes are consumed.
-  const temporary = mkdtempSync(join(tmpdir(), 'collaboration-release-plan-'));
-  try {
-    const output = join(temporary, 'plan.json');
-    run('bun', ['x', '--no-install', 'changeset', 'status', '--output', output]);
-    const plan = JSON.parse(readFileSync(output, 'utf8'));
-    return Object.fromEntries(plan.releases.map((entry) => [entry.name, entry.newVersion]));
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
-  }
+  if (!pending) return {};
+  // Compatibility shards consume a packed candidate without root dev dependencies.
+  const { getReleasePlan } = await import('@changesets/get-release-plan');
+  const plan = await getReleasePlan(ROOT);
+  return Object.fromEntries(plan.releases.map((entry) => [entry.name, entry.newVersion]));
 }
 export function stageManifest(manifest, versions) {
   const next = { ...manifest, version: versions[manifest.name] ?? manifest.version };

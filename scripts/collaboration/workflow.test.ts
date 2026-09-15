@@ -1,9 +1,17 @@
 import { afterEach, expect, test } from 'bun:test';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { sha } from './common.mjs';
+import { ROOT, run, sha } from './common.mjs';
 import { verifyCandidate } from './installation.mjs';
 
 const directories: string[] = [];
@@ -232,9 +240,57 @@ test('a final release with consumed Changesets needs no preview release plan', (
     [
       '--input-type=module',
       '-e',
-      "import { pendingVersions } from './scripts/collaboration/staging.mjs'; console.log(JSON.stringify(pendingVersions()));",
+      "import { pendingVersions } from './scripts/collaboration/staging.mjs'; console.log(JSON.stringify(await pendingVersions()));",
     ],
     { cwd: repo.dir, encoding: 'utf8' }
   );
   expect(JSON.parse(result)).toEqual({});
+});
+
+test('preview planning reads all pending notes without a local main branch', () => {
+  const repo = repository();
+  repo.write('bun.lock', '{}\n');
+  repo.data('package.json', { name: 'preview-test', private: true, workspaces: ['packages/*'] });
+  repo.data('packages/core/package.json', { name: '@docx-editor.dev/core', version: '2.18.0' });
+  repo.data('packages/pro/package.json', { name: '@docx-editor.dev/pro', version: '2.18.0' });
+  repo.data('.changeset/config.json', {
+    baseBranch: 'main',
+    fixed: [['@docx-editor.dev/core', '@docx-editor.dev/pro']],
+  });
+  repo.write(
+    '.changeset/already-on-main.md',
+    '---\n"@docx-editor.dev/core": minor\n---\n\nExisting release note.\n'
+  );
+  const base = repo.commit();
+  repo.git('update-ref', 'refs/remotes/origin/main', base);
+  repo.git('checkout', '--detach', '-q');
+  for (const branch of repo.git('for-each-ref', '--format=%(refname)', 'refs/heads').split('\n')) {
+    if (branch) repo.git('update-ref', '-d', branch);
+  }
+  repo.write('.changeset/new-pr.md', '---\n"@docx-editor.dev/pro": patch\n---\n\nNew fix.\n');
+  repo.commit();
+  symlinkSync(join(ROOT, 'node_modules'), join(repo.dir, 'node_modules'), 'dir');
+  const result = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "import { pendingVersions } from './scripts/collaboration/staging.mjs'; console.log(JSON.stringify(await pendingVersions()));",
+    ],
+    { cwd: repo.dir, encoding: 'utf8' }
+  );
+  expect(JSON.parse(result)).toEqual({
+    '@docx-editor.dev/core': '2.19.0',
+    '@docx-editor.dev/pro': '2.19.0',
+  });
+  expect(repo.git('for-each-ref', '--format=%(refname)', 'refs/heads')).toBe('');
+});
+
+test('failed tooling commands retain stdout and stderr diagnostics', () => {
+  expect(() =>
+    run(process.execPath, [
+      '-e',
+      'console.log("plan failed"); console.error("details"); process.exit(1)',
+    ])
+  ).toThrow(/plan failed[\s\S]*details/);
 });

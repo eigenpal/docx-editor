@@ -29,7 +29,7 @@ try {
     ? value.releases.filter((entry) => entry.version === release)
     : value.releases;
   assert.ok(entries.length, 'Requested release is not in the catalog');
-  candidate = option('candidate') ?? packCandidate();
+  candidate = option('candidate') ?? (await packCandidate());
   verifyCandidate(candidate);
   if (option('candidate')) install(candidate);
   const candidatePeer = new Peer(candidate, 'candidate-info');
