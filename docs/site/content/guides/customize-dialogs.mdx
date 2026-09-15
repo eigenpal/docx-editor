@@ -139,6 +139,11 @@ Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body
 `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept
 `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
+Anything else you pass reaches the rendered element, so a part takes an `id`, an
+`aria-*` label, or a `data-*` test hook. The part's own wiring wins every collision:
+passing `onClick` to `Apply` does not replace the packaged handler. To own the element
+and its handler, pass `asChild` and supply your own.
+
 Named children replace default parts. Use `hidden` to remove a part or
 `preset={false}` to supply the complete arrangement. Include a title, error region,
 and accessible Apply and Cancel controls. Omitted fields retain their draft values.

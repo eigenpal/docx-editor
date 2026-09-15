@@ -71,6 +71,33 @@ test('custom Apply preserves one default action and writes one undo step', async
   });
   expect(editor().getPageSetup()!.marginsTwips.top).toBe(1440);
 });
+test('a part forwards host attributes but keeps its own wiring', async () => {
+  let hostClicked = 0;
+  const { view, editor } = mount(
+    <Page open onClose={() => {}}>
+      <Page.Apply
+        id="app-apply"
+        aria-label="Save the page"
+        data-testid="app-save"
+        onClick={() => hostClicked++}
+      />
+    </Page>
+  );
+  const apply = view.container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
+  expect(apply.id).toBe('app-apply');
+  expect(apply.getAttribute('aria-label')).toBe('Save the page');
+  expect(apply.getAttribute('data-testid')).toBe('app-save');
+  await act(async () => {
+    fireEvent.change(view.getByLabelText('Top'), { target: { value: '0.5' } });
+  });
+  await act(async () => {
+    fireEvent.click(apply);
+  });
+  // The packaged handler still runs, and the host's stray one never replaced it.
+  expect(editor().getPageSetup()!.marginsTwips.top).toBe(720);
+  expect(hostClicked).toBe(0);
+});
+
 test('full composition retains field wiring in the supplied order', async () => {
   const { view, editor } = mount(
     <Page open onClose={() => {}} preset={false}>
