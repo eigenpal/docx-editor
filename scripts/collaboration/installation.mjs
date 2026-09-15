@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { ROOT, PACKAGES, json, read, sha, run, writeJSON, registry } from './common.mjs';
 
 import { pendingVersions, stageTarball } from './staging.mjs';
@@ -21,7 +21,7 @@ export function assertIsolated(directory) {
     if (!path) continue;
     if (entry.link) throw new Error(`Workspace link in isolated install: ${path}`);
     const full = join(directory, path);
-    if (existsSync(full) && !realpathSync(full).startsWith(realpathSync(directory) + '/')) {
+    if (existsSync(full) && !realpathSync(full).startsWith(realpathSync(directory) + sep)) {
       throw new Error(`Dependency escapes isolated install: ${path}`);
     }
   }
