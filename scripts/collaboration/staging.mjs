@@ -1,10 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { run, writeJSON } from './common.mjs';
+import { ROOT, run, writeJSON } from './common.mjs';
 
 // Use Changesets' own release plan. Do not independently calculate fixed-group versions.
 export function pendingVersions() {
+  const pending = readdirSync(join(ROOT, '.changeset')).some(
+    (file) => file.endsWith('.md') && file !== 'README.md'
+  );
+  if (!pending) return {}; // Changesets status exits nonzero once release notes are consumed.
   const temporary = mkdtempSync(join(tmpdir(), 'collaboration-release-plan-'));
   try {
     const output = join(temporary, 'plan.json');

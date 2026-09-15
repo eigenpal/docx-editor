@@ -224,3 +224,17 @@ test('an existing core Changeset covers the fixed Pro release group', () => {
   );
   expect(repo.check('--base', repo.base).status).toBe(0);
 });
+
+test('a final release with consumed Changesets needs no preview release plan', () => {
+  const repo = repository();
+  const result = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "import { pendingVersions } from './scripts/collaboration/staging.mjs'; console.log(JSON.stringify(pendingVersions()));",
+    ],
+    { cwd: repo.dir, encoding: 'utf8' }
+  );
+  expect(JSON.parse(result)).toEqual({});
+});

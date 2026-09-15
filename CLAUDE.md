@@ -388,6 +388,12 @@ Every code PR gets a changeset (`bun changeset`, or a correct hand-written
 - Keep the summary minimal: one sentence, two at most. No bullet lists, no
   implementation detail.
 
+Collaboration format compatibility has a separate policy after 2.18. Relevant PRs
+must include a decision from `bun run collaboration:change`. Format changes require
+at least a minor package release and migration instructions. Public API breaks
+still follow the major-version rule. See
+[Collaboration compatibility](docs/architecture/collaboration-compatibility.md).
+
 Never push the `chore: release` commit by hand, delete `.changeset/*.md` outside
 `changeset version`, or hand-edit `CHANGELOG.md` / `package.json#version`.
 
