@@ -30,7 +30,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, isRangeMarkerKind } from '../package/ooxml-shared.ts';
 import { isWmlNamed } from './tree-op-tracked.ts';
 import { isContentControl } from '../package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
@@ -617,6 +617,23 @@ function isBlockLevel(node: OoxmlNode): boolean {
   return node.kind !== 'textValue' && isContentControl(node);
 }
 
+/**
+ * A child that marks a position rather than holding content: bookmark, comment-range and
+ * move-range boundaries, permission-range boundaries, and proofing marks.
+ */
+function isInertMarker(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.kind === 'bookmarkStart' || node.kind === 'bookmarkEnd') return true;
+  if (isRangeMarkerKind(node.kind)) return true;
+  return (
+    node.kind === 'generic' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    (node.localName === 'proofErr' ||
+      node.localName === 'permStart' ||
+      node.localName === 'permEnd')
+  );
+}
+
 function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
@@ -657,16 +674,33 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     // accepting leaves a hollow one still occupying the model position the reviewer agreed to
     // remove. A `w:hyperlink` with no runs is a link to nowhere holding a relationship alive.
     // Word drops both, and an untracked delete over the same range already does.
-    if (child.kind === 'fldSimple' || child.kind === 'hyperlink') {
-      const survivor = rebuilt[0];
-      if (
-        rebuilt.length === 1 &&
-        survivor !== undefined &&
-        survivor.kind !== 'textValue' &&
-        survivor.children.length === 0
-      ) {
-        continue;
-      }
+    //
+    const survivor = rebuilt[0];
+    const hollow =
+      rebuilt.length === 1 && survivor !== undefined && survivor.kind !== 'textValue'
+        ? survivor
+        : null;
+    if ((child.kind === 'fldSimple' || child.kind === 'hyperlink') && hollow?.children.length === 0)
+      continue;
+    // A revision wrapper the resolution emptied goes the same way. Accepting one author's
+    // deletion of another author's insertion removes the deleted runs and leaves the `w:ins`
+    // holding no characters to decide about — yet it carded as a blank entry and kept the
+    // document reporting tracked changes. "Emptied" means no CONTENT left: Word writes
+    // bookmark, comment-range and proofing markers directly inside a wrapper, and a wrapper
+    // reduced to those is as hollow as one with nothing. The markers themselves are hoisted,
+    // not dropped, because each pairs with a counterpart elsewhere. Move halves sweep too: the
+    // range markers are siblings of the wrapper, so the other half still resolves by name.
+    // Only a wrapper THIS resolution emptied is swept — one that arrived empty is not this
+    // decision's to remove.
+    if (
+      hollow !== null &&
+      child.kind !== 'textValue' &&
+      isContentRevisionKind(child.kind) &&
+      child.children.some((entry) => !isInertMarker(entry)) &&
+      hollow.children.every(isInertMarker)
+    ) {
+      for (const marker of hollow.children) out.push(marker);
+      continue;
     }
     if (child.kind === 'paragraph') {
       const paragraph = rebuilt[0];

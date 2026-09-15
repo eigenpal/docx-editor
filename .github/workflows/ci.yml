@@ -1,7 +1,8 @@
 name: CI
 
-# `lint` and `test` run in parallel; `build needs: [lint, test]` so a
-# package can never build before lint has passed (OpenSpec §4.3).
+# Source checks, browser checks, and package verification run concurrently.
+# Each matrix entry is one named check. A failure cancels its siblings;
+# the stable test gate requires every verification lane to pass.
 #
 # Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
 # bun.lock first and then runs the same checks inline), so we skip them
@@ -18,7 +19,172 @@ on:
 permissions:
   contents: read
 
+# New commits supersede older verification runs for the same PR/ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  checks:
+    if: "github.actor != 'dependabot[bot]'"
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - check: shipped-advisories
+          - check: api-changeset
+          - check: lint
+          - check: typecheck
+          - check: browser
+          - check: build
+          - check: unit
+            shard: 1/4
+          - check: unit
+            shard: 2/4
+          - check: unit
+            shard: 3/4
+          - check: unit
+            shard: 4/4
+    name: "${{ matrix.check == 'unit' && format('unit ({0})', matrix.shard) || matrix.check }}"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: "${{ matrix.check == 'api-changeset' && '0' || '1' }}"
+      - name: Setup Bun
+        if: "matrix.check != 'api-changeset'"
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        if: "matrix.check != 'api-changeset' && matrix.check != 'shipped-advisories'"
+        run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+        if: "matrix.check == 'lint'"
+      - name: Lane boundary compile check
+        run: bun run check:lane-boundaries
+        if: "matrix.check == 'lint'"
+      - name: tsconfig lib floor check
+        run: bun run check:tsconfig-lib-floor
+        if: "matrix.check == 'lint'"
+      - name: Format check
+        run: bun run format:check
+        if: "matrix.check == 'lint'"
+      - name: Type check
+        if: "matrix.check == 'typecheck'"
+        run: bun run typecheck
+      - name: i18n locale + typed-exports sync check
+        if: "matrix.check == 'typecheck'"
+        run: bun run i18n:validate
+      - name: CLA logic tests
+        if: "matrix.check == 'typecheck'"
+        run: bash .github/cla/cla.test.sh
+      - name: Run unit test shard
+        if: "matrix.check == 'unit'"
+        env:
+          TEST_SHARD: '${{ matrix.shard }}'
+        run: 'bun run test --shard "$TEST_SHARD" --fail-fast'
+      - name: Demo apps build
+        if: "matrix.check == 'browser'"
+        run: bun run check:app-build
+      - name: Install Chromium for Markdown preview checks
+        if: "matrix.check == 'browser'"
+        run: bunx playwright install --with-deps chromium
+      - name: Check Markdown page layout and review controls
+        if: "matrix.check == 'browser'"
+        run: "bun run --filter './examples/docx-to-markdown' check:preview"
+      - name: Build packages
+        run: bun run build:packages
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+        if: "matrix.check == 'build'"
+      - name: Check editor API consumers against published declarations
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published"
+        if: "matrix.check == 'build'"
+      - name: Setup Node for server agent integration
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+        if: "matrix.check == 'build'"
+      - name: Server agent lifecycle integration
+        run: "bun run --filter './examples/server-agent-review' test:lifecycle"
+        if: "matrix.check == 'build'"
+      - name: Editor API public consumer workflows
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
+        if: "matrix.check == 'build'"
+      - name: Package size report
+        run: bun run check:package-size --out package-sizes.json
+        if: "matrix.check == 'build'"
+      - name: Upload package size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-sizes
+          path: package-sizes.json
+          overwrite: true
+        if: "matrix.check == 'build'"
+      - name: API report check
+        run: bun run api:check
+        if: "matrix.check == 'build'"
+      - name: Parity gates
+        run: bun run check:parity
+        if: "matrix.check == 'build'"
+      - name: Third-party notices generate (gate)
+        run: bun run notices:generate
+        if: "matrix.check == 'build'"
+      - name: Published-package artifact check
+        run: bun run check:package-artifacts
+        if: "matrix.check == 'build'"
+      - name: Shipped text-shaper check
+        run: bun run check:shipped-shaper
+        if: "matrix.check == 'build'"
+      - name: Published-package consumer check
+        run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
+        if: "matrix.check == 'build'"
+      - name: i18n per-locale bundle size check
+        run: bun run check:i18n-bundle-size
+        if: "matrix.check == 'build'"
+      - name: Fonts package manifest check
+        run: bun run check:fonts-manifest
+        if: "matrix.check == 'build'"
+      - name: Fonts package Google catalog check
+        run: bun run check:google-catalog
+        if: "matrix.check == 'build'"
+      - name: Word font width fidelity
+        timeout-minutes: 5
+        run: bun run check:font-width-fidelity
+        if: "matrix.check == 'build'"
+      - name: Docs JSON generation (smoke test)
+        run: bun run docs:json
+        if: "matrix.check == 'build'"
+      - name: Docs MDX check
+        run: bun run check:docs-mdx
+        if: "matrix.check == 'build'"
+      - name: Docs chrome slot coverage
+        run: bun run check:docs-chrome-slots
+        if: "matrix.check == 'build'"
+      - name: Docs Vue ref check
+        run: bun run check:docs-vue-refs
+        if: "matrix.check == 'build'"
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+        if: "matrix.check == 'shipped-advisories'"
+        id: advisories
+      - name: Require a changeset when docs/api changed
+        run: 'node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"'
+        if: "matrix.check == 'api-changeset' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !(startsWith(github.head_ref, 'changeset-release/') &&\n  github.event.pull_request.head.repo.full_name == github.repository)"
+      - name: Save advisory report
+        if: "${{ !cancelled() && matrix.check == 'shipped-advisories' && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') }}"
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: shipped-advisories-sarif
+          path: shipped-advisories.sarif
+          if-no-files-found: ignore
+          overwrite: true
+
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -46,281 +212,21 @@ jobs:
           path: packages/editor-api/compat/reports/
           retention-days: 30
 
-  lint:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Lint
-        run: bun run lint
-
-      - name: Lane boundary compile check
-        # The only compile-level proof that store/layout/automation stay DOM-free:
-        # each lane compiles against a lib with no `dom`. The import-edge half of
-        # the lane DAG is a test (core-lane-imports.test.ts) and runs under `test`.
-        run: bun run check:lane-boundaries
-
-      - name: tsconfig lib floor check
-        # Several packages map core to `../core/src`, so they type-check core's
-        # sources and core's `lib` is their floor. Below it, `build:packages`
-        # fails in the dts build with a raw TS2550 — this reports the cause, and
-        # sits here so it lands before that build runs.
-        run: bun run check:tsconfig-lib-floor
-
-      - name: Format check
-        run: bun run format:check
-
   test:
-    if: github.actor != 'dependabot[bot]'
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
+    needs: checks
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Type check
-        run: bun run typecheck
-
-      - name: i18n locale + typed-exports sync check
-        run: bun run i18n:validate
-
-      - name: Run tests
-        run: bun run test
-
-      # BOTH demos build from LOCAL source, so this is the gate that a change to the
-      # engine or the shipped stylesheet still produces a working app. `build:packages`
-      # below does not catch it: a stylesheet that no CSS parser accepts passes typecheck,
-      # the whole suite and the adapter-CSS check, and only fails when an app bundles it.
-      #
-      # Both, because each demo resolves the workspace through its OWN vite alias list.
-      # A subpath added to one and not the other builds on one side and fails on the
-      # other, and no parity gate sees it: check:parity and check:adapter-mirror compare
-      # the PACKAGES, not the apps that consume them.
-      - name: Demo apps build
-        run: bun run check:app-build
-
-      - name: Install Chromium for Markdown preview checks
-        run: bunx playwright install --with-deps chromium
-
-      - name: Check Markdown page layout and review controls
-        run: bun run --filter './examples/docx-to-markdown' check:preview
-
-      # The three Chromium gates that used to run here (`verify:a11y-tree`,
-      # `verify:real-adapter-smoke`, `verify:real-adapter-gate`) drove the legacy editor
-      # lane and went away with it — the scripts no longer exist, so the steps could only
-      # fail. The browser specs that replaced them (`bun run test:e2e:editor`) still need a
-      # Vue dev server this branch does not ship, so they are not wired in here yet.
-      - name: CLA logic tests
-        run: bash .github/cla/cla.test.sh
-
-  # Advisories in the dependency closure we publish. Deliberately NOT `bun audit`:
-  # that reads the whole workspace lock, so devDependencies and the demo apps in
-  # examples/ would fail the build for CVEs no consumer can reach. See the header
-  # of scripts/check-shipped-advisories.mjs.
-  #
-  # No `bun install` step on purpose. The script reads bun.lock and the package
-  # manifests, so a checkout is the whole setup and the job finishes in seconds.
-  # It is independent of lint/test, so `build` does not wait on it.
-  shipped-advisories:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Shipped dependency advisories
-        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
-
-      # `always()` so a failing gate still publishes what it found: the run log
-      # is where a finding goes to be forgotten. `continue-on-error` because a
-      # fork PR gets a read-only token and cannot upload — the gate above has
-      # already passed or failed on its own, so a refused upload must not
-      # change the job result.
-      - name: Upload SARIF
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: shipped-advisories.sarif
-          category: shipped-advisories
-
-  # A PR that changes the public API surface (docs/api/*.api.md) must carry a changeset,
-  # or a removed export ships as an unversioned change. PRs only: on a push the changesets
-  # are legitimately consumed, and the release PR (changeset-release/*) deletes them by
-  # design. No `bun install` — git and node are the whole setup, same as shipped-advisories.
-  api-changeset:
-    # The changeset-release skip requires the SAME repo: head_ref is author-controlled, so
-    # a fork branch named changeset-release/x must not buy its way past the gate.
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.actor != 'dependabot[bot]' &&
-      !(startsWith(github.head_ref, 'changeset-release/') &&
-        github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Require a changeset when docs/api changed
-        run: node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"
-
-  build:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: [lint, test]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build packages
-        run: bun run build:packages
+      - name: Require all verification lanes to pass
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
+          RESULT: ${{ needs.checks.result }}
+        run: test "$RESULT" = success
 
-      - name: Check editor API consumers against published declarations
-        run: bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published
-
-      # This integration test runs real Node workers against built package exports.
-      # Keep it after build: the general Bun suite runs on a source-only checkout.
-      - name: Setup Node for server agent integration
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-
-      - name: Server agent lifecycle integration
-        run: bun run --filter './examples/server-agent-review' test:lifecycle
-
-      - name: Editor API public consumer workflows
-        run: bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
-
-      # Sizes of the exact artifacts `npm publish` ships (`npm pack --dry-run`
-      # per published package). Uploaded as an artifact: main-branch runs are
-      # the baseline the `package-size` job below diffs PRs against.
-      - name: Package size report
-        run: bun run check:package-size --out package-sizes.json
-
-      # `overwrite` because artifact names are unique per RUN, not per attempt:
-      # without it, "Re-run all jobs" 409s here and fails the build job.
-      - name: Upload package size report
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-sizes
-          path: package-sizes.json
-          overwrite: true
-
-      - name: API report check
-        run: bun run api:check
-
-      - name: Parity gates
-        run: bun run check:parity
-
-      # Same generator the release runs, here as a gate rather than for its
-      # output: it fails when a newly bundled dependency ships no license text,
-      # or when a tsup config stops emitting the metafile it reads. Catching
-      # that on the PR beats discovering it mid-publish.
-      - name: Third-party notices generate (gate)
-        run: bun run notices:generate
-
-      - name: Published-package artifact check
-        run: bun run check:package-artifacts
-
-      - name: Shipped text-shaper check
-        run: bun run check:shipped-shaper
-
-      - name: Published-package consumer check
-        run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
-
-      - name: i18n per-locale bundle size check
-        run: bun run check:i18n-bundle-size
-
-      - name: Fonts package manifest check
-        # Baked sha256 hashes in @docx-editor.dev/fonts must match the shipped font files.
-        run: bun run check:fonts-manifest
-
-      - name: Fonts package Google catalog check
-        # Offline. The generator owns the list of revisions a catalogued URL may be pinned
-        # to; this is the only thing that enforces it. Without it a regenerated catalog
-        # could point at a mutable branch tip and every unit test would still pass, because
-        # a test can only assert the SHAPE of a URL, not which commits are allowed.
-        run: bun run check:google-catalog
-
-      - name: Word font width fidelity
-        # The only step here that reaches the network: three Montserrat faces from
-        # jsDelivr, hash-verified, retried three times on transport failure. Bounded so a
-        # CDN that hangs fails this step instead of holding a runner for the workflow's
-        # whole timeout.
-        timeout-minutes: 5
-        run: bun run check:font-width-fidelity
-
-      - name: Docs JSON generation (smoke test)
-        # Not committed — `docs/json/` is gitignored. Run as a smoke test
-        # so any breakage in the generator surfaces here instead of when
-        # the docs site (`docx-editor-page`) tries to consume it.
-        run: bun run docs:json
-
-      - name: Docs MDX check
-        # `docs/site/content/` is prose with no app in this repo to render it,
-        # so a bare `{identifier}` compiles fine here and only explodes when
-        # the docs site prerenders it. Same reasoning as the step above: catch
-        # it on the PR, not in `docx-editor-page`'s build.
-        run: bun run check:docs-mdx
-
-      - name: Docs chrome slot coverage
-        # Keep the authored slot reference aligned with the public core union and
-        # both adapter toolbar namespaces as those APIs grow.
-        run: bun run check:docs-chrome-slots
-
-      - name: Docs Vue ref check
-        # A Vue template unwraps a ref only when the ref is a top-level binding.
-        # Most composables return a plain object of refs, so a sample that drops
-        # `.value` renders a control that never disables. Nothing type-checks
-        # this prose, so the wrong sample would ship as written.
-        run: bun run check:docs-vue-refs
-
-  # Diffs the PR's published-package sizes against the latest successful main
-  # run and keeps ONE sticky PR comment up to date. Fails on huge tarball
-  # growth (thresholds in scripts/check-package-size.mjs) unless the PR
-  # carries the `size-increase-expected` label. Separate from `build` so that
-  # job keeps its read-only token; only this one gets `pull-requests: write`.
   package-size:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
+    needs: checks
     permissions:
       contents: read
       actions: read # download the baseline artifact from a main run
@@ -390,3 +296,28 @@ jobs:
           else
             gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@size-comment.md
           fi
+
+  # Publishing SARIF needs a write token; all verification jobs stay read-only.
+  # This informational upload cannot change the advisory gate result.
+  security-report:
+    name: Security report
+    if: "${{ !cancelled() && github.actor != 'dependabot[bot]' }}"
+    needs: checks
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Download advisory report
+        uses: actions/download-artifact@v8
+        with:
+          name: shipped-advisories-sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories

@@ -148,6 +148,28 @@ describe('shared Review menu commands', () => {
     editor.destroy();
   });
 
+  test('accepting a deletion nested in another author’s insertion leaves no blank card', async () => {
+    const editor = mountEditor(
+      '<w:p><w:r><w:t xml:space="preserve">A </w:t></w:r>' +
+        '<w:ins w:id="1" w:author="Ada"><w:del w:id="2" w:author="Grace"><w:r><w:delText>new</w:delText></w:r></w:del></w:ins>' +
+        '<w:r><w:t xml:space="preserve"> B</w:t></w:r></w:p>'
+    );
+    const before = await editor.save();
+    const deletion = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'delete');
+    expect(deletion).toBeDefined();
+    expect(editor.acceptReviewItem(deletion!.key).ok).toBe(true);
+    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getTrackedChanges()).toHaveLength(0);
+    expect(editor.surface!.session.bodyText()).toBe('A  B');
+    expect(serializeOoxmlPart(editor.surface!.session.storyParts()[0]!)).not.toContain('<w:ins');
+    editor.exec({ type: 'undo' });
+    expect(editor.getReviewItems()).toHaveLength(2);
+    expect(await editor.save()).toEqual(before);
+    editor.destroy();
+  });
+
   test('bulk resolution keeps review comments', () => {
     const editor = mountEditor(ins(1));
     expect(

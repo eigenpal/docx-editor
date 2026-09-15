@@ -53,10 +53,19 @@ try {
 
 `getByTag(tag)` narrows the collection directly when you know what you are looking for, and `getById(id)` / `getFirstOrNullObject()` address a single control.
 
-Toggling a checkbox in a table preserves its enclosing cell, row, and formatting,
-including after you save and reopen the document. The toggle rewrites only the run that
-shows the state glyph. If the control's content holds no paragraph and no run, such as
-foreign markup, the write is refused instead of replacing that content.
+Writing a value to a control in a table preserves its enclosing cell, row, and formatting,
+including after you save and reopen the document. A text, dropdown, combo box, or date value
+becomes one run in the control's display paragraph: the first paragraph that holds text, or
+else the first paragraph, searching cells that hold text first. That paragraph keeps its
+properties, bookmarks, and comment anchors. Other paragraphs beside it are removed, so the
+control's text equals the value you wrote. A checkbox toggle rewrites only the run that
+shows the state glyph.
+
+The write is refused, and the document left unchanged, when the value cannot stand in for
+the content: a table or nested control beside the display paragraph, a field that begins
+inside the control and ends outside it, or content the editor does not recognize, such as
+foreign markup. Word replaces such content when you type over it; the editor refuses
+instead, so that a cell or a table never disappears from a document by accident.
 
 ## Values are typed
 

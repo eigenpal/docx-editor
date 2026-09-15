@@ -89,6 +89,16 @@ const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
 Custom button components must forward refs, attributes, and listeners to their
 native button. Preserve the supplied handler and disabled state.
 
+`asChild` forwards a part's behavior and geometry, never its decoration. Your element
+gets the wiring (`type`, `onClick`, `disabled`, and the part's data attributes) and the
+part's own `className`, but not the packaged class, so your styles or utility classes
+apply as written. To keep the packaged look and adjust it, pass `className` to the part
+instead of `asChild`.
+
+The one part that keeps its packaged class is the hyperlink popup's `Root`, because that
+class positions and stacks the panel rather than decorating it. Override its appearance
+with your own anchored `.docx-hyperlink-popup` rule.
+
 Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
 React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
 components, not render callbacks.
@@ -128,6 +138,11 @@ Toolbar menus and pickers use their existing compound `.Content` parts, outside 
 Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body`,
 `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept
 `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
+
+Anything else you pass reaches the rendered element, so a part takes an `id`, an
+`aria-*` label, or a `data-*` test hook. The part's own wiring wins every collision:
+passing `onClick` to `Apply` does not replace the packaged handler. To own the element
+and its handler, pass `asChild` and supply your own.
 
 Named children replace default parts. Use `hidden` to remove a part or
 `preset={false}` to supply the complete arrangement. Include a title, error region,
@@ -227,18 +242,50 @@ show an error; Cancel discards the draft. No separate session or opening state i
 
 ## Style and accessibility
 
-Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors.
-Optional tokens are `--doc-dialog-font-family`, `--doc-dialog-font-size`,
-`--doc-dialog-radius`, `--doc-dialog-padding`, and `--doc-dialog-gap`.
+Import your stylesheet after the core stylesheet. The default look follows Word and
+Google Docs: a plain panel, bordered inputs, a filled primary button, and an outlined
+secondary one. Dialogs inherit `--doc-*` colors, so a dark editor gets a dark dialog.
+
+Optional tokens adjust the panel without replacing any part:
+
+| Token                         | Controls                                                       |
+| ----------------------------- | -------------------------------------------------------------- |
+| `--doc-dialog-font-family`    | The panel font stack.                                          |
+| `--doc-dialog-font-size`      | The base size. Titles, labels, and hints scale from it.        |
+| `--doc-dialog-radius`         | The panel corner radius.                                       |
+| `--doc-dialog-control-radius` | The corner radius of inputs, text areas, selects, and buttons. |
+| `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer.    |
+| `--doc-dialog-gap`            | The vertical distance between rows and sections.               |
 
 Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
 `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
-For example, style your replacement without `!important`:
+
+There are two ways to change how a part looks:
+
+- To adjust the packaged part, pass `className` to the part. Every default rule
+  uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it
+  survives element resets like Tailwind preflight. To win, add a class or attribute
+  the default does not have, and skip `!important`. A selector with one class, such
+  as `.app-rounded` alone, loses. Anchoring with `.docx-editor` alone only ties, so
+  the result then depends on which stylesheet loads last.
+- To bring your own element, pass `asChild`. The packaged classes stay off your
+  element, so a single class or utility classes style it as written.
 
 ```css
-.docx-editor [data-docx-dialog='pageSetup'] .app-apply {
+/* className="app-rounded" on the packaged Apply part. The
+   data-docx-dialog attribute is the extra compound that wins. */
+.docx-editor [data-docx-dialog='pageSetup'] .app-rounded {
   border-radius: 999px;
   padding-inline: 1.25rem;
+}
+
+/* asChild with <button class="app-apply">, as in the example above */
+.app-apply {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 20px;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
 }
 ```
 

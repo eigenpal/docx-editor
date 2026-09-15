@@ -32,6 +32,19 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
   ).filter((element) => element.offsetParent !== null || element === document.activeElement);
 }
 
+/**
+ * A host may render this public dialog from its own chrome, outside the editor. The
+ * packaged rules are anchored to `.docx-editor`, so the overlay carries that class
+ * itself when nothing above it does, the way `NativeDialog` does for native dialogs.
+ *
+ * This runs as an element ref, not a watcher: the panel mounts only once its draft
+ * exists, which is a later tick than the one that sets `open`. The React twin matches.
+ */
+function scopeOverlay(node: unknown): void {
+  if (node instanceof HTMLElement && !node.closest('.docx-editor'))
+    node.classList.add('docx-editor');
+}
+
 function guardDialogMousedown(event: MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -516,6 +529,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
       const positionLocked = target?.kind === 'anchored' && target.canMove === false;
       return (
         <div
+          ref={scopeOverlay}
           class={`docx-dialog-overlay${props.className ? ` ${props.className}` : ''}`}
           onClick={dismiss}
           onMousedown={(event) => {

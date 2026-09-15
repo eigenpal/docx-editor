@@ -6,6 +6,7 @@ import {
   decodeCheckboxGlyph,
   isInlineControl,
 } from './content-control-checkbox.ts';
+import { valueContent, withParagraphDiff } from './content-control-value-content.ts';
 import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
@@ -236,14 +237,20 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'insertText' && !op.revision) {
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
     if (prompt) {
-      const emptied = clearPlaceholder(part, prompt.control.id, options);
-      if (emptied) {
-        return applyTreeOp(
-          emptied,
-          { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
-          options
-        );
-      }
+      // The caret's paragraph is the one the prompt is emptied into, so the insert below
+      // still finds it. A prompt whose content cannot be emptied in place is refused, not
+      // flattened by the insertion path: that path would replace the wrapped cell too.
+      const emptied = clearPlaceholder(part, prompt.control.id, options, op.paragraphId);
+      if (!emptied) return { ok: false, reason: 'unsupported' };
+      const result = applyTreeOp(
+        emptied,
+        { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
+        options
+      );
+      // Emptying the prompt may drop its other paragraphs; the insert's effect must say so.
+      const cleared = findNode(emptied, prompt.control.id);
+      if (!result.ok || !cleared) return result;
+      return { ...result, effect: withParagraphDiff(result.effect, prompt.control, cleared) };
     }
   }
 
@@ -1012,37 +1019,36 @@ function applyPlaceholderReplace(
   const nodes = builders.map((build) => build(nextId));
   const owner = parentOf(part, control.id);
   const inline = contentControlLevelOf(control) === 'inline';
-  const run = runElement(nextId, nodes);
-  const contentChildren = inline
-    ? [run]
-    : [
-        {
-          id: nextId(),
-          kind: 'paragraph',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'p',
-          prefix: 'w',
-          namespaceBindings: [],
-          attributes: [],
-          children: [run],
-        } as unknown as OoxmlNode,
-      ];
+  // The inserted content becomes the display run inside whatever the prompt wrapped, so a
+  // prompt around a cell keeps the cell. Content no insertion can stand in for is refused.
+  const contentChildren = valueContent(
+    contentControlContentOf(control),
+    (properties) => runElement(nextId, properties ? [properties, ...nodes] : nodes),
+    nextId,
+    inline
+  );
+  if (!contentChildren) return { ok: false, reason: 'unsupported' };
   let nextControl = replaceControlContent(control, contentChildren, nextId);
   nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
 
-  // A BLOCK placeholder replace deletes the prompt's paragraph(s) and mints a fresh one, so
-  // the paragraph set changes and the effect must say so. Reporting it as 'text-local' with
+  // A BLOCK placeholder replace can delete prompt paragraphs and mint a fresh one, so the
+  // paragraph set may change and the effect must say so. Reporting it as 'text-local' with
   // empty created/deleted told paragraph-keyed caches they could keep their answer, and a
   // retained review order index then had no entry for the minted paragraph — an item anchored
-  // in it listed in the rail but never activated from a caret. The inline branch really is
-  // text-local: the owner paragraph survives, only its runs are replaced.
-  const effect: TreeOpEffect = {
-    dirty: owner ? [owner.id] : [control.id],
-    created: inline ? [] : contentChildren.map((child) => child.id),
-    deleted: inline ? [] : placeholderParagraphIdsOf(control),
-    dependencyKeys: TEXT_DEPS,
-    impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
-  };
+  // in it listed in the rail but never activated from a caret. A prompt paragraph kept in
+  // place is dirty. The inline branch really is text-local: the owner paragraph survives,
+  // only its runs are replaced, and inline content holds no paragraph to diff.
+  const effect = withParagraphDiff(
+    {
+      dirty: owner ? [owner.id] : [control.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
+    },
+    control,
+    nextControl
+  );
 
   if (isTemporaryControl(control)) {
     // Build the unwrapped parent children from the replaced content — one tree write.
@@ -1057,24 +1063,6 @@ function applyPlaceholderReplace(
   }
 
   return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
-}
-
-/** Paragraph ids a block placeholder replace removes along with the prompt content. */
-function placeholderParagraphIdsOf(control: OoxmlNode): string[] {
-  if (control.kind === 'textValue') return [];
-  const content = contentControlContentOf(control);
-  if (!content) return [];
-  const ids: string[] = [];
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 32) return;
-    if (node.kind === 'paragraph') {
-      ids.push(node.id);
-      return;
-    }
-    for (const child of node.children) walk(child, depth + 1);
-  };
-  for (const child of content.children) walk(child, 0);
-  return ids;
 }
 
 function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
@@ -2043,39 +2031,27 @@ function applySetContentControlValue(
   if (!control) return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
   const owner = parentOf(part, control.id);
-  const inline = owner?.kind === 'paragraph';
+  const inline = isInlineControl(part, control.id);
   const type = contentControlValueTypeOf(control);
   let nextControl: OoxmlNode = control;
 
-  const setTextContent = (display: string): void => {
-    const run = runElement(nextId, [textElement(nextId, display)]);
-    const existingContent = contentControlContentOf(nextControl);
-    const existingParagraph =
-      !inline && existingContent?.children.length === 1 ? existingContent.children[0] : undefined;
-    const preservedParagraph =
-      existingParagraph?.kind === 'paragraph'
-        ? ({
-            ...existingParagraph,
-            children: [...existingParagraph.children.filter(isParagraphPropertiesNode), run],
-          } as OoxmlNode)
-        : undefined;
-    const contentChildren = inline
-      ? [run]
-      : [
-          preservedParagraph ??
-            ({
-              id: nextId(),
-              kind: 'paragraph',
-              namespaceUri: WML_NAMESPACE_URI,
-              localName: 'p',
-              prefix: 'w',
-              namespaceBindings: [],
-              attributes: [],
-              children: [run],
-            } as unknown as OoxmlNode),
-        ];
-    nextControl = replaceControlContent(nextControl, contentChildren, nextId);
+  // The value becomes one run inside whatever structure the control wraps. False means the
+  // content is a shape no value can stand in for, and the caller refuses instead of flattening.
+  const setTextContent = (display: string): boolean => {
+    const children = valueContent(
+      contentControlContentOf(nextControl),
+      (properties) =>
+        runElement(
+          nextId,
+          properties ? [properties, textElement(nextId, display)] : [textElement(nextId, display)]
+        ),
+      nextId,
+      inline
+    );
+    if (!children) return false;
+    nextControl = replaceControlContent(nextControl, children, nextId);
     nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
+    return true;
   };
 
   switch (type) {
@@ -2093,7 +2069,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(item.displayText);
+      if (!setTextContent(item.displayText)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'combo': {
@@ -2110,7 +2086,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'checkbox': {
@@ -2232,25 +2208,31 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'text':
     case 'richText':
     case 'other':
-      setTextContent(value);
+      if (!setTextContent(value)) return { ok: false, reason: 'unsupported' };
       break;
     default:
       return { ok: false, reason: 'unsupported' };
   }
 
-  const effect: TreeOpEffect = {
-    dirty: owner ? [owner.id] : [control.id],
-    created: [],
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  };
+  // Paragraphs the value dropped, minted or kept in place are reported, so paragraph-keyed
+  // consumers never hold an entry for a paragraph that went or miss one that changed.
+  const effect = withParagraphDiff(
+    {
+      dirty: owner ? [owner.id] : [control.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'flow-structural',
+    },
+    control,
+    nextControl
+  );
 
   if (isTemporaryControl(control)) {
     // Value write + temporary unwrap in one parent rewrite.

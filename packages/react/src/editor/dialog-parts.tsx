@@ -18,13 +18,24 @@ import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, RefObject }
 import { Slot } from './toolbar/Slot';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
-/** Presentation overrides for a dialog part. @public */
+/**
+ * Presentation overrides for a dialog part. @public
+ *
+ * Anything beyond these members reaches the rendered element, so a part takes an `id`,
+ * an `aria-*` label or a `data-*` test hook. The part's own wiring wins every collision:
+ * a host cannot replace Apply's handler or its `data-docx-part` marker by passing one.
+ * To own the element and its handler outright, pass `asChild` and supply your own.
+ */
 export interface DialogPartProps {
   className?: string;
   style?: CSSProperties;
   hidden?: boolean;
   asChild?: boolean;
   children?: DocxEditorChildren;
+  id?: string;
+  title?: string;
+  'aria-label'?: string;
+  [attribute: `data-${string}`]: unknown;
 }
 
 /** Layout customization for a packaged dialog. @public */
@@ -103,15 +114,31 @@ export function createDialogParts<Name extends string, State>() {
       const key = part === 'field' ? `field:${props.name}` : part;
       const original = context.defaults.get(key);
       if (!original) return props.children ?? null;
-      const { children, asChild, className, style } = props;
+      // `hidden` and `name` steer this component; they are not element attributes.
+      const { children, asChild, className, style, hidden: _hidden, name: _name, ...rest } = props;
       const shared = {
+        ...rest,
+        // The part's own wiring outranks anything the host passed, so a stray `onClick`
+        // or `data-docx-part` cannot silently detach the control from the dialog.
         ...original.props,
         className: [original.props.className, className].filter(Boolean).join(' '),
         style: { ...(original.props.style as CSSProperties), ...style },
       };
       if (asChild) {
-        const { children: _defaultChildren, ...wiring } = shared;
-        return <Slot {...wiring}>{children}</Slot>;
+        // The host owns the element's look: forward the wiring and the host's own
+        // presentation props, never the packaged `docx-dialog__*` classes, so a design
+        // system button styled by single-class utilities is not outranked by the defaults.
+        const {
+          children: _defaultChildren,
+          className: _presetClassName,
+          style: _presetStyle,
+          ...wiring
+        } = shared;
+        return (
+          <Slot {...wiring} {...(className ? { className } : {})} {...(style ? { style } : {})}>
+            {children}
+          </Slot>
+        );
       }
       return cloneElement(
         original,

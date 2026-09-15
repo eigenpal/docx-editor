@@ -6723,283 +6723,451 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
-/* Dialog parts are a public styling contract. */
-:where([data-docx-dialog='pageSetup'].docx-dialog, [data-docx-dialog='textFormField'].docx-dialog) {
-  background-color: var(--doc-surface);
-  border-radius: var(--doc-dialog-radius, 8px);
-  box-shadow: 0 4px 20px var(--doc-shadow);
-  max-width: 480px;
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__header,
-  [data-docx-dialog='textFormField'] .docx-dialog__header
-) {
-  padding: var(--doc-dialog-padding, 16px 20px 12px);
-  border-bottom: 1px solid var(--doc-border);
-  font-size: var(--doc-dialog-font-size, 16px);
-  font-weight: 600;
-  color: var(--doc-text);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__body,
-  [data-docx-dialog='textFormField'] .docx-dialog__body
-) {
-  padding: var(--doc-dialog-padding, 16px 20px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--doc-dialog-gap, 14px);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__section-label,
-  [data-docx-dialog='textFormField'] .docx-dialog__section-label
-) {
-  font-size: var(--doc-dialog-font-size, 12px);
-  font-weight: 600;
-  color: var(--doc-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__row,
-  [data-docx-dialog='textFormField'] .docx-dialog__row
-) {
-  display: flex;
-  align-items: center;
-  gap: var(--doc-dialog-gap, 12px);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__label,
-  [data-docx-dialog='textFormField'] .docx-dialog__label
-) {
-  width: 80px;
-  font-size: var(--doc-dialog-font-size, 13px);
-  color: var(--doc-text-muted);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__input,
-  [data-docx-dialog='textFormField'] .docx-dialog__input
-) {
-  flex: 1;
-  padding: var(--doc-dialog-padding, 6px 8px);
-  border: 1px solid var(--doc-border);
-  border-radius: var(--doc-dialog-radius, 4px);
-  font-size: var(--doc-dialog-font-size, 13px);
-  background-color: var(--doc-surface);
-  color: var(--doc-text);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__unit,
-  [data-docx-dialog='textFormField'] .docx-dialog__unit
-) {
-  font-size: var(--doc-dialog-font-size, 11px);
-  color: var(--doc-text-muted);
-  width: 16px;
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__footer,
-  [data-docx-dialog='textFormField'] .docx-dialog__footer
-) {
-  padding: var(--doc-dialog-padding, 12px 20px 16px);
-  border-top: 1px solid var(--doc-border);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--doc-dialog-gap, 8px);
-}
-:where(
-  [data-docx-dialog='pageSetup'] .docx-dialog__button,
-  [data-docx-dialog='textFormField'] .docx-dialog__button
-) {
-  padding: var(--doc-dialog-padding, 6px 16px);
-  font-size: var(--doc-dialog-font-size, 13px);
-  border: 1px solid var(--doc-border);
-  border-radius: var(--doc-dialog-radius, 4px);
-  cursor: pointer;
-  background-color: var(--doc-surface);
-  color: var(--doc-text);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__error) {
-  margin-right: auto;
-  font-size: var(--doc-dialog-font-size, 12px);
-  color: var(--doc-danger);
-}
-:where([data-docx-dialog='paragraph'].docx-dialog) {
-  background-color: var(--doc-surface);
-  border-radius: var(--doc-dialog-radius, 8px);
-  box-shadow: 0 4px 20px var(--doc-shadow);
-  max-width: 720px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__header) {
-  padding: var(--doc-dialog-padding, 16px 20px 12px);
-  border-bottom: 1px solid var(--doc-border);
-  flex-shrink: 0;
-  font-size: var(--doc-dialog-font-size, 16px);
-  font-weight: 600;
-  color: var(--doc-text);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__body) {
-  padding: var(--doc-dialog-padding, 16px 20px);
-  overflow-y: auto;
-  min-height: 0px;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__columns) {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--doc-dialog-gap, 28px);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__column) {
-  display: flex;
-  flex-direction: column;
-  gap: var(--doc-dialog-gap, 14px);
-  min-width: 0px;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__section-label) {
-  font-size: var(--doc-dialog-font-size, 12px);
-  font-weight: 600;
-  color: var(--doc-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__row) {
-  display: flex;
-  align-items: center;
-  gap: var(--doc-dialog-gap, 12px);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__label) {
-  width: 92px;
-  font-size: var(--doc-dialog-font-size, 13px);
-  color: var(--doc-text-muted);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__input) {
-  flex: 1;
-  padding: var(--doc-dialog-padding, 6px 8px);
-  border: 1px solid var(--doc-border);
-  border-radius: var(--doc-dialog-radius, 4px);
-  font-size: var(--doc-dialog-font-size, 13px);
-  background-color: var(--doc-surface);
-  color: var(--doc-text);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__unit) {
-  font-size: var(--doc-dialog-font-size, 11px);
-  color: var(--doc-text-muted);
-  width: 20px;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__checkbox-row) {
-  display: flex;
-  align-items: center;
-  gap: var(--doc-dialog-gap, 8px);
-  font-size: var(--doc-dialog-font-size, 13px);
-  color: var(--doc-text);
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__footer) {
-  padding: var(--doc-dialog-padding, 12px 20px 16px);
-  border-top: 1px solid var(--doc-border);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--doc-dialog-gap, 8px);
-  flex-shrink: 0;
-}
-:where([data-docx-dialog='paragraph'] .docx-dialog__button) {
-  padding: var(--doc-dialog-padding, 6px 16px);
-  font-size: var(--doc-dialog-font-size, 13px);
-  border: 1px solid var(--doc-border);
-  border-radius: var(--doc-dialog-radius, 4px);
-  cursor: pointer;
-  background-color: var(--doc-surface);
-  color: var(--doc-text);
-}
+/* ── Dialogs ───────────────────────────────────────────────────────────────
+   Dialog parts are a public styling contract: `.docx-dialog__*` classes,
+   `data-docx-dialog` kinds and `data-docx-part` names. The defaults follow the
+   Word and Google Docs dialog idiom: a white panel with rounded corners, bordered
+   inputs, a filled primary button and an outlined secondary one.
 
-:where(.docx-dialog) {
+   Every default rule is anchored to `.docx-editor` and carries exactly two-class
+   specificity; state pseudo-classes sit inside `:where()` so they add nothing.
+   A host override with two classes loaded after this sheet, or any three-class
+   one (`.docx-editor [data-docx-dialog='pageSetup'] .app-apply`), wins.
+
+   Zero-specificity defaults were tried and lost to element resets hosts ship:
+   Tailwind preflight and normalize.css set `border-width: 0` on `*` and
+   `background-color: transparent` on `[type='button']`, which stripped every
+   input border and button fill from the packaged dialogs.
+
+   Tokens:
+     --doc-dialog-font-family  panel font stack
+     --doc-dialog-font-size    base size; titles, labels and hints scale in em
+     --doc-dialog-radius       panel corner radius
+     --doc-dialog-control-radius  input and button corner radius
+     --doc-dialog-padding      ONE length: side inset of header, body, footer
+     --doc-dialog-gap          vertical rhythm between rows and sections */
+
+.docx-editor .docx-dialog,
+.docx-editor.docx-dialog {
   position: fixed;
   inset: 0;
   margin: auto;
+  box-sizing: border-box;
   width: calc(100vw - 40px);
   max-width: 480px;
   max-height: 90dvh;
   padding: 0;
-  border: 0;
   overflow: hidden;
   color: var(--doc-text);
   background: var(--doc-surface);
-  font: var(--doc-dialog-font-size, 13px)/1.5
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow:
+    0 12px 32px var(--doc-shadow),
+    0 2px 6px var(--doc-shadow-subtle);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
     var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
 }
-:where(.docx-dialog[open]) {
+.docx-editor .docx-dialog[open],
+.docx-editor.docx-dialog[open] {
   display: flex;
   flex-direction: column;
 }
-:where(.docx-dialog)::backdrop {
+.docx-editor .docx-dialog::backdrop,
+.docx-editor.docx-dialog::backdrop {
   background: var(--doc-overlay);
 }
-:where(.docx-dialog__body) {
+.docx-editor .docx-dialog:where([data-docx-dialog='paragraph']),
+.docx-editor.docx-dialog:where([data-docx-dialog='paragraph']) {
+  max-width: 720px;
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='textFormField']),
+.docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) {
+  max-width: 520px;
+}
+
+/* The image properties dialog is a plain element under its own overlay. */
+.docx-editor .docx-dialog-overlay,
+.docx-editor.docx-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--doc-overlay);
+}
+.docx-editor .docx-dialog-overlay .docx-dialog,
+.docx-editor.docx-dialog-overlay .docx-dialog {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header and title */
+.docx-editor .docx-dialog__header {
+  flex-shrink: 0;
+  padding-block: 20px 4px;
+  padding-inline: var(--doc-dialog-padding, 24px);
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__title {
+  display: block;
+  font-size: 1.385em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__header:where(:not(:has(.docx-dialog__title))) {
+  font-size: 1.385em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Body */
+.docx-editor .docx-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
   min-height: 0;
+  padding-block: 12px 8px;
+  padding-inline: var(--doc-dialog-padding, 24px);
   overflow-y: auto;
 }
-:where(.docx-dialog__input) {
+.docx-editor .docx-dialog__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 32px;
+}
+.docx-editor .docx-dialog__column,
+.docx-editor .docx-dialog__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
   min-width: 0;
-  font-family: inherit;
 }
-:where(.docx-dialog__button) {
-  font-family: inherit;
+.docx-editor .docx-dialog__section-label {
+  margin-top: 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
 }
-:where(.docx-dialog__apply) {
-  background: var(--doc-primary);
-  color: var(--doc-on-primary);
+.docx-editor .docx-dialog__section-label:where(:first-child) {
+  margin-top: 0;
+}
+.docx-editor .docx-dialog__section-label--spaced {
+  margin-top: 8px;
+}
+.docx-editor .docx-dialog [data-docx-field='tabStops'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+}
+
+/* Rows and labels */
+.docx-editor .docx-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.docx-editor .docx-dialog__row--actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+.docx-editor .docx-dialog__label,
+.docx-editor .docx-dialog__field-label {
+  flex: 0 0 auto;
+  width: 96px;
+  font-size: 1em;
+  line-height: 1.3;
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label,
+.docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label {
+  width: 132px;
+}
+/* Outside a row the label stacks above its control, so it sizes to its text. */
+.docx-editor .docx-dialog__section > .docx-dialog__label,
+.docx-editor .docx-dialog__section > .docx-dialog__field-label {
+  width: auto;
+}
+.docx-editor .docx-dialog__unit {
+  flex: 0 0 auto;
+  min-width: 20px;
+  font-size: 0.92em;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-dialog__tab-position {
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__tab-description {
+  flex: 1;
+  min-width: 0;
+  font-size: 1em;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-dialog__note,
+.docx-editor .docx-dialog__hint {
+  margin: 0;
+  font-size: 0.92em;
+  line-height: 1.4;
+  color: var(--doc-text-muted);
+}
+
+/* Inputs, selects and text areas */
+.docx-editor .docx-dialog__input,
+.docx-editor .docx-dialog__select,
+.docx-editor .docx-dialog__textarea {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  line-height: 30px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  outline: none;
+  box-shadow: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.docx-editor .docx-dialog__select {
+  padding-right: 4px;
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__textarea {
+  height: auto;
+  min-height: 72px;
+  padding: 6px 8px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.docx-editor .docx-dialog__input--full {
+  flex: none;
+  width: 100%;
+}
+.docx-editor .docx-dialog__input:where(:hover),
+.docx-editor .docx-dialog__select:where(:hover),
+.docx-editor .docx-dialog__textarea:where(:hover) {
+  border-color: var(--doc-border-dark);
+}
+.docx-editor .docx-dialog__input:where(:focus, :focus-visible),
+.docx-editor .docx-dialog__select:where(:focus, :focus-visible),
+.docx-editor .docx-dialog__textarea:where(:focus, :focus-visible) {
   border-color: var(--doc-primary);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--doc-primary);
 }
-:where(.docx-dialog__button:disabled) {
-  opacity: 0.5;
+.docx-editor .docx-dialog__input:where(:disabled),
+.docx-editor .docx-dialog__select:where(:disabled),
+.docx-editor .docx-dialog__textarea:where(:disabled) {
+  color: var(--doc-text-subtle);
+  background: var(--doc-bg-subtle);
+  border-color: var(--doc-border);
   cursor: default;
 }
-:where(.docx-dialog__error:empty) {
+.docx-editor .docx-dialog__input:where([aria-invalid='true']),
+.docx-editor .docx-dialog__select:where([aria-invalid='true']),
+.docx-editor .docx-dialog__textarea:where([aria-invalid='true']) {
+  border-color: var(--doc-danger);
+}
+
+/* Checkboxes */
+.docx-editor .docx-dialog__checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 1em;
+  line-height: 1.4;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__checkbox-row :where(input[type='checkbox']) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--doc-primary);
+  cursor: pointer;
+}
+
+/* Footer and buttons */
+.docx-editor .docx-dialog__footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-block: 12px 20px;
+  padding-inline: var(--doc-dialog-padding, 24px);
+}
+.docx-editor .docx-dialog__error {
+  margin: 0 auto 0 0;
+  font-size: 0.92em;
+  line-height: 1.4;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-dialog__error:where(:empty) {
   display: none;
 }
-:where(.docx-dialog :where(button, input, select, textarea):focus-visible) {
+.docx-editor .docx-dialog__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 72px;
+  margin: 0;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+.docx-editor .docx-dialog__button:where(:hover) {
+  background: var(--doc-bg-hover);
+  border-color: var(--doc-border-dark);
+}
+.docx-editor .docx-dialog__button:where(:active) {
+  background: var(--doc-bg-subtle);
+}
+.docx-editor .docx-dialog__apply,
+.docx-editor .docx-dialog__button--primary {
+  color: var(--doc-on-primary);
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+.docx-editor .docx-dialog__apply:where(:hover),
+.docx-editor .docx-dialog__button--primary:where(:hover) {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+}
+.docx-editor .docx-dialog__apply:where(:active),
+.docx-editor .docx-dialog__button--primary:where(:active) {
+  background: var(--doc-primary-hover);
+}
+.docx-editor .docx-dialog__link-button {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--doc-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+}
+.docx-editor .docx-dialog__link-button:where(:hover) {
+  background: var(--doc-primary-light);
+}
+.docx-editor .docx-dialog__button:where(:disabled),
+.docx-editor .docx-dialog__link-button:where(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+.docx-editor .docx-dialog__button:where(:focus-visible),
+.docx-editor .docx-dialog__link-button:where(:focus-visible),
+.docx-editor .docx-dialog__checkbox-row :where(input:focus-visible) {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
-  :where([data-docx-dialog='paragraph'] .docx-dialog__columns) {
+  .docx-editor .docx-dialog__columns {
     grid-template-columns: 1fr;
   }
 }
 
-:where(.docx-dialog__note) {
-  font-size: 12px;
-  color: var(--doc-text-muted);
-}
-:where(.docx-dialog__tab-description) {
-  flex: 1;
-  font-size: 13px;
-  color: var(--doc-text-muted);
-}
-:where(.docx-dialog[data-docx-dialog='paragraph']) {
-  max-width: 720px;
-}
-
-:where(.docx-dialog__section-label--spaced) {
-  margin-top: 4px;
-}
-:where(.docx-dialog__tab-position) {
-  color: var(--doc-text);
-}
-:where(.docx-dialog__row--actions) {
-  justify-content: flex-end;
-}
-
-:where(.docx-content-control-widget-popup) {
+/* Content control widget popup: an anchored popover, not a modal. */
+.docx-editor .docx-content-control-widget-popup {
   position: absolute;
   z-index: 20;
   display: grid;
   gap: 8px;
+  min-width: 220px;
+  box-sizing: border-box;
   padding: 12px;
   color: var(--doc-text);
   background: var(--doc-popover-bg, white);
   border: 1px solid var(--doc-border);
-  border-radius: var(--doc-dialog-radius, 8px);
-  box-shadow: 0 4px 16px var(--doc-shadow);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px var(--doc-shadow),
+    0 1px 3px var(--doc-shadow-subtle);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-editor .docx-content-control-widget-popup > :where(input, select) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  outline: none;
+}
+.docx-editor .docx-content-control-widget-popup > :where(input, select):where(:focus-visible) {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 1px var(--doc-primary);
+}
+.docx-editor .docx-content-control-widget-popup > :where(button) {
+  margin: 0;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--doc-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+}
+.docx-editor .docx-content-control-widget-popup > :where(button):where(:hover) {
+  background: var(--doc-bg-hover);
+}
+.docx-editor .docx-content-control-widget-popup > :where([role='alert']) {
+  font-size: 0.92em;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-content-control-widget-popup .docx-dialog__footer {
+  padding: 4px 0 0;
+}
+
+/* Alt text popover: a stacked label, text area and footer inside the toolbar panel. */
+.docx-editor .docx-toolbar__alt-text-panel > .docx-dialog__label {
+  display: block;
+  width: auto;
+  margin-bottom: 6px;
+}
+.docx-editor .docx-toolbar__alt-text-panel .docx-dialog__textarea {
+  width: 100%;
+}
+.docx-editor .docx-toolbar__alt-text-panel .docx-dialog__footer {
+  padding: 12px 0 0;
 }

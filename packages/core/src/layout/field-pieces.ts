@@ -230,6 +230,31 @@ export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
 
 /**
+ * What a piece emitter may attach beyond text, style and range.
+ *
+ * The vocabulary of `push` in the paragraph walk (`field-projection.ts`), kept beside the
+ * piece it decorates.
+ */
+export interface PieceEmitExtras {
+  readonly positionalTab?: PositionalTab;
+  readonly breakKind?: HardBreakKind;
+  readonly measureText?: string;
+  readonly noteNav?: FieldAwarePiece['noteNav'];
+  readonly inlineDrawing?: InlineDrawingLayoutInput;
+  readonly anchoredAtom?: true;
+  readonly equation?: FieldAwarePiece['equation'];
+  /**
+   * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the walk
+   * has left the wrapper that owns it — an atomic field's flushed result is the case. Passing
+   * it here keeps the projection in one place.
+   */
+  readonly revisionsOverride?: readonly RevisionAttribution[];
+  readonly linkOverride?: SpanLinkRecord;
+  /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
+  readonly fieldAtom?: FieldAtomMarker;
+}
+
+/**
  * Pending live or inert-cache projection for one atomic field unit.
  *
  * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text

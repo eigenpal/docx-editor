@@ -24,13 +24,24 @@ import { trapTabWithin } from './paragraph-dialog-fields';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
 
-/** Shared presentation props for dialog parts. @public */
+/**
+ * Shared presentation props for dialog parts. @public
+ *
+ * Anything beyond these members reaches the rendered element, so a part takes an `id`,
+ * an `aria-*` label or a `data-*` test hook. The part's own wiring wins every collision:
+ * a host cannot replace Apply's handler or its `data-docx-part` marker by passing one.
+ * To own the element and its handler outright, pass `as-child` and supply your own.
+ */
 export interface DialogPartProps {
   className?: string;
   style?: CSSProperties;
   hidden?: boolean;
   asChild?: boolean;
   children?: DocxEditorChildren;
+  id?: string;
+  title?: string;
+  'aria-label'?: string;
+  [attribute: `data-${string}`]: unknown;
 }
 /** Layout customization for a packaged dialog. @public */
 export interface DialogCustomizationProps {
@@ -104,15 +115,26 @@ export function createDialogComposition<
                   ? { type: 'button', onClick: ctx.cancel }
                   : {};
             const merged = {
-              ...original?.props,
+              // Host attributes fill gaps; the part's own wiring outranks them, so a stray
+              // `onClick` or `data-docx-part` cannot silently detach the control from the
+              // dialog. The React twin applies the same order.
               ...attrs,
+              ...original?.props,
               ...action,
               class: [original?.props?.class, attrs.class, p.className],
               style: { ...original?.props?.style, ...p.style },
               'data-docx-part': partName.toLowerCase(),
               ...(p.name ? { 'data-docx-field': p.name } : {}),
             };
-            if (p.asChild) return h(Slot, merged, { default: () => children });
+            // With `asChild` the host owns the element's look: forward the wiring and the
+            // host's own classes, never the packaged `docx-dialog__*` classes, so a design
+            // system button styled by single-class utilities is not outranked by the defaults.
+            if (p.asChild)
+              return h(
+                Slot,
+                { ...merged, class: [attrs.class, p.className], style: p.style },
+                { default: () => children }
+              );
             if (original) {
               // Recreate the node so Vue derives the child type from the replacement slot.
               // Mutating a clone retains the default text-child flag for VNode arrays.

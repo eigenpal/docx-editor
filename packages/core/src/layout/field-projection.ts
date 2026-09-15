@@ -29,7 +29,6 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlProperty,
-  type HardBreakKind,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import {
@@ -81,16 +80,16 @@ import {
   appendModelRange,
   applyEastAsiaFontSlots,
   positionalTabOf,
-  type FieldAtomMarker,
   type FieldAwarePiece,
   type FieldLinkProjector,
   type HyperlinkProjector,
   type ModelRange,
   type MutableModelRange,
   type PendingFieldProjection,
+  type PieceEmitExtras,
   type PositionalTab,
 } from './field-pieces.ts';
-import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
+import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
@@ -108,8 +107,7 @@ import {
   NO_REVISIONS,
   isRevisionWrapper,
   revisionAttributionOf,
-  projectedRevisions,
-  projectedRevisionProperties,
+  projectPieceAttribution,
   revisionsAreDeletion,
   revisionsVisible,
   withRevision,
@@ -222,39 +220,22 @@ export function piecesOfParagraph(
     projected: boolean,
     start: number,
     end: number,
-    extras?: {
-      readonly positionalTab?: PositionalTab;
-      readonly breakKind?: HardBreakKind;
-      readonly measureText?: string;
-      readonly noteNav?: FieldAwarePiece['noteNav'];
-      readonly inlineDrawing?: InlineDrawingLayoutInput;
-      readonly anchoredAtom?: true;
-      readonly equation?: FieldAwarePiece['equation'];
-      /**
-       * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
-       * walk has left the wrapper that owns it — a buffered field result is the only such
-       * case. Passing it here keeps `push` the single place a piece is attributed.
-       */
-      readonly revisionsOverride?: readonly RevisionAttribution[];
-      readonly linkOverride?: SpanLinkRecord;
-      /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
-      readonly fieldAtom?: FieldAtomMarker;
-    }
+    extras?: PieceEmitExtras
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const effectiveLink = extras?.linkOverride ?? currentLink;
-    const authoredRevisions = extras?.revisionsOverride ?? revisions;
-    const effectiveRevisions = authorFilter
-      ? projectedRevisions(authoredRevisions, displayMode, authorFilter)
-      : authoredRevisions;
-    if (effectiveRevisions === null) return;
-    const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
+    const published = projectPieceAttribution(
+      extras?.revisionsOverride ?? revisions,
+      props,
+      displayMode,
+      authorFilter
+    );
+    if (published === null) return;
     const link = effectiveLink ? { link: effectiveLink } : {};
-    const attribution = effectiveRevisions.length === 0 ? {} : { revisions: effectiveRevisions };
     if (projected) {
       pieces.push({
         text,
-        props: publishedProps,
+        ...published,
         style,
         start,
         end,
@@ -266,21 +247,19 @@ export function piecesOfParagraph(
         ...(extras?.equation ? { equation: extras.equation } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
-        ...attribution,
       });
       return;
     }
     if (text.length === 0) return;
     pieces.push({
       text,
-      props: publishedProps,
+      ...published,
       style,
       start,
       end,
       ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
       ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
       ...link,
-      ...attribution,
     });
   };
 
@@ -318,14 +297,17 @@ export function piecesOfParagraph(
     // `w:hyperlink` captured into `resultLink` wins, exactly as it does for every other field.
     // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
-    const { resultLink, linkSpec, resultRevisions, formField } = pending;
-    let carriedMemo: NonNullable<Parameters<typeof push>[6]> | undefined;
-    const carried = (): NonNullable<Parameters<typeof push>[6]> => {
+    const { resultLink, linkSpec, resultRevisions, capturedResultRevisions, formField } = pending;
+    let carriedMemo: PieceEmitExtras | undefined;
+    const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
       const fieldLink = !resultLink && linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
       const carriedLink = resultLink ?? fieldLink;
+      // Gated on the CAPTURE, not on the stack being non-empty: an untracked first result run
+      // captures an empty stack, and that empty stack is the answer — not whatever wrapper the
+      // walk happens to be inside when `end` arrives.
       carriedMemo = {
-        ...(resultRevisions.length > 0 ? { revisionsOverride: resultRevisions } : {}),
+        ...(capturedResultRevisions ? { revisionsOverride: resultRevisions } : {}),
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
         fieldAtom: { formField },
       };
@@ -386,6 +368,8 @@ export function piecesOfParagraph(
         offset += piece.end - piece.start;
       }
       if (pending.cachedText.length > 0 && pending.buffered.length === 0) {
+        // The cache was captured from the first displayed result run, so its attribution is
+        // the captured one — not the live stack, which by now may be a later run's wrapper.
         push(
           pending.cachedText,
           pending.props,
@@ -393,7 +377,12 @@ export function piecesOfParagraph(
           false,
           offset,
           offset + pending.cachedText.length,
-          fieldLink ? { linkOverride: fieldLink } : undefined
+          {
+            ...(pending.capturedResultRevisions
+              ? { revisionsOverride: pending.resultRevisions }
+              : {}),
+            ...(fieldLink ? { linkOverride: fieldLink } : {}),
+          }
         );
         offset += pending.cachedText.length;
       }
@@ -707,19 +696,25 @@ export function piecesOfParagraph(
           }
           // Demoted / editable-result field: the sym paints the way it does in an ordinary
           // run — a projected zero-width glyph piece — instead of vanishing with the atomic
-          // skips. Buffered like the surrounding result text, so it flushes with it.
+          // skips. Buffered like the surrounding result text, so it flushes with it — and
+          // projected here, because the flush never runs `push`.
           const glyph = symbolGlyphOf(grand);
-          if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter))
-            continue;
+          if (!glyph || style.hidden) continue;
           const sym = symbolRunStyle(props, glyph, themeFonts);
+          const symAttribution = projectPieceAttribution(
+            revisions,
+            sym.props,
+            displayMode,
+            authorFilter
+          );
+          if (symAttribution === null) continue;
           pending.buffered.push({
             text: glyph.text,
-            props: sym.props,
             style: sym.style,
             start: offset,
             end: offset,
             projected: true,
-            ...(revisions.length > 0 ? { revisions } : {}),
+            ...symAttribution,
             ...(currentLink ? { link: currentLink } : {}),
             fieldAtom: { formField: pending.formField },
           });
@@ -734,9 +729,10 @@ export function piecesOfParagraph(
         // wrapper and `revisions` is empty again. Apply the suppression at buffer time or a
         // deleted field's result survives the proposed result the deletion was accepted into.
         const fieldDeleted = revisionsAreDeletion(revisions);
+        // `null` is this view removing the content — the same verdict `push` returns on.
+        const attribution = projectPieceAttribution(revisions, props, displayMode, authorFilter);
         const fieldSuppressed =
-          !revisionsVisible(revisions, displayMode, authorFilter) ||
-          (grand.kind === 'deletedText' && !fieldDeleted);
+          attribution === null || (grand.kind === 'deletedText' && !fieldDeleted);
 
         // The result EXISTS in this display mode, whatever hides it below (vanish included) —
         // the flush needs the distinction to keep synthesis from painting over a result the
@@ -802,18 +798,17 @@ export function piecesOfParagraph(
           pending.style = style;
           pending.capturedResultStyle = true;
         }
-        // Buffered rather than pushed, so it does not pass through `push` and has to carry its
-        // own attribution. Here the walk is STILL inside the wrapper, so the live stack is the
-        // right one — unlike the atomic flush, which happens after the walk has left it. The
-        // link matters for the same reason: a demoted field inside a `w:hyperlink` lost its
-        // href here while every ordinary run in the same link kept one.
+        // Buffered rather than pushed, so it does not pass through `push` and carries its own
+        // attribution — PROJECTED through the reviewer view as `push` would, never the raw
+        // stack. The walk is STILL inside the wrapper here, so the live stack is the right one,
+        // unlike the atomic flush, which runs after the walk has left it. The link matters for
+        // the same reason: a demoted field inside a `w:hyperlink` lost its href here once.
         pending.buffered.push({
           text,
-          props,
           style,
           start: offset,
           end: offset + text.length,
-          ...(revisions.length > 0 ? { revisions } : {}),
+          ...attribution,
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
           // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.

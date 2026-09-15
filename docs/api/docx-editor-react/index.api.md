@@ -374,6 +374,10 @@ export interface DialogCustomizationProps {
 // @public
 export interface DialogPartProps {
     // (undocumented)
+    'aria-label'?: string;
+    // (undocumented)
+    [attribute: `data-${string}`]: unknown;
+    // (undocumented)
     asChild?: boolean;
     // (undocumented)
     children?: DocxEditorChildren;
@@ -382,7 +386,11 @@ export interface DialogPartProps {
     // (undocumented)
     hidden?: boolean;
     // (undocumented)
+    id?: string;
+    // (undocumented)
     style?: CSSProperties;
+    // (undocumented)
+    title?: string;
 }
 
 // @public @deprecated (undocumented)

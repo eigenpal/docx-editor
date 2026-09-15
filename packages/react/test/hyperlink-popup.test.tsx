@@ -68,7 +68,11 @@ interface Mounted {
   editor(): DocxEditorInstance;
 }
 
-function mount(source: Uint8Array, children?: React.ReactNode): Mounted {
+function mount(
+  source: Uint8Array,
+  children?: React.ReactNode,
+  rootProps: { asChild?: boolean; className?: string } = {}
+): Mounted {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
@@ -80,7 +84,7 @@ function mount(source: Uint8Array, children?: React.ReactNode): Mounted {
       <DocxEditorToolbar />
       <DocxEditorViewport>
         <DocxEditorContent />
-        <DocxEditorHyperLink>{children}</DocxEditorHyperLink>
+        <DocxEditorHyperLink {...rootProps}>{children}</DocxEditorHyperLink>
       </DocxEditorViewport>
     </DocxEditorRoot>
   );
@@ -416,6 +420,39 @@ describe('the customization ladder', () => {
     // Unlink is gone, and edit — which the consumer did not name — is untouched.
     expect(mounted.view.queryByTestId('hyperlink-popup-unlink')).toBeNull();
     expect(mounted.view.queryByTestId('hyperlink-popup-edit')).not.toBeNull();
+  });
+
+  test('asChild hands the element to the host and keeps the wiring', () => {
+    const mounted = mount(
+      LINKED,
+      <DocxEditorHyperLink.Unlink asChild className="paired-class">
+        <button className="brand-button">Remove</button>
+      </DocxEditorHyperLink.Unlink>
+    );
+    caret(mounted, 8);
+    clickLink(mounted, 'Example');
+    const unlink = mounted.view.getByTestId('hyperlink-popup-unlink');
+    // The host owns the look: its own classes land, the packaged one does not.
+    expect(unlink.classList.contains('brand-button')).toBe(true);
+    expect(unlink.classList.contains('paired-class')).toBe(true);
+    expect(unlink.classList.contains('docx-hyperlink-popup__action')).toBe(false);
+    // Nothing else rides along: the element carries exactly these two classes.
+    expect(unlink.className).toBe('paired-class brand-button');
+    // The wiring still works.
+    act(() => {
+      fireEvent.click(unlink);
+    });
+    expect(mounted.view.container.querySelectorAll('a.docx-hyperlink')).toHaveLength(0);
+  });
+
+  test('an asChild panel keeps the class that positions it', () => {
+    const mounted = mount(LINKED, <section className="brand-panel" />, { asChild: true });
+    caret(mounted, 8);
+    clickLink(mounted, 'Example');
+    const panel = mounted.view.getByTestId('hyperlink-popup');
+    expect(panel.classList.contains('brand-panel')).toBe(true);
+    // The Root's class carries position and stacking, not decoration, so it stays.
+    expect(panel.classList.contains('docx-hyperlink-popup')).toBe(true);
   });
 
   test('a custom icon replaces the glyph without changing the wiring', () => {

@@ -24,7 +24,12 @@
   --doc-primary-hover: #115b34;
   --doc-dialog-radius: 4px;
 }
-.brand-dialog-button {
+/* Most of these buttons use `asChild`, which keeps the packaged classes off them,
+   so the first selector styles them on its own. MyParagraphDialog passes
+   `class-name` instead, so its button keeps `docx-dialog__button`; the second
+   selector adds a compound that outranks that default. */
+.docx-editor .brand-dialog-button,
+.docx-editor .docx-dialog .brand-dialog-button {
   border: 0;
   border-radius: 6px;
   background: var(--doc-primary);

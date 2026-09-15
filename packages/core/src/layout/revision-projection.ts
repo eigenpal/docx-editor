@@ -419,6 +419,38 @@ export function projectedRevisionProperties(
   });
 }
 
+/** What one laid-out piece carries after the reviewer view is applied to it. */
+export interface PieceAttribution {
+  /** Run properties with hidden-reviewer provenance (`rPrChange`) removed. */
+  readonly props: readonly OoxmlProperty[];
+  /** The revisions still shown as markup; absent when the piece paints as ordinary text. */
+  readonly revisions?: readonly RevisionAttribution[];
+}
+
+/**
+ * The attribution and properties one piece publishes under the current reviewer view, or
+ * `null` when that view removes the content altogether.
+ *
+ * The ONE projection for every piece the paragraph walk emits, whichever route it takes to the
+ * piece list. An ordinary run is projected as it is pushed; a field's editable or demoted
+ * result is buffered first and flushed later, and a buffered piece that skipped this step kept
+ * a hidden reviewer's colour and `rPrChange` while the review list and the change bar had
+ * already dropped them. Both routes call this so they cannot disagree again.
+ */
+export function projectPieceAttribution(
+  revisions: readonly RevisionAttribution[],
+  props: readonly OoxmlProperty[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionFilter
+): PieceAttribution | null {
+  const projected = projectedRevisions(revisions, mode, authorFilter);
+  if (projected === null) return null;
+  const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
+  return projected.length === 0
+    ? { props: publishedProps }
+    : { props: publishedProps, revisions: projected };
+}
+
 /** Paragraph-mark revisions that remain attributed in the current reviewer view. */
 export function visibleParagraphMarkRevisionsOf(
   paragraph: OoxmlNode,

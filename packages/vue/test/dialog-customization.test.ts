@@ -107,15 +107,38 @@ for (const asChild of [false, true]) {
     await nextTick();
     const button = container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
     expect(button.textContent).toBe('Save field');
-    for (const name of ['docx-dialog__button', 'app-action', 'app-active', 'paired-class']) {
+    for (const name of ['app-action', 'app-active', 'paired-class']) {
       expect(button.classList.contains(name)).toBe(true);
     }
+    // `asChild` hands the look to the host: the packaged classes stay off its element.
+    expect(button.classList.contains('docx-dialog__button')).toBe(!asChild);
     expect(button.classList.contains('app-hidden')).toBe(false);
     button.click();
     await nextTick();
     expect(saved).toHaveLength(1);
   });
 }
+
+test('a part forwards host attributes but keeps its own wiring', async () => {
+  let hostClicked = 0;
+  const { container, saved } = mount(true, {
+    asChild: false,
+    id: 'app-apply',
+    'aria-label': 'Save the field',
+    'data-testid': 'app-save',
+    onClick: () => hostClicked++,
+  } as Record<string, unknown>);
+  await nextTick();
+  const button = container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!;
+  expect(button.id).toBe('app-apply');
+  expect(button.getAttribute('aria-label')).toBe('Save the field');
+  expect(button.getAttribute('data-testid')).toBe('app-save');
+  button.click();
+  await nextTick();
+  // The packaged handler still runs, and the host's stray one never replaced it.
+  expect(saved).toHaveLength(1);
+  expect(hostClicked).toBe(0);
+});
 
 test('forwarding optional SFC children does not expose a readonly DOM property', async () => {
   const { DocxEditorPageSetupDialog } = await import('../src/editor/DocxEditorPageSetup');

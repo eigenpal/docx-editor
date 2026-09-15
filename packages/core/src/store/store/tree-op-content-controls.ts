@@ -4,6 +4,7 @@ import {
   isInlineControl,
   type CheckboxSymbol,
 } from './content-control-checkbox.ts';
+import { valueContent, withParagraphDiff } from './content-control-value-content.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
 export {
@@ -60,7 +61,6 @@ import {
   fromEdit,
   parentOf,
   parseCheckboxValue,
-  runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
 import {
   insertionLandingNodeId,
@@ -1190,27 +1190,6 @@ export function textRun(
   } as unknown as OoxmlNode;
 }
 
-/** The `w:rPr` a control's first run carries, cloned so a value write keeps its face. */
-function firstRunProperties(
-  content: OoxmlNode | undefined,
-  nextId: () => string
-): OoxmlNode | undefined {
-  if (!content || content.kind === 'textValue') return undefined;
-  const find = (node: OoxmlNode, depth: number): OoxmlNode | undefined => {
-    if (node.kind === 'textValue' || depth > 8) return undefined;
-    if (node.kind === 'run') {
-      const properties = runPropertiesNodeOf(node);
-      return properties ? cloneWithFreshIds(properties, nextId) : undefined;
-    }
-    for (const child of node.children) {
-      const found = find(child, depth + 1);
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return find(content, 0);
-}
-
 export function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
   if (node.kind === 'textValue') return { id: nextId(), kind: 'textValue', value: node.value };
   return {
@@ -1591,19 +1570,17 @@ export function editedProperties(
 function contentWithText(
   content: OoxmlElement | undefined,
   text: string,
-  nextId: () => string
-): readonly OoxmlNode[] {
-  const run = textRun(nextId, text, firstRunProperties(content, nextId));
-  const firstParagraph = content?.children.find((child) => child.kind === 'paragraph');
-  if (!firstParagraph || firstParagraph.kind === 'textValue') return [run];
-  const pPr = firstParagraph.children.find(
-    (child: OoxmlNode) => child.kind !== 'textValue' && child.localName === 'pPr'
+  nextId: () => string,
+  inline: boolean,
+  preferredParagraphId?: string
+): readonly OoxmlNode[] | null {
+  return valueContent(
+    content,
+    (properties) => textRun(nextId, text, properties),
+    nextId,
+    inline,
+    preferredParagraphId
   );
-  const paragraph = {
-    ...firstParagraph,
-    children: pPr ? [pPr, run] : [run],
-  } as OoxmlNode;
-  return [paragraph];
 }
 
 export function contentControlEffect(
@@ -1658,7 +1635,7 @@ export function applySetContentControlValue(
   const inline = isInlineControl(part, control.id);
   const children = planned.symbol
     ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
-    : contentWithText(content, planned.text, nextId);
+    : contentWithText(content, planned.text, nextId, inline);
   if (!children) return { ok: false, reason: 'unsupported' };
   const nextProperties = editedProperties(
     sdtPr,
@@ -1701,7 +1678,13 @@ export function applySetContentControlValue(
   return {
     ok: true,
     part: written.part,
-    effect: contentControlEffect(control.id, 'flow-structural'),
+    // Paragraphs the value dropped, minted or kept in place are reported to paragraph-keyed
+    // consumers.
+    effect: withParagraphDiff(
+      contentControlEffect(control.id, 'flow-structural'),
+      control,
+      rebuilt
+    ),
   };
 }
 
@@ -1810,26 +1793,29 @@ export function placeholderControlForInsertion(
 export function clearPlaceholder(
   part: OoxmlPart,
   controlId: string,
-  options?: EditOptions
+  options?: EditOptions,
+  /** The paragraph the caller is about to write into, kept as the emptied prompt's paragraph. */
+  preferredParagraphId?: string
 ): OoxmlPart | null {
   const control = findNode(part, controlId);
   if (!control || control.kind !== 'contentControl') return null;
   const nextId = createNodeIdAllocator(part);
-  const content = contentControlContentNodeOf(control);
+  const content = contentControlContentOf(control);
   const sdtPr = contentControlPropertiesContainerOf(control);
   const properties = editedProperties(sdtPr, { showingPlaceholder: false }, nextId);
+  const inline = isInlineControl(part, control.id);
+  const children = contentWithText(content, '', nextId, inline, preferredParagraphId);
+  if (!children) return null;
   const emptied = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
-    children: contentWithText(content, '', nextId),
+    children,
   } as OoxmlNode;
   const rebuilt = {
     ...control,
     children: [
       properties,
-      ...control.children.filter(
-        (child) => child.id !== sdtPr?.id && child.kind !== 'contentControlContent'
-      ),
+      ...control.children.filter((child) => child.id !== sdtPr?.id && child.id !== content?.id),
       emptied,
     ],
   } as OoxmlNode;
