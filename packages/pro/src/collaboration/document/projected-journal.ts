@@ -273,18 +273,22 @@ export function projectJournalToShared(
   journal: CanonicalPrimitiveJournal
 ): { readonly ok: true; readonly journal: CanonicalPrimitiveJournal } | ProjectionRefusal {
   const hidden = registry.replacementLoserRuns();
-  const reinserted = new Set(
-    journal.effects.flatMap((effect) =>
-      effect.kind === 'spliceChildren'
-        ? effect.childLogicalIds
-        : effect.kind === 'moveNode'
-          ? [effect.logicalId]
-          : []
-    )
-  );
   const minted = journal.effects.filter((effect) => effect.kind === 'putNode').length;
   if (registry.nodeCount() + minted > registry.limits.maxNodes) {
     return { ok: false, code: 'too-many-nodes' };
+  }
+  // Bound incoming lists before collecting future moves. Do not flatten unvalidated
+  // child arrays into an additional unbounded allocation.
+  const reinserted = new Set<string>();
+  for (const effect of journal.effects) {
+    if (effect.kind === 'spliceChildren') {
+      if (effect.childLogicalIds.length > registry.limits.maxChildren)
+        return { ok: false, code: 'too-many-children' };
+      for (const id of effect.childLogicalIds) reinserted.add(id);
+    } else if (effect.kind === 'moveNode') {
+      reinserted.add(effect.logicalId);
+    }
+    if (reinserted.size > registry.limits.maxNodes) return { ok: false, code: 'too-many-nodes' };
   }
   const raw = new JournalProjection(registry);
   const text = new TextCoordinates(registry, raw);
