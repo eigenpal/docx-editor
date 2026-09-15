@@ -468,8 +468,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroyed: () => destroyed,
     editingMode: () => editingMode,
     hostViewOnly: () => hostConfig.mode() === 'view',
-    publish: (clearReason) => {
-      if (clearReason) facadeRejection = standingRejection(null);
+    publish: () => {
       bump();
       emitSelectionChange();
     },
@@ -1720,8 +1719,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       suggestingGuards(),
       documentTracking(),
       editingMode,
-      fallback
+      fallback,
+      engineAdoptedViewing
     );
+    // This lane decides too, so it records what it adopted.
+    engineAdoptedViewing = decision.mode === 'viewing' && hostConfig.mode() !== 'view';
     if (decision.mode !== editingMode) applyEditingMode(decision.mode);
     facadeRejection = standingRejection(decision.rejection);
     suggestingReporter.report(decision.configurationRejection);

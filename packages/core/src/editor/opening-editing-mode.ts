@@ -240,16 +240,20 @@ export function documentTrackingAdoption(
     released = 'editing';
     current = 'editing';
   }
+  const settled: OpeningModeDecision =
+    released === null ? NO_DECISION : { mode: released, rejection: null };
   // Forms protection outranks every request for suggesting, the reader's included: Word
   // greys Track Changes out there, and a session already suggesting cannot go on into a
   // document every keystroke would refuse. Editing is the one mode still permitted.
+  //
+  // Asked of the RELEASED mode, and returning `settled` rather than nothing: a forms-protected
+  // document opened after a read-only one has to leave the viewing the read-only one adopted,
+  // or the reader cannot fill the very fields this protection exists to permit.
   if (input.restrictedToForms) {
-    return input.currentMode === 'suggesting' && !input.viewOnly
+    return current === 'suggesting' && !input.viewOnly
       ? { mode: 'editing', rejection: FORMS_PROTECTION_SUGGESTING_REASON }
-      : NO_DECISION;
+      : settled;
   }
-  const settled: OpeningModeDecision =
-    released === null ? NO_DECISION : { mode: released, rejection: null };
   if (input.viewOnly || current !== 'editing' || input.readerChoseMode) return settled;
   const asks = input.trackRevisions && !input.hostChoseMode;
   if (!asks && !input.restrictedToTrackedChanges) return settled;
@@ -303,7 +307,9 @@ export function resolveHostEditingMode(
   guards: OpeningModeGuards,
   tracking: DocumentTrackingSettings,
   currentMode: DocumentEditingMode,
-  fallback: DocumentEditingMode
+  fallback: DocumentEditingMode,
+  /** See {@link documentTrackingAdoption}: without it this lane's viewing outlives its file. */
+  engineAdoptedViewing = false
 ): { mode: DocumentEditingMode; rejection: string | null; configurationRejection: string | null } {
   const host = resolveOpeningEditingMode(requested, guards);
   let mode: DocumentEditingMode = requested === 'view' ? 'viewing' : (host.mode ?? fallback);
@@ -314,6 +320,7 @@ export function resolveHostEditingMode(
     hostChoseMode: requested !== undefined,
     readerChoseMode: false,
     currentMode: mode,
+    engineAdoptedViewing,
   });
   if (document.mode !== null) mode = document.mode;
   const restriction = documentEditingModeRestriction(tracking, mode);

@@ -360,6 +360,17 @@ describe('read-only and comments-only protection', () => {
     expect(editor.exec({ type: 'insertNote', noteKind: 'footnote' }).ok).toBe(false);
   });
 
+  test('a forms-protected document loaded after a read-only one is fillable', () => {
+    // The release has to reach the forms branch too, or the reader is left in the viewing the
+    // previous document adopted and cannot fill the fields this protection exists to permit.
+    const editor = mount({
+      document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>'),
+    });
+    expect(editor.snapshot().editingMode).toBe('viewing');
+    editor.load(trackedDocx(FORMS));
+    expect(editor.snapshot().editingMode).toBe('editing');
+  });
+
   test('an unenforced protection restricts nothing', () => {
     const editor = mount({
       document: trackedDocx('<w:documentProtection w:edit="readOnly" w:enforcement="0"/>'),

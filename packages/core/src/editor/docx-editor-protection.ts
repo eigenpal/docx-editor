@@ -83,14 +83,14 @@ export function createDocumentProtectionCommands(deps: {
   /** True when the facade was constructed `mode: 'view'`: read-only for the session. */
   readonly hostViewOnly: () => boolean;
   /**
-   * Notify, and on a LIFT clear the standing reason.
+   * Notify that the toggle ran.
    *
-   * Only the clear, because the mode itself is not this command's to decide: the protection
-   * write publishes a change, and the editor's own protection sync re-runs the mode decision
-   * off the new `settings.xml`. Deciding here as well meant two English sentences for one
-   * fact, and whichever ran second won.
+   * Nothing about the MODE or its reason: the write publishes a change, and `sync` below
+   * re-decides both off the new `settings.xml`. Clearing here as well discarded what that
+   * decision had just published — an author-missing reason on a document whose lift restored
+   * its `w:trackRevisions` request, for one.
    */
-  readonly publish: (clearReason: boolean) => void;
+  readonly publish: () => void;
   /** The document's own mode request, re-asked against the settings as they are now. */
   readonly decision: () => OpeningModeDecision;
   /** Enter the decided mode and publish its reason. */
@@ -99,6 +99,8 @@ export function createDocumentProtectionCommands(deps: {
   readonly tracking: () => DocumentTrackingSettings;
 }): DocumentProtectionCommands {
   let seenRestrictions: string | null = null;
+  /** The settings tree `seenRestrictions` was read from; immutable, so identity is enough. */
+  let seenSettingsRoot: unknown = null;
   const restrictionKey = (): string => {
     const tracking = deps.tracking();
     return [
@@ -156,6 +158,11 @@ export function createDocumentProtectionCommands(deps: {
 
   return {
     sync() {
+      // Called on EVERY publish, so it starts with a reference compare: the settings tree is
+      // immutable, and re-parsing it per keystroke is seven child scans nobody needs.
+      const root = deps.surface()?.session.settingsRoot() ?? null;
+      if (root === seenSettingsRoot && seenRestrictions !== null) return;
+      seenSettingsRoot = root;
       const key = restrictionKey();
       if (key === seenRestrictions) return;
       seenRestrictions = key;
@@ -164,6 +171,7 @@ export function createDocumentProtectionCommands(deps: {
       deps.adopt(deps.decision());
     },
     prime: () => {
+      seenSettingsRoot = deps.surface()?.session.settingsRoot() ?? null;
       seenRestrictions = restrictionKey();
     },
     state,
@@ -189,11 +197,8 @@ export function createDocumentProtectionCommands(deps: {
       // Word greys Track Changes out under forms protection; a session that was suggesting
       // cannot go on suggesting into a document that now refuses to track. Editing mode is the
       // one mode still permitted, and the pill says why it moved.
-      // Enforcing ends a suggesting session, because Word does not track changes in a
-      // document protected for forms — the mode sync does that from the written setting.
-      // Lifting clears the reason that said so: left standing, the snapshot told the host the
-      // document was protected after it was not.
-      deps.publish(!enforce);
+      // The mode and its reason both come from `sync`, off the setting this just wrote.
+      deps.publish();
       return { ok: true, changed: true };
     },
   };
