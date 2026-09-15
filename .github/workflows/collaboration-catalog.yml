@@ -1,0 +1,74 @@
+name: Capture collaboration release
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable published version (defaults to the current package version)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: collaboration-catalog
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Capture published artifacts and prepare review
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          version="$REQUESTED_VERSION"
+          if [ -z "$version" ]; then
+            version=$(node -p "JSON.parse(require('fs').readFileSync('packages/pro/package.json')).version")
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Expected a stable release version'
+            exit 1
+          fi
+          if node --input-type=module -e 'import { readFileSync } from "node:fs"; const data=JSON.parse(readFileSync(".collaboration/releases.json")); process.exit(data.releases.some(entry => entry.version === process.argv[1]) ? 0 : 1)' "$version"; then
+            echo "Baseline $version is already recorded."
+            exit 0
+          fi
+          branch="automation/collaboration-catalog-$version"
+          if gh pr list --head "$branch" --state all --json number --jq 'length' | grep -qv '^0$'; then
+            echo "A catalog PR already exists for $version. Review that PR."
+            exit 0
+          fi
+          git switch -c "$branch"
+          node scripts/collaboration/cli.mjs catalog --capture "$version"
+          node scripts/collaboration/cli.mjs catalog
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config core.hooksPath /dev/null
+          git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx
+          git commit -m "test: capture collaboration baseline $version"
+          git push origin "$branch"
+          cat > /tmp/collaboration-catalog-pr.md <<'BODY'
+          Record the published collaboration packages, frozen installation, and saved-room fixture. Review the artifact integrity and generated release table before the next release.
+          BODY
+          gh pr create --base main --head "$branch" --title "test: capture collaboration baseline $version" --body-file /tmp/collaboration-catalog-pr.md

@@ -52,7 +52,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: "${{ matrix.check == 'api-changeset' && '0' || '1' }}"
+          fetch-depth: "${{ (matrix.check == 'api-changeset' || matrix.check == 'build') && '0' || '1' }}"
       - name: Setup Bun
         if: "matrix.check != 'api-changeset'"
         uses: oven-sh/setup-bun@v2
@@ -136,6 +136,31 @@ jobs:
       - name: Third-party notices generate (gate)
         run: bun run notices:generate
         if: "matrix.check == 'build'"
+      - name: Collaboration policy
+        if: "matrix.check == 'build'"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RELEASE_BRANCH: ${{ startsWith(github.head_ref, 'changeset-release/') }}
+        run: |
+          if [ "$RELEASE_BRANCH" = true ]; then
+            bun run collaboration:check --release
+          else
+            bun run collaboration:check --base "$BASE_SHA"
+          fi
+      - name: Pack collaboration candidate
+        if: "matrix.check == 'build'"
+        run: node scripts/collaboration/cli.mjs pack
+      - name: Upload collaboration candidate and build
+        if: "matrix.check == 'build'"
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-build
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/publish/
+            packages/*/dist/
+            packages/*/THIRD_PARTY_NOTICES.md
+          retention-days: 7
       - name: Published-package artifact check
         run: bun run check:package-artifacts
         if: "matrix.check == 'build'"
@@ -187,6 +212,40 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
 
+  collaboration:
+    if: github.actor != 'dependabot[bot]'
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8
+        with:
+          name: collaboration-build
+          path: .
+      - name: Test published collaboration releases
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node scripts/collaboration/test.mjs --all --shard "$SHARD" --candidate .cache/collaboration/publish
+      - name: Save compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-evidence-${{ strategy.job-index }}
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/report-*.json
+            .cache/collaboration/failure.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -216,14 +275,15 @@ jobs:
 
   test:
     if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
-    needs: checks
+    needs: [checks, collaboration]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
         env:
           RESULT: ${{ needs.checks.result }}
-        run: test "$RESULT" = success
+          COLLABORATION_RESULT: ${{ needs.collaboration.result }}
+        run: test "$RESULT" = success && test "$COLLABORATION_RESULT" = success
 
   package-size:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'

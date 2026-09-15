@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
           # Default GITHUB_TOKEN can push to dependabot PR branches when
           # workflow-level `permissions: contents: write` is granted.
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -96,6 +97,16 @@ jobs:
         run: bun run build:packages
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Collaboration policy
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun run collaboration:check --base "$BASE_SHA"
+
+      - name: Collaboration published-release matrix
+        run: |
+          bun run notices:generate
+          bun run collaboration:test --all
 
       - name: API report check
         run: bun run api:check

@@ -127,6 +127,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -173,6 +175,21 @@ jobs:
       - name: Generate third-party notices
         run: bun run notices:generate
 
+      - name: Check collaboration release decisions
+        run: bun run collaboration:check --release
+
+      - name: Pack collaboration release candidate
+        run: node scripts/collaboration/cli.mjs pack
+
+      - name: Upload collaboration release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-candidate
+          include-hidden-files: true
+          path: .cache/collaboration/publish/
+          if-no-files-found: error
+          retention-days: 7
+
       # Hand the exact build the prepublish job validated to the release job. Both path
       # patterns share `packages/` as their common ancestor, so the artifact
       # keeps the `<pkg>/dist/...` layout and unpacks back into `packages/`.
@@ -186,20 +203,59 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  collaboration:
+    name: Prepublish collaboration (${{ matrix.shard }})
+    needs: [mode, build]
+    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8
+        with:
+          name: publish-dist
+          path: packages
+      - uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          path: .cache/collaboration/publish
+      - name: Test the complete release candidate
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node scripts/collaboration/test.mjs --all --allow-current --shard "$SHARD" --candidate .cache/collaboration/publish
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-collaboration-evidence-${{ strategy.job-index }}
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/report-*.json
+            .cache/collaboration/failure.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   # The changesets action and everything downstream of it. Must be a
   # GitHub-hosted runner — see the header comment.
   release:
     name: Release
-    needs: [mode, checks, build]
+    needs: [mode, checks, build, collaboration]
     # Run on both paths: checks/build are skipped on the PR-update path by
     # design, so accept skipped as well as success.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.publishing != 'true' || needs.collaboration.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
       # Consumed by the notify-failure job to tell "the changesets step itself
       # failed" apart from "an earlier step failed".
       changesets_outcome: ${{ steps.changesets.outcome }}
+      published: ${{ steps.changesets.outputs.published }}
     permissions:
       contents: write # push tags, create GitHub Releases
       pull-requests: write # changesets/action opens / updates the release PR
@@ -253,6 +309,17 @@ jobs:
           name: publish-dist
           path: packages
 
+      - name: Download tested collaboration candidate
+        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          path: .cache/collaboration/publish
+
+      - name: Verify the publication payload without rebuilding
+        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        run: node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish
+
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
       #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).
@@ -288,6 +355,10 @@ jobs:
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           git tag -a "v$version" -m "Release v$version"
           git push origin "v$version"
+
+      - name: Verify published artifact integrity
+        if: ${{ steps.changesets.outputs.published == 'true' }}
+        run: node scripts/collaboration/cli.mjs verify-published --candidate .cache/collaboration/publish
 
       # Post-publish fan-out runs as the eigenpal-release-pal App rather than
       # the default GITHUB_TOKEN, so it can comment on this repo's PRs and
@@ -629,3 +700,13 @@ jobs:
               ]
             }')
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+
+  collaboration-catalog:
+    name: Record published collaboration baseline
+    needs: release
+    if: ${{ needs.release.outputs.published == 'true' }}
+    uses: ./.github/workflows/collaboration-catalog.yml
+    secrets: inherit
+    permissions:
+      contents: write
+      pull-requests: write
