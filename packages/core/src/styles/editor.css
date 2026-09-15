@@ -6744,7 +6744,7 @@ a.docx-hyperlink:focus-visible {
      --doc-dialog-font-size    base size; titles, labels and hints scale in em
      --doc-dialog-radius       panel corner radius
      --doc-dialog-control-radius  input and button corner radius
-     --doc-dialog-padding      panel inline inset (header, body, footer)
+     --doc-dialog-padding      ONE length: side inset of header, body, footer
      --doc-dialog-gap          vertical rhythm between rows and sections */
 
 .docx-editor .docx-dialog,
