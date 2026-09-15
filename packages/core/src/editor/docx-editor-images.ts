@@ -1,3 +1,4 @@
+import { commandProtectionRefusal } from './command-protection.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
 // Reads derive from layout records plus canonical projection; writes route through the
@@ -578,6 +579,8 @@ export function gateImageCommand(
   if (!surface) {
     return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   }
+  const protectedWrite = commandProtectionRefusal(command, surface);
+  if (protectedWrite) return protectedWrite;
   if (command.type === 'insertImage') {
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'insertImage requires image bytes' };

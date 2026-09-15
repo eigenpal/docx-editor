@@ -57,8 +57,12 @@ Enforced document protection restricts the available modes:
 - Filling-in-forms protection refuses suggesting mode. Word does not track
   changes in a document protected for forms. The refusal is
   `{ ok: false, code: 'locked' }` with the reason.
-- Read-only and comments-only protection open the document in viewing mode.
-  Every other mode is refused.
+- Read-only protection opens the document in viewing mode. Every other mode is refused.
+- Comments-only protection permits comment work in editing mode. You can add, reply to,
+  resolve, reopen, and delete comments. Content edits and suggesting mode are refused.
+  Explicit viewing still refuses comment writes.
+- Under forms protection, commands outside fillable fields return `locked` with a
+  readable reason. Their controls are disabled. Valid field fills remain available.
 
 Turning protection on from **Review → Protect Document for Forms** while
 suggesting returns the editor to editing mode. The editor publishes the reason

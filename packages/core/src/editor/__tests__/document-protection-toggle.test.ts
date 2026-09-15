@@ -97,9 +97,8 @@ describe('toggling protection', () => {
     const saved = await settingsOf(editor);
     expect(saved).toContain('w:edit="forms"');
     expect(saved).toContain('w:enforcement="1"');
-    // Enforced: the store refuses the write, though the command still reports no change
-    // rather than a refusal. Making that refusal visible is #845.
-    expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: false });
+    // Both admission and execution report the protection refusal.
+    expect(typeAt(editor, 0, 0, 'x')).toMatchObject({ ok: false, code: 'locked' });
 
     expect(editor.exec(TOGGLE)).toEqual({ ok: true, changed: true });
     expect(protection(editor)).toEqual({ edit: 'forms', enforced: false, password: false });
@@ -274,17 +273,21 @@ describe('read-only and comments-only protection', () => {
     // The document permits no edit, so it opens VIEWING. An editing pill over a document that
     // refuses every keystroke is the silent-drop shape issue #836 was filed about; the mode
     // pill is where the reader can SEE that the document is protected.
-    test(`${mode}: the document opens viewing and every other mode is refused`, () => {
+    test(`${mode}: the document opens in its permitted mode`, () => {
       const editor = mount({
         document: trackedDocx(`<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`),
       });
-      expect(editor.snapshot().editingMode).toBe('viewing');
-      expect(editor.snapshot().lastRejection).toBe(READ_ONLY_PROTECTION_REASON);
-      for (const next of ['editing', 'suggesting'] as const) {
+      expect(editor.snapshot().editingMode).toBe(mode === 'comments' ? 'editing' : 'viewing');
+      const forbidden =
+        mode === 'comments' ? (['suggesting'] as const) : (['editing', 'suggesting'] as const);
+      for (const next of forbidden) {
         expect(editor.can({ type: 'setEditingMode', mode: next })).toEqual({
           ok: false,
           code: 'locked',
-          reason: READ_ONLY_PROTECTION_REASON,
+          reason:
+            mode === 'comments'
+              ? 'this document is protected for comments only'
+              : READ_ONLY_PROTECTION_REASON,
         });
       }
     });

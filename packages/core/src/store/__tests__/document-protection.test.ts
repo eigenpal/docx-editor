@@ -321,7 +321,7 @@ describe('read-only and comments-only refusals', () => {
     }
   });
 
-  test('a package-only comment write is refused under every enforced protection', () => {
+  test('package-only comment writes respect the protection mode', () => {
     // Resolve and delete carry no story op, so the per-op gate never sees them and the
     // package channel cannot refuse forms without also refusing a legitimate field fill.
     // Ungated, a form sent out for filling came back with every thread resolved by a reader
@@ -330,8 +330,12 @@ describe('read-only and comments-only refusals', () => {
       const settings = build(
         `<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`
       ).parts.get('/word/settings.xml');
-      expect(lifecycleProtectionRefusal(settings, { op: 'setCommentResolved' })).toBe('locked');
-      expect(lifecycleProtectionRefusal(settings, { op: 'deleteComments' })).toBe('locked');
+      expect(lifecycleProtectionRefusal(settings, { op: 'setCommentResolved' })).toBe(
+        mode === 'comments' ? null : 'locked'
+      );
+      expect(lifecycleProtectionRefusal(settings, { op: 'deleteComments' })).toBe(
+        mode === 'comments' ? null : 'locked'
+      );
     }
     const open = build('').parts.get('/word/settings.xml');
     expect(lifecycleProtectionRefusal(open, { op: 'setCommentResolved' })).toBeNull();

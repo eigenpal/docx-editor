@@ -1,3 +1,9 @@
+import {
+  commandProtectionRefusal,
+  createControlWriteRefusal,
+  registerFormFieldIdentity,
+  writeRejectionReason,
+} from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
 import {
   createContentControlWidgetSessions,
@@ -349,7 +355,6 @@ export function mountPaginatedSurface(
   };
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
-  const READ_ONLY_REFUSAL = 'the document is read-only';
   const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
@@ -1013,6 +1018,8 @@ export function mountPaginatedSurface(
   }
 
   const format = createSurfaceFormat({
+    runFormatRefusal: () =>
+      commandProtectionRefusal({ type: 'toggleMark', mark: 'bold' }, surface)?.reason ?? null,
     session: gatedSession,
     storyScope,
     paragraphOrder,
@@ -3042,20 +3049,10 @@ export function mountPaginatedSurface(
     return null;
   }
 
-  /**
-   * Why a content-control interaction is refused right now, or null.
-   *
-   * The widget is chrome the ENGINE paints, so the mode has to reach it here rather than at
-   * a host's discretion. No selection or op list to judge: a control write is aimed at a
-   * control id, so the TOC rules — which are about where the caret is — do not apply, and
-   * refusing a form field because the caret happens to sit in a table of contents would be
-   * an answer to a different question.
-   */
-  function contentControlRefusal(): string | null {
-    const refusal = writeRefusal(true, [], false);
-    if (refusal !== null) return refusal;
-    return session.editable ? null : READ_ONLY_REFUSAL;
-  }
+  const contentControlRefusal = createControlWriteRefusal(
+    () => writeRefusal(true, [], false),
+    () => session.editable
+  );
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
   function isDocumentEdit(op: TreeDocOp): boolean {
@@ -3294,7 +3291,10 @@ export function mountPaginatedSurface(
     const result = run();
     const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
     if (rejection) {
-      lastRejection = String(rejection.reason ?? 'rejected');
+      lastRejection = writeRejectionReason(
+        String(rejection.reason ?? 'rejected'),
+        session.settingsRoot()
+      );
     } else {
       lastRejection = null;
       // The post-edit selection is installed BEFORE the paint, so the single render below
@@ -5949,8 +5949,7 @@ export function mountPaginatedSurface(
     selectionSync.onCompositionStart(...args);
   };
 
-  // The selection mirror checks this handle to avoid adopting browser selection mid-drag.
-  // It is assigned once the surface exists.
+  // The selection mirror uses this handle to avoid adopting selection mid-drag.
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction(
     {
@@ -5981,6 +5980,7 @@ export function mountPaginatedSurface(
     },
     runtimeOptions.initialTextFormInput
   );
+  registerFormFieldIdentity(surface, textFormInteraction.fieldId);
   const dispatchKeyDown = createKeyDownHandler(surface, options);
   const onKeyDown = (event: KeyboardEvent): void => {
     // The browser may have moved its caret without delivering the queued `selectionchange`

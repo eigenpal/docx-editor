@@ -39,6 +39,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceFormatDeps {
+  runFormatRefusal?(): string | null;
   readonly session: TreeDocxSessionView;
   /** Active story for mutations — body or `{ kind: 'headerFooter', rId }`. */
   storyScope(): StoryScope;
@@ -115,6 +116,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
     after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
   ) => session.applyTreeOps(ops, before, after, deps.storyScope());
+  const refuseRunFormat = (): boolean => {
+    const reason = deps.runFormatRefusal?.();
+    if (!reason) return false;
+    deps.commit(() => ({ committed: false, rejected: true, opCount: 0, reason }));
+    return true;
+  };
   const currentLayout = {
     get value(): SemanticLayout {
       return deps.layout();
@@ -380,6 +387,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
   return {
     setRunProperty(localName, attributes) {
+      if (refuseRunFormat()) return;
       const incoming = { localName, ...(attributes ? { attributes } : {}) };
       const cells = deps.selectedCells?.();
       if (cells && cells.length > 0) {
@@ -430,6 +438,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       ),
 
     toggleRunProperty(localName, attributes) {
+      if (refuseRunFormat()) return;
       const cells = deps.selectedCells?.();
       // The VALUE this press means, for a property whose on-state is one member of an
       // enumeration rather than a boolean: `w:vertAlign` carries superscript AND subscript,
@@ -489,6 +498,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     clearFormatting() {
+      if (refuseRunFormat()) return;
       // Word's eraser, and Word's split: character formatting is a RANGE, paragraph
       // formatting is not. The selected text loses its direct `w:rPr`; every paragraph the
       // selection touches loses its direct `w:pPr` — which includes `w:pStyle`, so the

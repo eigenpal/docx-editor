@@ -25,21 +25,22 @@ export function lifecycleProtectionRefusal(
   if (op.op === 'setDocumentProtection') return null;
   const protection = readDocumentProtection(settings?.root);
   if (protection.enforced && protection.edit === 'forms') return 'locked';
+  if (
+    protection.enforced &&
+    protection.edit === 'comments' &&
+    ['comment', 'setCommentResolved', 'deleteComments'].includes(op.op)
+  )
+    return null;
   return documentProtectionRefusal(settings);
 }
 
 /**
  * The refusal an enforced `readOnly` or `comments` protection gives a write.
  *
- * Read-only admits no edit at all. Comments-only admits the comment ANCHOR and nothing else.
- * Adding a comment is still refused overall: its text lands in `comments.xml` through the
- * package channel, which carries no `op` and so cannot claim the exemption — the narrowing is
- * recorded in the feature matrix rather than worked around here. Coarser than Word in one more
- * respect: Word lets an edit through inside a `w:permStart` exception range, and this editor
- * refuses there too, because a refusal the reader can see beats a write the protection was
- * meant to stop. `forms` and `trackedChanges` are answered elsewhere: forms by
- * `formsProtectionRefusal` and by `lifecycleProtectionRefusal` above, tracked changes by the
- * editing-mode gate.
+ * Read-only admits no edit. Comments-only admits comment anchors; the package channel
+ * admits only callbacks from the internal comment writers. Generic package edits stay locked.
+ * Forms and tracked-changes protection have their own field and editing-mode checks.
+ * Exception ranges are not supported.
  */
 export function documentProtectionRefusal(
   settings: OoxmlPart | null | undefined,

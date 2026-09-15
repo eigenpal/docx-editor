@@ -1,3 +1,4 @@
+export { formsProtectionCommandRefusal } from './forms-protection-command.ts';
 import {
   checkboxContent,
   checkboxStateHexes,
@@ -610,7 +611,7 @@ function locksOf(chain: readonly OoxmlNode[]): readonly ContentControlLock[] {
  * to answer from three different walks over three different op allowlists, which is how an inline
  * control ended up unprotected in all three.
  */
-function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
+export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   if (reach.kind === 'none') return NOTHING;
   // No control is touched — no lock, no binding — and nothing here is inside a control, so a
   // protected document refuses it.

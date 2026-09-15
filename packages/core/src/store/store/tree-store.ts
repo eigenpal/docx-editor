@@ -1,3 +1,4 @@
+import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
@@ -22,7 +23,8 @@ import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
-import { documentProtectionRefusal } from './forms-protection.ts';
+import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
+import { isCommentPackageEdit } from './comment-package-edit.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import {
   formsProtectionRefusal,
@@ -566,6 +568,7 @@ export class TreeDocumentStore {
       return writes ? revisionIdsFor(part) : null;
     };
 
+    const retainFormControl = createFormsTextReplacementContext();
     let fillingField: { partName: string; paragraphId: string; fieldNodeId: string } | null = null;
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
       if (failure) return false;
@@ -574,6 +577,7 @@ export class TreeDocumentStore {
         failure = { reason: 'unknown-part', detail: partName };
         return false;
       }
+      op = retainFormControl(target, this.settingsPartOverride?.() ?? settingsPartOf(working), op);
       // Forms protection lives in `settings.xml`, one part up from the op, so it is resolved
       // HERE rather than in the per-part applier: a part alone cannot see whether the document
       // it belongs to is protected.
@@ -674,9 +678,10 @@ export class TreeDocumentStore {
         // touches resources, and the collaboration and automation lanes append one
         // unconditionally — judging those document-scoped refused every collaborative and
         // scripted fill of the very fields forms protection exists to permit.
-        const packageProtection = documentProtectionRefusal(
-          this.settingsPartOverride?.() ?? settingsPartOf(working)
-        );
+        const settings = this.settingsPartOverride?.() ?? settingsPartOf(working);
+        const packageProtection = isCommentPackageEdit(edit)
+          ? lifecycleProtectionRefusal(settings, { op: 'comment' })
+          : documentProtectionRefusal(settings);
         if (packageProtection) {
           failure = { reason: packageProtection };
           return false;

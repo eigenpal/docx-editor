@@ -1,3 +1,6 @@
+import { documentProtectionRefusal } from '../store/store/forms-protection.ts';
+import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
 // Content-control query derivation for the Editor facade.
 //
 // Projects typed `w:sdt` nodes — and generic WML `sdt` fallbacks until the canonical model
@@ -758,10 +761,12 @@ export function canContentControlCommand(
 
 /** What the store itself would say about this op, in the vocabulary `can` answers. */
 function storeVerdict(surface: PaginatedSurface, op: TreeDocOp, nodeId: string): CanResult {
-  const rejection = validateTreeOp(
-    partOfNodeId(surface.session, nodeId) ?? surface.session.part(),
-    op
-  );
+  const part = partOfNodeId(surface.session, nodeId) ?? surface.session.part();
+  const settings = settingsPartOf(surface.session.currentPackage());
+  const rejection =
+    documentProtectionRefusal(settings, op) ??
+    formsProtectionRefusal(part, settings, op) ??
+    validateTreeOp(part, op);
   if (rejection) {
     return {
       ok: false,

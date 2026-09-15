@@ -1,3 +1,4 @@
+import { reviewChangesLocked } from './command-protection.ts';
 import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
@@ -1636,7 +1637,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           text: item.text,
           ...(item.replacedText ? { replacedText: item.replacedText } : {}),
           replyIds: item.replyIds,
-          readOnly: item.readOnly,
+          readOnly: item.readOnly || reviewChangesLocked(surface),
           item,
         };
       }
@@ -2151,8 +2152,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     reportCustomNodeDiagnostic: reportDiagnostic,
 
     addComment(text: string, authorOverride?: string): ExecResult {
-      // Comment AUTHORING is the review module's capability, like every other
-      // review write above. Missed in the first gating pass — caught by review.
+      // Comment authoring requires the review module, like other review writes.
       if (!reviewEnabled) {
         return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
       }

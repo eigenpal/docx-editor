@@ -80,8 +80,7 @@ export const FORMS_PROTECTION_SUGGESTING_REASON =
   'this document is protected for filling in forms, which does not track changes';
 
 /**
- * The refusal every mode but viewing gets under enforced read-only or comments-only
- * protection.
+ * The refusal every mode but viewing gets under enforced read-only protection.
  *
  * The document permits no edit (or only a comment), so the editor opens VIEWING rather than
  * presenting an editing pill over a document that refuses every keystroke. That silent-drop
@@ -90,6 +89,9 @@ export const FORMS_PROTECTION_SUGGESTING_REASON =
  */
 export const READ_ONLY_PROTECTION_REASON =
   'this document is protected against editing; open it in Word to change that';
+
+/** Comments-only keeps review writes available and refuses content edits. */
+export const COMMENTS_PROTECTION_REASON = 'this document is protected for comments only';
 
 /** What a decision asks the facade to do: adopt a mode, publish a refusal, or neither. */
 export interface OpeningModeDecision {
@@ -225,7 +227,7 @@ export function documentTrackingAdoption(
 ): OpeningModeDecision {
   // A document that permits no editing opens VIEWING, whatever anyone asked for. Every other
   // outcome puts an editing pill over a document whose every write the store refuses.
-  if (input.restrictedToReadOnly || input.restrictedToComments) {
+  if (input.restrictedToReadOnly) {
     return input.currentMode === 'viewing'
       ? NO_DECISION
       : { mode: 'viewing', rejection: READ_ONLY_PROTECTION_REASON };
@@ -242,13 +244,14 @@ export function documentTrackingAdoption(
   }
   const settled: OpeningModeDecision =
     released === null ? NO_DECISION : { mode: released, rejection: null };
-  // Forms protection outranks every request for suggesting, the reader's included: Word
-  // greys Track Changes out there, and a session already suggesting cannot go on into a
-  // document every keystroke would refuse. Editing is the one mode still permitted.
-  //
-  // Asked of the RELEASED mode, and returning `settled` rather than nothing: a forms-protected
-  // document opened after a read-only one has to leave the viewing the read-only one adopted,
-  // or the reader cannot fill the very fields this protection exists to permit.
+  // Comments need the editing surface, but can never become tracked content writes.
+  if (input.restrictedToComments) {
+    return current === 'suggesting' && !input.viewOnly
+      ? { mode: 'editing', rejection: COMMENTS_PROTECTION_REASON }
+      : settled;
+  }
+  // Forms also refuse suggesting. The released mode preserves field filling after a
+  // read-only document; the previous document's viewing adoption must not outlive it.
   if (input.restrictedToForms) {
     return current === 'suggesting' && !input.viewOnly
       ? { mode: 'editing', rejection: FORMS_PROTECTION_SUGGESTING_REASON }
@@ -287,8 +290,11 @@ export function documentEditingModeRestriction(
   tracking: DocumentTrackingSettings,
   next: DocumentEditingMode
 ): CommandRefusal | null {
-  if (next !== 'viewing' && (tracking.restrictedToReadOnly || tracking.restrictedToComments)) {
+  if (next !== 'viewing' && tracking.restrictedToReadOnly) {
     return { ok: false, code: 'locked', reason: READ_ONLY_PROTECTION_REASON };
+  }
+  if (next === 'suggesting' && tracking.restrictedToComments) {
+    return { ok: false, code: 'locked', reason: COMMENTS_PROTECTION_REASON };
   }
   if (next === 'suggesting' && tracking.restrictedToForms) {
     return { ok: false, code: 'locked', reason: FORMS_PROTECTION_SUGGESTING_REASON };
@@ -326,8 +332,7 @@ export function resolveHostEditingMode(
   const restriction = documentEditingModeRestriction(tracking, mode);
   // A refused mode falls back to the one the protection permits: viewing when nothing may be
   // edited, otherwise the mode already in force.
-  const permitted =
-    tracking.restrictedToReadOnly || tracking.restrictedToComments ? 'viewing' : currentMode;
+  const permitted = tracking.restrictedToReadOnly ? 'viewing' : currentMode;
   return {
     mode: restriction === null ? mode : permitted,
     rejection: document.rejection ?? restriction?.reason ?? null,

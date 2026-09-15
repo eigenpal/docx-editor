@@ -1,3 +1,4 @@
+import { commandProtectionRefusal } from './command-protection.ts';
 import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import type {
   CanResult,
@@ -79,6 +80,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         : { ok: false, code: 'notFound', reason: 'no visible changes to review' };
     if (deps.viewing())
       return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+    const protectedWrite = commandProtectionRefusal(command, deps.surface()!);
+    if (protectedWrite) return protectedWrite;
     const items = all();
     if (!items.length) return { ok: false, code: 'notFound', reason: 'no changes to review' };
     if (items.some((item) => item.readOnly))
@@ -101,6 +104,11 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         );
       return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
     }
+    const protectedWrite = commandProtectionRefusal(
+      { type: 'resolveAllReviewChanges', action },
+      deps.surface()!
+    );
+    if (protectedWrite) return protectedWrite;
     deps.surface()!.flushPendingInput();
     const item = deps.placements().find((entry) => entry.key === key)?.item;
     if (!item || item.kind !== 'revision')

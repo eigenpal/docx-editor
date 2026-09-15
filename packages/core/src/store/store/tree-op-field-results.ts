@@ -695,7 +695,9 @@ export function applyTextFormFieldDefault(
 export function protectedTextFormEditRefusal(
   part: OoxmlPart,
   op: TreeDocOp,
-  field: TextFormFieldRange
+  field: TextFormFieldRange,
+  /** Admission only: the end of text replaced before insertion. Commit checks each op. */
+  replacementEnd?: number
 ): TreeOpRejection | null {
   if (op.op !== 'insertText' && op.op !== 'deleteText') return 'invalidArgs';
   const paragraph = findNode(part, op.paragraphId);
@@ -731,7 +733,7 @@ export function protectedTextFormEditRefusal(
     textFormInputLength(
       located.cachedText.slice(0, op.offset - field.start) +
         op.text +
-        located.cachedText.slice(op.offset - field.start),
+        located.cachedText.slice((replacementEnd ?? op.offset) - field.start),
       field,
       located.cachedText
     ) > field.maxLength

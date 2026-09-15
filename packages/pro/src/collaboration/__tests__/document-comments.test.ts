@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import {
   addPackageComment,
   commentsExtendedPartNameOf,
@@ -545,4 +545,38 @@ describe('deleting a comment replicates the stripped markers and the comments pa
     expect(findText(packageOf(bob), 'Alpha').value).toBe('Alpha');
     expectConverged(alice, bob);
   });
+});
+
+test('comments-only protection permits journaled comment work and preserves protected text', async () => {
+  const files = unzipSync(EMPTY);
+  files['word/settings.xml'] = strToU8(
+    `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="comments" w:enforcement="1"/></w:settings>`
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'
+    )
+  );
+  files['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>`
+  );
+  const { alice, bob } = await pair(zipSync(files));
+  const id = addCommentOn(alice, 0, 'Protected review', 'Alice');
+  replyOn(bob, id, 0, 'Reply');
+  expectConverged(alice, bob);
+  expect(setPackageCommentResolved(alice.store, id, true).ok).toBe(true);
+  alice.port.flushPendingJournals();
+  expectExtendedOnPeer(bob, true);
+  expectConverged(alice, bob);
+  expect(deletePackageComments(bob.store, [{ commentId: id }])).toBe(true);
+  bob.port.flushPendingJournals();
+  expectConverged(alice, bob);
+  expect(markerIds(packageOf(alice), 'commentRangeStart')).toHaveLength(0);
+  expect(findText(packageOf(alice), 'Alpha').value).toBe('Alpha');
+  expect(
+    alice.store.bodyStore().transact((ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: paragraphIdAt(alice, 0), offset: 0, text: 'X' });
+    })
+  ).toMatchObject({ ok: false, reason: 'locked' });
 });

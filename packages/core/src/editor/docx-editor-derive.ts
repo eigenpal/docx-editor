@@ -1,3 +1,6 @@
+import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import { commandProtectionRefusal, FORMS_WRITE_REASON } from './command-protection.ts';
 // Snapshot derivations for `createDocxEditor` (editor seam).
 //
 // The reads that turn a mounted surface into contract values: run formatting, page setup,
@@ -236,7 +239,12 @@ export function tableCommandState(
   command: EditorCommand,
   surface: PaginatedSurface
 ): { readonly can: CanResult; readonly plan: TableCommandPlan } {
-  const plan = planTableCommand(buildTableCommandPlannerInput(command, surface));
+  const input = buildTableCommandPlannerInput(command, surface);
+  let plan = planTableCommand(input);
+  const settings = settingsPartOf(surface.session.currentPackage());
+  if (plan.ok && plan.ops.some((op) => formsProtectionRefusal(input.part, settings, op))) {
+    plan = { ok: false, code: 'locked', reason: FORMS_WRITE_REASON };
+  }
   return plan.ok
     ? { can: { ok: true }, plan }
     : { can: { ok: false, code: plan.code, reason: plan.reason }, plan };
@@ -301,6 +309,8 @@ export function gateCommand(
       refusal: { ok: false, code: 'locked', reason: 'the document is read-only' },
     };
   }
+  const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
+  if (protection) return { ok: false, refusal: protection };
   // History commands are gated on the HISTORY, not just the mode: `can` drives the
   // toolbar's enabled state, and an undo button that stays live over an empty stack
   // silently no-ops — Word greys it out.

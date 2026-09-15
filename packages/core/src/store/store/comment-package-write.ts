@@ -1,3 +1,4 @@
+import { commentPackageContext } from './comment-package-edit.ts';
 // Comment write through the package coordinator, so collaboration can journal it.
 //
 // `addComment` commits on the story store. The coordinator then grafts the new parts onto
@@ -142,7 +143,8 @@ export function deletePackageComments(
     () => {
       let refused = false;
       let removed = false;
-      const result = store.transact((ctx) => {
+      const result = store.transact((transaction) => {
+        const ctx = commentPackageContext(transaction);
         ctx.applyPackage((current) => {
           let next = current;
           for (const comment of comments) {
