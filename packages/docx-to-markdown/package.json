@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
-  "version": "2.15.1",
+  "version": "2.19.0",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -46,10 +46,10 @@
     "check:consumer": "node ../../scripts/check-markdown-media-consumer.mjs"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.18.0"
+    "@docx-editor.dev/core": "~2.19.0"
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.18.0",
+    "@docx-editor.dev/fonts": "~2.19.0",
     "fflate": "^0.8.2"
   },
   "devDependencies": {
