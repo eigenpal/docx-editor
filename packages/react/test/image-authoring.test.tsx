@@ -492,6 +492,24 @@ describe('edits image properties atomically', () => {
     expect(closed).toBe(true);
   });
 
+  test('the overlay carries the scope class when rendered outside the editor', async () => {
+    // A host may render this public dialog from its own chrome. Its packaged rules are
+    // anchored to `.docx-editor`, so the overlay has to carry that class itself or the
+    // panel gets no styles at all.
+    const { view, ready, selectDrawing } = mount(
+      <DocxEditorImagePropertiesDialog open onClose={() => {}} />,
+      inlinePictureDocument()
+    );
+    await ready();
+    await selectDrawing();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const overlay = view.container.querySelector('.docx-dialog-overlay');
+    if (!overlay) throw new Error(`no overlay; html: ${view.container.innerHTML.slice(0, 400)}`);
+    expect(overlay.closest('.docx-editor')).not.toBeNull();
+  });
+
   test('cancel makes no mutation', async () => {
     const { view, editor, ready, selectDrawing } = mount(
       <DocxEditorImagePropertiesDialog open onClose={() => {}} />,

@@ -31,6 +31,18 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
   ).filter((element) => element.offsetParent !== null || element === document.activeElement);
 }
 
+/**
+ * A host may render this public dialog from its own chrome, outside the editor. The
+ * packaged rules are anchored to `.docx-editor`, so the overlay carries that class
+ * itself when nothing above it does, the way `DialogFrame` does for native dialogs.
+ *
+ * This runs as an element ref, not an effect: the panel mounts only once its draft
+ * exists, which is a later render than the one that sets `open`.
+ */
+function scopeOverlay(node: HTMLDivElement | null): void {
+  if (node && !node.closest('.docx-editor')) node.classList.add('docx-editor');
+}
+
 function guardDialogMousedown(event: React.MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -273,10 +285,6 @@ export function DocxEditorImagePropertiesDialog({
     if (!open) return undefined;
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
-    // A host may render this dialog outside the editor. Carry the scope class to the
-    // overlay so the packaged rules still match, as DialogFrame does for native dialogs.
-    const overlay = dialog.parentElement;
-    if (overlay && !overlay.closest('.docx-editor')) overlay.classList.add('docx-editor');
     const focusables = dialogFocusables(dialog);
     const initial =
       focusables.find(
@@ -475,6 +483,7 @@ export function DocxEditorImagePropertiesDialog({
 
   return (
     <div
+      ref={scopeOverlay}
       className={`docx-dialog-overlay${className ? ` ${className}` : ''}`}
       onClick={dismiss}
       onMouseDown={(event) => {

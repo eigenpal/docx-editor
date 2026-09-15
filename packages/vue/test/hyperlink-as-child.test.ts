@@ -55,6 +55,17 @@ test('asChild keeps the packaged class off the host element and the wiring on it
   expect(unlinked()).toBe(1);
 });
 
+test('asChild with no className leaves only the host element\'s own class', async () => {
+  const { container } = mountPart({ asChild: true }, () =>
+    h('button', { class: 'brand-button' }, 'Remove')
+  );
+  await nextTick();
+  const button = container.querySelector<HTMLButtonElement>(
+    '[data-testid="hyperlink-popup-unlink"]'
+  )!;
+  expect(button.className).toBe('brand-button');
+});
+
 test('without asChild the packaged part keeps its class alongside className', async () => {
   const { container } = mountPart({ className: 'paired-class' });
   await nextTick();

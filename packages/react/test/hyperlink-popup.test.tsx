@@ -436,6 +436,8 @@ describe('the customization ladder', () => {
     expect(unlink.classList.contains('brand-button')).toBe(true);
     expect(unlink.classList.contains('paired-class')).toBe(true);
     expect(unlink.classList.contains('docx-hyperlink-popup__action')).toBe(false);
+    // Nothing else rides along: the element carries exactly these two classes.
+    expect(unlink.className).toBe('paired-class brand-button');
     // The wiring still works.
     act(() => {
       fireEvent.click(unlink);
