@@ -75,6 +75,33 @@ Do not configure a newly inserted table, image, list, or text range before that 
 If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite
 reads can remain loaded after a later command fails.
 
+## Preserve Office.js enum property types
+
+Like Office.js, `Document.changeTrackingMode` and `PageSetup.orientation` use unions
+of the enum and its string literals for both reads and writes. Enum constants and
+the corresponding string literals are accepted by the type system. This matches
+Microsoft's [change-tracking declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.document#word-word-document-changetrackingmode-member)
+and [page-orientation declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.pagesetup#word-word-pagesetup-orientation-member).
+
+Let TypeScript infer a property's type, or use an indexed-access type when saving
+its value. An enum-only annotation is narrower than the Office.js property type:
+
+```ts
+import { ChangeTrackingMode, type Document } from '@docx-editor.dev/editor-api';
+
+const mode = await runtime.run(async (context) => {
+  context.document.load('changeTrackingMode');
+  await context.sync();
+  const current: Document['changeTrackingMode'] = context.document.changeTrackingMode;
+  return current;
+});
+const trackingMine = mode === ChangeTrackingMode.trackMineOnly;
+```
+
+For orientation, use `PageSetup['orientation']` in the same way after loading and
+syncing that property. Type compatibility does not imply support for every enum
+value: `TrackAll` remains unsupported and refuses at `sync()`.
+
 ## Give each sync a purpose
 
 A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes.
