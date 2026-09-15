@@ -232,36 +232,38 @@ show an error; Cancel discards the draft. No separate session or opening state i
 
 ## Style and accessibility
 
-Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors,
-so a dark editor gets a dark dialog. The default look follows Word and Google Docs:
-a white panel, bordered inputs, a filled primary button, and an outlined secondary one.
+Import your stylesheet after the core stylesheet. The default look follows Word and
+Google Docs: a plain panel, bordered inputs, a filled primary button, and an outlined
+secondary one. Dialogs inherit `--doc-*` colors, so a dark editor gets a dark dialog.
 
 Optional tokens adjust the panel without replacing any part:
 
-| Token                         | Controls                                                    |
-| ----------------------------- | ----------------------------------------------------------- |
-| `--doc-dialog-font-family`    | The panel font stack.                                       |
-| `--doc-dialog-font-size`      | The base size. Titles, labels, and hints scale from it.     |
-| `--doc-dialog-radius`         | The panel corner radius.                                    |
-| `--doc-dialog-control-radius` | The corner radius of inputs, selects, and buttons.          |
-| `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer. |
-| `--doc-dialog-gap`            | The vertical distance between rows and sections.            |
+| Token                         | Controls                                                       |
+| ----------------------------- | -------------------------------------------------------------- |
+| `--doc-dialog-font-family`    | The panel font stack.                                          |
+| `--doc-dialog-font-size`      | The base size. Titles, labels, and hints scale from it.        |
+| `--doc-dialog-radius`         | The panel corner radius.                                       |
+| `--doc-dialog-control-radius` | The corner radius of inputs, text areas, selects, and buttons. |
+| `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer.    |
+| `--doc-dialog-gap`            | The vertical distance between rows and sections.               |
 
 Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
 `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
 
 There are two ways to change how a part looks:
 
-- **Adjust the packaged part.** Pass `className` to the part. Every default rule
-  has two-class specificity, such as `.docx-editor .docx-dialog__button`, so it
-  survives element resets like Tailwind preflight. Anchor your selector with
-  `.docx-editor` and style it without `!important`. A selector with one class,
-  such as `.app-rounded` alone, loses to the defaults.
-- **Bring your own element.** Pass `asChild`. The packaged classes stay off your
+- To adjust the packaged part, pass `className` to the part. Every default rule
+  uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it
+  survives element resets like Tailwind preflight. To win, add a class or attribute
+  the default does not have, and skip `!important`. A selector with one class, such
+  as `.app-rounded` alone, loses. Anchoring with `.docx-editor` alone only ties, so
+  the result then depends on which stylesheet loads last.
+- To bring your own element, pass `asChild`. The packaged classes stay off your
   element, so a single class or utility classes style it as written.
 
 ```css
-/* className="app-rounded" on the packaged Apply part */
+/* className="app-rounded" on the packaged Apply part. The
+   data-docx-dialog attribute is the extra compound that wins. */
 .docx-editor [data-docx-dialog='pageSetup'] .app-rounded {
   border-radius: 999px;
   padding-inline: 1.25rem;
