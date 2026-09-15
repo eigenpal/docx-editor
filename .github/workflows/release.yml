@@ -291,8 +291,8 @@ jobs:
 
       # Post-publish fan-out runs as the eigenpal-release-pal App rather than
       # the default GITHUB_TOKEN, so it can comment on this repo's PRs and
-      # notify docx-editor.dev. (App permissions are managed in the org.)
-      # continue-on-error on all three post-publish steps: the release has
+      # notify the documentation and Markdown sites. (App permissions are managed in the org.)
+      # continue-on-error on the post-publish steps: the release has
       # already shipped to npm, so a transient failure here must NOT flip the
       # run to failed, which would suppress the success Slack and fire the
       # misleading "publish failed / partial state" alert keyed on
@@ -306,7 +306,7 @@ jobs:
           app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
           private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: docx-editor,docx-editor.dev
+          repositories: docx-editor,docx-editor.dev,docx-to-markdown.com
 
       # Fan the release out to the work it shipped, all computed ONCE here at
       # publish time — nothing later rescans or resyncs:
@@ -521,6 +521,24 @@ jobs:
         run: |
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           gh api "repos/${{ github.repository_owner }}/docx-editor.dev/dispatches" \
+            -f event_type=upstream-release \
+            -f "client_payload[version]=$version"
+
+      # The converter site follows the published Markdown package, rather than
+      # assuming the first entry in the monorepo release is its version.
+      - name: Notify DOCX to Markdown site of new release
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: |
+          version=$(jq -r '.[] | select(.name == "@docx-editor.dev/docx-to-markdown") | .version' <<<"$PUBLISHED_PACKAGES")
+          if [ -z "$version" ]; then
+            echo "The Markdown package was not published; skipping its site update."
+            exit 0
+          fi
+          gh api "repos/${{ github.repository_owner }}/docx-to-markdown.com/dispatches" \
             -f event_type=upstream-release \
             -f "client_payload[version]=$version"
 
