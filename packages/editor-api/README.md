@@ -32,7 +32,6 @@ Server use requires Node.js `^20.16.0 || >=22.3.0`.
 
 Start with [Runtime and setup](https://www.docx-editor.dev/docs/2.x/editor-api/runtime) and
 [Batching, loading, and errors](https://www.docx-editor.dev/docs/2.x/editor-api/batching-and-errors).
-Every example uses the supported public model and explicit sync boundaries.
 
 | Task                                                      | Guide                                                                                              |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -46,13 +45,12 @@ Every example uses the supported public model and explicit sync boundaries.
 | Set page geometry and edit headers, footers, or notes     | [Page layout and stories](https://www.docx-editor.dev/docs/2.x/editor-api/page-layout-and-stories) |
 | Fill template controls and edit their metadata            | [Content controls](https://www.docx-editor.dev/docs/2.x/editor-api/content-controls)               |
 | Discuss content and manage threads                        | [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments)                               |
-| Create, inspect, and decide redlines                      | [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions)                       |
+| Create, inspect, accept, or reject tracked changes        | [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions)                       |
 | Find any public object, method, property, or support type | [API member directory](https://www.docx-editor.dev/docs/2.x/editor-api/reference)                  |
 
 ## On a server
 
-The default entry needs no browser and nothing to mount. It opens DOCX bytes, edits them, and
-hands them back.
+The root entry opens DOCX bytes, edits the document, and returns the saved bytes.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
@@ -113,10 +111,11 @@ Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
 
 This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists
 across its `run()` calls. It does not change peers' tracking settings or save a document-wide
-tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
-Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
+tracking policy. `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module;
+the runtime setting does not change the editor UI mode.
+Tracked text edits support one paragraph, including table-cell text. The runtime rejects targets touching
 pending revisions, including text inside a row with a pending insertion or deletion.
-Structural and formatting mutations under tracking also refuse. Comments and
+The runtime also rejects structural and formatting changes while tracking. Comments and
 revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
 
 See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,
@@ -124,52 +123,34 @@ stale-read handling, and the review lifecycle.
 
 ## In the browser
 
-The browser entry takes an editor the host already created, from `@docx-editor.dev/react` or a
-plain page, and drives it in place. Edits land in the open document with the reader's undo
-stack intact. There is no `save()`: the host saves as it already did.
+Pass an open core, React, or Vue editor to `createBrowser()`. Edits use the editor's
+undo history. Save through the owning editor.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
-await runtime.run(async (context) => {
-  const heading = context.document.body.paragraphs.getFirstOrNullObject();
-  heading.load('text');
-  await context.sync();
+try {
+  await runtime.run(async (context) => {
+    const heading = context.document.body.paragraphs.getFirstOrNullObject();
+    heading.load('text');
+    await context.sync();
 
-  if (!heading.isNullObject) heading.font.bold = true;
-  await context.sync();
-});
+    if (!heading.isNullObject) heading.font.bold = true;
+    await context.sync();
+  });
+} finally {
+  runtime.dispose();
+}
 ```
 
 Use the `/browser` entry for an open editor. Use the root entry on servers to exclude
 browser rendering code from the bundle.
 
-`author` is optional for ordinary edits. Supply it for `Range.insertComment()`,
-`Comment.reply()`, and server-side `TrackMineOnly` mode. A missing identity refuses with `NotSupported`; a
-live comment write also requires the Pro review module and a writable editing mode. There is no
-static comment-write capability because those conditions are dynamic, so callers should handle the
-typed refusal from the call or `sync()`.
-
-`range.insertComment(text)` creates a top-level comment over that exact range and returns the new
-`Comment`. Collapsed ranges create insertion-point comments. Empty text and ranges crossing table
-cells are refused; duplicate author names are ordinary OOXML and are not deduplicated.
-
-`Comment.delete()` removes a root comment, its replies, and its anchors. `CommentReply.delete()`
-removes only that reply and preserves the parent and siblings. Several deletes queued before one
-`sync()` are one atomic transaction and one browser Undo unit. Browser comment writes require the
-Pro review module and a writable, attached editor; server writes are provided by this Pro-licensed
-runtime. Root creation follows the same browser gate and is one Undo unit.
-
-`document.revisions` is the main-body story. `Body.revisions` is story-scoped: a header, footer,
-or note collection names that story only. `items` contains revisions this API can publish as typed
-Word objects. Structural cards whose exact subtype cannot be named are omitted from `items` and
-remain preserved in the file. Collection membership is not the collection decision set:
-`acceptAll()` and `rejectAll()` still resolve every store-resolvable revision in that story —
-including a complete tracked row — and refuse atomically if any `readOnly` or otherwise unsupported
-revision remains. They never resolve only the listed subset. Handle a `NotImplemented` refusal and
-leave the document unchanged, or let a reviewer resolve the remaining markup in Word. Browser
-decisions join the editor's Undo stack, with one collection decision as one Undo unit.
+Supply `author` for comments, replies, and tracked edits. Browser review writes also
+require the Pro review module and an editable document. Handle errors by `code`.
+See [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments) and
+[Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions) for supported operations.
 
 ## Range snapshots
 
@@ -181,69 +162,29 @@ See [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-r
 
 ## Programming model
 
-- A property you did not `load()` throws instead of answering `undefined`, so a typo fails at
-  the read rather than producing a wrong document later.
-- `sync()` resolves supported prerequisite reads before one atomic write transaction. It can use several transport calls.
-- Sync after insertion before configuring the returned object. Structural edits sharing a paragraph can conflict.
-  Different list levels can batch after list creation. Competing proxies for one level still conflict. Field result updates cannot mix with layout-changing writes.
-- Proxies remain valid across `sync()` calls within a `run()`. To reuse a proxy in a later
-  run, add it to `context.trackedObjects` and pass it to `runtime.run(object, callback)`.
-  No proxy remains valid after `dispose()`.
-- `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose `isNullObject` is
-  `true`, which is the difference between "no such heading" and a crash.
-- Review timestamps come from untrusted, optional OOXML attributes. `Comment.creationDate`,
-  `CommentReply.creationDate`, and `Revision.date` are `Date | null`; narrow `null` before calling
-  `Date` methods.
+- Load properties before reading them. Load collection `items` before item properties.
+- Batch independent writes with `sync()`. A failed batch applies no writes; earlier successful syncs remain committed.
+- Sync after insertion before using the returned object.
+- Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.
+- Check `isNullObject` after sync when using a null-object accessor.
+- Check nullable font values and review dates before using them.
 
-`runtime.capabilities` says what the host behind a runtime can do: `save` is false in the
-browser; `selection`, `scrolling` and `layout` are false on a server. It is frozen for the
-life of the runtime, so one read stays true.
-
-## Entries
-
-| Entry                                 | Use when                                             |
-| ------------------------------------- | ---------------------------------------------------- |
-| `@docx-editor.dev/editor-api`         | Servers, workers, build scripts: bytes in, bytes out |
-| `@docx-editor.dev/editor-api/browser` | A page, driving an editor the host already created   |
-
-Both entries export the same vocabulary — the lifecycle types, the object model and the error
-type — so consumer code compiles against either. They differ by one member: `createBrowser`.
+See [Batching, loading, and errors](https://www.docx-editor.dev/docs/2.x/editor-api/batching-and-errors)
+for transaction limits, proxy lifetimes, and error recovery.
 
 ## Office.js compatibility
 
-The API is compatible with a documented subset of Word's JavaScript object model, so a call
-site written against that vocabulary compiles here. It is not Office.js: it does not run in an
-Office add-in host and depends on no Microsoft package. Every type in the surface is authored
-in this repository.
+The API implements a documented subset of Word's JavaScript object model.
+It runs independently of Office and does not require a Microsoft package.
+See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api)
+for supported operations, runtime differences, and compatibility reports.
 
-The subset includes rectangular table editing, inline PNG/JPEG pictures, list authoring, extended font formatting,
-and plain PAGE/NUMPAGES fields. Repeating-section editing, floating shapes, and custom XML mapping remain unavailable.
-Supported domains and runtime differences are listed in
-[the Office.js compatibility page](https://www.docx-editor.dev/docs/latest/editor-api/office-js-api).
+Server page-field updates require a measurer configured with font resources.
+See [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields)
+for setup and a runnable report agent.
 
-Run the informational checker from the repository root:
-
-```bash
-bun run --filter '@docx-editor.dev/editor-api' compat:report
-```
-
-The exhaustive editing report is `packages/editor-api/compat/reports/report.md`.
-The fixed 81-member profile is summarized in `agent-editing-summary.md` in that directory.
-Its endpoint details are in `agent-editing-report.md` and `agent-editing-report.json`.
-Presence and signature percentages do not prove runtime equivalence with Word.
-Track each endpoint's supported domains in `packages/editor-api/compat/runtime-notes.json`.
-CI publishes these percentages and artifacts without making coverage a merge gate.
-
-Server PAGE/NUMPAGES evaluation requires `createServer(bytes, { pagination: { measurer } })`.
-Use actual font resources with `createLayoutShaping` and `createLayoutShapedMeasurer` from `@docx-editor.dev/core/layout`.
-The [runnable report agent](https://github.com/eigenpal/docx-editor/blob/main/examples/editor-api-consumers/report-agent.ts)
-shows font loading, exact face resolution, runtime configuration, field updates, and disposal.
-Run `bun examples/editor-api-consumers/report-agent.ts` from the workspace root.
-See the [pagination setup guide](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api#measured-page-fields-on-a-server)
-for resource requirements and the effects of font substitution.
-
-Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? See
-[MIGRATION.md](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/MIGRATION.md).
+To upgrade from the former reviewer, bridge, MCP, or chat APIs, see
+[Migration](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/MIGRATION.md).
 
 ## Packages
 
@@ -257,7 +198,8 @@ Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? 
 
 ## License
 
-This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
+See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
 ## Contributing
 

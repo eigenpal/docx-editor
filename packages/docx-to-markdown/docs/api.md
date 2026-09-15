@@ -230,7 +230,7 @@ For a single export, use `exportMarkdown(docxBytes)`. To keep a layout without r
 
 ## Images
 
-Images affect page boundaries but are omitted from Markdown. If omitting an inline image would join words, the exporter inserts a space.
+Images affect page boundaries and are omitted from Markdown unless you enable `images`. If omitting an inline image would join words, the exporter inserts a space.
 
 ## Errors and cancellation
 
@@ -334,9 +334,12 @@ Omit `fallbackFonts` to use your fonts, bundled substitutes, and document-embedd
 
 Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`, use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes precedence and bypasses both font options. Omit `fontPolicy` and `onFontResolution` when using a custom measurer or live view; these combinations throw `TypeError`.
 
-`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic faces in the resolution report. Font resolution uses at most 64 candidate families, prioritizing body content before headers and footers, then notes. Additional families are excluded from the candidate list rather than causing `layoutFailed`. The report and strict coverage checks cover this bounded list, so strict success does not guarantee coverage of every family in a document exceeding the limit.
+`fontPolicy: 'strict'` rejects font-source failures or missing regular, bold, italic, or bold-italic faces in the resolution report.
+Font resolution checks at most 64 families, prioritizing the body, then headers and footers, then notes.
+Additional families are excluded without causing `layoutFailed`. Strict success therefore covers only the candidate list, not every family in a larger document.
 
-Use `onFontResolution` to record resolved and substituted faces. The callback's returned promises are not awaited; thrown errors and rejected promises are logged without failing the export. If report persistence must complete before continuing, await your own persistence operation using `result.fontResolution` after export.
+Use `onFontResolution` to observe resolved and substituted faces. The exporter does not await callback promises.
+Callback errors are logged without failing the export. To wait for report storage, save `result.fontResolution` after export and await that operation.
 
 Use `googleFonts({ onFailure })` to log fallback failures. Failed or aborted Google Fonts requests are not cached.
 

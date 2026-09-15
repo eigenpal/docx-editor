@@ -5,16 +5,16 @@ category: 'Guides'
 ---
 
 Pass `popups` to the editor or `Root`. Use `definePopup(MyPopup)` to supply
-an ordinary React component or Vue single-file component. The editor opens it
+a React component or Vue single-file component. The editor opens it
 and supplies its typed props. Forward those props to the default component to
 retain its state, validation, and commands.
 
 ## Replace a button
 
-These examples replace **Apply** in Page Setup. You do not need to manage its
-opening state or create a session.
+These examples replace **Apply** in the **Page Setup** dialog. The editor manages
+the opening state and session.
 
-<FrameworkTabs>
+<FrameworkTabs variant="block">
 <Framework value="react">
 
 ```tsx
@@ -89,15 +89,12 @@ const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
 Custom button components must forward refs, attributes, and listeners to their
 native button. Preserve the supplied handler and disabled state.
 
-`asChild` forwards a part's behavior and geometry, never its decoration. Your element
-gets the wiring (`type`, `onClick`, `disabled`, and the part's data attributes) and the
-part's own `className`, but not the packaged class, so your styles or utility classes
-apply as written. To keep the packaged look and adjust it, pass `className` to the part
-instead of `asChild`.
+`asChild` forwards behavior, positioning, data attributes, and your `className` to
+the child element. It omits the packaged decorative classes.
+To adjust the default appearance, pass `className` to the part without `asChild`.
 
-The one part that keeps its packaged class is the hyperlink popup's `Root`, because that
-class positions and stacks the panel rather than decorating it. Override its appearance
-with your own anchored `.docx-hyperlink-popup` rule.
+The hyperlink popup's `Root` keeps its packaged class for positioning and stacking.
+Use a scoped `.docx-hyperlink-popup` rule to override its appearance.
 
 Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
 React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
@@ -106,7 +103,7 @@ components, not render callbacks.
 ## Choose a popup
 
 Each entry accepts a `definePopup()` result, render callback, or `false`.
-Props match the surface; dialogs, menus, and value widgets retain distinct contracts.
+Each popup receives the props listed here.
 
 | Entry                    | Supplied props                             |
 | ------------------------ | ------------------------------------------ |
@@ -129,8 +126,8 @@ dialogs. The packaged editor supplies defaults. `Root` mounts configured surface
 image and note overrides use their existing triggers. Explicit entries override
 `menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
 
-For manual ownership, use `false` and mount the surface yourself. You then own its
-trigger and visibility. Ordinary component customization does not need this option.
+To manage opening and closing yourself, set the entry to `false` and mount the popup.
+For component customization with automatic opening, use `definePopup()`.
 Toolbar menus and pickers use their existing compound `.Content` parts, outside this map.
 
 ## Arrange parts and custom fields
@@ -139,10 +136,9 @@ Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body
 `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept
 `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
-Anything else you pass reaches the rendered element, so a part takes an `id`, an
-`aria-*` label, or a `data-*` test hook. The part's own wiring wins every collision:
-passing `onClick` to `Apply` does not replace the packaged handler. To own the element
-and its handler, pass `asChild` and supply your own.
+Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element.
+Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler.
+Use `asChild` for a custom element, and preserve the supplied behavior.
 
 Named children replace default parts. Use `hidden` to remove a part or
 `preset={false}` to supply the complete arrangement. Include a title, error region,
@@ -166,7 +162,7 @@ See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 Put the input inside a named `Field`. Call the draft hook in the input component,
 which renders under the dialog's provider. This example edits the top margin in inches.
 
-<FrameworkTabs>
+<FrameworkTabs variant="block">
 <Framework value="react">
 
 ```tsx
@@ -237,14 +233,12 @@ Add this named child inside `Dialog`:
 </Framework>
 </FrameworkTabs>
 
-Keep the default Apply and Error parts. Invalid margins keep the dialog open and
-show an error; Cancel discards the draft. No separate session or opening state is needed.
+Keep the default `Apply` and `Error` parts. Invalid margins keep the dialog open and
+show an error. **Cancel** discards the draft.
 
-## Style and accessibility
+## Style popups
 
-Import your stylesheet after the core stylesheet. The default look follows Word and
-Google Docs: a plain panel, bordered inputs, a filled primary button, and an outlined
-secondary one. Dialogs inherit `--doc-*` colors, so a dark editor gets a dark dialog.
+Import your stylesheet after the core stylesheet. Default dialogs have a plain panel, bordered inputs, a filled primary button, and an outlined secondary button. Dialogs inherit `--doc-*` colors, so a dark editor gets a dark dialog.
 
 Optional tokens adjust the panel without replacing any part:
 
@@ -264,10 +258,10 @@ There are two ways to change how a part looks:
 
 - To adjust the packaged part, pass `className` to the part. Every default rule
   uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it
-  survives element resets like Tailwind preflight. To win, add a class or attribute
+  survives element resets like Tailwind preflight. To override these rules, add a class or attribute
   the default does not have, and skip `!important`. A selector with one class, such
-  as `.app-rounded` alone, loses. Anchoring with `.docx-editor` alone only ties, so
-  the result then depends on which stylesheet loads last.
+  as `.app-rounded`, has lower specificity. Adding `.docx-editor` gives equal
+  specificity, so stylesheet order determines the result.
 - To bring your own element, pass `asChild`. The packaged classes stay off your
   element, so a single class or utility classes style it as written.
 
@@ -297,6 +291,8 @@ For a complete session renderer, follow its abort signal and use its supplied
 actions. Widget sessions validate through `apply(value)`. Invalid-field sessions
 use `acknowledge()` to handle the invalid fill, or `cancel()` to dismiss without clearing it.
 `locale` controls regional dates; `i18n` controls UI strings.
+
+## Next steps
 
 Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
 or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)

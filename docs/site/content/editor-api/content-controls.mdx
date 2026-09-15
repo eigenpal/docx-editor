@@ -9,8 +9,8 @@ Content controls mark template content for structured reading and editing.
 Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope.
 `ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Find a control and inspect its metadata
 
@@ -18,7 +18,7 @@ Unless shown otherwise, `context` and existing proxies belong to an active `runt
 `getById(id)`, `getByTag(tag)`, and `getByTitle(title)`.
 Tag and title lookup return collections because matches need not be unique.
 `getById()` takes a number and returns the first match in document order.
-The loaded `ContentControl.id` is string metadata; DOCX ids can be absent or repeated.
+The loaded `ContentControl.id` is string metadata; DOCX IDs can be absent or repeated.
 Do not treat that value as a globally unique object identity.
 
 This example fills one eligible text control:
@@ -40,8 +40,8 @@ await runtime.run(async (context) => {
 ```
 
 `isBound` is advisory metadata. Every write checks binding and protection again at sync.
-A stale read or changed lock can still refuse the batch.
-Custom XML-bound writes refuse; this API does not expose `xmlMapping`.
+A stale read or changed lock can cause the batch to fail.
+The runtime rejects writes to custom XML-bound controls and does not expose `xmlMapping`.
 
 ## Choose the value for the control type
 
@@ -58,7 +58,7 @@ Use the loaded `subtype` to choose an operation.
 It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`.
 A control's text is not always its semantic value.
 Writing the text `true` does not set a checkbox's state.
-Unsupported values or control structures refuse rather than approximating another type.
+The runtime rejects unsupported values or control structures.
 
 `insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`.
 Replacement uses the control's value path, including placeholder and temporary-wrapper handling.
@@ -67,8 +67,8 @@ Sync before using that returned range.
 
 For an existing placeholder, prefer replacing the control value.
 For untracked range edits, a range covering the complete prompt can also replace it.
-Replacements that would consume untargeted prompt text refuse with `NotSupported`.
-Insertions away from the prompt start also refuse with `NotSupported`.
+The runtime returns `NotSupported` if a replacement would consume prompt text outside its target
+or an insertion starts away from the prompt start.
 The first insertion at the prompt start consumes the placeholder text.
 
 ## Edit metadata and locks
@@ -80,8 +80,7 @@ The first insertion at the prompt start consumes the placeholder text.
 | `cannotDelete`, `cannotEdit`            | Loaded reads and boolean writes |
 | `text`, `placeholderShown`, `temporary` | Loaded reads                    |
 
-Lock assignments on the same proxy coalesce and preserve the other lock axis.
-A write does not require loading that axis first.
+The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first.
 Effective ancestor locks and binding checks still apply; lock setters do not bypass protection.
 `ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary.
 There is no public combined `lock` property taking that alias.
@@ -106,7 +105,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-`ContentControlType` includes other Office-shaped values; those creation modes refuse.
+`ContentControlType` includes other Word values, but the runtime rejects those creation modes.
 The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support.
 Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable.
 Use a prepared template for existing eligible date, list, and checkbox controls.
@@ -117,9 +116,12 @@ Use a prepared template for existing eligible date, list, and checkbox controls.
 Resolve the returned range before dependent use.
 `delete(true)` removes the wrapper and preserves its content.
 `delete(false)` removes both wrapper and content.
-Protection, binding, unsupported structure, and tracking mode can refuse deletion or value changes.
+Deletion and value changes can fail because of protection, XML binding, unsupported structure, or tracking mode.
 
 Do not delete a binding or wrapper to force a failed template write.
 Read again and report an ineligible control to the application or template author.
+
+## Next steps
+
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
 [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).

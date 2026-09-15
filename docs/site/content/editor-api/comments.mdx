@@ -6,21 +6,21 @@ order: 62
 ---
 
 Use comments for discussion anchored to document content.
-Use [Tracked changes](/docs/2.x/editor-api/revisions) when the proposed change must carry an editable redline.
-Comments and replies are separate proxies with shared author, date, id, and text properties.
+Use [Tracked changes](/docs/2.x/editor-api/revisions) to propose text edits for review.
+Comments and replies are separate proxies with shared author, date, ID, and text properties.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Configure review writes
 
-Supply a non-empty `author` when creating the runtime for comment creation and replies.
+Supply a nonempty `author` when creating the runtime for comment creation and replies.
 The API does not obtain an identity from a signed-in Office account.
 Browser review writes also require the Pro review module, an editable mode, and an attached writable document.
 The server runtime supplies its own Pro-licensed review implementation.
 
 These conditions are dynamic; there is no static comment-write capability flag.
-Handle `NotSupported`, `NotImplemented`, and other typed refusals from the call or `sync()`.
+Handle `NotSupported`, `NotImplemented`, and other typed errors from the call or `sync()`.
 Do not assume that a successful read permits a write.
 
 ## Read threads and replies
@@ -62,7 +62,7 @@ Comment-body replacement is unavailable.
 
 `Range.insertComment(commentText)` returns a `Comment` over the exact range.
 A collapsed range creates an insertion-point comment.
-Empty comment text and ranges crossing table cells refuse.
+The runtime rejects empty comment text and ranges that cross table cells.
 
 This example comments on a unique phrase, then adds a reply:
 
@@ -84,7 +84,7 @@ await runtime.run(async (context) => {
 
 `Comment.reply(replyText)` returns the created `CommentReply`.
 Sync after creation before using either returned object for dependent work.
-Duplicate author names are ordinary document metadata; the runtime does not deduplicate them.
+Author names can repeat; the runtime preserves them as stored.
 
 ## Navigate and resolve a thread
 
@@ -121,9 +121,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-One browser deletion batch is one Undo unit.
+You can undo a browser deletion batch in one step.
 Server writes use the same object-model methods without a browser module.
 Deleted targets become invalid, and stale reads require fresh selection and reconsideration.
+
+## Next steps
 
 See [Runtime and setup](/docs/2.x/editor-api/runtime),
 [Search and navigation](/docs/2.x/editor-api/search-and-navigation), and [API member directory](/docs/2.x/editor-api/reference).

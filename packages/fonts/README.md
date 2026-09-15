@@ -12,11 +12,10 @@ measurement in the docx-editor engine.
 | Courier New     | Liberation Mono   | SIL OFL           |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
-The first five substitutes target identical advance widths for the glyphs they cover. TeX Gyre Adventor is close but
-not identical: `bun run check:font-width-fidelity` holds it to within 1% of Word's own
-Century Gothic advances, and the widest sample is -0.85% (`of work` at 40 pt bold). That
-1% is the gate's bound, not a description of it. Documents that need exact glyphs can
-supply licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
+The first five substitutes target matching advance widths for the glyphs they cover.
+TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`.
+Kerning and glyph differences can still change line breaks.
+For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs.
 The editor keeps native family fallback available for missing glyphs. Exact metrics still
@@ -29,34 +28,31 @@ it from these same packaged bytes only when a document names it.
 
 ## Usage
 
+Use `packagedFonts()` to load document fonts on demand. In React, `useFonts()`
+keeps the resolver identity stable so rerenders do not rebuild the editor.
+
 ```tsx
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
-// A resolver: the editor calls it on load and when new families are selected, with the families the file
-// declares, so a document using only Times New Roman loads Liberation Serif and
-// Carlito rather than all 20 eager faces. A family loads when the document names
-// it, or when it is that document's default face — which is Calibri, so Carlito
-// is a floor. `allow` narrows it further.
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
-  // its identity changes. An inline resolver is a new function on every render.
-  // `useFonts` keeps one for the component's life.
   const fonts = useFonts(packagedFonts());
   return <DocxEditor document={bytes} fonts={fonts} />;
 }
 ```
 
-Same call shape as `googleFonts()` below, so composing the two is adding an argument:
+To add Google Fonts, import its resolver and pass it after `packagedFonts()`:
 
 ```ts
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
 const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
-(Both calls belong inside a component — `useFonts` is a hook.)
+Call `useFonts()` inside a component.
 
-To load Word's five document defaults up front instead — no re-pagination, all 20 faces
-and 7.4 MB whichever document opens — use `defaultFonts()`:
+To load all 20 faces of the five default families before opening a document, use `defaultFonts()`.
+This loads 7.4 MB and avoids repagination when fonts arrive:
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -104,18 +100,18 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 ```
 
 `customFonts()` loads all configured faces when the editor resolves its fonts.
-Creating the resolver fetches nothing. It skips faces already supplied by earlier origins,
-matching family names without case sensitivity, plus weight and style.
+Creating the resolver does not fetch files. It skips faces supplied by earlier sources,
+matching the family name without case sensitivity and matching weight and style.
 
-Loaded company fonts become available for selection, including in blank documents.
-Loading fonts does not apply them to document text.
+Loaded fonts appear in the picker, including in blank documents.
+Select a font to apply it to document text.
 
 The helper uses `loadFonts` for validation and caching. `onFailure` receives each
 failed face and defaults to `console.warn`. Cancellation does not trigger `onFailure`.
 Core registers the supplied bytes under private names, without changing fonts elsewhere in your app.
 
 `loadFonts()` from Core remains the lower-level eager loader. It starts loading
-every listed source when called and returns admitted bytes with a typed `failures` list.
+every listed source when called and returns validated bytes with a typed `failures` list.
 
 ## Font registration
 
@@ -125,9 +121,8 @@ their existing fonts. Native fonts remain available for glyphs missing from the 
 
 ### Upgrade from page-wide registration
 
-Earlier loaders could register substitutes under public names such as `Arial`.
-Font loaders now supply bytes for private editor registration only.
-Existing calls still compile, but public registration no longer occurs.
+Before 2.18.0, loaders could register substitutes under public names such as `Arial`.
+From 2.18.0, font loaders supply bytes for private editor registration only.
 If you already pass `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option, keep that configuration.
 
 The `packagedFonts` option `install` is deprecated and ignored, including `true`.
@@ -143,10 +138,9 @@ Remove its calls and supply `packagedFonts()` or `defaultFonts()` through the ed
 `defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
 
 If surrounding app text relied on these public fonts, configure those fonts separately with your app's CSS or font loader.
-Check headers, sidebars, and other app text after upgrading; their previous fonts become available again.
+Check the fonts in your app's headers, sidebars, and other text after upgrading.
 
-Nothing loads until you call one of these: importing the package fetches no bytes, and
-the editor engine never calls in here on its own.
+Importing the package does not fetch fonts. Configure a loader or resolver to enable them.
 
 Font binaries ship as separate files (`assets/*.ttf` and `assets/*.otf`) fetched per requested
 family. Each face's `sha256:` hash is baked at packaging time
@@ -154,8 +148,8 @@ family. Each face's `sha256:` hash is baked at packaging time
 
 ## Google Fonts, on demand
 
-`@docx-editor.dev/fonts/google` ships nothing in the bundle and fetches nothing until a
-document names a family the catalog covers.
+`@docx-editor.dev/fonts/google` includes a font catalog without bundling its font files.
+It fetches fonts requested by the document or its default face.
 
 ```tsx
 import { googleFonts } from '@docx-editor.dev/fonts/google';
@@ -169,55 +163,47 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 
 The editor requests fonts on load and when edits or font selection introduce new families.
 
-Open a file that uses only Calibri and one family is fetched (Carlito, its
-metric-compatible stand-in). A document's DEFAULT face counts as declared, and that
-face is Calibri — so Carlito is fetched for a document that names nothing
-cataloged too. Narrow that with `allow`.
+A document that uses Calibri loads Carlito, its metric-compatible substitute.
+The document's default face also counts as a request. Use `allow` to restrict the catalog.
 
-The catalog is generated, closed, and pinned to immutable google/fonts commits
-(`src/google-catalog.generated.ts`, 107 families). A family a document names is only
-ever a lookup key, never interpolated into a URL, and every entry carries a baked
-`sha256:` that the engine re-derives on admission. Families are included by rule:
-all four static faces present, and the shaper's table checks passed. Variable-only
-families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuses
-variation axes and a variable file would render bold at regular weight.
+Resolution checks these sources in order:
 
-The substitution map is consulted FIRST, and your `substitute` entries are merged over the
-built-in one, so you can redirect any family — a catalogued one, or one this package
-answers from its own assets.
+1. Your `substitute` mappings, merged over the built-in substitutions.
+2. Packaged assets for Century Gothic, which needs no third-party request.
+3. A direct match in the Google Fonts catalog.
 
-A family the catalog cannot match may still be answered from those assets. Century Gothic
-is the one, read from `assets/` rather than the CDN, so it costs no third-party request.
+If no source matches, the editor keeps its fallback measurement. It does not infer
+width-compatible substitutes from the document's PANOSE font classification.
+Supply your own font bytes when you need a specific face.
 
-A family none of that answers resolves to nothing, and the host's own measurement stands.
-That is deliberate. Only a metric-compatible substitute keeps pagination Word-accurate,
-and a face picked from how a font describes itself is not one: `word/fontTable.xml` states
-a PANOSE classification, never an advance width, so nothing in the file bounds how much
-wider the substitute runs. A ranking over PANOSE was tried here and removed after it
-picked faces 22-24% wider than the family a document named — worse than the fixed fallback
-it replaced; issue #576 records the measurements. Supply the real bytes through
-`substitute` or `loadFonts` when you have them.
+Google Fonts requests disclose the requested families to the content delivery network.
+Use `packagedFonts()` for packaged assets, or restrict remote requests with
+`googleFonts({ allow: ['Tinos', 'Lato'] })`.
+When composed after another resolver, Google Fonts skips families whose faces are already loaded.
+A partially loaded family still requires its remaining faces.
 
-A fetching resolver makes opening a document perform network requests, and the CDN learns
-which families a document uses. The engine never supplies one, so opting in stays your call.
-`packagedFonts()` remains the zero-network answer, and
-`googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched. Listed
-after `packagedFonts()`, this resolver is told which FACES are already covered — family,
-weight and style, and only faces actually backed by bytes — and skips a family only when
-every one of its faces is covered. So a packaged family never costs a CDN request, and a
-partly covered family is still fetched whole rather than left with missing faces.
+## Maintain the catalog
 
-Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes).
+The generated catalog pins each face to an immutable `google/fonts` commit and a
+`sha256:` hash. Family names are lookup keys, never URL fragments.
+The catalog requires regular, bold, italic, and bold-italic static faces that pass
+validation. When upstream provides only variable fonts, the catalog can pin an earlier
+commit with static files. The shaper does not support variable font axes.
 
-`bun run check:google-catalog` guards the committed file offline and runs in CI. It is
-what enforces the revision pin: every URL has to name one of the commits the generator
-records, so a regenerated catalog cannot quietly point at a mutable branch tip. Run
-`google:verify` from this package to re-download every catalogued face and compare hashes
-against the CDN.
+Run these commands from `packages/fonts`:
 
-`bun run check:font-width-fidelity` compares privacy-safe synthetic strings against Word's
-own advances and line metrics, read from the font subsets Word embeds in its PDF export,
-and prints the families the package does not cover.
+```bash
+# Download fonts and regenerate the catalog and hashes.
+bun run google:catalog
+
+# Download catalog faces and verify their hashes.
+bun run google:verify
+```
+
+From the repository root, run `bun run check:google-catalog` to check the committed
+catalog offline. CI runs the same check.
+`bun run check:font-width-fidelity` compares synthetic text measurements with
+font subsets embedded in Word PDF exports.
 
 ## Licenses
 

@@ -32,18 +32,22 @@ A picker choice does not mean the font is installed or loaded. Opening the picke
 does not load font bytes. Your font configuration still controls measurement and
 font resolution.
 
-## Start here
+## Configure font sources
 
-Every font origin has the same shape: call it, and pass the result. To add
-another origin, add another argument.
+Pass a font resolver to `useDocxSource`. For packaged substitutes, use `packagedFonts()`.
+The examples use the React hook; Vue provides the same API. Call the hook inside a component.
 
 ```ts
+import { useDocxSource } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
 const { document, fonts } = useDocxSource(url, { fonts: packagedFonts() });
 ```
 
+To add Google Fonts, pass the resolvers in an array:
+
 ```ts
+import { useDocxSource } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
@@ -62,15 +66,15 @@ origin in a browser. No optional font source is enabled by default.
 
 ## Choose a font source
 
-| Source                     | Third-party requests         | Loads                                               | Measurement                        |
-| -------------------------- | ---------------------------- | --------------------------------------------------- | ---------------------------------- |
-| Fonts embedded in the DOCX | No                           | The faces in the file                               | Uses the embedded bytes            |
-| `packagedFonts()`          | No                           | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
-| `defaultFonts()`           | No                           | All 20 faces of the five defaults, every time       | Uses metric-compatible substitutes |
-| `googleFonts()`            | Yes, for catalogued families | The catalog families in use, plus the default face  | Uses the fetched faces             |
-| `customFonts()`            | Depends on your URLs         | All configured faces when the editor resolves fonts | Uses admitted files                |
-| `loadFonts` with your URLs | Depends on your URLs         | The URLs you list                                   | Uses admitted files                |
-| No usable source           | No                           | Nothing                                             | Canvas or fixed fallback           |
+| Source                     | Third-party requests        | Loads                                               | Measurement                        |
+| -------------------------- | --------------------------- | --------------------------------------------------- | ---------------------------------- |
+| Fonts embedded in the DOCX | No                          | The faces in the file                               | Uses the embedded bytes            |
+| `packagedFonts()`          | No                          | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
+| `defaultFonts()`           | No                          | All 20 faces of the five defaults, every time       | Uses metric-compatible substitutes |
+| `googleFonts()`            | Yes, for cataloged families | The catalog families in use, plus the default face  | Uses the fetched faces             |
+| `customFonts()`            | Depends on your URLs        | All configured faces when the editor resolves fonts | Uses validated files               |
+| `loadFonts` with your URLs | Depends on your URLs        | The URLs you list                                   | Uses validated files               |
+| No usable source           | No                          | Nothing                                             | Canvas or fixed fallback           |
 
 Embedded fonts load automatically. The editor registers them under internal
 aliases. A document cannot replace a page-wide font family used by your
@@ -110,10 +114,9 @@ The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes
 The first five match advance widths for the glyphs they cover. Kerning differences
 can still change line breaks.
 
-TeX Gyre Adventor is close, not exact. It runs slightly narrow against Century
-Gothic across the recorded samples: 0.22%, 0.34%, 0.67%, and 0.85% at 40 pt
-bold. `bun run check:font-width-fidelity` holds it within 1%. Over a long line
-that is a fraction of a character, and a wrap point can still move.
+TeX Gyre Adventor has slightly narrower advance widths than Century Gothic.
+The measured difference stays within 1% in `bun run check:font-width-fidelity`,
+but can still change line breaks.
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs.
 The editor preserves native family fallback for missing glyphs. Exact metrics still
@@ -157,10 +160,6 @@ share. They differ in when they run, what they cover, and what that costs.
 | First layout                 | Fixed measurement, then re-paginates                | Correct on the first pass        |
 | Undo history across the swap | Kept when the faces arrive                          | Kept                             |
 
-Century Gothic is the family that difference is for. `defaultFonts()` leaves it out
-because it would cost every document about 709 KB for a family most never name.
-`packagedFonts()` serves it from the same bundled bytes when a document asks.
-
 Use `defaultFonts()` when a visible re-pagination is worse than the extra bytes.
 Use `packagedFonts()` otherwise.
 
@@ -170,10 +169,8 @@ import { defaultFonts } from '@docx-editor.dev/fonts';
 const { document, fonts } = useDocxSource(url, { fonts: defaultFonts });
 ```
 
-With `defaultFonts`, `useDocxSource` holds `document` back until the fonts
-settle, so the reader never sees the text reflow. An on-demand resolver has
-nothing to hold for: the families it answers about come from the parse, so the
-bytes have to go through first.
+With `defaultFonts`, `useDocxSource` waits for fonts before returning the document.
+On-demand resolvers need the parsed document to identify fonts, so the first layout can use fallback measurement.
 
 ## Editor-scoped fonts
 
@@ -183,9 +180,8 @@ their existing fonts. Native fonts remain available for glyphs missing from the 
 
 ### Upgrade from page-wide registration
 
-Earlier loaders could register substitutes under public names such as `Arial`.
-Font loaders now supply bytes for private editor registration only.
-Existing calls still compile, but public registration no longer occurs.
+Before 2.18.0, loaders could register substitutes under public names such as `Arial`.
+From 2.18.0, font loaders supply bytes for private editor registration only.
 If you already pass `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option, keep that configuration.
 
 The `packagedFonts` option `install` is deprecated and ignored, including `true`.
@@ -201,7 +197,7 @@ Remove its calls and supply `packagedFonts()` or `defaultFonts()` through the ed
 `defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
 
 If surrounding app text relied on these public fonts, configure those fonts separately with your app's CSS or font loader.
-Check headers, sidebars, and other app text after upgrading; their previous fonts become available again.
+Check the fonts in your app's headers, sidebars, and other text after upgrading.
 
 ## Load your own fonts
 
@@ -241,11 +237,11 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 ```
 
 `customFonts()` loads all configured faces when the editor resolves its fonts.
-Creating the resolver fetches nothing. It skips faces already supplied by earlier origins,
-matching family names without case sensitivity, plus weight and style.
+Creating the resolver does not fetch files. It skips faces supplied by earlier sources,
+matching the family name without case sensitivity and matching weight and style.
 
-Loaded company fonts become available for selection, including in blank documents.
-Loading fonts does not apply them to document text.
+Loaded fonts appear in the picker, including in blank documents.
+Select a font to apply it to document text.
 
 The helper uses `loadFonts` for validation and caching. `onFailure` receives each
 failed face and defaults to `console.warn`. Cancellation does not trigger `onFailure`.
@@ -254,7 +250,7 @@ Core registers the supplied bytes under private names, without changing fonts el
 ### Load font bytes eagerly
 
 `loadFonts()` remains the lower-level eager loader. It starts loading every listed
-source when called and returns admitted bytes with a typed `failures` list.
+source when called and returns validated bytes with a typed `failures` list.
 Use it when you need font bytes before opening a document.
 
 ```ts
@@ -276,8 +272,8 @@ async function mountEditor(container: HTMLElement, bytes: Uint8Array) {
 
 | `loadFonts` behavior | Result                                                                 |
 | -------------------- | ---------------------------------------------------------------------- |
-| One source fails     | Returns admitted sources and a typed `failures` list.                  |
-| Hash matches         | Admits the source.                                                     |
+| One source fails     | Returns validated sources and a typed `failures` list.                 |
+| Hash matches         | Accepts the source.                                                    |
 | Hash differs         | Rejects that source with `hashMismatch`.                               |
 | Hash omitted         | Computes one for the returned source.                                  |
 | Same request repeats | Uses the Cache API when available. Otherwise, each call fetches again. |
@@ -403,20 +399,17 @@ The editor caps the family list passed to a resolver.
 3. A direct catalog match on the name the document wrote.
 
 Step 1 comes first, so `substitute: { Lato: 'Tinos' }` redirects Lato even
-though Lato is catalogued under its own name.
+though Lato is cataloged under its own name.
 
-A family that none of the three answers resolves to nothing, and keeps whatever
-measurement your host already had. That is deliberate. Only a metric-compatible
-substitute keeps pagination Word-accurate, and a face picked on how a font
-describes itself is not one: `word/fontTable.xml` states a PANOSE
-classification, never an advance width, so nothing in the file bounds how much
-wider the substitute would run.
+If no source matches, the host keeps its fallback measurement.
+The resolver does not choose substitutes from PANOSE, the font classification in `word/fontTable.xml`.
+That classification does not describe glyph widths, so it cannot predict compatible line breaks.
 
 ### Serve the catalog from your own origin
 
 `googleFonts()` fetches from a content delivery network. To send those requests
 somewhere else, pass `fetcher`. It replaces the `fetch` that resolver uses, so
-your function decides where each catalogued face comes from:
+your function decides where each cataloged face comes from:
 
 ```ts
 googleFonts({
@@ -424,21 +417,17 @@ googleFonts({
 });
 ```
 
-The bytes suit a mirror well. Each face is pinned to an immutable commit and
-carries a `sha256:` value. The engine re-derives that hash when it admits the
-bytes, so a substituted or corrupted file fails loudly rather than rendering.
+Each face is pinned to an immutable commit and a `sha256:` hash.
+The engine checks the downloaded bytes against that hash and rejects mismatches.
 
 `packagedFonts()` and `defaultFonts()` accept `fetcher` too, and their assets
 ship inside the package, so they read your own origin with or without it.
 
 Core reuses the loaded bytes for private registration without another request.
 
-Use `fetcher` for caching too. `googleFonts()` keeps its catalog fetches in
-memory, keyed by the fetcher you passed, which is what a browser tab needs.
-Nothing else caches. The packaged assets are re-read on every call. A server
-that renders in short-lived processes gets no reuse either way. Nothing is
-written to disk, and nothing is shared between workers. Wrapping `fetcher` is
-where you add that:
+Use `fetcher` to add persistent or shared caching. `googleFonts()` caches catalog
+requests in memory, keyed by fetcher. Packaged loaders read their assets on each call.
+This cache does not persist to disk or share data between workers:
 
 ```ts
 googleFonts({
@@ -478,14 +467,11 @@ Point `fetcher` at a mirror you control. Or leave `googleFonts()` out and use
 
 ### Write your own resolver
 
-Wrap it in `defineFontResolver`. That mark is how `useDocxSource` tells a
-resolver, which it calls with a request, from a loader such as `defaultFonts`,
-which it calls with no arguments. TypeScript cannot separate the two, because a
-zero-argument function is assignable to a one-argument function type.
+Wrap your resolver in `defineFontResolver`. This lets `useDocxSource` distinguish
+a resolver that receives a font request from a loader such as `defaultFonts` that takes no arguments.
 
-`useFonts` needs the mark only from the second argument on. Its first argument has
-never accepted a loader, so there is nothing to disambiguate and a bare resolver
-still works there.
+`useFonts` accepts an unmarked resolver as its first argument.
+Wrap resolvers passed as later arguments in `defineFontResolver`.
 
 In Vue, a function origin is always the value, never a getter to call. To build an
 origin lazily, use a `computed`:
@@ -531,15 +517,11 @@ for these faces to render their authored glyphs. The editor maps private-use
 symbols to Unicode where a mapping exists and preserves the character otherwise.
 Supplied faces are also available in the font picker.
 
-`resolvedFaces` lists the faces earlier origins in the same composition can already
-paint. It reports faces rather than families, and only faces backed by bytes, so
-skipping one cannot lose one. That is what makes honoring the list an optimization
-rather than a requirement: composition drops a duplicate face either way, so
-ignoring it only costs bytes.
+`resolvedFaces` lists faces already loaded by earlier sources, including weight and style.
+Use it to skip duplicate downloads. Composition removes duplicate faces even if your resolver ignores this list.
 
-Origins resolve one after another, not in parallel, so each can be told what the
-ones before it covered. That costs one extra origin's latency. Order origins
-cheapest-first.
+Sources resolve sequentially so each receives the faces supplied by earlier sources.
+Put preferred sources first; when either source is suitable, put the faster one first.
 
 ## Source precedence
 

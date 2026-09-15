@@ -7,10 +7,9 @@ order: 60
 
 A story is a text container, such as the main body, a header, a footer, or a note.
 A section controls page layout for part of the main story.
-These concepts do not define interchangeable text scopes.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Inspect sections and page setup
 
@@ -44,7 +43,7 @@ await runtime.run(async (context) => {
 
 Assignments on one page-setup proxy coalesce per sync.
 The engine validates dimensions, margins, and the resulting page geometry.
-Runtime-local tracking refuses page-layout mutations.
+The runtime rejects page-layout changes while tracking changes.
 After layout changes, update page fields separately using [Fields and pagination](/docs/2.x/editor-api/fields).
 
 ## Address headers and footers
@@ -71,7 +70,6 @@ await runtime.run(async (context) => {
 
 Use the returned body's paragraph, search, bookmark, field, and review accessors for that story.
 `Body.bookmarks` and `Body.revisions` do not combine separate stories.
-Creating a variant does not add an API for every Word header/footer option.
 The public surface does not expose header/footer linkage or first-page layout toggles.
 
 ## Insert page and section breaks
@@ -79,7 +77,7 @@ The public surface does not expose header/footer linkage or first-page layout to
 `Range.insertBreak(breakType, insertLocation)` supports `Page` and `SectionNext`.
 The insertion location must be `Before` or `After`.
 A next-page section break requires a main-body paragraph outside a table.
-The exported `BreakType` also names unsupported kinds; `Line`, `Next`, and other section break kinds refuse.
+The exported `BreakType` also names unsupported kinds. The runtime rejects `Line`, `Next`, and other section break kinds.
 
 Queue break insertion alone in its write transaction:
 
@@ -124,9 +122,11 @@ It fails with `ItemNotFound` after the last note.
 Use `note.body` for supported structured reading and editing within that note story.
 
 `NoteItem.delete()` removes the note and its references.
-It is a package transaction and must run alone in its sync.
+Run note deletion alone in its sync.
 Sync all pending reads or writes before queuing note deletion.
 Note creation and reference-number formatting are not exposed by this subset.
+
+## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
 [Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).

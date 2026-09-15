@@ -60,7 +60,7 @@ dependencies. Pro installs `y-protocols`.
 
 ## Plan deployment and upgrades
 
-Use the dedicated [collaboration format version](/docs/latest/pro/collaboration-versions)
+Use the dedicated [collaboration format version](/docs/2.x/pro/collaboration-versions)
 to check clients before synchronization. Check saved rooms separately before
 loading them. The guide covers server admission, offline work, and migration.
 
@@ -469,7 +469,7 @@ changes. Waiting does not fix the replica.
 
 For `collaboration-format-mismatch`, `protocol-version-mismatch`, or
 `schema-version-mismatch`, preserve local work
-and follow [collaboration upgrades](/docs/latest/pro/collaboration-versions).
+and follow [collaboration upgrades](/docs/2.x/pro/collaboration-versions).
 Rejoining the same incompatible room cannot resolve these errors.
 
 For other failures, resolve the cause before calling `rejoin`:
@@ -557,7 +557,7 @@ callback instead of a string. The provider calls it for each reconnection.
 The provider preserves recognized collaboration failure codes from the server
 both during the initial join and after reconnecting. For
 `collaboration-format-mismatch`, follow the
-[upgrade guide](/docs/latest/pro/collaboration-versions); refreshing credentials
+[upgrade guide](/docs/2.x/pro/collaboration-versions); refreshing credentials
 cannot resolve a version mismatch.
 
 An unrecognized authentication refusal produces `initialization-aborted` during
@@ -720,7 +720,7 @@ release numbers. Check clients before synchronization and check saved rooms
 before loading them. The transport hooks do not configure your server's
 admission policy.
 
-See [Collaboration versions and upgrades](/docs/latest/pro/collaboration-versions)
+See [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions)
 for the client/server setup and deployment checks.
 
 ### Upgrade a persisted room
@@ -729,7 +729,7 @@ When a release requires a room upgrade, export with the compatible previous
 build and create a fresh room from the verified DOCX. Keep local work and
 backups. Collaboration undo history starts afresh.
 
-Follow [Upgrade saved rooms](/docs/latest/pro/collaboration-versions#upgrade-saved-rooms)
+Follow [Upgrade saved rooms](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms)
 for the complete procedure, including offline edits and rollback.
 
 ### Recover from an error
@@ -738,18 +738,15 @@ An `error` session cannot repair itself. First inspect the failure code.
 For `collaboration-format-mismatch`, `schema-version-mismatch`, or
 `protocol-version-mismatch`, stop reconnect
 attempts: connect a compatible application version to that room, or follow the
-[saved-room upgrade procedure](/docs/latest/pro/collaboration-versions#upgrade-saved-rooms). A fresh `Y.Doc` joining the same
+[saved-room upgrade procedure](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms). A fresh `Y.Doc` joining the same
 incompatible persisted room will fail again. Never relabel its version metadata.
 
 Custom ports and direct store integrations must call
-`room.session.gateOperations(ops, scope)` before committing edits and stop when it
-returns a refusal code. A store transaction can succeed locally even after the
-session becomes incompatible, even though those edits cannot synchronize.
-Preserve the local document for recovery. Treat the session's terminal error as
-unsynchronized local work, and preserve those bytes before replacing the store.
-Do not infer successful synchronization from the store's transaction result.
+`room.session.gateOperations(ops, scope)` before committing edits. Stop if it returns an error code.
+A successful local transaction does not prove that peers received the edit.
+If the session becomes incompatible, save the local document before replacing the store.
 
-For another error, once the host has resolved its cause, recreate the session:
+For other errors, resolve the cause, then recreate the session:
 
 1. If the editor mounted successfully, preserve local work with `await editor.save()`.
 2. Call `room.destroy()`, then destroy the provider.

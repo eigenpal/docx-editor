@@ -61,7 +61,7 @@ checks the secret and calls `assertCollaborationFormatCompatibility(collaboratio
 before Hocuspocus allows synchronization. Import the version from the installed package;
 transmit it unchanged. Missing, malformed, and incompatible versions are refused.
 The example also accepts compatible clients using its previous `versions` envelope.
-The provider's public `token` option remains a string.
+Pass the encoded string as `token`, or return it from a callback to refresh credentials on reconnection.
 
 These self-reported versions prevent accidental connections between incompatible builds.
 They do not prove which code a client runs. A production server should verify a signed token,
@@ -74,15 +74,15 @@ It also exports a `.docx` file beside each Yjs document. Before admitting a save
 `server/stored-room.ts` checks its version with `readCollaborationFormatVersion` and
 `assertCollaborationFormatCompatibility` in a temporary document. It then validates the
 compatible document with `readCollaborationDocument`.
-An incompatible or invalid snapshot is refused before its state reaches the live room;
-client version compatibility does not upgrade persisted data.
+The server rejects incompatible or invalid snapshots before loading them into the live room.
+Compatible clients cannot upgrade saved room data.
 
 Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage.
 
 ### Recover after a version mismatch
 
-Upgrade the app, room server, and export workers together, then reload every open browser tab.
-Clients that still advertise a different collaboration format version will be refused before sync.
+Preserve local and offline edits before reloading browser tabs.
+Upgrade the app, room server, and export workers together. The server rejects incompatible clients before synchronization.
 
 For saved rooms and offline work, follow the
 [collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions).

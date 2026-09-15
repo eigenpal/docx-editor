@@ -5,13 +5,14 @@ category: 'Editing API'
 order: 52
 ---
 
-All document objects are proxies. Obtain them through `context.document`, rather than constructing them.
+Document objects are proxies: they queue operations against the runtime's document.
+Obtain them through `context.document`.
 A `RunCallback<T>` receives a `RequestContext` and returns `Promise<T>`.
 `runtime.run()` returns that callback's result.
 Returning from `run()` does not flush pending commands. Use an explicit final `await context.sync()`.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Load collections, then item properties
 
@@ -38,8 +39,7 @@ const headings = await runtime.run(async (context) => {
 });
 ```
 
-Each loop queues independent loads. Neither loop performs a sync for each item.
-The result contains plain data that can leave the run safely.
+Each loop queues item loads, then syncs once. The result contains plain data you can use outside the run.
 Collections expose read-only `items` arrays. Item objects remain editable proxies.
 Reload values after writes when your next decision needs the changed document.
 
@@ -51,7 +51,7 @@ Reload values after writes when your next decision needs the changed document.
 | `load('text,style')` or `load(['text', 'style'])` | Load named scalar properties                               |
 | `{ select: 'items', top: 20, skip: 40 }`          | Load a collection window                                   |
 | `load()`                                          | Load the object's default selection; prefer explicit names |
-| `expand`                                          | Reserved; non-empty values fail with `InvalidArgument`     |
+| `expand`                                          | Reserved; nonempty values fail with `InvalidArgument`      |
 
 `top` and `skip` require nonnegative integers and apply to collections.
 Unknown properties and options fail explicitly.
@@ -82,7 +82,7 @@ await runtime.run(async (context) => {
 
 The two syncs are separate transactions. A later failure does not undo an earlier successful sync.
 Batch independent writes when they should succeed or fail together.
-Use separate syncs for conflicting structural edits, solitary table mutations, and break insertion.
+Use separate syncs for conflicting structural edits. Run each row or column addition or deletion, and each break insertion, in its own sync.
 Different levels of an existing list can share a sync; competing aliases for one level can conflict.
 Keep field result updates separate from layout-changing writes.
 See each topic's supported batching limits.
@@ -91,7 +91,7 @@ Disjoint plain-text edits can batch within an ordinary paragraph with direct tex
 Their returned ranges account for that batch's changes.
 Older ranges still retain snapshot offsets across later batches; tracking does not change this behavior.
 After editing a paragraph, search again before a later dependent edit.
-Same-paragraph text mixed with formatting, hyperlinks, or structural writes refuses atomically.
+The runtime rejects a batch that combines text edits with formatting, hyperlinks, or structural writes in the same paragraph.
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for the supported domain.
 
 ## Handle an absent item
@@ -186,13 +186,15 @@ try {
 | `RuntimeDisposed`                | Create a new runtime                                                                     |
 | `StaleDocument`                  | Start a fresh run, read again, and reconsider the proposed change                        |
 | `DocumentUnavailable`            | Wait for the owning editor to attach a document, then start a new run                    |
-| `GeneralException`               | Report the refusal and inspect the target; do not silently discard document structure    |
+| `GeneralException`               | Report the error and inspect the target; do not silently discard document structure      |
 
 `DocxEditorErrorInit` describes `code`, optional `target`, and optional resource or revision metadata.
 `DocxEditorError` exposes the same fields.
 For stale reads, `expectedRevision` and `actualRevision` identify the mismatch when available.
 For input limits, `limit` names the exceeded ZIP, XML, part, or relationship budget.
-Never blindly replay a model edit after a stale read.
+After a stale read, obtain fresh ranges and reconsider the edit before retrying.
 Never disable change tracking automatically to bypass a refusal.
+
+## Next steps
 
 See [Runtime and setup](/docs/2.x/editor-api/runtime) and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).

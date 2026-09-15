@@ -99,7 +99,7 @@ Runtime disposal releases its adapter; it does not destroy the editor.
 
 | Option             | Hosts                    | Meaning                                                                                                            |
 | ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `author`           | All                      | Explicit identity for comment creation, replies, and server tracked text edits                                     |
+| `author`           | All                      | Author name for comment creation, replies, and tracked text edits                                                  |
 | `revisionTextView` | All                      | `allMarkup` by default; `original` hides pending insertions and retains pending deletions in text reads and search |
 | `limits`           | Server and collaborative | Bounded ZIP, XML, part, and relationship parsing                                                                   |
 | `pagination`       | Server and collaborative | Explicit measured pagination for page-field result updates                                                         |
@@ -131,7 +131,7 @@ Explicit server pagination does not give a server a browser selection or layout 
 The `events` flag does not provide a public event subscription API on the runtime.
 Capabilities do not guarantee write permission.
 Browser review writes also require the Pro review module and an editable document.
-Handle the actual refusal from the call or `sync()`.
+Handle errors from the call or `sync()`.
 
 ## Bound input parsing
 
@@ -142,13 +142,13 @@ Counts and byte budgets must be finite nonnegative integers.
 Compression ratios can be fractional.
 
 The default XML element budget is 10,000,000 per part.
-The engine permits at most 50,000,000 elements, 64 MiB per part, and 256 nested levels.
+The engine limits each XML part to 50,000,000 elements, 64 MiB, and 256 nested levels.
 These limits do not guarantee sufficient host memory.
 Malformed input or invalid limits produce `InvalidArgument`.
 An exceeded budget produces `ResourceLimitExceeded` with a `limit` field.
 See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for recovery.
 
-## Continue
+## Next steps
 
 - [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
 - [Comments](/docs/2.x/editor-api/comments) and [Tracked changes](/docs/2.x/editor-api/revisions)

@@ -9,8 +9,8 @@ Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`.
 Set paragraph formatting directly on `Paragraph`.
 The API does not provide a `ParagraphFormat` object or a style-creation API.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Format an exact phrase
 
@@ -36,7 +36,7 @@ await runtime.run(async (context) => {
 
 Assignments on one `Font` proxy coalesce within a sync.
 Different proxies that address overlapping content can still conflict.
-Tracking mode does not support these formatting writes; it refuses them atomically.
+The runtime rejects formatting writes while tracking changes.
 Never switch tracking off automatically to bypass that refusal.
 
 ## Read authored font values
@@ -70,14 +70,14 @@ Do not convert `null` into a formatting write.
 Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`,
 `DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`,
 `TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`.
-The exported enum also includes `Mixed`, `Hidden`, and `DotLine`; those writes refuse.
+The exported enum also includes `Mixed`, `Hidden`, and `DotLine`, which the runtime rejects on writes.
 For example, `UnderlineType.single` has the value `Single`.
 
 Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`,
 `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`.
 Reads return `#RRGGBB` or `null`.
-Arbitrary colors outside that palette refuse.
-The getter accepts a nullable result, but the public setter type accepts `string`.
+The runtime rejects colors outside that palette.
+The getter returns `string | null`; the setter accepts `string`.
 A nullable read is not a valid typed setter argument.
 
 ## Format paragraphs
@@ -102,14 +102,14 @@ await runtime.run(async (context) => {
 accept finite values within their supported bounds.
 A negative first-line indent creates a hanging indent.
 `ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes.
-`Mixed` and `Unknown` describe reads and refuse on writes.
+`Mixed` and `Unknown` are read values; the runtime rejects them on writes.
 Assignments on one paragraph proxy coalesce per sync.
 
 ## Apply an existing style
 
 `Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name.
 The name must already exist in the document's styles part.
-An unknown style refuses; assignment does not create a style.
+The runtime rejects unknown style names. Assigning a name does not create a style.
 A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs.
 Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
 
@@ -136,8 +136,11 @@ await context.sync();
 Assign an empty string to remove a hyperlink from an eligible text span.
 Ordinary partial spans inside an existing hyperlink support retargeting and unlinking.
 The unaffected linked text keeps its metadata and formatting.
-Collapsed ranges and complex or nested hyperlink wrappers refuse.
+The runtime rejects collapsed ranges and complex or nested hyperlink wrappers.
 The runtime validates the URL and content boundaries.
-Unsupported or protected targets refuse without replacing their structure.
+Failed edits leave unsupported or protected targets unchanged.
 There is no standalone `Hyperlink` or `HyperlinkCollection` object.
+
+## Next steps
+
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for selecting the text target.

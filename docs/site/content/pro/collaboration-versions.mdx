@@ -10,11 +10,14 @@ Collaboration has its own compatibility version, separate from the editor packag
 version. Use it to decide which clients and workers can share a room.
 The same contract applies to Hocuspocus, WebRTC, and custom providers.
 
-A collaboration version is supplied by the installed package. It is not a
-configuration option. Changing a version label cannot upgrade a saved room.
+The installed package supplies the collaboration version.
+Changing that value does not upgrade a saved room.
 Ordinary DOCX files do not need a collaboration upgrade.
 
 ## Choose the upgrade path
+
+Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration.
+Export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
 
 | Situation                                                  | What you do                                                                      |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -64,7 +67,7 @@ export const token = async (): Promise<string> =>
   });
 ```
 
-Set your connection options to `token: token`. The provider calls the callback
+Pass this callback as the connection's `token` option. The provider calls the callback
 on each reconnection, so it sends both the refreshed credential and the format version.
 
 On your server, authenticate the user and document access before checking the
@@ -119,7 +122,7 @@ The assertion accepts an exact match. Missing, malformed, or different values
 throw `CollaborationSchemaError` with code `collaboration-format-mismatch`.
 The Hocuspocus wrapper preserves recognized failure codes from the server during
 initial connection and reconnection. Handle `error.code` in your app; do not parse
-diagnostic strings to recover a version refusal.
+error messages to detect a version mismatch.
 A reported version prevents accidental mixed-version connections. It does not
 prove which code a client runs or replace access control.
 
@@ -171,8 +174,8 @@ document export. A failure leaves the saved snapshot intact.
 If decoding the snapshot throws an unrecognized error, treat it as damaged saved
 data. Keep the snapshot for recovery, as the example server does.
 
-An unseeded room throws `not-initialized`. Missing or invalid version information
-throws `collaboration-format-mismatch`. Treat those errors as recovery cases for
+Reading an unseeded room throws `not-initialized`. Missing or invalid version information
+causes `collaboration-format-mismatch`. Treat those errors as recovery cases for
 saved rooms. Only create an empty room when your storage confirms no room exists.
 
 ## Upgrade saved rooms
@@ -222,7 +225,7 @@ show users an action they can take.
 A thrown `CollaborationSchemaError` for a version mismatch includes recovery
 instructions and this guide's URL in its `message`. Framework hooks expose a
 structured failure through `error`; render your own message and a link to
-[the collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions).
+[the collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions).
 Open the guide in a separate tab so users can keep their local document available.
 
 | Where compatibility fails                    | Suggested message                                                                                       | Application action                                                                                               |
@@ -242,7 +245,7 @@ reloading or replacing its session. Keep the copy if reconnection fails.
 Rejoining uses the room's document; it does not merge the saved local copy.
 
 For other failures, see
-[Recover a diverged replica](/docs/latest/pro/collaboration#recover-a-diverged-replica).
+[Recover a diverged replica](/docs/2.x/pro/collaboration#recover-a-diverged-replica).
 
 ## Preserve offline work across upgrades
 
@@ -260,9 +263,8 @@ Package versions identify releases. The collaboration format version identifies
 which clients, workers, and rooms can work together. Use the format assertion
 for connection decisions and read release notes before deploying an update.
 
-A release that requires room migration is a breaking collaboration upgrade,
-even if its package version is labeled minor. A dedicated version check detects
-that incompatibility; it does not remove the migration requirement.
+A minor package release can require room migration. The format-version check
+detects incompatible rooms; it does not migrate them.
 
 ## Verify a deployment
 
@@ -274,5 +276,7 @@ Before admitting production traffic, verify these outcomes in a test deployment:
 - Offline work remains recoverable when a user returns after an upgrade.
 - Migrated rooms use fresh storage keys and export the expected document.
 
-For an executable server example, see the
+## Next steps
+
+For a runnable server example, see the
 [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus).

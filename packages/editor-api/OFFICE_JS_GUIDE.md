@@ -6,7 +6,7 @@ authentication, collaboration transport, and job lifetime belong outside that mo
 ## A complete server example
 
 This function returns a DOCX containing one pending replacement. Supply the agent's author name.
-The runtime owns the opened document and is always disposed.
+The `finally` block disposes the runtime after the job.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -63,7 +63,7 @@ const snapshot = await runtime.run(async (context) => {
 
 This follows Microsoft's [split-loop and correlated-objects guidance](https://learn.microsoft.com/en-us/office/dev/add-ins/concepts/correlated-objects-pattern).
 Bound model input and member-property loads. The collection's `items` load still enumerates its members;
-the slice above does not promise server-side collection pagination.
+slicing the array does not paginate the collection on the server.
 
 Supported read-derived proxies can share one `sync()` with their edits. For example,
 `body.getRange().insertText(text, 'Replace')` and `table.getCell(0, 0).value = text`
@@ -100,7 +100,7 @@ const trackingMine = mode === ChangeTrackingMode.trackMineOnly;
 
 For orientation, use `PageSetup['orientation']` in the same way after loading and
 syncing that property. Type compatibility does not imply support for every enum
-value: `TrackAll` remains unsupported and refuses at `sync()`.
+value: `TrackAll` fails with `NotSupported` at `sync()`.
 
 ## Give each sync a purpose
 
@@ -121,12 +121,12 @@ Explicit tracked-object adoption exists for advanced cases; fresh reads are simp
 
 If model generation happens inside a run, commit against the revision that run read. If it happens outside,
 keep a validated snapshot and re-anchor in a new run. The example's tool adapter checks both the paragraph snapshot
-and document digest. On `StaleDocument`, read again and reconsider the proposal. Do not blindly replay old text.
+and document digest. On `StaleDocument`, read again and reconsider the proposal. Recheck the target before retrying.
 
 ## Use errors to recover deliberately
 
 Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identifies the failing public member.
-Do not parse message strings. A refused sync does not apply its queued document edits or tracking-mode changes.
+Do not parse message strings. A failed sync does not apply its queued document edits or tracking-mode changes.
 Earlier successful syncs remain committed. Failed batches are discarded and are never automatically replayed.
 
 | Code                 | Next action                                                                                                         |
@@ -141,7 +141,7 @@ Earlier successful syncs remain committed. Failed batches are discarded and are 
 
 ## Tracking subset
 
-| Intent                             | Office-shaped API                                                      |
+| Intent                             | Office.js-compatible API                                               |
 | ---------------------------------- | ---------------------------------------------------------------------- |
 | Track this agent's text edits      | `context.document.changeTrackingMode = 'TrackMineOnly'`                |
 | Insert before or after a range     | `range.insertText(text, 'Before')` or `'After'`                        |
@@ -151,10 +151,11 @@ Earlier successful syncs remain committed. Failed batches are discarded and are 
 | Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'`                            |
 
 `Off` is the initial runtime mode. Browser tracked writes require the review module; this property does not change the editor UI mode. `TrackMineOnly` needs a configured author and persists for that host session.
-It does not change peers' editing modes or persist a document-wide policy. `TrackAll` refuses. Browser UI modes remain controlled by the editor host.
-Tracked edits support inline text in one paragraph, including table cells, and refuse targets touching pending revisions.
-Tracked deletion and replacement refuse simple fields with nested fields or other result containers. Direct result runs remain supported.
-Structural and formatting mutations while tracking refuse. Comments and revision decisions remain available.
+It does not change peers' editing modes or persist a document-wide policy. `TrackAll` fails with `NotSupported`. Browser UI modes remain controlled by the editor host.
+Tracked edits support inline text in one paragraph, including table cells.
+The runtime rejects targets that touch pending revisions.
+The runtime rejects tracked deletion or replacement of simple fields containing nested fields or other result containers. Direct result runs remain supported.
+The runtime rejects structural and formatting edits while tracking changes. Comments and revision decisions remain available.
 Never silently fall back to `Off` when an edit cannot be tracked.
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require
@@ -175,13 +176,13 @@ Field updates can share a sync with other field updates. They cannot share a syn
 
 Headless field calculation requires an explicit `pagination.measurer` when creating the server runtime.
 Use measurements from the document's fonts. Browser runtimes use the editor's measured layout.
-A runtime without pagination refuses `updateResult()` with `NotSupported`. It does not guess the page count.
+Without pagination, `updateResult()` fails with `NotSupported`.
 Other field instructions remain inert. The authoring subset refuses unsupported field codes and formatting switches.
 
 Character formatting also supports underline, strikethrough, exact Word-palette highlighting, subscript, and superscript.
 `font.underline = 'None'` removes an underline. Setting one script mode to `true` clears the other mode.
 The highlight setter keeps Office's pinned `string` type, although Microsoft documents runtime `null` for clearing.
-The runtime accepts this clearing value. Unsupported highlight colors refuse instead of selecting an approximate color.
+The runtime accepts this clearing value. The runtime rejects unsupported highlight colors.
 
 The workflow tests cover both hosts and save/reopen:
 `model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, and `model-picture-field-parity.test.ts`.

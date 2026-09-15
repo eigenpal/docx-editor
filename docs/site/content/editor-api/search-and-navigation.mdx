@@ -9,8 +9,8 @@ Search within the smallest body or range that represents your task.
 Search returns `RangeCollection`; it does not modify the document.
 Match counts and context help you avoid edits to the wrong occurrence.
 
-Examples use a live `runtime` from [Runtime and setup](/docs/2.x/editor-api/runtime).
-Unless shown otherwise, `context` and existing proxies belong to an active `runtime.run()` callback.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use `context` and document proxies inside `runtime.run()`.
 
 ## Search and inspect matches
 
@@ -35,10 +35,10 @@ const found = await runtime.run(async (context) => {
 | ---------------------------------------------- | -------------------------------------------------------- |
 | `matchCase`                                    | Case-sensitive matching when `true`                      |
 | `matchWholeWord`                               | Whole-word matching when `true`                          |
-| `ignorePunct`, `ignoreSpace`, `matchWildcards` | Accepted in the type; `true` refuses with `NotSupported` |
+| `ignorePunct`, `ignoreSpace`, `matchWildcards` | Setting any of these to `true` fails with `NotSupported` |
 
-Search is plain-text search, not a regular-expression API.
-Use non-empty search text and handle unsupported text boundaries explicitly.
+Search matches plain text; regular expressions are unsupported.
+Use nonempty search text and handle unsupported text boundaries explicitly.
 Search follows the runtime's `revisionTextView`, including its treatment of pending insertions and deletions.
 Cached field result text can appear in ordinary text reads and searches.
 A search result is not permission to replace protected field or revision structure.
@@ -57,7 +57,7 @@ See [Text and ranges](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-
 
 `Paragraph.split(delimiters, trimDelimiters?, trimSpacing?)` returns a `RangeCollection`.
 It splits the paragraph at matching delimiters and returns one range per resulting paragraph.
-This is a structural write, including when your purpose is to inspect the pieces.
+This method changes the document's paragraph structure.
 Use delimiter strings only when you intend to change paragraph structure:
 
 ```ts
@@ -74,7 +74,7 @@ await runtime.run(async (context) => {
 ```
 
 A split can conflict with other structural writes on that paragraph.
-Runtime-local tracking refuses this structural operation.
+The runtime rejects paragraph splitting while tracking changes.
 
 For paragraph collections, use `getFirst()`, `getLast()`, `getFirstOrNullObject()`, or `getLastOrNullObject()`.
 To insert or remove paragraphs, use [Text and ranges](/docs/2.x/editor-api/text-and-ranges).
@@ -108,7 +108,7 @@ Bookmark ranges do not expose document-wide numeric offsets.
 `Range.select(selectionMode?)` and `Bookmark.select(selectionMode?)` accept `SelectionMode`:
 `Select`, `Start`, or `End`.
 The default selects the range. Endpoint modes place the selection at that endpoint.
-A server runtime refuses selection with `NotSupported`.
+Selecting a range on a server fails with `NotSupported`.
 
 Check the host before moving its selection:
 
@@ -126,4 +126,7 @@ if (runtime.capabilities.selection) {
 
 Selection requires an attached browser document.
 The API does not expose `Document.getSelection()` or a separate range scrolling method.
+
+## Next steps
+
 See [API member directory](/docs/2.x/editor-api/reference) for the public navigation surface.

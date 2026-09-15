@@ -1,10 +1,8 @@
 # Customizing the editor
 
-There are three ways to change how the editor looks and behaves, and they are meant to be
-tried in this order. Reaching for the next one is a signal that the previous one has a gap —
-if you find yourself at the bottom of this page, open an issue rather than living with it.
+Start with component props, then CSS tokens. Use custom composition when you need a different layout.
 
-`examples/igloo/` is a working demonstration of all three. `bun run dev:igloo`.
+Run `bun run dev:igloo` to explore all three approaches in the [Igloo example](../examples/igloo).
 
 ---
 
@@ -31,7 +29,7 @@ Page Setup, Paragraph Options, and legacy text Field Options also expose named
 parts. Use the editor's `popups` configuration for automatically opened instances.
 See [Customize popups](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
 
-### Prefer your own classes over styling ours
+### Add classes to parts
 
 Use the documented part statics and their `className` props to attach your own
 classes. For example:
@@ -48,10 +46,8 @@ classes. For example:
 </DocxEditor.Navigation>
 ```
 
-The parts still do all the work — that headings list is still fed by the engine's outline.
-You have only taken ownership of the class names, which is the difference between customizing
-the API and working around it. A selector you wrote cannot break in a release; one of ours
-can.
+Parts retain their behavior when you supply classes. For example, `Headings` still
+reads the document outline. Prefer these public props to selectors that depend on internal markup.
 
 Where a sub-element is rendered outside `children` and so cannot be composed — the
 navigation toggle, which has to stay clickable while the panel is `inert` — the prop takes
@@ -60,14 +56,14 @@ accept `boolean | Props` the same way.
 
 **What you can pass**
 
-| Prop                                              | Where                                                                     | Notes                                                             |
-| ------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `icon`                                            | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls   |
-| `t`                                               | any compound                                                              | Your i18n resolver. Without it the raw keys render, never English |
-| `preset={false}`                                  | any compound                                                              | Renders your children verbatim, in your order                     |
-| `hidden`                                          | any packaged part                                                         | Removes it from the default arrangement                           |
-| `className`                                       | every part                                                                | Appended after the load-bearing classes                           |
-| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row`                          | Host-owned actions                                                |
+| Prop                                              | Where                                                                    | Notes                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `icon`                                            | toolbar parts, menu rows, menu triggers, color splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls   |
+| `t`                                               | any compound                                                             | Your i18n resolver. Without it the raw keys render, never English |
+| `preset={false}`                                  | any compound                                                             | Renders your children verbatim, in your order                     |
+| `hidden`                                          | any packaged part                                                        | Removes it from the default arrangement                           |
+| `className`                                       | every part                                                               | Appended after the load-bearing classes                           |
+| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row`                         | Host-owned actions                                                |
 
 **Host actions still ask the engine.** A control the registry does not describe has no
 enabled state of its own — but you can borrow the engine's:
@@ -82,16 +78,15 @@ const { isEnabled, disabledReason } = useEditorCommand({
 ```
 
 `useEditorCommand` takes a `ChromeSlotId` **or** a raw `EditorCommand`, so your own action
-greys out for the engine's reason rather than a guess of yours. Never invent a disabled
+grays out for the engine's reason rather than a guess of yours. Never invent a disabled
 reason; if the engine did not give you one, do not show one.
 
 ---
 
 ## 2. Tokens
 
-All chrome colour lives on CSS custom properties. Restating them under any scope re-themes
-everything inside it — toolbar, menu bar, panels, pickers, rulers, the navigation pane —
-without touching a single component.
+Editor controls use CSS custom properties for colors. Set these tokens on a wrapper
+to theme its toolbar, menus, panels, pickers, rulers, and navigation pane.
 
 ```css
 .my-editor {
@@ -101,9 +96,7 @@ without touching a single component.
 }
 ```
 
-Custom properties inherit, so **the scope is the override**. Narrow it to re-theme one
-region: Igloo makes its navigation pane transparent white-on-water with a token block on the
-pane alone, and nothing else in the app changes.
+Custom properties inherit. To theme one region, set the tokens on that region's wrapper.
 
 ### The palette
 
@@ -136,18 +129,16 @@ Dark mode is the same list re-declared under `.docx-editor.dark`.
 
 ### What is deliberately not themeable
 
-**The document canvas.** Painter output stays Word-faithful — a page that matched your brand
-would be a lie about what the file contains. Theme the space _around_ the page instead; Igloo
-puts the page on an iceberg rather than tinting it.
+The document canvas uses the file's formatting. Theme the surrounding editor UI
+without changing how document pages appear.
 
 ---
 
 ## 3. Your own React
 
-Anything composes under `DocxEditor.Root`. The primitives are `Root` (owns the editor's
-lifetime), `Viewport` (the scroll container the engine discovers by class), and `Content` (the
-element it paints into). Everything else — your header, your panels, your art — is just
-children.
+Compose your layout under `DocxEditor.Root`, which manages the editor's lifetime.
+`Viewport` provides the scroll container, and `Content` provides the document surface.
+Add your header and panels as children.
 
 ```tsx
 <DocxEditor.Root document={bytes} fonts={fonts}>
@@ -159,22 +150,20 @@ children.
 </DocxEditor.Root>
 ```
 
-`Content`'s centring margin is defined behind `:where()`, so it carries no specificity: place
+`Content`'s centering margin is defined behind `:where()`, so it carries no specificity: place
 the page yourself with a plain class, never `!important`.
 
 To read editor state, use `useEditorState(selector)`; to open a document,
-[`useDocxSource`](#opening-a-document).
+[`useDocxSource`](#open-a-document).
 
 ---
 
-## Two layout traps
-
-Both cost real debugging time in Igloo, and both are ordinary CSS a host would write.
+## Avoid layout conflicts
 
 **`backdrop-filter` captures `position: fixed` children.** An element with
 `backdrop-filter` (or `filter`, or `transform`) becomes the containing block for every fixed
 descendant. A frosted header containing the menu bar makes the Page Setup dialog's
-`inset: 0` overlay resolve against the _header_, so the dialog centres inside a 120px strip.
+`inset: 0` overlay resolve against the _header_, so the dialog centers inside a 120px strip.
 Put the effect on a `::before` pseudo-element instead.
 
 **`z-index` traps popovers.** A `z-index` on the wrapper around `Viewport` opens a stacking
@@ -183,7 +172,7 @@ context that the context menu cannot escape, however high its own `z-index` goes
 
 ---
 
-## Opening a document
+## Open a document
 
 ```tsx
 import { useDocxSource } from '@docx-editor.dev/react';
@@ -203,11 +192,9 @@ fixed-width measurement and `error` stays null.
 
 ---
 
-## When none of this is enough
+## Request a customization API
 
-The `docx-*` class names are **implementation details**, not API. Styling them works until it
-does not, and nothing tells you when a release moves one.
+Internal `docx-*` classes can change between releases. Prefer documented props,
+parts, and tokens.
 
-If you need something the three layers above cannot express, that is a gap worth reporting —
-this page exists because building `examples/igloo/` found several, and each one became a prop
-or a token rather than a workaround.
+If the public API cannot express your layout, [open an issue](https://github.com/eigenpal/docx-editor/issues).
