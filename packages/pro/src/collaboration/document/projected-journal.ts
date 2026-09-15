@@ -273,6 +273,15 @@ export function projectJournalToShared(
   journal: CanonicalPrimitiveJournal
 ): { readonly ok: true; readonly journal: CanonicalPrimitiveJournal } | ProjectionRefusal {
   const hidden = registry.replacementLoserRuns();
+  const reinserted = new Set(
+    journal.effects.flatMap((effect) =>
+      effect.kind === 'spliceChildren'
+        ? effect.childLogicalIds
+        : effect.kind === 'moveNode'
+          ? [effect.logicalId]
+          : []
+    )
+  );
   const minted = journal.effects.filter((effect) => effect.kind === 'putNode').length;
   if (registry.nodeCount() + minted > registry.limits.maxNodes) {
     return { ok: false, code: 'too-many-nodes' };
@@ -368,7 +377,8 @@ export function projectJournalToShared(
         if (!refusal && effect.childLogicalIds.length > 0) {
           const runs = effect.childLogicalIds.filter((id) => kindOf(id) === 'run');
           for (const id of removed)
-            if (kindOf(id) === 'run') recordSplitTextSources(recording, id, runs);
+            if (kindOf(id) === 'run' && (!reinserted.has(id) || descriptors.has(id)))
+              recordSplitTextSources(recording, id, runs);
         }
       } else if (effect.kind === 'moveNode') {
         // moveNode's destination index is measured AFTER unlinking the source.

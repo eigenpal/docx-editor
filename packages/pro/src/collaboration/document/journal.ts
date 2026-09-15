@@ -372,6 +372,8 @@ interface JournalPlan {
    * see `applyEffect`.
    */
   readonly mintedText: ReadonlySet<string>;
+  /** Nodes created or described by this journal, including intermediate format runs. */
+  readonly mintedNodes: ReadonlySet<string>;
   /**
    * For each replacement splice, the ids it removed in effect order.
    *
@@ -403,6 +405,7 @@ function planJournal(
   const removed: LogicalId[] = [];
   const reinserted = new Set<LogicalId>();
   const mintedText = new Set<string>();
+  const mintedNodes = new Set<string>();
   const replacementsByEffect = new Map<CanonicalPrimitiveEffect, LogicalId[]>();
   for (const effect of effects) {
     const refusal = validateEffect(registry, effect, projection);
@@ -426,12 +429,13 @@ function planJournal(
       for (const childId of effect.childLogicalIds) reinserted.add(childId);
     } else if (effect.kind === 'moveNode') {
       reinserted.add(effect.logicalId);
-    } else if (effect.kind === 'putNode' && effect.descriptor.kind === 'textValue') {
-      mintedText.add(effect.descriptor.logicalId);
+    } else if (effect.kind === 'putNode') {
+      mintedNodes.add(effect.descriptor.logicalId);
+      if (effect.descriptor.kind === 'textValue') mintedText.add(effect.descriptor.logicalId);
     }
     projectEffect(projection, effect);
   }
-  return { removed, reinserted, mintedText, replacementsByEffect };
+  return { removed, reinserted, mintedText, mintedNodes, replacementsByEffect };
 }
 
 function mintedNodeCount(effects: readonly CanonicalPrimitiveEffect[]): number {
@@ -519,6 +523,9 @@ function recordSplitProvenance(
 ): void {
   for (const removedId of removedIds) {
     if (registry.kindOf(removedId) !== 'run') continue;
+    // A pre-existing run moved to another paragraph was not replaced by this splice.
+    // Only intermediate runs minted in this journal can be reinserted split ancestors.
+    if (planned.reinserted.has(removedId) && !planned.mintedNodes.has(removedId)) continue;
     const root = resolveSplitRoot(registry, removedId, planned.reinserted);
     const runs = insertedIds.filter((runId) => registry.kindOf(runId) === 'run');
     recordSplitTextSources(registry, removedId, runs);
