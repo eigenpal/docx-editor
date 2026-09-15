@@ -43,6 +43,45 @@ Run `node convert.mjs` from that directory. The output includes each page's body
 
 `'proposed'` includes pending insertions and hides pending deletions, which is useful when indexing proposed contract text. The default, `'all-markup'`, includes both. Exporting does not accept or reject changes in the source file.
 
+## Configure fonts for accurate layout
+
+Fonts affect the page boundaries in `result.pages`. The converter measures text before generating Markdown. A font with different character widths can wrap a paragraph onto another line, increase a table row's height, and move content to the next page. Markdown does not preserve the DOCX font family; your Markdown renderer controls the displayed font.
+
+The converter includes substitutes for common Word fonts, such as Carlito for Calibri and Liberation Serif for Times New Roman. These substitutes target matching character widths, but font differences can still change line and page breaks. If you need page references that match Word, supply the author's fonts through `fonts` when your license permits it, and compare representative documents with Word.
+
+### Add fallback fonts
+
+Use `fallbackFonts` to resolve font faces that your `fonts` configuration and bundled substitutes do not provide. Fallback fonts improve measurement when a requested font is available from another source. They do not replace faces that an earlier source has already resolved or guarantee matching Word pagination.
+
+To use the Google Fonts catalog as a fallback, add the fonts package to your application:
+
+```sh
+npm install @docx-editor.dev/fonts
+```
+
+Pass DOCX bytes to `exportMarkdown` and configure `googleFonts()` through `fallbackFonts`:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const docxBytes = await readFile('document.docx');
+const result = await exportMarkdown(docxBytes, {
+  fallbackFonts: googleFonts(),
+});
+
+console.log(result.markdown);
+console.log(result.fontResolution);
+console.log(result.warnings);
+```
+
+Google Fonts fallback requires network access and fetches matching faces from a pinned catalog. It cannot supply every font. Omit `fallbackFonts` to use the bundled and document-embedded fonts, plus any fonts you supply. For offline conversion, your own font resolvers must also use local data.
+
+Inspect `result.fontResolution` for substitutions and incomplete font families. The default `fontPolicy: 'best-effort'` allows approximate measurement when fonts remain unresolved. Use `fontPolicy: 'strict'` to reject font-source failures or missing regular, bold, italic, or bold-italic faces among the checked families. Strict mode checks font resolution; it does not guarantee the same page breaks as Word.
+
+See [font resolution order, custom fonts, and limits](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#layout-and-fonts).
+
 ## When to use it
 
 **Answers that need page references.** A search system can find the right clause and still leave the reader searching for it. For contract review, compliance checks, and audit reports, use `pages[]` to attach a reference such as “contract.docx, page 12” before splitting text into retrieval chunks. Headers and footers stay separate, so you can index body text without repeating those labels.

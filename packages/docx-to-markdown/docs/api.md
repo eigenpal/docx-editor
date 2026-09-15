@@ -288,7 +288,11 @@ Fonts resolve in this order:
 
 The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono for Courier New. These fonts are bundled with the package.
 
-For accurate pagination, supply the author's licensed fonts, use `fontPolicy: 'strict'`, save the font-resolution report, and pin the exporter, Core, and font catalog versions. The default `best-effort` policy uses approximate measurements for unresolved fonts.
+Font measurements determine line wrapping, table row heights, and page boundaries. Markdown does not preserve the DOCX font family, but it uses the pages calculated from those measurements. Bundled substitutes target matching character widths; differences can still change page breaks.
+
+If you need page references that match Word, supply the author's licensed fonts through `fonts`, save the font-resolution report, pin the exporter, Core, and font catalog versions, and compare representative documents with Word. The default `best-effort` policy uses approximate measurements for unresolved fonts. `fontPolicy: 'strict'` checks font resolution; it does not guarantee the same pagination as Word.
+
+Use `fallbackFonts` for faces that your `fonts` configuration and bundled substitutes do not provide. Fallback sources do not replace faces already resolved by earlier sources. A fallback can improve measurement only when it supplies a missing face; Google Fonts cannot supply fonts outside its catalog.
 
 To enable Google Fonts as a fallback, pass `googleFonts()` through `fallbackFonts`. It uses a pinned catalog and verified content hashes. Requests disclose requested font families to the CDN:
 
