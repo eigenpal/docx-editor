@@ -384,7 +384,14 @@ export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boo
   return value;
 }
 
-function resolveBorderEdge(node: OoxmlElement | undefined): ParagraphBorderEdge | undefined {
+/**
+ * One `CT_Border` element — `w:pBdr` edges and `w:pgBorders` edges are the SAME complex type.
+ *
+ * Shared so a page border reads `w:sz` (eighths of a point), `w:space` (points) and `w:color`
+ * through exactly one parser: two readers of one schema type is two places for the eighths to
+ * be forgotten. `nil` / `none` suppress the edge and return undefined.
+ */
+export function borderEdgeOf(node: OoxmlElement | undefined): ParagraphBorderEdge | undefined {
   if (!node) return undefined;
   const val = attributeValue(node, 'val');
   if (!val || NO_BORDER.has(val)) return undefined;
@@ -419,12 +426,12 @@ function resolveBorderEdge(node: OoxmlElement | undefined): ParagraphBorderEdge 
  * one the transitional schema (§17.3.1.24) actually declares.
  */
 function bordersOfElement(pBdr: OoxmlElement): ParagraphBorders {
-  const top = resolveBorderEdge(childNamed(pBdr, 'top'));
-  const left = resolveBorderEdge(childNamed(pBdr, 'left') ?? childNamed(pBdr, 'start'));
-  const bottom = resolveBorderEdge(childNamed(pBdr, 'bottom'));
-  const right = resolveBorderEdge(childNamed(pBdr, 'right') ?? childNamed(pBdr, 'end'));
-  const between = resolveBorderEdge(childNamed(pBdr, 'between'));
-  const bar = resolveBorderEdge(childNamed(pBdr, 'bar'));
+  const top = borderEdgeOf(childNamed(pBdr, 'top'));
+  const left = borderEdgeOf(childNamed(pBdr, 'left') ?? childNamed(pBdr, 'start'));
+  const bottom = borderEdgeOf(childNamed(pBdr, 'bottom'));
+  const right = borderEdgeOf(childNamed(pBdr, 'right') ?? childNamed(pBdr, 'end'));
+  const between = borderEdgeOf(childNamed(pBdr, 'between'));
+  const bar = borderEdgeOf(childNamed(pBdr, 'bar'));
   return {
     ...(top ? { top } : {}),
     ...(left ? { left } : {}),

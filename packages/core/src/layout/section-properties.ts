@@ -25,6 +25,7 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
+import { parsePageBorders, type SectionPageBorders } from './page-borders.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -123,6 +124,11 @@ export interface SectionProperties {
    * element is present with no attributes (comprehensive-fixture shape).
    */
   readonly pageNumbering?: SectionPageNumbering;
+  /**
+   * Resolved `w:pgBorders` (§17.6.10). Absent when the section declares none, or when every
+   * edge it declares is off or an art border — see {@link parsePageBorders}.
+   */
+  readonly pageBorders?: SectionPageBorders;
 }
 
 /**
@@ -344,6 +350,7 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
     : defaults.pageSize.heightTwips;
 
   const pageNumbering = parsePageNumbering(sectPr);
+  const pageBorders = parsePageBorders(sectPr);
   const count = columnCount(cols);
   const gapTwips = cols
     ? nonNegativeTwips(attribute(cols, 'space'), defaults.columns.gapTwips)
@@ -386,6 +393,7 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
     titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
     ...(pageNumbering !== undefined ? { pageNumbering } : {}),
+    ...(pageBorders !== undefined ? { pageBorders } : {}),
   };
 }
 
