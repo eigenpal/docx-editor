@@ -183,3 +183,38 @@ test('noninteractive decision creation accepts spaces between test paths', () =>
     'scripts/collaboration/workflow.test.ts',
   ]);
 });
+
+test('a closed worker input rejects the request without crashing the parent', () => {
+  const dir = workspace();
+  writeFileSync(
+    join(dir, 'worker.mjs'),
+    `
+    import { closeSync } from 'node:fs';
+    closeSync(0);
+    console.log(JSON.stringify({ id: 0, value: 'ready' }));
+    setTimeout(() => {}, 2000);
+  `
+  );
+  const source = `
+    import { Peer } from ${JSON.stringify(join(dir, 'scripts/collaboration/peer.mjs'))};
+    const peer = new Peer(${JSON.stringify(dir)}, 'broken-input');
+    await new Promise(resolve => peer.child.stdout.once('data', resolve));
+    try {
+      await peer.request('info');
+      process.exitCode = 1;
+    } catch (error) {
+      console.log('caught:', error.message);
+    } finally {
+      await peer.close();
+    }
+  `;
+  // Exercise Node's real pipe-error event in a subprocess, so a regression is
+  // observed as a failing exit status rather than taking down the test runner.
+  const result = spawnSync('node', ['--input-type=module', '-e', source], {
+    encoding: 'utf8',
+    timeout: 10000,
+  });
+  expect(result.status).toBe(0);
+  expect(result.stderr).toBe('');
+  expect(result.stdout).toContain('caught: broken-input: worker input failed:');
+});

@@ -35,6 +35,9 @@ export class Peer {
         ? pending.reject(new Error(`${label}: ${reply.error}`))
         : pending.resolve(reply.value);
     });
+    this.child.stdin.on('error', (error) =>
+      this.fail(new Error(`${label}: worker input failed: ${error.message}`))
+    );
     this.child.on('error', (error) => this.fail(error));
     this.child.on('exit', (code) =>
       this.fail(new Error(`${label} worker exited (${code}): ${this.stderr}`))
