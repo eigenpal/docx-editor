@@ -1,4 +1,7 @@
-# API reference
+# DOCX to Markdown API reference
+
+Use this reference to choose an export function, configure conversion, and inspect the result.
+For installation and a first export, see the [package quickstart](../README.md).
 
 ## Public interface
 
@@ -113,7 +116,7 @@ const citation = {
 
 ### Comments and tracked changes
 
-Comments and revision metadata are returned separately from Markdown. Review IDs are opaque and valid only within one export. For stored citations, include your own document version or content hash.
+The exporter returns comments and revision metadata separately from Markdown. Review IDs are opaque and valid only within one export. For stored citations, include your own document version or content hash.
 
 `page.comments` and `page.trackedChanges` contain complete artifacts with occurrences on that page. Their `occurrences` can include other pages. Filter them to avoid double counting:
 
@@ -148,7 +151,7 @@ Artifacts without occurrences have no bindings or `unmappedReason`. These includ
 
 Artifact IDs, occurrence indexes, page IDs, and offsets are valid only within this export.
 
-Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps inserted and deleted text visible, `proposed` includes pending insertions and hides pending deletions, and `original` shows the rejected view. Revision mode applies to the whole document.
+Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps inserted and deleted text visible, `proposed` includes pending insertions and hides pending deletions, and `original` hides pending insertions and shows pending deletions. Revision mode applies to the whole document.
 
 ## Images and portable delivery
 
@@ -161,7 +164,7 @@ Occurrences expose exact `displayWidthPx`, `displayHeightPx`, and `kind` (`inlin
 Asset `pixelWidth` and `pixelHeight` describe the image bytes, not their displayed size.
 Crop, rotation, and floating text wrapping are not reproduced.
 
-`createMarkdownZip(result)` and `toMarkdownJSON(result)` are exported from the main package. `writeMarkdownBundle(result, { directory })` comes from `/node`. See [image APIs, errors, ownership, and runnable workflows](images.md).
+`createMarkdownZip(result)` and `toMarkdownJSON(result)` are exported from the main package. `writeMarkdownBundle(result, { directory })` comes from `@docx-editor.dev/docx-to-markdown/node`. See [image APIs, errors, ownership, and runnable workflows](images.md).
 
 ## Options
 
@@ -224,7 +227,7 @@ try {
 }
 ```
 
-Always call `dispose()` on reusable sessions to release caches and pending resource work. Repeated calls are safe. Live views can retain state across revisions; byte sources use one-shot caching by default.
+Call `dispose()` on reusable sessions to release caches and pending resource work. Repeated calls are safe. Live views can retain state across revisions; byte sources use one-shot caching by default.
 
 For a single export, use `exportMarkdown(docxBytes)`. To keep a layout without retaining session resources, obtain it before disposal, then pass it to `exportMarkdownLayout`. Layouts remain valid after disposal.
 
@@ -236,7 +239,7 @@ Images affect page boundaries and are omitted from Markdown unless you enable `i
 
 For malformed or unsupported DOCX input, `exportMarkdown` throws `DocumentOpenError`. `openDocumentForExport` returns `{ ok: false, reason, detail }` instead.
 
-Both workflows throw `TypeError` for unsupported option combinations described under [Options](#options), such as a custom `measurer` combined with `fontPolicy` or `onFontResolution`.
+Both workflows throw `TypeError` for unsupported combinations of [export options](#options), such as a custom `measurer` combined with `fontPolicy` or `onFontResolution`.
 
 Both workflows can throw `ExportResourceError` with one of these codes:
 
@@ -379,3 +382,8 @@ Drawing warnings are grouped by category and page, including headers, footers, a
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and tracked changes inside it remain available as page artifacts with exact text-box provenance.
 - Office Math uses the core semantic equation fallback.
 - A note continued without its reference is emitted as a labeled continuation block in page Markdown.
+
+## See also
+
+- [Image extraction and delivery](images.md).
+- [Application integrations](integrations.md).
