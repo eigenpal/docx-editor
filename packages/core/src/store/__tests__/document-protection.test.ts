@@ -12,7 +12,10 @@ import {
   serializeOoxmlPart,
   type OoxmlPackage,
 } from '../index.ts';
-import { documentProtectionRefusal } from '../store/forms-protection.ts';
+import {
+  documentProtectionRefusal,
+  lifecycleProtectionRefusal,
+} from '../store/forms-protection.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -316,6 +319,22 @@ describe('read-only and comments-only refusals', () => {
         }).ok
       ).toBe(false);
     }
+  });
+
+  test('a package-only comment write is refused under every enforced protection', () => {
+    // Resolve and delete carry no story op, so the per-op gate never sees them and the
+    // package channel cannot refuse forms without also refusing a legitimate field fill.
+    // Ungated, a form sent out for filling came back with every thread resolved by a reader
+    // who could not type a character.
+    for (const mode of ['forms', 'readOnly', 'comments'] as const) {
+      const settings = build(
+        `<w:documentProtection w:edit="${mode}" w:enforcement="1"/>`
+      ).parts.get('/word/settings.xml');
+      expect(lifecycleProtectionRefusal(settings, { op: 'setCommentResolved' })).toBe('locked');
+      expect(lifecycleProtectionRefusal(settings, { op: 'deleteComments' })).toBe('locked');
+    }
+    const open = build('').parts.get('/word/settings.xml');
+    expect(lifecycleProtectionRefusal(open, { op: 'setCommentResolved' })).toBeNull();
   });
 
   test('the protection toggle itself is never refused, or the document could not be unlocked', () => {

@@ -23,6 +23,8 @@ import {
   type SetCommentResolvedResult,
 } from './comment-writes.ts';
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
+import { lifecycleProtectionRefusal } from './forms-protection.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -70,6 +72,14 @@ export function setPackageCommentResolved(
 ): SetCommentResolvedResult {
   const store = packageStore.bodyStore();
   const beforePackage = packageStore.currentPackage();
+  // A package-ONLY write: no story op accompanies it, so the per-op gate never sees it and
+  // the package channel cannot refuse forms protection without also refusing a legitimate
+  // field fill. Asked here instead, or a form sent out for filling came back with every
+  // comment thread resolved by a reader who could not type a character.
+  const locked = lifecycleProtectionRefusal(settingsPartOf(beforePackage), {
+    op: 'setCommentResolved',
+  });
+  if (locked) return { ok: false, reason: locked };
   const checkpoint = store.checkpoint();
   store.graftPackage(() => packageStore.currentPackage());
   return runObservedStoreTransaction(
@@ -108,6 +118,14 @@ export function deletePackageComments(
   noteId?: number
 ): boolean {
   if (comments.length === 0) return false;
+  // Package-only, like the resolve above: asked here because no story op carries it.
+  if (
+    lifecycleProtectionRefusal(settingsPartOf(packageStore.currentPackage()), {
+      op: 'deleteComments',
+    })
+  ) {
+    return false;
+  }
   const storyPart =
     scope.kind === 'body' ? packageStore.bodyStore().part : packageStore.partFor(scope);
   if (!storyPart) return false;

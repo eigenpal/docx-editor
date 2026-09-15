@@ -237,6 +237,16 @@ export interface PaginatedSurface {
   toggleList(kind: 'bullet' | 'ordered'): boolean;
   /** Whether every paragraph the selection touches is already a list of `kind`. */
   isListActive(kind: 'bullet' | 'ordered'): boolean;
+  /**
+   * Whether enforced filling-in-forms protection would refuse a write AT THE CARET.
+   *
+   * Forms protection inverts the usual rule: the document is read-only except inside a form
+   * field, so the answer depends on where the caret is and cannot be read from the mode. The
+   * gate asks it so a refused edit is refused VISIBLY — before this the store dropped the
+   * write and the command still answered `{ ok: true, changed: false }`, with Bold enabled
+   * over a document that could not take it.
+   */
+  formsProtectionRefusesWrite(): boolean;
   /** Select the whole document. */
   selectAll(): void;
   /**

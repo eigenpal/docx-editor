@@ -97,9 +97,8 @@ describe('toggling protection', () => {
     const saved = await settingsOf(editor);
     expect(saved).toContain('w:edit="forms"');
     expect(saved).toContain('w:enforcement="1"');
-    // Enforced: the body is read-only. The store answers with no change, as it does for any
-    // write forms protection refuses.
-    expect(typeAt(editor, 0, 0, 'x')).toEqual({ ok: true, changed: false });
+    // Enforced: the body outside a form field is read-only, and says so.
+    expect(typeAt(editor, 0, 0, 'x')).toMatchObject({ ok: false, code: 'locked' });
 
     expect(editor.exec(TOGGLE)).toEqual({ ok: true, changed: true });
     expect(protection(editor)).toEqual({ edit: 'forms', enforced: false, password: false });
@@ -358,6 +357,23 @@ describe('read-only and comments-only protection', () => {
       editor.exec({ type: 'setHeaderFooterOptions', sectionIndex: 0, titlePage: true }).ok
     ).toBe(false);
     expect(editor.exec({ type: 'insertNote', noteKind: 'footnote' }).ok).toBe(false);
+  });
+
+  test('a write outside a form field is refused, not silently dropped', () => {
+    // Word greys the formatting controls out under forms protection and takes typing only in
+    // a field. The store already refused these writes; before this the command still answered
+    // `{ ok: true, changed: false }` and the toolbar offered Bold on a document that could not
+    // take it — the same invisible drop this whole gate exists to prevent. That a field still
+    // fills is pinned at the store, in `text-form-field-editing.test.ts`.
+    const editor = mount({ document: trackedDocx(FORMS) });
+    expect(editor.can({ type: 'insertText', text: 'x' })).toMatchObject({
+      ok: false,
+      code: 'locked',
+    });
+    expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(false);
+    expect(editor.surface!.session.bodyText()).toBe('tracked');
+    expect(toolbarCommandState(editor, 'text.bold').enabled).toBe(false);
+    expect(toolbarCommandState(editor, 'text.bold').disabledReason).not.toBeNull();
   });
 
   test('a forms-protected document loaded after a read-only one is fillable', () => {

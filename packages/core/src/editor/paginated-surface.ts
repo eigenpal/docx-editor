@@ -14,7 +14,11 @@ import {
   createTextFormFieldInteraction,
   type PendingTextFormInput,
 } from './surface-text-form-fields.ts';
-import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
+import {
+  formsProtectionEnabled,
+  sectionProtectsForms,
+  textFormFieldsOf,
+} from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
 
@@ -4555,6 +4559,7 @@ export function mountPaginatedSurface(
     applyGatedTreeOps: (ops, before, after, scope) =>
       applyJournaledOps(ops, before, after, scope ?? storyScope()),
     storyScope,
+    formsProtectionRefusesWrite,
     imageDecodePort: () => decodePort,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
@@ -5941,6 +5946,30 @@ export function mountPaginatedSurface(
   // The selection mirror checks this handle to avoid adopting browser selection mid-drag.
   // It is assigned once the surface exists.
   let pointer: PointerController | null = null;
+  /** Enforced forms protection reaching the paragraph the caret is in. */
+  function formsProtectionAt(paragraphId = selection.head.paragraphId): boolean {
+    if (!formsProtectionEnabled(session.settingsRoot())) return false;
+    return sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId);
+  }
+
+  /**
+   * Would a write at the caret be refused by forms protection?
+   *
+   * Only outside an enabled fillable field: the whole point of this protection is that the
+   * fields stay editable, so the answer is about WHERE the caret is, not about the mode. A
+   * range selection is judged by its head, the same position a keystroke would land at.
+   */
+  function formsProtectionRefusesWrite(): boolean {
+    const { paragraphId, offset } = selection.head;
+    if (!formsProtectionAt(paragraphId)) return false;
+    const part = partOfNodeId(session, paragraphId) ?? session.part();
+    const paragraph = findNode(part, paragraphId);
+    if (paragraph?.kind !== 'paragraph') return true;
+    return !textFormFieldsOf(paragraph).some(
+      (field) => field.enabled && offset >= field.start && offset <= field.end
+    );
+  }
+
   textFormInteraction = createTextFormFieldInteraction(
     {
       onRequest: options.onRequestTextFormField,
@@ -5952,9 +5981,7 @@ export function mountPaginatedSurface(
       part: (paragraphId?: string) =>
         partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
       parts: () => session.storyParts(),
-      protected: (paragraphId = selection.head.paragraphId) =>
-        formsProtectionEnabled(session.settingsRoot()) &&
-        sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+      protected: (paragraphId = selection.head.paragraphId) => formsProtectionAt(paragraphId),
       selection: () => selection,
       select: (next) => setSelection(next),
       editable: () => editingMode === 'edit',
