@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "before": "Changesets includes private workspace version bumps in release plans and release PR notes.",
+  "after": "Only public packages participate in release versioning; private examples and Nuxt stay outside the release plan.",
+  "reason": "This changes release metadata only and does not change collaboration packages, stored data, or runtime behavior.",
+  "fields": [],
+  "tests": ["scripts/release-plan.test.ts"],
+  "changeset": null,
+  "migration": null
+}
