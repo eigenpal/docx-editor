@@ -3448,6 +3448,8 @@ export interface SemanticLayoutOptions {
     readonly showFieldCodes?: boolean;
     readonly styleCascade?: StyleCascadeTable;
     readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
+    // @internal
+    readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
 // @public

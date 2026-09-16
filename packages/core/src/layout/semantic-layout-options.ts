@@ -140,6 +140,8 @@ export interface SemanticLayoutOptions {
   readonly showFieldCodes?: boolean;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
+  /** @internal Word TOC character-style suppression. */
+  readonly tocLinkStyleRanges?: import('./toc-link-formatting.ts').TocLinkRanges;
   /**
    * The document's parsed metadata, for document-property fields (TITLE, AUTHOR, …). Read once
    * by the surface and shared across body, table, note and header/footer flows.

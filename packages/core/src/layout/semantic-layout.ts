@@ -1,3 +1,4 @@
+import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
@@ -416,13 +417,18 @@ export function layoutSemanticDocument(
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
   const controlToken = contentControlContextToken(part);
+  const linkStyleRanges = tocLinkRanges(part);
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
     fieldCodeRanges: options.showFieldCodes ? tocCodeRanges(part) : undefined,
+    tocLinkStyleRanges: linkStyleRanges,
     displayMode,
     producer: producerWithControlContext(
-      options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer,
-      controlToken
+      producerWithControlContext(
+        options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer,
+        controlToken
+      ),
+      tocLinkStyleToken(linkStyleRanges)
     ),
     tocFieldChromeParagraphIds:
       options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
@@ -1663,6 +1669,7 @@ function layoutBlocksPass(
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     showFieldCodes: options.showFieldCodes,
     fieldCodeRanges: options.fieldCodeRanges,
+    tocLinkStyleRanges: options.tocLinkStyleRanges,
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
     bodyPageFields: bodyPageFieldContext,
@@ -1814,6 +1821,7 @@ function layoutBlocksPass(
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         showFieldCodes: options.showFieldCodes,
         fieldCodeRanges: options.fieldCodeRanges?.get(paragraphId),
+        tocLinkStyleRanges: options.tocLinkStyleRanges?.get(paragraphId),
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
         bodyPageFields: bodyPageFieldContext,

@@ -135,6 +135,8 @@ export interface ParagraphFlowOptions {
   readonly showFieldCodes?: boolean;
   /** @internal */
   readonly fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[];
+  /** @internal Word TOC character-style suppression. */
+  readonly tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[];
   /**
    * The document's parsed metadata, for document-property fields (TITLE, AUTHOR, …).
    *
@@ -478,7 +480,8 @@ export function breakParagraph(
     flow?.refFields,
     flow?.revisionAuthorFilter,
     flow?.showFieldCodes,
-    flow?.fieldCodeRanges
+    flow?.fieldCodeRanges,
+    flow?.tocLinkStyleRanges
   );
   const allPieces = bidiPieces(
     rawPieces,

@@ -66,6 +66,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   drawingSourceOrder: 'layout-internal',
   tocFieldChromeParagraphIds: 'layout-internal',
   fieldCodeRanges: 'layout-internal',
+  tocLinkStyleRanges: 'layout-internal',
   emptyTocPlaceholderParagraphIds: 'layout-internal',
   emptyTocSuppressedResultParagraphIds: 'layout-internal',
 } satisfies Readonly<Record<keyof SemanticLayoutOptions, SemanticLayoutOptionRole>>);

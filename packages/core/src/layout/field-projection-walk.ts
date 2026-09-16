@@ -1,3 +1,4 @@
+import { tocLinkCascader } from './toc-link-formatting.ts';
 import { displayFieldCodes } from './field-code-display.ts';
 // Safe PAGE / NUMPAGES / SECTIONPAGES field projection for read-only page furniture.
 //
@@ -123,13 +124,17 @@ export function piecesOfParagraphForDisplay(
   refFields?: RefFieldContext,
   authorFilter?: RevisionAuthorFilter,
   showFieldCodes = false,
-  fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[]
+  fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[],
+  tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[]
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
 
   const pieces: FieldAwarePiece[] = [];
   let offset = 0;
+  cascadeRuns = tocLinkCascader(cascadeRuns, showFieldCodes ? undefined : tocLinkStyleRanges, () =>
+    pending?.atomic ? pending.atomStart : offset
+  );
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 

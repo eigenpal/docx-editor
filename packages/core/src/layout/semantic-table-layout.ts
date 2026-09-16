@@ -213,6 +213,8 @@ export interface TableFlowDeps {
   readonly showFieldCodes?: boolean;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
+  /** @internal Word TOC character-style suppression. */
+  readonly tocLinkStyleRanges?: import('./toc-link-formatting.ts').TocLinkRanges;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -527,6 +529,7 @@ function placeCellParagraph(
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       showFieldCodes: deps.showFieldCodes,
       fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
+      tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
       suppressEmptyPlaceholderLine: deps.fieldCodeRanges
         ?.get(paragraphId)
         ?.some((range) => range.suppressParagraph),
