@@ -102,7 +102,8 @@ function detectTocsInContainer(
 ): readonly DetectedToc[] {
   const cached = detectedTocsByContainer.get(container);
   if (cached) return cached;
-  const stack: (OpenField | null)[] = [];
+  const stack: OpenField[] = [];
+  let overflowDepth = 0;
   const completed: ContainerTocResult[] = [];
 
   const processParagraph = (paragraph: OoxmlElement): void => {
@@ -119,8 +120,8 @@ function detectTocsInContainer(
       }
       const type = fldCharType(token);
       if (type === 'begin') {
-        if (stack.length >= TOC_MAX_FIELD_NESTING) {
-          stack.push(null);
+        if (overflowDepth > 0 || stack.length >= TOC_MAX_FIELD_NESTING) {
+          overflowDepth += 1;
         } else {
           stack.push({
             beginNodeId: token.id,
@@ -134,6 +135,13 @@ function detectTocsInContainer(
             invalid: false,
           });
         }
+        continue;
+      }
+
+      // Retain only the supported nesting levels. A null placeholder per extra
+      // begin makes every following text token scan an arbitrarily large stack.
+      if (overflowDepth > 0) {
+        if (type === 'end') overflowDepth -= 1;
         continue;
       }
 
