@@ -345,7 +345,11 @@ function computeRevisionItemsOf(
       )
   );
   const order = dependencies.deepOrder(part);
-  return pairReplacements(mergeParagraphBreakEdits(items, part, order, previewByNode), order);
+  // Finish inline chains before a paragraph mark connects their endpoints. Otherwise a
+  // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
+  // an atomic field, leaving those wrappers as separate review decisions.
+  const inlineItems = mergeAdjacentSameKindEdits(items, order);
+  return pairReplacements(mergeParagraphBreakEdits(inlineItems, part, order, previewByNode), order);
 }
 
 /**
