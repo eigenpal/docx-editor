@@ -63,6 +63,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.pageXofY': 'format_list_numbered',
   'review.paragraphMarks': 'format_paragraph',
   'review.protectDocument': 'lock',
+  'review.simpleMarkup': 'visibility',
   'review.allMarkup': 'visibility',
   'review.noMarkup': 'visibility',
   'review.original': 'visibility',

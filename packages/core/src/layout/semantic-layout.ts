@@ -97,6 +97,7 @@ import {
 import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
 import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
+import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
 import {
   clipInlineDrawingRecordToRegion,
@@ -2373,8 +2374,15 @@ function layoutBlocksPass(
 
     const { revisions: markRevisions, formatRevision: markFormatRevision } =
       visibleParagraphMarkRevisionsOf(entry.paragraph, displayMode, authorFilter);
+    const markChangeSites = resolvedParagraphMarkChangeSites(
+      entry.paragraph,
+      displayMode,
+      authorFilter
+    );
     const mergeGroup = paragraphMergeGroupOf(entry.paragraph);
-    const mergeBoundaries = mergeGroup ? mergeBoundariesOf(mergeGroup) : null;
+    const mergeBoundaries = mergeGroup
+      ? mergeBoundariesOf(mergeGroup, displayMode, authorFilter)
+      : null;
 
     /**
      * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
@@ -2580,6 +2588,7 @@ function layoutBlocksPass(
         // own declaration carries the rest of the reasoning.
         ...(isLast ? { paragraphEnd: true as const } : {}),
         ...(isLast && showsMarkup ? markRevisionFields(markRevisions, markFormatRevision) : {}),
+        ...(isLast && markChangeSites.length > 0 ? { markChangeSites } : {}),
         lines: mergedLines ?? pending,
         ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts),
         box: { x: columnX + indent.left, y: top, width: available, height },
@@ -2855,6 +2864,7 @@ function layoutBlocksPass(
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
         ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
+        ...(pendingLine.changeSites ? { changeSites: pendingLine.changeSites } : {}),
       };
       lineCounter += 1;
       if (pending.length === 0) fragmentFirstLineSkip = skipBefore;

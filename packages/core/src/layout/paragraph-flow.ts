@@ -68,6 +68,7 @@ import {
 import { styleForFontSlot } from './script-itemization.ts';
 import { createLineExclusionClearance } from './line-exclusion-clearance.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { MutableChangeSite } from './field-pieces.ts';
 import {
   buildInlineDrawingRecord,
   inlineDrawingVerticalLayout,
@@ -463,6 +464,9 @@ export function breakParagraph(
   // from the emitted spans, because in the proposed result a deletion produces no span at all
   // and its offsets would otherwise look like ordinary empty positions.
   const deletedRanges: { start: number; end: number }[] = [];
+  // Content a resolved view removed leaves no piece either; its site is collected the same
+  // way, for the Simple Markup change bar. Kept content carries its sites on the piece.
+  const changeSites: MutableChangeSite[] = [];
   const rawPieces = piecesOfParagraphForDisplay(
     paragraph,
     inheritedRunProperties,
@@ -481,7 +485,8 @@ export function breakParagraph(
     flow?.revisionAuthorFilter,
     flow?.showFieldCodes,
     flow?.fieldCodeRanges,
-    flow?.tocLinkStyleRanges
+    flow?.tocLinkStyleRanges,
+    changeSites
   );
   const allPieces = bidiPieces(
     rawPieces,
@@ -554,9 +559,11 @@ export function breakParagraph(
     piece: FieldAwarePiece
   ): {
     revisions?: readonly RevisionAttribution[];
+    changeSites?: readonly RevisionAttribution[];
     fieldAtom?: FieldAwarePiece['fieldAtom'];
   } => ({
     ...(piece.revisions === undefined ? {} : { revisions: piece.revisions }),
+    ...(piece.changeSites === undefined ? {} : { changeSites: piece.changeSites }),
     // Rides the same carrier for the same reason: only the paragraph walk knows an atom was a
     // field, and by paint time its result is indistinguishable from ordinary text.
     ...(piece.fieldAtom === undefined ? {} : { fieldAtom: piece.fieldAtom }),
@@ -887,6 +894,64 @@ export function breakParagraph(
       .map((range) => ({ start: Math.max(range.start, start), end: Math.min(range.end, end) }));
 
   /**
+   * Every revision a resolved view answered on the line: those its spans and anchors carry,
+   * and those recorded for content the view removed between the line's offsets. One entry
+   * per address, as a wrapper split across runs would otherwise be listed once per run.
+   */
+  const revisionKey = (revision: RevisionAttribution): string =>
+    `${revision.kind}|${revision.id}|${revision.author}|${revision.nodeId}`;
+  const mergeSites = (
+    lists: readonly (readonly RevisionAttribution[] | undefined)[]
+  ): RevisionAttribution[] => {
+    const seen = new Set<string>();
+    const out: RevisionAttribution[] = [];
+    for (const list of lists) {
+      if (!list) continue;
+      for (const revision of list) {
+        const key = revisionKey(revision);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(revision);
+      }
+    }
+    return out;
+  };
+  /** Removed-content sites some line has already taken, so the trailing pass takes the rest. */
+  const claimedSites = new Set<MutableChangeSite>();
+  const changeSitesOn = (
+    line: { readonly start: number; readonly end: number },
+    spans: readonly StyleSpanRecord[],
+    carried: readonly RevisionAttribution[] | undefined
+  ): RevisionAttribution[] => {
+    const removed: RevisionAttribution[] = [];
+    for (const site of changeSites) {
+      // Strict overlap, as deleted ranges use, so a site ending where the next line starts
+      // is not listed twice — except on a line with no extent at all, which a view that
+      // removed every character of its paragraph leaves behind: the site sits on it.
+      const overlaps = site.start < line.end && site.end > line.start;
+      const emptyLineHost =
+        line.start === line.end && site.start <= line.start && site.end >= line.start;
+      if (!overlaps && !emptyLineHost) continue;
+      claimedSites.add(site);
+      removed.push(...site.revisions);
+    }
+    return mergeSites([carried, ...spans.map((span) => span.changeSites), removed]);
+  };
+  /**
+   * Content the view removed at the END of the paragraph — a deleted last word, a picture
+   * after the final character — starts where the last line ends and overlaps no line. It
+   * belongs to the last line, which is where a reader would have seen it.
+   */
+  const claimTrailingChangeSites = (built: readonly PendingLine[]): void => {
+    const last = built[built.length - 1];
+    if (!last) return;
+    const trailing = changeSites.filter((site) => !claimedSites.has(site));
+    if (trailing.length === 0) return;
+    for (const site of trailing) claimedSites.add(site);
+    last.changeSites = mergeSites([last.changeSites, ...trailing.map((site) => site.revisions)]);
+  };
+
+  /**
    * Where the word currently being placed started on this line.
    *
    * A word can span RUNS — `<w:del>which</w:del><w:ins>that</w:ins>` is one word, so is
@@ -1047,6 +1112,8 @@ export function breakParagraph(
     markWrapAdvances();
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
+    const sites = changeSitesOn(line, line.spans, line.changeSites);
+    if (sites.length > 0) line.changeSites = sites;
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
@@ -1142,6 +1209,10 @@ export function breakParagraph(
       ) {
         line.anchorRevisions = [...(line.anchorRevisions ?? []), ...piece.revisions];
       }
+      // A resolved view keeps the picture as plain furniture; the line still records the site.
+      if (piece.anchoredAtom && piece.changeSites) {
+        line.changeSites = [...(line.changeSites ?? []), ...piece.changeSites];
+      }
       line.end = piece.end;
       continue;
     }
@@ -1167,6 +1238,10 @@ export function breakParagraph(
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
         })
       );
+      // A picture a resolved view kept has no span to carry its site; the line takes it.
+      if (piece.changeSites) {
+        line.changeSites = [...(line.changeSites ?? []), ...piece.changeSites];
+      }
       line.width += atomWidth;
       line.end = piece.end;
       wordStartSpan = -1;
@@ -1608,6 +1683,7 @@ export function breakParagraph(
       flow,
       true
     );
+  claimTrailingChangeSites(lines);
   if (cacheKey !== null && cache)
     cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
   return lines;

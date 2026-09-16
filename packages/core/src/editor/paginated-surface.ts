@@ -113,11 +113,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
-import {
-  DEFAULT_REVISION_DISPLAY_MODE,
-  type RevisionAuthorFilter,
-  type RevisionDisplayMode,
-} from '../layout/revision-projection.ts';
+import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { markRemovedInMode } from '../layout/revision-visibility.ts';
 import {
   createRevisionAuthorVisibility,
@@ -216,6 +212,7 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
+import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
@@ -838,13 +835,19 @@ export function mountPaginatedSurface(
   });
   // Layout, furniture, and formatting writes share the view's current projection (#497).
   let showFieldCodes = false;
-  let displayMode = options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-  const revisionDisplayMode = (): RevisionDisplayMode => displayMode;
+  const reviewView = createReviewViewState(
+    options.revisionDisplayMode,
+    !!options.reviewModel,
+    (mode) => surface.setRevisionDisplayMode(mode)
+  );
+  const reviewDisplayMode = reviewView.view;
+  const revisionDisplayMode = reviewView.projection;
+  const changeBarsMode = reviewView.changeBars;
   const revisionAuthorVisibility =
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
   const revisionFilter = (): RevisionAuthorFilter | undefined =>
-    revisionAuthorVisibility.filterForSession(session);
+    reviewView.filter(revisionAuthorVisibility.filterForSession(session));
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
     const paragraph = findNode(part, paragraphId);
@@ -2710,6 +2713,8 @@ export function mountPaginatedSurface(
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         shadeFormFields: shadeFormFields(),
         showParagraphMarks: paragraphMarks.get(),
+        changeBars: changeBarsMode(),
+        changeBarsToggle: !!options.reviewModel,
         ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
         ...(activeHf
           ? {
@@ -5200,7 +5205,7 @@ export function mountPaginatedSurface(
       );
     },
 
-    revisionDisplayMode,
+    revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
     applyAutomationOps: (staged, scope, packageEdits) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
@@ -5352,9 +5357,9 @@ export function mountPaginatedSurface(
 
     revisionAuthors: () => reviewAuthors.get().value,
     setRevisionDisplayMode(mode) {
-      if (destroyed || mode === displayMode) return;
+      if (destroyed || mode === reviewView.view()) return;
       flushPendingInputAndLayout();
-      displayMode = mode;
+      reviewView.set(mode);
       applyRevisionAuthorVisibility(true);
     },
     hiddenRevisionAuthors: () => revisionAuthorVisibility.hiddenAuthors,
@@ -6195,6 +6200,7 @@ export function mountPaginatedSurface(
         hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
       },
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
+      ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
       isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,
     },
     options.pointer ? { mode: options.pointer } : {}

@@ -275,6 +275,15 @@ export const CHROME_GROUPS: readonly [{
 }, {
     readonly controls: readonly [{
         readonly defaultToolbar: false;
+        readonly id: "simpleMarkup";
+        readonly labelKey: "review.simpleMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
         readonly id: "allMarkup";
         readonly labelKey: "review.allMarkup";
         readonly paths: readonly string[];
@@ -674,7 +683,7 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
@@ -1572,7 +1581,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         beforePt?: number | null;
     };
     setReviewDisplayMode: {
-        mode: 'all-markup' | 'proposed' | 'original';
+        mode: ReviewDisplayMode;
     };
     setSelection: {
         anchor: DocAnchor;
@@ -1883,7 +1892,7 @@ export interface EditorSnapshot {
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
-    readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
+    readonly reviewDisplayMode?: ReviewDisplayMode;
     readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;
@@ -2584,7 +2593,7 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
-    readonly displayModes: readonly RevisionDisplayMode[];
+    readonly displayModes: readonly ReviewDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 

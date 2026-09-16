@@ -32,6 +32,8 @@ export interface PaintOptions {
     readonly activeHeaderFooterPageIndex?: number;
     readonly activeHeaderFooterRId?: string;
     readonly ariaHidden?: boolean;
+    readonly changeBars?: ChangeBarsMode;
+    readonly changeBarsToggle?: boolean;
     readonly contentControlChrome?: {
         readonly activeIds?: ReadonlySet<string>;
         readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];

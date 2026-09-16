@@ -235,18 +235,22 @@ Define a dark-theme rule when you tint comment bands by author.
 
 ## Style the change bar
 
-The change bar is the hairline in the left margin beside every changed line. Two
-tokens control it. The bar is painted on the page sheet, outside the dark-mode
-inversion, so define both light and dark values when you change the color.
+The change bar is the rule in the left margin beside every changed line. Two
+tokens control the gray bar of **All Markup**, and two more the red bar of
+**Simple Markup**. The bar is painted on the page sheet, outside the dark-mode
+inversion, so define both light and dark values when you change a color.
 
 ```css
 .docx-editor {
   --doc-review-change-bar: #8a8a8a;
   --doc-review-change-bar-width: 2px;
+  --doc-review-change-bar-simple: #d32f2f;
+  --doc-review-change-bar-simple-width: 3px;
 }
 
 .docx-editor.dark {
   --doc-review-change-bar: #b0b0b0;
+  --doc-review-change-bar-simple: #ef5350;
 }
 ```
 
@@ -278,8 +282,11 @@ by redefining the token:
 ```
 
 Each bar also carries `data-docx-story` with `body`, `header`, `footer`,
-`footnote`, or `endnote`. While a header or footer is being edited, the bars of
-the other stories dim with the text beside them.
+`footnote`, or `endnote`, and the overlay carries `data-docx-change-bars-mode`
+with `all-markup` or `simple-markup`. While a header or footer is being edited,
+the bars of the other stories dim with the text beside them. A click on a bar
+switches between Simple Markup and All Markup; the bars are the only painted
+furniture that takes the pointer.
 
 To hide the bars, set `display: none` on `.docx-change-bars`.
 

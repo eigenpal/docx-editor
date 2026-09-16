@@ -37,6 +37,9 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
   { file: 'contracts/editor.ts', to: 'collaboration' },
+  // The review view vocabulary (`ReviewDisplayMode`) is the layout's projection union widened
+  // by Simple Markup: the contract names it, the layout owns it. Erased, like the edges above.
+  { file: 'contracts/editor-review.ts', to: 'layout' },
   // Split out of `contracts/editor.ts` above, and it inherits that file's coupling with it:
   // the selected-image read model names drawing, crop and image-resource types the store
   // lane owns. Compile-time only, and one fewer line in a file at its cap.

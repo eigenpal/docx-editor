@@ -16,12 +16,24 @@ import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { OoxmlParagraphNode } from '@docx-editor.dev/core/store';
 import type { ParagraphMergeGroup } from './story-roots.ts';
 import type { LineRecord, SourceRange, StyleSpanRecord } from './semantic-records.ts';
+import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
+import type {
+  RevisionAttribution,
+  RevisionAuthorFilter,
+  RevisionDisplayMode,
+} from './revision-projection.ts';
 
 interface MergeMember {
   readonly paragraphId: string;
   /** Where this member's content starts in the merged paragraph's offsets. */
   readonly base: number;
   readonly length: number;
+  /**
+   * The mark decisions the view answered to fold this member into the next — the removed
+   * break the merge exists for. Reported on the line that holds the join, for the Simple
+   * Markup change bar; absent on the survivor, whose mark stays.
+   */
+  readonly markChangeSites?: readonly RevisionAttribution[];
 }
 
 export interface MergeBoundaries {
@@ -30,14 +42,28 @@ export interface MergeBoundaries {
 }
 
 /** Member bases, in the merged paragraph's own offset space. */
-export function mergeBoundariesOf(group: ParagraphMergeGroup): MergeBoundaries {
+export function mergeBoundariesOf(
+  group: ParagraphMergeGroup,
+  displayMode?: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): MergeBoundaries {
   const members: MergeMember[] = [];
   let base = 0;
-  for (const member of group.members) {
+  const last = group.members.length - 1;
+  group.members.forEach((member, index) => {
     const length = paragraphOffsetIndex(member as OoxmlParagraphNode).length;
-    members.push({ paragraphId: member.id, base, length });
+    const markChangeSites =
+      index < last && displayMode
+        ? resolvedParagraphMarkChangeSites(member, displayMode, authorFilter)
+        : [];
+    members.push({
+      paragraphId: member.id,
+      base,
+      length,
+      ...(markChangeSites.length > 0 ? { markChangeSites } : {}),
+    });
     base += length;
-  }
+  });
   return { members, total: base };
 }
 
@@ -88,7 +114,24 @@ export function remapMergedLines(
   lines: readonly LineRecord[],
   boundaries: MergeBoundaries
 ): readonly LineRecord[] {
+  // Each join lands on ONE line: the one whose merged-offset extent holds the member's end.
+  // The end is EXCLUSIVE so a join at a line break is the next line's, not both — this runs
+  // once per fragment, and a page break at the join would otherwise report it twice — except
+  // at the very end of the merged paragraph (an empty survivor), where only the last line can.
+  const joins = boundaries.members
+    .filter((member) => member.markChangeSites !== undefined)
+    .map((member) => ({ offset: member.base + member.length, sites: member.markChangeSites! }));
   return lines.map((line) => {
+    const joinSites = joins
+      .filter(
+        (join) =>
+          join.offset >= line.range.start &&
+          (join.offset < line.range.end ||
+            (join.offset === line.range.end && join.offset === boundaries.total))
+      )
+      .flatMap((join) => join.sites);
+    const changeSites =
+      joinSites.length > 0 ? [...(line.changeSites ?? []), ...joinSites] : line.changeSites;
     const spans = line.spans.map((span) => remapSpan(span, boundaries));
     const first = spans[0];
     // Remapped FIRST, because the line's own extent has to count them: an inline drawing is
@@ -141,6 +184,7 @@ export function remapMergedLines(
       spans,
       ...(drawings ? { drawings } : {}),
       ...(deletedRanges ? { deletedRanges } : {}),
+      ...(changeSites ? { changeSites } : {}),
     };
   });
 }

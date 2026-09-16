@@ -529,6 +529,37 @@ describe('change bars', () => {
     );
   });
 
+  test('a merge join at a page break is one Simple Markup site, on the line that holds it', () => {
+    // Merged lines are remapped once per FRAGMENT: a removed paragraph mark whose join offset
+    // sits exactly at a page break used to be claimed by the last line of one page and the
+    // first line of the next. The join belongs to the line whose extent holds it.
+    const geometry = {
+      width: 200,
+      height: 60,
+      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    };
+    const body =
+      `<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+      `${run('one')}<w:r><w:br/></w:r>${run('two')}<w:r><w:br/></w:r>${run('three')}` +
+      `<w:r><w:br/></w:r></w:p>` +
+      `<w:p>${run('four')}</w:p>`;
+    const layout = layoutSemanticDocument(load(body), 1, {
+      measurer,
+      geometry,
+      displayMode: 'proposed',
+    });
+    // Three lines fit a page: the survivor's own line — and the join before it — opens page two.
+    expect(layout.pages).toHaveLength(2);
+    const sites = layout.pages.flatMap((page) =>
+      page.fragments.flatMap((block) =>
+        block.kind === 'paragraph'
+          ? block.lines.flatMap((line) => (line.changeSites ?? []).map((site) => site.id))
+          : []
+      )
+    );
+    expect(sites).toEqual(['1']);
+  });
+
   test('a clean line gets none', () => {
     const root = paint(`<w:p>${run('nothing tracked here')}</w:p>`);
     expect(bars(root)).toHaveLength(0);

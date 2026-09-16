@@ -48,7 +48,11 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
-import { paintPageChangeBars, reconcilePageChangeBars } from './semantic-paint-change-bars.ts';
+import {
+  paintPageChangeBars,
+  reconcilePageChangeBars,
+  type ChangeBarsMode,
+} from './semantic-paint-change-bars.ts';
 import {
   applyHeaderFooterPaintChrome,
   headerFooterBandHeightPt,
@@ -214,6 +218,19 @@ export interface PaintOptions {
    */
   readonly revisionStyles?: RevisionStyles;
   /**
+   * Which change bars the margin draws: All Markup's neutral rule beside attributed lines
+   * (the default, whatever the layout's projection — a layout that carries attribution gets
+   * its bars), Simple Markup's red rule beside the change sites a resolved layout published,
+   * or none, which the review chrome names for its resolved views.
+   */
+  readonly changeBars?: ChangeBarsMode;
+  /**
+   * Whether a change bar takes the pointer as Word's does — a click swaps Simple and All
+   * Markup. Only a host that can act on the press should set it; the bars stay inert
+   * furniture otherwise.
+   */
+  readonly changeBarsToggle?: boolean;
+  /**
    * Relationship id of the header/footer story currently open for editing.
    *
    * When set, the matching `[data-docx-hf]` container is editable and every body
@@ -289,6 +306,8 @@ type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 type DrawingPaintHostContext = PaintContext & {
   readonly drawingStrings?: DrawingPaintStrings;
   readonly urlRegistry?: DrawingUrlRegistry | null;
+  readonly changeBars?: ChangeBarsMode;
+  readonly changeBarsToggle?: boolean;
   /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
   readonly paintInstance?: string;
 };
@@ -296,6 +315,8 @@ type DrawingPaintHostContext = PaintContext & {
 interface ResolvedPaintContext extends DrawingPaintHostContext {
   readonly drawingStrings: DrawingPaintStrings;
   readonly urlRegistry: DrawingUrlRegistry | null;
+  readonly changeBars: ChangeBarsMode;
+  readonly changeBarsToggle: boolean;
 }
 
 function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintContext {
@@ -303,6 +324,8 @@ function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintCont
     ...ctx,
     drawingStrings: ctx.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS,
     urlRegistry: ctx.urlRegistry ?? null,
+    changeBars: ctx.changeBars ?? 'none',
+    changeBarsToggle: ctx.changeBarsToggle ?? false,
   };
 }
 
@@ -2313,7 +2336,13 @@ function paintPage(
   // one column per sheet. Painted from the whole page — body, notes, header, footer and
   // text boxes — so a change that crosses a paragraph or a cell boundary is one unbroken
   // rule. LAST on the sheet, which is also where block adoption puts a rebuilt one.
-  const changeBars = paintPageChangeBars(document, page, options.scale);
+  const changeBars = paintPageChangeBars(
+    document,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle
+  );
   if (changeBars) element.append(changeBars);
   return element;
 }
@@ -2695,7 +2724,14 @@ function adoptPageBlocks(
   }
   // The margin rules are a page-level overlay over the adopted blocks, so they are the one
   // piece of the sheet a block change can move; left alone when it did not.
-  reconcilePageChangeBars(document, retained.element, page, options.scale);
+  reconcilePageChangeBars(
+    document,
+    retained.element,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle
+  );
   return { record: page, materialized: true, element: retained.element, content, blocks };
 }
 
@@ -2791,6 +2827,8 @@ export function paintSemanticLayoutWithAuthorSlots(
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
     showParagraphMarks: options.showParagraphMarks ?? false,
+    changeBars: options.changeBars ?? 'all-markup',
+    changeBarsToggle: options.changeBarsToggle ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(revisionStyles ? { revisionStyles } : {}),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
@@ -2824,7 +2862,8 @@ export function paintSemanticLayoutWithAuthorSlots(
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
-    `rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}`;
+    `rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}|` +
+    `bars:${resolved.changeBars}:${resolved.changeBarsToggle}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;
   const reusable = parametersUnchanged

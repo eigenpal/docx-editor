@@ -44,6 +44,8 @@ export interface PendingLine {
   exclusionSkipBefore?: number;
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
+  /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
+  changeSites?: readonly RevisionAttribution[];
 }
 
 /**
@@ -62,6 +64,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   link: true,
   wrapAdvanceBefore: true,
   revisions: true,
+  changeSites: true,
   fieldAtom: true,
   projected: true,
   equation: true,
@@ -222,6 +225,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
+    ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
   }) as PendingLine;
 }
 

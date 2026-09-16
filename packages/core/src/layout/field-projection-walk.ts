@@ -68,7 +68,11 @@ import {
   type FieldAwarePiece,
   type FieldLinkProjector,
   type HyperlinkProjector,
+  type MutableChangeSite,
   type MutableModelRange,
+  capturedResultAttribution,
+  removedSiteRecorder,
+  withRunFormatSite,
   type PendingFieldProjection,
   type PieceEmitExtras,
 } from './field-pieces.ts';
@@ -98,6 +102,7 @@ import {
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
+import { resolvedFormatChangeOf } from './revision-formatting-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import { equationRunStyle } from './equation-layout.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
@@ -125,10 +130,14 @@ export function piecesOfParagraphForDisplay(
   authorFilter?: RevisionAuthorFilter,
   showFieldCodes = false,
   fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[],
-  tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[]
+  tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[],
+  changeSites?: MutableChangeSite[]
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
+  const recordRemoved = removedSiteRecorder(changeSites, displayMode, authorFilter);
+  /** The formatting change the view resolved into the run being walked, if any. */
+  let runFormatSite: RevisionAttribution | null = null;
 
   const pieces: FieldAwarePiece[] = [];
   let offset = 0;
@@ -174,11 +183,17 @@ export function piecesOfParagraphForDisplay(
       authorFilter
     );
     if (published === null) return;
+    // A field result flushes with the attribution captured from its result run, its
+    // formatting site included; anything else carries the run being walked.
+    const attributed = withRunFormatSite(
+      published,
+      extras?.revisionsOverride ? (extras.formatSiteOverride ?? null) : runFormatSite
+    );
     const link = effectiveLink ? { link: effectiveLink } : {};
     if (projected) {
       pieces.push({
         text,
-        ...published,
+        ...attributed,
         style,
         start,
         end,
@@ -196,7 +211,7 @@ export function piecesOfParagraphForDisplay(
     if (text.length === 0) return;
     pieces.push({
       text,
-      ...published,
+      ...attributed,
       style,
       start,
       end,
@@ -232,6 +247,7 @@ export function piecesOfParagraphForDisplay(
       if (deletedRanges && revisionsAreDeletion(pending.resultRevisions)) {
         appendModelRange(deletedRanges, start, end);
       }
+      recordRemoved(start, end, pending.resultRevisions);
       pending = null;
       openAtomicBeginId = null;
       return;
@@ -240,7 +256,8 @@ export function piecesOfParagraphForDisplay(
     // `w:hyperlink` captured into `resultLink` wins, exactly as it does for every other field.
     // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
-    const { resultLink, linkSpec, resultRevisions, capturedResultRevisions, formField } = pending;
+    const { resultLink, linkSpec, formField } = pending;
+    const captured = capturedResultAttribution(pending);
     let carriedMemo: PieceEmitExtras | undefined;
     const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
@@ -250,7 +267,7 @@ export function piecesOfParagraphForDisplay(
       // captures an empty stack, and that empty stack is the answer — not whatever wrapper the
       // walk happens to be inside when `end` arrives.
       carriedMemo = {
-        ...(capturedResultRevisions ? { revisionsOverride: resultRevisions } : {}),
+        ...captured,
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
         fieldAtom: { formField },
       };
@@ -321,9 +338,7 @@ export function piecesOfParagraphForDisplay(
           offset,
           offset + pending.cachedText.length,
           {
-            ...(pending.capturedResultRevisions
-              ? { revisionsOverride: pending.resultRevisions }
-              : {}),
+            ...capturedResultAttribution(pending),
             ...(fieldLink ? { linkOverride: fieldLink } : {}),
           }
         );
@@ -358,6 +373,7 @@ export function piecesOfParagraphForDisplay(
         authorFilter,
       });
       if (plan.recordDeleted && deletedRanges) appendModelRange(deletedRanges, start, end);
+      if (!plan.emit) recordRemoved(start, end, revisions);
       if (plan.emit) push('\uFFFC', props, style, true, start, end, plan.extras);
       return;
     }
@@ -415,10 +431,9 @@ export function piecesOfParagraphForDisplay(
     // deletion is malformed and is suppressed unconditionally, because the one thing that must
     // never happen is deleted text flowing as ordinary text.
     const deleted = revisionsAreDeletion(revisions);
-    const suppressed =
-      style.hidden ||
-      !revisionsVisible(revisions, displayMode, authorFilter) ||
-      (grand.kind === 'deletedText' && !deleted);
+    const resolvedAway = !revisionsVisible(revisions, displayMode, authorFilter);
+    const suppressed = style.hidden || resolvedAway || (grand.kind === 'deletedText' && !deleted);
+    if (resolvedAway && !style.hidden) recordRemoved(offset, offset + text.length, revisions);
     if (!suppressed) {
       push(text, props, style, false, offset, offset + text.length, {
         ...(grand.kind === 'hardBreak' ? { breakKind: hardBreakKind(grand) } : {}),
@@ -436,6 +451,9 @@ export function piecesOfParagraphForDisplay(
     if (run.kind !== 'run') return;
     const props = runPropertiesOf(run, inheritedRunProperties, cascadeRuns);
     const style = resolveRunStyle(props, themeFonts);
+    runFormatSite = resolvedFormatChangeOf(
+      run.children.find((child) => child.kind === 'runProperties')
+    );
 
     /**
      * Donate the run's style and attribution to the pending atom's flush, first-wins.
@@ -457,6 +475,7 @@ export function piecesOfParagraphForDisplay(
       }
       if (!pending.capturedResultRevisions) {
         pending.resultRevisions = revisions;
+        pending.resultFormatSite = runFormatSite;
         pending.capturedResultRevisions = true;
         if (!pending.resultLink && currentLink) pending.resultLink = currentLink;
       }
@@ -519,6 +538,7 @@ export function piecesOfParagraphForDisplay(
             // number painted its digits into the ORIGINAL view, with nothing recording that the
             // insertion was what put them there.
             resultRevisions: revisions,
+            resultFormatSite: runFormatSite,
             capturedResultRevisions: revisions.length > 0,
             formField: hasLegacyFormFieldData(grand),
             ...(currentLink ? { resultLink: currentLink } : {}),
@@ -695,6 +715,10 @@ export function piecesOfParagraphForDisplay(
         // The atomic path reserved ONE unit at `begin` and never advanced by the text length,
         // so the range is that reserved unit. Deriving it from the running offset produced
         // `start` values before the paragraph began (a measured `{start: -16, end: 1}`).
+        if (attribution === null) {
+          if (pending.atomic) recordRemoved(pending.atomStart, pending.atomStart + 1, revisions);
+          else recordRemoved(offset, offset + modelWidth, revisions);
+        }
         if (fieldDeleted && deletedRanges) {
           if (pending.atomic) {
             appendModelRange(deletedRanges, pending.atomStart, pending.atomStart + 1);
@@ -843,7 +867,10 @@ export function piecesOfParagraphForDisplay(
     if (revisionsAreDeletion(revisions) && deletedRanges) {
       appendModelRange(deletedRanges, start, start + 1);
     }
-    if (!revisionsVisible(revisions, displayMode, authorFilter)) return;
+    if (!revisionsVisible(revisions, displayMode, authorFilter)) {
+      recordRemoved(start, start + 1, revisions);
+      return;
+    }
 
     const projected = projectSimpleFieldResult({
       simple,
@@ -890,6 +917,9 @@ export function piecesOfParagraphForDisplay(
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
       const style = equationRunStyle(resolveRunStyle(inheritedRunProperties, themeFonts));
+      if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
+        recordRemoved(start, offset, revisions);
+      }
       if (style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
       return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
     }
@@ -899,6 +929,7 @@ export function piecesOfParagraphForDisplay(
     }
     if (child.kind === 'run') {
       processRun(child, depth);
+      runFormatSite = null; // The site belongs to that run alone.
       return;
     }
     if (isContentControl(child)) {

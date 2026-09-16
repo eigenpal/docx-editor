@@ -12,14 +12,18 @@
 // - Continuous. A changed line owns its whole pitch — from its own top (the paragraph's
 //   spacing before, on a first line) to the next line's top (the spacing after, on a last
 //   line) — so adjacent changed paragraphs read as one rule with no gap at the boundary.
-// - Neutral. All Markup paints it grey whatever the change was; the red bar belongs to
-//   Simple Markup, which the editor does not offer. The kind is still published as a class
-//   for a host that wants the colour back.
+// - Neutral in All Markup, grey whatever the change was, beside the lines that carry
+//   markup. Red and heavier in Simple Markup, beside the lines a resolved change touched —
+//   the layout publishes those as change sites, since nothing inline says a thing there.
+//   The kind is still published as a class for a host that wants the colour back.
+// - A toggle. Word swaps Simple and All Markup on a click, in both directions; the bar is
+//   the one piece of furniture on the sheet that takes the pointer.
 // - Everywhere. Body, table cells and tracked rows, headers, footers, footnotes, endnotes
 //   and the text of an anchored text box all draw in the same column; a run-property, a
 //   paragraph-property and a paragraph-mark change draw like an insertion.
-// - Furniture. A one-pixel hairline at every zoom, inert to the pointer, hidden from
-//   assistive technology.
+// - Furniture. A one-pixel hairline at every zoom in All Markup, heavier in Simple Markup,
+//   hidden from assistive technology (the Review menu offers the same toggle), and never a
+//   caret target: the press that toggles the view is consumed before the caret sees it.
 //
 // Kept in its own module so `semantic-paint.ts` stays under the max-lines gate.
 
@@ -41,6 +45,10 @@ import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawi
 export const CHANGE_BARS_CLASS = 'docx-change-bars';
 const CHANGE_BAR_CLASS = 'docx-change-bar';
 
+/** Which bars a paint draws: the view's own, or none for the resolved views. */
+export type ChangeBarsMode = 'all-markup' | 'simple-markup' | 'none';
+type DrawnChangeBarsMode = Exclude<ChangeBarsMode, 'none'>;
+
 /** Which story a bar stands beside; the header-editing chrome dims every other story's. */
 type BarStory = Exclude<SemanticRootStoryKind, 'note-separator'>;
 
@@ -56,6 +64,9 @@ interface BarRun {
 
 /** The page's rules before they become DOM, so an unchanged set can skip the DOM. */
 export interface PageChangeBars {
+  readonly mode: ChangeBarsMode;
+  /** Whether the bars take the pointer as Word's toggle. */
+  readonly toggle: boolean;
   /** Sheet-relative x of the column, already scaled and snapped to a whole pixel. */
   readonly left: number;
   readonly runs: readonly BarRun[];
@@ -89,6 +100,7 @@ function markKinds(run: BarRun, revisions: readonly RevisionAttribution[]): void
 
 /** Where one story's runs come from and how far down the sheet they may reach. */
 interface StoryFrame {
+  readonly mode: DrawnChangeBarsMode;
   readonly story: BarStory;
   /** Sheet-relative y to add to the story's own coordinates. */
   readonly dy: number;
@@ -113,6 +125,14 @@ function collectParagraph(
   for (let index = 0; index <= last; index += 1) {
     const line = lines[index]!;
     revisions.length = 0;
+    if (frame.mode === 'simple-markup') {
+      // The resolved projection carries no markup; the layout published where the view
+      // answered a change instead, per line and on the mark.
+      if (line.changeSites) revisions.push(...line.changeSites);
+      if (index === last && fragment.markChangeSites) revisions.push(...fragment.markChangeSites);
+      if (revisions.length > 0) pushLine(fragment, lines, index, frame, revisions, runs);
+      continue;
+    }
     for (const span of line.spans) {
       if (span.revisions) revisions.push(...span.revisions);
       // A run-property change is a revision with no wrapper: it lives in the run's own
@@ -140,41 +160,59 @@ function collectParagraph(
       if (paragraphFormat) revisions.push(paragraphFormat);
     }
     if (revisions.length === 0) continue;
-    // The line's PITCH, not its box: Word's rule runs from the top of the paragraph's own
-    // spacing before to the top of whatever comes next, so two changed paragraphs in a row
-    // draw one unbroken rule. Line boxes alone left the spacing after as a gap at every
-    // paragraph boundary.
-    const top = (index === 0 ? fragment.box.y : line.box.y) + frame.dy;
-    const bottom = Math.min(
-      (index === last ? fragment.box.y + fragment.box.height : lines[index + 1]!.box.y) + frame.dy,
-      frame.limit
-    );
-    if (bottom <= top) continue;
-    const run: BarRun = {
-      top,
-      bottom,
-      story: frame.story,
-      insertion: false,
-      deletion: false,
-      format: false,
-    };
-    markKinds(run, revisions);
-    runs.push(run);
+    pushLine(fragment, lines, index, frame, revisions, runs);
   }
+}
+
+/** One line's rule, over the line's PITCH. */
+function pushLine(
+  fragment: ParagraphFragmentRecord,
+  lines: ParagraphFragmentRecord['lines'],
+  index: number,
+  frame: StoryFrame,
+  revisions: readonly RevisionAttribution[],
+  runs: BarRun[]
+): void {
+  const line = lines[index]!;
+  const last = lines.length - 1;
+  // The line's PITCH, not its box: Word's rule runs from the top of the paragraph's own
+  // spacing before to the top of whatever comes next, so two changed paragraphs in a row
+  // draw one unbroken rule. Line boxes alone left the spacing after as a gap at every
+  // paragraph boundary.
+  const top = (index === 0 ? fragment.box.y : line.box.y) + frame.dy;
+  const bottom = Math.min(
+    (index === last ? fragment.box.y + fragment.box.height : lines[index + 1]!.box.y) + frame.dy,
+    frame.limit
+  );
+  if (bottom <= top) return;
+  const run: BarRun = {
+    top,
+    bottom,
+    story: frame.story,
+    insertion: false,
+    deletion: false,
+    format: false,
+  };
+  markKinds(run, revisions);
+  runs.push(run);
 }
 
 function collectTable(fragment: TableFragmentRecord, frame: StoryFrame, runs: BarRun[]): void {
   for (const row of fragment.rows) {
-    // A tracked row is a change even when every cell inside it reads as plain text.
-    if (row.revisionKind) {
-      runs.push({
+    // A tracked row is a change even when every cell inside it reads as plain text. All
+    // Markup reads the row's own attribution; Simple Markup the site the resolved view kept.
+    const rowSites = frame.mode === 'simple-markup' ? row.changeSites : undefined;
+    if ((frame.mode === 'all-markup' && row.revisionKind) || (rowSites && rowSites.length > 0)) {
+      const run: BarRun = {
         top: row.box.y + frame.dy,
         bottom: Math.min(row.box.y + row.box.height + frame.dy, frame.limit),
         story: frame.story,
         insertion: row.revisionKind === 'insert',
         deletion: row.revisionKind === 'delete',
         format: false,
-      });
+      };
+      if (rowSites) markKinds(run, rowSites);
+      runs.push(run);
     }
     for (const cell of row.cells) {
       if (cell.textDirection === 'btLr') {
@@ -250,14 +288,21 @@ function mergeRuns(runs: BarRun[]): BarRun[] {
  * blocks of each (tracked rows and rotated cells included), and the text-box stories its
  * anchored drawings carry, each at the origin the painter places it at.
  */
-export function collectPageChangeBars(page: PageRecord, scale: number): PageChangeBars {
+export function collectPageChangeBars(
+  page: PageRecord,
+  scale: number,
+  mode: ChangeBarsMode,
+  toggle = false
+): PageChangeBars {
   const runs: BarRun[] = [];
+  if (mode === 'none') return { mode, toggle, left: 0, runs, signature: 'none' };
   const sheetHeight = page.box.height;
   const contentBottom = page.contentBox.y - page.box.y + page.contentBox.height;
   const pageOrigin = { x: page.box.x, y: page.box.y };
   forEachPageStory(page, (root) => {
     if (root.story === 'note-separator') return;
     const frame: StoryFrame = {
+      mode,
       story: root.story,
       dy: root.origin.y - page.box.y,
       limit: root.story === 'body' ? contentBottom : sheetHeight,
@@ -276,7 +321,7 @@ export function collectPageChangeBars(page: PageRecord, scale: number): PageChan
         if (context.textboxDepth === 0) return;
         collectParagraph(
           fragment,
-          { story: root.story, dy: context.storyOrigin.y - page.box.y, limit: sheetHeight },
+          { mode, story: root.story, dy: context.storyOrigin.y - page.box.y, limit: sheetHeight },
           runs
         );
       },
@@ -289,13 +334,13 @@ export function collectPageChangeBars(page: PageRecord, scale: number): PageChan
   // pixel: a one-pixel rule at a fractional x is two faint ones.
   const left = Math.round(Math.max(0, (page.contentBox.x - page.box.x) / 2) * scale);
   const merged = mergeRuns(runs);
-  let signature = `${left}`;
+  let signature = `${mode}|${toggle ? 't' : ''}|${left}`;
   for (const run of merged) {
     signature +=
       `|${run.story}:${run.top.toFixed(3)}-${run.bottom.toFixed(3)}` +
       `${run.insertion ? 'i' : ''}${run.deletion ? 'd' : ''}${run.format ? 'f' : ''}`;
   }
-  return { left, runs: merged, signature };
+  return { mode, toggle, left, runs: merged, signature };
 }
 
 /**
@@ -313,9 +358,11 @@ export function renderPageChangeBars(
   scale: number
 ): HTMLElement | null {
   if (bars.runs.length === 0) return null;
+  const simple = bars.mode === 'simple-markup';
   const overlay = document.createElement('div');
   overlay.className = CHANGE_BARS_CLASS;
   overlay.dataset.docxChangeBars = bars.signature;
+  overlay.dataset.docxChangeBarsMode = bars.mode;
   overlay.setAttribute('aria-hidden', 'true');
   overlay.setAttribute('contenteditable', 'false');
   overlay.style.position = 'absolute';
@@ -336,9 +383,20 @@ export function renderPageChangeBars(
     // and never fights an inline value. The width does NOT follow the zoom: Word draws a
     // one-pixel hairline at 100% and at 200% alike, and a scaled 0.75pt rule vanishes at
     // 50% and turns into a slab at 400%.
-    bar.style.width = 'var(--doc-review-change-bar-width)';
-    bar.style.backgroundColor = 'var(--doc-review-change-bar)';
-    bar.style.pointerEvents = 'none';
+    bar.style.width = simple
+      ? 'var(--doc-review-change-bar-simple-width)'
+      : 'var(--doc-review-change-bar-width)';
+    bar.style.backgroundColor = simple
+      ? 'var(--doc-review-change-bar-simple)'
+      : 'var(--doc-review-change-bar)';
+    if (bars.toggle) {
+      // Word's toggle: the bar takes the pointer, and the surface swaps the view on a press.
+      bar.dataset.docxChangeBarToggle = '';
+      bar.style.pointerEvents = 'auto';
+      bar.style.cursor = 'pointer';
+    } else {
+      bar.style.pointerEvents = 'none';
+    }
     overlay.append(bar);
   }
   return overlay;
@@ -348,9 +406,11 @@ export function renderPageChangeBars(
 export function paintPageChangeBars(
   document: Document,
   page: PageRecord,
-  scale: number
+  scale: number,
+  mode: ChangeBarsMode,
+  toggle = false
 ): HTMLElement | null {
-  return renderPageChangeBars(document, collectPageChangeBars(page, scale), scale);
+  return renderPageChangeBars(document, collectPageChangeBars(page, scale, mode, toggle), scale);
 }
 
 /**
@@ -362,10 +422,12 @@ export function reconcilePageChangeBars(
   document: Document,
   sheet: HTMLElement,
   page: PageRecord,
-  scale: number
+  scale: number,
+  mode: ChangeBarsMode,
+  toggle = false
 ): void {
   const previous = sheet.querySelector<HTMLElement>(`:scope > .${CHANGE_BARS_CLASS}`);
-  const bars = collectPageChangeBars(page, scale);
+  const bars = collectPageChangeBars(page, scale, mode, toggle);
   if (previous && previous.dataset.docxChangeBars === bars.signature) return;
   previous?.remove();
   const next = renderPageChangeBars(document, bars, scale);

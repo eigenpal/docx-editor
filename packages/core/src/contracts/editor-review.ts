@@ -8,3 +8,5 @@ export interface ResolveReviewChangesOptions {
   /** Defaults to skip. Strict refuses the entire selection if any target cannot resolve. */
   unsupported?: 'skip' | 'fail';
 }
+
+export type { ReviewDisplayMode } from '../layout/revision-projection.ts';

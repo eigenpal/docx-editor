@@ -20,7 +20,7 @@
 
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { CollaborationModuleContribution } from '../collaboration/index.ts';
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
   ReviewItem,
   ReviewModelInput,
@@ -48,7 +48,7 @@ export type {
 // definition of the document model. A module author reaches the tree at
 // `@docx-editor.dev/core/store`, which is a published subpath written for exactly that.
 export type { OoxmlPart, RevisionAddress } from '@docx-editor.dev/core/store';
-export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+export type { ReviewDisplayMode, RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
  * Derives the review queue — every pending revision decision and comment
@@ -76,7 +76,7 @@ export interface ReviewModuleContribution {
    * carried so the future `setRevisionDisplayMode` command can validate against
    * it without a breaking module-shape change.
    */
-  readonly displayModes: readonly RevisionDisplayMode[];
+  readonly displayModes: readonly ReviewDisplayMode[];
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;
   /**

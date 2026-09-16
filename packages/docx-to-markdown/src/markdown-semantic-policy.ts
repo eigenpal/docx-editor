@@ -61,6 +61,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     link: 'represented',
     wrapAdvanceBefore: 'layout-only',
     revisions: 'represented',
+    // Simple Markup's margin bar has no Markdown; the revision itself is represented above.
+    changeSites: 'explicitly-omitted',
     fieldAtom: 'explicitly-omitted',
     projected: 'layout-only',
     equation: 'represented',
@@ -122,6 +124,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     deletedRanges: 'layout-only',
     drawings: 'represented',
     anchorRevisions: 'explicitly-omitted',
+    changeSites: 'explicitly-omitted',
   } satisfies Record<keyof LineRecord, MarkdownFieldPolicy>,
   paragraph: {
     kind: 'represented',
@@ -144,6 +147,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     markRevisions: 'explicitly-omitted',
     markRevision: 'explicitly-omitted',
     markFormatRevision: 'explicitly-omitted',
+    markChangeSites: 'explicitly-omitted',
     marker: 'represented',
     tabStops: 'layout-only',
     lines: 'represented',
@@ -178,6 +182,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     revisionId: 'explicitly-omitted',
     revisionAuthor: 'explicitly-omitted',
     revisionDate: 'explicitly-omitted',
+    changeSites: 'explicitly-omitted',
     rowIndex: 'layout-only',
     isHeaderRow: 'represented',
     isHeaderRepeat: 'represented',

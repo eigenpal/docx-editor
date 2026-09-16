@@ -311,6 +311,15 @@ describe('change bars in every story share one column', () => {
     );
   });
 
+  test('without a review module the bars stay inert furniture, not a view toggle', () => {
+    // The free engine can name no other view, so its bars take no pointer: a click lands on
+    // the sheet as it always did, and nothing swaps a projection the host cannot mirror.
+    const { container } = mount(docx({ body: `<w:p>${ins('1', run('added'))}</w:p>` }));
+    const rule = bars(container)[0]!;
+    expect(rule.dataset.docxChangeBarToggle).toBeUndefined();
+    expect(rule.style.pointerEvents).toBe('none');
+  });
+
   test('the overlay is one element per sheet, sitting on the sheet', () => {
     const { container } = mount(
       docx({

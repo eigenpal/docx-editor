@@ -758,6 +758,7 @@ export type ChromeSlotId =
   | 'review.comments'
   | 'review.paragraphMarks'
   | 'review.protectDocument'
+  | 'review.simpleMarkup'
   | 'review.allMarkup'
   | 'review.noMarkup'
   | 'review.original'
@@ -1038,6 +1039,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         labelKey: 'review.displayForReview',
         paths: GENERATED_ICON_PATHS['visibility'],
         items: [
+          { kind: 'item', slot: 'review.simpleMarkup' },
           { kind: 'item', slot: 'review.allMarkup' },
           { kind: 'item', slot: 'review.noMarkup' },
           { kind: 'item', slot: 'review.original' },

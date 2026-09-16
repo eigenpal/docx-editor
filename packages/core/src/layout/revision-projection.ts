@@ -59,6 +59,18 @@ export interface RevisionAttribution {
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 /**
+ * The views the review chrome offers, in Word's terms: the three layout projections plus
+ * Simple Markup, which reads as the proposed result with a red change bar beside every line
+ * a change touched — the document as accepting everything would leave it, and where.
+ */
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+/** The projection the layout performs for a review view: Simple Markup lays out the proposal. */
+export function layoutProjectionOf(mode: ReviewDisplayMode): RevisionDisplayMode {
+  return mode === 'simple-markup' ? 'proposed' : mode;
+}
+
+/**
  * How a document renders tracked changes when nothing says otherwise.
  *
  * `all-markup` matches Word's own default: a reader who opens a document with pending changes
@@ -80,7 +92,43 @@ export interface RevisionFilter {
   readonly includesNode?: (nodeId: string, author: string) => boolean;
   /** Accepted/original projection for a revision excluded by `includesNode`. */
   readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
+  /**
+   * In a resolved view, content the view keeps paints as ORDINARY text: no author ink, no
+   * decoration, no change bar of its own. This is Word's No Markup, Original and Simple
+   * Markup, which the review chrome asks for. Without it the accepted projection keeps the
+   * attribution on kept insertions, which is what the engine paints when no review module
+   * is registered — colour by author, deletions resolved — and what its roster reads.
+   */
+  readonly resolvedMarkup?: 'plain';
   readonly cacheKey: string;
+}
+
+/** The plain-resolved policy with nobody hidden, for a review view that filters no one. */
+const PLAIN_RESOLVED_FILTER: RevisionAuthorFilter = Object.freeze({
+  hiddenAuthors: Object.freeze(new Set<string>()) as ReadonlySet<string>,
+  resolvedMarkup: 'plain' as const,
+  cacheKey: 'plain',
+});
+
+/** One wrapped filter per base, so identity-keyed layout memos see one object per session state. */
+const plainResolvedFilters = new WeakMap<RevisionAuthorFilter, RevisionAuthorFilter>();
+
+/** The same filter, with the review chrome's plain-resolved policy applied. */
+export function withPlainResolvedMarkup(
+  filter: RevisionAuthorFilter | undefined
+): RevisionAuthorFilter {
+  if (!filter) return PLAIN_RESOLVED_FILTER;
+  if (filter.resolvedMarkup === 'plain') return filter;
+  let wrapped = plainResolvedFilters.get(filter);
+  if (!wrapped) {
+    wrapped = Object.freeze({
+      ...filter,
+      resolvedMarkup: 'plain' as const,
+      cacheKey: `${filter.cacheKey}|plain`,
+    });
+    plainResolvedFilters.set(filter, wrapped);
+  }
+  return wrapped;
 }
 
 /** A read-only Set facade whose backing collection is unreachable to consumers. */
@@ -237,7 +285,8 @@ export function revisionAuthorFilter(
   });
 }
 
-function revisionIncluded(filter: RevisionFilter, revision: RevisionAttribution): boolean {
+/** Whether a reviewer filter keeps this revision's markup and change bar. */
+export function revisionIncluded(filter: RevisionFilter, revision: RevisionAttribution): boolean {
   return (
     filter.includes?.(revision) ?? revisionNodeIncluded(filter, revision.nodeId, revision.author)
   );
@@ -383,9 +432,31 @@ export function projectedRevisions(
 ): readonly RevisionAttribution[] | null {
   if (!authorFilter && mode === 'all-markup') return revisions;
   if (!revisionsVisible(revisions, mode, authorFilter)) return null;
+  // A review view that resolves shows the document as accepting (or rejecting) every change
+  // would leave it: content it keeps is ordinary text, so it carries no markup to paint.
+  // Returning the attribution here underlined every kept insertion in No Markup.
+  if (mode !== 'all-markup' && authorFilter?.resolvedMarkup === 'plain') return NO_REVISIONS;
   if (!authorFilter) return revisions;
   const visible = revisions.filter((revision) => revisionIncluded(authorFilter, revision));
   return visible.length === 0 ? NO_REVISIONS : visible;
+}
+
+/**
+ * The revisions a resolved view answered for some content — kept as ordinary text or
+ * removed — that the reader can still be told about: what Simple Markup's change bar marks.
+ *
+ * Empty in All Markup, where the content carries its own markup, and empty for a revision
+ * the reviewer filter hides, whose content the view resolves silently.
+ */
+export function resolvedChangeSites(
+  revisions: readonly RevisionAttribution[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly RevisionAttribution[] {
+  if (mode === 'all-markup' || revisions.length === 0) return NO_REVISIONS;
+  if (!authorFilter) return revisions;
+  const included = revisions.filter((revision) => revisionIncluded(authorFilter, revision));
+  return included.length === 0 ? NO_REVISIONS : included;
 }
 
 /** Whether one attributed mark remains markup in the current reviewer view. */
@@ -425,6 +496,12 @@ export interface PieceAttribution {
   readonly props: readonly OoxmlProperty[];
   /** The revisions still shown as markup; absent when the piece paints as ordinary text. */
   readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The revisions a resolved view accepted into this piece, which paints as ordinary text.
+   * Absent in All Markup and for content no included revision touched. Simple Markup's
+   * change bar reads it; nothing inline does.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
 }
 
 /**
@@ -446,9 +523,12 @@ export function projectPieceAttribution(
   const projected = projectedRevisions(revisions, mode, authorFilter);
   if (projected === null) return null;
   const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
-  return projected.length === 0
-    ? { props: publishedProps }
-    : { props: publishedProps, revisions: projected };
+  const changeSites = resolvedChangeSites(revisions, mode, authorFilter);
+  return {
+    props: publishedProps,
+    ...(projected.length === 0 ? {} : { revisions: projected }),
+    ...(changeSites.length === 0 ? {} : { changeSites }),
+  };
 }
 
 /** Paragraph-mark revisions that remain attributed in the current reviewer view. */

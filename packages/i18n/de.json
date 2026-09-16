@@ -725,7 +725,8 @@
     "displayForReview": null,
     "noMarkup": null,
     "original": null,
-    "protectDocument": null
+    "protectDocument": null,
+    "simpleMarkup": null
   },
   "imageAltText": {
     "description": "Beschreibung",

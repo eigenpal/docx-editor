@@ -4,7 +4,7 @@
 // interface alone; the record is only ever read at open time, and every consumer imports it
 // from the contract, which re-exports it.
 
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type {
@@ -59,7 +59,7 @@ export interface PaginatedSurfaceOptions {
    * registered — the free tier's final-state rendering; the machinery below this
    * option is shared either way.
    */
-  readonly revisionDisplayMode?: RevisionDisplayMode;
+  readonly revisionDisplayMode?: ReviewDisplayMode;
   /** Authors whose changes open in their accepted view-time projection. */
   readonly hiddenRevisionAuthors?: readonly string[];
   /**

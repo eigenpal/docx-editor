@@ -218,6 +218,11 @@
      `data-docx-story` naming the story it stands beside. */
   --doc-review-change-bar: #a4a4a4;
   --doc-review-change-bar-width: 1px;
+  /* Simple Markup's bar: red and heavier, as Word draws it (Word's on-screen red, half again
+     the grey bar's width), beside every line a resolved change touched. A click on either
+     bar swaps the two views. */
+  --doc-review-change-bar-simple: #ea3425;
+  --doc-review-change-bar-simple-width: 2px;
 
   /* Selected table cells. A native selection is a run of characters and cannot
     * express a rectangle of cells, so that one highlight is drawn rather than
@@ -387,6 +392,7 @@
   --doc-revision-format: #9fb3bf;
   /* Painted on the sheet, outside the content-box inversion, so this value is the ink. */
   --doc-review-change-bar: #9e9e9e;
+  --doc-review-change-bar-simple: #f0524a;
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */
   --doc-text-subtle: #6e6e6e; /* tertiary/disabled text */

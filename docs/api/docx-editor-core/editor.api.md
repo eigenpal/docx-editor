@@ -280,6 +280,15 @@ export const CHROME_GROUPS: readonly [{
 }, {
     readonly controls: readonly [{
         readonly defaultToolbar: false;
+        readonly id: "simpleMarkup";
+        readonly labelKey: "review.simpleMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
         readonly id: "allMarkup";
         readonly labelKey: "review.allMarkup";
         readonly paths: readonly string[];
@@ -761,7 +770,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1684,7 +1693,7 @@ export interface PaginatedSurface {
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     revisionAuthors(): ReadonlyMap<string, number>;
-    revisionDisplayMode(): RevisionDisplayMode;
+    revisionDisplayMode(): ReviewDisplayMode;
     save(): Uint8Array;
     sectionAnchorParagraphAt(paragraphId: string): SectionAnchor;
     sectionAtPage(pageIndex: number): {
@@ -1738,7 +1747,7 @@ export interface PaginatedSurface {
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setRevisionAuthorVisible(author: string, visible: boolean): void;
-    setRevisionDisplayMode(mode: RevisionDisplayMode): void;
+    setRevisionDisplayMode(mode: ReviewDisplayMode): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
@@ -1801,7 +1810,7 @@ export interface PaginatedSurfaceOptions {
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
-    readonly revisionDisplayMode?: RevisionDisplayMode;
+    readonly revisionDisplayMode?: ReviewDisplayMode;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly showParagraphMarks?: boolean;
@@ -2121,7 +2130,7 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
-    readonly displayModes: readonly RevisionDisplayMode[];
+    readonly displayModes: readonly ReviewDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 

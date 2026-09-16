@@ -207,6 +207,14 @@ export interface StyleSpanRecord {
    */
   readonly revisions?: readonly RevisionAttribution[];
   /**
+   * The revisions a resolved view accepted into this text, which paints as ordinary text.
+   *
+   * Absent in All Markup, where {@link revisions} carries the markup instead, and absent for
+   * text no included revision touched. The Simple Markup change bar is its only reader; nothing
+   * inline draws from it.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
+  /**
    * Present when this span is a field's displayed RESULT, for the shading Word draws under one.
    *
    * `projected` cannot answer this: it is also set for note marks and inline drawings, so it
@@ -322,6 +330,16 @@ export interface LineRecord {
    * attributions the display mode lays out are recorded, matching the published records.
    */
   readonly anchorRevisions?: readonly RevisionAttribution[];
+  /**
+   * Revisions a resolved view answered on this line — content it kept as ordinary text and
+   * content it removed between the line's offsets — absent when there are none, and always
+   * absent in All Markup, where the spans carry the markup themselves.
+   *
+   * What Simple Markup's change bar draws beside the line. Nothing inline reads it: the view
+   * shows the document as accepting every change would leave it, and the bar in the margin is
+   * the one place that still says the line changed.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
 }
 
 /**
@@ -470,6 +488,13 @@ export interface ParagraphFragmentRecord {
    */
   readonly markFormatRevision?: RevisionAttribution;
   /**
+   * The decisions a resolved view answered on this paragraph's MARK: an inserted break it
+   * kept, a paragraph-property change or a mark-property change it accepted. Final fragment
+   * only, resolved views only; absent when there are none. A removed break merges its
+   * paragraph away and reports on the join line instead (see {@link LineRecord.changeSites}).
+   */
+  readonly markChangeSites?: readonly RevisionAttribution[];
+  /**
    * List marker painted in the hanging-indent slot of the FIRST fragment only.
    *
    * Not part of model text: no UTF-16 range, never contributes to caret/selection offsets,
@@ -572,6 +597,11 @@ export interface TableRowFragmentRecord {
   readonly revisionId?: string;
   readonly revisionAuthor?: string;
   readonly revisionDate?: string;
+  /**
+   * The row insertion a resolved view kept this row through, absent in All Markup (where
+   * {@link revisionKind} carries it) and for an untracked row. A removed row has no record.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
   /** Authored row ordinal within the table; repeats share the original row's index. */
   readonly rowIndex: number;
   /** True when the authored row resolves `w:tblHeader`, including its first occurrence. */

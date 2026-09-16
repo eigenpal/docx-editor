@@ -59,6 +59,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'review.comments': { type: 'toggleReviewPane' },
   'review.paragraphMarks': { type: 'toggleParagraphMarks' },
   'review.protectDocument': { type: 'toggleDocumentProtection' },
+  'review.simpleMarkup': { type: 'setReviewDisplayMode', mode: 'simple-markup' },
   'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
   'review.noMarkup': { type: 'setReviewDisplayMode', mode: 'proposed' },
   'review.original': { type: 'setReviewDisplayMode', mode: 'original' },

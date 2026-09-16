@@ -26,7 +26,13 @@ import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
 import { isSymbolEncodedFamily } from './symbol-encoding.ts';
-import type { RevisionAttribution } from './revision-projection.ts';
+import {
+  type PieceAttribution,
+  type RevisionAttribution,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+  resolvedChangeSites,
+} from './revision-projection.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
@@ -144,6 +150,11 @@ export interface FieldAwarePiece {
    * decision about it.
    */
   readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The revisions a resolved view accepted into this piece, which paints as ordinary text;
+   * see {@link PieceAttribution.changeSites}. Simple Markup's change bar reads it.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
   /** Present when this piece is a field's displayed result; literal or projected. */
   readonly fieldAtom?: FieldAtomMarker;
   /**
@@ -162,6 +173,72 @@ export interface ModelRange {
 }
 
 export type MutableModelRange = { start: number; end: number };
+
+/**
+ * A model range whose content a resolved view removed, with the revisions that removed it.
+ *
+ * Kept apart from {@link MutableModelRange}: deleted ranges exist in every mode and are the
+ * caret's concern; a change site exists only where the view resolved a change the reviewer
+ * filter still shows, and is the change bar's concern.
+ */
+export type MutableChangeSite = {
+  start: number;
+  end: number;
+  revisions: readonly RevisionAttribution[];
+};
+
+/** Record a site for content the view removed. Empty attribution lists record nothing. */
+export function appendChangeSite(
+  sites: MutableChangeSite[],
+  start: number,
+  end: number,
+  revisions: readonly RevisionAttribution[]
+): void {
+  if (revisions.length === 0 || end <= start) return;
+  sites.push({ start, end, revisions });
+}
+
+/**
+ * The walk's recorder for content the view REMOVED: such content leaves no piece, so its
+ * site is recorded as it is skipped — the same reason `deletedRanges` is collected in the
+ * walk. Kept content carries its own sites on the piece. A walk with no site list gets a
+ * recorder that does nothing.
+ */
+export function removedSiteRecorder(
+  sites: MutableChangeSite[] | undefined,
+  mode: RevisionDisplayMode,
+  authorFilter: RevisionAuthorFilter | undefined
+): (start: number, end: number, removed: readonly RevisionAttribution[]) => void {
+  if (!sites) return () => {};
+  return (start, end, removed) =>
+    appendChangeSite(sites, start, end, resolvedChangeSites(removed, mode, authorFilter));
+}
+
+/**
+ * The attribution a field result flushes with: captured from its result run, formatting
+ * site included, or nothing when no run donated one (the live stack answers then).
+ */
+export function capturedResultAttribution(pending: {
+  readonly capturedResultRevisions: boolean;
+  readonly resultRevisions: readonly RevisionAttribution[];
+  readonly resultFormatSite: RevisionAttribution | null;
+}): Pick<PieceEmitExtras, 'revisionsOverride' | 'formatSiteOverride'> {
+  return pending.capturedResultRevisions
+    ? { revisionsOverride: pending.resultRevisions, formatSiteOverride: pending.resultFormatSite }
+    : {};
+}
+
+/**
+ * A kept piece's attribution with a run's accepted formatting change added as a site: the
+ * bar has to say the line changed when nothing inline can.
+ */
+export function withRunFormatSite(
+  published: PieceAttribution,
+  runFormatSite: RevisionAttribution | null
+): PieceAttribution {
+  if (!runFormatSite) return published;
+  return { ...published, changeSites: [...(published.changeSites ?? []), runFormatSite] };
+}
 
 /** Append a range, coalescing with the previous one when they touch or overlap. */
 export function appendModelRange(ranges: MutableModelRange[], start: number, end: number): void {
@@ -249,6 +326,8 @@ export interface PieceEmitExtras {
    * it here keeps the projection in one place.
    */
   readonly revisionsOverride?: readonly RevisionAttribution[];
+  /** With {@link revisionsOverride}: the captured run's formatting site, or none. */
+  readonly formatSiteOverride?: RevisionAttribution | null;
   readonly linkOverride?: SpanLinkRecord;
   /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
   readonly fieldAtom?: FieldAtomMarker;
@@ -400,6 +479,8 @@ export interface PendingFieldProjection {
    * the model does not have.
    */
   resultRevisions: readonly RevisionAttribution[];
+  /** The accepted formatting change of the run that donated {@link resultRevisions}. */
+  resultFormatSite: RevisionAttribution | null;
   /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
   capturedResultRevisions: boolean;
   /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
