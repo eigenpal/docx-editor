@@ -155,14 +155,14 @@ See [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments) and
 ## Resolve revisions in a batch
 
 Use `RevisionCollection.resolve('accept')` or `resolve('reject')` to process supported
-changes in a story and report what remains. Pass a second argument with revision objects
-to select a batch. Read `result.value` after `context.sync()`; the result contains
-`resolved`, `skipped`, and `remaining`.
+changes in one story. To select changes, pass revision objects as the second argument.
+API batches don't inherit editor filters. Read `result.value` after `context.sync()`
+for resolved and skipped decisions and the remaining count.
 
-The existing `acceptAll()` and `rejectAll()` methods remain strict: an unsupported
-change blocks the entire story-wide decision. See
+To require every change in the story to resolve, use `acceptAll()` or `rejectAll()`.
+These methods fail if any revision is unsupported. See
 [Resolve a batch of changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes)
-for selection, grouping, browser-filter, and error-handling examples.
+for examples and result handling.
 
 ## Range snapshots
 

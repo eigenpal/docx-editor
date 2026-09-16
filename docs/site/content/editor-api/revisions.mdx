@@ -5,9 +5,8 @@ category: 'Editing API'
 order: 63
 ---
 
-Set `Document.changeTrackingMode` to create tracked text suggestions through standard editing methods.
-Read existing revisions through `RevisionCollection`.
-See the limits on tracking modes and revision types in this guide.
+Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them.
+To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter.
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
 Use `context` and document proxies inside `runtime.run()`.
@@ -106,31 +105,32 @@ Resolve the range before reading or selecting its content.
 
 ## Resolve a batch of changes
 
-Use `RevisionCollection.resolve(action, revisions?)` to accept or reject supported changes in one story. Pass `"accept"` to keep the changes or `"reject"` to undo them. Unsupported changes remain pending. Read the result after `context.sync()`.
+Use `RevisionCollection.resolve(action, revisions?)` to accept or reject supported changes in one story. Pass `'accept'` to keep the changes or `'reject'` to undo them. Unsupported changes remain pending.
 
-For example, accept Ada's changes in the main story:
+API batches don't inherit editor filters. Pass revision objects from the same request context and story to select changes. For example, accept Ada's changes:
 
 ```ts
 await runtime.run(async (context) => {
   const revisions = context.document.revisions;
   revisions.load('items');
   await context.sync();
-  for (const revision of revisions.items) revision.load('author');
+  for (const revision of revisions.items) {
+    revision.load('author');
+  }
   await context.sync();
 
   const selected = revisions.items.filter((revision) => revision.author === 'Ada');
   const result = revisions.resolve('accept', selected);
   await context.sync();
 
-  console.log(result.value.resolved.length);
-  console.log(result.value.skipped);
-  console.log(result.value.remaining);
+  const { resolved, skipped, remaining } = result.value;
+  console.log({ resolved: resolved.length, skipped, remaining });
 });
 ```
 
-Pass revision objects from the same request context and story. Don't pass raw OOXML `w:id` values: Word can reuse those values for different authors, kinds of change, and stories. Each object names a canonical review decision, which can span multiple XML elements. Both halves of a replacement resolve together.
+Read `result.value` after `context.sync()`. Changes commit in one transaction and one undo step. Browser writes require the Pro review module and an editable document.
 
-Omit the second argument to consider every decision in the story. The operation resolves eligible changes, including complete tracked rows, and reports unsupported records even when they are absent from `items`:
+To process the whole story, omit the selection. This includes complete tracked rows and reports unsupported changes omitted from `items`:
 
 ```ts
 await runtime.run(async (context) => {
@@ -142,31 +142,35 @@ await runtime.run(async (context) => {
 });
 ```
 
-A browser decision requires the review module and an editable document. All eligible changes commit as one Undo unit. `resolve()` must be the only write in its sync batch; reads can share the batch. Use separate sync calls for different stories. Document protection, content control locks, and collaboration permissions still apply. A transaction failure aborts the batch and leaves the result unloaded.
+Keep `resolve()` as the only write in its sync batch; reads can share the batch. Use a separate sync for each story. Protection, content control locks, and collaboration permissions still apply. If the transaction fails, no changes commit and the result remains unloaded.
 
 ### Interpret the result
 
-| Field       | Meaning                                                                                                           |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| `resolved`  | The decisions resolved by this operation, with their key, author, part name, and revision kind.                   |
-| `skipped`   | Requested decisions that remain pending, with a key and reason. Known decisions also include `revision` metadata. |
-| `remaining` | The number of pending decisions in the addressed story, including excluded and unsupported changes.               |
+| Field       | Meaning                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| `resolved`  | Resolved decisions, with their key, author, part name, and revision kind.                 |
+| `skipped`   | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
+| `remaining` | Number of pending decisions in the story, including excluded and unsupported changes.     |
 
-Counts refer to review decisions, which can contain several XML markers. A successful call can leave changes pending. Handle the following skip reasons:
+A decision can contain several XML markers, such as both halves of a replacement. A successful batch can leave changes pending:
 
-| Reason                 | What to do                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `unsupported-revision` | Preserve the file and resolve the unsupported structure in Word. Independent supported changes can still resolve. |
-| `incomplete-group`     | Review the related decisions together, then select the complete group.                                            |
-| `unknown-revision`     | Reload the collection before deciding again. The target no longer exists.                                         |
+| Skip reason            | Next step                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `unsupported-revision` | Resolve the unsupported structure in Word. Independent supported changes can still resolve. |
+| `incomplete-group`     | Review and select all related decisions together.                                           |
+| `unknown-revision`     | Reload the collection; the target no longer exists.                                         |
 
-Nested changes, named move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. The batch skips a group if resolving it could consume an excluded or unsupported decision. It never expands the selection to include hidden changes. This conservative rule also applies when a particular action could preserve part of the group.
+Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection.
 
-An empty array selects nothing. Duplicate objects resolve once. Stale objects are reported as `unknown-revision`; objects from another context or story fail validation. Keys are opaque and valid only for the open document. Reload objects after saving and reopening a file.
+Pass an empty array to select nothing. Duplicate objects resolve once; stale objects produce `unknown-revision`. Objects from another context or story fail validation.
+
+Use revision objects instead of raw OOXML `w:id` values, which Word can reuse. Treat result keys as opaque identifiers for the open document. Reload revisions after saving and reopening a file.
 
 ## Resolve changes shown in the editor
 
-The shared editor's bulk review controls use the active author visibility and tracked-changes predicate. “Shown” includes filtered-in revisions on offscreen pages and in supported stories. It does not depend on which cards are mounted or on activation exclusions.
+The editor's bulk controls honor author visibility and the tracked-changes filter, including offscreen changes in supported stories. Mounted cards and activation exclusions don't affect the selection. Supported changes resolve in one undo step; unsupported changes remain pending.
+
+For example, accept changes shown by an author filter:
 
 ```ts
 editor.setTrackedChangesFilter((revision) => revision.author === 'Ada');
@@ -174,10 +178,12 @@ const result = editor.exec({
   type: 'resolveAllReviewChanges',
   action: 'accept',
 });
-if (result.ok) console.log(result.revisions);
+if (result.ok) {
+  console.log(result.revisions);
+}
 ```
 
-Pass `keys` from `editor.getReviewItems()` to select an explicit batch. Keys override the active filter. Pass `scope: 'document'` to process all authors across the document's supported stories. The default scope is `'visible'` and the default unsupported policy is `'skip'`.
+To select an explicit batch, pass `keys` from `editor.getReviewItems()`. Keys override the active filter:
 
 ```ts
 const keys = editor
@@ -192,13 +198,13 @@ const result = editor.exec({
 });
 ```
 
-The result's `remaining` count covers the document, including hidden revisions. If no eligible changes exist, `editor.can()` disables the command and `editor.exec()` returns a refusal without adding an Undo entry. Pass `unsupported: 'fail'` to require the entire selection to resolve.
+To include all authors across supported stories, pass `scope: 'document'`. To require every selected change to resolve, pass `unsupported: 'fail'`. The defaults are `scope: 'visible'` and `unsupported: 'skip'`.
 
-The browser's visible scope applies to the editor command. `RevisionCollection.resolve()` remains story-scoped in browser and headless runtimes; it does not inherit UI filters. Pass the selected revision objects to filter an API batch.
+The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
 
 ## Require every change to resolve
 
-`Revision.accept()` and `Revision.reject()` decide one supported revision. The existing `RevisionCollection.acceptAll()` and `rejectAll()` methods keep their strict, story-wide behavior. They ignore browser filters and fail the entire sync if any unsupported revision remains. Complete tracked rows participate even when they are absent from `items`.
+Use `Revision.accept()` or `Revision.reject()` for one supported revision. Use `RevisionCollection.acceptAll()` or `rejectAll()` for a strict story-wide batch:
 
 ```ts
 await runtime.run(async (context) => {
@@ -207,9 +213,15 @@ await runtime.run(async (context) => {
 });
 ```
 
-If the strict operation fails with `NotImplemented`, use `resolve()` to process independent supported changes and inspect what remains. On `StaleDocument`, start a fresh run, read again, and reconsider the decision before retrying.
+These collection methods ignore editor filters and fail the entire sync if any revision is unsupported. They include complete tracked rows omitted from `items`.
 
-**Migration:** Existing API calls need no changes. The editor's **Accept all changes shown** and **Reject all changes shown** controls now honor revision filters and skip unsupported groups. For the previous shared-command behavior, pass `scope: 'document'` and `unsupported: 'fail'`.
+If a strict batch fails with `NotImplemented`, use `resolve()` to process supported changes and report what remains. For `StaleDocument`, start a fresh run and reload revisions before deciding again.
+
+### Update existing integrations
+
+Existing `acceptAll()` and `rejectAll()` calls keep their behavior. To support partial batches or an explicit selection, use `resolve()`.
+
+The editor's **Accept all changes shown** and **Reject all changes shown** controls now honor filters and skip unsupported groups. To keep the previous editor command behavior, pass `scope: 'document'` and `unsupported: 'fail'`.
 
 ## Try the demo
 
@@ -220,9 +232,9 @@ bun install
 bun run dev:react
 ```
 
-Open `http://localhost:5173/?bulkReview=1&fixture=bulk-review.docx`. Filter by author, select decisions, and compare the shown-change controls with the main-story API controls. Use **Undo**, **Redo**, and **Save and reopen** to verify that excluded and unsupported changes survive.
+Open `http://localhost:5173/?bulkReview=1&fixture=bulk-review.docx`. Filter by author or select individual changes, then accept or reject them. Compare the filtered editor controls with the main-story API controls. Use **Undo**, **Redo**, and **Save and reopen** to check that excluded and unsupported changes remain pending.
 
-Run the automated browser checks:
+To run the browser tests:
 
 ```sh
 bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction.spec.ts

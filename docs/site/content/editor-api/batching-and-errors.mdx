@@ -142,9 +142,8 @@ await runtime.run(paragraph, async (context) => {
 Await the first run before adoption. Tracking does not prevent document edits or deletion of the target.
 No proxy survives runtime disposal.
 
-`ClientResult<T>` is an exported support type with `isLoaded` and `value`.
-Read `value` only after its producing sync; otherwise it throws `ValueNotLoaded`.
-It is not a promise. `RevisionCollection.resolve()` returns `ClientResult<RevisionBatchResult>` with resolved, skipped, and remaining decisions. See [Resolve a batch of changes](/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes).
+`ClientResult<T>` exposes `isLoaded` and `value`. Read `value` after the operation's `context.sync()` completes; reading it earlier throws `ValueNotLoaded`.
+For example, `RevisionCollection.resolve()` returns a `ClientResult<RevisionBatchResult>` with resolved and skipped decisions and a remaining count. See [Resolve a batch of changes](/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes).
 
 ## Recover by error code
 
