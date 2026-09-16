@@ -72,6 +72,42 @@
         "package-lock.json": "b0285c72e7c1d197e92570a465626b0285458bb1c7b0a879c4f4670648beb593",
         "fixture.json": "845cfea6759629030d6d19bc09bee4db0139d751d181e3cf33085e148486233f"
       }
+    },
+    {
+      "version": "2.19.1",
+      "commit": "0d95d3e1cc1c6c8c89f641da2a7cee5d99b45077",
+      "sourceLockHash": "3e3d86f5a61d1a6a3ea2349e8cbe75c79bcbfebfbdbd993421bd5d831285e4af",
+      "format": "docx-collaboration:1.3.1.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 3,
+        "repairVersion": 1,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.19.1",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.19.1.tgz",
+          "integrity": "sha512-wAFJZdqtDsB7/U2ED5SH10SmA6fjCn7pile2jxYDkKN/FosuGOyk/qPRtt5iG93f57MRjhmZXayu6h3/mC5tEA=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.19.1.tgz",
+          "integrity": "sha512-tEF86HydHW+bnIoCrxtRfNo2uMIUmTyHrMcfOZYZj7LvGuFtA0aLkTUlopqzC1haFfM+9EtVJcBXtb/2rRhE2w=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.19.1.tgz",
+          "integrity": "sha512-XTAnzmX6b7bGZUxFxvkHzW3gsK9bV3SYwfeKZaBIhBp+SVnNcpumjR6GfGb3682ZXC9olM6FoS/l8HixN+OoPQ=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.19.1.tgz",
+          "integrity": "sha512-zs2D27qtMAAlFn8UQmMBUXh1GPzHDJTEIKIJ0nBZw6Wtg4RafxZlU5enJEUxfub+ZHoUQrtcrt6SmDWolExXiQ=="
+        }
+      },
+      "hashes": {
+        "package.json": "ef514a8b4f9dcaad8bcef5e48f30532903d42589026fbc9728522453e2828807",
+        "package-lock.json": "575abfec92a1fc658feb016a9477d10a3dc07a9c396bd32f50962d40931625de",
+        "fixture.json": "0036345d9cc1da0114c038aaca31a147e19df3d4d84669bd967e77d49aa74687"
+      }
     }
   ]
 }
