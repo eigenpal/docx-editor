@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { hasPublishedRelease } from './post-release.mjs';
 
 const repository = 'eigenpal/docx-editor';
@@ -102,5 +105,60 @@ test('post-release retries neither hold the release concurrency lock nor have pu
         expect(step.run ?? '').not.toMatch(/(?:npm|changeset) publish/);
       }
     }
+  }
+});
+
+test('retrying release comments deduplicates existing messages and preserves PR versus issue commands', () => {
+  const steps = workflow('post-release').jobs.announcements.steps;
+  const script = steps.find((step: any) => step.run?.includes('comment_release()')).run;
+  const helper = script.match(/comment_release\(\) \{[\s\S]*?\n\}/)?.[0];
+  expect(helper).toBeDefined();
+  const dir = mkdtempSync(join(tmpdir(), 'release-comment-test-'));
+  try {
+    writeFileSync(
+      join(dir, 'gh'),
+      `#!/bin/bash
+if [ "$1" = api ]; then
+  if [ "$API_FAIL" = 1 ]; then exit 1; fi
+  printf '%s\\n' "$COMMENTS"
+else
+  printf '%s\\n' "$@" > "$CALL_LOG"
+fi
+`,
+      { mode: 0o755 }
+    );
+    for (const [kind, comments, apiFail] of [
+      ['pr', '', '0'],
+      ['issue', '', '0'],
+      ['pr', '🚀 Released in [v2.19.0](https://example.test/release)', '0'],
+      ['issue', '', '1'],
+    ]) {
+      const log = join(dir, 'call');
+      rmSync(log, { force: true });
+      execFileSync(
+        'bash',
+        [
+          '-euo',
+          'pipefail',
+          '-c',
+          `${helper}\ncomment_release ${kind} 42 v2.19.0 https://example.test/release`,
+        ],
+        {
+          env: {
+            ...process.env,
+            PATH: `${dir}:${process.env.PATH}`,
+            REPO: 'example/repository',
+            COMMENTS: comments,
+            API_FAIL: apiFail,
+            CALL_LOG: log,
+          },
+          stdio: 'pipe',
+        }
+      );
+      if (comments || apiFail === '1') expect(existsSync(log)).toBe(false);
+      else expect(readFileSync(log, 'utf8')).toStartWith(`${kind}\ncomment\n42\n`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

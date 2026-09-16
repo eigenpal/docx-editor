@@ -146,7 +146,7 @@ jobs:
           # A downstream workflow can be retried without republishing. Reuse an
           # existing release comment so retries do not notify the same thread again.
           comment_release() {
-            local n="$1" tag="$2" release_url="$3" body existing
+            local kind="$1" n="$2" tag="$3" release_url="$4" body existing
             body="🚀 Released in [$tag]($release_url)"
             if ! existing=$(gh api "repos/$REPO/issues/$n/comments" --paginate --jq '.[].body'); then
               echo "::warning::Could not check existing release comments for #$n; skipping."
@@ -156,7 +156,7 @@ jobs:
               echo "#$n already has a release comment for $tag."
               return 0
             fi
-            gh issue comment "$n" --repo "$REPO" --body "$body" \
+            gh "$kind" comment "$n" --repo "$REPO" --body "$body" \
               || echo "::warning::Could not comment on #$n; continuing."
           }
 
@@ -196,7 +196,7 @@ jobs:
               fi
             fi
             if [ "$do_comment" -eq 1 ]; then
-              comment_release "$n" "$tag" "$release_url"
+              comment_release issue "$n" "$tag" "$release_url"
             fi
             if [ -n "$item_id" ]; then
               GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
@@ -235,7 +235,7 @@ jobs:
             local issues="" pr refs
             for pr in $prs; do
               if [ "$do_comment" -eq 1 ]; then
-                comment_release "$pr" "$tag" "$release_url"
+                comment_release pr "$pr" "$tag" "$release_url"
               fi
               refs=$(gh api graphql -f query='
                 query($owner: String!, $name: String!, $pr: Int!) {
