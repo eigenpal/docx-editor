@@ -1,3 +1,4 @@
+import { sliceTocParagraph } from './toc-result.ts';
 // Resolve a cached TOC result row back to the heading it stands for.
 //
 // A refresh that only rewrites page numbers must not assume the cached rows line up with the
@@ -94,7 +95,8 @@ export function resolveTocRowHeadings(
     const paragraph = findNode(part, paragraphId);
     if (!paragraph || paragraph.kind === 'textValue') return null;
 
-    const anchor = rowAnchor(paragraph);
+    const result = sliceTocParagraph(paragraph, toc, 'result');
+    const anchor = rowAnchor(result);
     const anchored = anchor === undefined ? undefined : bookmarks.get(anchor);
     if (anchored && byParagraphId.has(anchored.paragraphId)) {
       const bucket = unusedByTitle.get(
@@ -107,7 +109,7 @@ export function resolveTocRowHeadings(
       return anchored.paragraphId;
     }
 
-    const title = rowTitle(paragraph);
+    const title = rowTitle(result);
     if (title.length === 0) return null;
     const bucket = unusedByTitle.get(title);
     if (!bucket || bucket.length === 0) return null;

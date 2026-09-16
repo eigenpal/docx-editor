@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "TOC refresh retains stale rows in field boundary paragraphs and misses one-paragraph fields.",
+  "after": "Refresh replaces the actual cached result while preserving field markers and neighboring text.",
+  "reason": "The fix emits existing canonical paragraph and run edits. Shared node schemas, primitive updates, and repair rules remain unchanged; released readers can read the corrected OOXML.",
+  "tests": ["packages/core/src/editor/__tests__/toc-boundary-refresh.test.ts"],
+  "changeset": "toc-inline-boundaries",
+  "migration": null
+}
