@@ -39,14 +39,18 @@ describe('compatibility classification', () => {
     'examples/collaboration-hocuspocus/server.ts',
     'bun.lock',
     'packages/core/package.json',
-    'scripts/collaboration/policy.mjs',
-    '.github/workflows/dependabot-lockfile.yml',
+    '.collaboration/changes/example.json',
   ])('protects %s', (path) => expect(relevant(path)).toBe(true));
   test.each([
     'docs/site/content/editor-api/guide.mdx',
     'README.md',
     'packages/react/src/toolbar.tsx',
     'packages/core/src/layout/paint.ts',
+    'scripts/collaboration/policy.mjs',
+    'scripts/collaboration/workflow.test.ts',
+    '.github/workflows/release.yml',
+    '.github/workflows/ci.yml',
+    '.github/workflows/dependabot-lockfile.yml',
   ])('does not require unrelated %s', (path) => expect(relevant(path)).toBe(false));
   test('requires evidence for compatible changes', () => {
     expect(() => validateRecord(record, 'test')).not.toThrow();

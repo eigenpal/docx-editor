@@ -99,6 +99,26 @@ function repository() {
   return { dir, write, data, git, commit, check, base, addDecision };
 }
 
+test('workflow and compatibility-tooling changes need no decision in PR or release checks', () => {
+  const repo = repository();
+  repo.write('.github/workflows/release.yml', 'permissions:\n  contents: read\n');
+  const tool = 'scripts/collaboration/cli.mjs';
+  repo.write(tool, readFileSync(join(repo.dir, tool), 'utf8') + '\n// Tooling-only maintenance.\n');
+  repo.commit();
+  for (const args of [['--base', repo.base], ['--release']]) {
+    const result = repo.check(...args);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('0 decisions, 0 format fields changed');
+  }
+  // Adding a runtime change to the same PR must still require a decision.
+  repo.write('packages/core/src/store/example.ts', 'export const value = 2;\n');
+  for (const args of [['--base', repo.base], ['--release']]) {
+    const result = repo.check(...args);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('decision missing');
+  }
+});
+
 test('a relevant change cannot borrow a decision from a previous PR', () => {
   const repo = repository();
   repo.addDecision();

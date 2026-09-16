@@ -17,6 +17,8 @@ import {
 import { catalog, table } from './catalog.mjs';
 
 export function relevant(path) {
+  // Workflow and compatibility-tooling edits do not change the shared runtime.
+  // Mixed PRs still require a decision for any protected package or data changes.
   return (
     /^packages\/(core\/src\/(store|collaboration|binding|automation|editor)|pro\/src\/(collaboration|review|custom-nodes)|editor-api\/src)\//.test(
       path
@@ -27,10 +29,7 @@ export function relevant(path) {
       path
     ) ||
     ['bun.lock', 'package.json', '.changeset/config.json'].includes(path) ||
-    /^(scripts\/collaboration\/|\.collaboration\/)/.test(path) ||
-    /^\.github\/workflows\/(ci|release|recover-release|post-release|dependabot-lockfile|collaboration-catalog)\.yml$/.test(
-      path
-    )
+    /^\.collaboration\//.test(path)
   );
 }
 export function changedPaths(base) {
