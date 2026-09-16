@@ -1,3 +1,4 @@
+import { resolveTocSources } from './toc-sources.ts';
 // Build TOC result paragraphs and ensure heading bookmarks.
 
 import {
@@ -79,7 +80,23 @@ function runWithText(mint: () => string, text: string): OoxmlNode {
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: [textNode(mint, text)],
+    children: text.split('\t').flatMap((piece, index) => [
+      ...(index > 0
+        ? [
+            {
+              id: mint(),
+              kind: 'tab',
+              namespaceUri: WML_NAMESPACE_URI,
+              localName: 'tab',
+              prefix: 'w',
+              namespaceBindings: [],
+              attributes: [],
+              children: [],
+            } as OoxmlNode,
+          ]
+        : []),
+      textNode(mint, piece),
+    ]),
   } as unknown as OoxmlNode;
 }
 
@@ -260,7 +277,7 @@ export function buildTocEntryParagraph(
 ): OoxmlNode {
   const styleId = `TOC${Math.min(entry.level + 1, 9)}`;
   const runs: OoxmlNode[] = [runWithText(mint, entry.text)];
-  if (!instruction.omitPageNumbers) {
+  if (!instruction.omitPageNumbers && entry.pageNumberText !== '') {
     runs.push(ptabRun(mint));
     runs.push(runWithText(mint, entry.pageNumberText));
   }
@@ -484,11 +501,9 @@ export function planTocEntries(
   let bookmarkAlloc = 0;
   const nextTocId = nextTocBookmarkNumber(index, actorId);
 
-  for (const heading of outline) {
+  for (const heading of resolveTocSources(part, outline, instruction) ?? []) {
     if (entries.length >= TOC_MAX_ENTRIES) break;
     if (excludeParagraphIds.has(heading.blockId)) continue;
-    const oneBased = heading.level + 1;
-    if (oneBased < instruction.outlineStart || oneBased > instruction.outlineEnd) continue;
 
     let bookmarkName = nameByParagraph.get(heading.blockId);
     if (!bookmarkName && instruction.hyperlink) {
@@ -505,10 +520,12 @@ export function planTocEntries(
 
     entries.push({
       level: heading.level,
-      text: tocEntryText(heading.text),
+      text: heading.tcEntry ? heading.text.trim() : tocEntryText(heading.text),
       headingParagraphId: heading.blockId,
       bookmarkName,
-      pageNumberText: pageNumberByParagraphId.get(heading.blockId) ?? '1',
+      pageNumberText: heading.omitPageNumber
+        ? ''
+        : (pageNumberByParagraphId.get(heading.blockId) ?? '1'),
     });
   }
 

@@ -1,3 +1,4 @@
+import { resolveTocSources } from '../store/package/toc-sources.ts';
 import {
   commandProtectionRefusal,
   createControlWriteRefusal,
@@ -4236,7 +4237,8 @@ export function mountPaginatedSurface(
   function canRefreshToc(tocId?: string): boolean {
     if (editingMode === 'view' || !session.editable) return false;
     const toc = targetToc(tocId);
-    if (!toc) return false;
+    if (!toc || !resolveTocSources(session.part(), session.documentOutline(), toc.instruction))
+      return false;
     return (
       validateTreeOp(session.part(), {
         op: 'rewriteTocPageNumbers',
@@ -4380,7 +4382,9 @@ export function mountPaginatedSurface(
 
     let layout = surface.layout();
     const outline = session.documentOutline();
-    const outlineBlockIds = outline.map((entry) => entry.blockId);
+    const sources = resolveTocSources(session.part(), outline, toc.instruction);
+    if (!sources) return false;
+    const outlineBlockIds = sources.map((entry) => entry.blockId);
 
     if (mode === 'entire') {
       const plan = planTocEntries(

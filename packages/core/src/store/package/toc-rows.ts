@@ -1,3 +1,5 @@
+import { resolveTocSources } from './toc-sources.ts';
+import { fldCharType, isInstrTextNode, instrTextValue } from './field-nodes.ts';
 import { sliceTocParagraph } from './toc-result.ts';
 // Resolve a cached TOC result row back to the heading it stands for.
 //
@@ -31,33 +33,79 @@ function rowAnchor(paragraph: OoxmlNode, depth = 0): string | undefined {
   return undefined;
 }
 
+/** Word can link a plain TOC row through PAGEREF without a hyperlink wrapper. */
+function rowPageRefAnchor(paragraph: OoxmlNode): string | undefined {
+  const stack: { instruction: string; separated: boolean }[] = [];
+  let overflow = 0;
+  let anchor: string | undefined;
+  const read = (instruction: string) => {
+    if (instruction.length > 256) return;
+    const match = /^\s*PAGEREF\s+(?:"([^"\r\n]+)"|([^\s\\]+))/i.exec(instruction);
+    anchor ??= match?.[1] ?? match?.[2];
+  };
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (anchor || node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    const type = fldCharType(node);
+    if (type === 'begin') {
+      if (overflow || stack.length >= 4) overflow++;
+      else stack.push({ instruction: '', separated: false });
+      return;
+    }
+    if (type === 'end') {
+      if (overflow) overflow--;
+      else {
+        const field = stack.pop();
+        if (field) read(field.instruction);
+      }
+      return;
+    }
+    if (type === 'separate') {
+      if (!overflow && stack.length) stack[stack.length - 1]!.separated = true;
+      return;
+    }
+    if (!overflow && node.kind === 'fldSimple') {
+      read(node.attributes.find((attr) => attr.localName === 'instr')?.value ?? '');
+      return;
+    }
+    if (!overflow && isInstrTextNode(node)) {
+      const field = stack[stack.length - 1];
+      if (field && !field.separated) {
+        const chunk = instrTextValue(node);
+        field.instruction = (field.instruction + chunk).slice(0, 257);
+      }
+      return;
+    }
+    for (const child of node.children) walk(child, nextInlineContainerDepth(node, depth));
+  };
+  walk(paragraph, 0);
+  return anchor;
+}
+
 /**
  * A row's title: the text before the tab that carries the page number.
  *
- * Everything from the first tab or `w:ptab` on is leader and page number, which say nothing
- * about which heading the row names.
+ * The final tab separates the page number; earlier tabs can belong to TC entry text.
+ * Also try the complete title for entries whose page number is omitted.
  */
-function rowTitle(paragraph: OoxmlNode): string {
+function rowTitles(paragraph: OoxmlNode): readonly string[] {
   let title = '';
-  let done = false;
   const walk = (node: OoxmlNode, depth: number): void => {
-    if (done || node.kind === 'textValue') return;
-    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
-    if (node.kind === 'tab' || node.localName === 'ptab' || node.localName === 'tab') {
-      done = true;
+    if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    if (node.localName === 'pPr' || node.localName === 'rPr') return;
+    if (node.kind === 'tab' || node.localName === 'ptab') {
+      title += '\t';
       return;
     }
-    if (node.kind === 'text' || node.localName === 't') {
-      for (const child of node.children) {
-        if (child.kind === 'textValue') title += child.value;
-      }
+    if (node.kind === 'text') {
+      for (const child of node.children) if (child.kind === 'textValue') title += child.value;
       return;
     }
     const childDepth = nextInlineContainerDepth(node, depth);
     for (const child of node.children) walk(child, childDepth);
   };
   walk(paragraph, 0);
-  return tocEntryText(title);
+  const pageTab = title.lastIndexOf('\t');
+  return [tocEntryText(pageTab < 0 ? title : title.slice(0, pageTab)), tocEntryText(title)];
 }
 
 /**
@@ -73,11 +121,9 @@ export function resolveTocRowHeadings(
   outline: readonly TocOutlineHeading[],
   excludeParagraphIds: ReadonlySet<string>
 ): readonly (string | null)[] {
-  const candidates = outline.filter((heading) => {
-    if (excludeParagraphIds.has(heading.blockId)) return false;
-    const oneBased = heading.level + 1;
-    return oneBased >= toc.instruction.outlineStart && oneBased <= toc.instruction.outlineEnd;
-  });
+  const candidates = (resolveTocSources(part, outline, toc.instruction) ?? []).filter(
+    (heading) => !excludeParagraphIds.has(heading.blockId)
+  );
   const byParagraphId = new Set(candidates.map((heading) => heading.blockId));
 
   const bookmarks = buildBookmarkIndex(part);
@@ -96,7 +142,7 @@ export function resolveTocRowHeadings(
     if (!paragraph || paragraph.kind === 'textValue') return null;
 
     const result = sliceTocParagraph(paragraph, toc, 'result');
-    const anchor = rowAnchor(result);
+    const anchor = rowAnchor(result) ?? rowPageRefAnchor(result);
     const anchored = anchor === undefined ? undefined : bookmarks.get(anchor);
     if (anchored && byParagraphId.has(anchored.paragraphId)) {
       const bucket = unusedByTitle.get(
@@ -109,10 +155,10 @@ export function resolveTocRowHeadings(
       return anchored.paragraphId;
     }
 
-    const title = rowTitle(result);
-    if (title.length === 0) return null;
-    const bucket = unusedByTitle.get(title);
-    if (!bucket || bucket.length === 0) return null;
-    return bucket.shift() ?? null;
+    for (const title of rowTitles(result)) {
+      const bucket = unusedByTitle.get(title);
+      if (bucket?.length) return bucket.shift() ?? null;
+    }
+    return null;
   });
 }

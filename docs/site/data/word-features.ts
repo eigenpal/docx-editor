@@ -912,7 +912,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert a body TOC from the shared Insert menu, then refresh it from the document headings. A refresh can update the page numbers only. Tab leaders, section-formatted page numbers, and bookmark links all work. The generated rows are read-only navigation links.',
+      'Insert a body TOC from the shared Insert menu, then refresh it from document headings or TC entry fields. Unsupported source switches preserve the cached table and refuse refresh. A refresh can update the page numbers only. Tab leaders, section-formatted page numbers, and bookmark links all work. The generated rows are read-only navigation links.',
   },
   {
     id: 'fields.cross-references',
