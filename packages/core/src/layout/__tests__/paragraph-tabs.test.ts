@@ -325,3 +325,39 @@ describe('a trailing tab ends its line rather than starting one', () => {
     expect(lines[0]!.spans.some((span) => span.text === 'RIGHT')).toBe(true);
   });
 });
+
+describe('hanging-indent tabs', () => {
+  const row = (extra = '') =>
+    `<w:p><w:pPr><w:ind w:left="720" w:hanging="720"/><w:tabs>` +
+    `<w:tab w:val="right" w:pos="9000" w:leader="dot"/>${extra}</w:tabs></w:pPr>` +
+    `<w:r><w:t>1</w:t><w:tab/><w:t>Alpha</w:t><w:tab/><w:t>3</w:t></w:r></w:p>`;
+
+  test('number, title, and page number stay on one line', () => {
+    const lines = linesOf(lay(load(row())));
+    expect(lines).toHaveLength(1);
+    const spans = lines[0]!.spans;
+    expect(spans.find((span) => span.text === 'Alpha')!.box.x).toBeCloseTo(36, 6);
+    const number = spans.find((span) => span.text === '3')!;
+    expect(number.box.x + number.box.width).toBeCloseTo(450, 6);
+    const tabs = spans.filter((span) => span.text === '\t');
+    expect(tabs.map((tab) => tab.tabLeader)).toEqual([undefined, 'dot']);
+  });
+
+  test('an authored tab at the hanging indent retains its alignment', () => {
+    const lines = linesOf(lay(load(row('<w:tab w:val="right" w:pos="720"/>'))));
+    const title = lines[0]!.spans.find((span) => span.text === 'Alpha')!;
+    expect(title.box.x + title.box.width).toBeCloseTo(36, 6);
+  });
+});
+
+test('a right-aligned TOC tab reaches past the right indent without wrapping its page number', () => {
+  const part = load(
+    '<w:p><w:pPr><w:ind w:left="720" w:hanging="720" w:right="1440"/>' +
+      '<w:tabs><w:tab w:val="right" w:pos="9000" w:leader="dot"/></w:tabs></w:pPr>' +
+      '<w:r><w:t>1</w:t><w:tab/><w:t>Alpha</w:t><w:tab/><w:t>33</w:t></w:r></w:p>'
+  );
+  const lines = linesOf(lay(part));
+  expect(lines).toHaveLength(1);
+  const page = lines[0]!.spans.find((span) => span.text === '33')!;
+  expect(page.box.x + page.box.width).toBeCloseTo(450, 6);
+});

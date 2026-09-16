@@ -38,7 +38,22 @@ export function prepareParagraphBreakInputs(
   defaultTabStopPt: number | undefined,
   dependencies: ParagraphBreakDependencies
 ): { readonly tabStops: ResolvedTabStops; readonly properties: readonly OoxmlProperty[] } {
-  const tabStops = withDefaultTabInterval(inputs.tabStops, defaultTabStopPt);
+  let tabStops = withDefaultTabInterval(inputs.tabStops, defaultTabStopPt);
+  // Word supplies a left tab at a hanging paragraph's text origin. An authored stop
+  // at that position takes precedence; later custom stops must not swallow this tab.
+  const { left, hanging, firstLine } = inputs.indent;
+  if (
+    (hanging > 0 || firstLine < 0) &&
+    left > 0 &&
+    !tabStops.stops.some((stop) => stop.positionPt === left)
+  ) {
+    tabStops = {
+      ...tabStops,
+      stops: [...tabStops.stops, { positionPt: left, alignment: 'left' as const }].sort(
+        (a, b) => a.positionPt - b.positionPt
+      ),
+    };
+  }
   const token =
     tabStops === inputs.tabStops ? inputs.tabStopsCacheToken : tabStopsFingerprint(tabStops);
   return {

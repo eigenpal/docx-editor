@@ -554,6 +554,7 @@ export function breakParagraph(
   const contentOriginX = flow?.contentOriginX ?? 0;
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
   const lines: PendingLine[] = [];
+  let alignedTabRight = 0;
   let line: PendingLine = {
     spans: [],
     start: startOffset,
@@ -749,7 +750,7 @@ export function breakParagraph(
   const lineAvailable = (): number => {
     const base = baseLineAvailable();
     const zones = activeExclusionZones();
-    if (zones.length === 0) return base;
+    if (zones.length === 0) return Math.max(base, alignedTabRight - lineOrigin());
     applyTopAndBottomSkipIfNeeded();
     if (!snapLineToAvailableInterval()) return 0;
     const intervals = mergeAvailableIntervalsAtY(exclusionProbeY(), zones, contentLeft, wrapRight);
@@ -1031,6 +1032,7 @@ export function breakParagraph(
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
+    alignedTabRight = 0;
     line = {
       spans: [],
       drawings: [],
@@ -1260,9 +1262,18 @@ export function breakParagraph(
         const positional = piece.positionalTab
           ? positionalTabDestination(piece.positionalTab, indentLeft, rightEdge, flow?.marginExtent)
           : null;
+        // Authored aligned tabs may reach the containing margin beyond the paragraph's
+        // right indent. Only their following segment gets that extra room.
+        const tabEdge =
+          activeExclusionZones().length === 0
+            ? Math.max(rightEdge, flow?.marginExtent?.right ?? rightEdge)
+            : rightEdge;
+        const authored = nextTabDestination(tabStops, currentX, tabEdge);
         const destination =
           positional === null
-            ? nextTabDestination(tabStops, currentX, rightEdge)
+            ? authored.alignment === 'left'
+              ? nextTabDestination(tabStops, currentX, rightEdge)
+              : authored
             : positional.positionPt > currentX
               ? positional
               : {
@@ -1270,6 +1281,9 @@ export function breakParagraph(
                   ...nextTabDestination(tabStops, currentX, rightEdge),
                   ...(positional.leader ? { leader: positional.leader } : {}),
                 };
+        if (destination.alignment !== 'left') {
+          alignedTabRight = Math.max(alignedTabRight, Math.min(destination.positionPt, tabEdge));
+        }
         const width = tabAdvanceWidth(
           destination.alignment,
           currentX,
