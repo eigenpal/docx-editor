@@ -48,6 +48,7 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
+import { paintPageChangeBars, reconcilePageChangeBars } from './semantic-paint-change-bars.ts';
 import {
   applyHeaderFooterPaintChrome,
   headerFooterBandHeightPt,
@@ -959,100 +960,6 @@ function applyRevisionPresentation(
   }
 }
 
-/**
- * The margin rules beside the lines that carry tracked changes.
- *
- * CONTIGUOUS lines MERGE into one rule. Drawn per line, a five-line edit reads as five separate
- * marks with hairline gaps between them at every line boundary — the eye sees a dashed rule
- * where Word draws a solid one, and the gaps imply the change stops and restarts.
- *
- * Coloured by kind, so the margin says what happened as well as that something did. A run of
- * lines carrying both an insertion and a deletion takes the deletion colour: removed text is
- * the stronger claim, and it is the one a reviewer scanning the margin must not miss.
- *
- * Furniture throughout: one overlay, `aria-hidden`, `pointer-events: none`, no model range, and
- * positioned in the margin the fragment box already leaves, so it can never move a glyph.
- */
-function paintChangeBars(
-  document: Document,
-  fragment: ParagraphFragmentRecord,
-  scale: number
-): HTMLElement | null {
-  interface BarRun {
-    top: number;
-    bottom: number;
-    deleted: boolean;
-  }
-  const runs: BarRun[] = [];
-  // The mark belongs to the LAST line, and it is a revision like any other. Reading only the
-  // spans left a paragraph whose sole change was its own pilcrow — a split or a merge, the
-  // most ordinary tracked edit there is — with a coloured ¶ and no rule in the margin, so a
-  // reader scanning the margin never saw that the paragraph had been changed at all.
-  const markLine = fragment.lines[fragment.lines.length - 1];
-  for (const line of fragment.lines) {
-    const revisions = [
-      ...line.spans.flatMap((span) => span.revisions ?? []),
-      // Drawings too: a line whose ONLY change is an inserted or deleted picture carries no
-      // revision span — an inline atom is projected, not a span, and an anchored drawing
-      // paints from the page layer — and without these the margin said nothing had changed
-      // on it (#479).
-      ...(line.drawings ?? []).flatMap((drawing) => drawing.revisions ?? []),
-      ...(line.anchorRevisions ?? []),
-      ...(line === markLine ? (fragment.markRevisions ?? []) : []),
-    ];
-    if (revisions.length === 0) continue;
-    const deleted = revisions.some(
-      (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
-    );
-    const top = line.box.y - fragment.box.y;
-    const bottom = top + line.box.height;
-    const previous = runs[runs.length - 1];
-    // Touching or overlapping lines of the same claim are one rule.
-    if (previous && previous.deleted === deleted && top <= previous.bottom + 0.5) {
-      previous.bottom = Math.max(previous.bottom, bottom);
-      continue;
-    }
-    runs.push({ top, bottom, deleted });
-  }
-  if (runs.length === 0) return null;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'docx-change-bars';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.pointerEvents = 'none';
-  for (const run of runs) {
-    const bar = document.createElement('div');
-    bar.className = `docx-change-bar docx-change-bar-${run.deleted ? 'deletion' : 'insertion'}`;
-    bar.style.position = 'absolute';
-    bar.style.top = `${run.top * scale}px`;
-    bar.style.height = `${(run.bottom - run.top) * scale}px`;
-    // ANCHORED TO THE MARGIN, NOT TO THE PARAGRAPH. The bar is a child of the fragment, whose
-    // left edge is the paragraph's indented column — so an offset from the fragment put the
-    // rule at a different x for every indent level, and a nested list drew a staircase down
-    // the page. Subtracting the fragment's own x lands every bar on one vertical line, which
-    // is what makes a column of them readable as "these lines changed".
-    bar.style.left = `${(-fragment.box.x - CHANGE_BAR_OFFSET_PT) * scale}px`;
-    bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
-    bar.style.pointerEvents = 'none';
-    bar.style.backgroundColor = run.deleted
-      ? 'var(--doc-revision-deletion)'
-      : 'var(--doc-revision-insertion)';
-    overlay.append(bar);
-  }
-  return overlay;
-}
-
-/**
- * Distance from the text column to the change bar, and its thickness, in points.
- *
- * Close enough to read as belonging to the line, far enough not to collide with a hanging
- * indent or a list marker.
- */
-const CHANGE_BAR_OFFSET_PT = 7.5;
-const CHANGE_BAR_WIDTH_PT = 1.5;
-
 function paintSpan(
   document: Document,
   span: StyleSpanRecord,
@@ -1624,10 +1531,6 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
-  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, and it
-  // is the only signal that a change exists at all once the reader is in a resolved view.
-  const bars = paintChangeBars(document, fragment, scale);
-  if (bars) element.append(bars);
   if (
     (ctx.showParagraphMarks && fragment.paragraphEnd) ||
     (fragment.markRevisions && fragment.markRevisions.length > 0)
@@ -2406,6 +2309,12 @@ function paintPage(
   }
 
   paintContentControlChrome(document, element, page, options);
+  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, in
+  // one column per sheet. Painted from the whole page — body, notes, header, footer and
+  // text boxes — so a change that crosses a paragraph or a cell boundary is one unbroken
+  // rule. LAST on the sheet, which is also where block adoption puts a rebuilt one.
+  const changeBars = paintPageChangeBars(document, page, options.scale);
+  if (changeBars) element.append(changeBars);
   return element;
 }
 
@@ -2784,6 +2693,9 @@ function adoptPageBlocks(
     }
     content.insertBefore(element, cursor);
   }
+  // The margin rules are a page-level overlay over the adopted blocks, so they are the one
+  // piece of the sheet a block change can move; left alone when it did not.
+  reconcilePageChangeBars(document, retained.element, page, options.scale);
   return { record: page, materialized: true, element: retained.element, content, blocks };
 }
 

@@ -210,9 +210,14 @@
   --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
   --doc-review-author-7: #2e7d32;
-  /* Retained as an override hook for a host that wants one neutral margin rule instead of the
-     kind-coloured pair. Nothing reads it by default. */
-  --doc-review-change-bar: #767676;
+  /* The change bar: the rule in the left margin beside every line a tracked change touches.
+     Word's All Markup paints it neutral grey whatever the change was (its red bar belongs to
+     Simple Markup), and the ink here is Word's own on-screen grey. The width is a one-pixel
+     hairline at every zoom, as in Word. The bar also carries `docx-change-bar-insertion` /
+     `-deletion` / `-format` classes for a host that wants the kind back in the margin, and
+     `data-docx-story` naming the story it stands beside. */
+  --doc-review-change-bar: #a4a4a4;
+  --doc-review-change-bar-width: 1px;
 
   /* Selected table cells. A native selection is a run of characters and cannot
     * express a rectangle of cells, so that one highlight is drawn rather than
@@ -380,6 +385,7 @@
      AA. The same reason `--doc-revision-insertion` / `-deletion` are not overridden here.
      The CARDS sit outside the filter and lift the accent themselves, further down. */
   --doc-revision-format: #9fb3bf;
+  /* Painted on the sheet, outside the content-box inversion, so this value is the ink. */
   --doc-review-change-bar: #9e9e9e;
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */
@@ -3002,6 +3008,22 @@ a.docx-hyperlink:focus-visible {
   opacity: var(--doc-hf-dim-opacity);
   cursor: default;
   transition: opacity 0.15s ease;
+}
+
+/* The change bars beside dimmed stories dim with them; the bars beside the band being
+   edited stay at full ink. The sheet says which band that is. */
+.docx-pages--hf-editing .docx-change-bar {
+  opacity: var(--doc-hf-dim-opacity);
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing
+  .docx-page[data-docx-hf-active-kind='header']
+  .docx-change-bar[data-docx-story='header'],
+.docx-pages--hf-editing
+  .docx-page[data-docx-hf-active-kind='footer']
+  .docx-change-bar[data-docx-story='footer'] {
+  opacity: 1;
 }
 
 .docx-pages--hf-editing .docx-hf[data-docx-hf-active] {

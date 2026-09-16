@@ -356,7 +356,8 @@
   --doc-revision-deletion-wash: rgba(125, 147, 166, 0.06);
   --doc-revision-format: #4a7c98;
   --doc-revision-format-wash: rgba(74, 124, 152, 0.1);
-  --doc-review-change-bar: #6fbfe0;
+  /* The margin rule is a one-pixel hairline, so it takes the format ink, not the pale sky. */
+  --doc-review-change-bar: #4a7c98;
 }
 
 /* The stage does the centring, so the surface's own margin goes.

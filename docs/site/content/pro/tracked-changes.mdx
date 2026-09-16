@@ -226,8 +226,22 @@ paragraph ends (¶) and manual line breaks (↵, Shift+Enter). Tracked line-brea
 use their revision color and decoration. Automatic line wraps,
 page breaks, and column breaks do not receive a line-break arrow. Showing these symbols
 does not change copied text or saved documents. Adjacent inserted text and breaks by the same author form one
-review decision. A decision containing only breaks shows their count. Margin
-change bars remain visible, including inside table cells.
+review decision. A decision containing only breaks shows their count.
+
+## Change bars
+
+The editor draws Word's change bar: a gray hairline in the left margin beside
+every line that carries a tracked change. The bar sits halfway into the margin,
+whatever the paragraph indent, and one bar covers adjacent changed lines and
+paragraphs, including their paragraph spacing. Body text, tables, headers,
+footers, footnotes, endnotes, and text boxes all get the bar, and so do
+formatting-only changes and tracked table rows. The bar is neutral in every case, as in Word's
+**All Markup** view. It is not a pointer target. To change its color or width,
+or to color it by change kind, see
+[Review colors and styling](/docs/2.x/pro/review-styling#style-the-change-bar).
+
+Mirrored margins do not move the bar to the outside edge. Word's **Simple
+Markup** view, with its red bar, is unavailable.
 
 One paragraph mark can contain two decisions. For example, one author can insert
 a break before another author suggests its removal.

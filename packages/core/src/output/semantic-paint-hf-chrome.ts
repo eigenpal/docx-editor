@@ -57,12 +57,17 @@ export function applyHeaderFooterPaintChrome(
       if (chrome.activeHeaderFooterRId) content.setAttribute('contenteditable', 'false');
       else content.removeAttribute('contenteditable');
     }
+    // The sheet names the band being edited, so the stylesheet can dim the change bars of
+    // every OTHER story alongside the content they stand beside (the overlay is a sibling
+    // of the bands, not a child, so no band selector can reach it).
+    delete element.dataset.docxHfActiveKind;
     for (const band of element.querySelectorAll<HTMLElement>(
       ':scope > .docx-hf:not(.docx-hf--placeholder)'
     )) {
       const story = storyOfBand(page, band);
       if (!story) continue;
       const active = headerFooterBandIsActive(story, page.index, chrome);
+      if (active) element.dataset.docxHfActiveKind = story.kind;
       applyBandChrome(band, page, story, active, chrome.scale);
     }
     for (const layer of element.querySelectorAll<HTMLElement>(':scope > [data-docx-hf-front]')) {
