@@ -932,6 +932,7 @@ function layoutBlocksPass(
     contentWidth: contentWidthForReflow,
     insetsFor,
     pageCount: () => pages.length,
+    ...(options.sectionPageBorders ? { pageBorders: options.sectionPageBorders } : {}),
   });
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 

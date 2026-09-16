@@ -16,6 +16,8 @@ import {
   type PageContentInsets,
   type PageFurniture,
 } from './page-furniture-insets.ts';
+import { pageBorderFrame } from './page-border-frame.ts';
+import type { SectionPageBorders } from './page-borders.ts';
 import type { HeaderFooterStoryRecord, LayoutBox, PageGeometry } from './semantic-records.ts';
 
 export interface SectionPageFurnitureInputs {
@@ -33,6 +35,8 @@ export interface SectionPageFurnitureInputs {
   readonly insetsFor: (localIndex: number) => PageContentInsets;
   /** Pages the pass has completed so far, read when a story projects NUMPAGES. */
   readonly pageCount: () => number;
+  /** The section's `w:pgBorders`, for the frame a minted sheet draws. */
+  readonly pageBorders?: SectionPageBorders;
 }
 
 export interface SectionPageFurniture {
@@ -141,10 +145,13 @@ export function createSectionPageFurniture(
     const local = documentPageIndex - pageIndexStart;
     const header = furnitureFor('header', local, box);
     const footer = furnitureFor('footer', local, box);
+    // Same rule as a body page: `w:display` asks about the page's place in ITS section.
+    const pageBorders = pageBorderFrame(inputs.pageBorders, geometry, local === 0);
     return {
       insets: inputs.insetsFor(local),
       ...(header ? { header } : {}),
       ...(footer ? { footer } : {}),
+      ...(pageBorders ? { pageBorders } : {}),
     };
   };
 

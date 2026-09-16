@@ -10,7 +10,12 @@
 // shrink the content column to nothing, because pagination into a zero-height column never ends.
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
-import type { HeaderFooterStoryRecord, LayoutBox, SemanticLayout } from './semantic-records.ts';
+import type {
+  HeaderFooterStoryRecord,
+  LayoutBox,
+  PageBorderFrameRecord,
+  SemanticLayout,
+} from './semantic-records.ts';
 import { headerFooterVariantCanPaint } from '../store/package/hf-references.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
@@ -143,6 +148,12 @@ export interface OverflowPageShell {
   readonly insets: PageContentInsets;
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
+  /**
+   * The `w:pgBorders` frame the sheet's OWN position in its section resolves to. Not the
+   * template's: a template that is the section's first page has no `notFirstPage` frame, and
+   * the sheets minted after it must still draw one.
+   */
+  readonly pageBorders?: PageBorderFrameRecord;
 }
 
 /**
