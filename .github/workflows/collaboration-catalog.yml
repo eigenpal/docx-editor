@@ -17,6 +17,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
+  checks: read
+  statuses: read
 
 concurrency:
   group: collaboration-catalog
@@ -26,6 +29,9 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      pr: ${{ steps.capture.outputs.pr }}
+      version: ${{ steps.capture.outputs.version }}
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         id: token
@@ -43,6 +49,7 @@ jobs:
         with:
           node-version: '24'
       - name: Capture published artifacts and prepare review
+        id: capture
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ steps.token.outputs.token }}
@@ -59,10 +66,12 @@ jobs:
             echo "Baseline $version is already recorded."
             exit 0
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           branch="automation/collaboration-catalog-$version"
           pr_state=$(gh pr list --head "$branch" --state all --json state --jq '.[0].state // ""')
           if [ "$pr_state" = OPEN ]; then
-            echo "A catalog PR already exists for $version. Review that PR."
+            echo "A catalog PR already exists for $version. Resume its CI checks."
+            echo "pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ -n "$pr_state" ]; then
@@ -88,6 +97,53 @@ jobs:
             git push origin "$branch"
           fi
           cat > /tmp/collaboration-catalog-pr.md <<'BODY'
-          Record the published collaboration packages, frozen installation, and saved-room fixture. Review the artifact integrity and generated release table before the next release.
+          Record the published collaboration packages, frozen installation, and saved-room fixture. CI verifies artifact integrity, compatibility, and the generated release table. The catalog workflow merges this PR after all checks pass; failures leave it open for investigation.
           BODY
           gh pr create --base main --head "$branch" --title "test: capture collaboration baseline $version" --body-file /tmp/collaboration-catalog-pr.md
+          echo "pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" >> "$GITHUB_OUTPUT"
+
+  merge:
+    name: Merge verified catalog
+    needs: capture
+    if: needs.capture.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+      statuses: read
+    env:
+      PR_NUMBER: ${{ needs.capture.outputs.pr }}
+      RELEASE_VERSION: ${{ needs.capture.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Wait for the complete CI run and all PR checks
+        id: checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/collaboration/catalog-merge.mjs wait
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        if: steps.checks.outputs.head != ''
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+      - name: Recheck and merge the tested commit
+        if: steps.checks.outputs.head != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_TOKEN: ${{ steps.token.outputs.token }}
+          EXPECTED_HEAD: ${{ steps.checks.outputs.head }}
+        run: |
+          node scripts/collaboration/catalog-merge.mjs check
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" --squash --match-head-commit "$EXPECTED_HEAD" --repo "$GITHUB_REPOSITORY"

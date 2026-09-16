@@ -106,6 +106,7 @@ if [[ "$1" = push ]]; then echo pushed > "$STATE/pushed"; fi
     'gh',
     `
 if [[ "$2" = list ]]; then
+  if [[ "$*" = *"--json number"* ]]; then echo 123; exit 0; fi
   if [[ -f "$STATE/closed" ]]; then echo CLOSED; elif [[ -f "$STATE/created" ]]; then echo OPEN; fi
 elif [[ "$2" = create ]]; then
   if [[ ! -f "$STATE/failed" ]]; then echo failed > "$STATE/failed"; exit 1; fi
@@ -114,11 +115,8 @@ fi
 `
   );
   const workflow = readFileSync(join(ROOT, '.github/workflows/collaboration-catalog.yml'), 'utf8');
-  const block = workflow.slice(workflow.indexOf('        run: |\n') + '        run: |\n'.length);
-  const script = block
-    .split('\n')
-    .map((line) => line.replace(/^          /, ''))
-    .join('\n');
+  const parsed = Bun.YAML.parse(workflow) as any;
+  const script = parsed.jobs.capture.steps.find((step: any) => step.id === 'capture').run;
   // Keep the workflow's generated PR body inside the test's isolated directory.
   const isolated = script.replaceAll('/tmp/collaboration-catalog-pr.md', join(dir, 'pr.md'));
   const run = () =>
@@ -130,12 +128,14 @@ fi
         PATH: `${bin}:/usr/bin:/bin`,
         STATE: dir,
         REQUESTED_VERSION: '2.19.0',
+        GITHUB_OUTPUT: join(dir, 'outputs'),
       },
     });
   expect(run().status).toBe(1);
   expect(existsSync(join(dir, 'pushed'))).toBe(true);
   expect(run().status).toBe(0);
   expect(existsSync(join(dir, 'created'))).toBe(true);
+  expect(readFileSync(join(dir, 'outputs'), 'utf8')).toContain('pr=123');
   expect(readFileSync(join(dir, 'captures'), 'utf8')).toBe('capture\n');
   expect(readFileSync(join(dir, 'git-calls'), 'utf8')).toContain('switch --track');
   expect(run().status).toBe(0);

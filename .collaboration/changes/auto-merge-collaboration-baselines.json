@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Generated collaboration baselines require a manual merge even after all CI checks pass.",
+  "after": "The catalog workflow waits for completed CI, compatibility checks, and all registered checks, then merges only the verified PR head.",
+  "reason": "This changes release automation without changing collaboration data formats or package runtime behavior.",
+  "tests": [
+    "scripts/collaboration/catalog-merge.test.ts",
+    "scripts/collaboration/developer-experience.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

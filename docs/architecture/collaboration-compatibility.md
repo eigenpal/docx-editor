@@ -353,16 +353,19 @@ or integrity checks block publication.
 After publication, a separate Post-release updates workflow verifies registry
 integrity. It retries transient failures for up to 10 minutes across all packages
 and does not hold the Release workflow or its concurrency lock. A timeout or
-integrity mismatch blocks downstream
-updates. To resume those updates using the original tested artifacts, follow
+integrity mismatch blocks downstream updates. To resume those updates using the original tested artifacts, follow
 [Recover post-release updates without publishing](../RELEASING.md#recover-post-release-updates-without-publishing).
 
 ### Capture a published baseline
 
-The catalog workflow prepares a baseline PR after publication. Review and merge
-that PR before publishing another release. Its release App token allows CI to run
-on the generated PR. The workflow also supports a manual retry. If the branch push succeeds but PR
-creation fails, retrying reuses and validates the captured baseline before creating
+The catalog workflow prepares a baseline PR after publication. It waits for the
+complete CI run, all four collaboration shards, and all registered PR checks
+before merging the tested commit. Only the generated baseline files are eligible.
+Failed checks or merge conflicts leave the PR open. Resolve those failures before
+publishing another release.
+
+The release App token allows CI to run on the generated PR. The workflow also
+supports a manual retry. If the branch push succeeds but PR creation fails, retrying reuses and validates the captured baseline before creating
 the PR. It does not recapture or force-push the release. If the PR was closed,
 restore or reopen it before retrying.
 

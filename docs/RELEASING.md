@@ -120,7 +120,7 @@ these tasks.
 
 Release finishes without waiting for npm metadata propagation. The downstream
 workflow verifies the original tested artifacts, requests documentation and
-converter-site updates, captures the collaboration baseline, and comments on the
+converter-site updates, captures and merges the collaboration baseline after CI passes, and comments on the
 shipped PRs and issues. A downstream failure has its own workflow status and alert;
 it does not change the completed Release run. Retried comments are deduplicated.
 
@@ -157,8 +157,10 @@ packages are already published.
 4. Check the downstream workflows in `docx-editor.dev` and `docx-to-markdown.com`.
    A successful dispatch means the update was requested; each site has its own
    generation, validation, and deployment steps.
-5. Review the collaboration baseline PR opened by the catalog job. If a PR already
-   exists for that version, use the existing PR.
+5. Check the collaboration baseline PR. The catalog workflow waits for the full CI
+   run and all PR checks, then merges the tested commit. If checks fail, the PR
+   stays open. Fix the failure and rerun the catalog workflow to resume an
+   existing PR.
 
 Recovery does not build or publish packages, create release tags, or replay
 release announcements. It only updates sites for the current npm `latest`

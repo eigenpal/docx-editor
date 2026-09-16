@@ -42,9 +42,11 @@ jobs:
       version: ${{ needs.source.outputs.version }}
     secrets: inherit
     permissions:
-      actions: read
       contents: write
       pull-requests: write
+      actions: read
+      checks: read
+      statuses: read
 
   announcements:
     needs: [source, updates]
