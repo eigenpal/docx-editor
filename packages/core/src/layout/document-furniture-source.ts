@@ -50,6 +50,8 @@ export interface CreateDocumentFurnitureSourceOptions {
   /** Link/property projection and its inseparable cache identities. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
 }
 
 const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
@@ -99,6 +101,7 @@ export function createDocumentFurnitureSource(
     drawingTokenForParagraphForPart,
     linkProjectors,
     projectFieldLink,
+    showFieldCodes,
   } = options;
 
   const memo = new WeakMap<
@@ -234,6 +237,7 @@ export function createDocumentFurnitureSource(
         ...(numbering ? { numberingIndex: numbering } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
+        showFieldCodes,
         projectionEpoch,
         projectionTokenForParagraph: (paragraph: OoxmlNode) =>
           linkProjectors.tokenForParagraphForPart(part.name, paragraph),

@@ -194,6 +194,8 @@ export interface HeaderFooterStoryInputs {
   /** Sanitized hyperlink seams scoped to this header/footer part. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** @internal */
+  readonly showFieldCodes?: boolean;
   /** Per-paragraph identity for links and live document-property projection. */
   readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /** Memoized aggregate projection identity for table subtrees. */
@@ -241,6 +243,7 @@ export function layoutHeaderFooterStory(
   documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
   inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
+  if (inputs?.showFieldCodes) producer += '|field-codes';
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -361,6 +364,7 @@ export function layoutHeaderFooterStory(
         ...(documentProperties ? { documentProperties } : {}),
         ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
         ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+        showFieldCodes: inputs?.showFieldCodes,
         inlineDrawingLayout,
         ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
         ...(inputs?.projectionTokenForParagraph
@@ -412,6 +416,7 @@ export function layoutHeaderFooterStory(
           ...(documentProperties ? { documentProperties } : {}),
           ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
           ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+          showFieldCodes: inputs?.showFieldCodes,
           ...(inputs?.projectionTokenForParagraph
             ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
             : {}),
@@ -498,6 +503,7 @@ export function layoutHeaderFooterStory(
         ...(documentProperties ? { documentProperties } : {}),
         ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
         ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+        showFieldCodes: inputs?.showFieldCodes,
         ...(inputs?.projectionTokenForParagraph
           ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
           : {}),

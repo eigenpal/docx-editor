@@ -50,6 +50,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   compatibilityMode: 'document-coordinator',
   projectLink: 'document-coordinator',
   projectFieldLink: 'document-coordinator',
+  showFieldCodes: 'document-coordinator',
   documentProperties: 'document-coordinator',
   notes: 'document-coordinator',
   pageBottomReserves: 'layout-internal',
@@ -64,6 +65,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   drawingExclusionZonesByPage: 'layout-internal',
   drawingSourceOrder: 'layout-internal',
   tocFieldChromeParagraphIds: 'layout-internal',
+  fieldCodeRanges: 'layout-internal',
   emptyTocPlaceholderParagraphIds: 'layout-internal',
   emptyTocSuppressedResultParagraphIds: 'layout-internal',
 } satisfies Readonly<Record<keyof SemanticLayoutOptions, SemanticLayoutOptionRole>>);
@@ -92,6 +94,8 @@ export interface LayoutDocumentViewOptions {
   /** Body/story projection paired with every cache identity it requires. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
@@ -121,6 +125,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   furniture: 'semantic-layout',
   linkProjectors: 'both',
   projectFieldLink: 'both',
+  showFieldCodes: 'both',
   inlineDrawingLayout: 'semantic-layout',
   inlineDrawingLayoutForPart: 'notes',
   drawingTokenForParagraph: 'semantic-layout',
@@ -162,6 +167,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     drawingLayoutEpochForPart: options.drawingLayoutEpochForPart,
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
+    showFieldCodes: options.showFieldCodes,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
   } satisfies CreateDocumentNotesInputOptions &
@@ -182,6 +188,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     compatibilityMode: options.compatibilityMode,
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
+    showFieldCodes: options.showFieldCodes,
     inlineDrawingLayout: options.inlineDrawingLayout,
     drawingTokenForParagraph: options.drawingTokenForParagraph,
     drawingLayoutEpoch: options.drawingLayoutEpoch,
@@ -201,6 +208,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     furniture: semanticInputs.furniture.furniture(),
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
+    showFieldCodes: semanticInputs.showFieldCodes,
     documentProperties: semanticInputs.view.documentProperties(),
     inlineDrawingLayout: semanticInputs.inlineDrawingLayout,
     drawingTokenForParagraph: semanticInputs.drawingTokenForParagraph,

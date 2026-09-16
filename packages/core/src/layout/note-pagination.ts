@@ -249,6 +249,8 @@ export interface NotesLayoutInput {
   /** Combined notes-part freshness signal; outer memo only, never a paragraph producer. */
   readonly projectionEpoch?: string;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -684,6 +686,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     projectLink: input.projectLink,
     projectLinkForPart: input.projectLinkForPart,
     projectFieldLink: input.projectFieldLink,
+    showFieldCodes: input.showFieldCodes,
     documentProperties: input.documentProperties,
     refFields: input.refFields,
     noteMarks,
@@ -2779,6 +2782,8 @@ export function inheritNotesLayoutInput(
   body: {
     readonly projectLink?: NotesLayoutInput['projectLink'];
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
+    /** Field-code inspection projection. @internal */
+    readonly showFieldCodes?: boolean;
     readonly documentProperties?: NotesLayoutInput['documentProperties'];
     readonly refFields?: NotesLayoutInput['refFields'];
     readonly displayMode?: NotesLayoutInput['displayMode'];
@@ -2795,6 +2800,7 @@ export function inheritNotesLayoutInput(
     ...notes,
     ...(projectLink ? { projectLink } : {}),
     ...(projectFieldLink ? { projectFieldLink } : {}),
+    showFieldCodes: notes.showFieldCodes ?? body.showFieldCodes,
     ...(documentProperties ? { documentProperties } : {}),
     ...(refFields ? { refFields } : {}),
     ...(displayMode ? { displayMode } : {}),

@@ -209,6 +209,10 @@ export interface TableFlowDeps {
   readonly projectLink?: HyperlinkProjector;
   /** Same seam for HYPERLINK fields: a field in a table cell is an ordinary field. */
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
+  /** @internal */
+  readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -521,6 +525,11 @@ function placeCellParagraph(
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
+      showFieldCodes: deps.showFieldCodes,
+      fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
+      suppressEmptyPlaceholderLine: deps.fieldCodeRanges
+        ?.get(paragraphId)
+        ?.some((range) => range.suppressParagraph),
       ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
       ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
       ...(deps.refFields ? { refFields: deps.refFields } : {}),

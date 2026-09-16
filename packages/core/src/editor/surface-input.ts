@@ -120,6 +120,8 @@ export function createKeyDownHandler(
      */
     readonly onRequestHyperlink?: () => void;
     readonly onToggleParagraphMarks?: () => void;
+    /** @internal */
+    readonly onToggleFieldCodes?: () => void;
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
@@ -131,6 +133,20 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
+    // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.
+    if (
+      event.key === 'F9' &&
+      event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      !event.isComposing &&
+      hooks.onToggleFieldCodes
+    ) {
+      event.preventDefault();
+      hooks.onToggleFieldCodes();
+      return;
+    }
     if (
       !event.altKey &&
       !event.isComposing &&

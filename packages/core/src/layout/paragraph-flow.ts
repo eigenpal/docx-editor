@@ -1,3 +1,4 @@
+import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
 export { paragraphAlignment, alignSpans, type Alignment } from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
@@ -13,7 +14,6 @@ import {
   type Twips,
 } from '@docx-editor.dev/core/store';
 import {
-  piecesOfParagraph,
   propertiesOfRunContainer,
   type FieldAwarePiece,
   type FieldPageContext,
@@ -131,6 +131,10 @@ export interface ParagraphFlowOptions {
    * still measures and paints — it simply is not a link.
    */
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
+  /** @internal */
+  readonly fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[];
   /**
    * The document's parsed metadata, for document-property fields (TITLE, AUTHOR, …).
    *
@@ -457,7 +461,7 @@ export function breakParagraph(
   // from the emitted spans, because in the proposed result a deletion produces no span at all
   // and its offsets would otherwise look like ordinary empty positions.
   const deletedRanges: { start: number; end: number }[] = [];
-  const rawPieces = piecesOfParagraph(
+  const rawPieces = piecesOfParagraphForDisplay(
     paragraph,
     inheritedRunProperties,
     pageContext,
@@ -472,7 +476,9 @@ export function breakParagraph(
     flow?.documentProperties,
     flow?.bodyPageFields ?? false,
     flow?.refFields,
-    flow?.revisionAuthorFilter
+    flow?.revisionAuthorFilter,
+    flow?.showFieldCodes,
+    flow?.fieldCodeRanges
   );
   const allPieces = bidiPieces(
     rawPieces,
@@ -488,7 +494,16 @@ export function breakParagraph(
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const visiblePieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
-    if (piece.end <= startOffset) return [];
+    if (
+      piece.end <= startOffset &&
+      !(
+        flow?.showFieldCodes &&
+        piece.projected &&
+        piece.start === piece.end &&
+        piece.start === startOffset
+      )
+    )
+      return [];
     if (piece.start >= startOffset) return [piece];
     const trim = startOffset - piece.start;
     return [

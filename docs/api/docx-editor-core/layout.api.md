@@ -551,6 +551,8 @@ export interface CreateDocumentFurnitureSourceOptions {
     readonly projectFieldLink?: FieldLinkProjector;
     // (undocumented)
     readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    // @internal
+    readonly showFieldCodes?: boolean;
     // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
@@ -590,6 +592,8 @@ export interface CreateDocumentNotesInputOptions {
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
     // (undocumented)
     readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    // @internal
+    readonly showFieldCodes?: boolean;
     // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
@@ -2119,6 +2123,8 @@ export interface NotesLayoutInput {
     readonly refFields?: RefFieldContext;
     // (undocumented)
     readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    // @internal
+    readonly showFieldCodes?: boolean;
     // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }
@@ -3414,6 +3420,8 @@ export interface SemanticLayoutOptions {
     readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
     readonly emptyTocPlaceholderParagraphIds?: ReadonlySet<string>;
     readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
+    // @internal (undocumented)
+    readonly fieldCodeRanges?: FieldCodeRanges;
     readonly furniture?: PageFurniture;
     // (undocumented)
     readonly geometry?: PageGeometry;
@@ -3436,6 +3444,8 @@ export interface SemanticLayoutOptions {
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
     readonly session?: LayoutSession;
+    // @internal
+    readonly showFieldCodes?: boolean;
     readonly styleCascade?: StyleCascadeTable;
     readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
 }

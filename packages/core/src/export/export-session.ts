@@ -496,6 +496,7 @@ export function openDocumentForExport(
         compatibilityMode: state.styles.compatibilityMode,
         displayMode: mode,
         revisionAuthorFilter: undefined,
+        showFieldCodes: false,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -536,6 +537,7 @@ export function openDocumentForExport(
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: mode,
         revisionAuthorFilter: undefined,
+        showFieldCodes: false,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

@@ -168,6 +168,8 @@ export interface LayoutNoteStoryOptions {
    */
   readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   readonly projectionTokenForParagraphForPart?: (
     ownerPartName: string,
     paragraph: OoxmlNode
@@ -282,6 +284,7 @@ export function layoutNoteStory(
     // that produced them. Keep the unfiltered default key stable, matching furniture.
     producer:
       options.producer +
+      (options.showFieldCodes ? '|field-codes' : '') +
       (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
       (options.revisionAuthorFilter ? `|reviewers:${options.revisionAuthorFilter.cacheKey}` : '') +
       `|${scopeId}`,
@@ -291,6 +294,7 @@ export function layoutNoteStory(
     noteMarks,
     ...(projectLink ? { projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    showFieldCodes: options.showFieldCodes,
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.ownerPartName && options.projectionTokenForParagraphForPart
       ? {

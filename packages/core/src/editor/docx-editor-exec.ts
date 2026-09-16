@@ -1,3 +1,4 @@
+import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -338,7 +339,10 @@ export function execEditorCommand(
       break;
     case 'insertText':
       mounted.type(command.text);
-      if (mounted.state().lastRejection === 'the table of contents is generated and read-only') {
+      if (
+        mounted.state().lastRejection === 'the table of contents is generated and read-only' ||
+        mounted.state().lastRejection === FIELD_CODE_INPUT_REFUSAL
+      ) {
         return { ok: false, code: 'invalidArgs', reason: mounted.state().lastRejection! };
       }
       break;

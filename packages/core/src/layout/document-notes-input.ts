@@ -47,6 +47,8 @@ export interface CreateDocumentNotesInputOptions {
   /** Link/property projection and its inseparable cache identities. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }
@@ -157,6 +159,7 @@ export function createDocumentNotesInput(
       .map((part) => (part ? options.linkProjectors.epochForPart(part.name) : ''))
       .join('\0'),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    showFieldCodes: options.showFieldCodes,
     projectionTokenForParagraphForPart: options.linkProjectors.tokenForParagraphForPart,
     projectionTokenForTableForPart: options.linkProjectors.tokenForTableForPart,
     projectionEpoch: noteParts

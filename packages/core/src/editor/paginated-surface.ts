@@ -1,3 +1,8 @@
+import { createFormFieldShading } from './surface-form-field-shading.ts';
+import {
+  FIELD_CODE_INPUT_REFUSAL,
+  selectionTouchesFieldCodeInput,
+} from './surface-field-code-input.ts';
 import {
   fullyProtectedTocParagraphs,
   tocControlId,
@@ -55,7 +60,6 @@ import {
   parentNodeOf,
   parseTocInstruction,
   planTocEntries,
-  readViewSettings,
   resolveTocRowHeadings,
   validateTreeOp,
   type DetectedToc,
@@ -827,28 +831,13 @@ export function mountPaginatedSurface(
     }
     return { paragraphId: selection.head.paragraphId, offset: selection.head.offset };
   };
-  /**
-   * `w:doNotShadeFormData`, memoized per package revision.
-   *
-   * Read on every paint otherwise, and paint runs far more often than `settings.xml` changes —
-   * the same reason every other settings read in the engine is revision-keyed.
-   */
-  let formFieldShadingRevision = -1;
-  let formFieldShading = true;
-  const shadeFormFields = (): boolean => {
-    const revision = session.packageRevision();
-    if (formFieldShadingRevision !== revision) {
-      formFieldShadingRevision = revision;
-      // Inverted at the read: the setting says what NOT to do, the painter wants what to do.
-      formFieldShading = !readViewSettings(session.settingsRoot()).doNotShadeFormData;
-    }
-    return formFieldShading;
-  };
+  const shadeFormFields = createFormFieldShading(session);
   const paintImageUrlPort = createBrowserPaintImageUrlPort({
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
   });
   // Layout, furniture, and formatting writes share the view's current projection (#497).
+  let showFieldCodes = false;
   let displayMode = options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const revisionDisplayMode = (): RevisionDisplayMode => displayMode;
   const revisionAuthorVisibility =
@@ -890,7 +879,8 @@ export function mountPaginatedSurface(
   const fieldLinks = createFieldLinkRegistry();
   type SurfaceFurnitureOptions = Parameters<typeof createFurnitureSource>[0];
   const createCurrentFurnitureSource = (
-    authorFilter?: RevisionAuthorFilter
+    authorFilter?: RevisionAuthorFilter,
+    fieldCodes = showFieldCodes
   ): ReturnType<typeof createFurnitureSource> =>
     createFurnitureSource({
       session,
@@ -902,6 +892,7 @@ export function mountPaginatedSurface(
       // even when it is the default, because a lane that says nothing is treated as saying
       // "not All Markup", which is what keeps markup out of the resolved views.
       displayMode: revisionDisplayMode(),
+      showFieldCodes: fieldCodes,
       revisionAuthorFilter: authorFilter,
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
@@ -1281,6 +1272,7 @@ export function mountPaginatedSurface(
       // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
+      showFieldCodes: context ? false : showFieldCodes,
       revisionAuthorFilter: activeAuthorFilter,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
   }
@@ -1289,7 +1281,7 @@ export function mountPaginatedSurface(
   function canonicalUnfilteredLayoutForSave(): SemanticLayout {
     return layoutDocument(session.packageRevision(), undefined, {
       layoutSession: createLayoutSession(),
-      furnitureSource: createCurrentFurnitureSource(undefined),
+      furnitureSource: createCurrentFurnitureSource(undefined, false),
     });
   }
 
@@ -2977,6 +2969,14 @@ export function mountPaginatedSurface(
     // table of contents refused it with a reason about the table of contents.
     const protectionWrite = isDocumentProtectionBatch(ops);
     if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
+    if (
+      showFieldCodes &&
+      edits &&
+      checkSelection &&
+      !protectionWrite &&
+      selectionTouchesFieldCodeInput((id) => partOfNodeId(session, id), selection)
+    )
+      return FIELD_CODE_INPUT_REFUSAL;
     if (
       edits &&
       !protectionWrite &&
@@ -5904,7 +5904,7 @@ export function mountPaginatedSurface(
         sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
       selection: () => selection,
       select: (next) => setSelection(next),
-      editable: () => editingMode === 'edit',
+      editable: () => editingMode === 'edit' && !showFieldCodes,
       apply: (op) => applyTextFormOperation(op, commit, applyOps),
       save: (ops, next) =>
         applyTextFormSave(ops, next, {
@@ -5918,7 +5918,16 @@ export function mountPaginatedSurface(
     runtimeOptions.initialTextFormInput
   );
   registerFormFieldIdentity(surface, textFormInteraction.fieldId);
-  const dispatchKeyDown = createKeyDownHandler(surface, options);
+  const dispatchKeyDown = createKeyDownHandler(surface, {
+    ...options,
+    onToggleFieldCodes: () => {
+      flushPendingInputAndLayout();
+      showFieldCodes = !showFieldCodes;
+      furnitureSource = createCurrentFurnitureSource(revisionFilter());
+      scheduler.invalidateAll(session.packageRevision(), 'field-code-view');
+      scheduler.flush();
+    },
+  });
   const onKeyDown = (event: KeyboardEvent): void => {
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
