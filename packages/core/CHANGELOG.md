@@ -1,5 +1,21 @@
 # @docx-editor.dev/core
 
+## 2.19.1
+
+### Patch Changes
+
+- ccd6bdd: Avoid an extra blank page when a page-break-before paragraph starts a new section. Fixes #870.
+- ccd6bdd: Use Word's default C identifier for TOC source filtering and untyped TC entries. Fixes #878.
+- ccd6bdd: Bound TOC detection work when documents contain excessive nested field markers. Fixes #879.
+- ccd6bdd: Keep the first refreshed TOC entry beside its opening field markers, without adding a blank paragraph. Fixes #877.
+- ccd6bdd: Fix numbered table-of-contents rows skipping the hanging-indent tab and wrapping page numbers. Fixes #867.
+- ccd6bdd: Keep TOC hover highlights around the complete entry, including hanging clause numbers and right-aligned page numbers. Fixes #874.
+- ccd6bdd: Refresh table-of-contents entries within field boundary paragraphs and detect single-paragraph tables of contents. Fixes #869.
+- ccd6bdd: Preserve inline content controls during TOC refresh and respect locked cached page numbers. Fixes #875.
+- ccd6bdd: Preserve stale tabbed TOC titles when page numbers are omitted by their TC source. Fixes #876.
+- ccd6bdd: Preserve TC-based table-of-contents entries during refresh, including entry levels, identifiers, and page numbers. Fixes #868.
+- @docx-editor.dev/i18n@2.19.1
+
 ## 2.19.0
 
 ### Patch Changes

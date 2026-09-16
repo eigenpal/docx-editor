@@ -1,5 +1,11 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.19.1
+
+### Patch Changes
+
+- @docx-editor.dev/fonts@2.19.1
+
 ## 2.19.0
 
 ### Minor Changes

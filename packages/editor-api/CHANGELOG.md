@@ -1,5 +1,7 @@
 # @docx-editor.dev/editor-api
 
+## 2.19.1
+
 ## 2.19.0
 
 ### Patch Changes
