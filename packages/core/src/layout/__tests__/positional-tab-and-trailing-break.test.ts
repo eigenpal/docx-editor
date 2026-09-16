@@ -392,3 +392,23 @@ describe('a PAGE break carries the caret onto the page it opened', () => {
     expect(caretAt(layout, hit.position, measurer)?.pageIndex).toBe(0);
   });
 });
+
+test('a positional tab in the first TOC field result retains its leader and zero-width model range', () => {
+  const body =
+    CONTENTS.replace(
+      '<w:p>',
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>TOC</w:instrText><w:fldChar w:fldCharType="separate"/></w:r>'
+    ) + '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+  const layout = lay(body);
+  const paragraph = paragraphs(layout)[0]!;
+  const spans = paragraph.lines.flatMap((line) => line.spans);
+  const tab = spans.find((span) => span.text === '\t')!;
+  expect(tab.tabLeader).toBe('dot');
+  expect(tab.range.start).toBe(9);
+  expect(tab.range.end).toBe(9);
+  const number = spans.find((span) => span.text === '7')!;
+  expect(number.range.start).toBe(9);
+  expect(number.range.end).toBe(10);
+  expect(number.box.x + number.box.width).toBeCloseTo(468, 6);
+  expect(caretAt(layout, { paragraphId: paragraph.paragraphId, offset: 10 })).not.toBeNull();
+});

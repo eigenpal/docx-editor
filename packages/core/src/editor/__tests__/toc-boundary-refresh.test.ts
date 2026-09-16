@@ -195,3 +195,35 @@ test('page-only refresh refuses locked inline cached page numbers', async () => 
     editor.destroy();
   }
 });
+
+test('refresh places the first entry beside the opening field marker, as Word does', async () => {
+  // Desktop Word retains one result paragraph and one closing-marker paragraph.
+  const { result, xml } = await refresh(
+    p(begin('TOC \\o &quot;1-1&quot;') + text('Stale') + end) + heading('Fresh')
+  );
+  expect(result.ok).toBe(true);
+  expect(xml.match(/<w:p[ >]/g)).toHaveLength(3);
+  expect(xml.split('</w:p>')[0]).toContain('<w:t>Fresh</w:t>');
+});
+
+test('repeated refresh does not grow the TOC or move its first entry', async () => {
+  const editor = createDocxEditor({ container: document.createElement('div') });
+  try {
+    editor.load(
+      docx(
+        p(begin('TOC \\o &quot;1-1&quot;') + text('Stale')) +
+          p(end) +
+          heading('Alpha') +
+          heading('Beta')
+      )
+    );
+    for (let i = 0; i < 3; i++) {
+      expect(editor.exec({ type: 'refreshToc', mode: 'entire' }).ok).toBe(true);
+      const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+      expect(xml.match(/<w:p[ >]/g)).toHaveLength(5);
+      expect(xml.split('</w:p>')[0]).toContain('<w:t>Alpha</w:t>');
+    }
+  } finally {
+    editor.destroy();
+  }
+});

@@ -326,6 +326,20 @@ function replaceResultParagraphs(
       ),
     } as OoxmlElement;
   }
+  // Word places the first generated entry beside the separator. Keeping a standalone
+  // prefix paragraph inserts a blank line above every refreshed TOC.
+  const firstEntry = newEntries.shift();
+  if (firstEntry && firstEntry.kind !== 'textValue') {
+    const isProperties = (node: OoxmlNode) => node.kind === 'paragraphProperties';
+    prefix = {
+      ...prefix,
+      children: [
+        ...firstEntry.children.filter(isProperties),
+        ...prefix.children.filter((node) => !isProperties(node)),
+        ...firstEntry.children.filter((node) => !isProperties(node)),
+      ],
+    } as OoxmlElement;
+  }
   const nextChildren = [
     ...container.children.slice(0, beginIdx),
     prefix,
@@ -341,7 +355,7 @@ function replaceResultParagraphs(
   const replaced = replaceChildren(part, container.id, nextChildren, options);
   if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
   const effect: TreeOpEffect = {
-    dirty: [toc.beginParagraphId, toc.endParagraphId, ...created],
+    dirty: [toc.beginParagraphId, range.separateParagraphId, toc.endParagraphId, ...created],
     created,
     deleted,
     dependencyKeys: [toc.containerId],

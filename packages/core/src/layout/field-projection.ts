@@ -720,7 +720,11 @@ export function piecesOfParagraph(
           });
           continue;
         }
-        const text = modelTextOfRunChild(grand);
+        // Editable field results can carry positional tabs. Preserve their layout
+        // metadata while keeping their zero-width canonical model range.
+        const positional = pending.atomic ? null : positionalTabOf(grand);
+        const text = positional ? '\t' : modelTextOfRunChild(grand);
+        const modelWidth = positional ? 0 : text.length;
         if (text.length === 0) continue;
 
         // A field can be tracked as a whole — Word writes a deleted hyperlink as `w:del`
@@ -755,14 +759,14 @@ export function piecesOfParagraph(
             // Unconditional on this branch too. Gating it on suppression left an all-markup
             // deletion inside a DEMOTED field out of the ranges — visible, and so the one case
             // where the caret could walk into deleted content it is meant to step over.
-            appendModelRange(deletedRanges, offset, offset + text.length);
+            appendModelRange(deletedRanges, offset, offset + modelWidth);
           }
         }
 
         if (fieldSuppressed) {
           if (pending.atomic && nestedPage.active) nestedPage.noteResult(false);
           if (!pending.atomic) {
-            offset += text.length;
+            offset += modelWidth;
             pending.bufferOffset = offset;
           }
           continue;
@@ -789,7 +793,7 @@ export function piecesOfParagraph(
 
         // Demoted field: result text is ordinary addressable content.
         if (style.hidden) {
-          offset += text.length;
+          offset += modelWidth;
           pending.bufferOffset = offset;
           continue;
         }
@@ -807,14 +811,15 @@ export function piecesOfParagraph(
           text,
           style,
           start: offset,
-          end: offset + text.length,
+          end: offset + modelWidth,
+          ...(positional ? { positionalTab: positional } : {}),
           ...attribution,
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
           // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
           fieldAtom: { formField: pending.formField },
         });
-        offset += text.length;
+        offset += modelWidth;
         pending.bufferOffset = offset;
         continue;
       }
