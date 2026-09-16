@@ -87,8 +87,14 @@ describe('engine dependency integrity', () => {
     const markdownNavigation = JSON.parse(
       readFileSync(join(repositoryRoot, 'docs/site/content/export/markdown/meta.json'), 'utf8')
     );
-    expect(navigation.pages).toContain('export');
-    expect(navigation.pages).not.toContain('export/markdown');
+    const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
+    expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
+    expect(navigation.pages.slice(exportSectionIndex, exportSectionIndex + 3)).toEqual([
+      '---Export formats---',
+      'export/markdown',
+      '---Pro---',
+    ]);
+    expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');
     expect(exportNavigation.pages).toContain('markdown');
     expect(markdownNavigation.pages).toContain('index');
