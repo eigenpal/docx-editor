@@ -98,6 +98,11 @@ jobs:
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"
+      # Pixels, not styles: a dashed rule whose gradient sits on a solid ink fill has the
+      # right `backgroundImage` and still paints as a solid line.
+      - name: Check dashed and dotted borders paint with gaps
+        if: "matrix.check == 'browser'"
+        run: bun run check:border-patterns
       - name: Build packages
         run: bun run build:packages
         env:
