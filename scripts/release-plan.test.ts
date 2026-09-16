@@ -21,7 +21,7 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
-test('releases public packages without versioning private workspaces', async () => {
+test('versions private workspaces while keeping them private and untagged', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'docx-release-plan-'));
   directories.push(directory);
   const write = (path: string, value: unknown) => {
@@ -56,7 +56,7 @@ test('releases public packages without versioning private workspaces', async () 
     }
   }
 
-  expect(config.fixed.flat().sort()).toEqual(publicPackages.sort());
+  expect(config.fixed.flat().sort()).toEqual([...publicPackages, '@docx-editor.dev/nuxt'].sort());
   expect(config.privatePackages.tag).toBe(false);
   writeFileSync(
     join(directory, '.changeset', 'public-core-fix.md'),
@@ -64,8 +64,18 @@ test('releases public packages without versioning private workspaces', async () 
   );
   const plan = await getReleasePlan(directory);
   const versioned = plan.releases.filter((release) => release.type !== 'none');
-  expect(versioned.map((release) => release.name).sort()).toEqual(publicPackages);
+  expect(
+    versioned
+      .filter((release) => publicPackages.includes(release.name))
+      .map((release) => release.name)
+      .sort()
+  ).toEqual(publicPackages.sort());
   expect(versioned.every((release) => release.type === 'patch')).toBe(true);
+  const releases = new Map(plan.releases.map((release) => [release.name, release]));
+  expect(releases.get('@docx-editor.dev/example-collaboration')?.type).toBe('patch');
+  expect(releases.get('@docx-editor.dev/nuxt')?.newVersion).toBe(
+    releases.get('@docx-editor.dev/core')?.newVersion
+  );
   for (const release of plan.releases.filter((release) => release.type === 'none')) {
     expect(release.newVersion).toBe(release.oldVersion);
   }
@@ -81,7 +91,11 @@ test('releases public packages without versioning private workspaces', async () 
   );
   for (const { path, version } of privateManifests) {
     const manifest = JSON.parse(readFileSync(join(directory, path), 'utf8'));
-    expect(manifest.version).toBe(version);
-    expect(existsSync(join(directory, dirname(path), 'CHANGELOG.md'))).toBe(false);
+    const release = releases.get(manifest.name);
+    expect(manifest.private).toBe(true);
+    expect(manifest.version).toBe(release?.newVersion ?? version);
+    expect(existsSync(join(directory, dirname(path), 'CHANGELOG.md'))).toBe(
+      Boolean(release && release.type !== 'none')
+    );
   }
 });

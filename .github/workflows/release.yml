@@ -344,6 +344,13 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: 'true'
 
+      - name: Omit private packages from release PR notes
+        if: ${{ steps.changesets.outputs.pr-number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
+        run: node scripts/release-pr-notes.mjs
+
       # changesets/action creates per-package tags (e.g. `@docx-editor.dev/react@1.0.1`);
       # also create a single `vX.Y.Z` umbrella tag for Renovate/Dependabot/Releases.
       # The fixed group keeps every 1.x package in lockstep, so the umbrella
