@@ -3283,6 +3283,11 @@ a.docx-hyperlink:focus-visible {
   cursor: copy;
 }
 
+/* Link paint supplies an inline cursor for standalone hosts. The active painter wins. */
+.docx-pages[data-format-painter] .docx-hyperlink {
+  cursor: copy !important;
+}
+
 /* A content-control widget states `cursor: pointer !important`, so nothing but `!important`
  * reaches it — and it is text like any other while the painter is armed. */
 .docx-pages[data-format-painter] .docx-content-control-widget {

@@ -96,6 +96,7 @@ describe('painted hyperlink anchors', () => {
       EXTERNAL_REL
     );
     const anchor = container.querySelector('a.docx-hyperlink')!;
+    expect((anchor as HTMLElement).style.cursor).toBe('pointer');
     expect(anchor.getAttribute('href')).toBe('https://example.com');
     expect(anchor.getAttribute('title')).toBe('Our site');
     expect(anchor.getAttribute('rel')).toBe('noopener noreferrer');
@@ -106,6 +107,7 @@ describe('painted hyperlink anchors', () => {
       '<w:p><w:hyperlink w:anchor="section12"><w:r><w:t>Section 12</w:t></w:r></w:hyperlink></w:p>'
     );
     const anchor = container.querySelector('a.docx-hyperlink')!;
+    expect((anchor as HTMLElement).style.cursor).toBe('pointer');
     expect(anchor.getAttribute('href')).toBe('#section12');
     expect(anchor.getAttribute('rel')).toBeNull();
   });
@@ -116,6 +118,7 @@ describe('painted hyperlink anchors', () => {
       `<Relationship Id="rId9" Type="${R}/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>`
     );
     const anchor = container.querySelector('a.docx-hyperlink')!;
+    expect((anchor as HTMLElement).style.cursor).toBe('default');
     expect(anchor.hasAttribute('href')).toBe(false);
     expect(anchor.getAttribute('tabindex')).toBe('-1');
     // The words are still on the page — an inert link is not a deleted one.

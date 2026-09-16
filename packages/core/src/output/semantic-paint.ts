@@ -1188,6 +1188,8 @@ function paintHyperlinkAnchor(
 ): HTMLElement {
   const element = document.createElement('a');
   element.className = 'docx-hyperlink';
+  // Standalone painters and hosts with their own CSS still expose live link targets.
+  element.style.cursor = !ctx.inertLinks && link.href ? 'pointer' : 'default';
   // The link's identity, so a click can name the `w:hyperlink` it landed on without the
   // pointer path re-deriving it from geometry.
   element.dataset.docxLink = link.id;
