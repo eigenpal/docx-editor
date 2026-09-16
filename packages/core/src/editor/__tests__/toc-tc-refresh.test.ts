@@ -241,3 +241,53 @@ test('page-number omission never lets a title tab become a page-number update ta
   expect(result.ok).toBe(true);
   expect(xml.slice(0, xml.indexOf('Source'))).toContain('<w:t>1</w:t><w:tab/><w:t>Alpha</w:t>');
 });
+
+test('page-only refresh preserves a stale tabbed title when its TC source omits page numbers', async () => {
+  const row =
+    '<w:hyperlink w:anchor="EntryTarget">' +
+    text('1') +
+    '<w:r><w:tab/></w:r>' +
+    text('Old label') +
+    '</w:hyperlink>';
+  const body =
+    p(begin('TOC \\f \\h') + row + end) +
+    p(
+      '<w:bookmarkStart w:id="1" w:name="EntryTarget"/>' +
+        tc('TC &quot;New label&quot; \\n') +
+        '<w:bookmarkEnd w:id="1"/>'
+    );
+  const editor = createDocxEditor({ container: document.createElement('div') });
+  try {
+    editor.load(docx(body));
+    expect(editor.exec({ type: 'refreshToc', mode: 'pageNumbers' }).ok).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(xml).toContain('<w:t>Old label</w:t>');
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('one TC paragraph can omit one row number and still update another row', async () => {
+  const linked = (content: string) =>
+    '<w:hyperlink w:anchor="EntryTarget">' + content + '</w:hyperlink>';
+  const body =
+    p(begin('TOC \\f \\h') + linked(text('1') + '<w:r><w:tab/></w:r>' + text('Alpha'))) +
+    p(linked(text('Beta') + '<w:r><w:tab/></w:r>' + text('8')) + end) +
+    p(
+      '<w:bookmarkStart w:id="1" w:name="EntryTarget"/>' +
+        tc('TC &quot;1 Alpha&quot; \\n') +
+        tc('TC &quot;Beta&quot;') +
+        '<w:bookmarkEnd w:id="1"/>'
+    );
+  const editor = createDocxEditor({ container: document.createElement('div') });
+  try {
+    editor.load(docx(body));
+    expect(editor.exec({ type: 'refreshToc', mode: 'pageNumbers' }).ok).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(xml).toContain('<w:t>Alpha</w:t>');
+    expect(xml).toContain('<w:t>Beta</w:t>');
+    expect(xml).not.toContain('<w:t>8</w:t>');
+  } finally {
+    editor.destroy();
+  }
+});

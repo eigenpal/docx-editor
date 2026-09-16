@@ -1,4 +1,5 @@
 import { resolveTocSources } from '../package/toc-sources.ts';
+import { tocRowOmitsPageNumber } from '../package/toc-rows.ts';
 import { sliceTocParagraph } from '../package/toc-result.ts';
 // TOC refresh TreeDocOps — replace result paragraphs / rewrite page-number runs.
 
@@ -9,7 +10,6 @@ import {
   type DetectedToc,
 } from '../package/toc-detect.ts';
 import {
-  tocEntryText,
   bookmarkPairNodes,
   buildTocContentControl,
   buildTocEntryParagraph,
@@ -418,23 +418,18 @@ function rewritePageNumberInParagraph(
   pageNumberText: string,
   mint: () => string,
   toc: DetectedToc,
-  omittedTitles: ReadonlySet<string>
+  omitsPageNumber: boolean
 ): OoxmlElement | null {
   // Find text nodes inside hyperlink or direct runs; replace the last w:t.
   const texts: OoxmlNode[] = [];
   let hasPageTab = false;
-  let visibleText = '';
   const walk = (node: OoxmlNode, depth: number): void => {
     if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (node.kind === 'tab' || (node.kind !== 'textValue' && node.localName === 'ptab')) {
       hasPageTab = true;
-      visibleText += '\t';
     }
     if (node.kind === 'text' || (node.kind !== 'textValue' && node.localName === 't')) {
       texts.push(node);
-      visibleText += node.children
-        .flatMap((child) => (child.kind === 'textValue' ? [child.value] : []))
-        .join('');
       return;
     }
     if (node.kind === 'textValue') return;
@@ -442,7 +437,7 @@ function rewritePageNumberInParagraph(
     for (const child of node.children) walk(child, childDepth);
   };
   walk(sliceTocParagraph(paragraph, toc, 'result'), 0);
-  if (!hasPageTab || texts.length < 2 || omittedTitles.has(tocEntryText(visibleText))) return null;
+  if (!hasPageTab || texts.length < 2 || omitsPageNumber) return null;
   const target = texts[texts.length - 1]!;
   if (target.kind === 'textValue') return null;
   const targetId = target.id;
@@ -475,11 +470,7 @@ export function applyRewriteTocPageNumbers(
   const toc = findDetectedToc(detectBodyTocs(part), op.tocId);
   if (!toc) return { ok: false, reason: 'unknown-block' };
 
-  const omittedTitles = new Set(
-    (resolveTocSources(part, [], toc.instruction) ?? [])
-      .filter((source) => source.omitPageNumber)
-      .map((source) => tocEntryText(source.text))
-  );
+  const sources = resolveTocSources(part, [], toc.instruction) ?? [];
   if (toc.instruction.omitPageNumbers)
     return ok(part, {
       dirty: [],
@@ -501,7 +492,7 @@ export function applyRewriteTocPageNumbers(
       update.pageNumberText,
       mint,
       toc,
-      omittedTitles
+      tocRowOmitsPageNumber(current, sliceTocParagraph(paragraph, toc, 'result'), sources)
     );
     if (!rewritten) continue;
     const parent = parentOf(current, paragraph.id);

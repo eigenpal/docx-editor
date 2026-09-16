@@ -1,4 +1,4 @@
-import { resolveTocSources } from './toc-sources.ts';
+import { resolveTocSources, type TocSourceHeading } from './toc-sources.ts';
 import { fldCharType, isInstrTextNode, instrTextValue } from './field-nodes.ts';
 import { sliceTocParagraph } from './toc-result.ts';
 // Resolve a cached TOC result row back to the heading it stands for.
@@ -106,6 +106,28 @@ function rowTitles(paragraph: OoxmlNode): readonly string[] {
   walk(paragraph, 0);
   const pageTab = title.lastIndexOf('\t');
   return [tocEntryText(pageTab < 0 ? title : title.slice(0, pageTab)), tocEntryText(title)];
+}
+
+/** A stale cached label can still identify an omitted-number TC entry through its anchor. */
+export function tocRowOmitsPageNumber(
+  part: OoxmlPart,
+  paragraph: OoxmlNode,
+  sources: readonly TocSourceHeading[]
+): boolean {
+  const titles = rowTitles(paragraph);
+  const fullTitle = titles[titles.length - 1];
+  const anchor = rowAnchor(paragraph) ?? rowPageRefAnchor(paragraph);
+  const target = anchor === undefined ? undefined : buildBookmarkIndex(part).get(anchor);
+  if (!target) {
+    return sources.some(
+      (source) => source.omitPageNumber && tocEntryText(source.text) === fullTitle
+    );
+  }
+  const candidates = sources.filter((source) => source.blockId === target.paragraphId);
+  const matching = candidates.filter((source) => titles.includes(tocEntryText(source.text)));
+  // One paragraph can carry several TC entries. Prefer an exact cached title match;
+  // when every label is stale, preserve ambiguous titles instead of replacing one with a number.
+  return (matching.length ? matching : candidates).some((source) => source.omitPageNumber);
 }
 
 /**
