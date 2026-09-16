@@ -23,6 +23,7 @@ import { allowlistedPageField } from './field-instruction.ts';
 import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
 import { parseAutonumInstruction, type AutonumFieldSpec } from './field-autonum.ts';
 import { parseRefInstruction, type RefFieldSpec } from './field-ref.ts';
+import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { refSpecModifiersOf } from './field-ref-parse.ts';
 import { parseSymbolInstruction, type SymbolFieldSpec } from './field-symbol.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -78,6 +79,7 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   if (pending.buttonSpec) return;
   pending.docPropertySpec = parseDocPropertyInstruction(raw);
   if (pending.docPropertySpec) return;
+  pending.linkSpec = parseRefLinkInstruction(raw);
   pending.refSpec = parseRefInstruction(raw);
   if (pending.refSpec) return;
   pending.autonumSpec = parseAutonumInstruction(raw);

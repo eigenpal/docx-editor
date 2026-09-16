@@ -16,7 +16,7 @@ export interface RefFieldSpec {
   readonly bookmark: string;
   /** `r` / `w` paint the target's number; `n` the same without context; null the range text. */
   readonly numberSwitch: 'r' | 'w' | 'n' | null;
-  /** `\h` parsed and inert — the reference paints; navigation is a follow-up. */
+  /** `\h` marks a reference whose displayed result links to its bookmark. */
   readonly hyperlink: boolean;
 }
 

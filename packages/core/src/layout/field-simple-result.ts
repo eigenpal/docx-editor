@@ -17,6 +17,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
+import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
 import { parseAutonumInstruction } from './field-autonum.ts';
@@ -322,6 +323,17 @@ export function projectSimpleFieldResult(args: {
   /** The story's resolved REF inputs; absent keeps a REF simple field on its cached result. */
   readonly refFields?: RefFieldContext;
 }): SimpleFieldProjection | null {
+  const result = projectSimpleFieldDisplay(args);
+  if (!result || args.currentLink) return result;
+  const instruction = fldSimpleInstr(args.simple) ?? '';
+  const spec = parseHyperlinkInstruction(instruction) ?? parseRefLinkInstruction(instruction);
+  const link = spec ? args.projectFieldLink?.(spec) : null;
+  return link ? { ...result, link } : result;
+}
+
+function projectSimpleFieldDisplay(
+  args: Parameters<typeof projectSimpleFieldResult>[0]
+): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
   const instr = fldSimpleInstr(simple) ?? '';
@@ -438,7 +450,5 @@ export function projectSimpleFieldResult(args: {
   // to inherited properties the same way a top-level simple PAGE does.
   const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
   if (style.hidden) return null;
-  const linkSpec = args.currentLink ? null : parseHyperlinkInstruction(instr);
-  const fieldLink = linkSpec ? (args.projectFieldLink?.(linkSpec) ?? null) : null;
-  return { text: display.text, props, style, ...(fieldLink ? { link: fieldLink } : {}) };
+  return { text: display.text, props, style };
 }

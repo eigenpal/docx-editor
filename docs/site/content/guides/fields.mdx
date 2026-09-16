@@ -31,8 +31,8 @@ Unsupported instructions keep their saved result.
 supports the `\r`, `\w`, `\n`, `\t`, `\h`, and `\* MERGEFORMAT` switches.
 
 The `\t` switch removes text that is not a number delimiter from a referenced
-number. It needs `\r`, `\w`, or `\n`. The `\h` switch parses without adding
-hyperlink behavior.
+number. It needs `\r`, `\w`, or `\n`. With `\h`, clicking the result
+follows its bookmark within the document.
 
 The editor checks a non-empty saved result once. A matching result enables live
 updates after later edits. A mismatch keeps Word's saved result for that field.
@@ -55,7 +55,17 @@ footer, and text-box results keep their saved values.
 reference. It honors section number formats and `eachSect` restarts.
 
 The editor keeps the saved result for `\p`, `\f`, `eachPage` restarts, and custom
-note marks. The `\h` switch does not add hyperlink behavior.
+note marks. With `\h`, clicking the result follows the bookmarked note reference.
+
+## Cross-reference navigation
+
+`REF`, `PAGEREF`, and `NOTEREF` fields with `\h` link to their bookmarks.
+This works for complex fields and `w:fldSimple`, including instructions split across runs.
+Missing bookmarks do not navigate. References without `\h` remain ordinary field results.
+
+Navigation also works with saved results, including the `\p` above/below form.
+This does not change which field values the editor evaluates.
+An enclosing explicit hyperlink keeps its own target.
 
 ## `AUTONUM` fields
 

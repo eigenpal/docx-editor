@@ -923,7 +923,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'REF resolves bookmark text and numbered paragraph references in the body, footnotes, and endnotes. The editor supports the \\r, \\w, \\n, \\t, \\h, and \\* MERGEFORMAT switches. The \\r switch uses the same full-context number as \\w, and \\t needs a numbering switch. Bookmark text stops at the target paragraph boundary. NOTEREF resolves bookmarked note numbers with section formats and eachSect restarts. Unsupported switches, missing targets, bullet targets, eachPage note restarts, and custom note marks keep the saved result. Save refreshes calibrated, writable body and note results as one undo step. Header, footer, and text-box results keep their saved values.',
+      'REF resolves bookmark text and numbered paragraph references in the body, footnotes, and endnotes. The editor supports the \\r, \\w, \\n, \\t, \\h, and \\* MERGEFORMAT switches. REF, PAGEREF, and NOTEREF results with \\h navigate to their bookmarks, including cached relative-position results. The \\r switch uses the same full-context number as \\w, and \\t needs a numbering switch. Bookmark text stops at the target paragraph boundary. NOTEREF resolves bookmarked note numbers with section formats and eachSect restarts. Unsupported switches, missing targets, bullet targets, eachPage note restarts, and custom note marks keep the saved result. Save refreshes calibrated, writable body and note results as one undo step. Header, footer, and text-box results keep their saved values.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {
