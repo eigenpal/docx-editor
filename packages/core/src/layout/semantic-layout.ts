@@ -2195,7 +2195,9 @@ function layoutBlocksPass(
     const topExtent = paragraphBorderExtentPt(topEdge);
     const borderExtent = paragraphBorderExtentPt(closingEdge);
 
-    if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
+    // A fresh section already starts on a new sheet. Only break when this sheet
+    // holds content, including the host content of a continued section.
+    if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || cursorY > 0)) {
       flushPage();
       previousSpaceAfter = 0;
     }
