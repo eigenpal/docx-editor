@@ -159,3 +159,39 @@ test('refresh refuses structural content inside a cached result without deleting
     expect(xml).toContain(interior.includes('Keep table') ? 'Keep table' : 'Keep section');
   }
 });
+
+test('refresh refuses an inline content control inside the cached result', async () => {
+  const control =
+    '<w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr><w:sdtContent>' +
+    text('Keep control') +
+    '</w:sdtContent></w:sdt>';
+  const { result, xml } = await refresh(
+    p(begin('TOC \\o &quot;1-1&quot;') + control + end) + heading('Fresh')
+  );
+  expect(result.ok).toBe(false);
+  expect(xml).toContain('Keep control');
+});
+
+test('page-only refresh refuses locked inline cached page numbers', async () => {
+  const editor = createDocxEditor({ container: document.createElement('div') });
+  try {
+    const control =
+      '<w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr><w:sdtContent>' +
+      text('8') +
+      '</w:sdtContent></w:sdt>';
+    editor.load(
+      docx(
+        p(
+          begin('TOC \\o &quot;1-1&quot;') + text('Alpha') + '<w:r><w:tab/></w:r>' + control + end
+        ) + heading('Alpha')
+      )
+    );
+    const before = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(editor.exec({ type: 'refreshToc', mode: 'pageNumbers' }).ok).toBe(false);
+    expect(strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!)).toBe(
+      before
+    );
+  } finally {
+    editor.destroy();
+  }
+});

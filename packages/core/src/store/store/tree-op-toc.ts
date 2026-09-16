@@ -114,6 +114,11 @@ function tocRestriction(part: OoxmlPart, toc: DetectedToc): TreeOpRejection | nu
   for (const nodeId of [toc.beginParagraphId, ...toc.resultParagraphIds, toc.endParagraphId]) {
     if (isBoundAt(part, nodeId)) return 'bound';
     if (effectiveContentLockAt(part, nodeId).content) return 'locked';
+    const paragraph = findNode(part, nodeId);
+    if (paragraph && paragraph.kind !== 'textValue' && toc.resultParagraphIds.includes(nodeId)) {
+      const nested = resultControlRestriction(part, sliceTocParagraph(paragraph, toc, 'result'));
+      if (nested) return nested;
+    }
   }
   if (toc.contentControlId) {
     const control = findNode(part, toc.contentControlId);
@@ -124,6 +129,34 @@ function tocRestriction(part: OoxmlPart, toc: DetectedToc): TreeOpRejection | nu
     }
   }
   return null;
+}
+
+function resultControlRestriction(
+  part: OoxmlPart,
+  node: OoxmlNode,
+  depth = 0
+): TreeOpRejection | null {
+  if (node.kind === 'textValue') return null;
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return 'invalidArgs';
+  if (isContentControlNode(node)) {
+    if (isBoundAt(part, node.id)) return 'bound';
+    if (effectiveContentLockAt(part, node.id).content) return 'locked';
+  }
+  const next = nextInlineContainerDepth(node, depth);
+  for (const child of node.children) {
+    const rejected = resultControlRestriction(part, child, next);
+    if (rejected) return rejected;
+  }
+  return null;
+}
+
+/** A full result replacement cannot retain nested controls, including inline controls. */
+function resultContainsControl(node: OoxmlNode, depth = 0): boolean {
+  if (node.kind === 'textValue') return false;
+  if (isContentControlNode(node)) return true;
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return true;
+  const next = nextInlineContainerDepth(node, depth);
+  return node.children.some((child) => resultContainsControl(child, next));
 }
 
 export function validateReplaceTocResult(
@@ -145,6 +178,7 @@ export function validateReplaceTocResult(
   // the result. Refuse these shapes before inserting bookmarks or deleting content.
   for (const node of container.children.slice(start, end + 1)) {
     if (node.kind !== 'paragraph') return 'invalidArgs';
+    if (resultContainsControl(sliceTocParagraph(node, toc, 'result'))) return 'invalidArgs';
     if (node.id === toc.endParagraphId) continue;
     const properties = node.children.find((child) => child.kind === 'paragraphProperties');
     if (properties?.children.some((child) => child.localName === 'sectPr')) return 'invalidArgs';
