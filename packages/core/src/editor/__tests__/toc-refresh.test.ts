@@ -563,3 +563,74 @@ describe('TOC refresh editor lane', () => {
     editor.destroy();
   });
 });
+
+describe('TOC hover boundary covers complete rows', () => {
+  for (const wrapped of [false, true]) {
+    for (const split of [false, true]) {
+      test(`${wrapped ? 'content-control' : 'plain-field'} TOC on ${split ? 'two pages' : 'one page'}`, async () => {
+        const row = (label: string, prefix: string, suffix: string, pageBreak = false) =>
+          '<w:p><w:pPr><w:pStyle w:val="TOC1"/>' +
+          '<w:ind w:left="720" w:hanging="720" w:right="1440"/>' +
+          '<w:tabs><w:tab w:val="right" w:pos="9000" w:leader="dot"/></w:tabs>' +
+          (pageBreak ? '<w:pageBreakBefore/>' : '') +
+          '</w:pPr>' +
+          prefix +
+          `<w:r><w:t>1</w:t><w:tab/><w:t>${label}</w:t><w:tab/><w:t>3</w:t></w:r>` +
+          suffix +
+          '</w:p>';
+        const field =
+          row(
+            'Alpha',
+            '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>TOC</w:instrText><w:fldChar w:fldCharType="separate"/></w:r>',
+            ''
+          ) + row('Beta', '', '<w:r><w:fldChar w:fldCharType="end"/></w:r>', split);
+        const body = wrapped
+          ? '<w:sdt><w:sdtPr/><w:sdtContent>' + field + '</w:sdtContent></w:sdt>'
+          : field;
+        const container = document.createElement('div');
+        document.body.append(container);
+        const editor = createDocxEditor({ container });
+        try {
+          editor.load(docx(body));
+          const before = await documentXml(editor);
+          for (const zoom of [1, 1.5]) {
+            editor.setZoom(zoom);
+            const layout = editor.surface!.layout();
+            expect(layout.pages).toHaveLength(split ? 2 : 1);
+            for (const page of layout.pages) {
+              const sheet = container.querySelector<HTMLElement>(
+                `[data-page-index="${page.index}"]`
+              )!;
+              const rowElement = sheet.querySelector<HTMLElement>('[data-paragraph-id]')!;
+              rowElement.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+              const chrome = sheet.querySelector<HTMLElement>('[data-docx-toc]')!;
+              expect(chrome.hasAttribute('data-hover')).toBe(true);
+              expect(sheet.querySelectorAll('[data-docx-toc]')).toHaveLength(1);
+              const box = chrome.querySelector<HTMLElement>('.docx-content-control-boundary')!;
+              const scale = parseFloat(sheet.style.width) / page.box.width;
+              const left = parseFloat(box.style.left) / scale - (page.contentBox.x - page.box.x);
+              const right = left + parseFloat(box.style.width) / scale;
+              for (const fragment of paragraphFragmentsOf(page)) {
+                const spans = fragment.lines.flatMap((line) => line.spans);
+                expect(spans.find((span) => span.text === '1')!.box.x).toBeCloseTo(0, 5);
+                const number = spans.find((span) => span.text === '3')!;
+                expect(number.box.x + number.box.width).toBeCloseTo(450, 5);
+                for (const span of spans) {
+                  expect(left).toBeLessThanOrEqual(span.box.x + 0.001);
+                  expect(right).toBeGreaterThanOrEqual(span.box.x + span.box.width - 0.001);
+                }
+              }
+              expect(parseFloat(box.style.top) + parseFloat(box.style.height)).toBeLessThanOrEqual(
+                parseFloat(sheet.style.height)
+              );
+            }
+          }
+          expect(await documentXml(editor)).toBe(before);
+        } finally {
+          editor.destroy();
+          container.remove();
+        }
+      });
+    }
+  }
+});

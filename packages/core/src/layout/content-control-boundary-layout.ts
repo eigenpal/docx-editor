@@ -14,6 +14,7 @@ import type {
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { paragraphContentBounds } from './paragraph-content-bounds.ts';
 import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
@@ -408,7 +409,11 @@ function pageContribution(
     if (fragment.kind === 'paragraph') {
       if (index.neededBlockIds.has(fragment.paragraphId)) {
         work && (work.geometryEntries += 1);
-        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: shift(fragment.box) });
+        blocks.push({
+          pageIndex,
+          blockId: fragment.paragraphId,
+          box: shift(paragraphContentBounds(fragment)),
+        });
       }
       const needSpans = index.neededParagraphIds.has(fragment.paragraphId);
       for (const line of fragment.lines) {

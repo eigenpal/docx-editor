@@ -1,3 +1,4 @@
+import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import {
   commandProtectionRefusal,
@@ -1786,7 +1787,7 @@ export function mountPaginatedSurface(
     const tocs = detectBodyTocs(session.part());
     const tocBoundaries = tocs
       .map((toc) => {
-        const entry = tocBoundary(toc);
+        const entry = tocBoundaryForLayout(toc, currentLayout);
         return entry ? { ...entry, empty: emptyTocBeginIds.has(toc.beginParagraphId) } : null;
       })
       .filter((entry) => entry !== null);
@@ -1832,57 +1833,6 @@ export function mountPaginatedSurface(
       ...(additionalBoundaries.length > 0 ? { additionalBoundaries } : {}),
       ...(tocControlIds.size > 0 ? { tocControlIds } : {}),
       ...(suppressedIds.size > 0 ? { suppressedIds } : {}),
-    };
-  }
-
-  function tocBoundary(toc: ReturnType<typeof detectBodyTocs>[number]): {
-    readonly tocId: string;
-    readonly boundary: ContentControlBoundaryRecord;
-    readonly additional: boolean;
-  } | null {
-    const existing = toc.contentControlId
-      ? contentControlsInLayout(currentLayout).find(
-          (control) => control.id === toc.contentControlId
-        )
-      : undefined;
-    if (existing) return { tocId: toc.id, boundary: existing, additional: false };
-
-    const paragraphIds = new Set([
-      toc.beginParagraphId,
-      ...toc.resultParagraphIds,
-      toc.endParagraphId,
-    ]);
-    const fragments = currentLayout.pages.flatMap((page) => {
-      const boxes = paragraphFragmentsOf(page)
-        .filter((fragment) => paragraphIds.has(fragment.paragraphId))
-        .map((fragment) => fragment.box);
-      if (boxes.length === 0) return [];
-      const left = Math.min(...boxes.map((box) => box.x));
-      const top = Math.min(...boxes.map((box) => box.y));
-      const right = Math.max(...boxes.map((box) => box.x + box.width));
-      const bottom = Math.max(...boxes.map((box) => box.y + box.height));
-      return [
-        {
-          pageIndex: page.index,
-          box: { x: left, y: top, width: right - left, height: bottom - top },
-        },
-      ];
-    });
-    if (fragments.length === 0) return null;
-    return {
-      tocId: toc.id,
-      additional: true,
-      boundary: {
-        id: `toc:${toc.id}`,
-        controlType: 'richText',
-        lock: 'unlocked',
-        effectiveLock: 'unlocked',
-        placeholder: false,
-        bound: false,
-        nestingDepth: 0,
-        level: 'block',
-        fragments,
-      },
     };
   }
 
