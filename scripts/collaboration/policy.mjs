@@ -17,19 +17,21 @@ import {
 import { catalog, table } from './catalog.mjs';
 
 export function relevant(path) {
-  // Workflow and compatibility-tooling edits do not change the shared runtime.
-  // Mixed PRs still require a decision for any protected package or data changes.
+  // Require impact decisions for implementation changes, not release metadata,
+  // dependencies, documentation, tests, or build configuration.
+  if (
+    !/\.(?:[cm]?[jt]sx?|vue)$/.test(path) ||
+    /(?:^|\/)(?:__tests__|tests?|__fixtures__|fixtures)\//.test(path) ||
+    /\.(?:test|spec|config)\.[cm]?[jt]sx?$/.test(path) ||
+    /\.d\.[cm]?ts$/.test(path)
+  )
+    return false;
   return (
     /^packages\/(core\/src\/(store|collaboration|binding|automation|editor)|pro\/src\/(collaboration|review|custom-nodes)|editor-api\/src)\//.test(
       path
     ) ||
     /^packages\/(react|vue|pro)\/src\/.*collaboration/.test(path) ||
-    /^examples\/collaboration[^/]*\//.test(path) ||
-    /^packages\/(core|pro|editor-api|react|vue|i18n)\/(package\.json|tsup\.config\.[cm]?ts)$/.test(
-      path
-    ) ||
-    ['bun.lock', 'package.json', '.changeset/config.json'].includes(path) ||
-    /^\.collaboration\//.test(path)
+    /^examples\/collaboration[^/]*\//.test(path)
   );
 }
 export function changedPaths(base) {

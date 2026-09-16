@@ -75,7 +75,7 @@ Choose a decision based on shared behavior:
 
 | Decision             | Use it when…                                                               | Evidence to provide                                                            |
 | -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `no-impact`          | The change cannot affect shared state or synchronization.                  | Explain why. A test-only change in a protected path is one example.             |
+| `no-impact`          | The implementation change cannot affect shared state or synchronization.   | Explain why shared behavior stays unchanged.                                   |
 | `compatible`         | Released participants retain the same meaning for shared data and updates. | Explain why and identify regression tests.                                     |
 | `migration-required` | Participants would interpret shared data or updates differently.           | Identify affected format fields, regression tests, and migration instructions. |
 
@@ -123,21 +123,18 @@ package preparation. An argument error leaves your previous failure report intac
 
 ### Which PRs need a decision?
 
-A pull request (PR) needs a decision if it changes a path covered by
-[the compatibility policy](../../scripts/collaboration/policy.mjs). Covered paths
-include document editing, collaboration, review, provider integration, package
-configuration, and compatibility records.
+A pull request (PR) needs a decision if it changes implementation files covered by
+[the compatibility policy](../../scripts/collaboration/policy.mjs). Covered code
+includes document editing, collaboration, review, and provider integration.
+Renames check both the removed and added paths.
 
-Root package and lockfile changes also need a decision. Dependencies can affect
-shared behavior even when editor source files stay unchanged. A tooling-only update
-can declare `no-impact`. Renames check both the removed and added paths.
+Changes to `package.json`, `bun.lock`, release or build configuration, documentation,
+tests, fixtures, and compatibility tools do not require a decision. A PR that also
+changes covered implementation code still needs a decision for that code change.
+Production-code changes still need the repository's normal Changeset.
 
-Docs-only PRs, catalog-only updates, GitHub Actions workflow edits, and changes to
-the compatibility tools in `scripts/collaboration/` need no decision. A PR that also
-changes a protected runtime or dependency path still needs a decision for that change.
-Test-only records can omit a Changeset. Production-code changes still need the
-repository's normal Changeset. Dependency-update PRs follow the policy after
-refreshing their lockfile.
+Format-version checks and the checks that preserve published compatibility records,
+catalog entries, and release artifacts apply independently of the decision requirement.
 
 ### Record and test your change
 
