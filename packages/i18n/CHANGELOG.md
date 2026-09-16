@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.20.0
+
+### Patch Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+
 ## 2.19.1
 
 ## 2.19.0

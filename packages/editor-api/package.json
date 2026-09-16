@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/editor-api",
-  "version": "2.19.1",
+  "version": "2.20.0",
   "description": "Document automation for DOCX: a batching object model that drives a document from a server or from an editor already open in a page",
   "sideEffects": false,
   "engines": {
@@ -82,6 +82,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.19.0"
+    "@docx-editor.dev/core": "~2.20.0"
   }
 }

@@ -1,5 +1,22 @@
 # @docx-editor.dev/core
 
+## 2.20.0
+
+### Minor Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+
+### Patch Changes
+
+- a9034d4: Fix cross-reference links so clicking their results navigates to the target bookmark. Fixes #886.
+- a9034d4: Keep continuous tracked insertions containing fields together in one review card. Fixes #890.
+- a9034d4: Show pointer cursors on clickable document links in standalone hosts. Keep inert links and format-painter cursors distinct. Fixes #893.
+- a9034d4: Fix editing and highlighting of ordinary text beside table-of-contents field boundaries. Fixes #887.
+- a9034d4: Match Word's TOC link appearance while preserving explicit formatting and clickable targets. Fixes #892.
+- a9034d4: Support the Word keyboard shortcut for switching between field instructions and results. Fixes #891.
+- Updated dependencies [c10916a]
+  - @docx-editor.dev/i18n@2.20.0
+
 ## 2.19.1
 
 ### Patch Changes

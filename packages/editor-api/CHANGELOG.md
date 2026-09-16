@@ -1,5 +1,22 @@
 # @docx-editor.dev/editor-api
 
+## 2.20.0
+
+### Minor Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+
+### Patch Changes
+
+- Updated dependencies [a9034d4]
+- Updated dependencies [c10916a]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+  - @docx-editor.dev/core@2.20.0
+
 ## 2.19.1
 
 ## 2.19.0
