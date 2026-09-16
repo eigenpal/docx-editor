@@ -151,14 +151,4 @@ export function verifyCandidate(directory, { publication = false } = {}) {
   }
 }
 
-export async function verifyPublishedCandidate(directory) {
-  const manifest = json(join(directory, 'candidate.json'));
-  for (const [name, expected] of Object.entries(manifest.packages)) {
-    const published = await registry(name, expected.version, { waitForPublication: true });
-    if (published.dist.integrity !== expected.integrity)
-      throw new Error(
-        `Published artifact differs from tested candidate: ${name}@${expected.version}`
-      );
-  }
-  console.log('Published artifact integrity matches the tested candidate.');
-}
+export { verifyPublishedCandidate } from './publication.mjs';

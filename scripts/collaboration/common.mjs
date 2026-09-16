@@ -56,37 +56,7 @@ export function compareVersions(a, b) {
     right = b.split('.').map(Number);
   return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
 }
-export async function registry(name, version = '', { waitForPublication = false } = {}) {
-  const deadline = Date.now() + (waitForPublication ? 120_000 : 0);
-  let networkAttempts = 0;
-  for (;;) {
-    let response;
-    try {
-      response = await fetch(
-        `https://registry.npmjs.org/${encodeURIComponent(name)}${version ? '/' + version : ''}`,
-        { signal: AbortSignal.timeout(30_000), headers: { 'cache-control': 'no-cache' } }
-      );
-    } catch (error) {
-      if (++networkAttempts < 3 || (waitForPublication && Date.now() < deadline)) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        continue;
-      }
-      throw new Error(
-        `Registry request failed: ${name}@${version}: ${error.cause?.code ?? error.message}`
-      );
-    }
-    if (response.ok) return response.json();
-    if (
-      waitForPublication &&
-      [404, 429, 500, 502, 503, 504].includes(response.status) &&
-      Date.now() < deadline
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      continue;
-    }
-    throw new Error(`Registry lookup failed: ${name}@${version}: HTTP ${response.status}`);
-  }
-}
+export { registry } from './registry.mjs';
 export function option(name, fallback) {
   const index = process.argv.indexOf('--' + name);
   if (index < 0) return fallback;

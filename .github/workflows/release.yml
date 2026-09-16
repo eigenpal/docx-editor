@@ -188,7 +188,7 @@ jobs:
           include-hidden-files: true
           path: .cache/collaboration/publish/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
 
       # Hand the exact build the prepublish job validated to the release job. Both path
       # patterns share `packages/` as their common ancestor, so the artifact
@@ -684,8 +684,13 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           PUBLISHING: ${{ needs.mode.outputs.publishing }}
           CHANGESETS_OUTCOME: ${{ needs.release.outputs.changesets_outcome }}
+          PUBLISHED: ${{ needs.release.outputs.published }}
         run: |
-          if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
+          if [ "$PUBLISHED" = "true" ]; then
+            mode="post-publish"
+            title=":warning: docx-editor — post-publish verification or follow-up failed"
+            detail="Packages were published. Check the failing step, then use the Recover release workflow with this run ID and version to verify the original artifacts and resume documentation and catalog updates without publishing."
+          elif [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
             detail="A parallel prepublish check or build failed (checks: $CHECKS_RESULT; build: $BUILD_RESULT), or release-job setup failed. No release PR was updated and no publish was attempted. Check the run logs for the failing step."

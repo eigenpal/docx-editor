@@ -28,7 +28,9 @@ export function relevant(path) {
     ) ||
     ['bun.lock', 'package.json', '.changeset/config.json'].includes(path) ||
     /^(scripts\/collaboration\/|\.collaboration\/)/.test(path) ||
-    /^\.github\/workflows\/(ci|release|dependabot-lockfile|collaboration-catalog)\.yml$/.test(path)
+    /^\.github\/workflows\/(ci|release|recover-release|dependabot-lockfile|collaboration-catalog)\.yml$/.test(
+      path
+    )
   );
 }
 export function changedPaths(base) {

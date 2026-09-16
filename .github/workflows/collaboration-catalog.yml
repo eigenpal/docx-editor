@@ -2,6 +2,11 @@ name: Capture collaboration release
 
 on:
   workflow_call:
+    inputs:
+      version:
+        description: Stable published version (defaults to the current package version)
+        type: string
+        required: false
   workflow_dispatch:
     inputs:
       version:

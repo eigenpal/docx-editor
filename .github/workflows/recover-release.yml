@@ -1,0 +1,87 @@
+name: Recover release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published stable version to recover (for example, 2.19.0)
+        type: string
+        required: true
+      source_run_id:
+        description: Original Release run containing the tested collaboration-candidate artifact
+        type: string
+        required: true
+
+# Serialize recovery with publication so latest cannot move during verification.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Validate the original release run and tag
+        run: node scripts/collaboration/recovery.mjs source
+      - name: Download the original tested candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: .cache/collaboration/recovery
+      - name: Verify archived tarballs and published integrity
+        run: node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
+
+  sites:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: [docx-editor.dev, docx-to-markdown.com]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ matrix.repository }}
+      - name: Request the site update
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          gh api "repos/$TARGET_REPOSITORY/dispatches" \
+            -f event_type=upstream-release \
+            -f "client_payload[version]=$RELEASE_VERSION"
+          echo "Requested $TARGET_REPOSITORY update to $RELEASE_VERSION. Check the downstream workflow for completion." >> "$GITHUB_STEP_SUMMARY"
+
+  catalog:
+    needs: verify
+    uses: ./.github/workflows/collaboration-catalog.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+    permissions:
+      contents: write
+      pull-requests: write
