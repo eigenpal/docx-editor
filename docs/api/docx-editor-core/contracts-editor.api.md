@@ -715,9 +715,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         match: TextMatch;
         text: string;
     };
-    resolveAllReviewChanges: {
-        action: 'accept' | 'reject';
-    };
+    resolveAllReviewChanges: ResolveReviewChangesOptions;
     selectAll: Record<never, never>;
     selectTableRegion: {
         region: 'table' | 'row' | 'column';
@@ -1127,10 +1125,12 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 export type ExecResult = {
     changed: boolean;
     ok: true;
+    revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
 
@@ -1542,6 +1542,15 @@ export interface ResolvedNoteNumbering {
 }
 
 // @public
+export interface ResolveReviewChangesOptions {
+    // (undocumented)
+    action: 'accept' | 'reject';
+    keys?: readonly string[];
+    scope?: 'visible' | 'document';
+    unsupported?: 'skip' | 'fail';
+}
+
+// @public
 export interface ReviewActivationOptions {
     readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
@@ -1726,6 +1735,19 @@ export interface RevisionAddress {
     readonly date?: string;
     // (undocumented)
     readonly id: string;
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
 }
 
 // @public

@@ -606,15 +606,6 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (address.date !== undefined && typeof address.date !== 'string') {
         return 'invalid-property-value';
       }
-      if (
-        op.siteNodeIds !== undefined &&
-        (!Array.isArray(op.siteNodeIds) ||
-          op.siteNodeIds.length === 0 ||
-          op.siteNodeIds.length > 50_000 ||
-          op.siteNodeIds.some((nodeId) => typeof nodeId !== 'string' || nodeId.length === 0))
-      ) {
-        return 'invalid-property-value';
-      }
     } else if (op.scopeRootId !== undefined) {
       if (typeof op.scopeRootId !== 'string' || op.scopeRootId.length === 0) {
         return 'invalid-property-value';
@@ -623,6 +614,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // arbitrary subtree would invent public mutation semantics no caller has agreed to.
       if (scopedRevisionRoot(part, op.scopeRootId) === null) return 'invalid-property-value';
     }
+    if (
+      op.siteNodeIds !== undefined &&
+      (!Array.isArray(op.siteNodeIds) ||
+        op.siteNodeIds.length === 0 ||
+        op.siteNodeIds.length > 50_000 ||
+        op.siteNodeIds.some((id) => typeof id !== 'string' || id.length === 0))
+    )
+      return 'invalid-property-value';
     // Presence and resolvability are decided by the same walk that applies the op, so they
     // are checked there rather than duplicated into a second traversal that could disagree.
     return null;

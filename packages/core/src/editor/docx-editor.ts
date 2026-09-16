@@ -5,7 +5,10 @@ import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution } from './live-font-resolution.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
-import { createReviewCommands } from './docx-editor-review-commands.ts';
+import {
+  createReviewCommands,
+  dateOfReviewItem as dateOfItem,
+} from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
@@ -1744,17 +1747,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return suggesting ?? documentEditingModeRestriction(documentTracking(), mode);
   }
 
-  function dateOfItem(item: ReviewItem): string | undefined {
-    if (item.kind === 'comment') return item.comment.date;
-    return item.kind === 'revision' ? item.date : undefined;
-  }
-
   const reviewCommands = createReviewCommands({
     surface: () => surface,
     enabled: () => reviewEnabled,
     destroyed: () => destroyed,
     viewing: () => editingMode === 'viewing',
     placements: () => reviewPlacements(),
+    visible: () =>
+      filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
     scope: storyScopeOfReviewItem,
     activate: (key, allowExcludedFormat) => {
       allowExcludedFormatNavigation = allowExcludedFormat ?? false;

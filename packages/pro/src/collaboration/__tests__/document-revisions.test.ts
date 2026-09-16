@@ -143,3 +143,28 @@ describe('accepting and rejecting a tracked change replicates to the peer', () =
     peers.expectConverged(alice, bob);
   });
 });
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`selected bulk ${action} preserves skipped revisions on both peers`, async () => {
+    const bytes = zipDocument(
+      '<w:p><w:ins w:id="1" w:author="Ada"><w:r><w:t>selected</w:t></w:r></w:ins></w:p>' +
+        '<w:p><w:ins w:id="1" w:author="Grace"><w:r><w:t>hidden</w:t></w:r></w:ins></w:p>' +
+        '<w:tbl><w:tblPr><w:ins w:id="20" w:author="Ada"/></w:tblPr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl><w:sectPr/>'
+    );
+    const { alice, bob } = await peers.pair(bytes);
+    const { planRevisionBatch, revisionItemsOf, reviewItemKey } =
+      await import('@docx-editor.dev/core/store');
+    const part = alice.store.bodyStore().part;
+    const keys = revisionItemsOf(part)
+      .filter((item) => item.author === 'Ada')
+      .map(reviewItemKey);
+    const batch = planRevisionBatch(part, action, keys);
+    expect(batch.result.resolved).toHaveLength(1);
+    expect(batch.result.skipped).toHaveLength(1);
+    peers.apply(alice, batch.ops);
+    peers.expectConverged(alice, bob);
+    expect(storyText(bob)).toContain('hidden');
+    expect(storyText(bob).includes('selected')).toBe(action === 'accept');
+    expect(revisionItemsOf(bob.store.bodyStore().part)).toHaveLength(2);
+  });
+}

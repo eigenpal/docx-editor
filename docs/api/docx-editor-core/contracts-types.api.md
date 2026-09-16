@@ -154,10 +154,12 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 export type ExecResult = {
     changed: boolean;
     ok: true;
+    revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
 

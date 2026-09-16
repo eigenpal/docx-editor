@@ -2,15 +2,15 @@
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
  *
  * Commands go through `can` before `exec`; queries answer against the live, laid-out document.
- * Type-only where it can be, so an adapter can name the whole surface without importing the
- * engine.
- *
- * CONTRACT ONLY — declarations, not an implementation.
+ * Type-only declarations let adapters name the surface without importing the engine.
  *
  * @packageDocumentation
  * @public
  */
 
+import type { ResolveReviewChangesOptions } from './editor-review.ts';
+export type { ResolveReviewChangesOptions } from './editor-review.ts';
+export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 import type { EditorScope, ViewScope } from './editor-scope.ts';
 export type { EditorScope, ViewScope } from './editor-scope.ts';
@@ -1036,8 +1036,8 @@ export interface EditorCommands
   toggleDocumentProtection: Record<never, never>;
   /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
   navigateReviewChange: { direction: 'next' | 'previous' };
-  /** Resolve all document changes, including hidden authors and other stories, in one undo step. */
-  resolveAllReviewChanges: { action: 'accept' | 'reject' };
+  /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
+  resolveAllReviewChanges: ResolveReviewChangesOptions;
   /** Change the review projection without accepting or rejecting document revisions. */
   setReviewDisplayMode: { mode: 'all-markup' | 'proposed' | 'original' };
   toggleMark: { mark: string };

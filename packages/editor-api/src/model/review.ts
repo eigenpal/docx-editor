@@ -41,6 +41,13 @@ import {
 import { HandleCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
+import { clientResult, type ClientResult } from '../runtime/client-result.ts';
+import type { RevisionBatchResult } from '@docx-editor.dev/core/automation';
+export type {
+  RevisionBatchResult,
+  RevisionBatchEntry,
+  RevisionBatchSkipReason,
+} from '@docx-editor.dev/core/automation';
 
 /**
  * Word's own names for a kind of change.
@@ -560,6 +567,13 @@ export class Revision extends ModelObject implements PromisedItem {
     );
   }
 
+  /** @internal Capture a batch target without exposing engine identity. */
+  static batchHandle(revision: Revision, context: RequestContext): AutomationHandle {
+    if (!(revision instanceof Revision) || revision.context !== context)
+      fail({ code: 'InvalidArgument', target: 'RevisionCollection.resolve' });
+    return revision.#handle();
+  }
+
   #handle(): AutomationHandle {
     this.requireAddressable();
     return this.path.handle();
@@ -610,6 +624,52 @@ export class RevisionCollection extends HandleCollection<Revision> {
   rejectAll(): void {
     const body = this.#body;
     this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', body }));
+  }
+
+  /**
+   * Resolve eligible revisions in this story and report skipped decisions after sync.
+   * Omit revisions to include unsupported and structural decisions absent from items.
+   * Pass an empty array to select nothing. Duplicate objects resolve once; stale targets
+   * are reported as unknown-revision. This must be the only write in its sync batch.
+   * Unlike acceptAll/rejectAll, unsupported decisions do not block independent changes.
+   *
+   * @example
+   * ```ts
+   * const result = context.document.revisions.resolve('accept');
+   * await context.sync();
+   * console.log(result.value.resolved.length, result.value.remaining);
+   * for (const skipped of result.value.skipped) console.log(skipped.reason);
+   * ```
+   */
+  resolve(
+    action: 'accept' | 'reject',
+    revisions?: readonly Revision[]
+  ): ClientResult<RevisionBatchResult> {
+    const label = `${this.path.label}.resolve`;
+    if (
+      !['accept', 'reject'].includes(action) ||
+      (revisions !== undefined && !Array.isArray(revisions))
+    )
+      fail({ code: 'InvalidArgument', target: label });
+    const targets = revisions === undefined ? undefined : [...revisions];
+    const { result, fill } = clientResult<RevisionBatchResult>(label);
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan: () => ({
+        op: 'resolveRevisionBatch',
+        body: this.#body,
+        action,
+        ...(targets === undefined
+          ? {}
+          : { revisions: targets.map((revision) => Revision.batchHandle(revision, this.context)) }),
+      }),
+      settle: (value) => {
+        if (value.kind !== 'revisionBatch') fail({ code: 'GeneralException', target: label });
+        fill(value.result);
+      },
+    });
+    return result;
   }
 
   /** @internal The read that answers this collection's members. */

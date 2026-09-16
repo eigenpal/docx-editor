@@ -71,3 +71,19 @@ for local substitutes. `googleFonts()` opts your application into CDN requests.
 
 For more information, see the
 [React adapter guide](https://www.docx-editor.dev/docs/2.x/react).
+
+## Review changes in batches
+
+Open `http://localhost:5173/?bulkReview=1&fixture=bulk-review.docx` after running
+`bun run dev:react` from the repository root. The demo supports author filters, explicit
+selection, skipped-change reports, Undo/Redo, and save/reopen. The main-story API controls
+use `RevisionCollection.resolve()` and include changes hidden by the UI filter.
+
+Run the browser checks with:
+
+```sh
+bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction.spec.ts
+```
+
+See [Resolve a batch of changes](../../docs/site/content/editor-api/revisions.mdx) for defaults,
+result fields, grouping rules, and the strict API alternative.

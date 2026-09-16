@@ -1,5 +1,7 @@
+import { partOfNodeId } from './surface-scope.ts';
+import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
-import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
+import { revisionSiteNodeIdsOf, reviewItemKey } from '../store/store/review-items.ts';
 import type {
   CanResult,
   EditorCommand,
@@ -25,6 +27,7 @@ interface ReviewCommandDependencies {
   destroyed(): boolean;
   viewing(): boolean;
   placements(): readonly ReviewItemPlacement[];
+  visible(): readonly ReviewItem[];
   scope(item: ReviewItem): StoryScope;
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
   setDisplayMode(mode: 'all-markup' | 'proposed' | 'original'): void;
@@ -44,6 +47,43 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .surface()
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
+  const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
+    const items = all();
+    const selected = new Set(
+      command.keys ??
+        (command.scope === 'document' ? items : deps.visible())
+          .filter((item) => item.kind === 'revision')
+          .map(reviewItemKey)
+    );
+    const scopes = new Map<string, { scope: StoryScope; part: OoxmlPart; keys: string[] }>();
+    for (const item of items) {
+      const scope = deps.scope(item);
+      const part = partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
+      if (!part) continue;
+      let group = scopes.get(part.name);
+      if (!group) {
+        group = { scope, part, keys: [] };
+        scopes.set(part.name, group);
+      }
+      const key = reviewItemKey(item);
+      if (selected.delete(key)) group.keys.push(key);
+    }
+    const resolved: RevisionBatchResult['resolved'][number][] = [];
+    const skipped: RevisionBatchResult['skipped'][number][] = [...selected].map((key) => ({
+      key,
+      reason: 'unknown-revision',
+    }));
+    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
+    let remaining = 0;
+    for (const { scope, part, keys } of scopes.values()) {
+      const plan = planRevisionBatch(part, command.action, keys);
+      resolved.push(...plan.result.resolved);
+      skipped.push(...plan.result.skipped);
+      remaining += plan.result.remaining;
+      if (plan.ops.length) groups.push({ scope, ops: plan.ops });
+    }
+    return { groups, result: { resolved, skipped, remaining } };
+  };
   const ready = (): CanResult => {
     if (deps.destroyed())
       return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
@@ -82,13 +122,21 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
     const protectedWrite = commandProtectionRefusal(command, deps.surface()!);
     if (protectedWrite) return protectedWrite;
-    const items = all();
-    if (!items.length) return { ok: false, code: 'notFound', reason: 'no changes to review' };
-    if (items.some((item) => item.readOnly))
+    if (
+      (command.scope !== undefined && !['visible', 'document'].includes(command.scope)) ||
+      (command.unsupported !== undefined && !['skip', 'fail'].includes(command.unsupported)) ||
+      (command.keys !== undefined &&
+        (!Array.isArray(command.keys) || command.keys.some((key) => typeof key !== 'string')))
+    )
+      return { ok: false, code: 'invalidArgs', reason: 'invalid bulk revision selection' };
+    const { result } = bulkPlan(command);
+    if (command.unsupported === 'fail' && result.skipped.length)
+      return { ok: false, code: 'unsupported', reason: 'some selected changes cannot be resolved' };
+    if (!result.resolved.length)
       return {
         ok: false,
-        code: 'unsupported',
-        reason: 'some changes cannot be accepted or rejected by this editor',
+        code: result.skipped.length ? 'unsupported' : 'notFound',
+        reason: 'no eligible selected changes to review',
       };
     return { ok: true };
   };
@@ -149,7 +197,25 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     deps.surface()?.flushPendingInput();
     const gate = can(command);
     if (!gate) return null;
-    if (!gate.ok) return gate;
+    if (!gate.ok) {
+      if (
+        command.type === 'resolveAllReviewChanges' &&
+        (gate.code === 'notFound' || gate.code === 'unsupported') &&
+        ready().ok &&
+        !deps.viewing()
+      ) {
+        const { result } = bulkPlan(command);
+        return {
+          ...gate,
+          revisions: {
+            ...result,
+            resolved: [],
+            remaining: result.remaining + result.resolved.length,
+          },
+        };
+      }
+      return gate;
+    }
     const surface = deps.surface()!;
     if (command.type === 'setReviewDisplayMode') {
       deps.setDisplayMode(command.mode);
@@ -167,19 +233,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return deps.activate(target.key, !target.activatable && target.revisionKind === 'format');
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
-    const scopes = new Map<string, StoryScope>();
-    for (const item of all()) {
-      const scope = deps.scope(item);
-      scopes.set(JSON.stringify(scope), scope);
-    }
+    const { groups, result } = bulkPlan(command);
     let applied: { committed: boolean; reason?: unknown } | undefined;
     surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(
-        [...scopes.values()].map((scope) => ({
-          scope,
-          ops: [{ op: command.action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions' }],
-        }))
-      );
+      applied = surface.session.applyTreeOpsAtomic(groups);
       return applied;
     }, 'revision-resolve');
     if (!applied?.committed)
@@ -189,7 +246,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         reason: typeof applied?.reason === 'string' ? applied.reason : 'the revisions were refused',
       };
     deps.activate(null);
-    return { ok: true, changed: true };
+    return { ok: true, changed: true, revisions: { ...result, remaining: all().length } };
   };
   return { can, exec, resolveReviewItem };
 }
@@ -270,4 +327,10 @@ function resolutionOps(
     ...(localName === undefined ? {} : { localName }),
     siteNodeIds,
   }));
+}
+
+/** Date metadata shared by comment and revision placements. */
+export function dateOfReviewItem(item: ReviewItem): string | undefined {
+  if (item.kind === 'comment') return item.comment.date;
+  return item.kind === 'revision' ? item.date : undefined;
 }

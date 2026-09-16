@@ -4,6 +4,11 @@ Measures each stage of the one pipeline — bytes → parse → identity → sto
 edit/relayout → save — on a long document, so stage-level regressions show up as numbers
 instead of anecdotes.
 
+## Bulk revision benchmark
+
+Compare filtered accept/reject with individual review decisions at 100, 1,000, and 10,000 revisions.
+See [Bulk revision benchmark and review](./bulk-review.md) for commands, measurements, and scope.
+
 ## Editing regression benchmark
 
 For repeatable optimization work on the repository-owned, synthetic 200-page reviewed fixture:

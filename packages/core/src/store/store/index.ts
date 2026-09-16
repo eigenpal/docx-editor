@@ -203,3 +203,10 @@ export type { SetTextFormFieldDefaultOp } from './text-form-fields.ts';
 
 export { type TextFormFieldOptions, type TextFormFieldType } from './text-form-field-options.ts';
 export type { CommitTextFormFieldOp } from './text-form-fields.ts';
+
+export {
+  planRevisionBatch,
+  type RevisionBatchEntry,
+  type RevisionBatchResult,
+  type RevisionBatchSkipReason,
+} from './revision-batch.ts';

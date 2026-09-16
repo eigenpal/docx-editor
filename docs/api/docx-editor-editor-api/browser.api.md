@@ -15,6 +15,9 @@ import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { RevisionBatchEntry } from '@docx-editor.dev/core/automation';
+import { RevisionBatchResult } from '@docx-editor.dev/core/automation';
+import { RevisionBatchSkipReason } from '@docx-editor.dev/core/automation';
 
 // @public
 export enum Alignment {
@@ -1158,6 +1161,8 @@ export class Revision extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
+    // @internal
+    static batchHandle(revision: Revision, context: RequestContext): AutomationHandle;
     get date(): Date | null;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
@@ -1172,6 +1177,12 @@ export class Revision extends ModelObject implements PromisedItem {
     get type(): RevisionType;
 }
 
+export { RevisionBatchEntry }
+
+export { RevisionBatchResult }
+
+export { RevisionBatchSkipReason }
+
 // @public
 export class RevisionCollection extends HandleCollection<Revision> {
     acceptAll(): void;
@@ -1184,6 +1195,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
     // @internal
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
+    resolve(action: 'accept' | 'reject', revisions?: readonly Revision[]): ClientResult<RevisionBatchResult>;
 }
 
 // @public

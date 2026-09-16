@@ -31,15 +31,17 @@ if (container) {
   const root = createRoot(container);
   void (async () => {
     const View =
-      params.get('dialogs') === '1'
-        ? (await import('./DialogCustomizationDemo')).DialogCustomizationDemo
-        : treeHarness
-          ? (await import('./test-harness/TreeSurfaceHarness.tsx')).TreeSurfaceHarness
-          : performanceE2E
-            ? (await import('./test-harness/PerformanceE2EHarness.tsx')).PerformanceE2EHarness
-            : tableE2E
-              ? (await import('./test-harness/TableEditingE2EHarness.tsx')).TableEditingE2EHarness
-              : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
+      params.get('bulkReview') === '1'
+        ? (await import('./BulkReviewDemo')).BulkReviewDemo
+        : params.get('dialogs') === '1'
+          ? (await import('./DialogCustomizationDemo')).DialogCustomizationDemo
+          : treeHarness
+            ? (await import('./test-harness/TreeSurfaceHarness.tsx')).TreeSurfaceHarness
+            : performanceE2E
+              ? (await import('./test-harness/PerformanceE2EHarness.tsx')).PerformanceE2EHarness
+              : tableE2E
+                ? (await import('./test-harness/TableEditingE2EHarness.tsx')).TableEditingE2EHarness
+                : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
     root.render(
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <PreviewBanner />

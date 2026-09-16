@@ -199,7 +199,7 @@ describe('shared Review menu commands', () => {
       files['word/_rels/document.xml.rels'] = strToU8(
         `<Relationships xmlns="${REL}"><Relationship Id="header" Type="${relationshipNs}/header" Target="header1.xml"/><Relationship Id="notes" Type="${relationshipNs}/footnotes" Target="footnotes.xml"/></Relationships>`
       );
-      files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${ins(2, 'Grace')}</w:hdr>`);
+      files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${ins(1)}</w:hdr>`);
       files['word/footnotes.xml'] = strToU8(
         `<w:footnotes xmlns:w="${W}"><w:footnote w:id="2">${ins(3)}</w:footnote></w:footnotes>`
       );
@@ -208,17 +208,24 @@ describe('shared Review menu commands', () => {
         document: zipSync(files),
         modules: [reviewModule()],
       });
-      // Opening a story initializes its stable paragraph IDs before the undo baseline.
-      editor.surface!.session.partFor({ kind: 'headerFooter', rId: 'header' });
-      const before = editor.surface!.session.storyParts().map(serializeOoxmlPart);
+      const xml = () => editor.surface!.session.storyParts().map(serializeOoxmlPart);
+      const unopened = xml();
+      expect(editor.can({ type: 'resolveAllReviewChanges', action }).ok).toBe(true);
+      expect(xml()).toEqual(unopened);
+      // First mutation initializes an unopened header's paragraph IDs, outside undo history.
+      const contentXml = () =>
+        xml().map((value) =>
+          value.replace(/ xmlns:w14="[^"]*"/g, '').replace(/ w14:(?:paraId|textId)="[^"]*"/g, '')
+        );
+      const before = contentXml();
       expect(editor.surface!.session.reviewItems()).toHaveLength(3);
-      expect(editor.exec({ type: 'resolveAllReviewChanges', action })).toEqual({
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action })).toMatchObject({
         ok: true,
         changed: true,
       });
       expect(editor.surface!.session.reviewItems()).toHaveLength(0);
       editor.exec({ type: 'undo' });
-      expect(editor.surface!.session.storyParts().map(serializeOoxmlPart)).toEqual(before);
+      expect(contentXml()).toEqual(before);
       expect(editor.surface!.session.reviewItems()).toHaveLength(3);
       editor.destroy();
     });
@@ -270,17 +277,17 @@ describe('shared Review menu commands', () => {
   });
 
   for (const action of ['accept', 'reject'] as const) {
-    test(`bulk ${action} includes hidden authors and has one undo`, async () => {
+    test(`bulk ${action} preserves hidden authors and has one undo`, async () => {
       const editor = mountEditor(ins(1) + ins(2, 'Grace'));
       const before = await editor.save();
       editor.setReviewAuthorVisible('Grace', false);
-      expect(editor.exec({ type: 'resolveAllReviewChanges', action })).toEqual({
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action })).toMatchObject({
         ok: true,
         changed: true,
       });
-      expect(editor.surface!.session.reviewItems()).toHaveLength(0);
+      expect(editor.surface!.session.reviewItems()).toHaveLength(1);
       expect(editor.surface!.session.bodyText()).toBe(
-        action === 'accept' ? 'Added1\nAdded2' : '\n'
+        action === 'accept' ? 'Added1\nAdded2' : '\nAdded2'
       );
       editor.exec({ type: 'undo' });
       expect(await editor.save()).toEqual(before);
@@ -295,8 +302,12 @@ describe('shared Review menu commands', () => {
         '<w:tbl><w:tblPr><w:ins w:id="2" w:author="Ada"/></w:tblPr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
     );
     const before = await editor.save();
-    expect(editor.can({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(false);
-    expect(editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(false);
+    expect(
+      editor.can({ type: 'resolveAllReviewChanges', action: 'accept', unsupported: 'fail' }).ok
+    ).toBe(false);
+    expect(
+      editor.exec({ type: 'resolveAllReviewChanges', action: 'accept', unsupported: 'fail' }).ok
+    ).toBe(false);
     expect(await editor.save()).toEqual(before);
     editor.destroy();
   });
@@ -309,7 +320,9 @@ describe('shared Review menu commands', () => {
     expect(editor.acceptReviewItem(key).ok).toBe(false);
     expect(editor.rejectReviewItem(key).ok).toBe(false);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    expect(editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(false);
+    expect(
+      editor.exec({ type: 'resolveAllReviewChanges', action: 'accept', unsupported: 'fail' }).ok
+    ).toBe(false);
     for (const mode of ['original', 'proposed', 'all-markup'] as const) {
       expect(editor.exec({ type: 'setReviewDisplayMode', mode })).toEqual({
         ok: true,
@@ -325,3 +338,100 @@ describe('shared Review menu commands', () => {
     expect(editor.exec({ type: 'setReviewDisplayMode', mode: 'original' }).ok).toBe(false);
   });
 });
+
+for (const action of ['accept', 'reject'] as const) {
+  for (const filter of ['author', 'predicate', 'combined'] as const) {
+    test(`${action} honors ${filter} filters, preserves comments, and redoes one decision`, async () => {
+      const editor = mountEditor(ins(1) + ins(2, 'Grace') + ins(3));
+      try {
+        editor.replyToReviewItem(editor.getReviewItems()[1]!.key, 'Keep discussion');
+        const before = await editor.save();
+        if (filter !== 'predicate') editor.setReviewAuthorVisible('Grace', false);
+        if (filter !== 'author')
+          editor.setTrackedChangesFilter(
+            (item) => item.author === 'Ada' && (filter !== 'combined' || item.text === 'Added3')
+          );
+        const count = filter === 'combined' ? 1 : 2;
+        const result = editor.exec({ type: 'resolveAllReviewChanges', action });
+        expect(result).toMatchObject({
+          ok: true,
+          changed: true,
+          revisions: { remaining: 3 - count },
+        });
+        expect(result.revisions?.resolved).toHaveLength(count);
+        const after = await editor.save();
+        editor.exec({ type: 'undo' });
+        expect(await editor.save()).toEqual(before);
+        editor.exec({ type: 'redo' });
+        expect(await editor.save()).toEqual(after);
+        expect(
+          editor.surface!.session.reviewItems().filter((item) => item.kind === 'comment')
+        ).toHaveLength(1);
+      } finally {
+        editor.destroy();
+      }
+    });
+  }
+  test(`${action} skips mixed unsupported changes, but a locked selected change aborts atomically`, async () => {
+    for (const locked of [false, true]) {
+      const supported = locked
+        ? '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+          ins(2) +
+          '</w:sdtContent></w:sdt>'
+        : '';
+      const editor = mountEditor(
+        ins(1) +
+          supported +
+          '<w:tbl><w:tblPr><w:ins w:id="20" w:author="Grace"/></w:tblPr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+      );
+      try {
+        const before = await editor.save();
+        const result = editor.exec({ type: 'resolveAllReviewChanges', action });
+        expect(result.ok).toBe(!locked);
+        if (locked) expect(await editor.save()).toEqual(before);
+        else {
+          expect(result.revisions?.skipped).toHaveLength(1);
+          expect(result.revisions?.remaining).toBe(1);
+          expect(editor.can({ type: 'resolveAllReviewChanges', action }).ok).toBe(false);
+          editor.exec({ type: 'undo' });
+          expect(await editor.save()).toEqual(before);
+        }
+      } finally {
+        editor.destroy();
+      }
+    }
+  });
+  test(`${action} handles all-hidden, empty, unknown and duplicate keys without extra history`, () => {
+    const editor = mountEditor(ins(1) + ins(2, 'Grace'));
+    try {
+      const keys = editor.getReviewItems().map((item) => item.key);
+      editor.setTrackedChangesFilter(() => false);
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action }).ok).toBe(false);
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action, keys: [] }).ok).toBe(false);
+      expect(editor.surface!.session.canUndo()).toBe(false);
+      const strict = editor.exec({
+        type: 'resolveAllReviewChanges',
+        action,
+        keys: [keys[0]!, 'unknown'],
+        unsupported: 'fail',
+      });
+      expect(strict.ok).toBe(false);
+      expect(strict.revisions?.resolved).toEqual([]);
+      expect(editor.surface!.session.canUndo()).toBe(false);
+      const result = editor.exec({
+        type: 'resolveAllReviewChanges',
+        action,
+        keys: [keys[0]!, keys[0]!, 'unknown'],
+      });
+      expect(result.ok).toBe(true);
+      expect(result.revisions?.resolved).toHaveLength(1);
+      expect(result.revisions?.skipped).toEqual([{ key: 'unknown', reason: 'unknown-revision' }]);
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' }).ok).toBe(
+        true
+      );
+      expect(editor.surface!.session.reviewItems()).toHaveLength(0);
+    } finally {
+      editor.destroy();
+    }
+  });
+}

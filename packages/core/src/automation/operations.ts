@@ -572,6 +572,13 @@ export type AutomationOperation =
    * such as a complete tracked row.
    */
   | { readonly op: 'getRevisions'; readonly body: AutomationHandle }
+  /** Resolve eligible decisions in one story. Omit revisions to select every canonical decision. */
+  | {
+      readonly op: 'resolveRevisionBatch';
+      readonly body: AutomationHandle;
+      readonly action: 'accept' | 'reject';
+      readonly revisions?: readonly AutomationHandle[];
+    }
   /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
   | { readonly op: 'getRevisionType'; readonly revision: AutomationHandle }
   | { readonly op: 'getRevisionAuthor'; readonly revision: AutomationHandle }
@@ -594,22 +601,10 @@ export type AutomationOperation =
    * header, footer, or the main body uses the part-wide store op; a note uses one store
    * all-decision scoped to that exact canonical note root. Both forms agree for the main story.
    */
-  | {
-      readonly op: 'acceptAllRevisions';
-      readonly body: AutomationHandle;
-    }
-  | {
-      readonly op: 'acceptAllRevisions';
-      readonly document: AutomationHandle;
-    }
-  | {
-      readonly op: 'rejectAllRevisions';
-      readonly body: AutomationHandle;
-    }
-  | {
-      readonly op: 'rejectAllRevisions';
-      readonly document: AutomationHandle;
-    }
+  | { readonly op: 'acceptAllRevisions'; readonly body: AutomationHandle }
+  | { readonly op: 'acceptAllRevisions'; readonly document: AutomationHandle }
+  | { readonly op: 'rejectAllRevisions'; readonly body: AutomationHandle }
+  | { readonly op: 'rejectAllRevisions'; readonly document: AutomationHandle }
   /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
@@ -933,6 +928,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'deleteComment',
   'acceptRevision',
   'rejectRevision',
+  'resolveRevisionBatch',
   'acceptAllRevisions',
   'rejectAllRevisions',
   'setContentControlValue',
@@ -953,6 +949,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  * caller's batch is published. Refused while planning instead.
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
+  'resolveRevisionBatch',
   'insertTable',
   'insertInlinePicture',
   'insertBreak',

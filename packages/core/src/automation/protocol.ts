@@ -1,3 +1,4 @@
+import type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 // The automation host protocol.
 //
 // One interface, two implementations: a headless host that owns a package it opened from
@@ -181,6 +182,7 @@ export interface AutomationSpan {
 
 /** What an operation answered with. */
 export type AutomationValue =
+  | { readonly kind: 'revisionBatch'; readonly result: RevisionBatchResult }
   | { readonly kind: 'field'; readonly field: { readonly code: string } }
   | {
       readonly kind: 'table';

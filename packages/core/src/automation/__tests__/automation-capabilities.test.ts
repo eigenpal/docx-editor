@@ -236,6 +236,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'deleteComment',
       'acceptRevision',
       'rejectRevision',
+      'resolveRevisionBatch',
       'acceptAllRevisions',
       'rejectAllRevisions',
       'setContentControlValue',
@@ -247,6 +248,7 @@ describe('the operation vocabulary declares which operations write', () => {
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
+      'resolveRevisionBatch',
       'insertTable',
       'insertInlinePicture',
       'insertBreak',

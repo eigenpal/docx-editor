@@ -1,3 +1,4 @@
+import type { RevisionBatchResult } from './editor.ts';
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
  *
@@ -131,8 +132,14 @@ export interface DocRange {
  * distinct ContentControl error classes that a boolean would flatten.
  */
 export type ExecResult =
-  | { ok: true; changed: boolean }
-  | { ok: false; code: ExecErrorCode; reason: string; target?: DocTarget };
+  | { ok: true; changed: boolean; revisions?: RevisionBatchResult }
+  | {
+      ok: false;
+      code: ExecErrorCode;
+      reason: string;
+      target?: DocTarget;
+      revisions?: RevisionBatchResult;
+    };
 
 /**
  * Why a write was refused, as a value to branch on.

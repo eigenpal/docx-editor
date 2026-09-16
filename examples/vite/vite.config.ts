@@ -26,6 +26,7 @@ async function fetchGitHubStars(): Promise<number | null> {
  */
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([
+    ['/bulk-review.docx', path.join(monorepoRoot, 'e2e/fixtures/bulk-review.docx')],
     [
       '/comprehensive-word-element-test.docx',
       path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
@@ -105,6 +106,14 @@ export default defineConfig(async (): Promise<UserConfig> => {
             { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
           ]
         : [
+            {
+              find: '@docx-editor.dev/editor-api/browser',
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/browser.ts'),
+            },
+            {
+              find: '@docx-editor.dev/editor-api',
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/index.ts'),
+            },
             // Resolve package imports to source for live development
             // Order matters: more-specific prefixes before less-specific ones
             {
@@ -132,7 +141,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(binding|collaboration|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {

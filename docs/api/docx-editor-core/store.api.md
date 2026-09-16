@@ -3317,6 +3317,12 @@ export interface PersistencePort {
     readonly kind: 'persistence';
 }
 
+// @internal
+export function planRevisionBatch(part: OoxmlPart, action: 'accept' | 'reject', keys?: readonly string[], scopeRoot?: OoxmlNode): {
+    ops: readonly TreeDocOp[];
+    result: RevisionBatchResult;
+};
+
 // @public
 export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>, actorId?: string): {
     readonly bookmarksToCreate: readonly {
@@ -3835,6 +3841,34 @@ export interface RevisionAddress {
 }
 
 // @public
+export interface RevisionBatchEntry {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionItem['revisionKind'];
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+}
+
+// @public
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'unknown-revision';
+
+// @public
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 
 // @public
@@ -4323,9 +4357,11 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly op: 'acceptAllRevisions';
     readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly op: 'rejectAllRevisions';
     readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly offset: number;
     readonly op: 'insertTab';

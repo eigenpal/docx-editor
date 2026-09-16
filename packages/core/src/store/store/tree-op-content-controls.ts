@@ -419,11 +419,13 @@ const TREE_OP_REACH: {
   acceptAllRevisions: (op) => ({
     kind: 'revisions',
     action: 'accept',
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
   rejectAllRevisions: (op) => ({
     kind: 'revisions',
     action: 'reject',
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
   // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.

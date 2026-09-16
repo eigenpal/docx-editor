@@ -341,7 +341,7 @@ export function collectRevisionSitesTransient(part: OoxmlPart): RevisionSite[] {
  * `@w:name` pairs a `moveFrom` RANGE with its `moveTo` RANGE; `@w:id` pairs a range START with
  * its own range END. In a real document the two halves of a named pair carry different ids.
  */
-function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
+export function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
   const byName = new Map<string, MoveRange>();
   const bucketFor = (name: string): MoveRange => {
     const existing = byName.get(name);
@@ -438,7 +438,7 @@ function matchingRevisionSites(
  * One classifier feeds both mutation planning and protection reach, so a row cannot be considered
  * removable by one path and incomplete by the other.
  */
-function trackedRowRevisions(
+export function trackedRowRevisions(
   part: OoxmlPart,
   matched: readonly RevisionSite[]
 ): ReadonlyMap<string, TrackedRowRevision> | TreeOpRejection {
@@ -722,9 +722,18 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         // this one is not a sibling of — reported a paragraph that is not this one's
         // neighbour, and the content then merged into it, arriving behind the block in a
         // place the reader never put it.
-        const nextBlock = children.slice(index + 1).find((entry) => isBlockLevel(entry));
-        const followed = nextBlock?.kind === 'paragraph';
-        if (plan.mergeForward.has(child.id) && followed) {
+        // Only a removed paragraph mark needs its next block. Avoid copying the rest of
+        // the story for every paragraph: that made bulk text decisions quadratic.
+        let followed = false;
+        if (plan.mergeForward.has(child.id)) {
+          for (let next = index + 1; next < children.length; next++) {
+            const candidate = children[next]!;
+            if (!isBlockLevel(candidate)) continue;
+            followed = candidate.kind === 'paragraph';
+            break;
+          }
+        }
+        if (followed) {
           // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
           // at its end rather than pairwise. Word merges all of them; stopping at the first
           // absorption left every second paragraph behind, so accepting sixteen deleted marks

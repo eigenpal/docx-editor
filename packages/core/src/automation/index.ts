@@ -109,3 +109,9 @@ export {
   type AutomationPaginationSnapshot,
   type AutomationPaginationProvider,
 } from './pagination.ts';
+
+export type {
+  RevisionBatchResult,
+  RevisionBatchEntry,
+  RevisionBatchSkipReason,
+} from '../store/store/revision-batch.ts';

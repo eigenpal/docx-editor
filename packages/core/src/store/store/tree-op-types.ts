@@ -250,11 +250,15 @@ export type TreeDocOp =
        * changes made one decision, and one undo should restore all of them.
        */
       readonly op: 'acceptAllRevisions';
+      /** Exact canonical sites selected by bulk preflight. */
+      readonly siteNodeIds?: readonly string[];
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
   | {
       readonly op: 'rejectAllRevisions';
+      /** Exact canonical sites selected by bulk preflight. */
+      readonly siteNodeIds?: readonly string[];
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }

@@ -32,6 +32,9 @@ export {
   Revision,
   RevisionCollection,
   type RevisionType,
+  type RevisionBatchResult,
+  type RevisionBatchEntry,
+  type RevisionBatchSkipReason,
 } from './review.ts';
 export { PageSetup, Section, SectionCollection, type HeaderFooterType } from './sections.ts';
 export type {

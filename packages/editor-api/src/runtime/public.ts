@@ -76,6 +76,9 @@ export {
   type ParagraphInsertTextLocation,
   type RangeInsertTextLocation,
   type RevisionType,
+  type RevisionBatchResult,
+  type RevisionBatchEntry,
+  type RevisionBatchSkipReason,
   type SearchOptions,
   type SelectionMode,
 } from '../model/index.ts';

@@ -114,7 +114,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal } from './plan-proposal.ts';
-import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
+import { planRevisionDecision } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
   planDeleteComment,
@@ -2399,22 +2399,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         };
       }
 
+      case 'resolveRevisionBatch':
       case 'acceptAllRevisions':
-      case 'rejectAllRevisions': {
-        const target = revisionDecisionTarget(operation, handles, packageReads);
-        if (!target.ok) return refuse(target.code, target.message, target.detail);
-        const plan = planFor(target.reads);
-        const conflict = pinWrite(plan);
-        if (conflict) return conflict;
-        const ops = revisionCollectionOps(operation, target.reads);
-        return {
-          ok: true,
-          kind: 'command',
-          story: target.reads.story,
-          ops,
-          answer: () => APPLIED,
-        };
-      }
+      case 'rejectAllRevisions':
+        return planRevisionDecision(operation, handles, packageReads, (reads) =>
+          pinWrite(planFor(reads))
+        );
 
       case 'selectSpan': {
         const resolved = resolveSpanRef(operation.span, handles, packageReads);
