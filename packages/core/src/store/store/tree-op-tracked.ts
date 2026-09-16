@@ -44,7 +44,7 @@ import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
   insertionDestination,
-  textFormFieldEndAt,
+  fieldInsertionEndAt,
   paragraphOffsetIndex,
   trailingInsertionDestination,
   type ParagraphOffsetIndex,
@@ -389,7 +389,7 @@ function applyTrackedInsertion(
     ? Math.max(aim, replacedEnd(paragraph, offsets, replaced!, revision.author, aim))
     : aim;
   const trailingDestination = trailingInsertionDestination(paragraph, offset);
-  const fieldDestination = textFormFieldEndAt(paragraph, offset)
+  const fieldDestination = fieldInsertionEndAt(paragraph, offset)
     ? insertionDestination(paragraph, offset, null)
     : null;
   const fieldSite = fieldDestination?.site;

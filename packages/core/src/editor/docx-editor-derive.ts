@@ -1,3 +1,4 @@
+import { tocAtPosition } from './surface-toc-ranges.ts';
 import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { commandProtectionRefusal, FORMS_WRITE_REASON } from './command-protection.ts';
@@ -624,4 +625,10 @@ export function selectionFormattingHalfPoints(formatting: RunFormatting | null):
     ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
     ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
   };
+}
+
+export function isInsideTocOf(surface: PaginatedSurface | null): boolean {
+  return (
+    !!surface && tocAtPosition(surface.session.part(), surface.state().selection.head) !== undefined
+  );
 }

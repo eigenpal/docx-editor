@@ -1,3 +1,7 @@
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { selectionRects } from '../layout/selection-rects.ts';
+import type { TextMeasurer } from '../layout/semantic-records.ts';
+import { tocParagraphRanges } from './surface-toc-ranges.ts';
 // TOC hover geometry for both authored content controls and plain complex fields.
 import { contentControlsInLayout } from '../layout/semantic-interaction.ts';
 import type { DetectedToc } from '../store/package/toc-detect.ts';
@@ -7,7 +11,9 @@ import { paragraphContentBounds } from '../layout/paragraph-content-bounds.ts';
 
 export function tocBoundaryForLayout(
   toc: DetectedToc,
-  currentLayout: SemanticLayout
+  currentLayout: SemanticLayout,
+  part: OoxmlPart,
+  measurer: TextMeasurer
 ): {
   readonly tocId: string;
   readonly boundary: ContentControlBoundaryRecord;
@@ -16,17 +22,32 @@ export function tocBoundaryForLayout(
   const existing = toc.contentControlId
     ? contentControlsInLayout(currentLayout).find((control) => control.id === toc.contentControlId)
     : undefined;
-  if (existing) return { tocId: toc.id, boundary: existing, additional: false };
+  const ranges = tocParagraphRanges(part).filter((range) => range.toc.id === toc.id);
+  const partial = ranges.some((range) => range.start > 0 || range.end < range.length);
+  if (existing && !partial) return { tocId: toc.id, boundary: existing, additional: false };
 
-  const paragraphIds = new Set([
-    toc.beginParagraphId,
-    ...toc.resultParagraphIds,
-    toc.endParagraphId,
-  ]);
+  const byParagraph = new Map(ranges.map((range) => [range.paragraphId, range]));
+  const partialRects = ranges
+    .filter((range) => range.start > 0 || range.end < range.length)
+    .flatMap((range) =>
+      selectionRects(
+        currentLayout,
+        {
+          anchor: { paragraphId: range.paragraphId, offset: range.start },
+          head: { paragraphId: range.paragraphId, offset: range.end },
+        },
+        [range.paragraphId],
+        measurer
+      )
+    );
   const fragments = currentLayout.pages.flatMap((page) => {
     const boxes = paragraphFragmentsOf(page)
-      .filter((fragment) => paragraphIds.has(fragment.paragraphId))
+      .filter((fragment) => {
+        const range = byParagraph.get(fragment.paragraphId);
+        return range && range.start === 0 && range.end === range.length;
+      })
       .map(paragraphContentBounds);
+    boxes.push(...partialRects.filter((rect) => rect.pageIndex === page.index));
     if (boxes.length === 0) return [];
     const left = Math.min(...boxes.map((box) => box.x));
     const top = Math.min(...boxes.map((box) => box.y));

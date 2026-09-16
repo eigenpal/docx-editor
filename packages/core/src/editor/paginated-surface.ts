@@ -1,3 +1,12 @@
+import {
+  fullyProtectedTocParagraphs,
+  tocControlId,
+  tocForElement,
+  tocEscapePosition,
+  tocAtPosition,
+  selectionTouchesTocRange,
+  opTouchesTocRange,
+} from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import {
@@ -488,13 +497,7 @@ export function mountPaginatedSurface(
     }
   );
 
-  const initialTocParagraphs = new Set(
-    detectBodyTocs(session.part()).flatMap((toc) => [
-      toc.beginParagraphId,
-      ...toc.resultParagraphIds,
-      toc.endParagraphId,
-    ])
-  );
+  const initialTocParagraphs = fullyProtectedTocParagraphs(session.part());
   const paragraphIds = session.paragraphIds();
   const firstParagraph =
     paragraphIds.find((paragraphId) => !initialTocParagraphs.has(paragraphId)) ??
@@ -1697,16 +1700,7 @@ export function mountPaginatedSurface(
   let hoveredTocControlId: string | null = null;
 
   function tocControlIdOf(toc: ReturnType<typeof detectBodyTocs>[number]): string {
-    return toc.contentControlId ?? `toc:${toc.id}`;
-  }
-
-  function tocContainingParagraph(paragraphId: string) {
-    return detectBodyTocs(session.part()).find(
-      (toc) =>
-        toc.beginParagraphId === paragraphId ||
-        toc.endParagraphId === paragraphId ||
-        toc.resultParagraphIds.includes(paragraphId)
-    );
+    return tocControlId(toc, session.part());
   }
 
   /**
@@ -1740,10 +1734,12 @@ export function mountPaginatedSurface(
     applyTocHoverChrome();
   }
 
+  function tocForGesture(event: MouseEvent) {
+    return tocForElement(session.part(), gestureParagraphId(event), event.target as Element | null);
+  }
+
   function onTocPointerMove(event: PointerEvent): void {
-    const paragraph = (event.target as Element | null)?.closest<HTMLElement>('[data-paragraph-id]');
-    const paragraphId = paragraph?.dataset.paragraphId;
-    const toc = paragraphId ? tocContainingParagraph(paragraphId) : null;
+    const toc = tocForGesture(event);
     setHoveredTocControlId(toc ? tocControlIdOf(toc) : null);
   }
 
@@ -1787,7 +1783,7 @@ export function mountPaginatedSurface(
     const tocs = detectBodyTocs(session.part());
     const tocBoundaries = tocs
       .map((toc) => {
-        const entry = tocBoundaryForLayout(toc, currentLayout);
+        const entry = tocBoundaryForLayout(toc, currentLayout, session.part(), measurer);
         return entry ? { ...entry, empty: emptyTocBeginIds.has(toc.beginParagraphId) } : null;
       })
       .filter((entry) => entry !== null);
@@ -1798,6 +1794,10 @@ export function mountPaginatedSurface(
     const suppressedIds = new Set(
       tocBoundaries.filter((entry) => entry.empty).map((entry) => entry.boundary.id)
     );
+    for (const toc of tocs) {
+      if (toc.contentControlId && tocControlIdOf(toc) !== toc.contentControlId)
+        suppressedIds.add(toc.contentControlId);
+    }
     // TOC regions never project caret-active chrome — hoverIds own their visibility.
     const activeIds = active && !tocControlIds.has(active.id) ? new Set([active.id]) : undefined;
     const hoverIds = hoveredTocControlId ? new Set([hoveredTocControlId]) : undefined;
@@ -2197,8 +2197,7 @@ export function mountPaginatedSurface(
    * table of contents is under the pointer. That is what this publishes.
    */
   function onTocContextMenu(event: MouseEvent): void {
-    const paragraphId = gestureParagraphId(event);
-    const toc = paragraphId ? tocContainingParagraph(paragraphId) : undefined;
+    const toc = tocForGesture(event);
     setContextTocId(toc && canRefreshToc(toc.id) ? toc.id : null);
   }
 
@@ -2224,7 +2223,7 @@ export function mountPaginatedSurface(
     const toc = detectBodyTocs(session.part()).find((candidate) =>
       candidate.resultParagraphIds.includes(paragraphId)
     );
-    if (!toc) return;
+    if (!toc || tocForGesture(event)?.id !== toc.id) return;
     // The row names its own target through its anchor or its title. Reading the outline entry
     // that sits at the row's INDEX sends a click to the wrong heading the moment the cached
     // rows and the outline disagree, which is the normal state of a TOC that needs refreshing.
@@ -2708,7 +2707,7 @@ export function mountPaginatedSurface(
       currentLayout,
       {
         scale,
-        readOnlyParagraphIds: tocParagraphIds(),
+        readOnlyParagraphIds: fullyProtectedTocParagraphs(session.part()),
         ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
         ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
@@ -3365,7 +3364,7 @@ export function mountPaginatedSurface(
     reconcilePendingWith(next);
     releaseRetainedIfEscaped(next);
     const previousActive = contentControlAtCaret()?.id ?? null;
-    const previousToc = tocIdAtParagraph(selection.head.paragraphId);
+    const previousToc = tocAtPosition(session.part(), selection.head)?.id;
     retireActivationPin();
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
@@ -3414,7 +3413,7 @@ export function mountPaginatedSurface(
     // Content-control caret chrome is furniture keyed on the active control id. A caret move
     // into / out of a control must rebuild paint without a layout pass.
     const nextActive = contentControlAtCaret()?.id ?? null;
-    const nextToc = tocIdAtParagraph(selection.head.paragraphId);
+    const nextToc = tocAtPosition(session.part(), selection.head)?.id;
     if (previousActive !== nextActive || previousToc !== nextToc) {
       render(false);
     }
@@ -4109,34 +4108,12 @@ export function mountPaginatedSurface(
     );
   }
 
-  function tocIdAtParagraph(paragraphId: string): string | null {
-    const toc = detectBodyTocs(session.part()).find(
-      (candidate) =>
-        candidate.beginParagraphId === paragraphId ||
-        candidate.endParagraphId === paragraphId ||
-        candidate.resultParagraphIds.includes(paragraphId)
-    );
-    return toc?.id ?? null;
-  }
-
   function selectionTouchesToc(): boolean {
-    return (
-      tocIdAtParagraph(selection.anchor.paragraphId) !== null ||
-      tocIdAtParagraph(selection.head.paragraphId) !== null
-    );
+    return selectionTouchesTocRange(session.part(), selection);
   }
 
   function opTouchesToc(op: TreeDocOp): boolean {
-    const ids = tocParagraphIds();
-    const inspect = (value: unknown, key = ''): boolean => {
-      if (typeof value === 'string') {
-        return /(?:Id|Ids)$/.test(key) && ids.has(value);
-      }
-      if (Array.isArray(value)) return value.some((entry) => inspect(entry, key));
-      if (!value || typeof value !== 'object') return false;
-      return Object.entries(value).some(([nestedKey, nested]) => inspect(nested, nestedKey));
-    };
-    return inspect(op);
+    return opTouchesTocRange(session.part(), op);
   }
 
   function tocParagraphIds(): ReadonlySet<string> {
@@ -4835,7 +4812,13 @@ export function mountPaginatedSurface(
       );
       if (!moved) return;
       const tocIds = tocParagraphIds();
-      if (tocIds.has(moved.position.paragraphId)) {
+      const outside = tocEscapePosition(
+        session.part(),
+        moved.position,
+        ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command)
+      );
+      if (outside) moved = { ...moved, position: outside };
+      if (tocAtPosition(session.part(), moved.position)) {
         if (extend) return;
         const backwards = new Set<NavigationCommand>([
           'left',
@@ -4873,9 +4856,9 @@ export function mountPaginatedSurface(
             return;
           }
           moved = next;
-          if (!tocIds.has(moved.position.paragraphId)) break;
+          if (!tocAtPosition(session.part(), moved.position)) break;
         }
-        if (tocIds.has(moved.position.paragraphId)) return;
+        if (tocAtPosition(session.part(), moved.position)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
@@ -6203,7 +6186,7 @@ export function mountPaginatedSurface(
         hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
       },
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
-      isReadOnlyParagraph: (paragraphId) => tocIdAtParagraph(paragraphId) !== null,
+      isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,
     },
     options.pointer ? { mode: options.pointer } : {}
   );

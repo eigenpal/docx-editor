@@ -34,7 +34,7 @@ import {
   listItemsOf,
   parseCheckboxValue,
 } from './tree-op-nodes.ts';
-import { insertionDestination, segmentsOf, textFormFieldEndAt } from './tree-op-segments.ts';
+import { insertionDestination, segmentsOf, fieldInsertionEndAt } from './tree-op-segments.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
 
 /**
@@ -57,7 +57,7 @@ export function contentControlAtCaret(
   if (start !== end) {
     return innermostContentControlAround(part, paragraph.id);
   }
-  if (textFormFieldEndAt(paragraph, start)) {
+  if (fieldInsertionEndAt(paragraph, start)) {
     return innermostContentControlAround(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId
@@ -115,7 +115,7 @@ export function rangeTouchesContentRestriction(
   end: number,
   bias?: 'left' | 'right'
 ): TreeOpRejection | null {
-  if (start === end && textFormFieldEndAt(paragraph, start)) {
+  if (start === end && fieldInsertionEndAt(paragraph, start)) {
     return nodeTouchesContentRestriction(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId

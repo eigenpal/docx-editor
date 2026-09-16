@@ -136,6 +136,7 @@ export interface PointerHost {
   onSelectionSettled?(): void;
   /** Generated navigation paragraphs refuse caret placement and text selection. */
   isReadOnlyParagraph?(paragraphId: string): boolean;
+  isReadOnlyPosition?(position: SemanticPosition): boolean;
   /**
    * Select a content control's full addressable content atomically.
    *
@@ -674,7 +675,11 @@ export function createPointerController(
     // An unresolvable move is a no-op, never a collapse: a pointer that has left the document
     // should leave the selection where it last was rather than throwing it away.
     if (!hit) return;
-    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) return;
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    )
+      return;
     if (extendCells(active, hit)) return;
     host.setSelection(
       extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit)
@@ -909,7 +914,10 @@ export function createPointerController(
 
     const hit = resolve(event.clientX, event.clientY);
     if (!hit) return;
-    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) {
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    ) {
       event.preventDefault();
       return;
     }

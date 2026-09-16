@@ -132,7 +132,7 @@ import {
 } from './tree-op-content-controls.ts';
 import {
   insertionDestination,
-  textFormFieldEndAt,
+  fieldInsertionEndAt,
   isParagraph,
   paragraphLength,
   runsUnder,
@@ -148,7 +148,11 @@ import {
 import { applyRefreshFieldResults } from './tree-op-field-results.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
-import { inlineWrapperProperties, wrapperChildren } from './tree-op-inline-wrapper-split.ts';
+import {
+  inlineWrapperProperties,
+  wrapperChildren,
+  fieldSplitChildren,
+} from './tree-op-inline-wrapper-split.ts';
 import type {
   OoxmlProperty,
   RevisionAttributionInput,
@@ -765,7 +769,7 @@ function applyInsertContent(
     const leftRun = leftSegment ? findNode(part, leftSegment.runId) : null;
     const inheritedProperties =
       leftRun && leftRun.kind === 'run'
-        ? textFormFieldEndAt(paragraph, offset)
+        ? fieldInsertionEndAt(paragraph, offset)
           ? insertedRunProperties(nextId, leftRun)
           : leftRun.children
               .filter((child) => child.kind === 'runProperties')
@@ -804,7 +808,7 @@ function applyInsertContent(
     bias === 'left' &&
     before &&
     before.removeNodeIds === undefined &&
-    !textFormFieldEndAt(paragraph, offset) &&
+    !fieldInsertionEndAt(paragraph, offset) &&
     !crossesContentControlBoundary(part, before, after) &&
     !leavesInlineContainer(paragraph, before, after)
   ) {
@@ -2566,7 +2570,7 @@ function applySplit(
   tailStyleId?: string | null
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
-  const segments = segmentsOf(paragraph);
+  const { children, segments, endIds } = fieldSplitChildren(paragraph, [offset], nextId);
   const headChildren: OoxmlNode[] = [];
   const tailChildren: OoxmlNode[] = [];
   const pPr = paragraphPropertiesNodeOf(paragraph);
@@ -2577,13 +2581,15 @@ function applySplit(
   // The range starts seen AT the current position — the ones whose end markers, if they
   // also sit here, must not be left behind in the head.
   const openedHere = new Set<string>();
-  for (const child of paragraph.children) {
+  for (const child of children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
-      (zeroLengthGoesToHead(child, cursor, offset, openedHere) ? headChildren : tailChildren).push(
-        child
-      );
+      ([...endIds].some((id) => contains(child, id)) ||
+      zeroLengthGoesToHead(child, cursor, offset, openedHere)
+        ? headChildren
+        : tailChildren
+      ).push(child);
       const opened = opensARange(child);
       if (opened) openedHere.add(opened);
       continue;
@@ -2908,7 +2914,7 @@ function applySplitMany(
   options?: EditOptions
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
-  const segments = segmentsOf(paragraph);
+  const { children, segments, endIds } = fieldSplitChildren(paragraph, offsets, nextId);
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const pieceCount = offsets.length + 1;
   const pieces: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
@@ -2917,14 +2923,16 @@ function applySplitMany(
   // nothing, exactly as the single split reads it.
   let cursor = 0;
   const openedHere = new Set<string>();
-  for (const child of paragraph.children) {
+  for (const child of children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
       const piece = pieceIndexOf(
         offsets,
         cursor,
-        closesAnOpenRange(child, openedHere) ? 'head' : 'tail'
+        [...endIds].some((id) => contains(child, id)) || closesAnOpenRange(child, openedHere)
+          ? 'head'
+          : 'tail'
       );
       pieces[piece]!.push(child);
       const opened = opensARange(child);

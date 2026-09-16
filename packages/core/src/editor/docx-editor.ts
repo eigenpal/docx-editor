@@ -133,6 +133,7 @@ import {
   pageSetupOf,
   gateCommand,
   hyperlinkAtOf,
+  isInsideTocOf,
   paragraphSummaries,
   runFormattingOf,
   selectionFormattingHalfPoints,
@@ -2551,9 +2552,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (query as { container?: ContainerRef }).container
           ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
-          return (
-            surface ? surface.isInsideToc(surface.state().selection.head.paragraphId) : false
-          ) as EditorQueryResults[K];
+          return isInsideTocOf(surface) as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
         case 'contentControls':

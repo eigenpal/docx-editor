@@ -27,6 +27,7 @@ import {
   isContentRevisionKind,
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
 } from '../package/ooxml-shared.ts';
 import {
   contentControlContentOf,
@@ -505,6 +506,42 @@ export function textFormFieldEndAt(
   return undefined;
 }
 
+const orphanFieldEnds = new WeakMap<OoxmlParagraphNode, ReadonlyMap<number, string>>();
+
+/** A trailing field marker must stay before content inserted at its zero-width boundary. */
+export function fieldInsertionEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  const form = textFormFieldEndAt(paragraph, offset);
+  if (form) return form;
+  return orphanFieldEndAt(paragraph, offset);
+}
+
+export function orphanFieldEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  let ends = orphanFieldEnds.get(paragraph);
+  if (!ends) {
+    const found = new Map<number, string>();
+    const offsets = paragraphOffsetIndex(paragraph);
+    const closed = new Set(parsedFieldSpansOf(paragraph).flatMap((field) => field.removeNodeIds));
+    const walk = (node: OoxmlNode, depth: number): void => {
+      if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+      if (isFldChar(node, 'end') && !closed.has(node.id)) {
+        const span = offsets.spanOf(node);
+        if (span && span.start === span.end) found.set(span.end, node.id);
+      }
+      for (const child of node.children) walk(child, nextInlineContainerDepth(node, depth));
+    };
+    walk(paragraph, 0);
+    ends = found;
+    orphanFieldEnds.set(paragraph, ends);
+  }
+  return ends.get(offset);
+}
+
 function rawInsertionSite(
   paragraph: OoxmlParagraphNode,
   offset: number,
@@ -522,7 +559,7 @@ function rawInsertionSite(
     return { kind: 'withinValue', segment };
   }
   {
-    const endId = textFormFieldEndAt(paragraph, offset);
+    const endId = fieldInsertionEndAt(paragraph, offset);
     const run = endId ? directParentOf(paragraph, endId) : null;
     if (run?.kind === 'run' && (owner === null || containsNode(owner, run.id))) {
       if (owner !== null || offsets.spanOf(run)?.end !== offset) {

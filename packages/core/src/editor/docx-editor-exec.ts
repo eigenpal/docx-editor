@@ -338,6 +338,9 @@ export function execEditorCommand(
       break;
     case 'insertText':
       mounted.type(command.text);
+      if (mounted.state().lastRejection === 'the table of contents is generated and read-only') {
+        return { ok: false, code: 'invalidArgs', reason: mounted.state().lastRejection! };
+      }
       break;
     case 'deleteText':
       mounted.deleteSelection();
