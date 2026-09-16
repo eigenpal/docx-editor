@@ -302,23 +302,13 @@ jobs:
         with:
           name: package-sizes
 
-      # Baseline = the `package-sizes` artifact from the newest successful
-      # push run on main. Missing baseline (first run, expired artifact) is
-      # not an error: the compare degrades to a report without deltas.
-      - name: Download baseline size report from main
+      # Compare against the PR's base commit, never an unrelated older main run.
+      - name: Download size report for the PR base commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          # `|| true` so a transient API error degrades to no-baseline instead
-          # of failing the job (the shell runs with -e).
-          run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
-            --jq '.workflow_runs[0].id // empty' || true)
-          if [ -n "$run_id" ]; then
-            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n package-sizes -D baseline \
-              || echo "Run $run_id has no package-sizes artifact yet; reporting without deltas."
-          else
-            echo "No successful main run found; reporting without deltas."
-          fi
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/package-size-baseline.mjs
 
       # The allow-label is read LIVE from the API, not from
       # `github.event.pull_request.labels`: a re-run reuses the frozen event
