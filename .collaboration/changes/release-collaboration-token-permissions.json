@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The release collaboration test job inherited repository-level GITHUB_TOKEN permissions.",
+  "after": "The release collaboration test job explicitly grants only contents: read for repository checkout.",
+  "reason": "This CI-only permissions restriction does not change collaboration runtime code, shared document data, wire formats, or compatibility between released clients.",
+  "tests": [],
+  "changeset": null,
+  "migration": null
+}
