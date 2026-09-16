@@ -72,7 +72,7 @@ function repository() {
   mkdirSync(join(dir, '.collaboration/changes'), { recursive: true });
   write(
     'docs/site/content/pro/collaboration-versions.mdx',
-    '## Upgrade saved rooms\n\n<!-- collaboration-releases:start -->\n<!-- collaboration-releases:end -->\n'
+    '## Upgrade saved rooms\n\n{/* collaboration-releases:start */}\n{/* collaboration-releases:end */}\n'
   );
   execFileSync(
     process.execPath,

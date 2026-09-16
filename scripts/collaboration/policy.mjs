@@ -263,7 +263,7 @@ export function check(base, release = false) {
     );
   }
   const generated = read(GUIDE).match(
-    /<!-- collaboration-releases:start -->[\s\S]*?<!-- collaboration-releases:end -->/
+    /\{\/\* collaboration-releases:start \*\/\}[\s\S]*?\{\/\* collaboration-releases:end \*\/\}/
   )?.[0];
   assert.equal(generated, table(), 'Release table is stale: run collaboration:catalog --table');
   console.log(

@@ -125,19 +125,19 @@ export function table(value = catalog()) {
   const widths = rows[0].map((_, column) => Math.max(...rows.map((row) => row[column].length)));
   const line = (row) => `| ${row.map((cell, i) => cell.padEnd(widths[i])).join(' | ')} |`;
   return [
-    '<!-- collaboration-releases:start -->',
+    '{/* collaboration-releases:start */}',
     '',
     line(rows[0]),
     line(widths.map((width) => '-'.repeat(width))),
     ...rows.slice(1).map(line),
     '',
-    '<!-- collaboration-releases:end -->',
+    '{/* collaboration-releases:end */}',
   ].join('\n');
 }
 export function updateTable() {
   const source = read(GUIDE);
   const pattern =
-    /<!-- collaboration-releases:start -->[\s\S]*?<!-- collaboration-releases:end -->/;
+    /\{\/\* collaboration-releases:start \*\/\}[\s\S]*?\{\/\* collaboration-releases:end \*\/\}/;
   if (!pattern.test(source)) throw new Error('Missing release table markers');
   writeFileSync(resolve(ROOT, GUIDE), source.replace(pattern, table()));
 }
