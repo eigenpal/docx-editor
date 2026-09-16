@@ -51,7 +51,7 @@ function sourceOptions(instruction: TocInstruction): SourceOptions | null {
   if (!parts || parts[0]?.toUpperCase() !== 'TOC') return null;
   let tc = false,
     outline = false;
-  let identifier: string | undefined;
+  let identifier = 'c';
   let minLevel = 1,
     maxLevel = 9;
   for (let i = 1; i < parts.length; i++) {
@@ -60,7 +60,7 @@ function sourceOptions(instruction: TocInstruction): SourceOptions | null {
       case '\\f':
         tc = true;
         if (parts[i + 1] && !parts[i + 1]!.startsWith('\\')) {
-          identifier = parts[++i];
+          identifier = parts[++i] ?? '';
           if (!/^[a-z]$/i.test(identifier!)) return null;
         }
         break;
@@ -99,7 +99,7 @@ function tcEntry(raw: string, blockId: string): TcEntry | null {
   const text = parts[1];
   if (text.length > 200) return null;
   let level = 0;
-  let identifier: string | undefined;
+  let identifier = 'c';
   let omitPageNumber = false;
   for (let i = 2; i < parts.length; i++) {
     switch (parts[i]!.toLowerCase()) {
@@ -108,7 +108,7 @@ function tcEntry(raw: string, blockId: string): TcEntry | null {
         level = Number(parts[i]) - 1;
         break;
       case '\\f':
-        identifier = parts[++i];
+        identifier = parts[++i] ?? '';
         if (!/^[a-z]$/i.test(identifier ?? '')) return null;
         break;
       case '\\n':

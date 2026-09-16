@@ -291,3 +291,21 @@ test('one TC paragraph can omit one row number and still update another row', as
     editor.destroy();
   }
 });
+
+test('Word defaults both TOC and TC identifiers to C', async () => {
+  for (const code of ['TOC \\f', 'TOC \\f c']) {
+    const { xml } = await refresh(
+      toc(code) +
+        p(
+          text('Sources') +
+            tc('TC &quot;No type&quot;') +
+            tc('TC &quot;Type C&quot; \\f c') +
+            tc('TC &quot;Type A&quot; \\f a')
+        )
+    );
+    const cached = xml.slice(0, xml.indexOf('Sources'));
+    expect(cached).toContain('<w:t>No type</w:t>');
+    expect(cached).toContain('<w:t>Type C</w:t>');
+    expect(cached).not.toContain('<w:t>Type A</w:t>');
+  }
+});
