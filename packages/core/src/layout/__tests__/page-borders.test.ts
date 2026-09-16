@@ -310,6 +310,13 @@ describe('w:pgBorders — paint', () => {
     const dotted = painted(docBody(allSides('w:val="dotted" w:sz="8" w:space="24"')));
     const dottedTop = dotted.querySelector('.docx-page-border-top') as HTMLElement;
     expect(dottedTop.style.backgroundImage).toContain('linear-gradient');
+    // The gaps are the gradient's transparent stops: an ink-coloured fill under them would
+    // close every gap. `scripts/check-border-pattern-rendering.mjs` checks the pixels.
+    expect(dottedTop.style.backgroundColor).toBe('transparent');
+    const dashed = painted(docBody(allSides('w:val="dashed" w:sz="8" w:space="24"')));
+    const dashedTop = dashed.querySelector('.docx-page-border-top') as HTMLElement;
+    expect(dashedTop.style.backgroundImage).toContain('linear-gradient');
+    expect(dashedTop.style.backgroundColor).toBe('transparent');
 
     const dbl = painted(docBody(allSides('w:val="double" w:sz="24" w:space="24"')));
     const doubleTop = dbl.querySelector('.docx-page-border-top') as HTMLElement;

@@ -143,11 +143,14 @@ describe('paragraph ST_Border styles — paint', () => {
       paragraph('x', '<w:pBdr><w:bottom w:val="dashed" w:sz="8" w:space="2"/></w:pBdr>')
     ).querySelector<HTMLElement>('.docx-paragraph-border-bottom')!;
     expect(dashed.style.backgroundImage).toContain('to right');
+    // Same gap rule as the page frame: no ink-coloured fill under the pattern.
+    expect(dashed.style.backgroundColor).toBe('transparent');
 
     const dotted = painted(
       paragraph('x', '<w:pBdr><w:left w:val="dotted" w:sz="8" w:space="4"/></w:pBdr>')
     ).querySelector<HTMLElement>('.docx-paragraph-border-left')!;
     expect(dotted.style.backgroundImage).toContain('to bottom');
+    expect(dotted.style.backgroundColor).toBe('transparent');
   });
 
   test('dashSmallGap and dotDash alias to the dashed pattern', () => {

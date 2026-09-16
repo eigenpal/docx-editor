@@ -40,12 +40,17 @@ export function applyParagraphBorderStyle(
     case 'dotDotDash':
     case 'dashDotStroked': {
       const period = Math.max(4, 4 * scale);
+      // The gaps are the gradient's transparent stops. Both callers fill the rule with the ink
+      // colour first, so that fill must go, or every gap shows the same colour and the rule reads
+      // solid.
+      rule.style.backgroundColor = 'transparent';
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
       return;
     }
     case 'dotted': {
       const period = Math.max(3, 3 * scale);
+      rule.style.backgroundColor = 'transparent';
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
       return;
