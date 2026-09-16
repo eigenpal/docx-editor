@@ -241,3 +241,45 @@ test('recovery rejects omitted, extra, or differently versioned packages', () =>
     expect(() => validateRecoveryPackages(manifest, packages, version)).toThrow('tagged release');
   }
 });
+
+test('cancelling a registry request does not start another attempt', async () => {
+  const controller = new AbortController();
+  let requests = 0;
+  const lookup = createRegistryClient({
+    fetch: async (_url: string, options: { signal: AbortSignal }) => {
+      requests++;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+          once: true,
+        });
+      });
+    },
+    log: () => {},
+  });
+  const pending = lookup(name, version, { waitForPublication: true, signal: controller.signal });
+  controller.abort(new Error('another package failed integrity verification'));
+  await expect(pending).rejects.toThrow('another package failed integrity verification');
+  expect(requests).toBe(1);
+});
+
+test('an unresponsive request is aborted within the remaining publication budget', async () => {
+  let aborted = false;
+  const lookup = createRegistryClient({
+    fetch: async (_url: string, options: { signal: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        options.signal.addEventListener(
+          'abort',
+          () => {
+            aborted = true;
+            reject(options.signal.reason);
+          },
+          { once: true }
+        );
+      }),
+    log: () => {},
+  });
+  await expect(
+    lookup(name, version, { waitForPublication: true, deadline: Date.now() + 100 })
+  ).rejects.toThrow('timed out');
+  expect(aborted).toBe(true);
+});

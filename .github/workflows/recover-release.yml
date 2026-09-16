@@ -1,6 +1,18 @@
 name: Recover release
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      source_run_id:
+        type: string
+        required: true
+    outputs:
+      published_packages:
+        description: Packages verified against the original tested candidate
+        value: ${{ jobs.verify.outputs.published_packages }}
   workflow_dispatch:
     inputs:
       version:
@@ -12,9 +24,9 @@ on:
         type: string
         required: true
 
-# Serialize recovery with publication so latest cannot move during verification.
+# Serialize automatic and manual downstream updates without locking publication.
 concurrency:
-  group: release
+  group: post-release-updates
   cancel-in-progress: false
 
 permissions:
@@ -26,6 +38,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      published_packages: ${{ steps.candidate.outputs.packages }}
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
@@ -47,7 +61,11 @@ jobs:
           github-token: ${{ github.token }}
           path: .cache/collaboration/recovery
       - name: Verify archived tarballs and published integrity
-        run: node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
+        id: candidate
+        run: |
+          node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
+          packages=$(jq -c '.packages | to_entries | map({name: .key, version: .value.version})' .cache/collaboration/recovery/candidate.json)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   sites:
     needs: verify

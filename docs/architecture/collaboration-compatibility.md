@@ -350,8 +350,10 @@ PR previews cannot pass the final publication check. Do not rebuild between test
 and publication. Missing catalog entries, unavailable packages, and failed evidence
 or integrity checks block publication.
 
-After publication, registry verification retries transient failures for up to 10
-minutes across all packages. A timeout or integrity mismatch blocks downstream
+After publication, a separate Post-release updates workflow verifies registry
+integrity. It retries transient failures for up to 10 minutes across all packages
+and does not hold the Release workflow or its concurrency lock. A timeout or
+integrity mismatch blocks downstream
 updates. To resume those updates using the original tested artifacts, follow
 [Recover post-release updates without publishing](../RELEASING.md#recover-post-release-updates-without-publishing).
 

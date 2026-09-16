@@ -15,7 +15,7 @@ name: Release
 #   checks in a fail-fast matrix on Blacksmith. `build` runs the package and
 #   demo builds plus consumer validation in parallel, then hands the validated
 #   artifact to `release`.
-# - `release` runs the changesets action and everything after it on a
+# - `release` runs the changesets action and creates the version tag on a
 #   GitHub-hosted runner: npm rejects provenance bundles from self-hosted
 #   runners (E422 "Unsupported GitHub Actions runner environment"), and
 #   Trusted Publishing always signs provenance. Blacksmith counts as
@@ -241,7 +241,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # The changesets action and everything downstream of it. Must be a
+  # Publish packages and tag the release. Verification and updates run in
+  # post-release.yml after this workflow completes. Publishing must use a
   # GitHub-hosted runner — see the header comment.
   release:
     name: Release
@@ -356,264 +357,8 @@ jobs:
           git tag -a "v$version" -m "Release v$version"
           git push origin "v$version"
 
-      - name: Verify published artifact integrity
-        if: ${{ steps.changesets.outputs.published == 'true' }}
-        run: node scripts/collaboration/cli.mjs verify-published --candidate .cache/collaboration/publish
-
-      # Post-publish fan-out runs as the eigenpal-release-pal App rather than
-      # the default GITHUB_TOKEN, so it can comment on this repo's PRs and
-      # notify the documentation and Markdown sites. (App permissions are managed in the org.)
-      # continue-on-error on the post-publish steps: the release has
-      # already shipped to npm, so a transient failure here must NOT flip the
-      # run to failed, which would suppress the success Slack and fire the
-      # misleading "publish failed / partial state" alert keyed on
-      # no-pending-changesets.
-      - name: Mint release-pal App token
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        id: pal-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
-          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: docx-editor,docx-editor.dev,docx-to-markdown.com
-
-      # Fan the release out to the work it shipped, all computed ONCE here at
-      # publish time — nothing later rescans or resyncs:
-      #   1. Comment "🚀 Released in vX.Y.Z" on every PR in the release.
-      #   2. Comment the same on every issue those PRs closed.
-      #   3. Stamp the roadmap board's "Shipped in" text field on each issue.
-      # "What shipped in a tag" = squash-merge subjects ending in "(#N)"
-      # between the previous umbrella tag and that tag, chore: release
-      # commits skipped so the release PR doesn't comment on itself. Issues =
-      # each PR's closing references (GitHub's own linkage) plus closing
-      # keywords in commit messages. The first run creates the "Shipped in"
-      # field and backfills it across every past v* tag — field only, no
-      # comments on historical issues; after that each run touches only its
-      # own release. To force a re-backfill, delete the field on the board.
-      # PR/issue comments use the pal App token; board reads and writes use
-      # the org-project PAT the label sync uses, and degrade to warnings so a
-      # board problem never blocks the comments.
-      - name: Comment on shipped PRs and closed issues, stamp the board
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
-          REPO: ${{ github.repository }}
-          SERVER_URL: ${{ github.server_url }}
-          ORG: eigenpal
-          PROJECT_NUMBER: 2
-          FIELD_NAME: Shipped in
-        run: |
-          # `|| true` throughout: the shell runs with -e, so a grep no-match
-          # (first-ever release, a tag with no closed issues) or a failed
-          # best-effort API call would otherwise abort this step — which, via
-          # the implicit success() gate, would skip the landing-notify
-          # dispatch below.
-          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
-          OWNER="${REPO%%/*}"
-          NAME="${REPO#*/}"
-          # Includes v$version: the umbrella tag was created locally above.
-          ALL_TAGS=$(git tag --list 'v*' --sort=v:refname)
-
-          # Resolve the board and the "Shipped in" field once; create the
-          # TEXT field on the first run. A missing field makes gh exit
-          # non-zero (NOT_FOUND alongside the data), so tolerate the failure
-          # and read what did resolve.
-          BACKFILL=0
-          PROJECT_JSON=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
-            query($org: String!, $number: Int!, $field: String!) {
-              organization(login: $org) {
-                projectV2(number: $number) {
-                  id
-                  field(name: $field) {
-                    ... on ProjectV2Field { id dataType }
-                  }
-                }
-              }
-            }' -f org="$ORG" -F number="$PROJECT_NUMBER" -f field="$FIELD_NAME" 2>/dev/null || true)
-          PROJECT_ID=$(jq -r '.data.organization.projectV2.id // ""' <<<"$PROJECT_JSON")
-          FIELD_ID=$(jq -r '.data.organization.projectV2.field.id // ""' <<<"$PROJECT_JSON")
-          if [ -z "$PROJECT_ID" ]; then
-            echo "::warning::Roadmap project did not resolve (PROJECT_TOKEN?); issues get comments only."
-          elif [ -z "$FIELD_ID" ]; then
-            FIELD_ID=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
-              mutation($project: ID!, $name: String!) {
-                createProjectV2Field(input: {projectId: $project, dataType: TEXT, name: $name}) {
-                  projectV2Field { ... on ProjectV2Field { id } }
-                }
-              }' -f project="$PROJECT_ID" -f name="$FIELD_NAME" 2>/dev/null \
-              | jq -r '.data.createProjectV2Field.projectV2Field.id // ""' || true)
-            if [ -n "$FIELD_ID" ]; then
-              echo "Created text field '$FIELD_NAME' — backfilling every past release."
-              BACKFILL=1
-            else
-              echo "::warning::Could not create the '$FIELD_NAME' field; issues get comments only."
-            fi
-          fi
-
-          # Comment on one issue and stamp its board item. The one read per
-          # issue proves the number is an issue (a commit keyword can point
-          # at a PR) and finds its board item; an off-board issue (no area
-          # label) gets the comment but no field — board membership stays
-          # owned by the label sync.
-          sync_issue() {
-            local n="$1" tag="$2" release_url="$3" do_comment="$4"
-            local item_id=""
-            if [ -n "$FIELD_ID" ]; then
-              local issue_json
-              if ! issue_json=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
-                query($owner: String!, $name: String!, $number: Int!) {
-                  repository(owner: $owner, name: $name) {
-                    issue(number: $number) {
-                      projectItems(first: 50) { nodes { id project { id } } }
-                    }
-                  }
-                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" 2>/dev/null); then
-                echo "#$n is not an issue; skipping."
-                return 0
-              fi
-              item_id=$(jq -r --arg pid "$PROJECT_ID" '
-                first(.data.repository.issue.projectItems.nodes[] | select(.project.id == $pid) | .id) // ""' \
-                <<<"$issue_json")
-            else
-              # Board unavailable: still verify the number is an issue
-              # before commenting on it.
-              if ! gh api graphql -f query='
-                query($owner: String!, $name: String!, $number: Int!) {
-                  repository(owner: $owner, name: $name) { issue(number: $number) { id } }
-                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" > /dev/null 2>&1; then
-                echo "#$n is not an issue; skipping."
-                return 0
-              fi
-            fi
-            if [ "$do_comment" -eq 1 ]; then
-              gh issue comment "$n" --repo "$REPO" \
-                --body "🚀 Released in [$tag]($release_url)" \
-                || echo "Could not comment on issue #$n; continuing."
-            fi
-            if [ -n "$item_id" ]; then
-              GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
-                mutation($project: ID!, $item: ID!, $field: ID!, $text: String!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $project, itemId: $item, fieldId: $field, value: { text: $text }
-                  }) { projectV2Item { id } }
-                }' -f project="$PROJECT_ID" -f item="$item_id" \
-                   -f field="$FIELD_ID" -f text="$tag" > /dev/null \
-                && echo "Issue #$n: $FIELD_NAME = $tag." \
-                || echo "::warning::Could not stamp issue #$n."
-            elif [ -n "$FIELD_ID" ]; then
-              echo "Issue #$n is off the board (no area label); field skipped."
-            fi
-          }
-
-          # Comment every shipped PR and sync every issue those PRs closed,
-          # for one umbrella tag. do_comment=0 on backfilled tags: historical
-          # PRs and issues already got their comments when they shipped.
-          sync_version() {
-            local tag="$1" do_comment="$2"
-            local prev
-            prev=$(awk -v t="$tag" '$0 == t { print prev; exit } { prev = $0 }' <<<"$ALL_TAGS")
-            if [ -z "$prev" ]; then
-              echo "$tag is the first release tag (no lower bound); skipping."
-              return 0
-            fi
-            local release_url="$SERVER_URL/$REPO/releases/tag/$tag"
-
-            local prs
-            prs=$(git log --format='%s' "$prev..$tag" \
-              | grep -vE '^chore: release' \
-              | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u || true)
-            echo "$tag shipped PRs: $(tr '\n' ' ' <<<"${prs:-none}")"
-
-            local issues="" pr refs
-            for pr in $prs; do
-              if [ "$do_comment" -eq 1 ]; then
-                gh pr comment "$pr" --repo "$REPO" \
-                  --body "🚀 Released in [$tag]($release_url)" \
-                  || echo "Could not comment on #$pr (closed / cross-fork?); continuing."
-              fi
-              refs=$(gh api graphql -f query='
-                query($owner: String!, $name: String!, $pr: Int!) {
-                  repository(owner: $owner, name: $name) {
-                    pullRequest(number: $pr) {
-                      closingIssuesReferences(first: 20) {
-                        nodes { number repository { nameWithOwner } }
-                      }
-                    }
-                  }
-                }' -f owner="$OWNER" -f name="$NAME" -F pr="$pr" 2>/dev/null \
-                | jq -r --arg repo "$REPO" \
-                    '.data.repository.pullRequest.closingIssuesReferences.nodes[]
-                     | select(.repository.nameWithOwner == $repo) | .number' || true)
-              issues="$issues"$'\n'"$refs"
-            done
-
-            local commit_refs
-            commit_refs=$(git log --format='%s %b' "$prev..$tag" \
-              | grep -vE '^chore: release' \
-              | grep -oiE '(fix(e[sd])?|close[sd]?|resolve[sd]?) #[0-9]+' \
-              | grep -oE '[0-9]+' || true)
-            issues=$(printf '%s\n%s\n' "$issues" "$commit_refs" \
-              | grep -E '^[0-9]+$' | sort -un || true)
-            if [ -z "$issues" ]; then
-              echo "$tag: no closed issues."
-              return 0
-            fi
-            echo "$tag closed issues: $(tr '\n' ' ' <<<"$issues")"
-
-            local n
-            for n in $issues; do
-              sync_issue "$n" "$tag" "$release_url" "$do_comment"
-            done
-          }
-
-          if [ "$BACKFILL" -eq 1 ]; then
-            # Oldest first, so when an issue was re-fixed in a later release
-            # the latest ship wins the field.
-            for tag in $ALL_TAGS; do
-              [ "$tag" = "v$version" ] && continue
-              sync_version "$tag" 0
-            done
-          fi
-          sync_version "v$version" 1
-
-      # Tell the landing site a new version shipped. Its sync workflow opens an
-      # auto-merging PR that bumps the pinned editor deps to this version.
-      - name: Notify landing site of new release
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
-        run: |
-          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
-          gh api "repos/${{ github.repository_owner }}/docx-editor.dev/dispatches" \
-            -f event_type=upstream-release \
-            -f "client_payload[version]=$version"
-
-      # The converter site follows the published Markdown package, rather than
-      # assuming the first entry in the monorepo release is its version.
-      - name: Notify DOCX to Markdown site of new release
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
-        run: |
-          version=$(jq -r '.[] | select(.name == "@docx-editor.dev/docx-to-markdown") | .version' <<<"$PUBLISHED_PACKAGES")
-          if [ -z "$version" ]; then
-            echo "The Markdown package was not published; skipping its site update."
-            exit 0
-          fi
-          gh api "repos/${{ github.repository_owner }}/docx-to-markdown.com/dispatches" \
-            -f event_type=upstream-release \
-            -f "client_payload[version]=$version"
-
       - name: Notify Slack — release succeeded
+        continue-on-error: true
         if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -651,7 +396,7 @@ jobs:
                 { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
               ]
             }')
-          curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
   # Distinguish three failure modes when notifying Slack:
   #   - MODE=pre-release → a prepublish job failed, or a release-job step failed
@@ -688,8 +433,8 @@ jobs:
         run: |
           if [ "$PUBLISHED" = "true" ]; then
             mode="post-publish"
-            title=":warning: docx-editor — post-publish verification or follow-up failed"
-            detail="Packages were published. Check the failing step, then use the Recover release workflow with this run ID and version to verify the original artifacts and resume documentation and catalog updates without publishing."
+            title=":warning: docx-editor — release tagging failed after publication"
+            detail="Packages were published, but release tagging failed. Check the original run and restore its version tag before using Recover release. Do not republish to repair a tag."
           elif [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
@@ -723,13 +468,3 @@ jobs:
               ]
             }')
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
-
-  collaboration-catalog:
-    name: Record published collaboration baseline
-    needs: release
-    if: ${{ needs.release.outputs.published == 'true' }}
-    uses: ./.github/workflows/collaboration-catalog.yml
-    secrets: inherit
-    permissions:
-      contents: write
-      pull-requests: write

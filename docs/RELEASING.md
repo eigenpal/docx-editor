@@ -61,7 +61,7 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
 3. **Before a package's first release, configure its npm Trusted Publisher.** This includes `@docx-editor.dev/docx-to-markdown`. It must authorize repo `eigenpal/docx-editor` and workflow `release.yml`; the release workflow has no `NPM_TOKEN` fallback.
 4. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-5. **Wait for the Release workflow.** With an empty changeset queue, it runs independent checks and builds in parallel. After all jobs pass, it publishes the validated artifacts through npm Trusted Publishing, creates package tags, and creates a GitHub Release with the changelog entries. Check the workflow result before announcing the release.
+5. **Wait for the Release workflow.** With an empty changeset queue, it runs independent checks and builds in parallel. After all jobs pass, it publishes the validated artifacts through npm Trusted Publishing, creates package tags, and creates a GitHub Release with the changelog entries. The release-success notification runs after publication and tagging. Check the separate Post-release updates workflow for registry verification and downstream updates.
 6. **After the renamed package is available, deprecate `@docx-editor.dev/agents` on npm.** Point consumers to `@docx-editor.dev/editor-api`; this is a one-time maintainer action outside the release workflow.
 
 While changesets are pending, the workflow updates the release PR without
@@ -111,6 +111,28 @@ The CI flow is preferred because it uses OIDC (no long-lived npm token needed) a
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
 - **Don't hand-write package names in changeset frontmatter.** Run `bun changeset` so the names come from the workspace — a typo crashes the post-merge Release workflow and blocks all releases.
 
+## Post-release verification and updates
+
+The [Post-release updates workflow](../.github/workflows/post-release.yml) starts
+when Release completes. It checks that the source run published packages and
+created the version tag. Release-PR updates and runs that published nothing skip
+these tasks.
+
+Release finishes without waiting for npm metadata propagation. The downstream
+workflow verifies the original tested artifacts, requests documentation and
+converter-site updates, captures the collaboration baseline, and comments on the
+shipped PRs and issues. A downstream failure has its own workflow status and alert;
+it does not change the completed Release run. Retried comments are deduplicated.
+
+The release-success Slack notification runs immediately after publication and
+tagging. Documentation notifications come from the website's own sync and
+deployment workflows. A release notification therefore confirms publication;
+check the downstream workflows to confirm that the documentation is ready.
+
+Automatic and manual downstream updates share a concurrency group that is
+separate from Release. Registry retries do not hold the release lock or delay
+another publication.
+
 ## Recover post-release updates without publishing
 
 Use the [Recover release workflow](../.github/workflows/recover-release.yml) if
@@ -140,7 +162,8 @@ packages are already published.
 
 Recovery does not build or publish packages, create release tags, or replay
 release announcements. It only updates sites for the current npm `latest`
-version, so an older recovery cannot downgrade a site. To capture a historical
+version at verification time. Downstream updates are serialized separately from
+publication to keep their requests ordered. To capture a historical
 baseline, run `collaboration-catalog.yml` with its `version` input separately.
 
 The candidate artifact is retained for 30 days on new Release runs. Earlier runs
@@ -149,7 +172,9 @@ a rebuilt tarball does not establish what the original release tested.
 
 ### Registry verification and retries
 
-After publication, verification gives all packages a shared 10-minute deadline.
+In the downstream workflow, verification gives all packages a shared 10-minute
+deadline. This is a maximum: it finishes as soon as all packages pass, with no
+fixed delay before the first request.
 Packages are checked concurrently. The verifier retries network errors, HTTP 404,
 408, 429, and temporary server errors with increasing delays, respects
 `Retry-After`, and logs the package, last error, and remaining time.

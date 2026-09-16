@@ -1,0 +1,301 @@
+name: Post-release updates
+
+on:
+  workflow_run:
+    workflows: [Release]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  source:
+    # Never consume artifacts from a fork or a pull-request workflow.
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      published: ${{ steps.source.outputs.published }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Identify a published and tagged release
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: node scripts/collaboration/post-release.mjs
+
+  updates:
+    needs: source
+    if: needs.source.outputs.published == 'true'
+    uses: ./.github/workflows/recover-release.yml
+    with:
+      source_run_id: ${{ format('{0}', github.event.workflow_run.id) }}
+      version: ${{ needs.source.outputs.version }}
+    secrets: inherit
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+
+  announcements:
+    needs: [source, updates]
+    if: needs.source.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      # Release comments run only after the archived candidate passes verification.
+      # The App token is scoped to this repository; each site uses its own token.
+      - name: Mint release-pal App token
+        if: ${{ needs.source.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        id: pal-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+
+      # Determine what shipped from the original version tag:
+      #   1. Comment "🚀 Released in vX.Y.Z" on every PR in the release.
+      #   2. Comment the same on every issue those PRs closed.
+      #   3. Stamp the roadmap board's "Shipped in" text field on each issue.
+      # "What shipped in a tag" = squash-merge subjects ending in "(#N)"
+      # between the previous umbrella tag and that tag, chore: release
+      # commits skipped so the release PR doesn't comment on itself. Issues =
+      # each PR's closing references (GitHub's own linkage) plus closing
+      # keywords in commit messages. The first run creates the "Shipped in"
+      # field and backfills it across every past v* tag — field only, no
+      # comments on historical issues; after that each run touches only its
+      # own release. To force a re-backfill, delete the field on the board.
+      # PR/issue comments use the pal App token; board reads and writes use
+      # the org-project PAT the label sync uses, and degrade to warnings so a
+      # board problem never blocks the comments.
+      - name: Comment on shipped PRs and closed issues, stamp the board
+        if: ${{ needs.source.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PUBLISHED_PACKAGES: ${{ needs.updates.outputs.published_packages }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          ORG: eigenpal
+          PROJECT_NUMBER: 2
+          FIELD_NAME: Shipped in
+        run: |
+          # `|| true` throughout: the shell runs with -e, so a grep no-match
+          # (first-ever release, a tag with no closed issues) or a failed
+          # best-effort API call would otherwise abort this step — which, via
+          # the implicit success() gate, would skip the landing-notify
+          # dispatch below.
+          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          OWNER="${REPO%%/*}"
+          NAME="${REPO#*/}"
+          # The checkout includes the umbrella tag created by the Release workflow.
+          ALL_TAGS=$(git tag --list 'v*' --sort=v:refname)
+
+          # Resolve the board and the "Shipped in" field once; create the
+          # TEXT field on the first run. A missing field makes gh exit
+          # non-zero (NOT_FOUND alongside the data), so tolerate the failure
+          # and read what did resolve.
+          BACKFILL=0
+          PROJECT_JSON=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+            query($org: String!, $number: Int!, $field: String!) {
+              organization(login: $org) {
+                projectV2(number: $number) {
+                  id
+                  field(name: $field) {
+                    ... on ProjectV2Field { id dataType }
+                  }
+                }
+              }
+            }' -f org="$ORG" -F number="$PROJECT_NUMBER" -f field="$FIELD_NAME" 2>/dev/null || true)
+          PROJECT_ID=$(jq -r '.data.organization.projectV2.id // ""' <<<"$PROJECT_JSON")
+          FIELD_ID=$(jq -r '.data.organization.projectV2.field.id // ""' <<<"$PROJECT_JSON")
+          if [ -z "$PROJECT_ID" ]; then
+            echo "::warning::Roadmap project did not resolve (PROJECT_TOKEN?); issues get comments only."
+          elif [ -z "$FIELD_ID" ]; then
+            FIELD_ID=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+              mutation($project: ID!, $name: String!) {
+                createProjectV2Field(input: {projectId: $project, dataType: TEXT, name: $name}) {
+                  projectV2Field { ... on ProjectV2Field { id } }
+                }
+              }' -f project="$PROJECT_ID" -f name="$FIELD_NAME" 2>/dev/null \
+              | jq -r '.data.createProjectV2Field.projectV2Field.id // ""' || true)
+            if [ -n "$FIELD_ID" ]; then
+              echo "Created text field '$FIELD_NAME' — backfilling every past release."
+              BACKFILL=1
+            else
+              echo "::warning::Could not create the '$FIELD_NAME' field; issues get comments only."
+            fi
+          fi
+
+          # A downstream workflow can be retried without republishing. Reuse an
+          # existing release comment so retries do not notify the same thread again.
+          comment_release() {
+            local n="$1" tag="$2" release_url="$3" body existing
+            body="🚀 Released in [$tag]($release_url)"
+            if ! existing=$(gh api "repos/$REPO/issues/$n/comments" --paginate --jq '.[].body'); then
+              echo "::warning::Could not check existing release comments for #$n; skipping."
+              return 0
+            fi
+            if grep -Fxq -- "$body" <<<"$existing"; then
+              echo "#$n already has a release comment for $tag."
+              return 0
+            fi
+            gh issue comment "$n" --repo "$REPO" --body "$body" \
+              || echo "::warning::Could not comment on #$n; continuing."
+          }
+
+          # Comment on one issue and stamp its board item. The one read per
+          # issue proves the number is an issue (a commit keyword can point
+          # at a PR) and finds its board item; an off-board issue (no area
+          # label) gets the comment but no field — board membership stays
+          # owned by the label sync.
+          sync_issue() {
+            local n="$1" tag="$2" release_url="$3" do_comment="$4"
+            local item_id=""
+            if [ -n "$FIELD_ID" ]; then
+              local issue_json
+              if ! issue_json=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    issue(number: $number) {
+                      projectItems(first: 50) { nodes { id project { id } } }
+                    }
+                  }
+                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" 2>/dev/null); then
+                echo "#$n is not an issue; skipping."
+                return 0
+              fi
+              item_id=$(jq -r --arg pid "$PROJECT_ID" '
+                first(.data.repository.issue.projectItems.nodes[] | select(.project.id == $pid) | .id) // ""' \
+                <<<"$issue_json")
+            else
+              # Board unavailable: still verify the number is an issue
+              # before commenting on it.
+              if ! gh api graphql -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) { issue(number: $number) { id } }
+                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" > /dev/null 2>&1; then
+                echo "#$n is not an issue; skipping."
+                return 0
+              fi
+            fi
+            if [ "$do_comment" -eq 1 ]; then
+              comment_release "$n" "$tag" "$release_url"
+            fi
+            if [ -n "$item_id" ]; then
+              GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+                mutation($project: ID!, $item: ID!, $field: ID!, $text: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $project, itemId: $item, fieldId: $field, value: { text: $text }
+                  }) { projectV2Item { id } }
+                }' -f project="$PROJECT_ID" -f item="$item_id" \
+                   -f field="$FIELD_ID" -f text="$tag" > /dev/null \
+                && echo "Issue #$n: $FIELD_NAME = $tag." \
+                || echo "::warning::Could not stamp issue #$n."
+            elif [ -n "$FIELD_ID" ]; then
+              echo "Issue #$n is off the board (no area label); field skipped."
+            fi
+          }
+
+          # Comment every shipped PR and sync every issue those PRs closed,
+          # for one umbrella tag. do_comment=0 on backfilled tags: historical
+          # PRs and issues already got their comments when they shipped.
+          sync_version() {
+            local tag="$1" do_comment="$2"
+            local prev
+            prev=$(awk -v t="$tag" '$0 == t { print prev; exit } { prev = $0 }' <<<"$ALL_TAGS")
+            if [ -z "$prev" ]; then
+              echo "$tag is the first release tag (no lower bound); skipping."
+              return 0
+            fi
+            local release_url="$SERVER_URL/$REPO/releases/tag/$tag"
+
+            local prs
+            prs=$(git log --format='%s' "$prev..$tag" \
+              | grep -vE '^chore: release' \
+              | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u || true)
+            echo "$tag shipped PRs: $(tr '\n' ' ' <<<"${prs:-none}")"
+
+            local issues="" pr refs
+            for pr in $prs; do
+              if [ "$do_comment" -eq 1 ]; then
+                comment_release "$pr" "$tag" "$release_url"
+              fi
+              refs=$(gh api graphql -f query='
+                query($owner: String!, $name: String!, $pr: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    pullRequest(number: $pr) {
+                      closingIssuesReferences(first: 20) {
+                        nodes { number repository { nameWithOwner } }
+                      }
+                    }
+                  }
+                }' -f owner="$OWNER" -f name="$NAME" -F pr="$pr" 2>/dev/null \
+                | jq -r --arg repo "$REPO" \
+                    '.data.repository.pullRequest.closingIssuesReferences.nodes[]
+                     | select(.repository.nameWithOwner == $repo) | .number' || true)
+              issues="$issues"$'\n'"$refs"
+            done
+
+            local commit_refs
+            commit_refs=$(git log --format='%s %b' "$prev..$tag" \
+              | grep -vE '^chore: release' \
+              | grep -oiE '(fix(e[sd])?|close[sd]?|resolve[sd]?) #[0-9]+' \
+              | grep -oE '[0-9]+' || true)
+            issues=$(printf '%s\n%s\n' "$issues" "$commit_refs" \
+              | grep -E '^[0-9]+$' | sort -un || true)
+            if [ -z "$issues" ]; then
+              echo "$tag: no closed issues."
+              return 0
+            fi
+            echo "$tag closed issues: $(tr '\n' ' ' <<<"$issues")"
+
+            local n
+            for n in $issues; do
+              sync_issue "$n" "$tag" "$release_url" "$do_comment"
+            done
+          }
+
+          if [ "$BACKFILL" -eq 1 ]; then
+            # Oldest first, so when an issue was re-fixed in a later release
+            # the latest ship wins the field.
+            for tag in $ALL_TAGS; do
+              [ "$tag" = "v$version" ] && continue
+              sync_version "$tag" 0
+            done
+          fi
+          sync_version "v$version" 1
+
+  notify-failure:
+    needs: [source, updates, announcements]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Report a post-release failure
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_URL: ${{ github.event.workflow_run.html_url }}
+        if: env.SLACK_WEBHOOK_URL != ''
+        run: |
+          payload=$(jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" \
+            '{text: ("Post-release verification or updates failed: " + $run + ". Original Release run: " + $source + ". Check both runs before retrying. Use Recover release for already-published packages; do not republish them.")}')
+          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
