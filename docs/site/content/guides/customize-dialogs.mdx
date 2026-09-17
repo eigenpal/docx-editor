@@ -183,7 +183,7 @@ from your own image source. It receives a session with `kind: 'picture'`, a
 `value` that names the control's drawing, and `replaceImage(bytes)`, which
 checks the format (PNG, JPEG, GIF, BMP, or WebP) and keeps the drawing's size.
 `DocxEditorContentControlWidget` without children renders its `Picture` part, a
-file input that opens the dialog at once in a panel that takes no room. Inside
+file input that opens the dialog at once. Its panel keeps retry errors and a Cancel action visible. Inside
 children, `useContentControlWidget()` exposes `accept` and
 `replaceImage(fileOrBytes)` for a custom picker.
 

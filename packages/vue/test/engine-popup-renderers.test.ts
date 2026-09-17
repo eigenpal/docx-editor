@@ -447,7 +447,9 @@ for (const configured of [false, true])
     // written for lists never sees the press.
     const popup = container.querySelector<HTMLElement>('[data-docx-popup="contentControlWidget"]');
     expect(popup !== null).toBe(configured);
-    expect(popup?.hasAttribute('data-picker') ?? false).toBe(configured);
+    expect(popup?.querySelector('[data-docx-part=picture]') !== null && popup !== null).toBe(
+      configured
+    );
     expect(container.querySelector('input[type="file"][data-docx-part="picture"]') !== null).toBe(
       configured
     );

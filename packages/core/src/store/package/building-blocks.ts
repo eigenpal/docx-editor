@@ -15,6 +15,15 @@ const GLOSSARY_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/glossaryDocument';
 const GLOSSARY_PART_NAME = '/word/glossary/document.xml';
 const DEFAULT_CATEGORY = 'General';
+const BLOCK_TYPES = new Set([
+  'none',
+  'normal',
+  'autoExp',
+  'toolbar',
+  'speller',
+  'formFld',
+  'bbPlcHdr',
+]);
 
 /** Upper bound on entries read from one glossary; a hostile part cannot make the list unbounded. */
 export const MAX_BUILDING_BLOCKS = 4096;
@@ -116,13 +125,23 @@ export function glossaryPartOf(pkg: OoxmlPackage): OoxmlPart | null {
 
 function blockOf(docPart: OoxmlElement): BuildingBlock | null {
   const properties = childNamed(docPart, 'docPartPr');
+  const types = childNamed(properties, 'types');
+  if (
+    types?.children.some(
+      (child) =>
+        child.kind !== 'textValue' && isWml(child, 'type') && !BLOCK_TYPES.has(valOf(child) ?? '')
+    )
+  )
+    return null;
   const name = valOf(childNamed(properties, 'name'))?.trim();
-  if (!name) return null;
+  if (!name || name.length > 512) return null;
   const category = childNamed(properties, 'category');
   const gallery = valOf(childNamed(category, 'gallery'))?.trim();
-  if (!gallery) return null;
+  if (!gallery || gallery.length > 256) return null;
+  const categoryName = valOf(childNamed(category, 'name'))?.trim() || DEFAULT_CATEGORY;
+  if (categoryName.length > 256) return null;
   const body = childNamed(docPart, 'docPartBody');
-  if (!body) return null;
+  if (!body || body.children.length > 4096) return null;
   const blocks = body.children.filter(
     (child) => child.kind !== 'textValue' && !isWml(child, 'sectPr')
   );
@@ -130,7 +149,7 @@ function blockOf(docPart: OoxmlElement): BuildingBlock | null {
   return {
     name,
     gallery,
-    category: valOf(childNamed(category, 'name'))?.trim() || DEFAULT_CATEGORY,
+    category: categoryName,
     blocks,
   };
 }
@@ -140,15 +159,25 @@ export function buildingBlocksOf(pkg: OoxmlPackage): readonly BuildingBlock[] {
   const glossary = glossaryPartOf(pkg);
   if (!glossary) return [];
   const out: BuildingBlock[] = [];
+  let visited = 0;
   const visit = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 8 || out.length >= MAX_BUILDING_BLOCKS) return;
+    if (
+      ++visited > MAX_BUILDING_BLOCKS * 4 ||
+      node.kind === 'textValue' ||
+      depth > 8 ||
+      out.length >= MAX_BUILDING_BLOCKS
+    )
+      return;
     const element: OoxmlElement = node;
     if (isWml(element, 'docPart')) {
       const block = blockOf(element);
       if (block) out.push(block);
       return;
     }
-    for (const child of element.children) visit(child, depth + 1);
+    for (const child of element.children) {
+      if (visited >= MAX_BUILDING_BLOCKS * 4 || out.length >= MAX_BUILDING_BLOCKS) break;
+      visit(child, depth + 1);
+    }
   };
   visit(glossary.root, 0);
   return out;

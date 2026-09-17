@@ -265,6 +265,9 @@ export async function validateEmbeddedImageForCommit(
   mime: SupportedImageMime,
   limits: ReturnType<typeof resolveImageResourceLimits> = resolveImageResourceLimits()
 ): Promise<Readonly<{ ok: true; bytes: Uint8Array } | { ok: false; reason: 'invalid-image' }>> {
+  if (bytes.byteLength === 0 || bytes.byteLength > limits.maxEncodedBytes) {
+    return { ok: false, reason: 'invalid-image' };
+  }
   const snapshotted = snapshotPartBytes(bytes);
   if (!validateEmbeddedImageBytes(snapshotted, mime)) {
     return { ok: false, reason: 'invalid-image' };

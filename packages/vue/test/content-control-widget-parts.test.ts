@@ -215,3 +215,62 @@ describe('DocxEditorContentControlWidget', () => {
     expect(writes).toEqual(['Extra large']);
   });
 });
+
+test('an empty gallery announces its state and takes keyboard focus', async () => {
+  const current = session('buildingBlockGallery', '');
+  const container = await mount(() =>
+    h(DocxEditorContentControlWidget, { session: current.session })
+  );
+  const note = container.querySelector<HTMLElement>('[data-docx-part=empty]')!;
+  expect(note.textContent).toContain('no building blocks');
+  expect(document.activeElement).toBe(note);
+});
+
+test('picture reads are bounded and failures resolve false with retry feedback', async () => {
+  const current = session('picture', 'drawing');
+  let reads = 0;
+  let writes = 0;
+  let widget: ReturnType<typeof useContentControlWidget> | undefined;
+  const Probe = defineComponent({
+    setup() {
+      // Vue composables run in setup; this is not a React hook.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      widget = useContentControlWidget();
+      return () => h(DocxEditorContentControlWidget.Error);
+    },
+  });
+  await mount(() =>
+    h(
+      DocxEditorContentControlWidget,
+      {
+        session: {
+          ...current.session,
+          replaceImage: async () => {
+            writes++;
+            return false;
+          },
+        },
+      },
+      { default: () => h(Probe) }
+    )
+  );
+  const oversized = {
+    size: 32 * 1024 * 1024 + 1,
+    arrayBuffer: async () => {
+      reads++;
+      return new ArrayBuffer(0);
+    },
+  } as unknown as Blob;
+  expect(await widget!.replaceImage(oversized)).toBe(false);
+  expect(reads).toBe(0);
+  expect(writes).toBe(0);
+  const unreadable = {
+    size: 2,
+    arrayBuffer: async () => {
+      throw new Error('read failed');
+    },
+  } as unknown as Blob;
+  expect(await widget!.replaceImage(unreadable)).toBe(false);
+  await nextTick();
+  expect(widget!.refused.value).toBe(true);
+});

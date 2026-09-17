@@ -1,3 +1,4 @@
+import { DEFAULT_IMAGE_RESOURCE_LIMITS } from '@docx-editor.dev/core/store';
 import { useId, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
   CONTENT_CONTROL_PICTURE_ACCEPT,
@@ -137,11 +138,21 @@ export function useContentControlWidgetState(
         setRefused(true);
         return false;
       }
-      const bytes =
-        source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
-      const accepted = await session.replaceImage(bytes);
-      setRefused(!accepted);
-      return accepted;
+      try {
+        const size = source instanceof Uint8Array ? source.byteLength : source.size;
+        if (!session.canApply() || size > DEFAULT_IMAGE_RESOURCE_LIMITS.maxEncodedBytes) {
+          setRefused(true);
+          return false;
+        }
+        const bytes =
+          source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
+        const accepted = await session.replaceImage(bytes);
+        setRefused(!accepted);
+        return accepted;
+      } catch {
+        setRefused(true);
+        return false;
+      }
     },
     [session]
   );

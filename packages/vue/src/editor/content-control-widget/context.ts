@@ -1,3 +1,4 @@
+import { DEFAULT_IMAGE_RESOURCE_LIMITS } from '@docx-editor.dev/core/store';
 import {
   useId,
   computed,
@@ -201,11 +202,21 @@ export function useContentControlWidgetState(
         refused.value = true;
         return false;
       }
-      const bytes =
-        source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
-      const accepted = await current.replaceImage(bytes);
-      refused.value = !accepted;
-      return accepted;
+      try {
+        const size = source instanceof Uint8Array ? source.byteLength : source.size;
+        if (!current.canApply() || size > DEFAULT_IMAGE_RESOURCE_LIMITS.maxEncodedBytes) {
+          refused.value = true;
+          return false;
+        }
+        const bytes =
+          source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
+        const accepted = await current.replaceImage(bytes);
+        refused.value = !accepted;
+        return accepted;
+      } catch {
+        refused.value = true;
+        return false;
+      }
     },
     calendar,
     previousMonth: () => {

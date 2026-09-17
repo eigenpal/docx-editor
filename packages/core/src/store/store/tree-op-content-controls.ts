@@ -120,6 +120,7 @@ const DEFAULT_PROMPTS: Readonly<Record<string, string>> = {
   date: 'Click here to enter a date.',
   dropDownList: 'Choose an item.',
   comboBox: 'Choose an item.',
+  docPartList: 'Choose a building block.',
 };
 const DEFAULT_TEXT_PROMPT = 'Click here to enter text.';
 

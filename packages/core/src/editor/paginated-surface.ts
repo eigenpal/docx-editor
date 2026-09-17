@@ -2131,9 +2131,12 @@ export function mountPaginatedSurface(
     layout: () => currentLayout,
     selectDrawing: (drawingNodeId, paragraphId) =>
       surface.selectDrawing(drawingNodeId, paragraphId),
-    replaceImage: (drawingNodeId, bytes, mime) =>
+    allowed: (id) => !contentControlsOps.disabledReason(id, 'edit'),
+    translate: (key) => translate?.(key) ?? key,
+    replaceImage: (drawingNodeId, bytes, mime, commitGuard) =>
       surface.replaceImage(drawingNodeId, bytes, mime, {
         expectedPackageRevision: session.packageRevision(),
+        commitGuard,
       }),
     setOpen: setContentControlWidgetOpen,
     reject: publishRefusal,
@@ -2244,6 +2247,7 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
       return;
     }
+    pictureWidget.cancel();
     // Re-pressing the native widget toggles its current menu shut.
     if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
     // A picture press selects the picture first, as in Word, so the host's image commands
@@ -2301,7 +2305,7 @@ export function mountPaginatedSurface(
       (
         menu.querySelector<HTMLElement>('input') ??
         menu.querySelector<HTMLElement>('[role=option][tabindex="0"]') ??
-        menu.querySelector<HTMLElement>('button')
+        menu.querySelector<HTMLElement>('button,[data-docx-part=empty]')
       )?.focus({ preventScroll: true });
   }
 

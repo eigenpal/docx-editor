@@ -56,7 +56,7 @@ export interface DocxEditorContentControlWidgetProps {
  * renders the same arrangement the engine paints on its own — a list, a list with free-text
  * entry, or a month calendar with a Today button — from the same stylesheet classes, so one
  * theme covers both. A checkbox session applies its toggle at once and shows nothing; a
- * picture session opens the browser's file dialog at once and shows nothing.
+ * picture session opens the browser's file dialog and retains a retry input and Cancel action.
  * @public
  */
 function ContentControlWidgetRoot(props: DocxEditorContentControlWidgetProps) {
@@ -101,7 +101,7 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
       (
         panel?.querySelector<HTMLElement>('input') ??
         panel?.querySelector<HTMLElement>('[role=option][tabindex="0"]') ??
-        panel?.querySelector<HTMLElement>('select,button')
+        panel?.querySelector<HTMLElement>('select,button,[data-docx-part=empty]')
       )?.focus({ preventScroll: true });
     }
     return () => {
@@ -134,7 +134,6 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
         data-docx-popup="contentControlWidget"
         data-docx-part="popup"
         data-kind={session.kind}
-        data-picker={session.kind === 'picture' && children === undefined ? '' : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           contentControlPopupKeyDown(event.currentTarget, event.nativeEvent, session.cancel);
@@ -149,7 +148,14 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
 
 function defaultArrangement(widget: UseContentControlWidgetResult): ReactNode {
   if (widget.kind === 'date') return <ContentControlWidgetCalendar />;
-  if (widget.kind === 'picture') return <ContentControlWidgetPicture />;
+  if (widget.kind === 'picture')
+    return (
+      <>
+        <ContentControlWidgetPicture />
+        <ContentControlWidgetError />
+        <ContentControlWidgetCancel />
+      </>
+    );
   if (widget.kind === 'comboBox') {
     return (
       <>

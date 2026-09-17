@@ -1010,18 +1010,6 @@ a.docx-hyperlink:focus-visible {
   content: '▾';
 }
 
-/* A packaged picture pop-up is nothing but its file input: the browser's dialog is the UI,
-   so the panel takes no room on the sheet. A host that composes children gets the panel. */
-.docx-content-control-widget-popup[data-picker] {
-  width: 1px;
-  height: 1px;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-  opacity: 0;
-}
-
 .docx-content-control-picture-input {
   font: inherit;
 }
@@ -1079,24 +1067,33 @@ a.docx-hyperlink:focus-visible {
 
 /* A checkbox control's widget is a hit target over the document's own state glyph (☐ / ☒ in
    the state font, exactly what Word shows), so it paints nothing of its own: a drawn check over
-   a see-through chip showed both the check and the glyph on hover. Hover and active states
-   outline the glyph instead. */
+   a see-through chip showed both the check and the glyph on hover. The chip hugs the glyph box
+   (the painter sizes it from the glyph's span), so hover and active states are a soft tint
+   behind the glyph, the way Word lights a control under the pointer, never a second box. */
 .docx-content-control-widget[data-docx-cc-widget='checkbox'],
-.docx-content-control-chrome[data-active]
-  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
-.docx-content-control-chrome[data-open]
-  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
-.docx-content-control-chrome:hover .docx-content-control-widget[data-docx-cc-widget='checkbox'],
 .docx-content-control-chrome[data-read-only]:hover
   .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  border-radius: 0.2em;
   background: transparent;
   border-color: transparent !important;
 }
 
 .docx-content-control-chrome[data-active]
   .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-open]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
 .docx-content-control-chrome:hover .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
-  border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--doc-primary) 16%, transparent);
+  border-color: transparent !important;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']:active {
+  background: color-mix(in srgb, var(--doc-primary) 28%, transparent);
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='checkbox']::after {

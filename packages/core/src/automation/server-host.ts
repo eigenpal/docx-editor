@@ -36,6 +36,7 @@ import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
 import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
+import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
@@ -143,7 +144,10 @@ export function createServerAutomationHost(
       detail: loaded.package.mainDocumentPart,
     };
   }
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  const store = new TreePackageStore(
+    loaded.package,
+    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main))
+  );
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
   const port = packageStorePort(store, collaboration, () => detachCollaboration());

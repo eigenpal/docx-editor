@@ -361,7 +361,18 @@ export function ContentControlWidgetList(props: DocxEditorContentControlWidgetPa
       id: widget.listId,
       'aria-label': t(`contentControl.types.${widget.kind}`),
     },
-    widget.items.map((item, index) => <ContentControlWidgetItem key={index} item={item} />)
+    widget.kind === 'buildingBlockGallery' && widget.items.length === 0 ? (
+      <div
+        className="docx-content-control-menu-empty"
+        data-docx-part="empty"
+        role="note"
+        tabIndex={0}
+      >
+        {t('contentControl.gallery.empty')}
+      </div>
+    ) : (
+      widget.items.map((item, index) => <ContentControlWidgetItem key={index} item={item} />)
+    )
   );
 }
 
@@ -549,8 +560,12 @@ export function ContentControlWidgetPicture({
   const widget = useContentControlWidget();
   const t = useFormControlTranslate();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const opened = useRef(false);
   useLayoutEffect(() => {
-    if (autoOpen !== false) inputRef.current?.click();
+    if (autoOpen !== false && !opened.current) {
+      opened.current = true;
+      inputRef.current?.click();
+    }
   }, [autoOpen]);
   return part(
     'input',
@@ -567,6 +582,7 @@ export function ContentControlWidgetPicture({
       onCancel: widget.cancel,
       onChange: (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
+        event.target.value = '';
         if (file) void widget.replaceImage(file);
       },
     },

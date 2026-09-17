@@ -614,6 +614,14 @@ function fragmentsForInlineControl(
       if (range.start > span.end) continue;
       if (seenPages.has(span.pageIndex)) continue;
       seenPages.add(span.pageIndex);
+      // A zero-width projected span AT the insertion point is the control's own glyph (a
+      // `w:sym` checkbox state owns no model text but paints a box): its painted box is the
+      // control's geometry, so the widget can hug the glyph instead of a hairline beside it.
+      if (span.start === span.end && span.start === range.start && span.box.width > 0) {
+        carets.push({ pageIndex: span.pageIndex, box: span.box });
+        if (!repeated) break;
+        continue;
+      }
       const x =
         span.start === span.end
           ? span.box.x

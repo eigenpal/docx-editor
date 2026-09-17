@@ -31,8 +31,17 @@ import {
   IceThaw,
 } from './icons/menu';
 
+/** `?fixture=` picks the document; the permit and the sample are two same-origin files. */
+function openFixture(name: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('fixture', name);
+  window.location.assign(url.toString());
+}
+
 export function IglooMenu() {
   const editor = useDocxEditor();
+  const onPermit =
+    new URLSearchParams(window.location.search).get('fixture') === 'expedition-permit.docx';
   const iglooT = useChromeTranslate(ICE_LABELS);
   const { freeze, thaw, enabled, disabledReason } = useFrost();
   // `editable` is the engine's answer: a view-only document greys these out like it does Bold.
@@ -80,6 +89,19 @@ export function IglooMenu() {
           </DocxEditor.Menu.Row>
           <DocxEditor.Menu.Row icon={IceLottery} {...nodeGate} onSelect={dropRandom}>
             Take whatever the water gives
+          </DocxEditor.Menu.Row>
+        </DocxEditor.Menu.Group>
+
+        <DocxEditor.Menu.Separator />
+
+        {/* A document of nothing but content controls, each with a pop-up of this demo's
+            own. Opening it is a navigation: the fixture is picked by the URL. */}
+        <DocxEditor.Menu.Group label="Paperwork">
+          <DocxEditor.Menu.Row
+            icon={IceGuide}
+            onSelect={() => openFixture(onPermit ? 'sample-igloo.docx' : 'expedition-permit.docx')}
+          >
+            {onPermit ? 'Back to the field notes' : 'Fill an expedition permit…'}
           </DocxEditor.Menu.Row>
         </DocxEditor.Menu.Group>
 

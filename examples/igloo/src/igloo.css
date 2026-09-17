@@ -978,3 +978,144 @@
     transform: translate(-50%, 0);
   }
 }
+
+/* ── The permit's pop-ups: content-control sessions, cut from ice ───────────────────────
+ *
+ * `IglooForms.tsx` renders every value pop-up over the packaged parts; these rules dress the
+ * parts' own classes and the demo's wrappers. Tokens do most of it (the panel inherits
+ * `--doc-*`), so what is left is the ice: the shard outline, a heading with a flake, tiles
+ * for the carved photos. */
+
+.igloo-permit {
+  min-width: 260px;
+  padding: 10px 10px 8px;
+  color: var(--doc-text);
+}
+
+.igloo-permit__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__list {
+  display: grid;
+  gap: 2px;
+}
+
+.igloo-permit__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__item[aria-selected='true'] {
+  background: var(--doc-primary-light);
+}
+
+.igloo-permit__flake {
+  color: var(--doc-accent);
+  font-size: 12px;
+}
+
+.igloo-permit__empty,
+.igloo-permit__error {
+  margin: 6px 2px 2px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__error[role='alert'] {
+  color: #9a3b2c;
+}
+
+.igloo-permit__input {
+  width: 100%;
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__calendar-header {
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-bg-subtle);
+}
+
+.igloo-permit__grid [role='gridcell'][data-selected] {
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.igloo-permit__today {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.igloo-permit__today:hover {
+  background: var(--doc-primary-hover);
+}
+
+.igloo-permit__scenes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.igloo-permit__scene {
+  display: grid;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--doc-border);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-card);
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.igloo-permit__scene:hover:not(:disabled) {
+  border-color: var(--doc-primary);
+  background: var(--doc-bg-hover);
+}
+
+.igloo-permit__scene:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.igloo-permit__scene-art {
+  display: block;
+  height: 54px;
+  border-radius: 2px 8px 2px 8px;
+}
+
+.igloo-permit__upload {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__file {
+  font-size: 12px;
+}

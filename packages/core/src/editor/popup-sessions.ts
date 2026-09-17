@@ -32,7 +32,8 @@ export interface ContentControlWidgetSession {
    * Picture sessions only: replace the control's image with these bytes. The engine sniffs
    * the format (PNG, JPEG, GIF, BMP or WebP) and keeps the drawing's size. Resolves false
    * when the bytes are not a supported image, the control no longer takes a write, or the
-   * document is open for viewing or suggesting.
+   * document is open for viewing or suggesting. Cancellation during decoding prevents
+   * the commit; only one replacement may be pending for a session.
    */
   replaceImage?(bytes: Uint8Array): Promise<boolean>;
 }

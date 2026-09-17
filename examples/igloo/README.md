@@ -20,22 +20,24 @@ Everything on the screen composes under `<DocxEditor.Root>`. The demo owns the
 arrangement, icons, labels, colors, and art. The library owns the engine,
 controls, and enabled states.
 
-| File                       | Customization point                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------------------- |
-| `src/IglooEditor.tsx`      | Composes `Root`, `Viewport`, `Content`, `Loading`, the workspace, and host art.               |
-| `src/IglooToolbar.tsx`     | Builds a custom toolbar with `preset={false}`, custom icons, editing modes, and host actions. |
-| `src/IglooContextMenu.tsx` | Changes packaged rows and adds host rows, submenus, and custom nodes.                         |
-| `src/IglooMenu.tsx`        | Changes registry menus, adds an Insert row, and defines a host menu.                          |
-| `src/IglooReview.tsx`      | Changes the EigenPal Pro License review rail with part overrides and host content.            |
-| `src/specimens.ts`         | Defines two custom nodes with recognition, chip colors, and rail cards.                       |
-| `src/useSpecimens.tsx`     | Owns custom-node writes, caret capture, dialogs, popovers, and notices.                       |
-| `src/SpecimenDialog.tsx`   | Collects custom-node attributes and inserts one node.                                         |
-| `src/SpecimenPopover.tsx`  | Opens custom-node details at the activation rectangle.                                        |
-| `src/useFrost.ts`          | Shares one host action and checks it with `Editor.can`.                                       |
-| `src/labels.ts`            | Defines label overrides through the same path as a locale.                                    |
-| `src/igloo.css`            | Changes the theme through `--doc-*` token overrides.                                          |
-| `src/icons/`               | Contains the demo SVG components.                                                             |
-| `src/art/`                 | Contains the background art and custom-node glyphs.                                           |
+| File                            | Customization point                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/IglooEditor.tsx`           | Composes `Root`, `Viewport`, `Content`, `Loading`, the workspace, and host art.               |
+| `src/IglooToolbar.tsx`          | Builds a custom toolbar with `preset={false}`, custom icons, editing modes, and host actions. |
+| `src/IglooContextMenu.tsx`      | Changes packaged rows and adds host rows, submenus, and custom nodes.                         |
+| `src/IglooMenu.tsx`             | Changes registry menus, adds an Insert row, and defines a host menu.                          |
+| `src/IglooReview.tsx`           | Changes the EigenPal Pro License review rail with part overrides and host content.            |
+| `src/specimens.ts`              | Defines two custom nodes with recognition, chip colors, and rail cards.                       |
+| `src/useSpecimens.tsx`          | Owns custom-node writes, caret capture, dialogs, popovers, and notices.                       |
+| `src/SpecimenDialog.tsx`        | Collects custom-node attributes and inserts one node.                                         |
+| `src/SpecimenPopover.tsx`       | Opens custom-node details at the activation rectangle.                                        |
+| `src/useFrost.ts`               | Shares one host action and checks it with `Editor.can`.                                       |
+| `src/IglooForms.tsx`            | Renders every content-control pop-up (lists, calendar, gallery, picture, checkbox) as ice.    |
+| `public/expedition-permit.docx` | A form of Word content controls, opened from **Custom Actions** > **Paperwork**.              |
+| `src/labels.ts`                 | Defines label overrides through the same path as a locale.                                    |
+| `src/igloo.css`                 | Changes the theme through `--doc-*` token overrides.                                          |
+| `src/icons/`                    | Contains the demo SVG components.                                                             |
+| `src/art/`                      | Contains the background art and custom-node glyphs.                                           |
 
 The top-level files demonstrate the API. The `icons/` and `art/` directories
 contain theme decoration.
@@ -92,6 +94,25 @@ The dialog collects attributes and calls `insertCustomNode`. The popover calls
 
 Word limits `w:tag` to 64 characters. The engine refuses an oversized tag, and
 the demo shows the refusal in the notice strip.
+
+## Compose the content-control pop-ups
+
+`public/expedition-permit.docx` holds one of every Word content control: plain and
+rich text, a date, a dropdown, a combo box, a building block gallery with its own
+glossary blocks, two checkboxes, and a picture. `IglooForms.tsx` gives the editor
+root a `popups` map for them:
+
+- `contentControlWidget` renders lists, the combo box, the gallery, and the date
+  picker from `DocxEditorContentControlWidget` parts with the demo's classes and
+  headings. The calendar keeps the packaged grid and keyboard model behind a
+  **Freeze today** button.
+- `contentControlPicture` carves three sled photos on a canvas and hands the PNG
+  bytes to `replaceImage`; the packaged `Picture` part stays for a file of your own.
+- `contentControlCheckbox` applies the toggle at once and speaks through the
+  notice strip.
+
+The sessions, the draft state, and the writes are the engine's. The demo owns the
+shapes and the words.
 
 ## Reuse the theme patterns
 

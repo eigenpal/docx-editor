@@ -12,6 +12,7 @@
 // collapse to a single honest statement of what the part contains.
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
+import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import type { Node as PMNode } from 'prosemirror-model';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
 import {
@@ -210,7 +211,11 @@ export function openTreeSession(
   // layer can seed split-tail mints and the contract can address by paraId. A document
   // already carrying valid ids normalizes to the SAME part reference (byte-stable save).
   const normalized = normalizeParagraphIdentity(main);
-  const packageStore = new TreePackageStore(pkgLoaded, normalized);
+  // Empty prompt-bearing controls open showing their glossary placeholder, as Word shows it.
+  const packageStore = new TreePackageStore(
+    pkgLoaded,
+    materializeGlossaryPlaceholders(pkgLoaded, normalized)
+  );
 
   let headerFooterBySection: {
     readonly packageRevision: number;

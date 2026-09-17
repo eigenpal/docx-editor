@@ -61,7 +61,14 @@ export interface DocxEditorContentControlWidgetProps {
 function defaultArrangement(widget: UseContentControlWidgetResult): VNodeChild {
   const kind = widget.kind.value;
   if (kind === 'date') return <ContentControlWidgetCalendar />;
-  if (kind === 'picture') return <ContentControlWidgetPicture />;
+  if (kind === 'picture')
+    return (
+      <>
+        <ContentControlWidgetPicture />
+        <ContentControlWidgetError />
+        <ContentControlWidgetCancel />
+      </>
+    );
   if (kind === 'comboBox') {
     return (
       <>
@@ -88,7 +95,7 @@ function defaultArrangement(widget: UseContentControlWidgetResult): VNodeChild {
  * renders the same arrangement the engine paints on its own — a list, a list with free-text
  * entry, or a month calendar with a Today button — from the same stylesheet classes, so one
  * theme covers both. A checkbox session applies its toggle at once and shows nothing; a
- * picture session opens the browser's file dialog at once and shows nothing.
+ * picture session opens the browser's file dialog and retains a retry input and Cancel action.
  * @public
  */
 const ContentControlWidgetRoot = defineComponent({
@@ -158,7 +165,7 @@ const ContentControlWidgetRoot = defineComponent({
           (
             element.querySelector<HTMLElement>('input') ??
             element.querySelector<HTMLElement>('[role=option][tabindex="0"]') ??
-            element.querySelector<HTMLElement>('select,button')
+            element.querySelector<HTMLElement>('select,button,[data-docx-part=empty]')
           )?.focus({ preventScroll: true });
         }
       },
@@ -190,11 +197,6 @@ const ContentControlWidgetRoot = defineComponent({
           data-docx-popup="contentControlWidget"
           data-docx-part="popup"
           data-kind={current.kind}
-          data-picker={
-            current.kind === 'picture' && !slots.default && props.children === undefined
-              ? ''
-              : undefined
-          }
           onPointerdown={(event) => event.stopPropagation()}
           onKeydown={(event) => {
             contentControlPopupKeyDown(event.currentTarget as HTMLElement, event, current.cancel);

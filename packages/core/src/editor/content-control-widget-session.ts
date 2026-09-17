@@ -17,7 +17,7 @@ interface Host {
   /** The drawing a picture control holds, or undefined when it holds none. */
   picture(id: string): string | undefined;
   /** Replace a picture control's image; false when refused. */
-  replaceImage(id: string, bytes: Uint8Array): Promise<boolean>;
+  replaceImage(id: string, bytes: Uint8Array, canCommit: () => boolean): Promise<boolean>;
   locale(): string;
   layer: HTMLElement;
   setOpen(id: string, open: boolean): void;
@@ -89,7 +89,11 @@ export function createContentControlWidgetSessions(host: Host) {
       // A picture session stands for the drawing it replaces; without one there is nothing
       // to replace, and the press is refused rather than opened onto nothing.
       const drawingNodeId = kind === 'picture' ? host.picture(id) : undefined;
-      if (kind === 'picture' && !drawingNodeId) return false;
+      if (kind === 'picture' && !drawingNodeId) {
+        cancel();
+        return false;
+      }
+      let replacing = false;
       const session: ContentControlWidgetSession = {
         controlId: id,
         kind: kind as ContentControlWidgetSession['kind'],
@@ -122,9 +126,22 @@ export function createContentControlWidgetSessions(host: Host) {
         ...(kind === 'picture'
           ? {
               async replaceImage(bytes: Uint8Array) {
-                if (!canApply() || !(await host.replaceImage(id, bytes))) return false;
-                if (isActive()) cancel();
-                return true;
+                if (replacing || !canApply()) return false;
+                replacing = true;
+                try {
+                  if (
+                    !(await host.replaceImage(
+                      id,
+                      bytes,
+                      () => canApply() && host.picture(id) === drawingNodeId
+                    ))
+                  )
+                    return false;
+                  if (isActive()) cancel();
+                  return true;
+                } finally {
+                  replacing = false;
+                }
               },
             }
           : {}),
@@ -211,7 +228,8 @@ export function contentControlValueOps(
   if (!control || !isBuildingBlockGalleryControl(control)) {
     return [{ op: 'setContentControlValue', controlId, value }];
   }
-  const block = buildingBlocksForControl(pkg(), control).find((entry) => entry.name === value);
+  const matches = buildingBlocksForControl(pkg(), control).filter((entry) => entry.name === value);
+  const block = matches.length === 1 ? matches[0] : undefined;
   return block
     ? [{ op: 'insertBuildingBlock', controlId, name: block.name, blocks: block.blocks }]
     : null;

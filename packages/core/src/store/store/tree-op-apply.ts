@@ -168,8 +168,9 @@ import {
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
-import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
+import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
+import { applyDrawingContentEdit } from './drawing-content-edit.ts';
 import { applyInsertBuildingBlock } from './building-block-insert.ts';
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
@@ -280,7 +281,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   ) {
     return applyTableCellPropertyOp(part, op, options);
   }
-  if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
+  if (isDrawingTreeDocOp(op)) return applyDrawingContentEdit(part, op, options);
 
   if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
   if (op.op === 'insertBuildingBlock') return applyInsertBuildingBlock(part, op, options);

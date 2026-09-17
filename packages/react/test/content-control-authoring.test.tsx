@@ -678,7 +678,9 @@ for (const configured of [false, true]) {
       '[data-docx-popup="contentControlWidget"]'
     );
     expect(popup !== null).toBe(configured);
-    expect(popup?.hasAttribute('data-picker') ?? false).toBe(configured);
+    expect(popup?.querySelector('[data-docx-part=picture]') !== null && popup !== null).toBe(
+      configured
+    );
     expect(
       view.container.querySelector('input[type="file"][data-docx-part="picture"]') !== null
     ).toBe(configured);

@@ -19,6 +19,7 @@ import {
 import { resolveRelationship } from './package/relationships.ts';
 import { type OoxmlElement, type OoxmlPart } from './package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from './package/para-id.ts';
+import { materializeGlossaryPlaceholders } from './store/placeholder-materialize.ts';
 import { relationshipTargetIn } from './package/hyperlink-part.ts';
 import { collectThemeSchemeFaces } from './package/theme-font-scheme.ts';
 import { TreePackageStore } from './store/tree-package-store.ts';
@@ -126,7 +127,10 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     };
   }
 
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  const store = new TreePackageStore(
+    loaded.package,
+    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main))
+  );
   return { ok: true, view: headlessViewOfStore(store) };
 }
 

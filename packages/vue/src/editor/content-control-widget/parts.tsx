@@ -408,7 +408,18 @@ export const ContentControlWidgetList = definePart(
       'aria-label': t(`contentControl.types.${widget.kind.value}`),
     },
     content: () =>
-      widget.items.value.map((item, index) => h(ContentControlWidgetItem, { key: index, item })),
+      widget.kind.value === 'buildingBlockGallery' && widget.items.value.length === 0 ? (
+        <div
+          class="docx-content-control-menu-empty"
+          data-docx-part="empty"
+          role="note"
+          tabindex={0}
+        >
+          {t('contentControl.gallery.empty')}
+        </div>
+      ) : (
+        widget.items.value.map((item, index) => h(ContentControlWidgetItem, { key: index, item }))
+      ),
   })
 );
 
@@ -614,6 +625,7 @@ export const ContentControlWidgetPicture = defineComponent({
           onCancel: () => widget.cancel(),
           onChange: (event: Event) => {
             const file = (event.target as HTMLInputElement).files?.[0];
+            (event.target as HTMLInputElement).value = '';
             if (file) void widget.replaceImage(file);
           },
         },

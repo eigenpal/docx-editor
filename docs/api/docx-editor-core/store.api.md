@@ -2265,6 +2265,9 @@ export function lockForbidsRemoval(lock: ContentControlLock): boolean;
 export function makeLimitCounter(limits: ResourceLimits, key: keyof ResourceLimits): BoundedCounter;
 
 // @public
+export function materializeGlossaryPlaceholders(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPart;
+
+// @public
 export const MAX_CONTENT_CONTROL_NESTING = 32;
 
 // @public

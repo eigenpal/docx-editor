@@ -29,6 +29,7 @@ import { IglooReview } from './IglooReview';
 import { IglooToolbar } from './IglooToolbar';
 import { Blizzard } from './art/Blizzard';
 import { ICE_LABELS } from './labels';
+import { PERMIT_POPUPS } from './IglooForms';
 import { SPECIMENS } from './specimens';
 import { SpecimenProvider } from './useSpecimens';
 
@@ -78,6 +79,10 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
         {...(fonts ? { fonts } : {})}
         author="Igloo"
         modules={PRO_MODULES}
+        // Every content control's pop-up, cut from ice: dropdowns, the date picker, the
+        // building block gallery, the picture picker and checkbox presses all render from
+        // `IglooForms.tsx` over the same sessions the packaged pop-ups use.
+        popups={PERMIT_POPUPS}
       >
         {/* Everything specimen-shaped, in one owner: the chip chrome, the authoring dialog,
             the click popover and the notice strip, plus the actions the two menus call. It

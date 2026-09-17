@@ -1,4 +1,7 @@
 import { resolve } from 'node:path';
+import { readOoxmlPackage } from '../packages/core/src/store/package/ooxml-package';
+import { serializeOoxmlPart } from '../packages/core/src/store/package/ooxml-serialize';
+import type { Page } from '@playwright/test';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { expect, test } from '@playwright/test';
 
@@ -267,6 +270,28 @@ test('the normal demo keeps the calendar actions visible on a laptop viewport', 
   await page.screenshot({ path: test.info().outputPath('calendar-normal-demo.png') });
 });
 
+async function pictureFacts(page: Page) {
+  const saved = await page.evaluate(async () =>
+    Array.from((await window.__DOCX_EDITOR_E2E__!.saveBytes())!)
+  );
+  const opened = readOoxmlPackage(new Uint8Array(saved));
+  if (!opened.ok) throw new Error(opened.reason);
+  const xml = serializeOoxmlPart(opened.package.parts.get(opened.package.mainDocumentPart)!);
+  return {
+    extent: xml.match(/<wp:extent[^>]*>/)?.[0],
+    docPr: xml.match(/<wp:docPr[^>]*>/)?.[0],
+    transform: xml.match(/<a:xfrm[^>]*>.*?<\/a:xfrm>/)?.[0],
+    pixels: await page
+      .locator('.docx-page-content img')
+      .first()
+      .evaluate(async (image) =>
+        Array.from(
+          new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())
+        )
+      ),
+  };
+}
+
 test('gallery: the engine menu lists the glossary blocks and a pick fills the control', async ({
   page,
 }) => {
@@ -280,6 +305,15 @@ test('gallery: the engine menu lists the glossary blocks and a pick fills the co
   await expect(paragraphs).toHaveCount(count);
   await expect(page.locator('.docx-pages')).toContainText('Approved by:');
   await expect(page.locator('.docx-pages')).not.toContainText('Choose a building block.');
+  await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.undoBenchmarkEdit());
+  await expect(page.locator('.docx-pages')).toContainText('Choose a building block.');
+  for (const name of ['Address block', 'Sign-off line']) {
+    await page.locator('[data-docx-cc-widget=buildingBlockGallery]').click();
+    await page.getByRole('option', { name, exact: true }).click();
+    await expect(page.locator('.docx-pages')).toContainText(
+      name === 'Address block' ? '123 Example Street' : 'Approved by:'
+    );
+  }
   expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.saveAndReopen())).toEqual({
     ok: true,
   });
@@ -291,6 +325,7 @@ test('picture: the widget opens a file picker and the chosen image replaces the 
 }) => {
   const image = page.locator('.docx-page-content img').first();
   const before = await image.getAttribute('src');
+  const initial = await pictureFacts(page);
   // The engine's picker is a real file input, so the browser's chooser is the dialog.
   const chooserOpened = page.waitForEvent('filechooser');
   await page.locator('[data-docx-cc-widget="picture"]').click();
@@ -305,7 +340,93 @@ test('picture: the widget opens a file picker and the chosen image replaces the 
   await expect
     .poll(async () => page.locator('.docx-page-content img').first().getAttribute('src'))
     .not.toBe(before);
+  const replaced = await pictureFacts(page);
+  expect(replaced.pixels).not.toEqual(initial.pixels);
+  expect(replaced.extent).toBe(initial.extent);
+  expect(replaced.docPr).toBe(initial.docPr);
+  expect(replaced.transform).toBe(initial.transform);
+  await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.undoBenchmarkEdit());
+  await expect.poll(async () => (await pictureFacts(page)).pixels).toEqual(initial.pixels);
+  const secondChooser = page.waitForEvent('filechooser');
+  await page.locator('[data-docx-cc-widget=picture]').click();
+  await (await secondChooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: png });
+  await expect.poll(async () => (await pictureFacts(page)).pixels).toEqual(replaced.pixels);
   expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.saveAndReopen())).toEqual({
     ok: true,
   });
+  await expect.poll(async () => (await pictureFacts(page)).pixels).toEqual(replaced.pixels);
 });
+
+test('an invalid engine picture pick shows a retry input and Cancel', async ({ page }) => {
+  const initial = await pictureFacts(page);
+  const opened = page.waitForEvent('filechooser');
+  await page.locator('[data-docx-cc-widget=picture]').click();
+  await (
+    await opened
+  ).setFiles({ name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('invalid image') });
+  const dialog = page.getByRole('dialog', { name: 'Picture' });
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(dialog.locator('input[type=file]')).toBeVisible();
+  await dialog.locator('input[type=file]').focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.locator('input[type=file]')).toBeFocused();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await pictureFacts(page)).toEqual(initial);
+});
+
+for (const adapter of ['react', 'vue'] as const) {
+  test(`${adapter} host gallery and picture parts complete real picks`, async ({ page }) => {
+    if (adapter === 'vue') {
+      await page.goto('http://localhost:5274/?fixture=form-controls-catalog.docx&e2e=1');
+      await page.locator('.docx-pages').waitFor();
+    }
+    await page.evaluate(
+      async ({ adapter, base }) => {
+        const { mountWidget, mountCatalog } = await import(
+          `${base}/e2e/content-control-widget-${adapter}-harness.ts`
+        );
+        const editor =
+          adapter === 'vue'
+            ? mountCatalog(
+                new Uint8Array(await (await fetch('/form-controls-catalog.docx')).arrayBuffer())
+              )
+            : (window.__DOCX_EDITOR_E2E__!.getEditor() as DocxEditorInstance);
+        const scroller = document.querySelector('.docx-editor__scroll-container')!;
+        editor.setContentControlWidgetChrome({
+          kinds: ['picture', 'buildingBlockGallery'],
+          onRequest: (session) => {
+            const mount = document.createElement('div');
+            scroller.append(mount);
+            mountWidget(mount, session);
+          },
+        });
+      },
+      { adapter, base: `/@fs/${resolve(import.meta.dirname, '..')}` }
+    );
+    await page.locator('[data-docx-cc-widget=buildingBlockGallery]').click();
+    const popup = page.locator('[data-docx-popup=contentControlWidget]');
+    await expect(popup.getByRole('option')).toHaveText(['Address block', 'Sign-off line']);
+    await popup.getByRole('option', { name: 'Address block' }).click();
+    await expect(page.locator('.docx-pages')).toContainText('123 Example Street');
+    const before = await page.locator('.docx-page-content img').first().getAttribute('src');
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('[data-docx-cc-widget=picture]').click();
+    await (
+      await chooser
+    ).setFiles({
+      name: 'dot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+        'base64'
+      ),
+    });
+    await expect(popup).toHaveCount(0);
+    await expect
+      .poll(() => page.locator('.docx-page-content img').first().getAttribute('src'))
+      .not.toBe(before);
+  });
+}

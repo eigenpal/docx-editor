@@ -279,6 +279,13 @@ Dropdowns support locale-aware typeahead, arrows, and Home/End. The selected
 entry is marked. Combo boxes also accept free text and use ArrowDown to enter
 the suggestion list. Moving focus does not change the document.
 
+A control that Word saved with empty content opens showing its placeholder, the
+way Word shows the glossary block its `w:placeholder` names, or the type's
+default prompt when the document carries no glossary. The caret can enter the
+prompt, a press selects it whole, and the first keystroke replaces it. The saved
+file then carries the prompt under `w:showingPlcHdr`, which is what Word writes
+once it has rendered the control.
+
 A building block gallery control lists the blocks the document's glossary part
 stores for the control's gallery and category, sorted by category and name. A
 pick replaces the control's content with the block's body and gives its
@@ -286,7 +293,7 @@ paragraphs fresh identities, as one undo step. A document with no matching block
 shows a note instead of an empty list.
 
 A picture control's button opens a file dialog. The chosen image replaces the
-control's picture and keeps the drawing's size. The picture is selected first,
+control's picture and keeps the drawing's size and metadata. The picture is selected first,
 so image commands address it. The engine accepts PNG, JPEG, GIF, BMP, and WebP
 files and refuses anything else with a reason in `lastRejection`.
 
@@ -314,7 +321,11 @@ writes. See [Document protection](/docs/2.x/guides/document-protection).
 - A building block gallery lists only blocks stored in the document's own
   glossary part. Blocks from Word's Building Blocks template are not available.
   A one-paragraph block fills an inline control; a block with several paragraphs
-  or a table needs a block-level control.
+  or a table needs a block-level control. Picks support self-contained text,
+  direct formatting, math, tables, and unbound nested controls. Blocks that reference
+  styles, numbering, media, relationships, bookmarks, notes, fields, or revisions
+  return `unsupported`; their glossary resources are not imported. This also applies
+  when a style with the same name already exists in the main document.
 - Replacing a picture control's image is refused in suggesting mode, like every
   image replacement.
 - Control creation, filling, and removal do not create revisions in suggesting
@@ -336,6 +347,16 @@ and a `replaceImage(bytes)` method; without that entry the engine opens its own
 file dialog. See
 [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
 for renderer ownership, sessions, and parts.
+
+Picture picks reject files larger than 32 MiB before reading them. A failed pick
+keeps a file input and an error message available for retry. Canceling the session,
+closing the editor, or entering suggesting mode during decoding prevents the write.
+Successful replacement clears placeholder state and removes a temporary control
+in the same undo step as the image change.
+
+Replacement preserves the drawing's width, height, crop, name, and alt text. A source
+image with a different aspect ratio can stretch within that frame. Resize or crop
+the result as needed, and review the alt text when the new image depicts different content.
 
 ## Next steps
 

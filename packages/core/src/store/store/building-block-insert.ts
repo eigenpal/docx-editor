@@ -8,18 +8,15 @@
 import { createNodeIdAllocator, replaceChildren, replaceNode } from '../package/ooxml-edit.ts';
 import type { EditOptions } from '../package/ooxml-edit.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { usedParaIds } from '../package/para-id.ts';
+import { buildingBlockBodyRefusal } from './building-block-safety.ts';
+import { sanitizeFragmentBlocks } from './clipboard-fragment-sanitize.ts';
+import { mintBuildingBlockIdentities } from './building-block-identities.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isInlineControl } from './content-control-checkbox.ts';
 import { withParagraphDiff } from './content-control-value-content.ts';
 import { replaceControlContent } from './tree-op-apply.ts';
-import {
-  MAX_FRAGMENT_DEPTH,
-  MAX_FRAGMENT_NODES,
-  withFreshParaIds,
-  withRequiredNamespaceBindings,
-} from './tree-op-fragment.ts';
+import { withRequiredNamespaceBindings } from './tree-op-fragment.ts';
 import {
   cloneWithNewIds,
   contentControlAncestorsOf,
@@ -43,7 +40,10 @@ export interface InsertBuildingBlockOp {
   readonly controlId: string;
   /** `w:docPartPr/w:name` of the picked block, for the journal and the host. */
   readonly name: string;
-  /** The block's `w:docPartBody` children; cloned with fresh ids at apply. */
+  /**
+   * Self-contained `w:docPartBody` children, cloned with fresh ids at apply.
+   * Resource, style, field, bookmark, note and revision references return `unsupported`.
+   */
   readonly blocks: readonly OoxmlNode[];
 }
 
@@ -58,30 +58,6 @@ function isWml(node: OoxmlNode, localName: string): boolean {
     node.namespaceUri === WML_NAMESPACE_URI &&
     node.localName === localName
   );
-}
-
-function shapeOf(
-  node: OoxmlNode,
-  depth: number,
-  budget: { nodes: number }
-): TreeOpRejection | null {
-  if (depth > MAX_FRAGMENT_DEPTH) return 'fragment-too-deep';
-  budget.nodes += 1;
-  if (budget.nodes > MAX_FRAGMENT_NODES) return 'fragment-resource-budget';
-  if (node.kind === 'textValue') {
-    return typeof node.value === 'string' ? null : 'fragment-invalid-block';
-  }
-  if (typeof node.localName !== 'string' || typeof node.namespaceUri !== 'string') {
-    return 'fragment-invalid-block';
-  }
-  if (!Array.isArray(node.children) || !Array.isArray(node.attributes)) {
-    return 'fragment-invalid-block';
-  }
-  for (const child of node.children) {
-    const refused = shapeOf(child, depth + 1, budget);
-    if (refused) return refused;
-  }
-  return null;
 }
 
 /** A row- or cell-level control wraps table structure no block body can stand in for. */
@@ -114,19 +90,23 @@ export function validateInsertBuildingBlock(
   }
   if (effectiveLockOf(part, control).content) return 'locked';
   if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) return 'locked';
-  if (typeof op.name !== 'string' || op.name.length === 0 || !isValidXmlText(op.name)) {
+  if (
+    typeof op.name !== 'string' ||
+    op.name.length === 0 ||
+    op.name.length > 512 ||
+    !isValidXmlText(op.name)
+  ) {
     return 'invalidArgs';
   }
   if (!Array.isArray(op.blocks) || op.blocks.length === 0) return 'fragment-invalid-block';
   if (op.blocks.length > MAX_BUILDING_BLOCK_BLOCKS) return 'fragment-resource-budget';
-  const budget = { nodes: 0 };
   for (const block of op.blocks) {
-    if (block.kind === 'textValue' || !BODY_BLOCK_KINDS.has(block.kind)) {
+    if (!block || block.kind === 'textValue' || !BODY_BLOCK_KINDS.has(block.kind)) {
       return 'fragment-invalid-block';
     }
-    const refused = shapeOf(block, 1, budget);
-    if (refused) return refused;
   }
+  const refused = buildingBlockBodyRefusal(op.blocks);
+  if (refused) return refused;
   if (wrapsTableStructure(control)) return 'unsupported';
   // An inline control holds runs: only a one-paragraph block has runs to give it. A block
   // body with several paragraphs or a table needs a block-level control, as in Word.
@@ -163,11 +143,14 @@ export function applyInsertBuildingBlock(
   // Fresh ids from the paste family, so a clone can never collide with a node the tree
   // already holds, and fresh `w14:paraId`s, so two picks of one block stay distinct.
   const nextId = createNodeIdAllocator(part, 'paste');
-  const paraIds = new Set(usedParaIds(part.root as OoxmlElement));
-  const counter = { value: 0 };
-  const blocks = op.blocks.map((block, index) =>
-    withFreshParaIds(cloneWithNewIds(block, nextId), paraIds, `${op.controlId}:${index}`, counter)
-  );
+  const identities = mintBuildingBlockIdentities(part);
+  const blocks: OoxmlNode[] = [];
+  for (const block of sanitizeFragmentBlocks(op.blocks)) {
+    const cloned = cloneWithNewIds(block, nextId);
+    const fresh = identities(cloned);
+    if (!fresh) return { ok: false, reason: 'fragment-resource-budget' };
+    blocks.push(fresh);
+  }
   const bound = withRequiredNamespaceBindings(part, blocks);
 
   const inline = isInlineControl(bound, op.controlId);
