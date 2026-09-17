@@ -5,21 +5,16 @@ category: 'Guides'
 seoTitle: 'Content controls (SDTs)'
 ---
 
-Word content controls (`w:sdt`, structured document tags) mark regions you can
-fill from code. Create a template in Word, tag its fillable regions, and use
-`tag`, `title`, or `id` to find each control.
+Word content controls (`w:sdt`, structured document tags) mark regions you can fill from code. Create a template in Word, tag its fillable regions, and use `tag`, `title`, or `id` to find each control.
 
-The editor displays control boundaries and supports the editing operations below.
-It preserves unsupported properties, including `w:dataBinding` and
-`w15:repeatingSection`, when you save.
+The editor displays control boundaries and supports the editing operations below. It preserves unsupported properties, including `w:dataBinding` and `w15:repeatingSection`, when you save.
 
 <Callout>
   Content controls are addressed by `tag`, `title`, or `id`. They are not `{{ mustache }}` template
   variables; the two systems can coexist in one document.
 </Callout>
 
-See the [Word fidelity matrix](/docs/2.x/word-fidelity) for support levels across
-features.
+See the [Word fidelity matrix](/docs/2.x/word-fidelity) for support levels across features.
 
 ## Filling a template from a server
 
@@ -53,25 +48,20 @@ try {
 
 `getByTag(tag)` narrows the collection directly when you know what you are looking for, and `getById(id)` / `getFirstOrNullObject()` address a single control.
 
-Writing a control value preserves its enclosing table cell, row, and formatting after saving and reopening.
-Text, dropdown, combo box, and date values replace the display paragraph's content with one run.
-The editor selects the first paragraph with text, or the first paragraph if none has text, checking cells with text first.
-It keeps that paragraph's properties, bookmarks, and comment anchors and removes sibling paragraphs.
-Checkbox updates change only the state-glyph run.
+Writing a control value preserves its enclosing table cell, row, and formatting after saving and reopening. Text, dropdown, combo box, and date values replace the display paragraph's content with one run. The editor selects the first paragraph with text, or the first paragraph if none has text, checking cells with text first. It keeps that paragraph's properties, bookmarks, and comment anchors and removes sibling paragraphs. Checkbox updates change only the state-glyph run.
 
-The editor rejects a value update if it would remove a sibling table or nested control,
-cross a field boundary, or discard unsupported markup. A failed update leaves the document unchanged.
+The editor rejects a value update if it would remove a sibling table or nested control, cross a field boundary, or discard unsupported markup. A failed update leaves the document unchanged.
 
 ## Values are typed
 
 `setValue` takes a discriminated value rather than a bare string, so a typed control cannot be filled with something it cannot hold:
 
-| Kind       | Shape                           | For                                                    |
-| ---------- | ------------------------------- | ------------------------------------------------------ |
-| `text`     | `{ kind: 'text', text }`        | Rich-text and plain-text controls.                     |
-| `listItem` | `{ kind: 'listItem', value }`   | Dropdowns and combo boxes. Must match a declared item. |
-| `checkbox` | `{ kind: 'checkbox', checked }` | Checkbox controls.                                     |
-| `date`     | `{ kind: 'date', iso }`         | Date pickers. `YYYY-MM-DD` or a full ISO-8601 instant. |
+| Kind | Shape | For |
+| --- | --- | --- |
+| `text` | `{ kind: 'text', text }` | Rich-text and plain-text controls. |
+| `listItem` | `{ kind: 'listItem', value }` | Dropdowns and combo boxes. Must match a declared item. |
+| `checkbox` | `{ kind: 'checkbox', checked }` | Checkbox controls. |
+| `date` | `{ kind: 'date', iso }` | Date pickers. `YYYY-MM-DD` or a full ISO-8601 instant. |
 
 `insertText(text, 'Replace' | 'Start' | 'End')` writes free text where that is what you want, and `delete(keepContent)` either drops a control with its content or unwraps it and keeps the content in place.
 
@@ -160,9 +150,7 @@ A data-bound control rejects a direct write: its content comes from the Custom X
 
 ## Creating a control in the editor
 
-`insertContentControl` authors a new control in the open document, as one undoable step. Select
-text to wrap it in a control, or leave the caret where it is to insert an empty control that
-shows Word's prompt for its type:
+`insertContentControl` authors a new control in the open document, as one undoable step. Select text to wrap it in a control, or leave the caret where it is to insert an empty control that shows Word's prompt for its type:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -219,12 +207,9 @@ function insertField() {
 </Framework>
 </FrameworkTabs>
 
-`tag` is the identity you look the control back up by, and `title` is the label Word shows. An
-empty control holds its prompt until the user types: the first character replaces the whole
-prompt, the way it does in Word.
+`tag` is the identity you look the control back up by, and `title` is the label Word shows. An empty control holds its prompt until the user types: the first character replaces the whole prompt, the way it does in Word.
 
-To address text other than the selection, pass a `target` that names a paragraph by its
-`paraId` and the phrase inside it:
+To address text other than the selection, pass a `target` that names a paragraph by its `paraId` and the phrase inside it:
 
 ```ts
 editor.exec({
@@ -235,111 +220,50 @@ editor.exec({
 });
 ```
 
-You can author `richText`, `plainText`, `dropdown`, `comboBox`, and `date`
-controls. OOXML also spells `dropdown` as `dropDownList`.
+You can author `richText`, `plainText`, `dropdown`, `comboBox`, and `date` controls. OOXML also spells `dropdown` as `dropDownList`.
 
-A new dropdown or combo box has no items. Add its items in Word, or fill a
-control from an existing template.
+A new dropdown or combo box has no items. Add its items in Word, or fill a control from an existing template.
 
-`editor.can()` answers the same refusal `exec` would, so a button can disable itself and show
-the reason.
+`editor.can()` answers the same refusal `exec` would, so a button can disable itself and show the reason.
 
-| Operation    | Refusal condition                                            | Reason                                        |
-| ------------ | ------------------------------------------------------------ | --------------------------------------------- |
-| Fill or edit | The control or an ancestor locks its content                 | `locked`                                      |
-| Remove       | The control or an ancestor locks its wrapper                 | `locked`                                      |
-| Fill         | The control declares `w:dataBinding`                         | `bound`                                       |
-| Fill         | The value does not match the control type                    | `typeMismatch`                                |
-| Create       | The selection crosses paragraphs                             | Inline controls cannot wrap block content     |
-| Create       | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
+| Operation | Refusal condition | Reason |
+| --- | --- | --- |
+| Fill or edit | The control or an ancestor locks its content | `locked` |
+| Remove | The control or an ancestor locks its wrapper | `locked` |
+| Fill | The control declares `w:dataBinding` | `bound` |
+| Fill | The value does not match the control type | `typeMismatch` |
+| Create | The selection crosses paragraphs | Inline controls cannot wrap block content |
+| Create | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
 
 ## Checkbox, dropdown, date, gallery, and picture interactions
 
-Each dropdown, combo box, date, building block gallery, and picture control shows
-a button past its right edge, the way Word attaches its tab. The button appears
-while the pointer or the caret is on the control, while its menu is open, and
-under show-all, and it stays reachable by keyboard the whole time. It scales
-with the page zoom. A press on the prompt of a dropdown, combo box, date, or
-gallery control selects the prompt and opens its menu in one step. A checkbox control's button covers its glyph. Select the
-button to toggle a checkbox, open a dropdown menu, open a date picker, list the
-document's building blocks, or choose an image file. The menu opens under the control's left
-edge, flips above when space is limited, and stays inside the visible page sheet. A menu closes when you press outside it, press the
-control button again, or press Escape. Each edit supports undo and requires no
-application event handler. Checkbox toggles use MS Gothic when the document omits
-the state font.
+Each dropdown, combo box, date, building block gallery, and picture control shows a button past its right edge, the way Word attaches its tab. The button appears while the pointer or the caret is on the control, while its menu is open, and under show-all, and it stays reachable by keyboard the whole time. It scales with the page zoom. A press on the prompt of a dropdown, combo box, date, or gallery control selects the prompt and opens its menu in one step. A checkbox control's button covers its glyph. Select the button to toggle a checkbox, open a dropdown menu, open a date picker, list the document's building blocks, or choose an image file. The menu opens under the control's left edge, flips above when space is limited, and stays inside the visible page sheet. A menu closes when you press outside it, press the control button again, or press Escape. Each edit supports undo and requires no application event handler. Checkbox toggles use MS Gothic when the document omits the state font.
 
-The date picker shows a month grid with a **Today** button. Month and weekday names
-and the first day of the week follow the editor's `locale`, not the browser. Arrow
-keys move between days and across month edges. Home/End move to the week's edges.
-PageUp/PageDown move one month; Shift with either key moves one year. Month and
-year controls let you jump directly. Enter a regional numeric date or an ISO date
-in the text input, then press Enter or **Apply**. Invalid dates keep the popup open.
-The input requires a four-digit year. A day press writes the date immediately.
-Tab stays inside the popup; Escape returns focus to its opener. On short screens,
-the popup scrolls so all controls remain reachable.
+The date picker shows a month grid with a **Today** button. Month and weekday names and the first day of the week follow the editor's `locale`, not the browser. Arrow keys move between days and across month edges. Home/End move to the week's edges. PageUp/PageDown move one month; Shift with either key moves one year. Month and year controls let you jump directly. Enter a regional numeric date or an ISO date in the text input, then press Enter or **Apply**. Invalid dates keep the popup open. The input requires a four-digit year. A day press writes the date immediately. Tab stays inside the popup; Escape returns focus to its opener. On short screens, the popup scrolls so all controls remain reachable.
 
-Dropdowns support locale-aware typeahead, arrows, and Home/End. The selected
-entry is marked. Combo boxes also accept free text and use ArrowDown to enter
-the suggestion list. Moving focus does not change the document.
+Dropdowns support locale-aware typeahead, arrows, and Home/End. The selected entry is marked. Combo boxes also accept free text and use ArrowDown to enter the suggestion list. Moving focus does not change the document.
 
-A control that Word saved with empty content opens showing its placeholder, the
-way Word shows the glossary block its `w:placeholder` names, or the type's
-default prompt when the document carries no glossary. The caret can enter the
-prompt, a press selects it whole, and the first keystroke replaces it. Typing at
-either edge of the prompt replaces it too, and the caret lands after the text.
-Typing at the end of a control's content stays inside the control, as in Word;
-ArrowRight leaves it. Inside a control, text typed at the end of a hyperlink
-leaves the link but stays in the control.
-Deleting everything a control holds brings its prompt back, so the control never
-becomes an invisible gap; Backspace and Delete at the edge of a text, date, or
-list control take one character, and only a content-locked control, a checkbox,
-or a picture goes as one unit. The saved file carries a shown prompt under
-`w:showingPlcHdr`, which is what Word writes once it has rendered the control.
+A control that Word saved with empty content opens showing its placeholder, the way Word shows the glossary block its `w:placeholder` names, or the type's default prompt when the document carries no glossary. The caret can enter the prompt, a press selects it whole, and the first keystroke replaces it. Typing at either edge of the prompt replaces it too, and the caret lands after the text. Typing at the end of a control's content stays inside the control, as in Word; ArrowRight leaves it. Inside a control, text typed at the end of a hyperlink leaves the link but stays in the control. Deleting everything a control holds brings its prompt back, so the control never becomes an invisible gap; Backspace and Delete at the edge of a text, date, or list control take one character, and only a content-locked control, a checkbox, or a picture goes as one unit. The saved file carries a shown prompt under `w:showingPlcHdr`, which is what Word writes once it has rendered the control.
 
-A building block gallery control lists the blocks the document's glossary part
-stores for the control's gallery and category, sorted by category and name. A
-pick replaces the control's content with the block's body and gives its
-paragraphs fresh identities, as one undo step. A document with no matching block
-shows a note instead of an empty list.
+A building block gallery control lists the blocks the document's glossary part stores for the control's gallery and category, sorted by category and name. A pick replaces the control's content with the block's body and gives its paragraphs fresh identities, as one undo step. A document with no matching block shows a note instead of an empty list.
 
-A picture control's button opens a file dialog. The chosen image replaces the
-control's picture and keeps the drawing's size and metadata. The picture is selected first,
-so image commands address it. The engine accepts PNG, JPEG, GIF, BMP, and WebP
-files and refuses anything else with a reason in `lastRejection`.
+A picture control's button opens a file dialog. The chosen image replaces the control's picture and keeps the drawing's size and metadata. The picture is selected first, so image commands address it. The engine accepts PNG, JPEG, GIF, BMP, and WebP files and refuses anything else with a reason in `lastRejection`.
 
-The engine paints these menus with the `docx-content-control-menu`,
-`docx-content-control-menu-item`, and `docx-content-control-calendar-*` classes,
-and the control buttons with `docx-content-control-widget`. Style them with these
-classes and the `--doc-*` tokens. For a different UI, see
-[Customize control popups](#customize-control-popups).
+The engine paints these menus with the `docx-content-control-menu`, `docx-content-control-menu-item`, and `docx-content-control-calendar-*` classes, and the control buttons with `docx-content-control-widget`. Style them with these classes and the `--doc-*` tokens. For a different UI, see [Customize control popups](#customize-control-popups).
 
-These interactions apply to content controls. For legacy Word form fields, see
-[Legacy text form fields](/docs/2.x/guides/fields#legacy-text-form-fields).
+These interactions apply to content controls. For legacy Word form fields, see [Legacy text form fields](/docs/2.x/guides/fields#legacy-text-form-fields).
 
 ## Operational limits
 
-Forms protection permits edits inside unlocked controls. Control locks and
-bindings still apply. Read-only and comments-only protection refuse control
-writes. See [Document protection](/docs/2.x/guides/document-protection).
+Forms protection permits edits inside unlocked controls. Control locks and bindings still apply. Read-only and comments-only protection refuse control writes. See [Document protection](/docs/2.x/guides/document-protection).
 
-- The editor does not support a control around a whole table cell or row.
-  Controls inside a cell work.
+- The editor does not support a control around a whole table cell or row. Controls inside a cell work.
 - The editor does not surface a control inside a hyperlink.
 - `w:dataBinding` round-trips without bound-value resolution.
-- Repeating-section markup round-trips without item add, item remove, or
-  section configuration edits.
-- A building block gallery lists only blocks stored in the document's own
-  glossary part. Blocks from Word's Building Blocks template are not available.
-  A one-paragraph block fills an inline control; a block with several paragraphs
-  or a table needs a block-level control. Picks support self-contained text,
-  direct formatting, math, tables, and unbound nested controls. Blocks that reference
-  styles, numbering, media, relationships, bookmarks, notes, fields, or revisions
-  return `unsupported`; their glossary resources are not imported. This also applies
-  when a style with the same name already exists in the main document.
-- Replacing a picture control's image is refused in suggesting mode, like every
-  image replacement.
-- Control creation, filling, and removal do not create revisions in suggesting
-  mode.
+- Repeating-section markup round-trips without item add, item remove, or section configuration edits.
+- A building block gallery lists only blocks stored in the document's own glossary part. Blocks from Word's Building Blocks template are not available. A one-paragraph block fills an inline control; a block with several paragraphs or a table needs a block-level control. Picks support self-contained text, direct formatting, math, tables, and unbound nested controls. Blocks that reference styles, numbering, media, relationships, bookmarks, notes, fields, or revisions return `unsupported`; their glossary resources are not imported. This also applies when a style with the same name already exists in the main document.
+- Replacing a picture control's image is refused in suggesting mode, like every image replacement.
+- Control creation, filling, and removal do not create revisions in suggesting mode.
 
 ## Customize control popups
 
@@ -351,23 +275,13 @@ Use `popups.contentControl` for the inspector. To customize value entry, choose:
 | `contentControlCheckbox` | Checkbox                                              |
 | `contentControlPicture`  | Picture                                               |
 
-Omit an entry to keep the engine's default behavior. In React and Vue,
-`DocxEditorContentControlWidget` provides composable parts and
-`useContentControlWidget()` exposes their draft state and actions. The root
-handles placement, keyboard navigation, dismissal, and focus return.
+Omit an entry to keep the engine's default behavior. In React and Vue, `DocxEditorContentControlWidget` provides composable parts and `useContentControlWidget()` exposes their draft state and actions. The root handles placement, keyboard navigation, dismissal, and focus return.
 
-See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
-for React and Vue examples, custom actions, and styling hooks.
+See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up) for React and Vue examples, custom actions, and styling hooks.
 
-Picture picks reject files larger than 32 MiB before reading them. A failed pick
-keeps a file input and an error message available for retry. Canceling the session,
-closing the editor, or entering suggesting mode during decoding prevents the write.
-Successful replacement clears placeholder state and removes a temporary control
-in the same undo step as the image change.
+Picture picks reject files larger than 32 MiB before reading them. A failed pick keeps a file input and an error message available for retry. Canceling the session, closing the editor, or entering suggesting mode during decoding prevents the write. Successful replacement clears placeholder state and removes a temporary control in the same undo step as the image change.
 
-Replacement preserves the drawing's width, height, crop, name, and alt text. A source
-image with a different aspect ratio can stretch within that frame. Resize or crop
-the result as needed, and review the alt text when the new image depicts different content.
+Replacement preserves the drawing's width, height, crop, name, and alt text. A source image with a different aspect ratio can stretch within that frame. Resize or crop the result as needed, and review the alt text when the new image depicts different content.
 
 ## Next steps
 

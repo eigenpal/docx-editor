@@ -1,8 +1,6 @@
 # Server agent review
 
-Run a Node.js worker that joins a Hocuspocus room as **Review agent** and proposes
-Word tracked changes. Open the room in two browsers, then accept or reject
-suggestions from either browser.
+Run a Node.js worker that joins a Hocuspocus room as **Review agent** and proposes Word tracked changes. Open the room in two browsers, then accept or reject suggestions from either browser.
 
 The browser renders the editor and requests jobs. All model calls and proposal execution happen on the worker. The job continues if its initiating browser closes.
 
@@ -46,9 +44,7 @@ Job state and room files live in ignored `.data/`. Override the directory with `
 
 ## Copyable server integration
 
-Join an existing room, generate one replacement, and commit it as a tracked change.
-Provide `roomId`, `instruction`, and your `generateReplacement` function. The complete
-example adds snapshot validation, cancellation, bounded retries, and tool-call deduplication.
+Join an existing room, generate one replacement, and commit it as a tracked change. Provide `roomId`, `instruction`, and your `generateReplacement` function. The complete example adds snapshot validation, cancellation, bounded retries, and tool-call deduplication.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -100,23 +96,15 @@ try {
 }
 ```
 
-For insertions use `range.insertText(text, 'Before' | 'After')`. For deletions use `range.delete()`.
-These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing.
-The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported,
-as are structural or formatting mutations while tracking. Other peers keep their own editing mode.
-The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
+For insertions use `range.insertText(text, 'Before' | 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported, as are structural or formatting mutations while tracking. Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
 
 ## Office.js developer patterns
 
-Follow the [Office.js guide](../../packages/editor-api/OFFICE_JS_GUIDE.md) for explicit property loads,
-batched reads, proxy lifetimes, error handling, and the supported tracking subset.
+Follow the [Office.js guide](../../packages/editor-api/OFFICE_JS_GUIDE.md) for explicit property loads, batched reads, proxy lifetimes, error handling, and the supported tracking subset.
 
-Each model tool has a focused schema: insertion requires text and an explicit position, replacement requires text,
-and deletion accepts only its snapshot and quote. Refusals include the public error target and recovery guidance.
-They never tell the model to disable tracking or blindly repeat a refused edit.
+Each model tool has a focused schema: insertion requires text and an explicit position, replacement requires text, and deletion accepts only its snapshot and quote. Refusals include the public error target and recovery guidance. They never tell the model to disable tracking or blindly repeat a refused edit.
 
-The worker batches paragraph reads, serializes tool calls, and commits one suggestion
-at a time. Each commit becomes available for review while the job continues.
+The worker batches paragraph reads, serializes tool calls, and commits one suggestion at a time. Each commit becomes available for review while the job continues.
 
 ## Client integration
 

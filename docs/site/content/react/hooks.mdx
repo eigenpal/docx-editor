@@ -5,18 +5,13 @@ category: 'React'
 order: 33
 ---
 
-Call these hooks inside `<DocxEditor.Root>`.
-You can also call them inside `<DocxEditor>`, which renders that root.
-The hooks read the editor from React context.
+Call these hooks inside `<DocxEditor.Root>`. You can also call them inside `<DocxEditor>`, which renders that root. The hooks read the editor from React context.
 
 The packaged toolbar, menu, and navigation pane use the same hooks.
 
 ## `useEditorCommand`
 
-Pass a chrome slot ID to `useEditorCommand`. The
-[chrome slot reference](/docs/2.x/guides/chrome-slots) lists every available
-ID and its named toolbar part.
-The hook returns the state and action for a control:
+Pass a chrome slot ID to `useEditorCommand`. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every available ID and its named toolbar part. The hook returns the state and action for a control:
 
 ```tsx
 import { useEditorCommand } from '@docx-editor.dev/react';
@@ -45,8 +40,7 @@ function BoldButton() {
 | `isEnabled`      | `boolean`        | Reports whether the command can run.             |
 | `disabledReason` | `string \| null` | Explains why the command cannot run.             |
 
-Use `isEnabled` as the enabled-state source.
-Use `disabledReason` when you explain a disabled control.
+Use `isEnabled` as the enabled-state source. Use `disabledReason` when you explain a disabled control.
 
 Pass an `EditorCommand` when no chrome slot matches your action:
 
@@ -56,9 +50,7 @@ const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' })
 
 ## `useEditorState`
 
-Use `useEditorState` to subscribe to part of the editor snapshot.
-The hook runs the selector for each state update.
-It renders your component only when the selected value changes:
+Use `useEditorState` to subscribe to part of the editor snapshot. The hook runs the selector for each state update. It renders your component only when the selected value changes:
 
 ```tsx
 import { useEditorState } from '@docx-editor.dev/react';
@@ -87,8 +79,7 @@ const formatting = useEditorState(
 );
 ```
 
-Select only the state that your component needs.
-A page indicator does not need to render after a bold-state change.
+Select only the state that your component needs. A page indicator does not need to render after a bold-state change.
 
 Useful fields include:
 
@@ -108,11 +99,7 @@ Useful fields include:
 
 ## `useDocxEditor`
 
-`useDocxEditor` returns the editor instance.
-It returns `null` before the `DocxEditor.Root` mount effect creates the
-instance.
-It also returns `null` outside a `DocxEditor.Root`.
-Use the instance for actions and one-time reads:
+`useDocxEditor` returns the editor instance. It returns `null` before the `DocxEditor.Root` mount effect creates the instance. It also returns `null` outside a `DocxEditor.Root`. Use the instance for actions and one-time reads:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
@@ -133,8 +120,7 @@ function SaveButton() {
 }
 ```
 
-Calling `editor.snapshot()` during render does not subscribe your component.
-Use `useEditorState` for reactive state.
+Calling `editor.snapshot()` during render does not subscribe your component. Use `useEditorState` for reactive state.
 
 ## `useEditorEvent`
 
@@ -149,8 +135,7 @@ useEditorEvent('change', (change) => void autosave(change.revision));
 
 ## `useFontFamily`
 
-`useFontFamily` provides font-picker state.
-It returns the current value, options, setter, and enabled state:
+`useFontFamily` provides font-picker state. It returns the current value, options, setter, and enabled state:
 
 ```tsx
 import { useFontFamily } from '@docx-editor.dev/react';
@@ -178,8 +163,7 @@ function FontPicker() {
 
 ## `usePageSetup`
 
-Use `usePageSetup` to read and change the current section.
-The hook supports margins, orientation, and paper size:
+Use `usePageSetup` to read and change the current section. The hook supports margins, orientation, and paper size:
 
 ```tsx
 import { usePageSetup } from '@docx-editor.dev/react';
@@ -201,9 +185,7 @@ function OrientationToggle() {
 
 ## `useParagraphFormat`
 
-Use `useParagraphFormat` to read and change the paragraph at the selection.
-`apply` sends the supplied fields as one command, so one call creates one undo
-step:
+Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step:
 
 ```tsx
 import { useParagraphFormat } from '@docx-editor.dev/react';
@@ -223,20 +205,13 @@ function DoubleSpaceButton() {
 }
 ```
 
-A field is `null` when selected paragraphs have different values. A checkbox
-shows an indeterminate state. A number field has no indeterminate state. It shows
-a default until you change it. Omitted fields are not written, so existing values
-stay. Spacing, line-spacing, and indent fields also accept `null`. That value
-clears the local setting so the style supplies it. Writing `0` sets an explicit
-value instead.
+A field is `null` when selected paragraphs have different values. A checkbox shows an indeterminate state. A number field has no indeterminate state. It shows a default until you change it. Omitted fields are not written, so existing values stay. Spacing, line-spacing, and indent fields also accept `null`. That value clears the local setting so the style supplies it. Writing `0` sets an explicit value instead.
 
-For the whole form, `DocxEditor.ParagraphDialog` is the Paragraph dialog
-over this hook.
+For the whole form, `DocxEditor.ParagraphDialog` is the Paragraph dialog over this hook.
 
 ## `useDocumentOutline`
 
-`useDocumentOutline` returns headings in document order.
-It also provides an action that moves to a heading:
+`useDocumentOutline` returns headings in document order. It also provides an action that moves to a heading:
 
 ```tsx
 import { useDocumentOutline } from '@docx-editor.dev/react';
@@ -262,11 +237,7 @@ function Outline() {
 }
 ```
 
-Each item has the shape `{ heading, depth }`.
-`heading` has the shape `{ text, level, blockId }`.
-`depth` measures indentation from the shallowest heading in the document.
-This calculation aligns a top-level Heading 2 with the base.
-Use `headings` when you need the flat list without calculated indentation.
+Each item has the shape `{ heading, depth }`. `heading` has the shape `{ text, level, blockId }`. `depth` measures indentation from the shallowest heading in the document. This calculation aligns a top-level Heading 2 with the base. Use `headings` when you need the flat list without calculated indentation.
 
 ## `useDocumentSearch`
 
@@ -301,14 +272,9 @@ The result also includes these pairs:
 
 ## useHistoryGroup
 
-Use `useHistoryGroup` when your app applies formatting continuously, such as a
-font-size slider or color picker. The document updates on every input event,
-and one undo action restores the state before the gesture. A redo action
-restores the final value.
+Use `useHistoryGroup` when your app applies formatting continuously, such as a font-size slider or color picker. The document updates on every input event, and one undo action restores the state before the gesture. A redo action restores the final value.
 
-Render the control inside `DocxEditor.Root`.
-You can use it in your own toolbar or a
-[toolbar slot override](/docs/2.x/react/composition). The hook returns two members:
+Render the control inside `DocxEditor.Root`. You can use it in your own toolbar or a [toolbar slot override](/docs/2.x/react/composition). The hook returns two members:
 
 | Member      | How you use it                                              |
 | ----------- | ----------------------------------------------------------- |
@@ -317,10 +283,7 @@ You can use it in your own toolbar or a
 
 ### Add a live font-size slider
 
-Use `useEditorValueCommand` to read the selected value and apply changes. Its
-`isEnabled` and `disabledReason` come from the editor. `value` follows the
-selection and updates after undo and redo. Bind your control to `value` to keep
-it synchronized with the document.
+Use `useEditorValueCommand` to read the selected value and apply changes. Its `isEnabled` and `disabledReason` come from the editor. `value` follows the selection and updates after undo and redo. Bind your control to `value` to keep it synchronized with the document.
 
 Font size uses half-points: `24` means 12 pt. `null` means mixed or unavailable.
 
@@ -365,27 +328,22 @@ To check the behavior:
 
 Holding an arrow key also forms one gesture. Releasing the key ends it.
 
-The binding handles pointer release outside the control, cancellation, lost
-pointer capture, and blur. It retains the gesture across rerenders and disposes it on unmount or
-editor replacement. Your value handler does not need to start or end a group.
+The binding handles pointer release outside the control, cancellation, lost pointer capture, and blur. It retains the gesture across rerenders and disposes it on unmount or editor replacement. Your value handler does not need to start or end a group.
 
 ### Choose the gesture policy
 
-| `kind`         | Use it for                                       | What ends the gesture                                                 |
-| -------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
-| `range`        | A native range input or custom slider            | Pointer release or cancellation, lost pointer capture, keyup, or blur |
-| `repeat`       | A button that applies repeated values while held | Pointer release or cancellation, lost pointer capture, keyup, or blur |
-| `keyboard`     | A control driven by repeated keydown events      | Keyup, Escape, or blur                                                |
-| `native-color` | An HTML color input                              | Native `change`, next activation, Escape, or blur                     |
+| `kind` | Use it for | What ends the gesture |
+| --- | --- | --- |
+| `range` | A native range input or custom slider | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `repeat` | A button that applies repeated values while held | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `keyboard` | A control driven by repeated keydown events | Keyup, Escape, or blur |
+| `native-color` | An HTML color input | Native `change`, next activation, Escape, or blur |
 
-For a repeat button, your app owns the repeat timer. Stop that timer on release
-or cancellation. The binding groups your writes; it does not generate them.
+For a repeat button, your app owns the repeat timer. Stop that timer on release or cancellation. The binding groups your writes; it does not generate them.
 
 ### Add a native color input
 
-Change the slot to `text.color` and the policy to `native-color`. Color commands
-accept six hexadecimal digits without `#`. React `onChange` applies each value. The binding listens for the native `change`
-event to end the gesture.
+Change the slot to `text.color` and the policy to `native-color`. Color commands accept six hexadecimal digits without `#`. React `onChange` applies each value. The binding listens for the native `change` event to end the gesture.
 
 ```tsx
 function LiveColor() {
@@ -413,119 +371,87 @@ function LiveColor() {
 }
 ```
 
-Native color controls differ between browsers. Native `change` means a committed
-value; it does not guarantee that a popup closed. If the browser sends no
-`change` event, the next activation, Escape, blur, or unmount ends the gesture.
-If you need consistent drag boundaries across browsers, use a custom slider.
+Native color controls differ between browsers. Native `change` means a committed value; it does not guarantee that a popup closed. If the browser sends no `change` event, the next activation, Escape, blur, or unmount ends the gesture. If you need consistent drag boundaries across browsers, use a custom slider.
 
 ### Read command results
 
-`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for
-application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you
-whether the document changed. At a collapsed caret, a formatting command can
-set the next typing format without changing the document or creating undo history.
+`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you whether the document changed. At a collapsed caret, a formatting command can set the next typing format without changing the document or creating undo history.
 
-For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or
-`none`. A split means another history boundary interrupted the gesture; it does
-not mean the formatting failed. See the
-[boundary table and supported commands](/docs/2.x/core#group-one-gesture-into-one-undo-step).
+For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or `none`. A split means another history boundary interrupted the gesture; it does not mean the formatting failed. See the [boundary table and supported commands](/docs/2.x/core#group-one-gesture-into-one-undo-step).
 
-`useEditorValueCommand` also accepts `font.family`, `text.highlight`,
-`styles.style`, and `list.lineSpacing`. Image value slots are available, but
-image commands reject the `historyGroup` option.
+`useEditorValueCommand` also accepts `font.family`, `text.highlight`, `styles.style`, and `list.lineSpacing`. Image value slots are available, but image commands reject the `historyGroup` option.
 
-`useEditorCommand().execute(options)` accepts the same options and returns a
-boolean. Its event-handler form, `onClick={command.execute}`, still works.
-If you need the full result for a raw command, get the editor with
-`useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
+`useEditorCommand().execute(options)` accepts the same options and returns a boolean. Its event-handler form, `onClick={command.execute}`, still works. If you need the full result for a raw command, get the editor with `useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
 
-For optional development feedback, subscribe with
-`useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted
-groups and possible cases where each update starts a separate group. Diagnostics
-do not change history behavior or write to the console.
+For optional development feedback, subscribe with `useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted groups and possible cases where each update starts a separate group. Diagnostics do not change history behavior or write to the console.
 
 ## Other hooks
 
-| Hook                              | Return value                                                                                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation.                                                                                 |
-| `useEditorValueCommand(slotId)`   | Reads selected values and runs typed formatting and image commands; `execute(value, options?)` returns `ExecResult`.                                            |
-| `useParagraphIndent()`            | Provides current indents and an `apply` action.                                                                                                                 |
-| `useHyperlinkPopup()`             | Provides state for a custom hyperlink panel.                                                                                                                    |
-| `useContentControl()`             | Provides content-control locks, value writes, and form-fill state.                                                                                              |
-| `useContentControlWidget()`       | Provides the draft value and calendar state of the enclosing value pop-up. See [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up). |
-| `useHeaderFooterState()`          | Returns the active header or footer scope, or `null`.                                                                                                           |
-| `useNoteScopeState()`             | Returns the active footnote or endnote scope.                                                                                                                   |
-| `useContextMenuTarget()`          | Returns the element that received the last context-menu action.                                                                                                 |
-| `useNavigationPane(options?)`     | Provides navigation-pane open state and width.                                                                                                                  |
-| `useTranslation()`                | Returns `{ t }` for the active locale catalog.                                                                                                                  |
-| `useChromeTranslate(overrides?)`  | Returns a catalog resolver that checks an override `Map` first.                                                                                                 |
-| `useFonts(source, ...fragments)`  | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts).                                                                                  |
-| `useNotePropertiesState()`        | Provides note-numbering properties for the current scope.                                                                                                       |
-| `useEditorSnapshot(editor)`       | Returns a revision counter for `useSyncExternalStore`.                                                                                                          |
-| `useNavigationShift()`            | Returns the horizontal offset for an open navigation pane.                                                                                                      |
-| `useReviewGutter()`               | Returns the inline reservations for the active review rail.                                                                                                     |
-| `useTableBorderTargetLabel()`     | Returns the active table-border target label.                                                                                                                   |
-| `useReviewAuthors()`              | Returns tracked-change authors, then comment-only authors. Each item includes its resolved style.                                                               |
-| `useEditorCaret()`                | Returns `{ paragraphId, offset }` for APIs that accept an `at` position.                                                                                        |
-| `useZoom()`                       | Reads and sets zoom from custom chrome.                                                                                                                         |
-| `useToolbarContext()`             | Returns toolbar compound context for custom slot parts.                                                                                                         |
-| `useToolbarLabel()`               | Returns the active toolbar-scope label.                                                                                                                         |
-| `useToolbarLabelFor(slotId)`      | Resolves the label for one slot ID.                                                                                                                             |
-| `useScopeClassName()`             | Returns the scoped chrome class prefix.                                                                                                                         |
-| `useScopedChromeAnchor()`         | Returns anchor metadata for scoped overlay chrome.                                                                                                              |
+| Hook | Return value |
+| --- | --- |
+| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation. |
+| `useEditorValueCommand(slotId)` | Reads selected values and runs typed formatting and image commands; `execute(value, options?)` returns `ExecResult`. |
+| `useParagraphIndent()` | Provides current indents and an `apply` action. |
+| `useHyperlinkPopup()` | Provides state for a custom hyperlink panel. |
+| `useContentControl()` | Provides content-control locks, value writes, and form-fill state. |
+| `useContentControlWidget()` | Provides the draft value and calendar state of the enclosing value pop-up. See [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up). |
+| `useHeaderFooterState()` | Returns the active header or footer scope, or `null`. |
+| `useNoteScopeState()` | Returns the active footnote or endnote scope. |
+| `useContextMenuTarget()` | Returns the element that received the last context-menu action. |
+| `useNavigationPane(options?)` | Provides navigation-pane open state and width. |
+| `useTranslation()` | Returns `{ t }` for the active locale catalog. |
+| `useChromeTranslate(overrides?)` | Returns a catalog resolver that checks an override `Map` first. |
+| `useFonts(source, ...fragments)` | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts). |
+| `useNotePropertiesState()` | Provides note-numbering properties for the current scope. |
+| `useEditorSnapshot(editor)` | Returns a revision counter for `useSyncExternalStore`. |
+| `useNavigationShift()` | Returns the horizontal offset for an open navigation pane. |
+| `useReviewGutter()` | Returns the inline reservations for the active review rail. |
+| `useTableBorderTargetLabel()` | Returns the active table-border target label. |
+| `useReviewAuthors()` | Returns tracked-change authors, then comment-only authors. Each item includes its resolved style. |
+| `useEditorCaret()` | Returns `{ paragraphId, offset }` for APIs that accept an `at` position. |
+| `useZoom()` | Reads and sets zoom from custom chrome. |
+| `useToolbarContext()` | Returns toolbar compound context for custom slot parts. |
+| `useToolbarLabel()` | Returns the active toolbar-scope label. |
+| `useToolbarLabelFor(slotId)` | Resolves the label for one slot ID. |
+| `useScopeClassName()` | Returns the scoped chrome class prefix. |
+| `useScopedChromeAnchor()` | Returns anchor metadata for scoped overlay chrome. |
 
-Use `useContentControlInstance()` outside the owning content-control part.
-Use `useHyperlinkPopupInstance()` outside the owning hyperlink part.
-These hooks provide context-free variants of the corresponding hooks.
+Use `useContentControlInstance()` outside the owning content-control part. Use `useHyperlinkPopupInstance()` outside the owning hyperlink part. These hooks provide context-free variants of the corresponding hooks.
 
-[`@docx-editor.dev/pro/react`](/docs/2.x/pro) provides `useReview`,
-`useReviewOf`, `useReviewItem`, and `useReviewAuthor`.
-[`@docx-editor.dev/pro/vue`](/docs/2.x/pro) provides the Vue equivalents.
+[`@docx-editor.dev/pro/react`](/docs/2.x/pro) provides `useReview`, `useReviewOf`, `useReviewItem`, and `useReviewAuthor`. [`@docx-editor.dev/pro/vue`](/docs/2.x/pro) provides the Vue equivalents.
 
 ## Dialog draft contexts
 
-Call the hook in a child component of the matching dialog. Each returns `values`,
-`setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
+Call the hook in a child component of the matching dialog. Each returns `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
 
-| Hook                       | Draft type                           | Draft keys                                                                                                                                                                                                                                |
-| -------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `usePageSetupDialog()`     | `PageSetupDialogFields`              | `pageWidth`, `pageHeight`, `orientation`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `scope`                                                                                                                               |
-| `useParagraphDialog()`     | `UseParagraphDialogReturn['values']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
-| `useTextFormFieldDialog()` | `TextFormFieldDialogFields`          | `defaultText`, `type`, `maxLength`, `format`, `enabled`                                                                                                                                                                                   |
+| Hook | Draft type | Draft keys |
+| --- | --- | --- |
+| `usePageSetupDialog()` | `PageSetupDialogFields` | `pageWidth`, `pageHeight`, `orientation`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `scope` |
+| `useParagraphDialog()` | `UseParagraphDialogReturn['values']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
+| `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 
-Page dimensions, margins, and paragraph indents use twips: 1,440 per inch.
-Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`,
-and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
+Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 
-Most `Field` names match draft keys. Page Setup uses `pageSize` for the size selector,
-which updates `pageWidth` and `pageHeight`. Paragraph's `clearedAllTabStops` is draft
-state, not a separate `Field`.
+Most `Field` names match draft keys. Page Setup uses `pageSize` for the size selector, which updates `pageWidth` and `pageHeight`. Paragraph's `clearedAllTabStops` is draft state, not a separate `Field`.
 
-See [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input)
-for a complete control and its placement inside the dialog.
+See [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input) for a complete control and its placement inside the dialog.
 
 ## Content-control widget state
 
-Inside `DocxEditorContentControlWidget`, `useContentControlWidget()` exposes the
-same state and actions that its default parts use:
+Inside `DocxEditorContentControlWidget`, `useContentControlWidget()` exposes the same state and actions that its default parts use:
 
-| Members                                         | Purpose                                              |
-| ----------------------------------------------- | ---------------------------------------------------- |
-| `session`, `kind`, `items`, `value`, `setValue` | Current session and ISO or list draft                |
-| `isEnabled`, `refused`, `apply`, `cancel`       | Validated writes and dismissal                       |
-| `calendar`, `focusIso`, `focusDay`              | Month grid and keyboard focus                        |
-| `previousMonth`, `nextMonth`, `showMonth`       | Relative or direct month navigation                  |
-| `selectDay`, `selectToday`                      | Immediate date selection                             |
-| `dateText`, `setDateText`, `applyDateText`      | Regional numeric date entry                          |
-| `listId`, `listNavigation`                      | Combo relationship and shared list keyboard behavior |
-| `accept`, `replaceImage`                        | Picture file types and image replacement             |
+| Members | Purpose |
+| --- | --- |
+| `session`, `kind`, `items`, `value`, `setValue` | Current session and ISO or list draft |
+| `isEnabled`, `refused`, `apply`, `cancel` | Validated writes and dismissal |
+| `calendar`, `focusIso`, `focusDay` | Month grid and keyboard focus |
+| `previousMonth`, `nextMonth`, `showMonth` | Relative or direct month navigation |
+| `selectDay`, `selectToday` | Immediate date selection |
+| `dateText`, `setDateText`, `applyDateText` | Regional numeric date entry |
+| `listId`, `listNavigation` | Combo relationship and shared list keyboard behavior |
+| `accept`, `replaceImage` | Picture file types and image replacement |
 
-`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999.
-For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first.
-Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior.
-For composition and CSS hooks, see
-[Compose the value pop-up](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
+`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999. For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first. Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior. For composition and CSS hooks, see [Compose the value pop-up](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
 
 ## Next steps
 

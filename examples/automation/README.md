@@ -1,8 +1,6 @@
 # Document automation
 
-`@docx-editor.dev/editor-api` drives a document through a batching object model. Nothing here
-needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and
-writes them back.
+`@docx-editor.dev/editor-api` drives a document through a batching object model. Nothing here needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and writes them back.
 
 From a clean clone, install dependencies and build the workspace packages:
 
@@ -12,13 +10,11 @@ bun run build:packages
 bun run --filter './examples/automation' fill
 ```
 
-The `fill` package script runs `fill-template.ts` with the sample input. It writes
-`examples/automation/filled.docx`.
+The `fill` package script runs `fill-template.ts` with the sample input. It writes `examples/automation/filled.docx`.
 
 ## Use the API
 
-The following example shows the server API directly. It is not the complete
-`fill-template.ts` script.
+The following example shows the server API directly. It is not the complete `fill-template.ts` script.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -46,8 +42,7 @@ try {
 }
 ```
 
-The first sync retrieves the collection's items. Only then are the individual paragraphs
-available to ask for their text, so the second sync retrieves those property values.
+The first sync retrieves the collection's items. Only then are the individual paragraphs available to ask for their text, so the second sync retrieves those property values.
 
 Bookmarks are discoverable from the story that owns them, without searching for target text first:
 
@@ -63,29 +58,18 @@ await runtime.run(async (context) => {
 });
 ```
 
-That collection covers the main body story only. Header and footer bodies have separate bookmark
-collections; there is no document-wide aggregation.
+That collection covers the main body story only. Header and footer bodies have separate bookmark collections; there is no document-wide aggregation.
 
 Four rules carry most of the API:
 
-- **Read what you asked for.** A property you did not `load()` throws instead of answering
-  `undefined`, so a typo is a failure at the read and not a wrong document three steps later.
-  Navigation-property `expand` is not supported yet: non-empty values fail with
-  `InvalidArgument`, so load the navigation object or collection explicitly.
-- **`sync()` is the only round trip.** Everything between two syncs is one ordered batch that
-  either applies whole or not at all.
-- **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one
-  past the callback, or past `dispose()`, is an error rather than a stale read. To keep a proxy
-  across syncs deliberately, use `context.trackedObjects`.
-- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is
-  `true` instead of throwing, which is the difference between "no such heading" and a crash.
+- **Read what you asked for.** A property you did not `load()` throws instead of answering `undefined`, so a typo is a failure at the read and not a wrong document three steps later. Navigation-property `expand` is not supported yet: non-empty values fail with `InvalidArgument`, so load the navigation object or collection explicitly.
+- **`sync()` is the only round trip.** Everything between two syncs is one ordered batch that either applies whole or not at all.
+- **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one past the callback, or past `dispose()`, is an error rather than a stale read. To keep a proxy across syncs deliberately, use `context.trackedObjects`.
+- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` instead of throwing, which is the difference between "no such heading" and a crash.
 
 ## In a page, on a document already open
 
-The browser subpath takes an editor that the host created with
-`@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page. It drives that editor in place.
-Edits land in the open document, with the reader's undo stack intact, so there is no `save()`
-here: the host saves the way it already did.
+The browser subpath takes an editor that the host created with `@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page. It drives that editor in place. Edits land in the open document, with the reader's undo stack intact, so there is no `save()` here: the host saves the way it already did.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
@@ -101,33 +85,18 @@ await runtime.run(async (context) => {
 });
 ```
 
-Import it from `/browser` deliberately: reaching a live editor means reaching the painted
-engine, and a server holding bytes should not pay for that.
+Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine, and a server holding bytes should not pay for that.
 
 ## Authorship, and asking what the host can do
 
-`createServer(bytes, { author })` names who comments are written as. It is required to write one
-at all: the file format makes the author mandatory, a server has no signed-in user, and a
-runtime opened without a name refuses the write rather than putting a placeholder into someone
-else's document.
+`createServer(bytes, { author })` names who comments are written as. It is required to write one at all: the file format makes the author mandatory, a server has no signed-in user, and a runtime opened without a name refuses the write rather than putting a placeholder into someone else's document.
 
-Deletion needs no author. `Comment.delete()` removes the root thread and anchors;
-`CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make
-them one atomic edit and one Undo unit in a browser. Browser comment writes require the
-EigenPal Pro License review module and a writable, attached editor. Editor-api cannot create a
-new root comment.
+Deletion needs no author. `Comment.delete()` removes the root thread and anchors; `CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make them one atomic edit and one Undo unit in a browser. Browser comment writes require the EigenPal Pro License review module and a writable, attached editor. Editor-api cannot create a new root comment.
 
-`runtime.capabilities` reports the available host features. `save` is false for a browser runtime.
-`selection`, `scrolling`, and `layout` are false for a server runtime. Branch on these values
-instead of the imported entry. The values do not change during the runtime.
+`runtime.capabilities` reports the available host features. `save` is false for a browser runtime. `selection`, `scrolling`, and `layout` are false for a server runtime. Branch on these values instead of the imported entry. The values do not change during the runtime.
 
 ## What this is, and is not
 
-The Office.js Word-shaped DocxEditor API is compatible with a documented subset of Word's
-JavaScript object model, so a call site written against that vocabulary compiles here. It is
-not Office.js, does not run in an Office add-in host, and depends on no Microsoft package.
-Every type in the surface is authored in this repository.
+The Office.js Word-shaped DocxEditor API is compatible with a documented subset of Word's JavaScript object model, so a call site written against that vocabulary compiles here. It is not Office.js, does not run in an Office add-in host, and depends on no Microsoft package. Every type in the surface is authored in this repository.
 
-The supported subset, and the omissions that matter (tables, images, repeating sections and
-custom XML mapping), are listed in
-[`docs/site/content/editor-api/office-js-api.mdx`](../../docs/site/content/editor-api/office-js-api.mdx).
+The supported subset, and the omissions that matter (tables, images, repeating sections and custom XML mapping), are listed in [`docs/site/content/editor-api/office-js-api.mdx`](../../docs/site/content/editor-api/office-js-api.mdx).

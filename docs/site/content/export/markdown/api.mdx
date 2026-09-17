@@ -20,15 +20,15 @@ See [getting started](/docs/2.x/export/markdown#get-started) for installation in
 
 ## Options
 
-| Option                    | Behavior                                                                                                                                                                               |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `displayMode`             | `'all-markup'` (default) shows pending insertions and deletions. `'proposed'` hides deletions; `'original'` hides insertions. Applies to layout and output without modifying the DOCX. |
-| `images`                  | `false` by default. Use `true` for image links and bytes, or an object with `syntax`, `resolveUrl`, and `maxTotalBytes`.                                                               |
-| `signal`                  | Cancels resource waits and later work at cancellation checks. Cannot interrupt synchronous parsing or layout.                                                                          |
-| `resourceTimeoutMs`       | Positive finite timeout applied separately to resource-wait phases, including font provisioning. Not a deadline for the whole conversion.                                              |
-| `fonts` / `fallbackFonts` | Caller font sources or resolvers. `fonts` precedes bundled substitutes; `fallbackFonts` follows them. Requires immutable DOCX bytes.                                                   |
-| `fontPolicy`              | `'best-effort'` (default) or `'strict'`. Strict mode refuses font origin failures and missing static faces among the candidate families.                                               |
-| `onFontResolution`        | Receives the font report. Callback promises do not delay export.                                                                                                                       |
+| Option | Behavior |
+| --- | --- |
+| `displayMode` | `'all-markup'` (default) shows pending insertions and deletions. `'proposed'` hides deletions; `'original'` hides insertions. Applies to layout and output without modifying the DOCX. |
+| `images` | `false` by default. Use `true` for image links and bytes, or an object with `syntax`, `resolveUrl`, and `maxTotalBytes`. |
+| `signal` | Cancels resource waits and later work at cancellation checks. Cannot interrupt synchronous parsing or layout. |
+| `resourceTimeoutMs` | Positive finite timeout applied separately to resource-wait phases, including font provisioning. Not a deadline for the whole conversion. |
+| `fonts` / `fallbackFonts` | Caller font sources or resolvers. `fonts` precedes bundled substitutes; `fallbackFonts` follows them. Requires immutable DOCX bytes. |
+| `fontPolicy` | `'best-effort'` (default) or `'strict'`. Strict mode refuses font origin failures and missing static faces among the candidate families. |
+| `onFontResolution` | Receives the font report. Callback promises do not delay export. |
 
 `fontPolicy` and `onFontResolution` require byte input with the default document-aware font resolution. Combining either with a live view or custom measurer throws `TypeError`.
 
@@ -36,16 +36,16 @@ For custom measurement, image decoders, and session controls, see the [complete 
 
 ## Response model
 
-| Field             | Meaning                                                                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markdown`        | Continuous document Markdown. Joins split records and excludes repeated headers and footers.                                                      |
-| `pages`           | Physical pages in document order. Each includes `id`, `number`, `markdown`, `headerMarkdown`, `footerMarkdown`, `comments`, and `trackedChanges`. |
-| `pagination`      | Layout source, export scope, Core layout revision, and revision display mode.                                                                     |
-| `media`           | Unique extracted images with bytes and occurrence metadata. Empty when images are disabled.                                                       |
-| `reviewArtifacts` | All normalized comments and tracked changes, including artifacts without a page occurrence.                                                       |
-| `reviewBindings`  | Ranges linking review occurrences to generated Markdown strings.                                                                                  |
-| `fontResolution`  | Resolved and substituted fonts, coverage, and origin failures. `null` when font-origin evidence is unavailable.                                   |
-| `warnings`        | Content omissions, image placement fallback, and font problems.                                                                                   |
+| Field | Meaning |
+| --- | --- |
+| `markdown` | Continuous document Markdown. Joins split records and excludes repeated headers and footers. |
+| `pages` | Physical pages in document order. Each includes `id`, `number`, `markdown`, `headerMarkdown`, `footerMarkdown`, `comments`, and `trackedChanges`. |
+| `pagination` | Layout source, export scope, Core layout revision, and revision display mode. |
+| `media` | Unique extracted images with bytes and occurrence metadata. Empty when images are disabled. |
+| `reviewArtifacts` | All normalized comments and tracked changes, including artifacts without a page occurrence. |
+| `reviewBindings` | Ranges linking review occurrences to generated Markdown strings. |
+| `fontResolution` | Resolved and substituted fonts, coverage, and origin failures. `null` when font-origin evidence is unavailable. |
+| `warnings` | Content omissions, image placement fallback, and font problems. |
 
 The following response excerpt shows a one-page agreement. IDs and the layout revision are example values; the table above describes the remaining fields.
 
@@ -110,12 +110,12 @@ Set `images: true` for relative image links and `media` assets. Each asset inclu
 
 Use `images: { syntax: 'html' }` to emit `img` tags with displayed `width` and `height` rounded to CSS pixels. Your renderer must support sanitized HTML and retain those attributes. For custom previews, use each occurrence's exact `displayWidthPx` and `displayHeightPx`; these can differ from the asset's intrinsic dimensions.
 
-| Delivery       | API                                                                                                                                                   |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON response  | `toMarkdownJSON(result)` omits image bytes and converts font failure causes to strings. It preserves metadata and URLs but does not serve the assets. |
-| Portable ZIP   | `await createMarkdownZip(result)` returns bytes containing `document.md`, `document.json`, and `media/` assets.                                       |
-| Local folder   | `await writeMarkdownBundle(result, { directory })` from the `/node` entry point.                                                                      |
-| Object storage | Set `images.resolveUrl` to upload each unique image and return a relative or HTTP(S) URL. Your application owns uploads, cleanup, and URL expiry.     |
+| Delivery | API |
+| --- | --- |
+| JSON response | `toMarkdownJSON(result)` omits image bytes and converts font failure causes to strings. It preserves metadata and URLs but does not serve the assets. |
+| Portable ZIP | `await createMarkdownZip(result)` returns bytes containing `document.md`, `document.json`, and `media/` assets. |
+| Local folder | `await writeMarkdownBundle(result, { directory })` from the `/node` entry point. |
+| Object storage | Set `images.resolveUrl` to upload each unique image and return a relative or HTTP(S) URL. Your application owns uploads, cleanup, and URL expiry. |
 
 For example, save the export above with its images as a portable ZIP:
 

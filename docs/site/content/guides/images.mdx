@@ -9,32 +9,23 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 ## Supported formats
 
-| Format                                      | Insert                               | Layout & paint                                                     | Round-trip                                |
-| ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------- |
-| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`                                | Original media preserved unless replaced  |
-| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent`                                | Original media preserved                  |
-| SVG                                         | No insert                            | Painted at authored `wp:extent`                                    | Original media preserved                  |
-| TIFF, EMF, WMF                              | No insert                            | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch            |
-| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel                                        | Preserved; explicit user gesture to embed |
+| Format | Insert | Layout & paint | Round-trip |
+| --- | --- | --- | --- |
+| PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Original media preserved unless replaced |
+| BMP, WebP | No insert | Full decode at authored `wp:extent` | Original media preserved |
+| SVG | No insert | Painted at authored `wp:extent` | Original media preserved |
+| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch |
+| External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
 
-JPEG validation accepts large EXIF and ICC metadata segments before the frame header.
-Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image.
-The original photo bytes and the authored drawing extent remain unchanged.
+JPEG validation accepts large EXIF and ICC metadata segments before the frame header. Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image. The original photo bytes and the authored drawing extent remain unchanged.
 
-BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down
-bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
-containers.
+BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
 
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays
-unchanged in the package through save. When conversion is unavailable, declined, or fails, the
-image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
 
-SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
-file never run and external references in it are never fetched. Its intrinsic size is read from
-`width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`.
-An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
+SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
 ## Reading selection state
 
@@ -83,9 +74,7 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
 
-Images in front of or behind text can paint beyond their anchor cells. Their cell-relative
-position is preserved, but the cell does not crop these overlays. Page-relative images are
-clipped to the physical sheet, including its margins.
+Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
 
@@ -99,23 +88,18 @@ The `resourceStatus` field reports image availability:
 
 ## Authoring surface
 
-Both adapters export the same parts under the same names. Default toolbar slots
-(contextual `image` group when a picture is selected):
+Both adapters export the same parts under the same names. Default toolbar slots (contextual `image` group when a picture is selected):
 
-| Slot               | Component / hook                                            | Engine command                                    |
-| ------------------ | ----------------------------------------------------------- | ------------------------------------------------- |
-| `image.insert`     | `ImageInsertProvider`, `ImageInsertTrigger`                 | `executeImageCommand({ type: 'insertImage', … })` |
-| `image.wrap`       | `ImageWrap`, `useEditorValueCommand('image.wrap')`          | `setImageWrapType` via `runToolbarCommand`        |
-| `image.altText`    | `ImageAltText`                                              | `setImageAltText`                                 |
-| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties`                              |
+| Slot | Component / hook | Engine command |
+| --- | --- | --- |
+| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` | `executeImageCommand({ type: 'insertImage', … })` |
+| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` | `setImageWrapType` via `runToolbarCommand` |
+| `image.altText` | `ImageAltText` | `setImageAltText` |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties` |
 
-The packaged Insert menu carries an **Image** row that opens the same file picker as
-`ImageInsertTrigger`. Hide it or place it elsewhere through `DocxEditor.Menu.ImageInsert`.
+The packaged Insert menu carries an **Image** row that opens the same file picker as `ImageInsertTrigger`. Hide it or place it elsewhere through `DocxEditor.Menu.ImageInsert`.
 
-`widthPoints` and `heightPoints` are the extent to insert at most. An image that fits
-where the caret flows keeps its natural size; a wider or taller one scales down
-proportionally to its cell, column, or page content box. Read the committed extent back
-from `snapshot().image`.
+`widthPoints` and `heightPoints` are the extent to insert at most. An image that fits where the caret flows keeps its natural size; a wider or taller one scales down proportionally to its cell, column, or page content box. Read the committed extent back from `snapshot().image`.
 
 Insert preflight:
 
@@ -179,54 +163,36 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 ## Drawing limits
 
-The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments.
-It preserves image alpha and adjustment markup when you save.
-PDF export does not apply these adjustments.
+The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments. It preserves image alpha and adjustment markup when you save. PDF export does not apply these adjustments.
 
-| Drawing content                                         | Status                                               |
-| ------------------------------------------------------- | ---------------------------------------------------- |
-| Solid shapes and bounded shape groups                   | Render geometry with sRGB or theme colors            |
-| Charts, SmartArt, unsupported groups, and canvases      | Preserve the extent and show a labeled placeholder   |
-| Anchored text boxes                                     | Render the story read-only and clip it to the extent |
-| Page fields in anchored header or footer text boxes     | Evaluate per page                                    |
-| Inline text boxes, linked chains, autofit, and rotation | Show a placeholder                                   |
-| Standalone VML (`w:pict`)                               | Render the bounded read-only subset described below  |
-| `w:object` and `w:altChunk`                             | Preserve as generic content with diagnostics         |
-| Tracked image insertion and deletion                    | Record the change in suggesting mode                 |
-| Tracked image property edits                            | Stay unavailable in suggesting mode                  |
-| Artistic effects (`a:effectLst`)                        | Do not render; authored markup round-trips           |
+| Drawing content | Status |
+| --- | --- |
+| Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
+| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder |
+| Anchored text boxes | Render the story read-only and clip it to the extent |
+| Page fields in anchored header or footer text boxes | Evaluate per page |
+| Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
+| Standalone VML (`w:pict`) | Render the bounded read-only subset described below |
+| `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
+| Tracked image insertion and deletion | Record the change in suggesting mode |
+| Tracked image property edits | Stay unavailable in suggesting mode |
+| Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
 
 ## Find text in text boxes
 
-**Find** searches anchored text boxes in the body, headers, and footers.
-Selecting a match selects its text box; the content remains read-only. Inline
-text boxes and text boxes in footnotes or endnotes are not searched.
+**Find** searches anchored text boxes in the body, headers, and footers. Selecting a match selects its text box; the content remains read-only. Inline text boxes and text boxes in footnotes or endnotes are not searched.
 
-Use `useDocumentSearch` to add Find navigation to a custom
-[React](/docs/2.x/react/hooks#usedocumentsearch) or
-[Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
+Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
 
 ## Legacy VML previews
 
-Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos,
-solid rectangles/ellipses, straight line segments with arrows, and straight fit-to-box
-WordArt (`_x0000_t136`). Group-local coordinates, picture crops, supported text wrapping,
-and source order are retained. WordArt uses the authored font when available on the host;
-curved or rotated WordArt is not supported.
+Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles/ellipses, straight line segments with arrows, and straight fit-to-box WordArt (`_x0000_t136`). Group-local coordinates, picture crops, supported text wrapping, and source order are retained. WordArt uses the authored font when available on the host; curved or rotated WordArt is not supported.
 
-Previews are read-only. Saving preserves the original VML, media, and
-relationships without adding generated SVG parts or converting the source to
-DrawingML. Deleting another picture preserves shared photo relationships.
+Previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
 
-The editor does not partially render unsupported, oversized, or clipped groups.
-Custom templates, text boxes, curves, image effects, rotation, and unsupported
-group members prevent a group preview. Only recognized standard shape templates
-are supported. When a document supplies DrawingML and VML alternatives, the
-editor displays only the selected alternative.
+The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
 
-Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the
-normal image validation and decode limits; an external or missing member never triggers
-a fetch or a misleading partial group preview.
+Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the normal image validation and decode limits; an external or missing member never triggers a fetch or a misleading partial group preview.
 
 ## Next steps
 

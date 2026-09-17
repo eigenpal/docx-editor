@@ -5,196 +5,126 @@ category: 'Guides'
 seoTitle: 'DOCX fields and cross-references'
 ---
 
-Word fields contain an instruction and an optional saved result. The editor
-preserves both forms when it opens and saves a DOCX file.
+Word fields contain an instruction and an optional saved result. The editor preserves both forms when it opens and saves a DOCX file.
 
-The editor evaluates a defined set of display-only fields. It never runs macros,
-DDE instructions, or external include instructions.
+The editor evaluates a defined set of display-only fields. It never runs macros, DDE instructions, or external include instructions.
 
 ## Show field codes
 
-Press **Option+F9** on macOS or **Alt+F9** on Windows to show field instructions.
-Some Mac keyboards require **Fn+Option+F9**. Press the shortcut again to return to field results.
+Press **Option+F9** on macOS or **Alt+F9** on Windows to show field instructions. Some Mac keyboards require **Fn+Option+F9**. Press the shortcut again to return to field results.
 
-The shortcut changes the display without changing document content or adding an undo step.
-It covers cross-references, form fields, and generated tables of contents, including fields in tables, notes, headers, and footers.
-Field instructions remain inert. Toggle back to field results before editing a form value.
+The shortcut changes the display without changing document content or adding an undo step. It covers cross-references, form fields, and generated tables of contents, including fields in tables, notes, headers, and footers. Field instructions remain inert. Toggle back to field results before editing a form value.
 
 ## Supported fields
 
-| Field                                     | Behavior                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------- |
-| `PAGE`, `NUMPAGES`, and `SECTIONPAGES`    | Update in headers and footers. Empty-cache body fields also update. |
-| `REF`                                     | Resolves bookmark text or numbering in the document body and notes. |
-| `NOTEREF`                                 | Resolves a bookmarked footnote or endnote reference number.         |
-| `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences.                  |
-| `SYMBOL`                                  | Renders the requested character, font, and size.                    |
-| Selected metadata fields                  | Render sanitized values from document properties.                   |
+| Field | Behavior |
+| --- | --- |
+| `PAGE`, `NUMPAGES`, and `SECTIONPAGES` | Update in headers and footers. Empty-cache body fields also update. |
+| `REF` | Resolves bookmark text or numbering in the document body and notes. |
+| `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
+| `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences. |
+| `SYMBOL` | Renders the requested character, font, and size. |
+| Selected metadata fields | Render sanitized values from document properties. |
 
-The editor also renders saved results for other complex and simple fields.
-Unsupported instructions keep their saved result.
+The editor also renders saved results for other complex and simple fields. Unsupported instructions keep their saved result.
 
 ## Table of contents boundaries
 
-Generated TOC rows are read-only. Ordinary text before or after the field remains editable,
-even when it shares a paragraph with a field marker. The TOC highlight follows the generated content.
-TOC links use the TOC paragraph formatting and explicit run formatting, as in Word.
-The Hyperlink character style does not add blue underlines inside generated TOC results.
+Generated TOC rows are read-only. Ordinary text before or after the field remains editable, even when it shares a paragraph with a field marker. The TOC highlight follows the generated content. TOC links use the TOC paragraph formatting and explicit run formatting, as in Word. The Hyperlink character style does not add blue underlines inside generated TOC results.
 
 ## `REF` fields
 
-`REF` resolves bookmark text and numbered paragraph references. The editor
-supports the `\r`, `\w`, `\n`, `\t`, `\h`, and `\* MERGEFORMAT` switches.
+`REF` resolves bookmark text and numbered paragraph references. The editor supports the `\r`, `\w`, `\n`, `\t`, `\h`, and `\* MERGEFORMAT` switches.
 
-The `\t` switch removes text that is not a number delimiter from a referenced
-number. It needs `\r`, `\w`, or `\n`. With `\h`, clicking the result
-follows its bookmark within the document.
+The `\t` switch removes text that is not a number delimiter from a referenced number. It needs `\r`, `\w`, or `\n`. With `\h`, clicking the result follows its bookmark within the document.
 
-The editor checks a non-empty saved result once. A matching result enables live
-updates after later edits. A mismatch keeps Word's saved result for that field.
+The editor checks a non-empty saved result once. A matching result enables live updates after later edits. A mismatch keeps Word's saved result for that field.
 
 An empty saved result remains eligible for live updates.
 
-The editor also keeps the saved result for missing bookmarks, bullet targets,
-and unsupported switches. Bookmark text resolution stops at the target
-paragraph boundary.
+The editor also keeps the saved result for missing bookmarks, bullet targets, and unsupported switches. Bookmark text resolution stops at the target paragraph boundary.
 
-The `\r` switch uses the same full-context number as `\w`. It does not calculate
-Word's relative number.
+The `\r` switch uses the same full-context number as `\w`. It does not calculate Word's relative number.
 
-Live `REF` resolution covers the document body, footnotes, and endnotes. Header,
-footer, and text-box results keep their saved values.
+Live `REF` resolution covers the document body, footnotes, and endnotes. Header, footer, and text-box results keep their saved values.
 
 ## `NOTEREF` fields
 
-`NOTEREF` resolves the display number of a bookmarked footnote or endnote
-reference. It honors section number formats and `eachSect` restarts.
+`NOTEREF` resolves the display number of a bookmarked footnote or endnote reference. It honors section number formats and `eachSect` restarts.
 
-The editor keeps the saved result for `\p`, `\f`, `eachPage` restarts, and custom
-note marks. With `\h`, clicking the result follows the bookmarked note reference.
+The editor keeps the saved result for `\p`, `\f`, `eachPage` restarts, and custom note marks. With `\h`, clicking the result follows the bookmarked note reference.
 
 ## Cross-reference navigation
 
-`REF`, `PAGEREF`, and `NOTEREF` fields with `\h` link to their bookmarks.
-This works for complex fields and `w:fldSimple`, including instructions split across runs.
-Missing bookmarks do not navigate. References without `\h` remain ordinary field results.
+`REF`, `PAGEREF`, and `NOTEREF` fields with `\h` link to their bookmarks. This works for complex fields and `w:fldSimple`, including instructions split across runs. Missing bookmarks do not navigate. References without `\h` remain ordinary field results.
 
-Navigation also works with saved results, including the `\p` above/below form.
-This does not change which field values the editor evaluates.
-An enclosing explicit hyperlink keeps its own target.
+Navigation also works with saved results, including the `\p` above/below form. This does not change which field values the editor evaluates. An enclosing explicit hyperlink keeps its own target.
 
 ## `AUTONUM` fields
 
-Each `AUTONUM` field kind has its own sequence. The editor numbers each sequence
-in document order.
+Each `AUTONUM` field kind has its own sequence. The editor numbers each sequence in document order.
 
-Word can restart these counters by heading context. The editor does not apply
-that restart behavior.
+Word can restart these counters by heading context. The editor does not apply that restart behavior.
 
-The `\*` switch supports Arabic, alphabetic, Roman, ordinal, cardinal text,
-ordinal text, and hexadecimal formats. The `\e` switch removes the trailing
-period.
+The `\*` switch supports Arabic, alphabetic, Roman, ordinal, cardinal text, ordinal text, and hexadecimal formats. The `\e` switch removes the trailing period.
 
-An unsupported switch produces no generated value. Save does not add result
-runs because Word does not store results for these fields.
+An unsupported switch produces no generated value. Save does not add result runs because Word does not store results for these fields.
 
 ## Save-time refresh
 
-`save()` updates calibrated, writable `REF` and `NOTEREF` results in the body,
-footnotes, and endnotes. It commits all updated parts in one undo step.
+`save()` updates calibrated, writable `REF` and `NOTEREF` results in the body, footnotes, and endnotes. It commits all updated parts in one undo step.
 
-The editor skips locked fields, revision markup, nested or unsafe result
-structures, and protected content controls. A skipped field keeps its saved
-result.
+The editor skips locked fields, revision markup, nested or unsafe result structures, and protected content controls. A skipped field keeps its saved result.
 
-View mode and read-only sessions do not rewrite results. A collaborative session
-also exports the saved results without rewriting them.
+View mode and read-only sessions do not rewrite results. A collaborative session also exports the saved results without rewriting them.
 
 ## Fields that stay inert
 
-`DATE`, `TIME`, `FILENAME`, `SEQ`, `LISTNUM`, `EQ`, `CITATION`, and
-`BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result
-when one exists.
+`DATE`, `TIME`, `FILENAME`, `SEQ`, `LISTNUM`, `EQ`, `CITATION`, and `BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result when one exists.
 
-The editor preserves field instructions through save. It does not execute
-macros, DDE instructions, OLE content, or external include instructions.
+The editor preserves field instructions through save. It does not execute macros, DDE instructions, OLE content, or external include instructions.
 
 ## Legacy text form fields
 
-Select a `FORMTEXT` field, then double-click it or choose **Edit field…** from
-the context menu. Set its default value, type (regular text, number, or date),
-maximum length, format, and **Fill-in enabled** setting. A maximum length of
-zero means unlimited. React and Vue share the same default behavior.
+Select a `FORMTEXT` field, then double-click it or choose **Edit field…** from the context menu. Set its default value, type (regular text, number, or date), maximum length, format, and **Fill-in enabled** setting. A maximum length of zero means unlimited. React and Vue share the same default behavior.
 
 ### Edit an unprotected field
 
-Partial edits keep the field definition; replacing its whole result removes it.
-Typing at the end of the field inserts ordinary text after it, including at the
-end of a paragraph.
+Partial edits keep the field definition; replacing its whole result removes it. Typing at the end of the field inserts ordinary text after it, including at the end of a paragraph.
 
-Deleting a word from a field boundary removes the complete field. Backspace
-at the end, or Delete at the start, first selects the field. Press again to
-remove it. Shift+Backspace follows the same behavior as Backspace.
+Deleting a word from a field boundary removes the complete field. Backspace at the end, or Delete at the start, first selects the field. Press again to remove it. Shift+Backspace follows the same behavior as Backspace.
 
 ### Fill a protected field
 
-Use **Review > Protect Document for Forms** to enable
-[forms protection](/docs/2.x/guides/document-protection). Filling a protected
-field keeps its definition. Tab and Shift+Tab move between enabled text fields.
+Use **Review > Protect Document for Forms** to enable [forms protection](/docs/2.x/guides/document-protection). Filling a protected field keeps its definition. Tab and Shift+Tab move between enabled text fields.
 
-Protected fields validate and format input when you leave. Pasted text is limited
-to the remaining capacity. Invalid numbers or dates open an alert; acknowledging
-it clears the input, which can be restored with Undo.
+Protected fields validate and format input when you leave. Pasted text is limited to the remaining capacity. Invalid numbers or dates open an alert; acknowledging it clears the input, which can be restored with Undo.
 
-Save also validates pending protected field input and applies its format. Invalid
-input rejects the save with code `invalidArgs`. The input stays available for
-correction, and save does not open an alert.
+Save also validates pending protected field input and applies its format. Invalid input rejects the save with code `invalidArgs`. The input stays available for correction, and save does not open an alert.
 
-Use `popups.textFormField` for Field Options and `popups.invalidTextFormField`
-for the validation alert. See [Customize popups](/docs/2.x/guides/customize-dialogs).
+Use `popups.textFormField` for Field Options and `popups.invalidTextFormField` for the validation alert. See [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ### Date input and UI language
 
-`locale` controls date input; `i18n` controls UI strings. For Polish dates with
-the default English UI, use:
+`locale` controls date input; `i18n` controls UI strings. For Polish dates with the default English UI, use:
 
 ```tsx
 <DocxEditor document={bytes} locale="pl-PL" />
 ```
 
-With `pl-PL`, `01.02.2030` means February 1. The default `en-US` interprets
-`01/02/2030` as January 2. ISO input (`2030-02-01`) works in every locale.
-Each field's format controls its displayed result. Changing locale preserves
-existing dates and applies to subsequent edits.
+With `pl-PL`, `01.02.2030` means February 1. The default `en-US` interprets `01/02/2030` as January 2. ISO input (`2030-02-01`) works in every locale. Each field's format controls its displayed result. Changing locale preserves existing dates and applies to subsequent edits.
 
-Date input supports Gregorian numeric dates, regional digits, and full English
-month names. Localized month names and non-Gregorian dates are not supported.
+Date input supports Gregorian numeric dates, regional digits, and full English month names. Localized month names and non-Gregorian dates are not supported.
 
-Only plain text results and the dialog's listed types and formats support editing
-and protected filling. The editor preserves other field structures.
+Only plain text results and the dialog's listed types and formats support editing and protected filling. The editor preserves other field structures.
 
-A legacy checkbox form field (`FORMCHECKBOX`) paints as a square box at the
-field's size. Its layout advance matches that size, including caret and selection
-geometry. An invisible pointer target is at least 24 CSS pixels without changing
-line layout. The box is the control: a click toggles it, and Space toggles
-the selected field. Tab can focus each checkbox; Space keeps focus on that checkbox.
-The toggle writes only the field's `w:checked` state. A field
-with `w:enabled` off refuses, and a document open for viewing or comments refuses.
-Word toggles these boxes only in a document protected for forms; the editor also
-toggles them in edit mode, so legacy and content-control checkboxes behave the
-same way.
+A legacy checkbox form field (`FORMCHECKBOX`) paints as a square box at the field's size. Its layout advance matches that size, including caret and selection geometry. An invisible pointer target is at least 24 CSS pixels without changing line layout. The box is the control: a click toggles it, and Space toggles the selected field. Tab can focus each checkbox; Space keeps focus on that checkbox. The toggle writes only the field's `w:checked` state. A field with `w:enabled` off refuses, and a document open for viewing or comments refuses. Word toggles these boxes only in a document protected for forms; the editor also toggles them in edit mode, so legacy and content-control checkboxes behave the same way.
 
-Legacy dropdown form fields (`FORMDROPDOWN`) use a native select. Click
-the value or focus it with Tab to choose a declared entry. Each choice updates
-the displayed text and saved selection in one undo step. Disabled fields and
-viewing or suggesting mode refuse changes. Forms protection permits filling.
+Legacy dropdown form fields (`FORMDROPDOWN`) use a native select. Click the value or focus it with Tab to choose a declared entry. Each choice updates the displayed text and saved selection in one undo step. Disabled fields and viewing or suggesting mode refuse changes. Forms protection permits filling.
 
-For customizable list popups, use
-[content controls](/docs/2.x/guides/content-controls).
+For customizable list popups, use [content controls](/docs/2.x/guides/content-controls).
 
-A field's `w:name` supplies its accessible name as bounded plain text. Fields
-with entry or exit macro references supply no name through this path. Macro
-values are not read. Entry and exit macros never run.
+A field's `w:name` supplies its accessible name as bounded plain text. Fields with entry or exit macro references supply no name through this path. Macro values are not read. Entry and exit macros never run.
 
 ## Next steps
 

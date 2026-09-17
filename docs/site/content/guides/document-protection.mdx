@@ -4,66 +4,44 @@ description: 'Restrict editing with document protection in React and Vue. Enable
 category: 'Guides'
 ---
 
-Use **Review > Protect Document for Forms** to restrict editing to form fields
-and other permitted content. React and Vue share this command through the core
-editor. It does not require a Pro module.
+Use **Review > Protect Document for Forms** to restrict editing to form fields and other permitted content. React and Vue share this command through the core editor. It does not require a Pro module.
 
 ## Turn protection on or off
 
-1. Open a document with [text form fields](/docs/2.x/guides/fields#legacy-text-form-fields)
-   or [content controls](/docs/2.x/guides/content-controls).
+1. Open a document with [text form fields](/docs/2.x/guides/fields#legacy-text-form-fields) or [content controls](/docs/2.x/guides/content-controls).
 2. Select **Review > Protect Document for Forms** to enable forms protection.
 3. Select the same item again to stop protection.
 
-Each toggle changes the document and creates one undo step. Saving preserves
-the setting. Stopping protection keeps the recorded restriction with enforcement
-turned off.
+Each toggle changes the document and creates one undo step. Saving preserves the setting. Stopping protection keeps the recorded restriction with enforcement turned off.
 
-The command can stop other enforced restrictions when they have no password.
-It cannot set read-only, comments-only, or tracked-changes protection. If the
-document records one of those restrictions with enforcement off, change it in
-Word before enabling forms protection here.
+The command can stop other enforced restrictions when they have no password. It cannot set read-only, comments-only, or tracked-changes protection. If the document records one of those restrictions with enforcement off, change it in Word before enabling forms protection here.
 
-The editor cannot set or verify protection passwords. To stop password-protected
-restrictions, open the document in Word.
+The editor cannot set or verify protection passwords. To stop password-protected restrictions, open the document in Word.
 
 ## Edit a protected document
 
 The editor applies a restriction only when the document enforces it.
 
-| Restriction     | Editing behavior                                                                                                                             |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Forms           | Fill supported text form fields and edit permitted content inside unlocked controls or unprotected sections. Suggesting mode is unavailable. |
-| Read-only       | Open in viewing mode. Content edits and comment writes are unavailable.                                                                      |
-| Comments-only   | Add, reply to, resolve, reopen, and delete comments in editing mode. Content edits and suggesting mode are unavailable.                      |
-| Tracked changes | Edit in suggesting mode with a review module and an author. Switching to untracked editing is unavailable.                                   |
+| Restriction | Editing behavior |
+| --- | --- |
+| Forms | Fill supported text form fields and edit permitted content inside unlocked controls or unprotected sections. Suggesting mode is unavailable. |
+| Read-only | Open in viewing mode. Content edits and comment writes are unavailable. |
+| Comments-only | Add, reply to, resolve, reopen, and delete comments in editing mode. Content edits and suggesting mode are unavailable. |
+| Tracked changes | Edit in suggesting mode with a review module and an author. Switching to untracked editing is unavailable. |
 
-Comments and tracked changes need their usual
-[Pro setup](/docs/2.x/pro). Tracked-changes protection does not supply a missing
-review module or author. See [Suggesting needs an author](/docs/2.x/pro/tracked-changes#suggesting-needs-an-author).
+Comments and tracked changes need their usual [Pro setup](/docs/2.x/pro). Tracked-changes protection does not supply a missing review module or author. See [Suggesting needs an author](/docs/2.x/pro/tracked-changes#suggesting-needs-an-author).
 
-Forms protection keeps legacy field definitions intact. Tab and Shift+Tab move
-between enabled text fields. The caret can move outside a field, but commands
-that would change protected content return `locked` with a reason. Packaged
-controls disable those commands. Formatting a protected legacy text field is
-also unavailable.
+Forms protection keeps legacy field definitions intact. Tab and Shift+Tab move between enabled text fields. The caret can move outside a field, but commands that would change protected content return `locked` with a reason. Packaged controls disable those commands. Formatting a protected legacy text field is also unavailable.
 
-Turning on forms protection while suggesting switches the editor to editing
-mode. `snapshot().lastRejection` explains the mode change.
+Turning on forms protection while suggesting switches the editor to editing mode. `snapshot().lastRejection` explains the mode change.
 
-If you open the editor with `mode="view"`, the session remains read-only.
-Comment writes and the protection toggle are unavailable, even when the
-document's restriction would otherwise permit them.
+If you open the editor with `mode="view"`, the session remains read-only. Comment writes and the protection toggle are unavailable, even when the document's restriction would otherwise permit them.
 
-Permission exception ranges (`w:permStart`) do not grant editing access.
-Document protection also does not authorize collaboration clients: remote
-updates bypass local protection checks. Enforce room access in your application.
+Permission exception ranges (`w:permStart`) do not grant editing access. Document protection also does not authorize collaboration clients: remote updates bypass local protection checks. Enforce room access in your application.
 
 ## Build a custom protection control
 
-Use the `review.protectDocument` [chrome slot](/docs/2.x/guides/chrome-slots#review-and-content-controls)
-with `useEditorCommand()` or a generic toolbar button. Neither adapter provides
-a named protection toolbar part.
+Use the `review.protectDocument` [chrome slot](/docs/2.x/guides/chrome-slots#review-and-content-controls) with `useEditorCommand()` or a generic toolbar button. Neither adapter provides a named protection toolbar part.
 
 For an existing core `Editor`, check the command before executing it:
 
@@ -77,12 +55,9 @@ function toggleProtection(editor: Editor) {
 }
 ```
 
-When the result has `ok: false`, show its `reason`. Do not infer permission from
-the current editing mode: a document that opens in viewing mode because of
-read-only protection can still allow you to stop protection.
+When the result has `ok: false`, show its `reason`. Do not infer permission from the current editing mode: a document that opens in viewing mode because of read-only protection can still allow you to stop protection.
 
-Read `editor.snapshot().documentProtection` for the document's settings. The
-core editor returns `null` before a document loads.
+Read `editor.snapshot().documentProtection` for the document's settings. The core editor returns `null` before a document loads.
 
 | Field      | Meaning                                                                             |
 | ---------- | ----------------------------------------------------------------------------------- |

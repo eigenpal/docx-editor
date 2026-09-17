@@ -10,14 +10,9 @@ import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 ```
 
-Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`, and
-`EditorMode` from the package root. The React package also exports its provider
-primitives, shared hooks, and compound chrome from that same root entry. There
-are no current `/ui`, `/hooks`, `/composables`, `/dialogs`, or `/plugin-api`
-public package exports.
+Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`, and `EditorMode` from the package root. The React package also exports its provider primitives, shared hooks, and compound chrome from that same root entry. There are no current `/ui`, `/hooks`, `/composables`, `/dialogs`, or `/plugin-api` public package exports.
 
-Staged React/Vue prop divergences are enforced by `bun run check:editor-contract`
-so they stay explicit instead of accidental.
+Staged React/Vue prop divergences are enforced by `bun run check:editor-contract` so they stay explicit instead of accidental.
 
 ## Props
 
@@ -58,9 +53,7 @@ so they stay explicit instead of accidental.
 
 Source: [`packages/react/src/types.ts`](../packages/react/src/types.ts) and [`packages/vue/src/types.ts`](../packages/vue/src/types.ts).
 
-For full details, see the
-[React props](https://www.docx-editor.dev/docs/2.x/react/props) and
-[Vue props](https://www.docx-editor.dev/docs/2.x/vue/props).
+For full details, see the [React props](https://www.docx-editor.dev/docs/2.x/react/props) and [Vue props](https://www.docx-editor.dev/docs/2.x/vue/props).
 
 ## Ref methods
 
@@ -75,5 +68,4 @@ ref.current?.exec(command, { scope: { kind: 'body' } });
 ref.current?.snapshot();
 ```
 
-The current shared handle methods are `load`, `save`, `getDocumentHandle`,
-`getEditor`, `focus`, `exec`, and `snapshot`.
+The current shared handle methods are `load`, `save`, `getDocumentHandle`, `getEditor`, `focus`, `exec`, and `snapshot`.

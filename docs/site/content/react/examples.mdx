@@ -64,8 +64,7 @@ export function SaveButton({ bytes }: { bytes: Uint8Array }) {
 
 ## Compose custom chrome
 
-This example replaces the packaged frame with composition primitives.
-The custom **Bold** button gets its state from `useEditorCommand`:
+This example replaces the packaged frame with composition primitives. The custom **Bold** button gets its state from `useEditorCommand`:
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -103,8 +102,7 @@ export function CustomChrome({ bytes }: { bytes: Uint8Array }) {
 
 ## Automate an open editor
 
-This component uses the Editing API to read the first paragraph.
-It disposes the browser runtime after the operation:
+This component uses the Editing API to read the first paragraph. It disposes the browser runtime after the operation:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';

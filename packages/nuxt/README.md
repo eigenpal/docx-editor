@@ -12,12 +12,9 @@
 
 # @docx-editor.dev/nuxt
 
-This private workspace package provides a Nuxt 3 and 4 module for
-[docx-editor.dev](https://docx-editor.dev). npm does not publish it.
+This private workspace package provides a Nuxt 3 and 4 module for [docx-editor.dev](https://docx-editor.dev). npm does not publish it.
 
-External Nuxt applications can use `@docx-editor.dev/vue` inside
-`<ClientOnly>`. See the
-[Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
+External Nuxt applications can use `@docx-editor.dev/vue` inside `<ClientOnly>`. See the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
 
 ## Workspace setup
 
@@ -46,8 +43,7 @@ async function loadFile(e: Event) {
 </template>
 ```
 
-The module registers `<DocxEditor>` as a client-only component. Nuxt renders a
-server placeholder and hydrates the editor in the browser.
+The module registers `<DocxEditor>` as a client-only component. Nuxt renders a server placeholder and hydrates the editor in the browser.
 
 The module also adds the editor stylesheet to the Nuxt CSS pipeline.
 
@@ -81,9 +77,7 @@ export default defineNuxtConfig({
 
 ## Component API
 
-`<DocxEditor>` is the Vue adapter component. It keeps the same props, emits, and
-`DocxEditorRef` methods. See the
-[Vue props reference](https://www.docx-editor.dev/docs/2.x/vue/props).
+`<DocxEditor>` is the Vue adapter component. It keeps the same props, emits, and `DocxEditorRef` methods. See the [Vue props reference](https://www.docx-editor.dev/docs/2.x/vue/props).
 
 ## Beyond the component
 
@@ -104,5 +98,4 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 
 ## Commercial support
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+> [!TIP] Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.

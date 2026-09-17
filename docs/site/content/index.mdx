@@ -6,11 +6,9 @@ order: 1
 seoTitle: 'Documentation and API reference'
 ---
 
-`docx-editor` is a what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React
-and Vue 3.
+`docx-editor` is a what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React and Vue 3.
 
-It parses Office Open XML (OOXML), renders paginated pages, and saves the edited
-state as a DOCX file. Browser editing needs no upload or conversion service.
+It parses Office Open XML (OOXML), renders paginated pages, and saves the edited state as a DOCX file. Browser editing needs no upload or conversion service.
 
 <Cards>
   <Card title="Install the editor" href="/docs/2.x/quickstart">
@@ -29,27 +27,27 @@ state as a DOCX file. Browser editing needs no upload or conversion service.
 
 ## Packages
 
-| Package                                               | Purpose                                                                        | License                                                 |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter and composition hooks                                            | Apache 2.0                                              |
-| [`@docx-editor.dev/vue`](/docs/2.x/vue)               | Vue 3 adapter and composables                                                  | Apache 2.0                                              |
-| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-independent OOXML, document, layout, paint, and editor engine        | Apache 2.0                                              |
-| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Browser and server automation through a documented Office.js-compatible subset | EigenPal Pro License                                    |
-| [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes                                    | EigenPal Pro License                                    |
-| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Shared interface translations                                                  | Apache 2.0                                              |
-| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Open-licensed substitutes for common Word fonts                                | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| Package | Purpose | License |
+| --- | --- | --- |
+| [`@docx-editor.dev/react`](/docs/2.x/react) | React adapter and composition hooks | Apache 2.0 |
+| [`@docx-editor.dev/vue`](/docs/2.x/vue) | Vue 3 adapter and composables | Apache 2.0 |
+| [`@docx-editor.dev/core`](/docs/2.x/core) | Framework-independent OOXML, document, layout, paint, and editor engine | Apache 2.0 |
+| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Browser and server automation through a documented Office.js-compatible subset | EigenPal Pro License |
+| [`@docx-editor.dev/pro`](/docs/2.x/pro) | Tracked changes, comments, and custom nodes | EigenPal Pro License |
+| [`@docx-editor.dev/i18n`](/docs/2.x/i18n) | Shared interface translations | Apache 2.0 |
+| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts) | Open-licensed substitutes for common Word fonts | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
 
 The Pro packages are licensed under the EigenPal Pro License, and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## Select packages
 
-| Goal                                                                   | Packages                                                       |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------- |
-| React editor                                                           | `@docx-editor.dev/react` and `@docx-editor.dev/core`           |
-| Vue editor                                                             | `@docx-editor.dev/vue` and `@docx-editor.dev/core`             |
-| Tracked changes, comments, or custom nodes                             | Add `@docx-editor.dev/pro`                                     |
-| Server-side editing through the documented Office.js-compatible subset | `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`      |
-| Browser automation through the same subset                             | Add `@docx-editor.dev/editor-api` and use its `/browser` entry |
+| Goal | Packages |
+| --- | --- |
+| React editor | `@docx-editor.dev/react` and `@docx-editor.dev/core` |
+| Vue editor | `@docx-editor.dev/vue` and `@docx-editor.dev/core` |
+| Tracked changes, comments, or custom nodes | Add `@docx-editor.dev/pro` |
+| Server-side editing through the documented Office.js-compatible subset | `@docx-editor.dev/editor-api` and `@docx-editor.dev/core` |
+| Browser automation through the same subset | Add `@docx-editor.dev/editor-api` and use its `/browser` entry |
 
 Install the React editor:
 
@@ -69,9 +67,7 @@ For Vue, replace `@docx-editor.dev/react` with `@docx-editor.dev/vue`.
 | Content     | Images, hyperlinks, bookmarks, and fields                               |
 | Review      | Tracked changes and comments with `@docx-editor.dev/pro`                |
 
-Support differs by feature and operation. See
-[Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip
-status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
+Support differs by feature and operation. See [Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
 
 ## Round-trip behavior
 
@@ -84,9 +80,7 @@ Saving preserves untouched package content and unsupported OOXML.
 | Media, fonts, macros, and VBA projects | Copies package payloads through save.     |
 | Custom XML and add-in markup           | Preserves structural content.             |
 
-For the preservation contract and test method, see
-[Word fidelity](/docs/2.x/word-fidelity). For engine details, see
-[Architecture](/docs/2.x/core/architecture).
+For the preservation contract and test method, see [Word fidelity](/docs/2.x/word-fidelity). For engine details, see [Architecture](/docs/2.x/core/architecture).
 
 ## Next steps
 

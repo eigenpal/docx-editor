@@ -33,8 +33,7 @@ export default function Page() {
 }
 ```
 
-Next.js requires the `dynamic()` call inside a Client Component.
-`app/components/Editor.tsx` also uses `'use client'` and renders `<DocxEditor />`.
+Next.js requires the `dynamic()` call inside a Client Component. `app/components/Editor.tsx` also uses `'use client'` and renders `<DocxEditor />`.
 
 ## Add the editor to Next.js
 
@@ -42,8 +41,6 @@ Next.js requires the `dynamic()` call inside a Client Component.
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Import `@docx-editor.dev/core/styles/editor.css` once.
-Load your editor component with `dynamic(..., { ssr: false })`.
+Import `@docx-editor.dev/core/styles/editor.css` once. Load your editor component with `dynamic(..., { ssr: false })`.
 
-For more information, see the
-[React adapter guide](https://www.docx-editor.dev/docs/2.x/react).
+For more information, see the [React adapter guide](https://www.docx-editor.dev/docs/2.x/react).

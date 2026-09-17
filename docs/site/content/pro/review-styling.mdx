@@ -7,8 +7,7 @@ order: 62
 
 Review styling changes presentation only. It does not change the document file.
 
-The same author color applies to [tracked changes](/docs/2.x/pro/tracked-changes)
-and [comments](/docs/2.x/pro/comments).
+The same author color applies to [tracked changes](/docs/2.x/pro/tracked-changes) and [comments](/docs/2.x/pro/comments).
 
 ## Default behavior
 
@@ -21,8 +20,7 @@ and [comments](/docs/2.x/pro/comments).
 | Review sidebar          | Cards use the author color for the leading edge and avatar disc. |
 | Comment highlights      | All authors use the same yellow highlight by default.            |
 
-Override ramp tokens under `.docx-editor`. Load your stylesheet after
-`editor.css`, or use a more specific selector.
+Override ramp tokens under `.docx-editor`. Load your stylesheet after `editor.css`, or use a more specific selector.
 
 ```css
 .docx-editor {
@@ -35,8 +33,7 @@ The document filter handles dark mode. Review chrome adjusts separately.
 
 ### Customize insertion underlines
 
-Override the insertion decoration tokens under `.docx-editor`. These tokens
-change presentation only.
+Override the insertion decoration tokens under `.docx-editor`. These tokens change presentation only.
 
 ```css
 .docx-editor {
@@ -48,19 +45,16 @@ change presentation only.
 
 ## Choose a styling API
 
-| API                             | Use                                                              |
-| ------------------------------- | ---------------------------------------------------------------- |
-| CSS tokens                      | Replace the color ramp or insertion underline.                   |
-| `AuthorStyle` declaration       | Set one author's color, backgrounds, classes, or avatar.         |
-| `ColorByChangeType` declaration | Color unmatched insertions green and deletions red.              |
-| `setRevisionStyles`             | Control the same state from an editor instance or headless host. |
+| API | Use |
+| --- | --- |
+| CSS tokens | Replace the color ramp or insertion underline. |
+| `AuthorStyle` declaration | Set one author's color, backgrounds, classes, or avatar. |
+| `ColorByChangeType` declaration | Color unmatched insertions green and deletions red. |
+| `setRevisionStyles` | Control the same state from an editor instance or headless host. |
 
-Use declarations or `setRevisionStyles` as the source of style state. Calling
-`setRevisionStyles` replaces mounted declarations until a declaration changes.
+Use declarations or `setRevisionStyles` as the source of style state. Calling `setRevisionStyles` replaces mounted declarations until a declaration changes.
 
-Declarations do not render Document Object Model (DOM) elements. Mounting,
-changing, or removing one repaints the editor without resetting selection,
-caret position, or undo history.
+Declarations do not render Document Object Model (DOM) elements. Mounting, changing, or removing one repaints the editor without resetting selection, caret position, or undo history.
 
 ### Declare author styles
 
@@ -116,8 +110,7 @@ const modules = [reviewModule()];
 </Framework>
 </FrameworkTabs>
 
-`author` must match the document's `w:author` value. An absent author has no
-effect. Unmatched authors keep ramp colors unless `ColorByChangeType` is mounted.
+`author` must match the document's `w:author` value. An absent author has no effect. Unmatched authors keep ramp colors unless `ColorByChangeType` is mounted.
 
 | Author style field                  | Effect                                            |
 | ----------------------------------- | ------------------------------------------------- |
@@ -127,17 +120,13 @@ effect. Unmatched authors keep ramp colors unless `ColorByChangeType` is mounted
 | `spanClassName` / `span-class-name` | Adds classes to painted change spans.             |
 | `avatarUrl` / `avatar-url`          | Sets the review sidebar avatar.                   |
 
-`background` tints all changes by that author. `activeBackground` sets the open
-change's highlight band and removes its default underline. Set both to `transparent` to clear the backgrounds.
+`background` tints all changes by that author. `activeBackground` sets the open change's highlight band and removes its default underline. Set both to `transparent` to clear the backgrounds.
 
-Keep span CSS metric-safe. Do not change font size, weight, or family. Such
-changes make painted text differ from measured layout.
+Keep span CSS metric-safe. Do not change font size, weight, or family. Such changes make painted text differ from measured layout.
 
 ### Set styles through the editor
 
-`setRevisionStyles` and the editor creation option accept a `RevisionStyles`
-value. Declarative components accept individual author or change-type props.
-Set `others` to `'author'`, the default, or `'kind'` in `RevisionStyles`.
+`setRevisionStyles` and the editor creation option accept a `RevisionStyles` value. Declarative components accept individual author or change-type props. Set `others` to `'author'`, the default, or `'kind'` in `RevisionStyles`.
 
 ```ts
 editor.setRevisionStyles({
@@ -149,33 +138,28 @@ editor.setRevisionStyles({
 });
 ```
 
-An author value can be a color string or an author style object. A headless host
-can also pass `revisionStyles` during editor creation.
+An author value can be a color string or an author style object. A headless host can also pass `revisionStyles` during editor creation.
 
 ## Read document authors
 
-Use `useReviewAuthors()` to build legends and color controls. Use
-`getReviewAuthors()` without an adapter.
+Use `useReviewAuthors()` to build legends and color controls. Use `getReviewAuthors()` without an adapter.
 
-| Returned behavior   | Detail                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------------------- |
-| Order               | Tracked-change authors appear first. Comment-only authors follow.                        |
-| Updates             | The list updates after document load or review style changes.                            |
-| `slot`              | This unbounded rank identifies first-appearance order.                                   |
-| `color`             | This is the resolved card color. An unmatched value can be `var(--doc-review-author-N)`. |
-| Resolved view       | Authors with only hidden revisions are omitted unless they also commented.               |
-| `ColorByChangeType` | Page colors show change types. Returned colors still describe card accents.              |
+| Returned behavior | Detail |
+| --- | --- |
+| Order | Tracked-change authors appear first. Comment-only authors follow. |
+| Updates | The list updates after document load or review style changes. |
+| `slot` | This unbounded rank identifies first-appearance order. |
+| `color` | This is the resolved card color. An unmatched value can be `var(--doc-review-author-N)`. |
+| Resolved view | Authors with only hidden revisions are omitted unless they also commented. |
+| `ColorByChangeType` | Page colors show change types. Returned colors still describe card accents. |
 
-React returns the list directly. Vue returns a shallow ref. Call the composable
-under `DocxEditorRoot`.
+React returns the list directly. Vue returns a shallow ref. Call the composable under `DocxEditorRoot`.
 
-Add `.docx-editor` to a legend or its ancestor. This class resolves ramp token
-values used by swatches.
+Add `.docx-editor` to a legend or its ancestor. This class resolves ramp token values used by swatches.
 
 ## Add avatars
 
-Set `avatarUrl` to replace initials in a review card. Authors without an avatar
-keep their initials.
+Set `avatarUrl` to replace initials in a review card. Authors without an avatar keep their initials.
 
 | Avatar behavior    | Result                                                       |
 | ------------------ | ------------------------------------------------------------ |
@@ -184,15 +168,11 @@ keep their initials.
 | Document page      | The avatar does not affect painted document content.         |
 | Request policy     | The packaged image uses `referrerPolicy="no-referrer"`.      |
 
-Use a host you control. The editor accepts application-held `blob:` URLs and
-non-SVG `data:image/*` URLs. It rejects other `data:` URLs, SVG data images,
-script schemes, and protocol-relative hosts.
+Use a host you control. The editor accepts application-held `blob:` URLs and non-SVG `data:image/*` URLs. It rejects other `data:` URLs, SVG data images, script schemes, and protocol-relative hosts.
 
-The browser fetches an avatar when its card renders. The editor never loads an
-avatar address from the document.
+The browser fetches an avatar when its card renders. The editor never loads an avatar address from the document.
 
-Document authors are untrusted strings. A sender can use a known name and
-receive its configured image. Do not use review styling as identity proof.
+Document authors are untrusted strings. A sender can use a known name and receive its configured image. Do not use review styling as identity proof.
 
 ## Use CSS hooks
 
@@ -206,14 +186,9 @@ receive its configured image. Do not use review styling as identity proof.
 | Hover balloons           | Both attributes and `--doc-review-author-current`    |
 | Gutter markers           | Both attributes and `--doc-review-author-current`    |
 
-`data-review-author` contains the exact document value.
-`data-review-author-slot` wraps to `0` through `7`. Calculate it as `slot % 8`
-when you build selectors from `useReviewAuthors()`.
+`data-review-author` contains the exact document value. `data-review-author-slot` wraps to `0` through `7`. Calculate it as `slot % 8` when you build selectors from `useReviewAuthors()`.
 
-Painted spans use inline ink and text decoration. CSS selectors cannot override
-those properties. Use a declaration or ramp token for ink. Use the insertion
-decoration tokens for insertion underlines. Use `currentColor` for metric-safe
-span effects.
+Painted spans use inline ink and text decoration. CSS selectors cannot override those properties. Use a declaration or ramp token for ink. Use the insertion decoration tokens for insertion underlines. Use `currentColor` for metric-safe span effects.
 
 ```css
 .docx-editor [data-review-author='Jess Lin'] {
@@ -230,20 +205,13 @@ span effects.
 }
 ```
 
-`--doc-review-author-current` contains the light-theme value in both themes.
-Define a dark-theme rule when you tint comment bands by author.
+`--doc-review-author-current` contains the light-theme value in both themes. Define a dark-theme rule when you tint comment bands by author.
 
 ## Style the change bar
 
-Text, table rows, and drawings use the same page-margin change bars. Tracked
-rows do not draw a second bar beside the table, and tracked images, shapes, and
-text boxes do not draw a colored revision frame. Deleted drawings remain dimmed
-in All Markup.
+Text, table rows, and drawings use the same page-margin change bars. Tracked rows do not draw a second bar beside the table, and tracked images, shapes, and text boxes do not draw a colored revision frame. Deleted drawings remain dimmed in All Markup.
 
-The change bar is the rule in the left margin beside every changed line. Two
-tokens control the gray bar of **All Markup**, and two more the red bar of
-**Simple Markup**. The bar is painted on the page sheet, outside the dark-mode
-inversion, so define both light and dark values when you change a color.
+The change bar is the rule in the left margin beside every changed line. Two tokens control the gray bar of **All Markup**, and two more the red bar of **Simple Markup**. The bar is painted on the page sheet, outside the dark-mode inversion, so define both light and dark values when you change a color.
 
 ```css
 .docx-editor {
@@ -259,12 +227,7 @@ inversion, so define both light and dark values when you change a color.
 }
 ```
 
-Each bar is a `.docx-change-bar` element inside one `.docx-change-bars` overlay
-per page. A bar carries `docx-change-bar-insertion`, `docx-change-bar-deletion`,
-or `docx-change-bar-format` for each kind of change on its lines, so a bar over
-a replacement has both the insertion and the deletion class. The color and width
-are inline token references, so a selector on these classes overrides them only
-by redefining the token:
+Each bar is a `.docx-change-bar` element inside one `.docx-change-bars` overlay per page. A bar carries `docx-change-bar-insertion`, `docx-change-bar-deletion`, or `docx-change-bar-format` for each kind of change on its lines, so a bar over a replacement has both the insertion and the deletion class. The color and width are inline token references, so a selector on these classes overrides them only by redefining the token:
 
 ```css
 .docx-editor .docx-change-bar-deletion {
@@ -286,25 +249,15 @@ by redefining the token:
 }
 ```
 
-Each bar also carries `data-docx-story` with `body`, `header`, `footer`,
-`footnote`, or `endnote`, and the overlay carries `data-docx-change-bars-mode`
-with `all-markup` or `simple-markup`. While a header or footer is being edited,
-the bars of the other stories dim with the text beside them. A click on a bar
-switches between Simple Markup and All Markup; the bars are the only painted
-furniture that takes the pointer.
+Each bar also carries `data-docx-story` with `body`, `header`, `footer`, `footnote`, or `endnote`, and the overlay carries `data-docx-change-bars-mode` with `all-markup` or `simple-markup`. While a header or footer is being edited, the bars of the other stories dim with the text beside them. A click on a bar switches between Simple Markup and All Markup; the bars are the only painted furniture that takes the pointer.
 
 To hide the bars, set `display: none` on `.docx-change-bars`.
 
 ## Build custom review cards
 
-`useReviewAuthor` returns one author's resolved color, ramp slot, and declared
-style. React returns the value directly. The Vue composable accepts a ref or
-getter and returns a computed ref.
+`useReviewAuthor` returns one author's resolved color, ramp slot, and declared style. React returns the value directly. The Vue composable accepts a ref or getter and returns a computed ref.
 
-The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and
-its `author`. Use that value to select a custom card. For composition patterns,
-see [React composition](/docs/2.x/react/composition) or
-[Vue composition](/docs/2.x/vue/composition).
+The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and its `author`. Use that value to select a custom card. For composition patterns, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
 
 ## Next steps
 

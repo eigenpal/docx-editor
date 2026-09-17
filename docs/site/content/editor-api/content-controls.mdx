@@ -5,21 +5,13 @@ category: 'Editing API'
 order: 61
 ---
 
-Content controls mark template content for structured reading and editing.
-Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope.
-`ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs.
+Content controls mark template content for structured reading and editing. Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope. `ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
-Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Find a control and inspect its metadata
 
-`ContentControlCollection` exposes `items`, `getFirst()`, `getFirstOrNullObject()`,
-`getById(id)`, `getByTag(tag)`, and `getByTitle(title)`.
-Tag and title lookup return collections because matches need not be unique.
-`getById()` takes a number and returns the first match in document order.
-The loaded `ContentControl.id` is string metadata; DOCX IDs can be absent or repeated.
-Do not treat that value as a globally unique object identity.
+`ContentControlCollection` exposes `items`, `getFirst()`, `getFirstOrNullObject()`, `getById(id)`, `getByTag(tag)`, and `getByTitle(title)`. Tag and title lookup return collections because matches need not be unique. `getById()` takes a number and returns the first match in document order. The loaded `ContentControl.id` is string metadata; DOCX IDs can be absent or repeated. Do not treat that value as a globally unique object identity.
 
 This example fills one eligible text control:
 
@@ -39,9 +31,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-`isBound` is advisory metadata. Every write checks binding and protection again at sync.
-A stale read or changed lock can cause the batch to fail.
-The runtime rejects writes to custom XML-bound controls and does not expose `xmlMapping`.
+`isBound` is advisory metadata. Every write checks binding and protection again at sync. A stale read or changed lock can cause the batch to fail. The runtime rejects writes to custom XML-bound controls and does not expose `xmlMapping`.
 
 ## Choose the value for the control type
 
@@ -54,22 +44,11 @@ The runtime rejects writes to custom XML-bound controls and does not expose `xml
 | `{ kind: 'checkbox', checked: true }`     | Checkbox state and its displayed glyph           |
 | `{ kind: 'date', iso: '2026-09-13' }`     | Date value; also accepts a full ISO-8601 instant |
 
-Use the loaded `subtype` to choose an operation.
-It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`.
-A control's text is not always its semantic value.
-Writing the text `true` does not set a checkbox's state.
-The runtime rejects unsupported values or control structures.
+Use the loaded `subtype` to choose an operation. It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`. A control's text is not always its semantic value. Writing the text `true` does not set a checkbox's state. The runtime rejects unsupported values or control structures.
 
-`insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`.
-Replacement uses the control's value path, including placeholder and temporary-wrapper handling.
-Sync before using that returned range.
-`text`, `placeholderShown`, and `temporary` are loaded read-only properties.
+`insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`. Replacement uses the control's value path, including placeholder and temporary-wrapper handling. Sync before using that returned range. `text`, `placeholderShown`, and `temporary` are loaded read-only properties.
 
-For an existing placeholder, prefer replacing the control value.
-For untracked range edits, a range covering the complete prompt can also replace it.
-The runtime returns `NotSupported` if a replacement would consume prompt text outside its target
-or an insertion starts away from the prompt start.
-The first insertion at the prompt start consumes the placeholder text.
+For an existing placeholder, prefer replacing the control value. For untracked range edits, a range covering the complete prompt can also replace it. The runtime returns `NotSupported` if a replacement would consume prompt text outside its target or an insertion starts away from the prompt start. The first insertion at the prompt start consumes the placeholder text.
 
 ## Edit metadata and locks
 
@@ -80,16 +59,11 @@ The first insertion at the prompt start consumes the placeholder text.
 | `cannotDelete`, `cannotEdit`            | Loaded reads and boolean writes |
 | `text`, `placeholderShown`, `temporary` | Loaded reads                    |
 
-The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first.
-Effective ancestor locks and binding checks still apply; lock setters do not bypass protection.
-`ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary.
-There is no public combined `lock` property taking that alias.
+The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first. Effective ancestor locks and binding checks still apply; lock setters do not bypass protection. `ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary. There is no public combined `lock` property taking that alias.
 
 ## Create a text control
 
-`Range.insertContentControl(type?)` supports `RichText` and `PlainText`; the default is `RichText`.
-The range must be an eligible single-paragraph span.
-Sync creation before setting metadata:
+`Range.insertContentControl(type?)` supports `RichText` and `PlainText`; the default is `RichText`. The range must be an eligible single-paragraph span. Sync creation before setting metadata:
 
 ```ts
 await runtime.run(async (context) => {
@@ -105,23 +79,14 @@ await runtime.run(async (context) => {
 });
 ```
 
-`ContentControlType` includes other Word values, but the runtime rejects those creation modes.
-The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support.
-Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable.
-Use a prepared template for existing eligible date, list, and checkbox controls.
+`ContentControlType` includes other Word values, but the runtime rejects those creation modes. The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support. Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable. Use a prepared template for existing eligible date, list, and checkbox controls.
 
 ## Address or remove control content
 
-`getRange(location?)` accepts `Whole`, `Content`, `Start`, `End`, `Before`, and `After`.
-Resolve the returned range before dependent use.
-`delete(true)` removes the wrapper and preserves its content.
-`delete(false)` removes both wrapper and content.
-Deletion and value changes can fail because of protection, XML binding, unsupported structure, or tracking mode.
+`getRange(location?)` accepts `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. Resolve the returned range before dependent use. `delete(true)` removes the wrapper and preserves its content. `delete(false)` removes both wrapper and content. Deletion and value changes can fail because of protection, XML binding, unsupported structure, or tracking mode.
 
-Do not delete a binding or wrapper to force a failed template write.
-Read again and report an ineligible control to the application or template author.
+Do not delete a binding or wrapper to force a failed template write. Read again and report an ineligible control to the application or template author.
 
 ## Next steps
 
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges),
-[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).
+See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).

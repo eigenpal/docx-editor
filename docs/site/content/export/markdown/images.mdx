@@ -4,8 +4,7 @@ description: Include images in DOCX Markdown exports, preserve displayed sizes, 
 category: Export formats
 ---
 
-Before you begin, [install the converter](/docs/2.x/export/markdown#get-started).
-Set `images: true` to include image links and extracted bytes. For this Node.js example, save the code as `convert.mjs`, place `document.docx` beside it, and run `node convert.mjs`:
+Before you begin, [install the converter](/docs/2.x/export/markdown#get-started). Set `images: true` to include image links and extracted bytes. For this Node.js example, save the code as `convert.mjs`, place `document.docx` beside it, and run `node convert.mjs`:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -19,19 +18,13 @@ console.log(result.media); // Unique bytes, paths, URLs, dimensions, and occurre
 
 `images: true` and `images: {}` use relative URLs. If you omit `images`, the result contains no image links and returns `media: []`.
 
-Each image contains its ID, path, URL, MIME type, bytes, intrinsic dimensions, and occurrences.
-The ID is a hexadecimal SHA-256 digest without the `sha256:` prefix. MIME types and extensions describe the exported bytes, including converted images.
+Each image contains its ID, path, URL, MIME type, bytes, intrinsic dimensions, and occurrences. The ID is a hexadecimal SHA-256 digest without the `sha256:` prefix. MIME types and extensions describe the exported bytes, including converted images.
 
-Each occurrence records its page, story, source position, displayed dimensions, drawing kind, and alternative text.
-Repeated uses of identical bytes share one asset with separate occurrences. Source offsets use UTF-16 code units.
-Keep the document version with stored citations: occurrence and page identifiers belong to that export snapshot.
-See the [image types](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/src/media-types.ts) for all returned fields.
+Each occurrence records its page, story, source position, displayed dimensions, drawing kind, and alternative text. Repeated uses of identical bytes share one asset with separate occurrences. Source offsets use UTF-16 code units. Keep the document version with stored citations: occurrence and page identifiers belong to that export snapshot. See the [image types](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/src/media-types.ts) for all returned fields.
 
 ## Preserve displayed image sizes
 
-An image file's `pixelWidth` and `pixelHeight` describe its intrinsic pixels. Word can display the same file at different sizes.
-Use each occurrence's `displayWidthPx` and `displayHeightPx` for the document's displayed size, in CSS pixels at 96 pixels per inch.
-These values retain fractional pixels. `kind` distinguishes inline and anchored drawings.
+An image file's `pixelWidth` and `pixelHeight` describe its intrinsic pixels. Word can display the same file at different sizes. Use each occurrence's `displayWidthPx` and `displayHeightPx` for the document's displayed size, in CSS pixels at 96 pixels per inch. These values retain fractional pixels. `kind` distinguishes inline and anchored drawings.
 
 Standard Markdown image syntax has no width or height attributes. To carry each occurrence's size into your Markdown renderer, replace the conversion call in the first example with:
 
@@ -42,14 +35,9 @@ const result = await exportMarkdown(docxBytes, {
 // <img src="media/<digest>.png" alt="Banner" width="300" height="80">
 ```
 
-The converter escapes HTML attributes and rounds the display dimensions to whole CSS pixels. Extents smaller than half a pixel round to zero.
-This option works with local folders, ZIP downloads, and `resolveUrl` for server storage.
-The default `syntax: 'markdown'` keeps standard image links without dimensions.
-Both options return full occurrence metadata.
+The converter escapes HTML attributes and rounds the display dimensions to whole CSS pixels. Extents smaller than half a pixel round to zero. This option works with local folders, ZIP downloads, and `resolveUrl` for server storage. The default `syntax: 'markdown'` keeps standard image links without dimensions. Both options return full occurrence metadata.
 
-Configure your renderer to parse HTML, sanitize it, and retain `img` attributes `src`, `alt`, `width`, and `height`.
-For example, [`react-markdown`](https://github.com/remarkjs/react-markdown#appendix-a-html-in-markdown) supports `rehype-raw` followed by [`rehype-sanitize`](https://github.com/rehypejs/rehype-sanitize); the default sanitizer retains these attributes.
-If your renderer disables HTML or removes size attributes, use the metadata in a custom preview.
+Configure your renderer to parse HTML, sanitize it, and retain `img` attributes `src`, `alt`, `width`, and `height`. For example, [`react-markdown`](https://github.com/remarkjs/react-markdown#appendix-a-html-in-markdown) supports `rehype-raw` followed by [`rehype-sanitize`](https://github.com/rehypejs/rehype-sanitize); the default sanitizer retains these attributes. If your renderer disables HTML or removes size attributes, use the metadata in a custom preview.
 
 For a custom React preview, pass the selected occurrence and its asset's trusted preview URL:
 
@@ -82,17 +70,11 @@ function ImagePreview({
 }
 ```
 
-The explicit aspect ratio preserves Word's displayed proportions when the image shrinks, even if they differ from its intrinsic proportions.
-Use the same styles in a custom Markdown image component, with `width` and `height` from the generated HTML.
-Resolve `src` through your known asset URLs, as shown in the browser example.
+The explicit aspect ratio preserves Word's displayed proportions when the image shrinks, even if they differ from its intrinsic proportions. Use the same styles in a custom Markdown image component, with `width` and `height` from the generated HTML. Resolve `src` through your known asset URLs, as shown in the browser example.
 
-Do not use an asset's first occurrence to size every image with the same URL.
-Occurrences describe physical layout and include repeated headers; their order is not a Markdown image index.
-Use HTML syntax to attach the correct dimensions directly to each rendered image.
-For a preview built from occurrence metadata, identify the occurrence by its page, story, part, and drawing node.
+Do not use an asset's first occurrence to size every image with the same URL. Occurrences describe physical layout and include repeated headers; their order is not a Markdown image index. Use HTML syntax to attach the correct dimensions directly to each rendered image. For a preview built from occurrence metadata, identify the occurrence by its page, story, part, and drawing node.
 
-Displayed dimensions describe the drawing's extent before crop and rotation. They do not reproduce cropping, rotation, effects, alignment, or floating text wrapping.
-Anchored images appear at their source paragraph positions in Markdown.
+Displayed dimensions describe the drawing's extent before crop and rotation. They do not reproduce cropping, rotation, effects, alignment, or floating text wrapping. Anchored images appear at their source paragraph positions in Markdown.
 
 ## Save a local folder
 
@@ -107,9 +89,7 @@ const result = await exportMarkdown(await readFile('input.docx'), { images: true
 await writeMarkdownBundle(result, { directory: './output' });
 ```
 
-The helper writes `document.md`, `document.json`, and `media/`.
-The parent directory must exist, and the output directory must be new or empty. Existing files are not overwritten.
-Files use `0o600` permissions where supported. JSON includes page, review, and image metadata without image bytes.
+The helper writes `document.md`, `document.json`, and `media/`. The parent directory must exist, and the output directory must be new or empty. Existing files are not overwritten. Files use `0o600` permissions where supported. JSON includes page, review, and image metadata without image bytes.
 
 ## Save a ZIP file
 
@@ -127,9 +107,7 @@ The ZIP includes `document.md`, `document.json`, and `media/`. Keep generated re
 
 ## Convert and download in the browser
 
-Configure your bundler to serve the package's font and WebAssembly assets.
-For a working configuration, see the [browser demo](https://github.com/eigenpal/docx-editor/tree/main/examples/docx-to-markdown).
-Image extraction runs in the browser without a server or storage service.
+Configure your bundler to serve the package's font and WebAssembly assets. For a working configuration, see the [browser demo](https://github.com/eigenpal/docx-editor/tree/main/examples/docx-to-markdown). Image extraction runs in the browser without a server or storage service.
 
 ```ts
 import { exportMarkdown, createMarkdownZip } from '@docx-editor.dev/docx-to-markdown';

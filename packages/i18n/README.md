@@ -31,8 +31,7 @@ import { de } from '@docx-editor.dev/i18n';
 <DocxEditor document={bytes} i18n={de} />;
 ```
 
-For several editors, or for chrome parts you compose yourself, put it in context once with
-`LocaleProvider` instead:
+For several editors, or for chrome parts you compose yourself, put it in context once with `LocaleProvider` instead:
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
@@ -145,5 +144,4 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 
 ## Commercial Support
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+> [!TIP] Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.

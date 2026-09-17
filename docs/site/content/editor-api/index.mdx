@@ -8,13 +8,9 @@ seoTitle: 'Office.js-compatible DOCX editing API'
 
 <PackageStats name="@docx-editor.dev/editor-api" />
 
-`@docx-editor.dev/editor-api` edits DOCX files through a supported subset of Word's
-JavaScript object model, including paragraphs, ranges, comments, and revisions.
-Use `load()` to queue reads and `sync()` to apply each batch atomically.
+`@docx-editor.dev/editor-api` edits DOCX files through a supported subset of Word's JavaScript object model, including paragraphs, ranges, comments, and revisions. Use `load()` to queue reads and `sync()` to apply each batch atomically.
 
-Run the API on a server over DOCX bytes or in the browser against an open editor.
-See [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
-for supported members and differences from Word.
+Run the API on a server over DOCX bytes or in the browser against an open editor. See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) for supported members and differences from Word.
 
 ```bash
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
@@ -24,28 +20,26 @@ The API and editor adapters must share one resolved copy of the `@docx-editor.de
 
 ## Guides by task
 
-Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and
-[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
 
-| Task                                                      | Guide                                                                   |
-| --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Read, insert, replace, or remove text                     | [Text and ranges](/docs/2.x/editor-api/text-and-ranges)                 |
-| Find matches, split paragraphs, or use bookmarks          | [Search and navigation](/docs/2.x/editor-api/search-and-navigation)     |
-| Set fonts, paragraph properties, styles, or links         | [Formatting and styles](/docs/2.x/editor-api/formatting)                |
-| Create and configure lists                                | [Lists and numbering](/docs/2.x/editor-api/lists)                       |
-| Work with table values, rows, columns, and cells          | [Tables and cells](/docs/2.x/editor-api/tables)                         |
-| Insert and resize images                                  | [Inline pictures](/docs/2.x/editor-api/pictures)                        |
-| Calculate PAGE and NUMPAGES                               | [Fields and pagination](/docs/2.x/editor-api/fields)                    |
-| Set page geometry and edit headers, footers, or notes     | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
-| Fill template controls and edit their metadata            | [Content controls](/docs/2.x/editor-api/content-controls)               |
-| Discuss content and manage threads                        | [Comments](/docs/2.x/editor-api/comments)                               |
-| Create, inspect, accept, or reject tracked changes        | [Tracked changes](/docs/2.x/editor-api/revisions)                       |
-| Find any public object, method, property, or support type | [API member directory](/docs/2.x/editor-api/reference)                  |
+| Task | Guide |
+| --- | --- |
+| Read, insert, replace, or remove text | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
+| Find matches, split paragraphs, or use bookmarks | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
+| Set fonts, paragraph properties, styles, or links | [Formatting and styles](/docs/2.x/editor-api/formatting) |
+| Create and configure lists | [Lists and numbering](/docs/2.x/editor-api/lists) |
+| Work with table values, rows, columns, and cells | [Tables and cells](/docs/2.x/editor-api/tables) |
+| Insert and resize images | [Inline pictures](/docs/2.x/editor-api/pictures) |
+| Calculate PAGE and NUMPAGES | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| Set page geometry and edit headers, footers, or notes | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
+| Fill template controls and edit their metadata | [Content controls](/docs/2.x/editor-api/content-controls) |
+| Discuss content and manage threads | [Comments](/docs/2.x/editor-api/comments) |
+| Create, inspect, accept, or reject tracked changes | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| Find any public object, method, property, or support type | [API member directory](/docs/2.x/editor-api/reference) |
 
 ## Choose a host
 
-Use the root entry for server jobs and `/browser` to edit an open editor.
-For shared documents, use `DocxEditor.createCollaborative()` with your collaboration session.
+Use the root entry for server jobs and `/browser` to edit an open editor. For shared documents, use `DocxEditor.createCollaborative()` with your collaboration session.
 
 | Host          | Save through      | Requirements                                   |
 | ------------- | ----------------- | ---------------------------------------------- | --- | --------- |
@@ -53,9 +47,7 @@ For shared documents, use `DocxEditor.createCollaborative()` with your collabora
 | Browser       | The owning editor | An attached core, React, or Vue editor         |
 | Collaborative | `runtime.save()`  | DOCX bytes and an `EditorCollaborationSession` |
 
-Supply an `author` for comments, replies, and tracked edits.
-Browser review writes also require the Pro review module and an editable document.
-Capabilities describe host features; handle write errors from the call or `sync()`.
+Supply an `author` for comments, replies, and tracked edits. Browser review writes also require the Pro review module and an editable document. Capabilities describe host features; handle write errors from the call or `sync()`.
 
 See [Runtime and setup](/docs/2.x/editor-api/runtime) for capabilities, parsing limits, and resource cleanup.
 
@@ -85,32 +77,21 @@ try {
 }
 ```
 
-`createServer()` finishes parsing before it resolves. Each `save()` returns a fresh byte array.
-To update an open editor from a detached server job, load the saved bytes into that editor.
+`createServer()` finishes parsing before it resolves. Each `save()` returns a fresh byte array. To update an open editor from a detached server job, load the saved bytes into that editor.
 
 ## Create tracked changes on a server
 
-Set `context.document.changeTrackingMode = 'TrackMineOnly'` before calling
-`range.insertText()` or `range.delete()`. Configure an `author` when you create
-the runtime. The mode applies to that runtime and persists across `run()` calls.
+Set `context.document.changeTrackingMode = 'TrackMineOnly'` before calling `range.insertText()` or `range.delete()`. Configure an `author` when you create the runtime. The mode applies to that runtime and persists across `run()` calls.
 
-Tracked edits support text within one paragraph, including table cells. Edits
-that touch pending revisions, structural edits, and formatting edits are rejected
-atomically. `TrackAll` is unsupported. Browser tracked writes require the Pro review module;
-the runtime setting does not change the editor UI mode.
+Tracked edits support text within one paragraph, including table cells. Edits that touch pending revisions, structural edits, and formatting edits are rejected atomically. `TrackAll` is unsupported. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode.
 
-A pending row insertion or deletion blocks tracked edits throughout that row,
-including other cells and nested tables.
+A pending row insertion or deletion blocks tracked edits throughout that row, including other cells and nested tables.
 
-For a complete example, see the
-[server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md).
-To publish suggestions to a shared document, use
-[`DocxEditor.createCollaborative`](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines).
+For a complete example, see the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md). To publish suggestions to a shared document, use [`DocxEditor.createCollaborative`](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines).
 
 ## In the browser
 
-Pass an open core, React, or Vue editor to `createBrowser()`.
-Edits use that editor's undo history.
+Pass an open core, React, or Vue editor to `createBrowser()`. Edits use that editor's undo history.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
@@ -141,23 +122,17 @@ Dispose the runtime when you finish. Save browser edits through the owning edito
 - Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.
 - Handle errors by `code`. On `StaleDocument`, read again and reconsider the edit.
 
-See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
-for recovery and [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for batching limits.
+See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for recovery and [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for batching limits.
 
 ## Build an agent
 
-Define application tools around individual document tasks. Validate inputs and return plain data from each `runtime.run()` callback.
-Use `revisionTextView` to choose whether reads include pending insertions.
-Keep chat UI, model calls, and collaboration transport in your application.
+Define application tools around individual document tasks. Validate inputs and return plain data from each `runtime.run()` callback. Use `revisionTextView` to choose whether reads include pending insertions. Keep chat UI, model calls, and collaboration transport in your application.
 
-See [Build a DOCX agent](/docs/2.x/build-a-docx-agent) for a walkthrough,
-or the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md)
-for tracked edits and recovery.
+See [Build a DOCX agent](/docs/2.x/build-a-docx-agent) for a walkthrough, or the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for tracked edits and recovery.
 
 ## License
 
-This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
-See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
 ## Next steps
 

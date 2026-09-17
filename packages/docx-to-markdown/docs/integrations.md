@@ -1,7 +1,6 @@
 # Integrate DOCX to Markdown
 
-Before you begin, [install the converter and check the runtime requirements](../README.md#before-you-begin).
-Use `result.markdown` for text and `result.pages` for page citations. See [image delivery](images.md) for browser ZIP downloads, local folders, and server URLs with JSON metadata.
+Before you begin, [install the converter and check the runtime requirements](../README.md#before-you-begin). Use `result.markdown` for text and `result.pages` for page citations. See [image delivery](images.md) for browser ZIP downloads, local folders, and server URLs with JSON metadata.
 
 ## LangChain
 

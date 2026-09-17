@@ -17,24 +17,19 @@ Comments require the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
 ## Prerequisites
 
-| Task                                  | Requirement                                                                      |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| Read comments                         | A loaded document                                                                |
-| Show the review rail                  | `reviewModule()` and `DocxEditorReview`                                          |
-| Create or reply in a browser          | A non-empty `author`, `reviewModule()`, an editable mode, and an attached editor |
-| Resolve, reopen, or delete in browser | `reviewModule()`, an editable mode, and an attached editor                       |
-| Create or reply on a server           | A non-empty `author` and a server runtime                                        |
+| Task | Requirement |
+| --- | --- |
+| Read comments | A loaded document |
+| Show the review rail | `reviewModule()` and `DocxEditorReview` |
+| Create or reply in a browser | A non-empty `author`, `reviewModule()`, an editable mode, and an attached editor |
+| Resolve, reopen, or delete in browser | `reviewModule()`, an editable mode, and an attached editor |
+| Create or reply on a server | A non-empty `author` and a server runtime |
 
-OOXML requires `w:author` for each comment and reply. The engine refuses a
-write without an author.
+OOXML requires `w:author` for each comment and reply. The engine refuses a write without an author.
 
-Comments-only document protection permits these comment actions while keeping
-document content locked. Read-only protection and `mode="view"` refuse comment
-writes. See [Document protection](/docs/2.x/guides/document-protection) for the
-rules for each restriction.
+Comments-only document protection permits these comment actions while keeping document content locked. Read-only protection and `mode="view"` refuse comment writes. See [Document protection](/docs/2.x/guides/document-protection) for the rules for each restriction.
 
-For module registration and licensing, see the
-[Pro package documentation](/docs/2.x/pro).
+For module registration and licensing, see the [Pro package documentation](/docs/2.x/pro).
 
 ## Write a comment
 
@@ -266,21 +261,19 @@ For a document-level read without the review module, `editor.getComments()` retu
 
 ## Resolve and reopen threads
 
-The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and
-`<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
+The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and `<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
 
-| Action                       | Result                                               | Refusal behavior                            |
-| ---------------------------- | ---------------------------------------------------- | ------------------------------------------- |
-| `comment(text, author?)`     | Adds a thread to the selection                       | Returns `false`; the caller keeps its draft |
-| `reply(item, text, author?)` | Adds a reply, or comments on a revision range        | Returns `false`                             |
-| `resolve(item)`              | Marks an open thread complete                        | Repeating it succeeds without a write       |
-| `reopen(item)`               | Reopens a complete thread                            | Repeating it succeeds without a write       |
-| `remove(item)`               | Deletes a comment thread or rejects a tracked change | Returns `false` when refused                |
+| Action | Result | Refusal behavior |
+| --- | --- | --- |
+| `comment(text, author?)` | Adds a thread to the selection | Returns `false`; the caller keeps its draft |
+| `reply(item, text, author?)` | Adds a reply, or comments on a revision range | Returns `false` |
+| `resolve(item)` | Marks an open thread complete | Repeating it succeeds without a write |
+| `reopen(item)` | Reopens a complete thread | Repeating it succeeds without a write |
+| `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused |
 
 The hook does not own the caller's draft state.
 
-`commentResolutionDisabledReason` explains why Resolve and Reopen are
-unavailable.
+`commentResolutionDisabledReason` explains why Resolve and Reopen are unavailable.
 
 This example selects the correct action for the comment state:
 

@@ -10,12 +10,12 @@ Before you begin, [install the converter](/docs/2.x/export/markdown#get-started)
 
 ## Choose a font source
 
-| Your task                                          | Configuration                                                                              |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Convert documents that use common Word fonts       | Start with the bundled defaults; no font option is required.                               |
-| Load missing faces from Google Fonts               | Set `fallbackFonts: googleFonts()`. Network access is required.                            |
-| Use your own fonts or replace a bundled substitute | Supply font bytes through `fonts`.                                                         |
-| Convert without network access                     | Use bundled fonts, document-embedded fonts, and local custom fonts. Omit remote resolvers. |
+| Your task | Configuration |
+| --- | --- |
+| Convert documents that use common Word fonts | Start with the bundled defaults; no font option is required. |
+| Load missing faces from Google Fonts | Set `fallbackFonts: googleFonts()`. Network access is required. |
+| Use your own fonts or replace a bundled substitute | Supply font bytes through `fonts`. |
+| Convert without network access | Use bundled fonts, document-embedded fonts, and local custom fonts. Omit remote resolvers. |
 
 Fonts resolve in this order:
 
@@ -157,15 +157,15 @@ Save `result.fontResolution`, your package versions, font configuration, documen
 
 ## Troubleshoot fonts and pagination
 
-| Symptom                                        | What to check                                         | What to do                                                                                                                                                |
-| ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page breaks differ from Word                   | Substituted or incomplete families, and `displayMode` | Supply the source document's fonts through `fonts`, match revision visibility, and compare representative documents. Other layout differences can remain. |
-| `incomplete-font` warning                      | The family's `coverage` and `faces`                   | Supply the missing regular, bold, italic, or bold-italic files. Use Google Fonts fallback only if it contains that family and those faces.                |
-| `font-origin-failed` warning                   | `fontResolution.originFailures`                       | Correct the failing resolver or file path. For remote sources, check network access and the reported failure.                                             |
-| Google Fonts does not change the selected font | Whether an earlier source already resolved the face   | Put your replacement font in `fonts`; `fallbackFonts` does not override bundled substitutes.                                                              |
-| Strict export fails with `layoutFailed`        | The error message and font-source diagnostics         | Supply missing faces or fix the failing source. Use best effort only if approximate measurement is acceptable.                                            |
-| Font policy throws `TypeError`                 | Input type and custom `measurer`                      | Pass immutable DOCX bytes with the default measurer, or omit `fontPolicy` and `onFontResolution` for a live view or custom measurer.                      |
-| Deployed export cannot load bundled fonts      | Whether deployment retained package assets            | Follow the Node.js and Next.js deployment configuration in the integration guide.                                                                         |
+| Symptom | What to check | What to do |
+| --- | --- | --- |
+| Page breaks differ from Word | Substituted or incomplete families, and `displayMode` | Supply the source document's fonts through `fonts`, match revision visibility, and compare representative documents. Other layout differences can remain. |
+| `incomplete-font` warning | The family's `coverage` and `faces` | Supply the missing regular, bold, italic, or bold-italic files. Use Google Fonts fallback only if it contains that family and those faces. |
+| `font-origin-failed` warning | `fontResolution.originFailures` | Correct the failing resolver or file path. For remote sources, check network access and the reported failure. |
+| Google Fonts does not change the selected font | Whether an earlier source already resolved the face | Put your replacement font in `fonts`; `fallbackFonts` does not override bundled substitutes. |
+| Strict export fails with `layoutFailed` | The error message and font-source diagnostics | Supply missing faces or fix the failing source. Use best effort only if approximate measurement is acceptable. |
+| Font policy throws `TypeError` | Input type and custom `measurer` | Pass immutable DOCX bytes with the default measurer, or omit `fontPolicy` and `onFontResolution` for a live view or custom measurer. |
+| Deployed export cannot load bundled fonts | Whether deployment retained package assets | Follow the Node.js and Next.js deployment configuration in the integration guide. |
 
 For strict failures, use `onFontResolution: (report) => console.dir(report, { depth: null })` to inspect the report before rejection. The exporter does not await callback promises. See the [font resource limits](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#font-limits) for file size and memory constraints.
 

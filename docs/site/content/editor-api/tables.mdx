@@ -5,18 +5,13 @@ category: 'Editing API'
 order: 57
 ---
 
-Use `Body.tables` or `Range.tables` to discover tables in the addressed scope.
-`Table`, `TableRow`, and `TableCell` are proxies with separate collections.
-You can edit rectangular tables. Structural edits can fail on merged or otherwise unsupported tables.
+Use `Body.tables` or `Range.tables` to discover tables in the addressed scope. `Table`, `TableRow`, and `TableCell` are proxies with separate collections. You can edit rectangular tables. Structural edits can fail on merged or otherwise unsupported tables.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
-Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Insert a table
 
-`Range.insertTable(rowCount, columnCount, location, values?)` accepts `Before` or `After`.
-Counts must be positive integers. Supplied values must form a matching rectangular string matrix.
-Resolve the range, create the table, then configure it after sync:
+`Range.insertTable(rowCount, columnCount, location, values?)` accepts `Before` or `After`. Counts must be positive integers. Supplied values must form a matching rectangular string matrix. Resolve the range, create the table, then configure it after sync:
 
 ```ts
 await runtime.run(async (context) => {
@@ -35,9 +30,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The returned `Table` requires a completed sync before dependent operations.
-Table insertion is not a `Body.insertTable()` operation in this subset.
-Use a body paragraph's range as the anchor.
+The returned `Table` requires a completed sync before dependent operations. Table insertion is not a `Body.insertTable()` operation in this subset. Use a body paragraph's range as the anchor.
 
 ## Read table values and cells
 
@@ -58,45 +51,28 @@ await runtime.run(async (context) => {
 });
 ```
 
-`Table.getCell(rowIndex, cellIndex)` uses zero-based indexes.
-`Table.rows` returns `TableRowCollection`; `TableRow.cells` returns `TableCellCollection`.
-All three table collections expose `items`, `getFirst()`, and `getFirstOrNullObject()`.
-Load collection membership before reading item properties.
+`Table.getCell(rowIndex, cellIndex)` uses zero-based indexes. `Table.rows` returns `TableRowCollection`; `TableRow.cells` returns `TableCellCollection`. All three table collections expose `items`, `getFirst()`, and `getFirstOrNullObject()`. Load collection membership before reading item properties.
 
-`TableCell.body` exposes the cell's `Body` for text, paragraphs, search, and formatting.
-Resolve the cell and its body before dependent navigation.
-To preserve rich cell content, edit an exact range within that body.
-Whole-cell replacement supports ordinary single-paragraph text and preserves its existing font formatting.
-The runtime rejects multiline values, nested blocks, and complex cell content.
-Cell-body font reads remain scoped to that cell.
-You can navigate existing nested rectangular tables, but cannot create them.
+`TableCell.body` exposes the cell's `Body` for text, paragraphs, search, and formatting. Resolve the cell and its body before dependent navigation. To preserve rich cell content, edit an exact range within that body. Whole-cell replacement supports ordinary single-paragraph text and preserves its existing font formatting. The runtime rejects multiline values, nested blocks, and complex cell content. Cell-body font reads remain scoped to that cell. You can navigate existing nested rectangular tables, but cannot create them.
 
 ## Edit values and structure
 
-| Member                                             | Behavior                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------ |
-| `Table.values`                                     | Read or replace the table's string matrix                    |
-| `TableCell.value`                                  | Read or replace one cell's plain text                        |
-| `Table.rowCount`, `Table.columnCount`              | Loaded, read-only dimensions                                 |
-| `Table.addRows(location, rowCount, values?)`       | Add rows at `Start` or `End`; return `TableRowCollection`    |
-| `Table.addColumns(location, columnCount, values?)` | Add columns at `Start` or `End`; return `void`               |
-| `Table.deleteRows(rowIndex, rowCount?)`            | Delete rows from a zero-based index; default count is one    |
-| `Table.deleteColumns(columnIndex, columnCount?)`   | Delete columns from a zero-based index; default count is one |
-| `Table.delete()`                                   | Delete the table and clean up its references                 |
+| Member | Behavior |
+| --- | --- |
+| `Table.values` | Read or replace the table's string matrix |
+| `TableCell.value` | Read or replace one cell's plain text |
+| `Table.rowCount`, `Table.columnCount` | Loaded, read-only dimensions |
+| `Table.addRows(location, rowCount, values?)` | Add rows at `Start` or `End`; return `TableRowCollection` |
+| `Table.addColumns(location, columnCount, values?)` | Add columns at `Start` or `End`; return `void` |
+| `Table.deleteRows(rowIndex, rowCount?)` | Delete rows from a zero-based index; default count is one |
+| `Table.deleteColumns(columnIndex, columnCount?)` | Delete columns from a zero-based index; default count is one |
+| `Table.delete()` | Delete the table and clean up its references |
 
-Value matrices must match the affected row and column dimensions.
-Do not assume ragged matrices or implicit resizing work.
-Deleting all rows or all columns removes the table.
-`Table.delete()` can remove an existing merged table.
-Deletion can still fail if the table is protected or its surrounding structure is unsupported.
-Sync structural changes before addressing newly added cells or relying on changed indexes.
+Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
 
 ## Format tables and cells
 
-`Table.style` uses an existing table style name.
-`Table.headerRowCount` sets the number of leading header rows, from zero through the row count.
-Zero removes the header flags.
-Cell formatting exposes these properties:
+`Table.style` uses an existing table style name. `Table.headerRowCount` sets the number of leading header rows, from zero through the row count. Zero removes the header flags. Cell formatting exposes these properties:
 
 | `TableCell` property | Domain                                                              |
 | -------------------- | ------------------------------------------------------------------- |
@@ -104,10 +80,7 @@ Cell formatting exposes these properties:
 | `shadingColor`       | Six-digit RGB hex, optional `#`; `auto` removes direct shading      |
 | `verticalAlignment`  | `Top`, `Center`, or `Bottom`; the runtime rejects `Mixed` on writes |
 
-`VerticalAlignment` exports the corresponding enum values.
-For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`.
-A width write changes the entire grid column, matching cell widths, and total table width.
-It also sets fixed table layout. The runtime rejects width changes for tables with missing grids or merged cells.
+`VerticalAlignment` exports the corresponding enum values. For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`. A width write changes the entire grid column, matching cell widths, and total table width. It also sets fixed table layout. The runtime rejects width changes for tables with missing grids or merged cells.
 
 For example, format a resolved header cell:
 
@@ -119,22 +92,11 @@ await context.sync();
 
 ## Handle unsupported structures
 
-Structural edits can fail on merged grids, protected content, nested preserved structures, and pending revisions.
-Adding columns or deleting some columns requires an existing table grid.
-Deleting all columns can still remove a table without a grid.
-A matching TypeScript signature does not guarantee an edit works on every table.
-Table value replacement does not silently discard unsupported cell content.
-Inspect and edit a smaller cell-body range when that preserves the intended structure.
+Structural edits can fail on merged grids, protected content, nested preserved structures, and pending revisions. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
 
-The runtime rejects table creation, structural edits, and formatting while tracking changes.
-Tracked text edits can operate inside one eligible cell paragraph.
-A pending tracked row insertion or deletion blocks tracked text edits throughout that row.
-See [Tracked changes](/docs/2.x/editor-api/revisions).
+The runtime rejects table creation, structural edits, and formatting while tracking changes. Tracked text edits can operate inside one eligible cell paragraph. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
 
-Each row or column addition or deletion must run alone in its sync, even across separate tables.
-Do not combine it with cell values or formatting.
-Separate other dependent structural operations into distinct syncs.
-If a batch returns `ConflictingChanges`, read the table again before retrying a revised operation.
+Each row or column addition or deletion must run alone in its sync, even across separate tables. Do not combine it with cell values or formatting. Separate other dependent structural operations into distinct syncs. If a batch returns `ConflictingChanges`, read the table again before retrying a revised operation.
 
 ## Next steps
 

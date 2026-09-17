@@ -1,7 +1,6 @@
 # Nuxt example
 
-This repository example uses the private `@docx-editor.dev/nuxt` workspace
-module. The module wraps the Vue adapter for Nuxt 3 and Nuxt 4.
+This repository example uses the private `@docx-editor.dev/nuxt` workspace module. The module wraps the Vue adapter for Nuxt 3 and Nuxt 4.
 
 ## Run the example
 
@@ -25,8 +24,7 @@ export default defineNuxtConfig({
 });
 ```
 
-The module auto-imports `<DocxEditor>` as a client-only component.
-It also injects the editor stylesheet.
+The module auto-imports `<DocxEditor>` as a client-only component. It also injects the editor stylesheet.
 
 ```vue
 <template>
@@ -34,15 +32,10 @@ It also injects the editor stylesheet.
 </template>
 ```
 
-`app.vue` shows the complete workspace example.
-It imports `DocxEditorToolbar` from `@docx-editor.dev/vue`.
-It passes document bytes, review modules, an author, and a `ready` handler.
+`app.vue` shows the complete workspace example. It imports `DocxEditorToolbar` from `@docx-editor.dev/vue`. It passes document bytes, review modules, an author, and a `ready` handler.
 
 ## Use Nuxt outside this repository
 
-The workspace module has `"private": true`, so npm does not publish it.
-External applications must use the published Vue adapter with a client-only
-component.
+The workspace module has `"private": true`, so npm does not publish it. External applications must use the published Vue adapter with a client-only component.
 
-Follow the
-[Nuxt integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
+Follow the [Nuxt integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).

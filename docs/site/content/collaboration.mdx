@@ -5,13 +5,9 @@ category: 'Getting Started'
 seoTitle: 'Real-time DOCX collaboration quickstart for React and Vue'
 ---
 
-This quickstart uses `useWebrtcCollaboration` to add real-time DOCX
-collaboration to a React or Vue editor. It connects two editors through WebRTC
-and shows each participant's changes.
+This quickstart uses `useWebrtcCollaboration` to add real-time DOCX collaboration to a React or Vue editor. It connects two editors through WebRTC and shows each participant's changes.
 
-Start with a working editor from the [Quickstart](/docs/2.x/quickstart). For
-provider options and failure states, see the
-[collaboration reference](/docs/2.x/pro/collaboration).
+Start with a working editor from the [Quickstart](/docs/2.x/quickstart). For provider options and failure states, see the [collaboration reference](/docs/2.x/pro/collaboration).
 
 ## Install the packages
 
@@ -21,8 +17,7 @@ Install the Pro package, Yjs, and the WebRTC provider:
 npm install @docx-editor.dev/pro yjs y-webrtc
 ```
 
-You also need `@docx-editor.dev/react` or `@docx-editor.dev/vue` in your
-application.
+You also need `@docx-editor.dev/react` or `@docx-editor.dev/vue` in your application.
 
 ## Create a room ID
 
@@ -34,13 +29,11 @@ import { createCollaborationRoomId } from '@docx-editor.dev/pro/collaboration/we
 const roomId = createCollaborationRoomId();
 ```
 
-Store the room ID in your application state or URL. Do not create a new ID
-during each render.
+Store the room ID in your application state or URL. Do not create a new ID during each render.
 
 ## Add a collaborative editor
 
-Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX
-bytes. The first editor creates the room. Later editors join its document.
+Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX bytes. The first editor creates the room. Later editors join its document.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -73,9 +66,7 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
 }
 ```
 
-Vue provides the composable at `@docx-editor.dev/pro/vue/webrtc`. Select Vue in
-the [collaboration API reference](/docs/2.x/pro/collaboration#connect-with-usewebrtccollaboration)
-for a complete component.
+Vue provides the composable at `@docx-editor.dev/pro/vue/webrtc`. Select Vue in the [collaboration API reference](/docs/2.x/pro/collaboration#connect-with-usewebrtccollaboration) for a complete component.
 
 ## Test the room
 
@@ -83,23 +74,15 @@ for a complete component.
 2. Open a second tab with the same `roomId` and a different `actorId`.
 3. Type in either editor.
 
-Open the first tab before the second tab. This sequence prevents both peers from
-seeding an empty room at the same time.
+Open the first tab before the second tab. This sequence prevents both peers from seeding an empty room at the same time.
 
-The example uses the public demo signaling service when you omit `signaling`.
-Configure your own signaling URLs and TURN servers for production.
+The example uses the public demo signaling service when you omit `signaling`. Configure your own signaling URLs and TURN servers for production.
 
 ## Continue the setup
 
-- [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions):
-  check compatibility before deploying updates or reopening saved rooms.
-- [Production WebRTC setup](/docs/2.x/pro/collaboration#use-your-own-signaling):
-  configure signaling and TURN servers.
-- [Hocuspocus setup](/docs/2.x/pro/collaboration#connect-to-a-hocuspocus-server):
-  connect authentication and persistence.
-- [Custom Yjs providers](/docs/2.x/pro/collaboration#integrate-a-custom-yjs-provider):
-  connect an existing Yjs deployment.
-- [Tracked changes](/docs/2.x/pro/tracked-changes): suggesting mode and the
-  review sidebar.
-- [Build a DOCX agent](/docs/2.x/build-a-docx-agent): connect a headless replica
-  to a room for real-time agent edits.
+- [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions): check compatibility before deploying updates or reopening saved rooms.
+- [Production WebRTC setup](/docs/2.x/pro/collaboration#use-your-own-signaling): configure signaling and TURN servers.
+- [Hocuspocus setup](/docs/2.x/pro/collaboration#connect-to-a-hocuspocus-server): connect authentication and persistence.
+- [Custom Yjs providers](/docs/2.x/pro/collaboration#integrate-a-custom-yjs-provider): connect an existing Yjs deployment.
+- [Tracked changes](/docs/2.x/pro/tracked-changes): suggesting mode and the review sidebar.
+- [Build a DOCX agent](/docs/2.x/build-a-docx-agent): connect a headless replica to a room for real-time agent edits.

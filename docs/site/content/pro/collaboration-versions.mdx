@@ -6,59 +6,41 @@ order: 65
 seoTitle: 'DOCX collaboration version compatibility and upgrade guide'
 ---
 
-Collaboration has its own compatibility version, separate from the editor package
-version. Use it to decide which clients and workers can share a room.
-The same contract applies to Hocuspocus, WebRTC, and custom providers.
+Collaboration has its own compatibility version, separate from the editor package version. Use it to decide which clients and workers can share a room. The same contract applies to Hocuspocus, WebRTC, and custom providers.
 
-The installed package supplies the collaboration version.
-Changing that value does not upgrade a saved room.
-Ordinary DOCX files do not need a collaboration upgrade.
+The installed package supplies the collaboration version. Changing that value does not upgrade a saved room. Ordinary DOCX files do not need a collaboration upgrade.
 
 ## Understand the terms
 
-A collaboration deployment includes every program that reads or writes shared
-room state. Include browsers, servers, export workers, and background agents when
-you plan an upgrade.
+A collaboration deployment includes every program that reads or writes shared room state. Include browsers, servers, export workers, and background agents when you plan an upgrade.
 
-| Term                 | Meaning                                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Package version      | The npm release you install, such as `2.18.0`.                                                                                                       |
-| Collaboration format | The rules your installed code uses to interpret shared data and updates. Compare the complete exported value when admitting a connection.            |
-| Room                 | Shared editing state for one collaborative document. It includes identities and history that an ordinary DOCX export does not retain.                |
-| Replica              | A participant's local copy of the shared room state. Participants exchange updates to keep their copies synchronized.                                |
-| Saved room           | A persisted snapshot of collaboration state. Upgrading application packages does not convert this data.                                              |
-| Export and reseed    | Export a DOCX with a compatible build, then use it to initialize a separate room. The replacement room starts with empty collaboration undo history. |
-| Persistence key      | The storage identifier for saved room state or queued updates. Use fresh keys during migration to keep updates from different rooms separate.        |
+| Term | Meaning |
+| --- | --- |
+| Package version | The npm release you install, such as `2.18.0`. |
+| Collaboration format | The rules your installed code uses to interpret shared data and updates. Compare the complete exported value when admitting a connection. |
+| Room | Shared editing state for one collaborative document. It includes identities and history that an ordinary DOCX export does not retain. |
+| Replica | A participant's local copy of the shared room state. Participants exchange updates to keep their copies synchronized. |
+| Saved room | A persisted snapshot of collaboration state. Upgrading application packages does not convert this data. |
+| Export and reseed | Export a DOCX with a compatible build, then use it to initialize a separate room. The replacement room starts with empty collaboration undo history. |
+| Persistence key | The storage identifier for saved room state or queued updates. Use fresh keys during migration to keep updates from different rooms separate. |
 
 ### Understand the format value
 
-The 2.18.0 release uses `docx-collaboration:1.3.1.1`. The four numbers identify
-synchronization rules, shared storage structure, conflict-repair rules, and the
-editor's document model, in that order.
+The 2.18.0 release uses `docx-collaboration:1.3.1.1`. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
 
-Treat the complete value as one compatibility identifier. Import it from the
-installed package; do not construct it yourself. Changing the stored value does
-not convert the data or make incompatible code safe to use.
+Treat the complete value as one compatibility identifier. Import it from the installed package; do not construct it yourself. Changing the stored value does not convert the data or make incompatible code safe to use.
 
 ### Decide whether a fix requires migration
 
-A fix can keep the same format when released code already understands its corrected
-writes. For example, a paragraph-split fix can preserve text without changing its
-shared representation. Older writers still have their original bug.
+A fix can keep the same format when released code already understands its corrected writes. For example, a paragraph-split fix can preserve text without changing its shared representation. Older writers still have their original bug.
 
-A fix requires a format change when it changes the meaning of shared data or
-updates. For example, two versions might choose different surviving text for the
-same conflict, even though the stored fields have the same names.
+A fix requires a format change when it changes the meaning of shared data or updates. For example, two versions might choose different surviving text for the same conflict, even though the stored fields have the same names.
 
-Package versions and room compatibility have separate policies. A minor package
-release can require a saved-room migration. Check the release notes for a
-`Breaking collaboration upgrade` notice and its release-specific instructions.
-The public document API retains its own compatibility policy.
+Package versions and room compatibility have separate policies. A minor package release can require a saved-room migration. Check the release notes for a `Breaking collaboration upgrade` notice and its release-specific instructions. The public document API retains its own compatibility policy.
 
 ## Published collaboration formats
 
-The upgrade column describes moving from the previous stable release.
-Matching formats allow synchronization; older releases can still have bugs fixed in newer releases.
+The upgrade column describes moving from the previous stable release. Matching formats allow synchronization; older releases can still have bugs fixed in newer releases.
 
 {/* collaboration-releases:start */}
 
@@ -73,24 +55,20 @@ Matching formats allow synchronization; older releases can still have bugs fixed
 
 ## Choose the upgrade path
 
-Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration.
-Export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
+Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
 
-| Situation                                                  | What you do                                                                      |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Situation | What you do |
+| --- | --- |
 | Clients and workers support the same collaboration version | Keep using compatible rooms. Follow the release notes for other package changes. |
-| A client has a different collaboration version             | Refuse synchronization and direct the user to a compatible app deployment.       |
-| A saved room is incompatible with your deployment          | Keep the room intact and follow [Upgrade saved rooms](#upgrade-saved-rooms).     |
-| You only open and save DOCX files without collaboration    | No collaboration-room migration is needed.                                       |
+| A client has a different collaboration version | Refuse synchronization and direct the user to a compatible app deployment. |
+| A saved room is incompatible with your deployment | Keep the room intact and follow [Upgrade saved rooms](#upgrade-saved-rooms). |
+| You only open and save DOCX files without collaboration | No collaboration-room migration is needed. |
 
-Check both the connecting client and the saved room. A compatible client does not
-make an older room compatible. Include export workers and background agents in
-your deployment checks.
+Check both the connecting client and the saved room. A compatible client does not make an older room compatible. Include export workers and background agents in your deployment checks.
 
 ## Check clients before synchronization
 
-Import the collaboration format version and send it unchanged with your
-connection request. Do not hard-code its value or compare parts of it.
+Import the collaboration format version and send it unchanged with your connection request. Do not hard-code its value or compare parts of it.
 
 For Hocuspocus, your client can encode it with your access token:
 
@@ -105,9 +83,7 @@ export function connectionToken(accessToken: string): string {
 }
 ```
 
-Pass the result to the `token` option of `useHocuspocusCollaboration` or its
-`connect` method. The provider sends this string unchanged.
-If you refresh access tokens, encode the current token on each refresh.
+Pass the result to the `token` option of `useHocuspocusCollaboration` or its `connect` method. The provider sends this string unchanged. If you refresh access tokens, encode the current token on each refresh.
 
 Use a callback for tokens that expire:
 
@@ -124,11 +100,9 @@ export const token = async (): Promise<string> =>
   });
 ```
 
-Pass this callback as the connection's `token` option. The provider calls the callback
-on each reconnection, so it sends both the refreshed credential and the format version.
+Pass this callback as the connection's `token` option. The provider calls the callback on each reconnection, so it sends both the refreshed credential and the format version.
 
-On your server, authenticate the user and document access before checking the
-collaboration version. Complete both checks before allowing synchronization:
+On your server, authenticate the user and document access before checking the collaboration version. Complete both checks before allowing synchronization:
 
 ```ts
 import { Server } from '@hocuspocus/server';
@@ -175,30 +149,15 @@ const server = new Server({
 await server.listen();
 ```
 
-The assertion accepts an exact match. Missing, malformed, or different values
-throw `CollaborationSchemaError` with code `collaboration-format-mismatch`.
-The Hocuspocus wrapper preserves recognized failure codes from the server during
-initial connection and reconnection. Handle `error.code` in your app; do not parse
-error messages to detect a version mismatch.
-A reported version prevents accidental mixed-version connections. It does not
-prove which code a client runs or replace access control.
+The assertion accepts an exact match. Missing, malformed, or different values throw `CollaborationSchemaError` with code `collaboration-format-mismatch`. The Hocuspocus wrapper preserves recognized failure codes from the server during initial connection and reconnection. Handle `error.code` in your app; do not parse error messages to detect a version mismatch. A reported version prevents accidental mixed-version connections. It does not prove which code a client runs or replace access control.
 
-For a custom provider, perform the same checks in its connection admission flow.
-For WebRTC, your application must control access to room invitations before peers
-connect. Deploy compatible clients to every participant. The library detects
-incompatible room state, but does not provide a WebRTC admission server.
+For a custom provider, perform the same checks in its connection admission flow. For WebRTC, your application must control access to room invitations before peers connect. Deploy compatible clients to every participant. The library detects incompatible room state, but does not provide a WebRTC admission server.
 
-The existing `DOCUMENT_COLLABORATION_VERSIONS` and
-`assertDocumentCollaborationCompatibility` APIs remain supported for integrations
-that already use them. Use the format-version API for new connection handshakes.
-The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus)
-accepts compatible clients using either handshake.
+The existing `DOCUMENT_COLLABORATION_VERSIONS` and `assertDocumentCollaborationCompatibility` APIs remain supported for integrations that already use them. Use the format-version API for new connection handshakes. The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus) accepts compatible clients using either handshake.
 
 ## Check saved rooms before loading
 
-`readCollaborationFormatVersion` reads a room's recorded format version without
-joining, exporting, or changing its shared data. It can inspect incompatible
-rooms so you can identify which deployment they need.
+`readCollaborationFormatVersion` reads a room's recorded format version without joining, exporting, or changing its shared data. It can inspect incompatible rooms so you can identify which deployment they need.
 
 Check a saved snapshot in a temporary document before loading your live room:
 
@@ -225,103 +184,58 @@ export function loadRoom(live: Y.Doc, snapshot: Uint8Array): void {
 }
 ```
 
-Version inspection is a small metadata read. It does not validate the document's
-content. The separate export check validates compatible content and costs a full
-document export. A failure leaves the saved snapshot intact.
-If decoding the snapshot throws an unrecognized error, treat it as damaged saved
-data. Keep the snapshot for recovery, as the example server does.
+Version inspection is a small metadata read. It does not validate the document's content. The separate export check validates compatible content and costs a full document export. A failure leaves the saved snapshot intact. If decoding the snapshot throws an unrecognized error, treat it as damaged saved data. Keep the snapshot for recovery, as the example server does.
 
-Reading an unseeded room throws `not-initialized`. Missing or invalid version information
-causes `collaboration-format-mismatch`. Treat those errors as recovery cases for
-saved rooms. Only create an empty room when your storage confirms no room exists.
+Reading an unseeded room throws `not-initialized`. Missing or invalid version information causes `collaboration-format-mismatch`. Treat those errors as recovery cases for saved rooms. Only create an empty room when your storage confirms no room exists.
 
 ## Upgrade saved rooms
 
-Use this procedure when the release notes require a room migration.
-Try it on a backup in a test deployment before upgrading production rooms.
+Use this procedure when the release notes require a room migration. Try it on a backup in a test deployment before upgrading production rooms.
 
-1. Pause editing in the old deployment, including background jobs. Let accepted
-   updates finish. Ask users with offline or unsynchronized edits to reconnect
-   to that deployment or save their work for reconciliation.
-2. Back up each room and any separately stored files. Keep the application build
-   that can open the backup. Export a DOCX with that build using
-   `readCollaborationDocument`. Do not run the export with the incompatible
-   replacement build.
-3. Reopen the exported DOCX. Check the expected text, formatting, comments,
-   tracked changes, tables, and embedded content. Resolve missing work before
-   proceeding. An export does not repair pre-existing document damage.
-4. Deploy compatible clients, room servers, agents, and export workers. Create
-   a fresh room with a new room ID and storage key. Seed it from the verified
-   DOCX, then route your application's document link to that room.
-5. Use a new browser persistence key for the replacement room, if your app stores
-   edits locally. Keep old tabs and queued updates attached to the old room.
-   Do not copy saved room data or pending updates into the replacement room.
-6. Open the replacement room with two clients. Check editing and DOCX export
-   before you resume normal access. Keep the old room and backups read-only
-   until you accept the migration.
+1. Pause editing in the old deployment, including background jobs. Let accepted updates finish. Ask users with offline or unsynchronized edits to reconnect to that deployment or save their work for reconciliation.
+2. Back up each room and any separately stored files. Keep the application build that can open the backup. Export a DOCX with that build using `readCollaborationDocument`. Do not run the export with the incompatible replacement build.
+3. Reopen the exported DOCX. Check the expected text, formatting, comments, tracked changes, tables, and embedded content. Resolve missing work before proceeding. An export does not repair pre-existing document damage.
+4. Deploy compatible clients, room servers, agents, and export workers. Create a fresh room with a new room ID and storage key. Seed it from the verified DOCX, then route your application's document link to that room.
+5. Use a new browser persistence key for the replacement room, if your app stores edits locally. Keep old tabs and queued updates attached to the old room. Do not copy saved room data or pending updates into the replacement room.
+6. Open the replacement room with two clients. Check editing and DOCX export before you resume normal access. Keep the old room and backups read-only until you accept the migration.
 
-The DOCX transfers document content. Collaboration undo history starts afresh,
-and participants reconnect. Unsynchronized edits do not transfer automatically.
-Keep recovered local documents until their changes have been reconciled.
+The DOCX transfers document content. Collaboration undo history starts afresh, and participants reconnect. Unsynchronized edits do not transfer automatically. Keep recovered local documents until their changes have been reconciled.
 
 ### Roll back an upgrade
 
-Before editing starts in the replacement room, you can restore the previous
-deployment and route users back to the original room.
+Before editing starts in the replacement room, you can restore the previous deployment and route users back to the original room.
 
-After editing starts, pause the replacement room and preserve its changes first.
-Export with its compatible build, then reconcile those changes before returning
-users to the previous deployment. Do not send replacement-room updates to the
-original room.
+After editing starts, pause the replacement room and preserve its changes first. Export with its compatible build, then reconcile those changes before returning users to the previous deployment. Do not send replacement-room updates to the original room.
 
 ## Help users recover
 
-Use the failure's `code` for application logic. Keep `detail` in diagnostic logs;
-show users an action they can take.
+Use the failure's `code` for application logic. Keep `detail` in diagnostic logs; show users an action they can take.
 
-A thrown `CollaborationSchemaError` for a version mismatch includes recovery
-instructions and this guide's URL in its `message`. Framework hooks expose a
-structured failure through `error`; render your own message and a link to
-[the collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions).
-Open the guide in a separate tab so users can keep their local document available.
+A thrown `CollaborationSchemaError` for a version mismatch includes recovery instructions and this guide's URL in its `message`. Framework hooks expose a structured failure through `error`; render your own message and a link to [the collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions). Open the guide in a separate tab so users can keep their local document available.
 
-| Where compatibility fails                    | Suggested message                                                                                       | Application action                                                                                               |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A client is refused before synchronization   | “This app version cannot join the document. Save any local work, then open the compatible app version.” | Offer the correct deployment link. If that deployment is already active, offer a reload after saving local work. |
-| Your server cannot open a saved room         | “This document needs a collaboration upgrade. Contact your administrator.”                              | Keep the saved room and follow the migration procedure.                                                          |
-| An active session reports a version mismatch | “Collaboration stopped. Save a copy of your changes before continuing.”                                 | Preserve local work and investigate the client and room versions.                                                |
+| Where compatibility fails | Suggested message | Application action |
+| --- | --- | --- |
+| A client is refused before synchronization | “This app version cannot join the document. Save any local work, then open the compatible app version.” | Offer the correct deployment link. If that deployment is already active, offer a reload after saving local work. |
+| Your server cannot open a saved room | “This document needs a collaboration upgrade. Contact your administrator.” | Keep the saved room and follow the migration procedure. |
+| An active session reports a version mismatch | “Collaboration stopped. Save a copy of your changes before continuing.” | Preserve local work and investigate the client and room versions. |
 
-The codes `collaboration-format-mismatch`, `protocol-version-mismatch`, and
-`schema-version-mismatch` require a compatibility check.
-The code alone does not identify whether a client or saved
-room needs attention. Use the operation that failed to choose the message.
-Repeated reconnects cannot upgrade an incompatible room.
+The codes `collaboration-format-mismatch`, `protocol-version-mismatch`, and `schema-version-mismatch` require a compatibility check. The code alone does not identify whether a client or saved room needs attention. Use the operation that failed to choose the message. Repeated reconnects cannot upgrade an incompatible room.
 
-If an editor is mounted, offer a DOCX download using `await editor.save()` before
-reloading or replacing its session. Keep the copy if reconnection fails.
-Rejoining uses the room's document; it does not merge the saved local copy.
+If an editor is mounted, offer a DOCX download using `await editor.save()` before reloading or replacing its session. Keep the copy if reconnection fails. Rejoining uses the room's document; it does not merge the saved local copy.
 
-For other failures, see
-[Recover a diverged replica](/docs/2.x/pro/collaboration#recover-a-diverged-replica).
+For other failures, see [Recover a diverged replica](/docs/2.x/pro/collaboration#recover-a-diverged-replica).
 
 ## Preserve offline work across upgrades
 
-A client can have unsynchronized edits when a deployment changes. Refusing its
-connection does not transfer those edits. Keep its local document available and
-offer a DOCX download before reloading, clearing browser storage, or leaving.
+A client can have unsynchronized edits when a deployment changes. Refusing its connection does not transfer those edits. Keep its local document available and offer a DOCX download before reloading, clearing browser storage, or leaving.
 
-If possible, reconnect that client to the compatible previous deployment before
-exporting the migration snapshot. Otherwise, reconcile its saved DOCX separately.
-Do not replay old queued updates into a replacement room.
+If possible, reconnect that client to the compatible previous deployment before exporting the migration snapshot. Otherwise, reconcile its saved DOCX separately. Do not replay old queued updates into a replacement room.
 
 ## Package versions and collaboration versions
 
-Package versions identify releases. The collaboration format version identifies
-which clients, workers, and rooms can work together. Use the format assertion
-for connection decisions and read release notes before deploying an update.
+Package versions identify releases. The collaboration format version identifies which clients, workers, and rooms can work together. Use the format assertion for connection decisions and read release notes before deploying an update.
 
-A minor package release can require room migration. The format-version check
-detects incompatible rooms; it does not migrate them.
+A minor package release can require room migration. The format-version check detects incompatible rooms; it does not migrate them.
 
 ## Verify a deployment
 
@@ -335,5 +249,4 @@ Before admitting production traffic, verify these outcomes in a test deployment:
 
 ## Next steps
 
-For a runnable server example, see the
-[Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus).
+For a runnable server example, see the [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus).

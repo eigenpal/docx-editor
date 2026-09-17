@@ -11,11 +11,11 @@ The editor fits the page to its container by default. A container wide enough fo
 
 Zoom has a value and a mode. The value is the scale the pages paint at; the mode is where that value comes from.
 
-| Mode                                | Behavior                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `'auto'` (default)                  | Fit the page width, between 50% and 100%. Shrinks a page that does not fit, leaves one that does. |
-| `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page.                       |
-| `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This keeps a fixed scale (the behavior before fit modes).         |
+| Mode | Behavior |
+| --- | --- |
+| `'auto'` (default) | Fit the page width, between 50% and 100%. Shrinks a page that does not fit, leaves one that does. |
+| `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page. |
+| `{ type: 'fixed' }` | Hold whatever `zoom` is set to. This keeps a fixed scale (the behavior before fit modes). |
 
 <FrameworkTabs>
 <Framework value="react">
@@ -95,22 +95,21 @@ const { zoom, isFit, auto, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom();
 </template>
 ```
 
-The Vue composable returns computed refs. Destructured bindings unwrap in the template, so
-read them with `.value` only in script code.
+The Vue composable returns computed refs. Destructured bindings unwrap in the template, so read them with `.value` only in script code.
 
 </Framework>
 </FrameworkTabs>
 
-| Member                    | What it does                                                                              |
-| ------------------------- | ----------------------------------------------------------------------------------------- |
-| `zoom`                    | The resolved scale. `1` is 100%.                                                          |
-| `mode`, `isFit`           | Where the scale came from. Render a control's selected state from these, not from `zoom`. |
-| `setZoom(n)`              | A fixed scale. Leaves any fit.                                                            |
-| `setMode(m)`              | `'auto'`, a fit, or `{ type: 'fixed' }`.                                                  |
-| `auto()`, `fitToWidth()`  | The two fits, by name.                                                                    |
-| `reset()`                 | Reset to fixed 100% zoom.                                                                 |
-| `zoomIn()`, `zoomOut()`   | Move to the next preset in `levels`.                                                      |
-| `canZoomIn`, `canZoomOut` | Whether a higher or lower preset remains.                                                 |
+| Member | What it does |
+| --- | --- |
+| `zoom` | The resolved scale. `1` is 100%. |
+| `mode`, `isFit` | Where the scale came from. Render a control's selected state from these, not from `zoom`. |
+| `setZoom(n)` | A fixed scale. Leaves any fit. |
+| `setMode(m)` | `'auto'`, a fit, or `{ type: 'fixed' }`. |
+| `auto()`, `fitToWidth()` | The two fits, by name. |
+| `reset()` | Reset to fixed 100% zoom. |
+| `zoomIn()`, `zoomOut()` | Move to the next preset in `levels`. |
+| `canZoomIn`, `canZoomOut` | Whether a higher or lower preset remains. |
 
 Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage marks "75%" as selected while fit mode still owns the scale.
 

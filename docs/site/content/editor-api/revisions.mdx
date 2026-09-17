@@ -5,17 +5,13 @@ category: 'Editing API'
 order: 63
 ---
 
-Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them.
-To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter.
+Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them. To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
-Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Create a tracked replacement
 
-Configure a nonempty `author` when creating the runtime.
-For browser tracked writes, install the Pro review module on an editable editor.
-Then enable `TrackMineOnly` and use an ordinary range edit:
+Configure a nonempty `author` when creating the runtime. For browser tracked writes, install the Pro review module on an editable editor. Then enable `TrackMineOnly` and use an ordinary range edit:
 
 ```ts
 await runtime.run(async (context) => {
@@ -31,52 +27,31 @@ await runtime.run(async (context) => {
 });
 ```
 
-Use `insertText(text, 'Before' | 'After')` for insertion suggestions.
-Use `range.delete()` or `range.clear()` for deletion suggestions.
-Inserted ranges require sync before dependent use.
-Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
+Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range.delete()` or `range.clear()` for deletion suggestions. Inserted ranges require sync before dependent use. Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
 
-| `ChangeTrackingMode` value | Runtime behavior                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `Off`                      | Initial mode; ordinary permanent edits                                                               |
-| `TrackMineOnly`            | Text tracking for this runtime with an explicit author; browser writes require the Pro review module |
-| `TrackAll`                 | Fails with `NotSupported`                                                                            |
+| `ChangeTrackingMode` value | Runtime behavior |
+| --- | --- |
+| `Off` | Initial mode; ordinary permanent edits |
+| `TrackMineOnly` | Text tracking for this runtime with an explicit author; browser writes require the Pro review module |
+| `TrackAll` | Fails with `NotSupported` |
 
-The runtime's tracking setting does not change the browser editor UI mode.
-Read `document.changeTrackingMode` only after loading it.
-The mode persists across runs on that runtime.
-It does not change peers' tracking settings or save a document-wide tracking policy.
-Set `Off` explicitly only when your application intends permanent edits.
+The runtime's tracking setting does not change the browser editor UI mode. Read `document.changeTrackingMode` only after loading it. The mode persists across runs on that runtime. It does not change peers' tracking settings or save a document-wide tracking policy. Set `Off` explicitly only when your application intends permanent edits.
 
 ## Stay within the tracked text domain
 
-Tracked text edits support one paragraph, including table-cell text.
-The runtime rejects targets that touch pending revisions.
-A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables.
-While tracking changes, the runtime rejects formatting, lists, tables, pictures, breaks, control changes, and other structural edits.
-Comments and supported revision decisions remain available.
+Tracked text edits support one paragraph, including table-cell text. The runtime rejects targets that touch pending revisions. A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. While tracking changes, the runtime rejects formatting, lists, tables, pictures, breaks, control changes, and other structural edits. Comments and supported revision decisions remain available.
 
-Never turn tracking off automatically to make an unsupported operation succeed.
-Report the limit or ask your application to choose a separately authorized permanent edit.
-For a multi-stage review, each successful sync becomes a separately committed suggestion.
-A later refusal does not roll back earlier suggestions.
+Never turn tracking off automatically to make an unsupported operation succeed. Report the limit or ask your application to choose a separately authorized permanent edit. For a multi-stage review, each successful sync becomes a separately committed suggestion. A later refusal does not roll back earlier suggestions.
 
 ## Choose the revision text view
 
-The runtime option `revisionTextView` affects ordinary text loads and search.
-`allMarkup` is the default. `original` retains pending deletions and hides pending insertions.
-This is a DocxEditor host option, not a Word document-model property.
-It does not accept or reject revisions.
+The runtime option `revisionTextView` affects ordinary text loads and search. `allMarkup` is the default. `original` retains pending deletions and hides pending insertions. This is a DocxEditor host option, not a Word document-model property. It does not accept or reject revisions.
 
-Use plain text and explicit revision information when preparing a model prompt.
-Do not pass live proxies into a model or job queue.
-See [Runtime and setup](/docs/2.x/editor-api/runtime).
+Use plain text and explicit revision information when preparing a model prompt. Do not pass live proxies into a model or job queue. See [Runtime and setup](/docs/2.x/editor-api/runtime).
 
 ## Inspect revisions by story
 
-`Document.revisions` addresses the main story.
-`Body.revisions` addresses that body's story, including a header, footer, or note.
-It never merges all stories into one collection.
+`Document.revisions` addresses the main story. `Body.revisions` addresses that body's story, including a header, footer, or note. It never merges all stories into one collection.
 
 Load collection membership, then load `author`, `date`, and `type`:
 
@@ -97,11 +72,7 @@ const pending = await runtime.run(async (context) => {
 });
 ```
 
-`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods.
-`Revision.type` uses the exported `RevisionType` vocabulary.
-`Revision.range` returns a range for the addressed revision.
-Resolve the range before reading or selecting its content.
-`RevisionCollection` exposes `items`, `resolve()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
+`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
 
 ## Resolve a batch of changes
 
@@ -146,19 +117,19 @@ Keep `resolve()` as the only write in its sync batch; reads can share the batch.
 
 ### Interpret the result
 
-| Field       | Meaning                                                                                   |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| `resolved`  | Resolved decisions, with their key, author, part name, and revision kind.                 |
-| `skipped`   | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
-| `remaining` | Number of pending decisions in the story, including excluded and unsupported changes.     |
+| Field | Meaning |
+| --- | --- |
+| `resolved` | Resolved decisions, with their key, author, part name, and revision kind. |
+| `skipped` | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
+| `remaining` | Number of pending decisions in the story, including excluded and unsupported changes. |
 
 A decision can contain several XML markers, such as both halves of a replacement. A successful batch can leave changes pending:
 
-| Skip reason            | Next step                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
+| Skip reason | Next step |
+| --- | --- |
 | `unsupported-revision` | Resolve the unsupported structure in Word. Independent supported changes can still resolve. |
-| `incomplete-group`     | Review and select all related decisions together.                                           |
-| `unknown-revision`     | Reload the collection; the target no longer exists.                                         |
+| `incomplete-group` | Review and select all related decisions together. |
+| `unknown-revision` | Reload the collection; the target no longer exists. |
 
 Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection.
 
@@ -242,6 +213,4 @@ bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction
 
 ## Next steps
 
-See the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md),
-[Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines), and
-[Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+See the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md), [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines), and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

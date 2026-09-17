@@ -4,15 +4,11 @@ description: 'Use your components to customize editor popups in React and Vue.'
 category: 'Guides'
 ---
 
-Pass `popups` to the editor or `Root`. Use `definePopup(MyPopup)` to supply
-a React component or Vue single-file component. The editor opens it
-and supplies its typed props. Forward those props to the default component to
-retain its state, validation, and commands.
+Pass `popups` to the editor or `Root`. Use `definePopup(MyPopup)` to supply a React component or Vue single-file component. The editor opens it and supplies its typed props. Forward those props to the default component to retain its state, validation, and commands.
 
 ## Replace a button
 
-These examples replace **Apply** in the **Page Setup** dialog. The editor manages
-the opening state and session.
+These examples replace **Apply** in the **Page Setup** dialog. The editor manages the opening state and session.
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -64,8 +60,7 @@ const Apply = Dialog.Apply;
 </template>
 ```
 
-Keep `preset: true` when forwarding Vue props; omitted Boolean props otherwise
-become `false`. Register the component in your editor:
+Keep `preset: true` when forwarding Vue props; omitted Boolean props otherwise become `false`. Register the component in your editor:
 
 ```vue
 <script setup lang="ts">
@@ -86,24 +81,17 @@ const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
 </Framework>
 </FrameworkTabs>
 
-Custom button components must forward refs, attributes, and listeners to their
-native button. Preserve the supplied handler and disabled state.
+Custom button components must forward refs, attributes, and listeners to their native button. Preserve the supplied handler and disabled state.
 
-`asChild` forwards behavior, positioning, data attributes, and your `className` to
-the child element. It omits the packaged decorative classes.
-To adjust the default appearance, pass `className` to the part without `asChild`.
+`asChild` forwards behavior, positioning, data attributes, and your `className` to the child element. It omits the packaged decorative classes. To adjust the default appearance, pass `className` to the part without `asChild`.
 
-The hyperlink popup's `Root` keeps its packaged class for positioning and stacking.
-Use a scoped `.docx-hyperlink-popup` rule to override its appearance.
+The hyperlink popup's `Root` keeps its packaged class for positioning and stacking. Use a scoped `.docx-hyperlink-popup` rule to override its appearance.
 
-Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
-React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
-components, not render callbacks.
+Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside components, not render callbacks.
 
 ## Choose a popup
 
-Each entry accepts a `definePopup()` result, render callback, or `false`.
-Each popup receives the props listed here.
+Each entry accepts a `definePopup()` result, render callback, or `false`. Each popup receives the props listed here.
 
 | Entry                    | Supplied props                             |
 | ------------------------ | ------------------------------------------ |
@@ -123,61 +111,39 @@ Each popup receives the props listed here.
 | `contentControlPicture`  | `{ session: ContentControlWidgetSession }` |
 | `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
 
-Omitted entries retain existing behavior, including native widget and invalid-field
-dialogs. The packaged editor supplies defaults. `Root` mounts configured surfaces;
-image and note overrides use their existing triggers. Explicit entries override
-`menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
+Omitted entries retain existing behavior, including native widget and invalid-field dialogs. The packaged editor supplies defaults. `Root` mounts configured surfaces; image and note overrides use their existing triggers. Explicit entries override `menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
 
-To manage opening and closing yourself, set the entry to `false` and mount the popup.
-For component customization with automatic opening, use `definePopup()`.
-Toolbar menus and pickers use their existing compound `.Content` parts, outside this map.
+To manage opening and closing yourself, set the entry to `false` and mount the popup. For component customization with automatic opening, use `definePopup()`. Toolbar menus and pickers use their existing compound `.Content` parts, outside this map.
 
 ## Arrange parts and custom fields
 
-Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body`,
-`Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept
-`className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
+Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
-Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element.
-Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler.
-Use `asChild` for a custom element, and preserve the supplied behavior.
+Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element. Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler. Use `asChild` for a custom element, and preserve the supplied behavior.
 
-Named children replace default parts. Use `hidden` to remove a part or
-`preset={false}` to supply the complete arrangement. Include a title, error region,
-and accessible Apply and Cancel controls. Omitted fields retain their draft values.
+Named children replace default parts. Use `hidden` to remove a part or `preset={false}` to supply the complete arrangement. Include a title, error region, and accessible Apply and Cancel controls. Omitted fields retain their draft values.
 
-Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part
-contains the collection control; `specialBy` appears when relevant.
+Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part contains the collection control; `specialBy` appears when relevant.
 
-For custom value controls, call `usePageSetupDialog()`, `useParagraphDialog()`, or
-`useTextFormFieldDialog()` inside a child of the matching dialog. Each supplies
-`values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
-Vue exposes state as refs. Use these draft APIs instead of creating another form session.
+For custom value controls, call `usePageSetupDialog()`, `useParagraphDialog()`, or `useTextFormFieldDialog()` inside a child of the matching dialog. Each supplies `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. Vue exposes state as refs. Use these draft APIs instead of creating another form session.
 
-A `Field` represents the labeled row; `asChild` does not adapt input value events.
-Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state.
-See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
-[Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
+A `Field` represents the labeled row; `asChild` does not adapt input value events. Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state. See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 
 ## Compose the value pop-up
 
-Use `DocxEditorContentControlWidget` to customize content-control popups. Omit
-children to keep the default UI, or pass parts to replace its contents. The root
-handles placement, Escape, outside clicks, focus return, and Tab wrapping.
+Use `DocxEditorContentControlWidget` to customize content-control popups. Omit children to keep the default UI, or pass parts to replace its contents. The root handles placement, Escape, outside clicks, focus return, and Tab wrapping.
 
 Choose an entry in the editor's `popups` prop:
 
-| Entry                    | Controls                                              | Default when omitted |
-| ------------------------ | ----------------------------------------------------- | -------------------- |
-| `contentControlWidget`   | Dropdown, combo box, date, and building block gallery | List or calendar     |
-| `contentControlCheckbox` | Checkbox                                              | Toggle immediately   |
-| `contentControlPicture`  | Picture                                               | Open a file dialog   |
+| Entry | Controls | Default when omitted |
+| --- | --- | --- |
+| `contentControlWidget` | Dropdown, combo box, date, and building block gallery | List or calendar |
+| `contentControlCheckbox` | Checkbox | Toggle immediately |
+| `contentControlPicture` | Picture | Open a file dialog |
 
 ### Arrange parts
 
-Check `session.kind` before rendering date-specific parts. Keep the default root
-for other kinds. This example styles the grid and uses `asChild` to replace the
-Today button's element while retaining its behavior.
+Check `session.kind` before rendering date-specific parts. Keep the default root for other kinds. This example styles the grid and uses `asChild` to replace the Today button's element while retaining its behavior.
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -257,26 +223,21 @@ Import `BrandedWidget` and register it on your editor:
 </Framework>
 </FrameworkTabs>
 
-`source` is your existing editor document. Import `DocxEditor` from your framework's
-package. Parts accept `className`, `style`, `hidden`, and `asChild` and forward
-`id`, `aria-*`, and `data-*`. With `asChild`, provide one element; custom components
-must forward its props, events, and ref.
+`source` is your existing editor document. Import `DocxEditor` from your framework's package. Parts accept `className`, `style`, `hidden`, and `asChild` and forward `id`, `aria-*`, and `data-*`. With `asChild`, provide one element; custom components must forward its props, events, and ref.
 
-| Task                               | Parts                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| Render a complete date picker      | `Calendar`                                                                     |
-| Arrange calendar navigation        | `Header`, `PreviousMonth`, `Title`, `NextMonth`, `Navigation`, `Month`, `Year` |
-| Arrange dates and entry            | `Weekdays`, `Grid`, `Day`, `Today`, `Input`                                    |
-| Render choices or a picture picker | `List`, `Item`, `Picture`                                                      |
-| Show errors and actions            | `Error`, `Footer`, `Apply`, `Cancel`                                           |
+| Task | Parts |
+| --- | --- |
+| Render a complete date picker | `Calendar` |
+| Arrange calendar navigation | `Header`, `PreviousMonth`, `Title`, `NextMonth`, `Navigation`, `Month`, `Year` |
+| Arrange dates and entry | `Weekdays`, `Grid`, `Day`, `Today`, `Input` |
+| Render choices or a picture picker | `List`, `Item`, `Picture` |
+| Show errors and actions | `Error`, `Footer`, `Apply`, `Cancel` |
 
-`Header` includes month and year selectors. `Footer` includes Cancel and Apply.
-Keep `Error` in custom arrangements so users can see rejected writes.
+`Header` includes month and year selectors. `Footer` includes Cancel and Apply. Keep `Error` in custom arrangements so users can see rejected writes.
 
 ### Add a custom action
 
-Call `useContentControlWidget()` in a child of `Widget`. This React button commits
-a date through the same validation as the packaged picker:
+Call `useContentControlWidget()` in a child of `Widget`. This React button commits a date through the same validation as the packaged picker:
 
 ```tsx
 import { useContentControlWidget } from '@docx-editor.dev/react';
@@ -291,27 +252,17 @@ function UseDepartureDate() {
 }
 ```
 
-Place `<UseDepartureDate />` inside the date arrangement above. In Vue, import the
-composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates
-unwrap automatically.
+Place `<UseDepartureDate />` inside the date arrangement above. In Vue, import the composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates unwrap automatically.
 
-- `setValue(value)` updates the draft. `apply()` commits it; `apply(value)` commits
-  an explicit value. A refused write returns `false`, keeps the popup open, and
-  sets `refused`. `cancel()` closes without applying the draft.
-- Dates use `YYYY-MM-DD`. `dateText`, `setDateText`, and `applyDateText` handle
-  regional numeric entry using `session.locale`.
-- Lists expose `items`. Pass an entry to `Item`, or call `apply(item.value)`.
-  Gallery values name blocks in the document's glossary.
-- Pictures expose `accept` and `replaceImage(fileOrBytes)`. Replacement returns
-  `Promise<boolean>` and preserves the drawing's size.
-- Checkbox values are `'true'` and `'false'`. A checkbox root without children
-  toggles immediately; custom children must call `apply`.
+- `setValue(value)` updates the draft. `apply()` commits it; `apply(value)` commits an explicit value. A refused write returns `false`, keeps the popup open, and sets `refused`. `cancel()` closes without applying the draft.
+- Dates use `YYYY-MM-DD`. `dateText`, `setDateText`, and `applyDateText` handle regional numeric entry using `session.locale`.
+- Lists expose `items`. Pass an entry to `Item`, or call `apply(item.value)`. Gallery values name blocks in the document's glossary.
+- Pictures expose `accept` and `replaceImage(fileOrBytes)`. Replacement returns `Promise<boolean>` and preserves the drawing's size.
+- Checkbox values are `'true'` and `'false'`. A checkbox root without children toggles immediately; custom children must call `apply`.
 
 ### Style without replacing a renderer
 
-Use `--doc-*` tokens for colors and `data-docx-part` attributes for individual
-parts. These hooks work with the engine, React, and Vue renderers. Load your
-stylesheet after the editor stylesheet.
+Use `--doc-*` tokens for colors and `data-docx-part` attributes for individual parts. These hooks work with the engine, React, and Vue renderers. Load your stylesheet after the editor stylesheet.
 
 ```css
 .docx-editor [data-docx-part='day'] {
@@ -322,26 +273,17 @@ stylesheet after the editor stylesheet.
 }
 ```
 
-Calendar cells expose `data-selected`, `data-today`, and `data-other-month`.
-Popup roots expose `data-placement="top"` or `"bottom"`.
+Calendar cells expose `data-selected`, `data-today`, and `data-other-month`. Popup roots expose `data-placement="top"` or `"bottom"`.
 
 ### Build a custom grid or root
 
-Prefer packaged parts to retain keyboard behavior. For a custom grid, use
-`calendar.days`, `focusDay`, and `calendarDateForKey` from
-`@docx-editor.dev/core/editor`. Preserve grid roles, selected states, and one
-focusable day. For a custom list, use `listId` and `listNavigation` to preserve
-listbox relationships, typeahead, and roving focus.
+Prefer packaged parts to retain keyboard behavior. For a custom grid, use `calendar.days`, `focusDay`, and `calendarDateForKey` from `@docx-editor.dev/core/editor`. Preserve grid roles, selected states, and one focusable day. For a custom list, use `listId` and `listNavigation` to preserve listbox relationships, typeahead, and roving focus.
 
-For a separate popup root, call `observeContentControlPopup(panel, session.anchor)`
-and run its returned cleanup on close. Use `contentControlPopupKeyDown` for Escape
-and Tab wrapping. You must also handle outside clicks, focus return, and
-`session.signal` cancellation. The packaged root handles these requirements.
+For a separate popup root, call `observeContentControlPopup(panel, session.anchor)` and run its returned cleanup on close. Use `contentControlPopupKeyDown` for Escape and Tab wrapping. You must also handle outside clicks, focus return, and `session.signal` cancellation. The packaged root handles these requirements.
 
 ## Connect a custom input
 
-Put the input inside a named `Field`. Call the draft hook in the input component,
-which renders under the dialog's provider. This example edits the top margin in inches.
+Put the input inside a named `Field`. Call the draft hook in the input component, which renders under the dialog's provider. This example edits the top margin in inches.
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -404,8 +346,7 @@ function update(event: Event) {
 </template>
 ```
 
-Import `TopMargin` in `PageSetup.vue` and declare `const Field = Dialog.Field`.
-Add this named child inside `Dialog`:
+Import `TopMargin` in `PageSetup.vue` and declare `const Field = Dialog.Field`. Add this named child inside `Dialog`:
 
 ```vue
 <Field name="marginTop"><TopMargin /></Field>
@@ -414,8 +355,7 @@ Add this named child inside `Dialog`:
 </Framework>
 </FrameworkTabs>
 
-Keep the default `Apply` and `Error` parts. Invalid margins keep the dialog open and
-show an error. **Cancel** discards the draft.
+Keep the default `Apply` and `Error` parts. Invalid margins keep the dialog open and show an error. **Cancel** discards the draft.
 
 ## Style popups
 
@@ -432,19 +372,12 @@ Optional tokens adjust the panel without replacing any part:
 | `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer.    |
 | `--doc-dialog-gap`            | The vertical distance between rows and sections.               |
 
-Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
-`data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
+Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`. `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
 
 There are two ways to change how a part looks:
 
-- To adjust the packaged part, pass `className` to the part. Every default rule
-  uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it
-  survives element resets like Tailwind preflight. To override these rules, add a class or attribute
-  the default does not have, and skip `!important`. A selector with one class, such
-  as `.app-rounded`, has lower specificity. Adding `.docx-editor` gives equal
-  specificity, so stylesheet order determines the result.
-- To bring your own element, pass `asChild`. The packaged classes stay off your
-  element, so a single class or utility classes style it as written.
+- To adjust the packaged part, pass `className` to the part. Every default rule uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it survives element resets like Tailwind preflight. To override these rules, add a class or attribute the default does not have, and skip `!important`. A selector with one class, such as `.app-rounded`, has lower specificity. Adding `.docx-editor` gives equal specificity, so stylesheet order determines the result.
+- To bring your own element, pass `asChild`. The packaged classes stay off your element, so a single class or utility classes style it as written.
 
 ```css
 /* className="app-rounded" on the packaged Apply part. The
@@ -464,17 +397,10 @@ There are two ways to change how a part looks:
 }
 ```
 
-Automatic dialogs inherit their editor's theme. For external portals or Vue
-`Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance.
-Preserve labels, keyboard behavior, and input-method composition on custom controls.
+Automatic dialogs inherit their editor's theme. For external portals or Vue `Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance. Preserve labels, keyboard behavior, and input-method composition on custom controls.
 
-For a complete session renderer, follow its abort signal and use its supplied
-actions. Widget sessions validate through `apply(value)`. Invalid-field sessions
-use `acknowledge()` to handle the invalid fill, or `cancel()` to dismiss without clearing it.
-`locale` controls regional dates; `i18n` controls UI strings.
+For a complete session renderer, follow its abort signal and use its supplied actions. Widget sessions validate through `apply(value)`. Invalid-field sessions use `acknowledge()` to handle the invalid fill, or `cancel()` to dismiss without clearing it. `locale` controls regional dates; `i18n` controls UI strings.
 
 ## Next steps
 
-Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
-or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
-with `?dialogs=1` to try two themed editors with custom dialog and link controls.
+Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) with `?dialogs=1` to try two themed editors with custom dialog and link controls.

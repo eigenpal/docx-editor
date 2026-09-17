@@ -39,30 +39,30 @@ Use these root props to configure the packaged frame:
 <FrameworkTabs variant="block">
 <Framework value="react">
 
-| Prop                                         | Type                                    | Description                                        |
-| -------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| `title`                                      | `string`                                | Document name shown in the title bar.              |
-| `onTitleChange`                              | `(title: string) => void`               | Makes the title editable.                          |
-| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title bar slots.                        |
-| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
-| `chrome`                                     | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                                 | `boolean \| DocxEditorNavigationProps`  | Toggle or customize the packaged navigation pane.  |
-| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                  |
-| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
+| Prop | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document name shown in the title bar. |
+| `onTitleChange` | `(title: string) => void` | Makes the title editable. |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode` | Host-owned title bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggle or customize the packaged menu row. |
+| `chrome` | `boolean` | Set `false` to remove the packaged frame entirely. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggle or customize the packaged navigation pane. |
+| `hyperlinkPopup` | `boolean` | Toggle the packaged link popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu. |
 
 </Framework>
 <Framework value="vue">
 
-| API                                | Type                                    | Description                                        |
-| ---------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| `title`                            | `string`                                | Document name shown in the title bar.              |
-| `@title-change`                    | `(title: string) => void`               | Makes the title editable.                          |
-| `#titleBarLeft` / `#titleBarRight` | slot                                    | Host-owned title bar slots.                        |
-| `menu`                             | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
-| `chrome`                           | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                       | `boolean \| DocxEditorNavigationProps`  | Toggle or customize the packaged navigation pane.  |
-| `hyperlinkPopup`                   | `boolean`                               | Toggle the packaged link popover.                  |
-| `contextMenu`                      | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
+| API | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document name shown in the title bar. |
+| `@title-change` | `(title: string) => void` | Makes the title editable. |
+| `#titleBarLeft` / `#titleBarRight` | slot | Host-owned title bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggle or customize the packaged menu row. |
+| `chrome` | `boolean` | Set `false` to remove the packaged frame entirely. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggle or customize the packaged navigation pane. |
+| `hyperlinkPopup` | `boolean` | Toggle the packaged link popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu. |
 
 </Framework>
 </FrameworkTabs>
@@ -168,48 +168,32 @@ const bold = useEditorCommand('text.bold');
 </template>
 ```
 
-`useEditorCommand` returns computed refs on a plain object, so read `isEnabled`,
-`isActive`, and `disabledReason` with `.value`.
+`useEditorCommand` returns computed refs on a plain object, so read `isEnabled`, `isActive`, and `disabledReason` with `.value`.
 
 </Framework>
 </FrameworkTabs>
 
-See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for every slot,
-its packaged surface, and the matching React and Vue toolbar part.
+See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for every slot, its packaged surface, and the matching React and Vue toolbar part.
 
 ## Format painter
 
-The `format.painter` slot copies the formatting at the selection and applies it somewhere
-else. The text never moves.
+The `format.painter` slot copies the formatting at the selection and applies it somewhere else. The text never moves.
 
-- Click the control once to arm it for a single application, then select the text to
-  format.
-- Double-click the control to keep it on for repeated applications, and press `Esc` to
-  release it.
-- Press `Ctrl+Alt+C` to copy the formatting and `Ctrl+Alt+V` to apply it. On macOS, use
-  `Command` in place of `Ctrl`.
+- Click the control once to arm it for a single application, then select the text to format.
+- Double-click the control to keep it on for repeated applications, and press `Esc` to release it.
+- Press `Ctrl+Alt+C` to copy the formatting and `Ctrl+Alt+V` to apply it. On macOS, use `Command` in place of `Ctrl`.
 
-On macOS, browsers bind `Command+Option+C` to their own element inspector, and a web page
-can't override a browser shortcut. To copy formatting there, use the control or the
-right-click menu. `Command+Option+V` applies the formatting as expected.
+On macOS, browsers bind `Command+Option+C` to their own element inspector, and a web page can't override a browser shortcut. To copy formatting there, use the control or the right-click menu. `Command+Option+V` applies the formatting as expected.
 
-On Windows and Linux keyboard layouts that put characters on the `AltGr` level of `C` — for
-example Polish — `Ctrl+Alt+C` types that character instead. Use the control or the
-right-click menu.
+On Windows and Linux keyboard layouts that put characters on the `AltGr` level of `C` — for example Polish — `Ctrl+Alt+C` types that character instead. Use the control or the right-click menu.
 
 - Right-click the document and choose **Copy formatting** or **Paste formatting**.
 
-What the painter copies follows the selection. A selection inside one paragraph copies
-character formatting: font, size, color, and the character marks. A selection that covers
-the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
+What the painter copies follows the selection. A selection inside one paragraph copies character formatting: font, size, color, and the character marks. A selection that covers the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
 
-The painter reads the formatting the reader sees, not only what the text states directly.
-Copying from a paragraph that takes its face from a style carries that face to the target.
-Three things stay on the target: paragraph borders (`w:pBdr`), a run's character style
-(`w:rStyle`), and character shading (`w:shd` on a run).
+The painter reads the formatting the reader sees, not only what the text states directly. Copying from a paragraph that takes its face from a style carries that face to the target. Three things stay on the target: paragraph borders (`w:pBdr`), a run's character style (`w:rStyle`), and character shading (`w:shd` on a run).
 
-To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting`
-commands. `pasteFormatting` reports a disabled reason until something is copied.
+To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting` commands. `pasteFormatting` reports a disabled reason until something is copied.
 
 ## Table editing
 
@@ -221,9 +205,7 @@ When the caret or a rectangular cell selection is inside a table, the formatting
 
 These controls target the **innermost** nested table under the pointer or selection. Merge and split remain unsupported; tables with merged cells refuse column resize/insert/delete with an explicit disabled reason.
 
-The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order,
-custom icons, and two host actions. See the
-[Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
+The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order, custom icons, and two host actions. See the [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
 
 ## Next steps
 

@@ -1,6 +1,6 @@
 ---
 title: DOCX to Markdown
-description: Convert DOCX to Markdown in TypeScript with layout-derived pages, headers, and footers. Build page citations for RAG and run conversion in Node.js functions.
+description: Convert DOCX to Markdown in TypeScript or Python with layout-derived pages, headers, footers, comments, and tracked changes.
 category: Export formats
 ---
 
@@ -42,6 +42,23 @@ console.log(result.warnings);
 Run `node convert.mjs` from that directory. The output includes each page's body, header, and footer, followed by the continuous document body and any warnings.
 
 `'proposed'` includes pending insertions and hides pending deletions, which is useful when indexing proposed contract text. The default, `'all-markup'`, includes both. Exporting does not accept or reject changes in the source file.
+
+## Python
+
+The Python package [`docx-to-markdown` on PyPI](https://pypi.org/project/docx-to-markdown/) wraps the same converter in a self-contained executable, with no Node.js installation required. It provides document Markdown, individual pages, headers, footers, comments, and tracked changes. The converter requires Python 3.11 or later.
+
+```sh
+pip install docx-to-markdown
+```
+
+```python
+from docx_to_markdown import convert
+
+result = convert("contract.docx")
+print(result.markdown)
+```
+
+See the [Python package README](https://github.com/eigenpal/docx-editor/tree/main/python/docx-to-markdown#readme) for page output, fonts, images, and batch conversion.
 
 ## Configure fonts for accurate layout
 

@@ -5,8 +5,7 @@ category: 'Vue'
 order: 39
 ---
 
-Import `@docx-editor.dev/vue/styles.css` once in your application entry before
-you use these examples.
+Import `@docx-editor.dev/vue/styles.css` once in your application entry before you use these examples.
 
 ## Load DOCX bytes
 
@@ -100,8 +99,7 @@ import BoldButton from './BoldButton.vue';
 </template>
 ```
 
-`DocxEditor.Navigation` shares the viewport with the document.
-`DocxEditor.HyperLink` and `DocxEditor.ContextMenu` provide overlay chrome.
+`DocxEditor.Navigation` shares the viewport with the document. `DocxEditor.HyperLink` and `DocxEditor.ContextMenu` provide overlay chrome.
 
 ## Automate an open editor
 
@@ -136,8 +134,7 @@ async function inspectFirstParagraph() {
 </template>
 ```
 
-Install `@docx-editor.dev/editor-api` before you use this example. The runtime
-uses the editor that `DocxEditor.Root` created.
+Install `@docx-editor.dev/editor-api` before you use this example. The runtime uses the editor that `DocxEditor.Root` created.
 
 ## Fetch bytes and fonts together
 
@@ -169,13 +166,9 @@ const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
 
 ## Live demo
 
-The
-[`examples/vue` application](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
-shows composition chrome, menu overrides, rulers, navigation, and package
-build mode. Run it with `bun run dev:vue`.
+The [`examples/vue` application](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) shows composition chrome, menu overrides, rulers, navigation, and package build mode. Run it with `bun run dev:vue`.
 
-The [adapter parity demo](/) serves React and Vue builds from
-`examples/parity/dist`.
+The [adapter parity demo](/) serves React and Vue builds from `examples/parity/dist`.
 
 ## Next steps
 

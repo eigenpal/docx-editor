@@ -5,9 +5,7 @@ category: 'Pro'
 order: 63
 ---
 
-Use a custom node for an element DOCX has no type for: a citation, an @mention, a merge field, a
-signature placeholder. Each is stored as an inline Word content control (`w:sdt`), so Word renders
-its text and returns the control unchanged.
+Use a custom node for an element DOCX has no type for: a citation, an @mention, a merge field, a signature placeholder. Each is stored as an inline Word content control (`w:sdt`), so Word renders its text and returns the control unchanged.
 
 Requires the custom-nodes module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
@@ -138,8 +136,7 @@ defineProps<{ bytes: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-Insert places `(Smith 2024)` at the caret as a chip. After you save, open the file in Word, and
-reopen it here, the editor recognizes the chip and its payload again.
+Insert places `(Smith 2024)` at the caret as a chip. After you save, open the file in Word, and reopen it here, the editor recognizes the chip and its payload again.
 
 ## Common tasks
 
@@ -179,25 +176,20 @@ const Citation = defineCustomNode({
 });
 ```
 
-`schema` is any [Standard Schema](https://standardschema.dev): zod, valibot, arktype. The pro
-package bundles none of them, so install the schema library your project already uses.
+`schema` is any [Standard Schema](https://standardschema.dev): zod, valibot, arktype. The pro package bundles none of them, so install the schema library your project already uses.
 
 - Invalid data is rejected before anything is written to the document.
 - Data read back out is returned as your type instead of `unknown`.
 
-Payloads also arrive from `.docx` files someone else wrote, so the schema validates that JSON
-before your code uses it. Async validation is refused.
+Payloads also arrive from `.docx` files someone else wrote, so the schema validates that JSON before your code uses it. Async validation is refused.
 
 `text` reads the schema's _output_, so a `.default()` or a `.transform()` has already run.
 
-A node can skip `schema` and keep everything in its tag, which Word caps at 64 characters. See
-[nodes without a payload](/docs/2.x/pro/custom-nodes-reference#nodes-without-a-payload).
+A node can skip `schema` and keep everything in its tag, which Word caps at 64 characters. See [nodes without a payload](/docs/2.x/pro/custom-nodes-reference#nodes-without-a-payload).
 
 Modules are read once, at construction. Changing the array after construction has no effect; remount the Root.
 
-Everything else is optional: `label` and `chrome.color` for the chip, `onClick` / `onHover` /
-`onEdit`, `reviewCard` for a sidebar card, `preserveOnExport` for export behavior. See the
-[reference](/docs/2.x/pro/custom-nodes-reference#definecustomnode).
+Everything else is optional: `label` and `chrome.color` for the chip, `onClick` / `onHover` / `onEdit`, `reviewCard` for a sidebar card, `preserveOnExport` for export behavior. See the [reference](/docs/2.x/pro/custom-nodes-reference#definecustomnode).
 
 ## Render the chips
 
@@ -252,11 +244,9 @@ Both entries export the same component names.
 </Framework>
 </FrameworkTabs>
 
-An activated node carries `name`, `attrs`, `tag`, `data` and `rect` (viewport-relative, for
-anchoring your own popover), plus `nodeId` and `text` when they resolve.
+An activated node carries `name`, `attrs`, `tag`, `data` and `rect` (viewport-relative, for anchoring your own popover), plus `nodeId` and `text` when they resolve.
 
-Remove can be refused, by a locked wrapper or a document open for viewing. Pass
-`onRemoveRefused(node, reason)` to show the engine's reason; without it, the menu closes.
+Remove can be refused, by a locked wrapper or a document open for viewing. Pass `onRemoveRefused(node, reason)` to show the engine's reason; without it, the menu closes.
 
 ## Insert, update, remove
 
@@ -268,12 +258,9 @@ updateCustomNode(editor, Citation, nodeId, { data }); // rewrites in place
 removeCustomNode(editor, nodeId); // node and payload
 ```
 
-All three writes use one transaction and create one undo step, including payload changes. Successful
-inserts and updates return `{ ok: true, changed: true, nodeId }`; refusals include a `reason` and a
-`code`.
+All three writes use one transaction and create one undo step, including payload changes. Successful inserts and updates return `{ ok: true, changed: true, nodeId }`; refusals include a `reason` and a `code`.
 
-An update replaces the control and returns its new node ID. The ID passed to `updateCustomNode` no
-longer resolves, so update any state that held it:
+An update replaces the control and returns its new node ID. The ID passed to `updateCustomNode` no longer resolves, so update any state that held it:
 
 ```ts
 const result = updateCustomNode(editor, Citation, card.nodeId, { data: next });
@@ -291,8 +278,7 @@ if (!result.ok) {
 }
 ```
 
-`attrs`, `lock`, `alias`, `at` and the three refusal codes are in the
-[reference](/docs/2.x/pro/custom-nodes-reference#writes).
+`attrs`, `lock`, `alias`, `at` and the three refusal codes are in the [reference](/docs/2.x/pro/custom-nodes-reference#writes).
 
 ## Read the nodes
 
@@ -305,13 +291,9 @@ for (const node of customNodesOf(editor)) {
 }
 ```
 
-`customNodesOf` returns recognized nodes from the document body in document order. It excludes
-headers, footers, footnotes and endnotes. Because each call reads the current document and no change
-event exists, call it again after every edit. Do not retain the returned array.
+`customNodesOf` returns recognized nodes from the document body in document order. It excludes headers, footers, footnotes and endnotes. Because each call reads the current document and no change event exists, call it again after every edit. Do not retain the returned array.
 
-Chrome and read surfaces carry every definition's nodes under one type, so their `data` is
-`unknown`. `dataOf` narrows a node to this definition and validates its payload, so you never write
-a parse at the call site:
+Chrome and read surfaces carry every definition's nodes under one type, so their `data` is `unknown`. `dataOf` narrows a node to this definition and validates its payload, so you never write a parse at the call site:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -332,9 +314,7 @@ a parse at the call site:
 
 Inside `text`, `reviewCard` and `fromDocx`, `data` is already the schema's output type.
 
-`data` is `undefined` when the node carries no payload, when its binding names a store node the
-document does not hold, or when the payload fails the schema. The last two report through
-`onDiagnostic`:
+`data` is `undefined` when the node carries no payload, when its binding names a store node the document does not hold, or when the payload fails the schema. The last two report through `onDiagnostic`:
 
 ```ts
 customNodesModule({
@@ -348,11 +328,9 @@ customNodesModule({
 
 ## Save vs export
 
-Use `editor.save()` for the copy you store. Word and Word Online preserve the node's text, lock, tag,
-binding and payload.
+Use `editor.save()` for the copy you store. Word and Word Online preserve the node's text, lock, tag, binding and payload.
 
-Use `saveForExport` when recipients must not receive custom-node markup, such as internal
-annotations. Generate that external copy separately from the saved document.
+Use `saveForExport` when recipients must not receive custom-node markup, such as internal annotations. Generate that external copy separately from the saved document.
 
 ```ts
 import { saveForExport } from '@docx-editor.dev/pro';
@@ -366,12 +344,9 @@ if (!outgoing.ok) throw new Error(outgoing.reason);
 download(outgoing.bytes);
 ```
 
-`preserveOnExport` decides per definition: `true` (default) keeps the full control, `'text'` keeps the words
-and drops the control, `false` removes the node and its content. A tag no definition claims is never
-touched.
+`preserveOnExport` decides per definition: `true` (default) keeps the full control, `'text'` keeps the words and drops the control, `false` removes the node and its content. A tag no definition claims is never touched.
 
-Store the saved bytes, not the exported ones. What the export stripped is gone: unwrapped text does
-not become a node again.
+Store the saved bytes, not the exported ones. What the export stripped is gone: unwrapped text does not become a node again.
 
 <Callout>
   `saveForExport` needs an editor. On a server, `prepareForExport(bytes, definitions)` is the same
@@ -381,9 +356,7 @@ not become a node again.
 
 ## Common configurations
 
-**A mention, no payload.** Everything fits in the tag, so there is no schema and no customXml part.
-`fromDocx` clamps the untrusted strings a `.docx` supplies, or returns `null` to leave the control
-literal:
+**A mention, no payload.** Everything fits in the tag, so there is no schema and no customXml part. `fromDocx` clamps the untrusted strings a `.docx` supplies, or returns `null` to leave the control literal:
 
 ```ts
 const Mention = defineCustomNode({
@@ -405,10 +378,7 @@ const InternalNote = defineCustomNode({
 });
 ```
 
-**A node written on a server.** `customNodeXml` builds the same control as XML without an editor or
-DOM. For a payload-bearing node, server authoring must also add the payload package parts, their
-relationships and the properties part's content-type override. When the document opens in this
-editor, the node is recognized:
+**A node written on a server.** `customNodeXml` builds the same control as XML without an editor or DOM. For a payload-bearing node, server authoring must also add the payload package parts, their relationships and the properties part's content-type override. When the document opens in this editor, the node is recognized:
 
 ```ts
 import { customNodeXml } from '@docx-editor.dev/pro';
@@ -419,12 +389,9 @@ const built = customNodeXml(Citation, { sourceId: 'smith-2024' }, '(Smith 2024)'
 if (built.ok) template.replace('{{citation}}', built.xml);
 ```
 
-`built.store` returns two parts, two relationships and one content-type override. Add all five items
-or Word offers to repair the file. See
-[server-side authoring](/docs/2.x/pro/custom-nodes-reference#server-side-authoring).
+`built.store` returns two parts, two relationships and one content-type override. Add all five items or Word offers to repair the file. See [server-side authoring](/docs/2.x/pro/custom-nodes-reference#server-side-authoring).
 
-**A card in the review sidebar.** `reviewCard` contributes one card per node, anchored at its range.
-`useReviewItem()` scopes your content to the card it renders inside:
+**A card in the review sidebar.** `reviewCard` contributes one card per node, anchored at its range. `useReviewItem()` scopes your content to the card it renders inside:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -468,8 +435,6 @@ This needs the review module registered alongside the custom-nodes module.
 
 ## Next steps
 
-- [Custom nodes reference](/docs/2.x/pro/custom-nodes-reference): every parameter, every error code,
-  the on-disk format
-- [Runnable example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes):
-  define, insert, edit, and round-trip a citation with a payload
+- [Custom nodes reference](/docs/2.x/pro/custom-nodes-reference): every parameter, every error code, the on-disk format
+- [Runnable example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes): define, insert, edit, and round-trip a citation with a payload
 - [Content controls](/docs/2.x/guides/content-controls): the built-in control surface these build on

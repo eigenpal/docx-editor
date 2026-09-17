@@ -5,23 +5,20 @@ category: 'Vue'
 order: 37
 ---
 
-`<DocxEditor>` supplies one arrangement of public parts. Use the parts when you
-need a different interface.
+`<DocxEditor>` supplies one arrangement of public parts. Use the parts when you need a different interface.
 
 ## Composition requirements
 
-| Requirement              | When required                    | Purpose                                                          |
-| ------------------------ | -------------------------------- | ---------------------------------------------------------------- |
-| `DocxEditorRoot`         | Every composed editor            | Owns and provides the editor instance                            |
-| `DocxEditorViewport`     | Every composed editor            | Supplies the scroll container and page-layout classes            |
-| `DocxEditorContent`      | Every composed editor            | Mounts the painted document surface                              |
-| Remount `:key`           | When you change modules          | Loads the new modules                                            |
-| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
-| Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
+| Requirement | When required | Purpose |
+| --- | --- | --- |
+| `DocxEditorRoot` | Every composed editor | Owns and provides the editor instance |
+| `DocxEditorViewport` | Every composed editor | Supplies the scroll container and page-layout classes |
+| `DocxEditorContent` | Every composed editor | Mounts the painted document surface |
+| Remount `:key` | When you change modules | Loads the new modules |
+| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane |
+| Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
 
-If you use Pro review chrome, register its modules once on
-`DocxEditorRoot`. For setup, see the
-[Pro package documentation](/docs/2.x/pro).
+If you use Pro review chrome, register its modules once on `DocxEditorRoot`. For setup, see the [Pro package documentation](/docs/2.x/pro).
 
 ## Primitives
 
@@ -54,20 +51,15 @@ You can place all optional chrome inside `DocxEditorRoot`.
 
 Listen for `@ready`, `@change`, and `@font-error` on the root.
 
-The root rebuilds for `document`, `fonts`, and `imageDecodePort` identity changes.
-Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog
-apply without a rebuild. Existing revisions keep their authors.
-The root ignores a later `modules` array change until you remount it with a different `:key`.
+The root rebuilds for `document`, `fonts`, and `imageDecodePort` identity changes. Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
 
 `locale` selects regional date input and generated document labels. It defaults to `en-US`.
 
-For full prop types, see the
-[Vue API reference](/docs/2.x/api/vue).
+For full prop types, see the [Vue API reference](/docs/2.x/api/vue).
 
 ### UI language and date input
 
-`DocxEditorRoot` reads UI translations from `LocaleProvider`; it has no `i18n` prop.
-Set `locale` separately for regional date input. This example uses Polish for both:
+`DocxEditorRoot` reads UI translations from `LocaleProvider`; it has no `i18n` prop. Set `locale` separately for regional date input. This example uses Polish for both:
 
 ```vue
 <script setup lang="ts">
@@ -93,13 +85,11 @@ import { pl } from '@docx-editor.dev/i18n';
 </template>
 ```
 
-Without the provider, UI strings remain English unless an ancestor supplies a catalog.
-See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
+Without the provider, UI strings remain English unless an ancestor supplies a catalog. See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
 
 ## `provideDocxEditor()`
 
-Call `provideDocxEditor()` when a parent layout holds the editor. The helper
-provides one editor instance to the returned root and its descendants.
+Call `provideDocxEditor()` when a parent layout holds the editor. The helper provides one editor instance to the returned root and its descendants.
 
 ```vue
 <script setup lang="ts">
@@ -118,8 +108,7 @@ const { DocxEditorRoot, rootProps, rootListeners, editorRef } = provideDocxEdito
 </template>
 ```
 
-`editorRef` tracks the same instance that `useDocxEditor()` returns in
-descendants.
+`editorRef` tracks the same instance that `useDocxEditor()` returns in descendants.
 
 ## Customization options
 
@@ -130,13 +119,11 @@ Use the first option that meets your requirements:
 3. Use `as-child` to merge behavior into your element.
 4. Override one compound part.
 5. Set `:preset="false"` and arrange all parts.
-6. Build your markup with
-   [Vue composables](/docs/2.x/vue/composables).
+6. Build your markup with [Vue composables](/docs/2.x/vue/composables).
 
 ### Use `as-child`
 
-`as-child` merges a part's behavior and accessibility attributes into one child.
-It does not render a wrapper.
+`as-child` merges a part's behavior and accessibility attributes into one child. It does not render a wrapper.
 
 ```vue
 <DocxEditorToolbar.Bold as-child>
@@ -148,8 +135,7 @@ The child must render one element.
 
 ### Override a slot
 
-A named part replaces the matching part in the preset. The `hidden` prop removes
-that part.
+A named part replaces the matching part in the preset. The `hidden` prop removes that part.
 
 ```vue
 <DocxEditorToolbar>
@@ -160,8 +146,7 @@ that part.
 
 ## Custom toolbar
 
-Set `:preset="false"` to use template order. Packaged parts still read command
-state and disabled reasons from the editor.
+Set `:preset="false"` to use template order. Packaged parts still read command state and disabled reasons from the editor.
 
 ```vue
 <DocxEditorToolbar :preset="false" class-name="my-toolbar">
@@ -179,14 +164,11 @@ state and disabled reasons from the editor.
 </DocxEditorToolbar>
 ```
 
-Most named parts map to one `ChromeSlotId`. `Alignment` combines the four
-`alignment.*` slots. The [chrome slot reference](/docs/2.x/guides/chrome-slots)
-lists every slot and named React and Vue part.
+Most named parts map to one `ChromeSlotId`. `Alignment` combines the four `alignment.*` slots. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every slot and named React and Vue part.
 
 ### Add a host toolbar action
 
-Use `DocxEditorToolbar.Action` for an action without a registry slot. Call
-`useEditorCommand()` to read whether the command can run.
+Use `DocxEditorToolbar.Action` for an action without a registry slot. Call `useEditorCommand()` to read whether the command can run.
 
 ```vue
 <script setup lang="ts">
@@ -254,13 +236,11 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
 </DocxEditorContextMenu>
 ```
 
-`DocxEditorContextMenu.Slot` gets its label, icon, state, and command from the
-registry.
+`DocxEditorContextMenu.Slot` gets its label, icon, state, and command from the registry.
 
 ## Custom menu bar
 
-`DocxEditorMenu` derives its default menus from `CHROME_MENUS`. Override only
-the menus that your product changes.
+`DocxEditorMenu` derives its default menus from `CHROME_MENUS`. Override only the menus that your product changes.
 
 ```vue
 <DocxEditorMenu class-name="my-menubar" :open-handler="openFile" :save-handler="saveFile">
@@ -289,8 +269,7 @@ the menus that your product changes.
 </DocxEditorMenu>
 ```
 
-Use `open-handler` and `save-handler` for composed Vue menu actions.
-`<DocxEditor>` exposes these actions as `@open` and `@save`.
+Use `open-handler` and `save-handler` for composed Vue menu actions. `<DocxEditor>` exposes these actions as `@open` and `@save`.
 
 ## Custom navigation pane
 
@@ -312,8 +291,7 @@ The headings list uses the document outline from the editor.
 
 ## Custom loading screen
 
-`DocxEditorLoading` covers the time before bytes arrive and the time while a
-document opens.
+`DocxEditorLoading` covers the time before bytes arrive and the time while a document opens.
 
 ```vue
 <DocxEditorViewport>
@@ -338,9 +316,7 @@ Set `overlay` to cover the previous document while the next document opens.
 </div>
 ```
 
-Give `.workspace` a positioning context. Use
-`DocxEditorLoading.Spinner` or `DocxEditorLoadingSpinner` to style the packaged
-spinner.
+Give `.workspace` a positioning context. Use `DocxEditorLoading.Spinner` or `DocxEditorLoadingSpinner` to style the packaged spinner.
 
 ## Custom hyperlink popover
 
@@ -353,13 +329,11 @@ spinner.
 </DocxEditorHyperLink>
 ```
 
-Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and
-`Error`. Use `useHyperlinkPopup()` when you need different markup.
+Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. Use `useHyperlinkPopup()` when you need different markup.
 
 ## Rulers
 
-The rulers read page setup and zoom from the editor. A drag creates one undo
-entry when you release the handle.
+The rulers read page setup and zoom from the editor. A drag creates one undo entry when you release the handle.
 
 ```vue
 <DocxEditorRoot :document="bytes">
@@ -393,10 +367,7 @@ const pageSetupOpen = ref(false);
 
 Use `usePageSetup()` to build a different form.
 
-Page Setup, Paragraph Options, and legacy text Field Options expose replaceable
-parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue`.
-Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`.
-For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+Page Setup, Paragraph Options, and legacy text Field Options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue`. Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Content-control panel
 
@@ -410,9 +381,7 @@ For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 </DocxEditorContentControl>
 ```
 
-The parts support the same class, `as-child`, and `hidden` controls. For content
-control behavior, see
-[Content controls](/docs/2.x/guides/content-controls).
+The parts support the same class, `as-child`, and `hidden` controls. For content control behavior, see [Content controls](/docs/2.x/guides/content-controls).
 
 ## Page furniture
 
@@ -428,13 +397,11 @@ Mount a part only when your layout needs its interface:
 | `DocxEditorHeaderFooterChrome` | Header and footer editing controls            |
 | `DocxEditorNotesChrome`        | Footnote and endnote controls                 |
 
-For review colors, see
-[Tracked changes](/docs/2.x/pro/tracked-changes).
+For review colors, see [Tracked changes](/docs/2.x/pro/tracked-changes).
 
 ## Custom labels
 
-Chrome resolves labels from the active locale catalog. Pass a translator only when
-you need label overrides.
+Chrome resolves labels from the active locale catalog. Pass a translator only when you need label overrides.
 
 ```vue
 <script setup lang="ts">
@@ -466,8 +433,7 @@ Set `--doc-*` tokens on a host scope. The tokens apply to chrome descendants.
 }
 ```
 
-Do not style internal `docx-*` classes. Do not theme the document canvas. The
-canvas must show the document's saved colors.
+Do not style internal `docx-*` classes. Do not theme the document canvas. The canvas must show the document's saved colors.
 
 ## Custom tracked changes and comments
 
@@ -535,8 +501,7 @@ Use the `item` slot for unrelated card markup:
 </DocxEditorReview>
 ```
 
-Set `:preset="false"` to arrange all rail parts. Use `useReview()` for data
-without chrome. Use `useReviewItem()` inside a card.
+Set `:preset="false"` to arrange all rail parts. Use `useReview()` for data without chrome. Use `useReviewItem()` inside a card.
 
 ## Custom-node chrome
 
@@ -560,9 +525,7 @@ const openNode = (node: ActivatedCustomNode) => {
 </template>
 ```
 
-`CustomNodeChrome` applies each definition's chip color. It also dispatches
-click and hover activation. `CustomNodeContextMenu` adds information, edit, and
-remove rows before the packaged rows.
+`CustomNodeChrome` applies each definition's chip color. It also dispatches click and hover activation. `CustomNodeContextMenu` adds information, edit, and remove rows before the packaged rows.
 
 ## Full composition
 
@@ -612,16 +575,13 @@ An omitted part has no interface.
 
 ## Layout constraints
 
-Place the navigation pane and viewport in a row with `position: relative`. The
-pane uses that row as its positioning context.
+Place the navigation pane and viewport in a row with `position: relative`. The pane uses that row as its positioning context.
 
-Do not set `z-index` on the workspace row or viewport. Either value creates a
-stacking context that can put a fixed context menu below other chrome.
+Do not set `z-index` on the workspace row or viewport. Either value creates a stacking context that can put a fixed context menu below other chrome.
 
 ## Keep the caret
 
-A mousedown event that reaches the document moves the caret. Prevent the event
-on host chrome that must keep the document selection.
+A mousedown event that reaches the document moves the caret. Prevent the event on host chrome that must keep the document selection.
 
 ```vue
 <div @mousedown="keepCaret">

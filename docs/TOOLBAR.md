@@ -2,9 +2,7 @@
 
 ## Overview
 
-The current React package exposes its toolbar and surrounding chrome from the
-package root. The packaged host is `<DocxEditor />`, and the lower-level
-provider/hooks/compound API is also rooted there.
+The current React package exposes its toolbar and surrounding chrome from the package root. The packaged host is `<DocxEditor />`, and the lower-level provider/hooks/compound API is also rooted there.
 
 ### Layout Structure
 
@@ -100,8 +98,4 @@ function MyEditor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`DocxEditor.Root` owns the editor instance, `DocxEditor.Viewport` is the scroll
-container, and `DocxEditor.Content` is the painted page surface. The other
-compounds (`DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`,
-`DocxEditor.HyperLink`, `DocxEditor.ContextMenu`) layer on top of that same
-provider.
+`DocxEditor.Root` owns the editor instance, `DocxEditor.Viewport` is the scroll container, and `DocxEditor.Content` is the painted page surface. The other compounds (`DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, `DocxEditor.ContextMenu`) layer on top of that same provider.

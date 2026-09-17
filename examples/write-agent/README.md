@@ -1,7 +1,6 @@
 # Writer agent example
 
-This app interviews a user, creates a fresh DOCX, and proposes later edits as tracked changes.
-It keeps `examples/agent` unchanged.
+This app interviews a user, creates a fresh DOCX, and proposes later edits as tracked changes. It keeps `examples/agent` unchanged.
 
 ## Run the example
 
@@ -12,8 +11,7 @@ bun install
 cp examples/write-agent/.env.example examples/write-agent/.env.local
 ```
 
-Set `OPENAI_API_KEY` in `examples/write-agent/.env.local`. You can also set
-`OPENAI_MODEL` and `ALLOWED_ORIGINS`. Then start the example:
+Set `OPENAI_API_KEY` in `examples/write-agent/.env.local`. You can also set `OPENAI_MODEL` and `ALLOWED_ORIGINS`. Then start the example:
 
 ```bash
 bun run dev:write-agent
@@ -21,16 +19,11 @@ bun run dev:write-agent
 
 Open `http://localhost:3004`.
 
-Without `OPENAI_API_KEY`, the chat route returns HTTP 503 with a clear message.
-The editor and direct tool tests still work.
+Without `OPENAI_API_KEY`, the chat route returns HTTP 503 with a clear message. The editor and direct tool tests still work.
 
 ## Flow
 
-The writer starts from a short request and infers safe defaults for audience, tone, and length.
-It uses placeholders for missing names, dates, amounts, jurisdictions, and private facts.
-It asks one question only when a missing detail prevents a useful draft.
-The `create_document` schema records the resulting six-field brief.
-The agent then uses five visible tool calls:
+The writer starts from a short request and infers safe defaults for audience, tone, and length. It uses placeholders for missing names, dates, amounts, jurisdictions, and private facts. It asks one question only when a missing detail prevents a useful draft. The `create_document` schema records the resulting six-field brief. The agent then uses five visible tool calls:
 
 1. Write styled paragraphs with `create_document`.
 2. Format bullet and numbered lists with `format_lists`.
@@ -38,15 +31,9 @@ The agent then uses five visible tool calls:
 4. Insert and populate a table with `insert_table`.
 5. Write the header, footer, and page field with `write_header_footer`.
 
-`create_document` calls the lower-level `replaceStoryBlocks` automation operation in one
-transaction. Every generated document uses all five calls.
+`create_document` calls the lower-level `replaceStoryBlocks` automation operation in one transaction. Every generated document uses all five calls.
 
-The browser runtime uses `revisionTextView: 'original'`. This DocxEditor runtime option matches
-Word's Original review view. It does not belong to the Office.js object model.
-Later turns call `read_document` through the standard `text` properties and `search()` methods.
-The three proposal tools call `proposeReplacement`, `proposeInsertion`, and `proposeDeletion`.
-Insertion anchors call `range.select('End')` before the browser command.
-All comments and tracked changes use the author `Writer agent`.
+The browser runtime uses `revisionTextView: 'original'`. This DocxEditor runtime option matches Word's Original review view. It does not belong to the Office.js object model. Later turns call `read_document` through the standard `text` properties and `search()` methods. The three proposal tools call `proposeReplacement`, `proposeInsertion`, and `proposeDeletion`. Insertion anchors call `range.select('End')` before the browser command. All comments and tracked changes use the author `Writer agent`.
 
 ## Architecture
 
@@ -71,10 +58,6 @@ The example uses workspace packages through `workspace:*`.
 
 ## Remaining API gaps
 
-Editor-api cannot atomically replace all story blocks or create lists, tables, headers, footers,
-page fields, or content controls.
-The example uses browser commands for lists, tables, headers, footers, and page fields.
-It uses the core automation protocol for content-control creation.
+Editor-api cannot atomically replace all story blocks or create lists, tables, headers, footers, page fields, or content controls. The example uses browser commands for lists, tables, headers, footers, and page fields. It uses the core automation protocol for content-control creation.
 
-No current editor-api or browser editor command sets section columns.
-The app reports this limitation and does not fake columns.
+No current editor-api or browser editor command sets section columns. The app reports this limitation and does not fake columns.

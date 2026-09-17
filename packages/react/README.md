@@ -14,13 +14,9 @@
 
 # @docx-editor.dev/react
 
-WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the real paginated
-layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion
-backend: parsing and serialization both happen client-side.
+WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the real paginated layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion backend: parsing and serialization both happen client-side.
 
-Saving has a lossless semantic round-trip. Untouched content, unsupported OOXML, and package
-payloads survive editing and save. Two oracles gate that in CI, so opening a document here
-cannot quietly destroy it.
+Saving has a lossless semantic round-trip. Untouched content, unsupported OOXML, and package payloads survive editing and save. Two oracles gate that in CI, so opening a document here cannot quietly destroy it.
 
 ```bash
 npm install @docx-editor.dev/react
@@ -54,17 +50,13 @@ export function App() {
 }
 ```
 
-`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane,
-context menu, and the painted document. It fills its parent, so give it a box with a real
-height, and import the stylesheet once.
+`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, context menu, and the painted document. It fills its parent, so give it a box with a real height, and import the stylesheet once.
 
-> **Next.js / SSR:** the editor measures text in the DOM at mount, so render it client-side
-> (`dynamic(..., { ssr: false })`).
+> **Next.js / SSR:** the editor measures text in the DOM at mount, so render it client-side (`dynamic(..., { ssr: false })`).
 
 ## Build your own UI
 
-The packaged chrome is one arrangement of public parts. Every packaged control uses the same
-hooks you would; there is no private API behind it.
+The packaged chrome is one arrangement of public parts. Every packaged control uses the same hooks you would; there is no private API behind it.
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -95,13 +87,9 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`Root` owns the editor instance, `Viewport` is the scroll container, `Content` is where pages
-are painted. Everything else (toolbar, menu, rulers, navigation, link popover, context menu)
-is optional and placed by name.
+`Root` owns the editor instance, `Viewport` is the scroll container, `Content` is where pages are painted. Everything else (toolbar, menu, rulers, navigation, link popover, context menu) is optional and placed by name.
 
-The customization ladder, in order: `className` and `data-active` → the `icon` prop →
-`asChild` (merge behavior onto your own element) → in-place slot override (`hidden`,
-`preset={false}`) → the hooks.
+The customization ladder, in order: `className` and `data-active` → the `icon` prop → `asChild` (merge behavior onto your own element) → in-place slot override (`hidden`, `preset={false}`) → the hooks.
 
 ## Hooks
 
@@ -116,17 +104,13 @@ The customization ladder, in order: `className` and `data-active` → the `icon`
 | `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless                        |
 | `useContentControl()`                          | Word content controls at the caret                   |
 
-Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the
-engine. Read `isEnabled` and show `disabledReason`.
+Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine. Read `isEnabled` and show `disabledReason`.
 
 ## Companion packages
 
-- [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked
-  changes, comments, custom nodes
-- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) —
-  Office.js-compatible editing API, on a server or against an open editor
-- [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine
-  this adapter renders
+- [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked changes, comments, custom nodes
+- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — Office.js-compatible editing API, on a server or against an open editor
+- [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine this adapter renders
 
 ## Documentation
 

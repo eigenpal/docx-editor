@@ -5,8 +5,7 @@ category: 'Guides'
 seoTitle: 'Headers, footers, and watermarks'
 ---
 
-Headers and footers render in their Word page positions. Double-click the
-header or footer area to edit it in place.
+Headers and footers render in their Word page positions. Double-click the header or footer area to edit it in place.
 
 ## Editing
 
@@ -23,38 +22,23 @@ Press Escape or click the close action to save and leave header/footer editing.
 
 ## Page-number fields
 
-`PAGE`, `NUMPAGES`, and `SECTIONPAGES` stay as Word fields. The page view updates
-their values when the document reflows.
+`PAGE`, `NUMPAGES`, and `SECTIONPAGES` stay as Word fields. The page view updates their values when the document reflows.
 
-`PAGE` shows the displayed page number. It honors the section start and format
-in `w:pgNumType`. `NUMPAGES` shows the document page count. `SECTIONPAGES` shows
-the page count for the current section.
+`PAGE` shows the displayed page number. It honors the section start and format in `w:pgNumType`. `NUMPAGES` shows the document page count. `SECTIONPAGES` shows the page count for the current section.
 
 A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
 
-A page-number field can carry a numeric picture switch. For example,
-`PAGE \# 0#` pads page 2 to `02`.
+A page-number field can carry a numeric picture switch. For example, `PAGE \# 0#` pads page 2 to `02`.
 
-The editor applies the picture to the computed header or footer value. A saved
-result does not replace that computed value. Pictures support digit placeholders,
-a grouping comma, and literal text.
+The editor applies the picture to the computed header or footer value. A saved result does not replace that computed value. Pictures support digit placeholders, a grouping comma, and literal text.
 
-Other fields use separate evaluation rules. See
-[Fields and cross-references](/docs/2.x/guides/fields).
+Other fields use separate evaluation rules. See [Fields and cross-references](/docs/2.x/guides/fields).
 
-Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr` over an
-empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs
-render in one footer band. Page values are re-centered per page, and the source structure
-survives save.
+Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr` over an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. Page values are re-centered per page, and the source structure survives save.
 
-A supported fixed-width frame uses a page-relative X position and text-relative vertical
-centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the
-frame. The editor clips that value but retains all fields, paragraphs, and source ranges.
-Selections and pointer hits use the same clip rectangle.
+A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
 
-This support covers a simple, single-line `PAGE` frame and a single-line empty or `PAGE` anchor. Values must fit completely
-inside the frame or lie completely beyond it. Partial wrapping, other positions,
-paragraph spacing, and additional content keep the ordinary flow behavior.
+This support covers a simple, single-line `PAGE` frame and a single-line empty or `PAGE` anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, paragraph spacing, and additional content keep the ordinary flow behavior.
 
 ## Per-section headers and footers
 
@@ -70,12 +54,9 @@ Documents using any of these render and round-trip correctly; editing a header e
 
 ## Watermarks
 
-Word stores watermarks in header parts. The editor renders the supported
-unrotated [legacy VML subset](/docs/2.x/guides/images#legacy-vml-previews) there.
-Rotated or curved watermark templates remain opaque.
+Word stores watermarks in header parts. The editor renders the supported unrotated [legacy VML subset](/docs/2.x/guides/images#legacy-vml-previews) there. Rotated or curved watermark templates remain opaque.
 
-Watermark insertion, editing, and headless authoring are not supported. The editor
-preserves the original VML or DrawingML markup and image payloads when you save.
+Watermark insertion, editing, and headless authoring are not supported. The editor preserves the original VML or DrawingML markup and image payloads when you save.
 
 ## Next steps
 

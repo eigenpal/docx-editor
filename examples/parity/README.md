@@ -1,7 +1,6 @@
 # Combined demo deployment
 
-This site serves the React, Vue, Igloo, and DOCX-to-Markdown examples from one Vercel
-deployment. Each app fills the viewport.
+This site serves the React, Vue, Igloo, and DOCX-to-Markdown examples from one Vercel deployment. Each app fills the viewport.
 
 ## Run locally
 
@@ -12,8 +11,7 @@ bun install
 bun run dev
 ```
 
-Open React at `http://localhost:5173/`.
-Open Vue at `http://localhost:5174/`.
+Open React at `http://localhost:5173/`. Open Vue at `http://localhost:5174/`.
 
 ## Build the parity site
 
@@ -39,12 +37,8 @@ The build performs these steps:
 3. It assigns `/react/`, `/vue/`, `/igloo/`, and `/docx-to-markdown/` as their base paths.
 4. It assembles all four builds in `examples/parity/dist/`.
 
-On Vercel, `/` rewrites to the React app. Hostname rewrites serve
-`igloo.docx-editor.dev` from `/igloo/` and `docx-to-markdown.docx-editor.dev` from
-`/docx-to-markdown/` without changing the browser URL. Before removing the old Igloo project, attach both custom domains to the same Vercel project.
+On Vercel, `/` rewrites to the React app. Hostname rewrites serve `igloo.docx-editor.dev` from `/igloo/` and `docx-to-markdown.docx-editor.dev` from `/docx-to-markdown/` without changing the browser URL. Before removing the old Igloo project, attach both custom domains to the same Vercel project.
 
 ## Adapter switcher
 
-The React switcher is in `examples/shared/AdapterSwitcher.tsx`.
-The Vue switcher is in `examples/vue/src/AdapterSwitcher.vue`.
-The production links use `/react/` and `/vue/`.
+The React switcher is in `examples/shared/AdapterSwitcher.tsx`. The Vue switcher is in `examples/vue/src/AdapterSwitcher.vue`. The production links use `/react/` and `/vue/`.

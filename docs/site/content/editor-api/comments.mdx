@@ -5,30 +5,19 @@ category: 'Editing API'
 order: 62
 ---
 
-Use comments for discussion anchored to document content.
-Use [Tracked changes](/docs/2.x/editor-api/revisions) to propose text edits for review.
-Comments and replies are separate proxies with shared author, date, ID, and text properties.
+Use comments for discussion anchored to document content. Use [Tracked changes](/docs/2.x/editor-api/revisions) to propose text edits for review. Comments and replies are separate proxies with shared author, date, ID, and text properties.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
-Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Configure review writes
 
-Supply a nonempty `author` when creating the runtime for comment creation and replies.
-The API does not obtain an identity from a signed-in Office account.
-Browser review writes also require the Pro review module, an editable mode, and an attached writable document.
-The server runtime supplies its own Pro-licensed review implementation.
+Supply a nonempty `author` when creating the runtime for comment creation and replies. The API does not obtain an identity from a signed-in Office account. Browser review writes also require the Pro review module, an editable mode, and an attached writable document. The server runtime supplies its own Pro-licensed review implementation.
 
-These conditions are dynamic; there is no static comment-write capability flag.
-Handle `NotSupported`, `NotImplemented`, and other typed errors from the call or `sync()`.
-Do not assume that a successful read permits a write.
+These conditions are dynamic; there is no static comment-write capability flag. Handle `NotSupported`, `NotImplemented`, and other typed errors from the call or `sync()`. Do not assume that a successful read permits a write.
 
 ## Read threads and replies
 
-`Document.comments` returns comments anchored in the main body story.
-`Body.getComments()` addresses comments in that body story.
-`CommentCollection` and `CommentReplyCollection` expose `items` and `getFirst()`.
-A first-item lookup fails with `ItemNotFound` on an empty collection.
+`Document.comments` returns comments anchored in the main body story. `Body.getComments()` addresses comments in that body story. `CommentCollection` and `CommentReplyCollection` expose `items` and `getFirst()`. A first-item lookup fails with `ItemNotFound` on an empty collection.
 
 Load thread properties after loading membership:
 
@@ -51,18 +40,11 @@ const threads = await runtime.run(async (context) => {
 });
 ```
 
-`Comment.replies` returns a reply collection in document order.
-Load its `items`, then load reply properties in another batch.
-Both objects expose `authorName`, `creationDate`, `id`, and `text`.
-`creationDate` is `Date | null`; missing or invalid DOCX dates return `null`.
-`text` is a DocxEditor read extension, not an editable comment body.
-Comment-body replacement is unavailable.
+`Comment.replies` returns a reply collection in document order. Load its `items`, then load reply properties in another batch. Both objects expose `authorName`, `creationDate`, `id`, and `text`. `creationDate` is `Date | null`; missing or invalid DOCX dates return `null`. `text` is a DocxEditor read extension, not an editable comment body. Comment-body replacement is unavailable.
 
 ## Create an anchored comment
 
-`Range.insertComment(commentText)` returns a `Comment` over the exact range.
-A collapsed range creates an insertion-point comment.
-The runtime rejects empty comment text and ranges that cross table cells.
+`Range.insertComment(commentText)` returns a `Comment` over the exact range. A collapsed range creates an insertion-point comment. The runtime rejects empty comment text and ranges that cross table cells.
 
 This example comments on a unique phrase, then adds a reply:
 
@@ -82,18 +64,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-`Comment.reply(replyText)` returns the created `CommentReply`.
-Sync after creation before using either returned object for dependent work.
-Author names can repeat; the runtime preserves them as stored.
+`Comment.reply(replyText)` returns the created `CommentReply`. Sync after creation before using either returned object for dependent work. Author names can repeat; the runtime preserves them as stored.
 
 ## Navigate and resolve a thread
 
-`Comment.getRange()` returns the content range for the comment.
-Resolve that range before reading text or selecting it in a browser.
-`Comment.resolved = true` resolves the whole thread.
-Assign `false` to reopen it.
-Load `resolved` before reading its state.
-Resolving a thread does not delete its text or replies.
+`Comment.getRange()` returns the content range for the comment. Resolve that range before reading text or selecting it in a browser. `Comment.resolved = true` resolves the whole thread. Assign `false` to reopen it. Load `resolved` before reading its state. Resolving a thread does not delete its text or replies.
 
 For example, resolve a comment already selected by your application:
 
@@ -102,14 +77,11 @@ comment.resolved = true;
 await context.sync();
 ```
 
-Keep the selected comment inside its run, or explicitly track and adopt it.
-See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+Keep the selected comment inside its run, or explicitly track and adopt it. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
 
 ## Delete threads or replies
 
-`Comment.delete()` removes the root comment, its replies, and its anchors.
-`CommentReply.delete()` removes only that reply and preserves its parent and siblings.
-Queue independent deletions together when they should form one atomic transaction:
+`Comment.delete()` removes the root comment, its replies, and its anchors. `CommentReply.delete()` removes only that reply and preserves its parent and siblings. Queue independent deletions together when they should form one atomic transaction:
 
 ```ts
 await runtime.run(async (context) => {
@@ -121,11 +93,8 @@ await runtime.run(async (context) => {
 });
 ```
 
-You can undo a browser deletion batch in one step.
-Server writes use the same object-model methods without a browser module.
-Deleted targets become invalid, and stale reads require fresh selection and reconsideration.
+You can undo a browser deletion batch in one step. Server writes use the same object-model methods without a browser module. Deleted targets become invalid, and stale reads require fresh selection and reconsideration.
 
 ## Next steps
 
-See [Runtime and setup](/docs/2.x/editor-api/runtime),
-[Search and navigation](/docs/2.x/editor-api/search-and-navigation), and [API member directory](/docs/2.x/editor-api/reference).
+See [Runtime and setup](/docs/2.x/editor-api/runtime), [Search and navigation](/docs/2.x/editor-api/search-and-navigation), and [API member directory](/docs/2.x/editor-api/reference).

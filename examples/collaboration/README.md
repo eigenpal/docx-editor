@@ -1,10 +1,8 @@
 # Peer-to-peer collaboration
 
-This example uses `y-webrtc` to replicate a document between browsers. It has no application
-server or durable shared storage.
+This example uses `y-webrtc` to replicate a document between browsers. It has no application server or durable shared storage.
 
-For server-backed rooms, see the
-[Hocuspocus collaboration example](../collaboration-hocuspocus/README.md).
+For server-backed rooms, see the [Hocuspocus collaboration example](../collaboration-hocuspocus/README.md).
 
 ## Set up the example
 
@@ -16,8 +14,7 @@ bun run build:packages
 bun run dev:collaboration
 ```
 
-The example uses `http://localhost:5173`. The React Vite example also uses port `5173`.
-Stop `bun run dev` or `bun run dev:react` before you start this example.
+The example uses `http://localhost:5173`. The React Vite example also uses port `5173`. Stop `bun run dev` or `bun run dev:react` before you start this example.
 
 ## Test from two machines
 
@@ -30,12 +27,9 @@ Stop `bun run dev` or `bun run dev:react` before you start this example.
 
 The link uses `localhost:5173`. Each person must run the example on their own machine.
 
-Share only the join link that the page shows. Do not initialize one room from two creator pages.
-Use the participant count to confirm peer discovery.
+Share only the join link that the page shows. Do not initialize one room from two creator pages. Use the participant count to confirm peer discovery.
 
-The link has the form `?room=<id>#collab=<key>`. The query value identifies the public signaling
-topic. The fragment contains the `y-webrtc` encryption key. Browsers do not send fragments to
-servers, but anyone with the full link can join the room.
+The link has the form `?room=<id>#collab=<key>`. The query value identifies the public signaling topic. The fragment contains the `y-webrtc` encryption key. Browsers do not send fragments to servers, but anyone with the full link can join the room.
 
 ## Limits
 
@@ -53,5 +47,4 @@ Run this command from the repository root:
 bun run --filter './examples/collaboration' headless
 ```
 
-The script connects two stores through in-process Yjs updates. It does not use React, WebRTC, or
-a browser.
+The script connects two stores through in-process Yjs updates. It does not use React, WebRTC, or a browser.

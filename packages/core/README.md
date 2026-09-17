@@ -13,13 +13,9 @@
 
 # @docx-editor.dev/core
 
-The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a
-canonical document tree, lays that tree out into pages, paints them, and writes the tree back
-to OOXML. No framework dependency and no UI.
+The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. No framework dependency and no UI.
 
-Most apps never install this directly — [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)
-carries it. Reach for it when you are writing your own adapter, or when you need the contract
-types to write a function signature.
+Most apps never install this directly — [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) carries it. Reach for it when you are writing your own adapter, or when you need the contract types to write a function signature.
 
 ```bash
 npm install @docx-editor.dev/core
@@ -34,9 +30,7 @@ import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-The root covers most uses: creating an editor, the `Editor` contract it implements, fonts,
-the chrome registry, and the document model types. Subpaths expose the canonical tree, the
-layout pass, and the paint step directly.
+The root covers most uses: creating an editor, the `Editor` contract it implements, fonts, the chrome registry, and the document model types. Subpaths expose the canonical tree, the layout pass, and the paint step directly.
 
 | Subpath                       | What's there                                                                                 |
 | ----------------------------- | -------------------------------------------------------------------------------------------- |
@@ -62,22 +56,15 @@ layout pass, and the paint step directly.
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
-There is one document model. The painted pages are the editable surface: they are
-`contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed
-as tree operations, so the browser never invents markup inside your document.
+There is one document model. The painted pages are the editable surface: they are `contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed as tree operations, so the browser never invents markup inside your document.
 
-Nodes are typed where layout needs them and generic everywhere else, preserving the element
-verbatim. Content the engine does not model is carried rather than dropped, so a document full
-of unknown extensions still opens, edits, and saves.
+Nodes are typed where layout needs them and generic everywhere else, preserving the element verbatim. Content the engine does not model is carried rather than dropped, so a document full of unknown extensions still opens, edits, and saves.
 
-Export sessions default to `all-markup`, which shows inserted and deleted text.
-Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
+Export sessions default to `all-markup`, which shows inserted and deleted text. Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
 
 ### Build a paginated exporter
 
-For exports that need accurate page breaks, use `openFontBackedDocumentForExport`. It resolves
-the fonts used throughout the document before layout. Without a measurer,
-`openDocumentForExport(bytes)` uses a fixed-width approximation.
+For exports that need accurate page breaks, use `openFontBackedDocumentForExport`. It resolves the fonts used throughout the document before layout. Without a measurer, `openDocumentForExport(bytes)` uses a fixed-width approximation.
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -102,25 +89,17 @@ try {
 }
 ```
 
-Let Core manage fonts, resources, and layout. Build your output from the returned pages.
-For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
+Let Core manage fonts, resources, and layout. Build your output from the returned pages. For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
 
 ## Fidelity
 
-Untouched content, unsupported OOXML, and package payloads survive editing and save. The
-canonical tree preserves document structure while embedded fonts, macros, media, and other
-payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the
-tree, and a save-and-reopen semantic digest.
+Untouched content, unsupported OOXML, and package payloads survive editing and save. The canonical tree preserves document structure while embedded fonts, macros, media, and other payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
 
 ## Untrusted input
 
-A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the
-parse boundary: URL allowlisting, entity and zip-bomb limits, recursion and element caps, no
-zero-click external fetches, escaping on the way back out.
+A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary: URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out.
 
-Anything you render from document data (a font name, a hyperlink target, a comment body) is
-still attacker-controlled at your boundary. Render it as text; do not build markup or URLs
-from it.
+Anything you render from document data (a font name, a hyperlink target, a comment body) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 
 ## Documentation
 

@@ -5,8 +5,7 @@ category: 'Frameworks'
 seoTitle: 'Nuxt DOCX editor setup'
 ---
 
-The editor measures text in the browser.
-Keep its package import and render work in a client-only component.
+The editor measures text in the browser. Keep its package import and render work in a client-only component.
 
 ## Install
 
@@ -18,8 +17,7 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 
 ## Configure Nuxt
 
-Load the editor stylesheet once.
-Prebundle the adapter and engine for the Vite development server.
+Load the editor stylesheet once. Prebundle the adapter and engine for the Vite development server.
 
 ```ts
 // nuxt.config.ts
@@ -35,8 +33,7 @@ export default defineNuxtConfig({
 
 ## Add a client-only component
 
-Use the `.client.vue` suffix.
-Nuxt excludes this component from server-side rendering (SSR).
+Use the `.client.vue` suffix. Nuxt excludes this component from server-side rendering (SSR).
 
 ```vue
 <!-- components/DocumentEditor.client.vue -->
@@ -57,8 +54,7 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </style>
 ```
 
-Use the component from a page or layout.
-Nuxt auto-imports components from the `components` directory.
+Use the component from a page or layout. Nuxt auto-imports components from the `components` directory.
 
 ```vue
 <!-- pages/index.vue -->
@@ -67,15 +63,11 @@ Nuxt auto-imports components from the `components` directory.
 </template>
 ```
 
-The server output contains a placeholder for `DocumentEditor`.
-Nuxt mounts the editor in the browser.
-The editor fills its parent, so the parent needs a measured height.
+The server output contains a placeholder for `DocumentEditor`. Nuxt mounts the editor in the browser. The editor fills its parent, so the parent needs a measured height.
 
 ## Nuxt module status
 
-The repository contains `@docx-editor.dev/nuxt` source and a Nuxt example.
-The package has `"private": true`, so the repository does not publish it to npm.
-Use the Vue adapter setup on this page in an external application.
+The repository contains `@docx-editor.dev/nuxt` source and a Nuxt example. The package has `"private": true`, so the repository does not publish it to npm. Use the Vue adapter setup on this page in an external application.
 
 The workspace module provides these behaviors:
 
@@ -88,8 +80,7 @@ Do not depend on these module behaviors until the package becomes publishable.
 
 ## Run the repository example
 
-The Nuxt example uses the private module through the monorepo workspace.
-It runs against the Nuxt version in the workspace.
+The Nuxt example uses the private module through the monorepo workspace. It runs against the Nuxt version in the workspace.
 
 ```bash
 git clone https://github.com/eigenpal/docx-editor.git

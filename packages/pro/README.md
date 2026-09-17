@@ -13,8 +13,7 @@
 
 # @docx-editor.dev/pro
 
-Four capabilities for the [docx-editor.dev](https://docx-editor.dev) React and
-Vue editors:
+Four capabilities for the [docx-editor.dev](https://docx-editor.dev) React and Vue editors:
 
 - **Tracked changes**: Suggesting mode, markup rendering, accept, and reject.
 - **Comments**: Threads anchored to a range, with replies.
@@ -25,13 +24,11 @@ Vue editors:
 npm install @docx-editor.dev/react @docx-editor.dev/pro
 ```
 
-The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at
-`@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
 ## Register a module
 
-Capabilities are modules passed to the editor root. Registration happens at construction, so
-the array identity must be stable. Build it outside render, or the editor rebuilds every time.
+Capabilities are modules passed to the editor root. Registration happens at construction, so the array identity must be stable. Build it outside render, or the editor rebuilds every time.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -53,17 +50,13 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`author` is what lands in `w:author`. OOXML requires it, so the engine refuses a comment or
-reply with no author rather than writing an empty attribute.
+`author` is what lands in `w:author`. OOXML requires it, so the engine refuses a comment or reply with no author rather than writing an empty attribute.
 
-Without a review module the editor still opens a document containing revisions and comments and
-still saves them back untouched. It renders revisions in their final state and offers no review
-UI; the module is what makes them visible and actionable.
+Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched. It renders revisions in their final state and offers no review UI; the module is what makes them visible and actionable.
 
 ## Collaboration
 
-Use `collaborationModule` with a Yjs 13 provider. The package includes WebRTC and
-Hocuspocus helpers for React and Vue.
+Use `collaborationModule` with a Yjs 13 provider. The package includes WebRTC and Hocuspocus helpers for React and Vue.
 
 Install the peer package for your transport:
 
@@ -72,16 +65,11 @@ npm install @docx-editor.dev/pro yjs y-webrtc
 npm install @docx-editor.dev/pro yjs @hocuspocus/provider
 ```
 
-Start with the
-[real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration).
-Use the
-[collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration)
-for room lifecycles, presence, recovery, and limits.
+Start with the [real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration). Use the [collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration) for room lifecycles, presence, recovery, and limits.
 
 ## Chrome or hooks
 
-Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for
-Word-like cards out of the box, or the hook to render your own markup.
+Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for Word-like cards out of the box, or the hook to render your own markup.
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';
@@ -114,15 +102,11 @@ function ChangeList() {
 }
 ```
 
-Items come from the document tree rather than from what is currently painted, and each anchor
-comes from layout records rather than measured DOM, so a sidebar built on this does not lag a
-repaint behind the page or break during pagination.
+Items come from the document tree rather than from what is currently painted, and each anchor comes from layout records rather than measured DOM, so a sidebar built on this does not lag a repaint behind the page or break during pagination.
 
 ## Custom nodes
 
-An inline node type you define (a citation, a mention, a merge field) stored as a Word content
-control whose `w:tag` carries your identity and attributes. Word opens the document, shows the
-node's text, and gives it back unchanged.
+An inline node type you define (a citation, a mention, a merge field) stored as a Word content control whose `w:tag` carries your identity and attributes. Word opens the document, shows the node's text, and gives it back unchanged.
 
 ```ts
 import { defineCustomNode, customNodesModule } from '@docx-editor.dev/pro';
@@ -140,15 +124,13 @@ const MODULES = [customNodesModule({ nodes: [Citation] })];
 
 Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `text` as untrusted.
 
-`insertCustomNode`, `updateCustomNode`, and `removeCustomNode` author them from code, and
-`customNodeXml` builds the same content control on a server with no editor and no DOM.
+`insertCustomNode`, `updateCustomNode`, and `removeCustomNode` author them from code, and `customNodeXml` builds the same content control on a server with no editor and no DOM.
 
 ## Licensing
 
 This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
-Both module factories accept an optional `licenseKey`. Construction never validates it and never
-touches the network.
+Both module factories accept an optional `licenseKey`. Construction never validates it and never touches the network.
 
 ## Documentation
 

@@ -5,55 +5,43 @@ category: 'Guides'
 seoTitle: 'DOCX footnotes and endnotes'
 ---
 
-The editor renders Word footnotes and endnotes in their document locations. You
-can edit note text through the same document surface.
+The editor renders Word footnotes and endnotes in their document locations. You can edit note text through the same document surface.
 
 ## Insert a note
 
 Open the **Insert** menu. Select **Footnote** or **Endnote**.
 
-The editor adds a reference at the caret and creates the matching note body. It
-then opens that note body for editing.
+The editor adds a reference at the caret and creates the matching note body. It then opens that note body for editing.
 
-React and Vue use the same `insert.footnote` and `insert.endnote` chrome slots.
-Custom chrome can run these shared commands.
+React and Vue use the same `insert.footnote` and `insert.endnote` chrome slots. Custom chrome can run these shared commands.
 
 ## Edit a note
 
-Select a note reference to enter its note scope. Text, lists, tables, content
-controls, pictures, fonts, comments, and bookmarks work inside that scope.
+Select a note reference to enter its note scope. Text, lists, tables, content controls, pictures, fonts, comments, and bookmarks work inside that scope.
 
 Comments need the review module and an EigenPal Pro License.
 
 Use `useNoteScopeState()` in React or Vue to read the active note scope.
 
-`DocxEditor.NotesChrome` and `DocxEditorNotesChrome` provide packaged note
-controls for React and Vue.
+`DocxEditor.NotesChrome` and `DocxEditorNotesChrome` provide packaged note controls for React and Vue.
 
 ## Convert or delete a note
 
-The note controls can convert a footnote to an endnote. They can also convert an
-endnote to a footnote.
+The note controls can convert a footnote to an endnote. They can also convert an endnote to a footnote.
 
-In edit mode, deleting a note removes its reference and note body together. The
-editor updates later note numbers after the operation.
+In edit mode, deleting a note removes its reference and note body together. The editor updates later note numbers after the operation.
 
-Suggesting mode refuses direct note deletion. Delete the reference to propose
-the deletion.
+Suggesting mode refuses direct note deletion. Delete the reference to propose the deletion.
 
-The Editing API can enumerate, read, navigate, and delete notes. Use
-`document.footnotes` and `document.endnotes`.
+The Editing API can enumerate, read, navigate, and delete notes. Use `document.footnotes` and `document.endnotes`.
 
 ## Placement and pagination
 
-The editor supports Word note positions such as page bottom, beneath text,
-section end, and document end.
+The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
 
-A footnote stays with its reference line when both fit on one page. The editor
-moves that line when the note cannot fit below it.
+A footnote stays with its reference line when both fit on one page. The editor moves that line when the note cannot fit below it.
 
-A note splits only when it is taller than the available note column. Split note
-pages keep separate rectangles for painting and pointer input.
+A note splits only when it is taller than the available note column. Split note pages keep separate rectangles for painting and pointer input.
 
 ## Limits
 

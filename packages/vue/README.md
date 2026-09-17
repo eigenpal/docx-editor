@@ -61,12 +61,9 @@ Every composable the packaged chrome uses is public: `useDocxEditor`, `useEditor
 
 ## SSR and Nuxt
 
-The editor is client-only. On the server, `DocxEditorRoot` skips instance
-creation. Mount the editor inside `<ClientOnly>` or load it with
-`defineAsyncComponent`.
+The editor is client-only. On the server, `DocxEditorRoot` skips instance creation. Mount the editor inside `<ClientOnly>` or load it with `defineAsyncComponent`.
 
-The Nuxt module remains a private workspace package. External applications
-should follow the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
+The Nuxt module remains a private workspace package. External applications should follow the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
 
 ## Docs and demo
 

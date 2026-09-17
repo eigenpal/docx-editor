@@ -36,8 +36,7 @@ export default function Index() {
 }
 ```
 
-The mount check keeps the server markup and first client markup identical.
-The lazy import keeps the editor out of the server build.
+The mount check keeps the server markup and first client markup identical. The lazy import keeps the editor out of the server build.
 
 ## Add the editor to Remix
 
@@ -45,8 +44,6 @@ The lazy import keeps the editor out of the server build.
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Import `@docx-editor.dev/core/styles/editor.css` once.
-Render the editor only after the component mounts.
+Import `@docx-editor.dev/core/styles/editor.css` once. Render the editor only after the component mounts.
 
-For more information, see the
-[Remix integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/remix).
+For more information, see the [Remix integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/remix).

@@ -4,24 +4,15 @@ description: 'Reference every editor chrome slot and its React and Vue toolbar p
 category: 'Guides'
 ---
 
-Chrome slots are stable control identifiers. Use fixed-command slots with
-`useEditorCommand()`, `ContextMenu.Slot`, or the generic toolbar button. Use
-named parts for controls that collect a value or open host UI.
+Chrome slots are stable control identifiers. Use fixed-command slots with `useEditorCommand()`, `ContextMenu.Slot`, or the generic toolbar button. Use named parts for controls that collect a value or open host UI.
 
 ## Read the tables
 
-The **Toolbar part** column gives the shared suffix. For example, `Bold` means
-`DocxEditor.Toolbar.Bold` in React and `DocxEditorToolbar.Bold` in Vue. An em
-dash means that neither adapter provides a named part.
+The **Toolbar part** column gives the shared suffix. For example, `Bold` means `DocxEditor.Toolbar.Bold` in React and `DocxEditorToolbar.Bold` in Vue. An em dash means that neither adapter provides a named part.
 
-The **Packaged surface** column shows where the standard editor places the
-control. **Explicit composition** means that you must add its named part to a
-custom toolbar.
+The **Packaged surface** column shows where the standard editor places the control. **Explicit composition** means that you must add its named part to a custom toolbar.
 
-Use the named part for controls that collect a value or open UI, such as
-`FontColor`, `TableBorderWidth`, or `ImageProperties`. Use `Toolbar.Button` in
-React or `DocxEditorToolbar.Button` in Vue for a fixed-command slot without a
-named part:
+Use the named part for controls that collect a value or open UI, such as `FontColor`, `TableBorderWidth`, or `ImageProperties`. Use `Toolbar.Button` in React or `DocxEditorToolbar.Button` in Vue for a fixed-command slot without a named part:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -40,9 +31,7 @@ named part:
 </Framework>
 </FrameworkTabs>
 
-Use `Action` for a host-owned action without a registry slot. Use `Separator`
-only for layout. The `Button`, `Action`, and `Separator` helpers don't add slot
-IDs.
+Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. The `Button`, `Action`, and `Separator` helpers don't add slot IDs.
 
 ## History, zoom, styles, and font
 
@@ -71,8 +60,7 @@ IDs.
 
 ## Alignment, lists, and formatting
 
-The default toolbar combines the four alignment slots into `Alignment`. Use
-the four `Align*` parts when you want separate controls.
+The default toolbar combines the four alignment slots into `Alignment`. Use the four `Align*` parts when you want separate controls.
 
 | Slot                | Packaged surface | Toolbar part             | Purpose                   |
 | ------------------- | ---------------- | ------------------------ | ------------------------- |
@@ -91,85 +79,72 @@ the four `Align*` parts when you want separate controls.
 
 ## Review and content controls
 
-For protection settings, password limits, and command examples, see
-[Document protection](/docs/2.x/guides/document-protection).
+For protection settings, password limits, and command examples, see [Document protection](/docs/2.x/guides/document-protection).
 
-Comments and reviewer filtering require the Pro review module. Content-control
-slots require the typed content-control capability. The two surface toggles can
-be composed anywhere; inspector and remove become enabled when the selection
-supports them.
+Comments and reviewer filtering require the Pro review module. Content-control slots require the typed content-control capability. The two surface toggles can be composed anywhere; inspector and remove become enabled when the selection supports them.
 
-| Slot                       | Packaged surface     | Toolbar part              | Purpose                                   |
-| -------------------------- | -------------------- | ------------------------- | ----------------------------------------- |
-| `review.comments`          | Default toolbar      | `Comments`                | Open comments and changes                 |
-| `review.paragraphMarks`    | Review menu          | —                         | Show paragraph-break marks                |
-| `review.protectDocument`   | Review menu          | —                         | Toggle document protection                |
-| `review.simpleMarkup`      | Review menu          | —                         | Show the proposed result with change bars |
-| `review.allMarkup`         | Review menu          | —                         | Show all revision markup                  |
-| `review.noMarkup`          | Review menu          | —                         | Show the proposed result                  |
-| `review.original`          | Review menu          | —                         | Show the original document                |
-| `review.previousChange`    | Review menu          | —                         | Go to the previous change                 |
-| `review.nextChange`        | Review menu          | —                         | Go to the next change                     |
-| `review.acceptAllChanges`  | Review menu          | —                         | Accept all document changes               |
-| `review.rejectAllChanges`  | Review menu          | —                         | Reject all document changes               |
-| `review.authors`           | Review menu          | `Reviewers`               | Filter markup by reviewer                 |
-| `review.editingMode`       | Default toolbar      | `EditingMode`             | Select editing or review mode             |
-| `contentControl.showAll`   | Explicit composition | `ContentControlShowAll`   | Show content-control boundaries           |
-| `contentControl.formFill`  | Explicit composition | `ContentControlFormFill`  | Toggle form-fill mode                     |
-| `contentControl.inspector` | Explicit composition | `ContentControlInspector` | Open content-control properties           |
-| `contentControl.remove`    | Explicit composition | `ContentControlRemove`    | Remove the selected control               |
+| Slot | Packaged surface | Toolbar part | Purpose |
+| --- | --- | --- | --- |
+| `review.comments` | Default toolbar | `Comments` | Open comments and changes |
+| `review.paragraphMarks` | Review menu | — | Show paragraph-break marks |
+| `review.protectDocument` | Review menu | — | Toggle document protection |
+| `review.simpleMarkup` | Review menu | — | Show the proposed result with change bars |
+| `review.allMarkup` | Review menu | — | Show all revision markup |
+| `review.noMarkup` | Review menu | — | Show the proposed result |
+| `review.original` | Review menu | — | Show the original document |
+| `review.previousChange` | Review menu | — | Go to the previous change |
+| `review.nextChange` | Review menu | — | Go to the next change |
+| `review.acceptAllChanges` | Review menu | — | Accept all document changes |
+| `review.rejectAllChanges` | Review menu | — | Reject all document changes |
+| `review.authors` | Review menu | `Reviewers` | Filter markup by reviewer |
+| `review.editingMode` | Default toolbar | `EditingMode` | Select editing or review mode |
+| `contentControl.showAll` | Explicit composition | `ContentControlShowAll` | Show content-control boundaries |
+| `contentControl.formFill` | Explicit composition | `ContentControlFormFill` | Toggle form-fill mode |
+| `contentControl.inspector` | Explicit composition | `ContentControlInspector` | Open content-control properties |
+| `contentControl.remove` | Explicit composition | `ContentControlRemove` | Remove the selected control |
 
 ## Images and tables
 
-The toolbar shows image controls when you select an image. It shows table border
-and fill controls when you place the caret or a cell selection in a table. The
-Insert menu also provides image and table insertion.
+The toolbar shows image controls when you select an image. It shows table border and fill controls when you place the caret or a cell selection in a table. The Insert menu also provides image and table insertion.
 
-| Slot                 | Packaged surface           | Toolbar part        | Purpose                        |
-| -------------------- | -------------------------- | ------------------- | ------------------------------ |
-| `image.insert`       | Insert menu, image context | `ImageInsert`       | Insert an image                |
-| `image.properties`   | Image context              | `ImageProperties`   | Open image properties          |
-| `image.wrap`         | Image context              | `ImageWrap`         | Choose text wrapping           |
-| `image.altText`      | Image context              | `ImageAltText`      | Edit alternative text          |
-| `table.insert`       | Insert menu                | `TableInsert`       | Insert a table                 |
-| `table.borderTarget` | Table context              | `TableBorderTarget` | Choose which borders to affect |
-| `table.borderColor`  | Table context              | `TableBorderColor`  | Choose and apply border color  |
-| `table.borderStyle`  | Table context              | `TableBorderStyle`  | Choose border style            |
-| `table.borderWidth`  | Table context              | `TableBorderWidth`  | Choose border width            |
-| `table.cellFill`     | Table context              | `TableCellFill`     | Choose and apply cell fill     |
+| Slot | Packaged surface | Toolbar part | Purpose |
+| --- | --- | --- | --- |
+| `image.insert` | Insert menu, image context | `ImageInsert` | Insert an image |
+| `image.properties` | Image context | `ImageProperties` | Open image properties |
+| `image.wrap` | Image context | `ImageWrap` | Choose text wrapping |
+| `image.altText` | Image context | `ImageAltText` | Edit alternative text |
+| `table.insert` | Insert menu | `TableInsert` | Insert a table |
+| `table.borderTarget` | Table context | `TableBorderTarget` | Choose which borders to affect |
+| `table.borderColor` | Table context | `TableBorderColor` | Choose and apply border color |
+| `table.borderStyle` | Table context | `TableBorderStyle` | Choose border style |
+| `table.borderWidth` | Table context | `TableBorderWidth` | Choose border width |
+| `table.cellFill` | Table context | `TableCellFill` | Choose and apply cell fill |
 
 ## File and insert
 
-The packaged menus provide file, break, note, and table-of-contents slots.
-Header/footer options provide page-field slots.
+The packaged menus provide file, break, note, and table-of-contents slots. Header/footer options provide page-field slots.
 
-| Slot                            | Packaged surface      | Toolbar part | Purpose                               |
-| ------------------------------- | --------------------- | ------------ | ------------------------------------- |
-| `file.open`                     | File menu             | —            | Load a document                       |
-| `file.save`                     | File menu             | `Save`       | Save a document                       |
-| `file.pageSetup`                | File menu             | —            | Open page setup                       |
-| `insert.footnote`               | Insert menu           | —            | Insert a footnote                     |
-| `insert.endnote`                | Insert menu           | —            | Insert an endnote                     |
-| `insert.pageNumber`             | Header/footer options | —            | Insert the current page number        |
-| `insert.totalPages`             | Header/footer options | —            | Insert the document page count        |
-| `insert.sectionPages`           | Header/footer options | —            | Insert the current section page count |
-| `insert.pageXofY`               | Header/footer options | —            | Insert a Page X of Y field pair       |
-| `insert.pageBreak`              | Insert menu           | —            | Insert a page break                   |
-| `insert.sectionBreakNextPage`   | Insert menu           | —            | Start a section on the next page      |
-| `insert.sectionBreakContinuous` | Insert menu           | —            | Start a section on the current page   |
-| `insert.toc`                    | Insert menu           | —            | Insert a table of contents            |
+| Slot | Packaged surface | Toolbar part | Purpose |
+| --- | --- | --- | --- |
+| `file.open` | File menu | — | Load a document |
+| `file.save` | File menu | `Save` | Save a document |
+| `file.pageSetup` | File menu | — | Open page setup |
+| `insert.footnote` | Insert menu | — | Insert a footnote |
+| `insert.endnote` | Insert menu | — | Insert an endnote |
+| `insert.pageNumber` | Header/footer options | — | Insert the current page number |
+| `insert.totalPages` | Header/footer options | — | Insert the document page count |
+| `insert.sectionPages` | Header/footer options | — | Insert the current section page count |
+| `insert.pageXofY` | Header/footer options | — | Insert a Page X of Y field pair |
+| `insert.pageBreak` | Insert menu | — | Insert a page break |
+| `insert.sectionBreakNextPage` | Insert menu | — | Start a section on the next page |
+| `insert.sectionBreakContinuous` | Insert menu | — | Start a section on the current page |
+| `insert.toc` | Insert menu | — | Insert a table of contents |
 
 ## Use a slot directly
 
-For a fixed-command slot, `useEditorCommand(slot)` supplies enabled state,
-active state, the engine's disabled reason, and `execute()`. Value and dialog
-controls also need input from your UI. Pass their complete `EditorCommand` to
-`useEditorCommand()`, or use the packaged part or menu. Handle `file.open` and
-`file.save` with the document loading and saving APIs.
+For a fixed-command slot, `useEditorCommand(slot)` supplies enabled state, active state, the engine's disabled reason, and `execute()`. Value and dialog controls also need input from your UI. Pass their complete `EditorCommand` to `useEditorCommand()`, or use the packaged part or menu. Handle `file.open` and `file.save` with the document loading and saving APIs.
 
-For complete signatures, see the [core API reference](/docs/2.x/api/core),
-[React API reference](/docs/2.x/api/react), or
-[Vue API reference](/docs/2.x/api/vue).
+For complete signatures, see the [core API reference](/docs/2.x/api/core), [React API reference](/docs/2.x/api/react), or [Vue API reference](/docs/2.x/api/vue).
 
 ## Next steps
 

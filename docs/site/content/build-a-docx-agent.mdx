@@ -5,33 +5,21 @@ category: 'Getting Started'
 seoTitle: 'Build a DOCX agent that edits and redlines Word documents'
 ---
 
-This page connects a tool-calling model to a DOCX file. You expose a small
-catalog of document tools. Each tool validates its input and calls
-[`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). The model does not
-generate Office Open XML (OOXML).
+This page connects a tool-calling model to a DOCX file. You expose a small catalog of document tools. Each tool validates its input and calls [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). The model does not generate Office Open XML (OOXML).
 
 ## Try the writer agent
 
-Open the [writer agent demo](/#writer-agent) on the homepage. Choose
-**Draft a mutual NDA.** After the draft finishes, choose **Redline for
-clarity**.
+Open the [writer agent demo](/#writer-agent) on the homepage. Choose **Draft a mutual NDA.** After the draft finishes, choose **Redline for clarity**.
 
-The demo uses the Vercel AI SDK. The document tools work with any tool-calling
-framework.
+The demo uses the Vercel AI SDK. The document tools work with any tool-calling framework.
 
-For an agent that continues working after the browser closes, run the
-[server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review).
-Its worker joins a shared Hocuspocus room and publishes suggestions for browser
-peers to accept or reject. Scripted review works without a model API key.
+For an agent that continues working after the browser closes, run the [server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review). Its worker joins a shared Hocuspocus room and publishes suggestions for browser peers to accept or reject. Scripted review works without a model API key.
 
 ## Before you start
 
 - You need `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`.
-- If you show the document in a page, install `@docx-editor.dev/react` or
-  `@docx-editor.dev/vue`.
-- For comments or tracked changes, pass a non-empty `author`. Browser review
-  also requires `@docx-editor.dev/pro` and its review module. The server runtime
-  provides these writes without a browser review module.
+- If you show the document in a page, install `@docx-editor.dev/react` or `@docx-editor.dev/vue`.
+- For comments or tracked changes, pass a non-empty `author`. Browser review also requires `@docx-editor.dev/pro` and its review module. The server runtime provides these writes without a browser review module.
 
 <Steps>
 
@@ -76,9 +64,7 @@ npm install @docx-editor.dev/pro
 
 ### Create a runtime
 
-If you have DOCX bytes and no editor in the page, create a server runtime. The
-server runtime returns edited bytes. It does not start Microsoft Word and does
-not use a browser Document Object Model (DOM).
+If you have DOCX bytes and no editor in the page, create a server runtime. The server runtime returns edited bytes. It does not start Microsoft Word and does not use a browser Document Object Model (DOM).
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -88,8 +74,7 @@ const runtime = await DocxEditor.createServer(bytes, {
 });
 ```
 
-If a reader already has the document open, create a browser runtime. Edits use
-the editor undo stack and appear in the page.
+If a reader already has the document open, create a browser runtime. Edits use the editor undo stack and appear in the page.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
@@ -99,8 +84,7 @@ const runtime = DocxEditor.createBrowser(editor, {
 });
 ```
 
-Call `runtime.dispose()` when the work ends. For capabilities, `sync()` rules,
-and disposal, see [Editing API](/docs/2.x/editor-api).
+Call `runtime.dispose()` when the work ends. For capabilities, `sync()` rules, and disposal, see [Editing API](/docs/2.x/editor-api).
 
 </Step>
 
@@ -108,8 +92,7 @@ and disposal, see [Editing API](/docs/2.x/editor-api).
 
 ### Define one tool per document task
 
-Give the model a small catalog. Each tool does one job, validates its input, and
-runs inside one `runtime.run` callback.
+Give the model a small catalog. Each tool does one job, validates its input, and runs inside one `runtime.run` callback.
 
 This AI SDK example defines a read tool and two write tools:
 
@@ -175,11 +158,9 @@ export function createDocumentTools(runtime: DocxEditorRuntime) {
 }
 ```
 
-Return a structured result. If a search matches zero times or more than once,
-return a refusal. Do not pick a match for the model.
+Return a structured result. If a search matches zero times or more than once, return a refusal. Do not pick a match for the model.
 
-This package does not include a model, a tool catalog, or a chat UI. Keep those
-in your application.
+This package does not include a model, a tool catalog, or a chat UI. Keep those in your application.
 
 </Step>
 
@@ -187,11 +168,9 @@ in your application.
 
 ### Address text with an exact phrase
 
-Pass a verbatim `search` phrase from the paragraph you read. Copy case and
-punctuation.
+Pass a verbatim `search` phrase from the paragraph you read. Copy case and punctuation.
 
-If you send a document snapshot with the chat request, cap it by paragraph count
-and character count. A large document must not grow every later turn.
+If you send a document snapshot with the chat request, cap it by paragraph count and character count. A large document must not grow every later turn.
 
 </Step>
 
@@ -199,8 +178,7 @@ and character count. A large document must not grow every later turn.
 
 ### Split a fresh draft into stages
 
-Do not put the whole document in one `write_document` tool. Split a draft so
-you can see each failure:
+Do not put the whole document in one `write_document` tool. Split a draft so you can see each failure:
 
 1. Replace the body with styled paragraphs. Return paragraph IDs.
 2. Apply native bullets or numbering.
@@ -215,11 +193,7 @@ you can see each failure:
 
 Each later tool uses IDs from the first tool. If a required stage fails, stop.
 
-The
-[writer agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/write-agent)
-runs this sequence. The
-[comment agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/agent)
-reads an open document and adds anchored comments.
+The [writer agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/write-agent) runs this sequence. The [comment agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/agent) reads an open document and adds anchored comments.
 
 </Step>
 
@@ -229,25 +203,16 @@ reads an open document and adds anchored comments.
 
 Read the user request, then pick tools:
 
-- If the user says "update", "rewrite", or "fix", call direct replacement,
-  insertion, or deletion.
-- If the user says "suggest", "review", or "redline", call tracked proposal
-  tools.
+- If the user says "update", "rewrite", or "fix", call direct replacement, insertion, or deletion.
+- If the user says "suggest", "review", or "redline", call tracked proposal tools.
 
-On a server, set `context.document.changeTrackingMode = 'TrackMineOnly'` and use
-`range.insertText()` or `range.delete()` to record tracked text edits. See the
-[server tracking example](/docs/2.x/editor-api#create-tracked-changes-on-a-server)
-for prerequisites and limits.
+On a server, set `context.document.changeTrackingMode = 'TrackMineOnly'` and use `range.insertText()` or `range.delete()` to record tracked text edits. See the [server tracking example](/docs/2.x/editor-api#create-tracked-changes-on-a-server) for prerequisites and limits.
 
-Leave accept and reject off the agent allowlist. The reader decides in the
-editor.
+Leave accept and reject off the agent allowlist. The reader decides in the editor.
 
-Cap tracked proposals per turn. Skip headings, placeholders, and sentences that
-are already clear. Prefer the smallest edit that fixes the problem.
+Cap tracked proposals per turn. Skip headings, placeholders, and sentences that are already clear. Prefer the smallest edit that fixes the problem.
 
-For revision markup, see
-[Tracked changes](/docs/2.x/pro/tracked-changes). For comment threads, see
-[Comments](/docs/2.x/pro/comments).
+For revision markup, see [Tracked changes](/docs/2.x/pro/tracked-changes). For comment threads, see [Comments](/docs/2.x/pro/comments).
 
 </Step>
 
@@ -255,19 +220,15 @@ For revision markup, see
 
 ### Wrap values in content controls
 
-A content control is a Structured Document Tag (SDT). Use one when a value has
-identity beyond its visible text, such as a party name or an effective date.
+A content control is a Structured Document Tag (SDT). Use one when a value has identity beyond its visible text, such as a party name or an effective date.
 
-Pass a paragraph ID, the exact placeholder text, a `tag`, a `title`, and a
-`subtype`. Search only that paragraph. If the phrase is missing or appears twice,
-return a refusal.
+Pass a paragraph ID, the exact placeholder text, a `tag`, a `title`, and a `subtype`. Search only that paragraph. If the phrase is missing or appears twice, return a refusal.
 
 <Callout>
   Wrap the placeholder, not the label. Wrap `[Effective Date]`. Do not wrap `Date of Birth`.
 </Callout>
 
-For field types and template filling, see
-[Content controls](/docs/2.x/guides/content-controls).
+For field types and template filling, see [Content controls](/docs/2.x/guides/content-controls).
 
 </Step>
 
@@ -283,8 +244,7 @@ For every write, do the following:
 4. Return a short success object or a typed refusal.
 5. Continue only when the result says the write succeeded.
 
-If the model emits parallel tool calls, queue the writes on the client. Do not
-tell the reader that a table, field, or revision exists until its tool succeeds.
+If the model emits parallel tool calls, queue the writes on the client. Do not tell the reader that a table, field, or revision exists until its tool succeeds.
 
 </Step>
 
@@ -295,5 +255,4 @@ tell the reader that a table, field, or revision exists until its tool succeeds.
 - [Editing API](/docs/2.x/editor-api): runtimes, `sync()`, and tool integration
 - [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
 - [API reference](/docs/2.x/api/editor-api)
-- [React composition](/docs/2.x/react/composition): mount chrome around the
-  editor
+- [React composition](/docs/2.x/react/composition): mount chrome around the editor

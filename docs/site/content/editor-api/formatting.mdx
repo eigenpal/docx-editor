@@ -5,12 +5,9 @@ category: 'Editing API'
 order: 55
 ---
 
-Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`.
-Set paragraph formatting directly on `Paragraph`.
-The API does not provide a `ParagraphFormat` object or a style-creation API.
+Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`. Set paragraph formatting directly on `Paragraph`. The API does not provide a `ParagraphFormat` object or a style-creation API.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
-Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Format an exact phrase
 
@@ -34,10 +31,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Assignments on one `Font` proxy coalesce within a sync.
-Different proxies that address overlapping content can still conflict.
-The runtime rejects formatting writes while tracking changes.
-Never switch tracking off automatically to bypass that refusal.
+Assignments on one `Font` proxy coalesce within a sync. Different proxies that address overlapping content can still conflict. The runtime rejects formatting writes while tracking changes. Never switch tracking off automatically to bypass that refusal.
 
 ## Read authored font values
 
@@ -52,33 +46,21 @@ await runtime.run(async (context) => {
 });
 ```
 
-Every font getter can return `null`.
-That means mixed values, no authored value, or formatting supplied through inheritance.
-These reads do not calculate the rendered style cascade.
-Do not convert `null` into a formatting write.
+Every font getter can return `null`. That means mixed values, no authored value, or formatting supplied through inheritance. These reads do not calculate the rendered style cascade. Do not convert `null` into a formatting write.
 
-| `Font` property                   | Write domain                                                      |
-| --------------------------------- | ----------------------------------------------------------------- |
-| `bold`, `italic`, `strikeThrough` | Boolean                                                           |
-| `name`                            | Font family name; your rendering host supplies its font resources |
-| `size`                            | Positive finite point size within the supported OOXML range       |
-| `color`                           | Concrete `#RRGGBB` color                                          |
-| `underline`                       | Supported `UnderlineType` value or matching string                |
-| `highlightColor`                  | Exact Word palette name or its hexadecimal color                  |
-| `subscript`, `superscript`        | Boolean; both cannot be `true` in the same write                  |
+| `Font` property | Write domain |
+| --- | --- |
+| `bold`, `italic`, `strikeThrough` | Boolean |
+| `name` | Font family name; your rendering host supplies its font resources |
+| `size` | Positive finite point size within the supported OOXML range |
+| `color` | Concrete `#RRGGBB` color |
+| `underline` | Supported `UnderlineType` value or matching string |
+| `highlightColor` | Exact Word palette name or its hexadecimal color |
+| `subscript`, `superscript` | Boolean; both cannot be `true` in the same write |
 
-Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`,
-`DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`,
-`TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`.
-The exported enum also includes `Mixed`, `Hidden`, and `DotLine`, which the runtime rejects on writes.
-For example, `UnderlineType.single` has the value `Single`.
+Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`, `DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`, `TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`. The exported enum also includes `Mixed`, `Hidden`, and `DotLine`, which the runtime rejects on writes. For example, `UnderlineType.single` has the value `Single`.
 
-Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`,
-`Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`.
-Reads return `#RRGGBB` or `null`.
-The runtime rejects colors outside that palette.
-The getter returns `string | null`; the setter accepts `string`.
-A nullable read is not a valid typed setter argument.
+Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`, `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`. Reads return `#RRGGBB` or `null`. The runtime rejects colors outside that palette. The getter returns `string | null`; the setter accepts `string`. A nullable read is not a valid typed setter argument.
 
 ## Format paragraphs
 
@@ -98,20 +80,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-`leftIndent`, `rightIndent`, `firstLineIndent`, `lineSpacing`, `spaceBefore`, and `spaceAfter`
-accept finite values within their supported bounds.
-A negative first-line indent creates a hanging indent.
-`ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes.
-`Mixed` and `Unknown` are read values; the runtime rejects them on writes.
-Assignments on one paragraph proxy coalesce per sync.
+`leftIndent`, `rightIndent`, `firstLineIndent`, `lineSpacing`, `spaceBefore`, and `spaceAfter` accept finite values within their supported bounds. A negative first-line indent creates a hanging indent. `ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes. `Mixed` and `Unknown` are read values; the runtime rejects them on writes. Assignments on one paragraph proxy coalesce per sync.
 
 ## Apply an existing style
 
-`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name.
-The name must already exist in the document's styles part.
-The runtime rejects unknown style names. Assigning a name does not create a style.
-A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs.
-Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
+`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
 
 Use a template with known styles, then assign its exact style name:
 
@@ -124,22 +97,14 @@ await context.sync();
 
 ## Set a hyperlink
 
-`Range.hyperlink` reads or writes a hyperlink for supported text spans.
-Load `hyperlink` before reading it.
-For a write, assign a permitted URL and sync:
+`Range.hyperlink` reads or writes a hyperlink for supported text spans. Load `hyperlink` before reading it. For a write, assign a permitted URL and sync:
 
 ```ts
 range.hyperlink = 'https://example.com/terms';
 await context.sync();
 ```
 
-Assign an empty string to remove a hyperlink from an eligible text span.
-Ordinary partial spans inside an existing hyperlink support retargeting and unlinking.
-The unaffected linked text keeps its metadata and formatting.
-The runtime rejects collapsed ranges and complex or nested hyperlink wrappers.
-The runtime validates the URL and content boundaries.
-Failed edits leave unsupported or protected targets unchanged.
-There is no standalone `Hyperlink` or `HyperlinkCollection` object.
+Assign an empty string to remove a hyperlink from an eligible text span. Ordinary partial spans inside an existing hyperlink support retargeting and unlinking. The unaffected linked text keeps its metadata and formatting. The runtime rejects collapsed ranges and complex or nested hyperlink wrappers. The runtime validates the URL and content boundaries. Failed edits leave unsupported or protected targets unchanged. There is no standalone `Hyperlink` or `HyperlinkCollection` object.
 
 ## Next steps
 

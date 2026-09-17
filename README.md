@@ -23,8 +23,7 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core     # Vue
 
 See the [React](#react) or [Vue](#vue) quick start.
 
-For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the
-packages with their build tool.
+For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packages with their build tool.
 
 <p align="center">
   <a href="https://docx-editor.dev/editor">
@@ -113,13 +112,9 @@ Full docs: [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) · [Props and
 
 ## Font measurement
 
-Pass usable font bytes for Word-accurate line and page breaks. Without them, the
-editor uses fallback measurement that does not guarantee Word-compatible
-layout.
+Pass usable font bytes for Word-accurate line and page breaks. Without them, the editor uses fallback measurement that does not guarantee Word-compatible layout.
 
-Use `packagedFonts()` from `@docx-editor.dev/fonts` for packaged substitutes.
-Use `customFonts()` from `@docx-editor.dev/core/editor` for your own font files.
-Add `googleFonts()` when your application accepts third-party font requests.
+Use `packagedFonts()` from `@docx-editor.dev/fonts` for packaged substitutes. Use `customFonts()` from `@docx-editor.dev/core/editor` for your own font files. Add `googleFonts()` when your application accepts third-party font requests.
 
 See [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
@@ -171,8 +166,7 @@ This repository is licensed under [Apache 2.0](LICENSE), except `packages/editor
 
 ## Commercial support
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+> [!TIP] Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
 
 ## Roadmap
 

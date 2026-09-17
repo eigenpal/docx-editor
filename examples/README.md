@@ -1,7 +1,6 @@
 # Examples
 
-Install dependencies from the repository root. Build the workspace packages before you run an
-example that imports package output.
+Install dependencies from the repository root. Build the workspace packages before you run an example that imports package output.
 
 ```bash
 bun install
@@ -30,22 +29,18 @@ bun run dev:collaboration   # Peer-to-peer collaboration
 bun run dev:server-agent-review # Server agent and shared review room
 ```
 
-Set `OPENAI_API_KEY` as described in each agent example before you run `dev:agent` or
-`dev:write-agent`.
+Set `OPENAI_API_KEY` as described in each agent example before you run `dev:agent` or `dev:write-agent`.
 
-The [server agent review example](server-agent-review/README.md) requires Node.js 22.18 or later.
-It starts the app, Hocuspocus, and a worker together. Scripted review works without a model API key.
+The [server agent review example](server-agent-review/README.md) requires Node.js 22.18 or later. It starts the app, Hocuspocus, and a worker together. Scripted review works without a model API key.
 
-Install Node.js 22.18 or later for the standalone Hocuspocus server. Run the server and app in
-separate terminals:
+Install Node.js 22.18 or later for the standalone Hocuspocus server. Run the server and app in separate terminals:
 
 ```bash
 bun run dev:collaboration-hocuspocus:server
 bun run dev:collaboration-hocuspocus
 ```
 
-The Hocuspocus server uses `ws://127.0.0.1:1234`. The app uses
-`http://localhost:5176`.
+The Hocuspocus server uses `ws://127.0.0.1:1234`. The app uses `http://localhost:5176`.
 
 Run all main framework examples together:
 
@@ -59,8 +54,7 @@ Build and serve the combined deployment preview:
 bun run preview
 ```
 
-Open `/react/`, `/vue/`, `/igloo/`, or `/docx-to-markdown/` at the local URL.
-The preview does not apply hostname rewrites from `vercel.json`.
+Open `/react/`, `/vue/`, `/igloo/`, or `/docx-to-markdown/` at the local URL. The preview does not apply hostname rewrites from `vercel.json`.
 
 Fill a DOCX template without a browser:
 
@@ -68,18 +62,15 @@ Fill a DOCX template without a browser:
 bun run --filter './examples/automation' fill
 ```
 
-The React Vite example and the peer-to-peer collaboration example both use port `5173`.
-Stop one server before you start the other.
+The React Vite example and the peer-to-peer collaboration example both use port `5173`. Stop one server before you start the other.
 
 ## Catalog
 
-- `vite/` shows the composed React API with Vite. It includes review features
-  under the EigenPal Pro License and a custom citation node.
+- `vite/` shows the composed React API with Vite. It includes review features under the EigenPal Pro License and a custom citation node.
 - `vue/` shows the Vue 3 adapter and mirrors the React example.
 - `happy-path/` shows the packaged `<DocxEditor>` component with minimal host code.
 - `docx-to-markdown/` shows Markdown beside an editable DOCX, with tables, headers, and footers.
-- `igloo/` shows extensive interface customization. See
-  [Customize the editor](../docs/CUSTOMIZING.md).
+- `igloo/` shows extensive interface customization. See [Customize the editor](../docs/CUSTOMIZING.md).
 - `custom-nodes/` defines and edits a custom citation content control.
 - `nextjs/` shows Next.js App Router integration.
 - `nuxt/` shows the `@docx-editor.dev/nuxt` module.
@@ -87,18 +78,12 @@ Stop one server before you start the other.
 - `astro/` shows an Astro page with a React island.
 - `agent/` uses an AI agent to read and comment on an open document.
 - `write-agent/` uses an AI agent to create a document and propose tracked changes.
-- [server-agent-review/](server-agent-review/README.md) runs a background agent that proposes
-  tracked changes in a shared Hocuspocus room. Browser peers review the suggestions.
+- [server-agent-review/](server-agent-review/README.md) runs a background agent that proposes tracked changes in a shared Hocuspocus room. Browser peers review the suggestions.
 - `automation/` fills a DOCX template with `@docx-editor.dev/editor-api`.
-- `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application
-  server.
-- `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable
-  storage.
-- `parity/` assembles the React, Vue, Igloo, and DOCX-to-Markdown builds for the primary Vercel
-  deployment and `bun run preview`.
-- `shared/` contains reusable example chrome, links, branding, and framework switchers. It is
-  not runnable.
+- `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application server.
+- `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable storage.
+- `parity/` assembles the React, Vue, Igloo, and DOCX-to-Markdown builds for the primary Vercel deployment and `bun run preview`.
+- `shared/` contains reusable example chrome, links, branding, and framework switchers. It is not runnable.
 - `dev-all.sh` starts the main framework examples for `bun run dev:demo`.
 
-When you add an example, add its path to this catalog. Add packages with dependencies to the
-root `workspaces` list.
+When you add an example, add its path to this catalog. Add packages with dependencies to the root `workspaces` list.
