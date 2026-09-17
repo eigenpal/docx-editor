@@ -68,7 +68,7 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 ## Publish a release
 
 1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
-2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
+2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Confirm that it includes the latest intended commits and that CI passes for those commits on `main`. Bot-created release updates may not start the pull-request CI workflow; successful preview or CodeQL checks alone do not establish release readiness.
 3. **Before a package's first release, configure its npm Trusted Publisher.** This includes `@docx-editor.dev/docx-to-markdown`. It must authorize repo `eigenpal/docx-editor` and workflow `release.yml`; the release workflow has no `NPM_TOKEN` fallback.
 4. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
 5. **Wait for the Release workflow.** With an empty changeset queue, it runs independent checks and builds in parallel. After all jobs pass, it publishes the validated artifacts through npm Trusted Publishing, creates package tags, and creates a GitHub Release with the changelog entries. The release-success notification runs after publication and tagging. Check the separate Post-release updates workflow for registry verification and downstream updates.
@@ -78,27 +78,49 @@ While changesets are pending, the workflow updates the release PR without runnin
 
 The publish path runs lint, formatting, type checks, tests, parity, license, and translation checks. A separate job builds packages and demos, validates a consumer install, and generates third-party notices. Publishing uses those artifacts only after every required job succeeds.
 
+### Check documentation before merging
+
+Match the pending changesets against the user guides, package READMEs, API snapshots, and `docs/site/data/word-features.ts`. Include usage instructions, upgrade steps, and unsupported cases for new behavior. Add Python release notes through the converter changeset, including the first Python release.
+
+Run the documentation checks from the repository root:
+
+```bash
+bun run check:docs-mdx
+bun run check:docs-chrome-slots
+bun run check:docs-vue-refs
+bun run check:public-docs-surface
+bun run build:packages
+bun run api:check
+bun run docs:json
+```
+
+Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
+
+Review the generated release plan with `bun changeset status`. Keep all eight published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
+
+For Python changes, check all five platform jobs in **Python wheels**. A passing npm release does not establish Python wheel availability. After publication, check the separate Python publish job and the documentation deployment.
+
 ### Common situations
 
-| Situation                                | What to do                                                                                                                                                                             |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hotfix, ship now                         | Land the fix PR with a `patch` changeset → release PR auto-updates → merge it.                                                                                                         |
-| Several PRs, ship together               | All landed PRs aggregated into one release PR. Merge once, one coordinated release.                                                                                                    |
-| Forgot a changeset on a merged PR        | Open a tiny follow-up PR with just `.changeset/foo.md`, _or_ edit the release PR's frontmatter inline.                                                                                 |
-| Not ready to release yet                 | Don't merge the release PR. It keeps updating as new PRs land.                                                                                                                         |
-| Publish step crashed after PR merged     | Re-run the workflow manually (`workflow_dispatch` is kept for this). Check npm for partial publication before retrying. For failures after successful publication, use recovery below. |
-| Need to force a major bump for marketing | Edit a pending changeset's frontmatter from `minor` → `major` before merging.                                                                                                          |
-| No pending changesets                    | The workflow takes the publish path. It publishes package versions that are not on npm yet.                                                                                            |
+| Situation | What to do |
+| --- | --- |
+| Hotfix, ship now | Land the fix PR with a `patch` changeset → release PR auto-updates → merge it. |
+| Several PRs, ship together | All landed PRs aggregated into one release PR. Merge once, one coordinated release. |
+| Forgot a changeset on a merged PR | Open a follow-up PR against `main` with `.changeset/foo.md`; let the bot regenerate the release PR. |
+| Not ready to release yet | Don't merge the release PR. It keeps updating as new PRs land. |
+| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). Check npm for partial publication before retrying. For failures after successful publication, use recovery below. |
+| Need to force a major bump for marketing | Edit a pending changeset's frontmatter from `minor` → `major` before merging. |
+| No pending changesets | The workflow takes the publish path. It publishes package versions that are not on npm yet. |
 
 ## Configure release automation
 
-| Where                    | What                                                                                                                                                                               |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| npmjs.com                | Trusted Publisher configured for each published `@docx-editor.dev/*` package, including `editor-api` and `docx-to-markdown`, → repo `eigenpal/docx-editor`, workflow `release.yml` |
-| `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                                                                |
-| `.changeset/config.json` | `"access": "public"`; fixed release group for the eight published packages; private workspace versioning and tagging disabled                                                      |
-| GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on                                        |
-| GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                                                             |
+| Where | What |
+| --- | --- |
+| npmjs.com | Trusted Publisher configured for each published `@docx-editor.dev/*` package, including `editor-api` and `docx-to-markdown`, → repo `eigenpal/docx-editor`, workflow `release.yml` |
+| `package.json` | `"publishConfig": { "access": "public" }` on each published package |
+| `.changeset/config.json` | `"access": "public"`; fixed release group for the eight published packages; private workspace versioning and tagging disabled |
+| GitHub perms | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
+| GitHub secrets | `SLACK_WEBHOOK_URL` (optional — release notifications) |
 
 ## Run a local release
 

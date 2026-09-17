@@ -118,11 +118,17 @@ Date input supports Gregorian numeric dates, regional digits, and full English m
 
 Only plain text results and the dialog's listed types and formats support editing and protected filling. The editor preserves other field structures.
 
+## Legacy checkbox form fields
+
 A legacy checkbox form field (`FORMCHECKBOX`) paints as a square box at the field's size. Its layout advance matches that size, including caret and selection geometry. An invisible pointer target is at least 24 CSS pixels without changing line layout. The box is the control: a click toggles it, and Space toggles the selected field. Tab can focus each checkbox; Space keeps focus on that checkbox. The toggle writes only the field's `w:checked` state. A field with `w:enabled` off refuses, and a document open for viewing or comments refuses. Word toggles these boxes only in a document protected for forms; the editor also toggles them in edit mode, so legacy and content-control checkboxes behave the same way.
+
+## Legacy dropdown form fields
 
 Legacy dropdown form fields (`FORMDROPDOWN`) use a native select. Click the value or focus it with Tab to choose a declared entry. Each choice updates the displayed text and saved selection in one undo step. Disabled fields and viewing or suggesting mode refuse changes. Forms protection permits filling.
 
 For customizable list popups, use [content controls](/docs/2.x/guides/content-controls).
+
+## Form field accessibility and macros
 
 A field's `w:name` supplies its accessible name as bounded plain text. Fields with entry or exit macro references supply no name through this path. Macro values are not read. Entry and exit macros never run.
 

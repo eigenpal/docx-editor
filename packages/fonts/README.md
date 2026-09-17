@@ -51,6 +51,18 @@ const fonts = await defaultFonts(); // Add families to load a subset.
 const editor = createDocxEditor({ document: bytes, fonts });
 ```
 
+## Relocate packaged fonts in Node or Bun
+
+For a single-file executable, copy the contents of the fonts package's `assets/` directory into a dedicated directory. Set `DOCX_EDITOR_FONT_ASSET_ROOT` before starting the process:
+
+```bash
+DOCX_EDITOR_FONT_ASSET_ROOT=/opt/my-app/fonts ./my-app
+```
+
+The directory must contain the packaged `.ttf` and `.otf` files with their original names. Use an absolute filesystem path or a `file:` URL. Relative paths, filesystem roots, and non-file URLs are ignored.
+
+The package reads this setting when its module loads. Setting it after importing the package does not relocate the fonts. The setting changes packaged asset locations; it does not register custom fonts or enable a font source. Configure `packagedFonts()` or `defaultFonts()` as usual. Browser builds use their bundled asset URLs.
+
 ## Custom fonts for the editor
 
 Use `customFonts()` to supply brand fonts or licensed Word fonts to the editor. Put it first so your supplied faces take precedence.

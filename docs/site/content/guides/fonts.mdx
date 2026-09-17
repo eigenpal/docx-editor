@@ -109,6 +109,18 @@ const fonts = packagedFonts({ allow: ['Calibri'] });
 
 Font binaries load as separate assets. Importing the package fetches nothing.
 
+### Relocate packaged fonts in Node or Bun
+
+For a single-file executable, copy the contents of the fonts package's `assets/` directory into a dedicated directory. Set `DOCX_EDITOR_FONT_ASSET_ROOT` before starting the process:
+
+```bash
+DOCX_EDITOR_FONT_ASSET_ROOT=/opt/my-app/fonts ./my-app
+```
+
+The directory must contain the packaged `.ttf` and `.otf` files with their original names. Use an absolute filesystem path or a `file:` URL. Relative paths, filesystem roots, and non-file URLs are ignored.
+
+The package reads this setting when its module loads. Setting it after importing the package does not relocate the fonts. The setting changes packaged asset locations; it does not register custom fonts or enable a font source. Configure `packagedFonts()` or `defaultFonts()` as usual. Browser builds use their bundled asset URLs.
+
 ### Choose between lazy and eager loading
 
 `packagedFonts()` and `defaultFonts()` measure identically for the families they share. They differ in when they run, what they cover, and what that costs.
