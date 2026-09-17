@@ -91,3 +91,22 @@ for (const action of ['accept', 'reject'] as const) {
     });
   }
 }
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`${action}: an excluded destructive row decision does not block selected text`, () => {
+    const kind = action === 'accept' ? 'del' : 'ins';
+    const part = load(
+      `<w:${kind} w:author="Grace" w:id="1"/>`,
+      `<w:cell${kind === 'ins' ? 'Ins' : 'Del'} w:author="Grace" w:id="1"/>`
+    );
+    const keys = revisionItemsOf(part)
+      .filter((item) => item.author === 'Ada')
+      .map(reviewItemKey);
+    const plan = planRevisionBatch(part, action, keys);
+    expect(plan.result.resolved).toHaveLength(1);
+    const applied = applyTreeOp(part, plan.ops[0]!);
+    if (!applied.ok) throw new Error(applied.reason);
+    expect(revisionItemsOf(applied.part)).toHaveLength(plan.result.remaining);
+    expect(serializeOoxmlPart(applied.part)).toContain(`w:cell${kind === 'ins' ? 'Ins' : 'Del'}`);
+  });
+}

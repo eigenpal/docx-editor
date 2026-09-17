@@ -435,3 +435,31 @@ for (const action of ['accept', 'reject'] as const) {
     }
   });
 }
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`bulk ${action} beside unsupported table properties exports and undoes as one action`, async () => {
+    const editor = mountEditor(
+      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="9" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr><w:tc>' +
+        ins(1) +
+        ins(2) +
+        '</w:tc></w:tr></w:tbl><w:p/>'
+    );
+    try {
+      const before = await editor.save();
+      const result = editor.exec({ type: 'resolveAllReviewChanges', action });
+      expect(result).toMatchObject({ ok: true, changed: true, revisions: { remaining: 1 } });
+      expect(result.revisions?.resolved).toHaveLength(2);
+      expect(result.revisions?.skipped).toHaveLength(1);
+      const after = await editor.save();
+      expect(strFromU8(unzipSync(new Uint8Array(after))['word/document.xml']!)).toContain(
+        'trPrChange'
+      );
+      editor.exec({ type: 'undo' });
+      expect(await editor.save()).toEqual(before);
+      editor.exec({ type: 'redo' });
+      expect(await editor.save()).toEqual(after);
+    } finally {
+      editor.destroy();
+    }
+  });
+}

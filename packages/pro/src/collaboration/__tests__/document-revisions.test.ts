@@ -168,3 +168,21 @@ for (const action of ['accept', 'reject'] as const) {
     expect(revisionItemsOf(bob.store.bodyStore().part)).toHaveLength(2);
   });
 }
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`bulk ${action} resolves table text beside unsupported row properties on both peers`, async () => {
+    const bytes = zipDocument(
+      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="2" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr>' +
+        '<w:tc><w:p><w:ins w:id="1" w:author="Ada"><w:r><w:t>selected</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl><w:p/>'
+    );
+    const { alice, bob } = await peers.pair(bytes);
+    const { planRevisionBatch, revisionItemsOf } = await import('@docx-editor.dev/core/store');
+    const batch = planRevisionBatch(alice.store.bodyStore().part, action);
+    expect(batch.result.resolved).toHaveLength(1);
+    expect(batch.result.skipped).toHaveLength(1);
+    peers.apply(alice, batch.ops);
+    peers.expectConverged(alice, bob);
+    expect(storyText(bob).includes('selected')).toBe(action === 'accept');
+    expect(revisionItemsOf(bob.store.bodyStore().part)).toHaveLength(batch.result.remaining);
+  });
+}

@@ -32,7 +32,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind, isRangeMarkerKind } from '../package/ooxml-shared.ts';
 import { isWmlNamed } from './tree-op-tracked.ts';
-import { isContentControl } from '../package/content-control-walk.ts';
+import { paragraphMergeSources } from './revision-paragraph-merge.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { isParagraphMarkRevision } from './tree-op-nodes.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP, recordedProperties } from './tree-op-tracked-properties.ts';
@@ -606,18 +606,6 @@ interface RebuildPlan {
  * wrapper as ordinary content.
  */
 /**
- * Is this a block-level sibling — something a paragraph cannot merge THROUGH?
- *
- * Paragraphs and tables are the flow's own blocks. A content control is one too for this
- * question: its paragraphs live in `w:sdtContent`, so the paragraph before it and the first
- * paragraph inside it have different parents and are not siblings at all.
- */
-function isBlockLevel(node: OoxmlNode): boolean {
-  if (node.kind === 'paragraph' || node.kind === 'table') return true;
-  return node.kind !== 'textValue' && isContentControl(node);
-}
-
-/**
  * A child that marks a position rather than holding content: bookmark, comment-range and
  * move-range boundaries, permission-range boundaries, and proofing marks.
  */
@@ -638,8 +626,9 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
   let carried: OoxmlNode[] = [];
+  let mergeSources: ReadonlySet<string> | undefined;
 
-  for (const [index, child] of children.entries()) {
+  for (const child of children) {
     if (child.kind !== 'textValue' && plan.removeRows.has(child.id)) continue;
     // A TABLE WITHOUT ROWS IS NOT A TABLE. `CT_Tbl` requires at least one `w:tr`, and the
     // structural op says the same by refusing to delete a table's last row (`block-required`).
@@ -726,12 +715,8 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         // the story for every paragraph: that made bulk text decisions quadratic.
         let followed = false;
         if (plan.mergeForward.has(child.id)) {
-          for (let next = index + 1; next < children.length; next++) {
-            const candidate = children[next]!;
-            if (!isBlockLevel(candidate)) continue;
-            followed = candidate.kind === 'paragraph';
-            break;
-          }
+          mergeSources ??= paragraphMergeSources(children);
+          followed = mergeSources.has(child.id);
         }
         if (followed) {
           // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
