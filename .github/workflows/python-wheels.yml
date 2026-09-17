@@ -113,7 +113,7 @@ jobs:
           fi
           version=$(basename "${wheels[0]}" | sed -E 's/docx_to_markdown-([^-]+)-.*/\1/')
           missing=""
-          for tag in manylinux_2_28_x86_64 manylinux_2_28_aarch64 macosx_12_0_arm64 macosx_12_0_x86_64 win_amd64; do
+          for tag in manylinux_2_17_x86_64 manylinux_2_17_aarch64 macosx_13_0_arm64 macosx_13_0_x86_64 win_amd64; do
             ls dist/*-py3-none-"$tag".whl >/dev/null 2>&1 || missing="$missing $tag"
           done
           echo "version=$version" >> "$GITHUB_OUTPUT"

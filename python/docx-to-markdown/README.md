@@ -14,7 +14,8 @@ converter as a self-contained executable. No Node.js installation is required.
 pip install docx-to-markdown
 ```
 
-Wheels are platform-specific: Linux x64 and arm64, macOS x64 and arm64, and Windows x64.
+Wheels are platform-specific: Linux x64 and arm64 (glibc 2.17 or newer), macOS 13 or later
+on x64 and arm64, and Windows x64. x64 CPUs need SSE4.2, which every CPU since 2008 has.
 Python 3.11 or later. The package version matches the `@docx-editor.dev/docx-to-markdown`
 npm release it wraps, so `docx-to-markdown==2.21.0` and `@docx-editor.dev/docx-to-markdown@2.21.0`
 produce the same output.

@@ -24,12 +24,12 @@ def platform_tag() -> str:
     machine = platform.machine().lower()
     if sys.platform.startswith("linux"):
         arch = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}
-        # Bun's Linux builds need glibc 2.27 or newer; manylinux_2_28 is the nearest tag.
-        return f"manylinux_2_28_{arch[machine]}"
+        # Bun's glibc builds require glibc 2.17 or newer (bun.sh/docs/installation).
+        return f"manylinux_2_17_{arch[machine]}"
     if sys.platform == "darwin":
         arch = "arm64" if machine in ("arm64", "aarch64") else "x86_64"
-        # Bun supports macOS 12 and newer.
-        return f"macosx_12_0_{arch}"
+        # Bun requires macOS 13.0 or later (bun.sh/docs/installation).
+        return f"macosx_13_0_{arch}"
     if sys.platform == "win32":
         return "win_amd64"
     raise RuntimeError(f"unsupported build platform {sys.platform}/{machine}")
