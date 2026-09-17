@@ -13,8 +13,8 @@ By copying, modifying, or using the Software, you agree to these terms.
 Subject to these terms, EigenPal, Inc. grants you a limited, non-exclusive, non-transferable, non-sublicensable, royalty-free license to:
 
 1. view, clone, and copy the Software;
-2. run the Software internally in a non-production environment solely to    evaluate its suitability for your intended application; and
-3. modify the Software solely as reasonably necessary for that internal,    non-production evaluation.
+2. run the Software internally in a non-production environment solely to evaluate its suitability for your intended application; and
+3. modify the Software solely as reasonably necessary for that internal, non-production evaluation.
 
 For any such modification, the following applies:
 
@@ -30,9 +30,9 @@ You may not use the Software for Production Use.
 “Production Use” means any use of the Software:
 
 1. in a live, operational, or customer-facing environment;
-2. to provide, operate, support, or enhance a product or service for another    person or organization;
+2. to provide, operate, support, or enhance a product or service for another person or organization;
 3. to process live, customer, or business-operational data; or
-4. as part of your ordinary internal business operations, other than evaluation    and testing.
+4. as part of your ordinary internal business operations, other than evaluation and testing.
 
 For the avoidance of doubt, Production Use includes embedding the Software in a product made available to others, offering the Software through a hosted or managed service, and using it in a customer pilot or paid proof of concept.
 
