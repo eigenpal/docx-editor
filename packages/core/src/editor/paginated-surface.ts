@@ -32,6 +32,8 @@ import {
 } from './content-control-widget-session.ts';
 import { createContentControlPictureWidget } from './content-control-picture-widget.ts';
 import { promptInsertionLanding } from './content-control-prompt-landing.ts';
+import { createContentControlHover } from './content-control-hover.ts';
+import { contentControlAtSelection } from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
@@ -104,7 +106,6 @@ import {
   selectionRects,
   caretAt,
   cellSelectionText,
-  contentControlAtSemantic,
   contentControlHoldingParagraph,
   contentControlRecordsInPart,
   contentControlsInLayout,
@@ -1259,6 +1260,7 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('click', onTocRowClick);
   pagesLayer.addEventListener('pointermove', onTocPointerMove);
   pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
+  const controlHover = createContentControlHover(pagesLayer);
   let desiredX: number | null = null;
   function layoutDocument(
     revision: number,
@@ -1886,13 +1888,7 @@ export function mountPaginatedSurface(
   }
 
   function resolveBodyContentControlAtCaret(): ContentControlBoundaryRecord | null {
-    const caret = caretAt(currentLayout, selection.head, measurer);
-    if (!caret) return null;
-    const found = contentControlAtSemantic(currentLayout, {
-      x: caret.x,
-      y: caret.y + caret.height / 2,
-      pageIndex: caret.pageIndex,
-    });
+    const found = contentControlAtSelection(currentLayout, selection, measurer);
     // Belt and braces: the records are the body's, so a match from another part is a bug in
     // the index rather than an answer, and must not become a write.
     if (!found) return null;
@@ -5593,6 +5589,7 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('click', onTocRowClick);
         pagesLayer.removeEventListener('pointermove', onTocPointerMove);
         pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
+        controlHover.destroy();
         // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
         // another editor sharing this store would paint into a detached container.
         scheduler.cancel();

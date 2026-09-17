@@ -804,3 +804,42 @@ describe('typing beside and clearing a prompt', () => {
     expect(surface.session.bodyText()).toBe(`Name:${PROMPT}`);
   });
 });
+
+describe('a press on a list prompt', () => {
+  const body = `<w:p><w:r><w:t xml:space="preserve">Size: </w:t></w:r>${sdt(
+    `<w:alias w:val="Size"/><w:showingPlcHdr/><w:dropDownList><w:listItem w:displayText="Small" w:value="S"/>` +
+      `<w:listItem w:displayText="Large" w:value="L"/></w:dropDownList>`,
+    `<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Choose an item.</w:t></w:r>`
+  )}</w:p>`;
+
+  test('selects the prompt whole, keeps the control active, and opens its menu', () => {
+    const { surface, container } = mount(body);
+    // Pressed by LAYOUT geometry: the DOM has no boxes under happy-dom, and the pointer maps
+    // client coordinates onto the pages layer, whose rect sits at the origin there.
+    const control = surface.layout().contentControls![0]!;
+    const fragment = control.fragments[0]!;
+    const page = surface.layout().pages[fragment.pageIndex]!;
+    const x =
+      page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width / 2;
+    const y =
+      page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height / 2;
+    container.querySelector<HTMLElement>('.docx-pages')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: y,
+      })
+    );
+    const selection = surface.state().selection;
+    expect([selection.anchor.offset, selection.head.offset]).toEqual([6, 21]);
+    // A range over the prompt is still IN the control: its chrome stays active.
+    expect(surface.contentControls.atCaret()?.alias).toBe('Size');
+    const menu = container.querySelector<HTMLElement>('.docx-content-control-menu');
+    expect(menu).not.toBeNull();
+    expect(menu!.querySelectorAll('[role="option"]')).toHaveLength(2);
+  });
+});
