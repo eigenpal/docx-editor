@@ -153,6 +153,15 @@ describe('TreeDocumentStore history groups', () => {
     expect(s.historyDepth).toBe(1);
   });
 
+  test('an ungrouped transaction that applies nothing still closes the group', () => {
+    const { store: s, id } = story();
+    const gesture = Symbol('drag');
+    append(s, id, ' a', gesture);
+    expect(s.transact(() => {})).toEqual({ ok: true, change: null });
+    append(s, id, ' b', gesture);
+    expect(s.historyDepth).toBe(2);
+  });
+
   test('a composition records its own entry and closes the group', () => {
     const { store: s, id } = story();
     const gesture = Symbol('drag');

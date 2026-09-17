@@ -246,8 +246,7 @@ import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
-import { runWithHistoryGroup, takeHistoryGroup } from './history-group-scope.ts';
-import type { HistoryGroup } from '@docx-editor.dev/core/store';
+import { CommitHistoryGroup, runWithHistoryGroup } from './history-group-scope.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -541,8 +540,7 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
-  /** The gesture the commit in flight belongs to; set around `run()` in `commitNow` only. */
-  let commitHistoryGroup: HistoryGroup | undefined;
+  const commitHistoryGroup = new CommitHistoryGroup();
   const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
@@ -2944,7 +2942,7 @@ export function mountPaginatedSurface(
     collaborationOperationCounter += 1;
     // The group of the commit in flight, if any: it travels with the transaction into local
     // history and, through the journal, to the collaboration undo authority.
-    const historyGroup = commitHistoryGroup;
+    const historyGroup = commitHistoryGroup.value;
     return session.applyTreeOps(
       ops,
       selectionBefore,
@@ -3235,8 +3233,6 @@ export function mountPaginatedSurface(
     // Any batched typing lands first as its own transaction, so this edit sees
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
-    // Taken BEFORE the flush: the flush commits through here too, and must find nothing.
-    const historyGroup = takeHistoryGroup(surface);
     flushTypeBuffer();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
     // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
@@ -3255,16 +3251,7 @@ export function mountPaginatedSurface(
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
-    // Restored, not cleared: a listener that writes back through a surface verb during
-    // `run()` re-enters here, and the outer command's later writes must keep their group.
-    const outerHistoryGroup = commitHistoryGroup;
-    commitHistoryGroup = historyGroup;
-    let result: ReturnType<typeof run>;
-    try {
-      result = run();
-    } finally {
-      commitHistoryGroup = outerHistoryGroup;
-    }
+    const result = commitHistoryGroup.around(surface, run);
     const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
     if (rejection) {
       lastRejection = writeRejectionReason(

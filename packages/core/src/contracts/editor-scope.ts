@@ -53,14 +53,15 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  * a call landing in another story, buffered typing flushed ahead of a call, an undo, a
  * redo, or a command that records a whole-package unit such as inserting an image or a
  * footnote. A call that changes nothing adds no entry and leaves the group open. Every
- * formatting and text command honors the token; accepting or rejecting revisions,
- * applying a form field and refreshing fields record their own step. Host code that runs
- * inside the call, such as a change listener, writes its own steps too.
+ * formatting and text command honors the token; review, protection, content-control and
+ * form-field commands record their own step. Host code that runs inside the call, such as
+ * a change listener, writes its own steps too.
  *
  * In a collaborative session the shared undo manager is the undo authority, and the token
  * groups there too: frames of one gesture join one shared undo item however long the
- * gesture lasts, and a change of group starts a new item. Without a token that manager
- * keeps its own rule of joining local edits inside its capture window.
+ * gesture lasts, and a change of group starts a new item; a story change inside one
+ * gesture does not split the shared item. Without a token that manager keeps its own rule
+ * of joining local edits inside its capture window.
  *
  * @example
  * ```ts

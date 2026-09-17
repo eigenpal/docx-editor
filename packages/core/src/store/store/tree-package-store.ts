@@ -957,13 +957,12 @@ export class TreePackageStore {
   promoteStoryTransactionToPackageUnit(
     beforePackage: OoxmlPackage,
     store: TreeDocumentStore,
-    checkpoint: TreeDocumentCheckpoint,
-    beforeDepth: number
+    checkpoint: TreeDocumentCheckpoint
   ): TreeModelChange {
     this.installPackageSnapshotInternal(store.package);
     // Unconditional: a frame that MERGED into an open group left the depth unchanged and
     // the top entry rewritten; the package unit owns it now either way.
-    if (store.historyDepth >= beforeDepth) store.restoreHistoryStacks(checkpoint);
+    store.restoreHistoryStacks(checkpoint);
     this.pushUndoPointer({
       kind: 'package',
       before: beforePackage,

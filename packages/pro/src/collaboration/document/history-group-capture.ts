@@ -61,6 +61,11 @@ export class HistoryGroupCapture {
     this.capturing = group !== undefined;
     try {
       return run();
+    } catch (error) {
+      // The frame never landed: forget it, as a refusal does, or the next frame would merge
+      // into an item that does not hold it.
+      this.reset();
+      throw error;
     } finally {
       this.capturing = false;
     }

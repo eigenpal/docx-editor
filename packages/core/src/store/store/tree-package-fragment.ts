@@ -129,7 +129,6 @@ export function applyFragmentPaste(
 
   const beforePackage = store.currentPackage();
   const checkpoint = storyStore.checkpoint();
-  const beforeDepth = storyStore.historyDepth;
   let blockCount = 0;
   let refusalDetail = '';
 
@@ -191,8 +190,7 @@ export function applyFragmentPaste(
       const change = store.promoteStoryTransactionToPackageUnit(
         beforePackage,
         storyStore,
-        checkpoint,
-        beforeDepth
+        checkpoint
       );
       return { ok: true as const, change, blockCount };
     },

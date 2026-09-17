@@ -1910,50 +1910,52 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
-      // The history group is bound for the span of the whole dispatch, so the surface's one
-      // write path picks it up whichever command family the call lands in, without every
-      // formatting verb growing an options parameter.
-      return runWithHistoryGroup(surface ?? editor, options?.historyGroup, () => {
-        const protectionResult = protection.exec(command);
-        if (protectionResult) return protectionResult;
-        const reviewResult = reviewCommands.exec(command);
-        if (reviewResult) return reviewResult;
-        if (isContentControlEditorCommand(command)) {
-          // The LIVE mode, not the constructed one — see `gateModeOf`.
-          return runContentControlCommand(command, surface, gateModeOf(editingMode), options);
-        }
-        // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
-        // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
-        // required to ask first and must not get a write it was told it could not have.
-        //
-        // Mutating only. A blanket refusal also blocked `selectAll` and `copy`, which is a
-        // viewer that cannot select or copy the document it exists to show — and it disagreed
-        // with the construction-time `mode: 'view'` path, which has always gated on `mutating`
-        // through `gateCommand`. Same visible state, two behaviours.
-        const viewingGate = classifyCommand(command);
-        if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
-          return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
-        }
-        const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
-        if (!gated.ok) return gated.refusal;
-        const mounted = surface!;
-        // Package revision covers body, furniture stories, and lifecycle ops; body-only
-        // revision would report HF / create-header edits as `changed: false`.
-        const before = mounted.session.packageRevision();
+      const protectionResult = protection.exec(command);
+      if (protectionResult) return protectionResult;
+      const reviewResult = reviewCommands.exec(command);
+      if (reviewResult) return reviewResult;
+      if (isContentControlEditorCommand(command)) {
+        // The LIVE mode, not the constructed one — see `gateModeOf`.
+        return runContentControlCommand(command, surface, gateModeOf(editingMode), options);
+      }
+      // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
+      // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
+      // required to ask first and must not get a write it was told it could not have.
+      //
+      // Mutating only. A blanket refusal also blocked `selectAll` and `copy`, which is a
+      // viewer that cannot select or copy the document it exists to show — and it disagreed
+      // with the construction-time `mode: 'view'` path, which has always gated on `mutating`
+      // through `gateCommand`. Same visible state, two behaviours.
+      const viewingGate = classifyCommand(command);
+      if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
+        return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+      }
+      const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
+      if (!gated.ok) return gated.refusal;
+      const mounted = surface!;
+      // Package revision covers body, furniture stories, and lifecycle ops; body-only
+      // revision would report HF / create-header edits as `changed: false`.
+      const before = mounted.session.packageRevision();
 
-        const result = execEditorCommand(mounted, command, {
+      // Bound around THIS family only: these verbs commit through the surface, which takes
+      // the group at its commit. Review, protection and content-control commands write
+      // through the session directly and record their own step, so nothing is bound for
+      // them — a listener writing back through the surface during their publish must not
+      // find a token to take.
+      const result = runWithHistoryGroup(mounted, options?.historyGroup, () =>
+        execEditorCommand(mounted, command, {
           ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
           editor,
-        });
-        if (result) return result;
-        // `changed` is read from the model, not assumed: reporting `changed: true` where the
-        // document did not move would be a lie. It answers for the DOCUMENT, not for
-        // observable state — a mark toggled at a collapsed caret ARMS the typing format
-        // (`toggleRunProperty`), which moves the snapshot and fires a tick while committing
-        // nothing, so it correctly reports `changed: false`. Package revision covers body,
-        // furniture stories, and lifecycle ops; body-only revision would miss HF edits.
-        return { ok: true, changed: mounted.session.packageRevision() !== before };
-      });
+        })
+      );
+      if (result) return result;
+      // `changed` is read from the model, not assumed: reporting `changed: true` where the
+      // document did not move would be a lie. It answers for the DOCUMENT, not for
+      // observable state — a mark toggled at a collapsed caret ARMS the typing format
+      // (`toggleRunProperty`), which moves the snapshot and fires a tick while committing
+      // nothing, so it correctly reports `changed: false`. Package revision covers body,
+      // furniture stories, and lifecycle ops; body-only revision would miss HF edits.
+      return { ok: true, changed: mounted.session.packageRevision() !== before };
     },
 
     can(command, options): CanResult {

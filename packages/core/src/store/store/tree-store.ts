@@ -190,12 +190,9 @@ export interface TransactOptions {
   /** Story identity stamped onto the published ModelChange (package-aware targeting). */
   readonly story?: TreeStoryRef;
   /**
-   * The gesture this transaction belongs to. Consecutive transactions carrying the SAME
-   * token extend one history entry instead of each recording their own: the entry keeps
-   * the package from before the first and the selection after the latest, so one undo
-   * restores the state before the gesture and one redo restores its final state. Any
-   * transaction carrying another token, or none, closes the group; so do undo and redo.
-   * See {@link HistoryGroup}.
+   * The gesture this transaction belongs to: consecutive transactions carrying the SAME
+   * token extend one history entry (package from before the first, selection after the
+   * latest). Another token, none, undo or redo closes the group. See {@link HistoryGroup}.
    */
   readonly historyGroup?: HistoryGroup;
 }
@@ -736,7 +733,22 @@ export class TreeDocumentStore {
         ...(rejection.detail ? { detail: rejection.detail } : {}),
       };
     }
-    if (applied === 0) return { ok: true, change: null };
+    // A PROJECTION-origin commit reconciles the view with state the store already holds.
+    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
+    // it must not become an undo step (task 5.6).
+    const recordsHistory =
+      options.recordsHistory ??
+      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
+
+    if (applied === 0) {
+      // Nothing to record — but an intent naming another gesture (or none) still closes the
+      // open one, as it would have had it changed something; a same-gesture frame does not.
+      const top = this.undoStack[this.undoStack.length - 1];
+      if (recordsHistory && !this.composition && top?.group !== options.historyGroup) {
+        this.closeHistoryGroup();
+      }
+      return { ok: true, change: null };
+    }
 
     const selectionAfter = selectionAfterExplicit ? explicitSelectionAfter : opCaret;
 
@@ -782,13 +794,6 @@ export class TreeDocumentStore {
         detail: JSON.stringify(packageValidation.issues),
       };
     }
-
-    // A PROJECTION-origin commit reconciles the view with state the store already holds.
-    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
-    // it must not become an undo step (task 5.6).
-    const recordsHistory =
-      options.recordsHistory ??
-      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
 
     if (recordsHistory) {
       if (this.composition) {
@@ -886,13 +891,10 @@ export class TreeDocumentStore {
   }
 
   /**
-   * Close the open history group, if any: the next transaction records its own entry
-   * whatever token it carries.
-   *
-   * The store closes its own group when a transaction with another token (or none) lands,
-   * and on undo and redo. What it cannot see is history moving ABOVE it — the package
-   * coordinator pushing a package unit, or another story's pointer — which is why the
-   * coordinator calls this on every store a pointer push or a history move leaves behind.
+   * Close the open history group, if any: the next transaction records its own entry.
+   * The store does this itself for another token, none, undo and redo; the package
+   * coordinator does it for history moving ABOVE the store (a package unit, another
+   * story's pointer), which the store cannot see.
    */
   closeHistoryGroup(): void {
     const top = this.undoStack[this.undoStack.length - 1];

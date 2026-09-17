@@ -43,3 +43,33 @@ export function takeHistoryGroup(owner: object): HistoryGroup | undefined {
   active = null;
   return group;
 }
+
+/**
+ * The group of the commit a surface is running, for its write path to stamp on the
+ * transaction.
+ *
+ * `around` takes the bound group for `owner` and holds it for the span of `run` — the
+ * surface's `commitNow` body — then restores whatever was held before. Restored, not
+ * cleared: a listener that writes back through a surface verb during the commit re-enters
+ * `around`, and the outer command's later writes must keep their group. Taken AFTER the
+ * type-buffer flush has run inside the same commit, which is safe because the flush binds
+ * `undefined` for its own span and so finds nothing to take.
+ */
+export class CommitHistoryGroup {
+  private current: HistoryGroup | undefined;
+
+  /** The group the commit in flight carries, or `undefined` outside a grouped commit. */
+  get value(): HistoryGroup | undefined {
+    return this.current;
+  }
+
+  around<T>(owner: object, run: () => T): T {
+    const outer = this.current;
+    this.current = takeHistoryGroup(owner);
+    try {
+      return run();
+    } finally {
+      this.current = outer;
+    }
+  }
+}
