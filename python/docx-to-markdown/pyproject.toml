@@ -33,7 +33,11 @@ Source = "https://github.com/eigenpal/docx-editor/tree/main/python/docx-to-markd
 Issues = "https://github.com/eigenpal/docx-editor/issues"
 
 [tool.hatch.version]
-path = "src/docx_to_markdown/__init__.py"
+# One version for every published package: the wheel takes the converter's npm version,
+# which `changeset version` bumps with the rest of the fixed group.
+source = "regex"
+path = "../../packages/docx-to-markdown/package.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/docx_to_markdown"]

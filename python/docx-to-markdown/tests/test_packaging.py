@@ -64,3 +64,13 @@ def test_every_font_file_has_a_license():
     assert fonts == set(expected)
     for family, license_file in expected.items():
         assert license_file in texts, f"{family} needs {license_file}"
+
+
+def test_version_matches_the_npm_package():
+    import json
+
+    import docx_to_markdown
+
+    manifest = PACKAGE_ROOT.parents[1] / "packages" / "docx-to-markdown" / "package.json"
+    expected = json.loads(manifest.read_text(encoding="utf-8"))["version"]
+    assert docx_to_markdown.__version__ == expected

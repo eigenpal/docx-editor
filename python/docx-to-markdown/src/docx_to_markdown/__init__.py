@@ -110,7 +110,18 @@ __all__ = [
     "runtime_path",
 ]
 
-__version__ = "0.1.0"
+
+def _installed_version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("docx-to-markdown")
+    except PackageNotFoundError:
+        return "0.0.0+unknown"
+
+
+#: The package version, the same as the `@docx-editor.dev/docx-to-markdown` npm release.
+__version__ = _installed_version()
 
 _UNSET: Any = object()
 
