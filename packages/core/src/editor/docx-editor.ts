@@ -1913,7 +1913,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // The history group is bound for the span of the whole dispatch, so the surface's one
       // write path picks it up whichever command family the call lands in, without every
       // formatting verb growing an options parameter.
-      return runWithHistoryGroup(surface!, options?.historyGroup, () => {
+      return runWithHistoryGroup(surface ?? editor, options?.historyGroup, () => {
         const protectionResult = protection.exec(command);
         if (protectionResult) return protectionResult;
         const reviewResult = reviewCommands.exec(command);

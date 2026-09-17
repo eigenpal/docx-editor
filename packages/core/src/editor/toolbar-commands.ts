@@ -133,7 +133,7 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
   // Both carry a real command whose ARGUMENTS come from chrome the registry does not own —
   // bytes from a file picker, a size from the insert grid. The probe asks the engine whether
-  // a well-formed one would be honoured AT THE CARET, which is exactly the enabled question;
+  // a well-formed one would be honored AT THE CARET, which is exactly the enabled question;
   // the values below are the smallest well-formed pair and are never executed. Picking a real
   // size still runs its own `can` first, so a 6×6 refused where a 1×1 was not cannot slip
   // through.
@@ -179,7 +179,7 @@ const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: strin
 /**
  * Known-valid probe values, so `toolbarCommandState` can ask `Editor.can` about a
  * value-typed slot without having a value yet. The probe never executes: it only
- * answers "would a well-formed value be honoured right now" — which is the editable
+ * answers "would a well-formed value be honored right now" — which is the editable
  * gate, exactly what enables the picker. The style probe passes the SHAPE gate on any
  * document (existence is an exec-time check), which is exactly right: the picker's
  * options come from `getDocumentStyles`, so a real pick always exists.
@@ -436,7 +436,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   const command = commandForSlot(id);
   if (!command) {
     // A value-typed slot has no fixed command, but it still has an honest enabled
-    // state: whether a well-formed value would be honoured right now. `active` stays
+    // state: whether a well-formed value would be honored right now. `active` stays
     // false — "the selection is Arial" is a VALUE for the picker to show, not a
     // pressed state.
     const probe = VALUE_SLOT_PROBES[id];
@@ -638,6 +638,15 @@ export function runTableChromeCommand(
   return result.ok ? { result, nextDraft: pick.nextDraft } : { result, nextDraft: null };
 }
 
+/** Slots `runToolbarCommand` runs on the surface directly, so `exec` options do not apply. */
+const SURFACE_RUN_SLOTS: ReadonlySet<ChromeSlotId> = new Set<ChromeSlotId>([
+  'format.painter',
+  'contentControl.showAll',
+  'contentControl.formFill',
+  'contentControl.inspector',
+  'contentControl.remove',
+]);
+
 /**
  * Run a toolbar control: `can` first, then `exec` only if it said yes. Returns
  * the engine's refusal untouched when it said no, so a caller cannot mistake a
@@ -650,10 +659,15 @@ export function runToolbarCommand(
   id: ChromeSlotId,
   /** The chosen value, for a slot whose command carries one (the editing-mode pill). */
   value?: unknown,
-  /** Forwarded to `exec`: a live control names its gesture here (`historyGroup`). */
+  /** Forwarded to `exec` for a slot that resolves to a command; a live control names its gesture here. */
   options?: EditorExecOptions
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  // These slots run on the surface and never reach `exec`, so the option cannot be honored
+  // there; refused rather than dropped, so a caller is never told a group it did not get.
+  if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
+    return { ok: false, code: 'unsupported', reason: `${id} does not take a history group` };
+  }
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };

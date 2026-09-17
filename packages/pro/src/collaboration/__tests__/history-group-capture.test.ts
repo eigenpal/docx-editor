@@ -22,14 +22,13 @@ function setup() {
   });
   const capture = new HistoryGroupCapture(undo);
   const frame = (value: string, group?: symbol): void => {
-    capture.apply(group);
-    doc.transact(() => text.insert(text.length, value), origin);
+    capture.capture(group, () => doc.transact(() => text.insert(text.length, value), origin));
   };
   /** Pretend the previous frame landed `ms` ago, as the manager measures it. */
   const elapse = (ms: number): void => {
     undo.lastChange -= ms;
   };
-  return { text, undo, capture, frame, elapse, destroy: () => doc.destroy() };
+  return { doc, origin, text, undo, capture, frame, elapse, destroy: () => doc.destroy() };
 }
 
 describe('HistoryGroupCapture', () => {
@@ -83,13 +82,29 @@ describe('HistoryGroupCapture', () => {
     try {
       frame('typed'); // the user's earlier, unrelated work
       const gesture = Symbol('drag');
-      // Frame 1 of the gesture: the capture is told, but the shared transaction changes
-      // nothing tracked, so no item lands.
-      capture.apply(gesture);
+      // Frame 1 of the gesture: the shared transaction changes nothing tracked, so no item.
+      capture.capture(gesture, () => {});
       frame('a', gesture);
       expect(undo.undoStack).toHaveLength(2);
       undo.undo();
       expect(text.toString()).toBe('typed');
+    } finally {
+      destroy();
+    }
+  });
+
+  test('an unrelated local item between two frames is not the merge target', () => {
+    const { undo, frame, elapse, text, doc, origin, destroy } = setup();
+    try {
+      const gesture = Symbol('drag');
+      frame('a', gesture);
+      // A tracked local write that is not a journal of this gesture, past the window so it
+      // is an item of its own — and now on top.
+      elapse(CAPTURE_TIMEOUT_MS * 2);
+      doc.transact(() => text.insert(text.length, 'z'), origin);
+      frame('b', gesture);
+      undo.undo();
+      expect(text.toString()).toBe('az');
     } finally {
       destroy();
     }

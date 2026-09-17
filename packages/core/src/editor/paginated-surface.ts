@@ -3255,12 +3255,15 @@ export function mountPaginatedSurface(
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
+    // Restored, not cleared: a listener that writes back through a surface verb during
+    // `run()` re-enters here, and the outer command's later writes must keep their group.
+    const outerHistoryGroup = commitHistoryGroup;
     commitHistoryGroup = historyGroup;
     let result: ReturnType<typeof run>;
     try {
       result = run();
     } finally {
-      commitHistoryGroup = undefined;
+      commitHistoryGroup = outerHistoryGroup;
     }
     const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
     if (rejection) {

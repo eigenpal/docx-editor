@@ -44,7 +44,7 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  * How one command runs: where it lands, and which gesture it belongs to.
  *
  * `historyGroup` is for a control that applies every intermediate value of one gesture — a
- * colour picker the user drags, a font-size stepper held down, a spacing slider. Each call
+ * color picker the user drags, a font-size stepper held down, a spacing slider. Each call
  * renders and replicates on its own, but consecutive calls carrying the same token are ONE
  * undo step: undo restores the formatting from before the first call, exactly as it was
  * (a mixed selection comes back mixed), and redo restores the last value applied. Mint a
@@ -53,7 +53,7 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  * a call landing in another story, buffered typing flushed ahead of a call, an undo, a
  * redo, or a command that records a whole-package unit such as inserting an image or a
  * footnote. A call that changes nothing adds no entry and leaves the group open. Every
- * formatting and text command honours the token; accepting or rejecting revisions,
+ * formatting and text command honors the token; accepting or rejecting revisions,
  * applying a form field and refreshing fields record their own step. Host code that runs
  * inside the call, such as a change listener, writes its own steps too.
  *

@@ -124,3 +124,6 @@ packages/editor-api/compat/reports/
 
 # Frozen published-client dependency graphs are test fixtures.
 !.collaboration/releases/*/package-lock.json
+
+# Scratch bundles the adapter build tests write beside the package
+packages/*/.test-dist-*/

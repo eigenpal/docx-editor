@@ -536,21 +536,22 @@ class DocumentSession implements DocumentCollaborationSession {
     }
     // A custom blob reader can run host code; recheck after that callback before writing.
     if (!this.canWriteSharedState()) return;
-    this.historyGroups.apply(historyGroupOfJournal(journal));
-    const refusal = this.ydoc.transact((): CollaborationFailure | null => {
-      if (blobs !== null) {
-        const published = this.putJournalBlobs(blobs.payloads);
-        if (published !== null) return published;
-      }
-      const result = applyPrimitiveJournal(this.registry, shared);
-      if (!result.ok) {
-        return {
-          code: result.code as CollaborationFailureCode,
-          ...(result.detail ? { detail: result.detail } : {}),
-        };
-      }
-      return null;
-    }, this.localOrigin);
+    const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () =>
+      this.ydoc.transact((): CollaborationFailure | null => {
+        if (blobs !== null) {
+          const published = this.putJournalBlobs(blobs.payloads);
+          if (published !== null) return published;
+        }
+        const result = applyPrimitiveJournal(this.registry, shared);
+        if (!result.ok) {
+          return {
+            code: result.code as CollaborationFailureCode,
+            ...(result.detail ? { detail: result.detail } : {}),
+          };
+        }
+        return null;
+      }, this.localOrigin)
+    );
     if (refusal === null) {
       this.refusedInARow = 0;
       return;

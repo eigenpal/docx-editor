@@ -961,9 +961,9 @@ export class TreePackageStore {
     beforeDepth: number
   ): TreeModelChange {
     this.installPackageSnapshotInternal(store.package);
-    if (store.historyDepth > beforeDepth) {
-      store.restoreHistoryStacks(checkpoint);
-    }
+    // Unconditional: a frame that MERGED into an open group left the depth unchanged and
+    // the top entry rewritten; the package unit owns it now either way.
+    if (store.historyDepth >= beforeDepth) store.restoreHistoryStacks(checkpoint);
     this.pushUndoPointer({
       kind: 'package',
       before: beforePackage,

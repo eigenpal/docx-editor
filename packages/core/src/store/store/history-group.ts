@@ -14,7 +14,7 @@ import type { TreeDocumentStore } from './tree-store.ts';
 /**
  * The identity of one continuous user gesture, for history grouping.
  *
- * A live colour picker, a font-size stepper or a spacing slider applies every intermediate
+ * A live color picker, a font-size stepper or a spacing slider applies every intermediate
  * value so the document updates under the pointer, and each of those writes is a
  * transaction in its own right — it must render, and a collaborator must receive it. What
  * they are NOT is separate undo steps. The caller mints one token when the gesture starts

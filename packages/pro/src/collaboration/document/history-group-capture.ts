@@ -28,17 +28,25 @@ export class HistoryGroupCapture {
    * before the gesture began.
    */
   private gestureItem: StackItem | undefined;
+  /** Set while a grouped journal's own transaction runs: only ITS item is the gesture's. */
+  private capturing = false;
 
   constructor(private readonly undoManager: Y.UndoManager) {
     const noteItem = (event: { stackItem: StackItem; type: 'undo' | 'redo' }): void => {
-      if (event.type === 'undo' && this.previous !== undefined) this.gestureItem = event.stackItem;
+      if (this.capturing && event.type === 'undo') this.gestureItem = event.stackItem;
     };
     undoManager.on('stack-item-added', noteItem);
     undoManager.on('stack-item-updated', noteItem);
   }
 
-  /** Prepare the undo manager for a local journal carrying `group`. */
-  apply(group: HistoryGroup | undefined): void {
+  /**
+   * Run one local journal's shared transaction as a frame of `group` (or of no gesture).
+   *
+   * The manager is prepared first, and the item the transaction lands on is remembered as
+   * the gesture's — so the next frame merges only into THAT item, never into whatever an
+   * unrelated local write may have pushed in between.
+   */
+  capture<T>(group: HistoryGroup | undefined, run: () => T): T {
     const previous = this.previous;
     this.previous = group;
     const stack = this.undoManager.undoStack;
@@ -46,10 +54,16 @@ export class HistoryGroupCapture {
       // `lastChange` is the manager's own clock for the merge rule; a frame of an open
       // gesture is always "just now", whatever the wall clock says.
       this.undoManager.lastChange = Date.now();
-      return;
+    } else {
+      if (group !== previous || group !== undefined) this.undoManager.stopCapturing();
+      this.gestureItem = undefined;
     }
-    if (group !== previous || group !== undefined) this.undoManager.stopCapturing();
-    this.gestureItem = undefined;
+    this.capturing = group !== undefined;
+    try {
+      return run();
+    } finally {
+      this.capturing = false;
+    }
   }
 
   /** Forget the open gesture: undo, redo and a refused journal are boundaries. */
