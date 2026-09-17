@@ -97,8 +97,9 @@ A call that changes nothing adds no undo step and leaves the group open. Every
 formatting and text command accepts the option, so a font-size stepper, a
 spacing slider, or an indent control that you build groups the same way.
 Review, protection, content-control, and form-field commands always record
-their own step. A control that dispatches by slot passes the same options
-through `runToolbarCommand`. The packaged toolbar does not pass a token.
+their own step, and image commands refuse the option. A control that
+dispatches by slot passes the same options through `runToolbarCommand`. The
+packaged toolbar does not pass a token.
 
 In a collaborative session, the shared undo manager owns undo. The token groups
 there too: frames of one gesture join one shared undo item however long the

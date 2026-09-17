@@ -1930,6 +1930,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
+      // An image write commits as a package unit of its own; refused, not dropped.
+      if (options?.historyGroup !== undefined && isImageCommand(command)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: 'image commands do not take a history group',
+        };
+      }
       const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
       const mounted = surface!;

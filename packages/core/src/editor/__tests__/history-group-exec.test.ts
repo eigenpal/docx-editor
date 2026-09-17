@@ -329,6 +329,16 @@ describe('exec history groups', () => {
     });
   });
 
+  test('an image command refuses a history group instead of dropping it', () => {
+    withEditor(MIXED, (editor) => {
+      const result = editor.exec({ type: 'setImageProperties', altText: 'x' } as never, {
+        historyGroup: Symbol('alt-text'),
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe('unsupported');
+    });
+  });
+
   test('can() accepts the option and reports nothing about it', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);

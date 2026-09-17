@@ -10,7 +10,6 @@ import {
   toolbarCommandState,
   type ImageWrapTarget,
 } from '@docx-editor.dev/core/editor';
-import type { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -20,7 +19,7 @@ import { useEditorState } from './useEditorState';
  * @public
  */
 export interface EditorValueCommandState<T extends string | number> {
-  readonly execute: (value: T, options?: EditorExecOptions) => void;
+  readonly execute: (value: T) => void;
   readonly value: T | null;
   readonly options: readonly T[];
   readonly isEnabled: boolean;
@@ -73,7 +72,7 @@ export function useEditorValueCommand(
 
   const wrapState = useMemo(
     (): EditorValueCommandState<ImageWrapTarget> => ({
-      execute: (value, options) => runToolbarCommand(editor, 'image.wrap', value, options),
+      execute: (value) => runToolbarCommand(editor, 'image.wrap', value),
       value: (slice.value as ImageWrapTarget | null) ?? null,
       options: IMAGE_WRAP_TARGETS,
       isEnabled: slice.enabled,
@@ -84,7 +83,7 @@ export function useEditorValueCommand(
 
   const altState = useMemo(
     (): EditorValueCommandState<string> => ({
-      execute: (value, options) => runToolbarCommand(editor, 'image.altText', value, options),
+      execute: (value) => runToolbarCommand(editor, 'image.altText', value),
       value: slice.value,
       options: [],
       isEnabled: slice.enabled,

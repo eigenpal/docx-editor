@@ -958,7 +958,7 @@ export class TreePackageStore {
     beforePackage: OoxmlPackage,
     store: TreeDocumentStore,
     checkpoint: TreeDocumentCheckpoint,
-    /** Unused: the restore is unconditional now. Kept so existing callers compile. */
+    /** Unused: the restore is unconditional now. Kept so the public signature stands. */
     _beforeDepth?: number
   ): TreeModelChange {
     this.installPackageSnapshotInternal(store.package);

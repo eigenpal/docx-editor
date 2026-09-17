@@ -1,6 +1,10 @@
-import type { HistoryGroup } from '../store/store/history-group.ts';
-
-export type { HistoryGroup };
+/**
+ * The identity of one continuous user gesture, for history grouping: mint one per gesture
+ * (`Symbol('color-drag')`) and pass it with every call of that gesture. A symbol, so two
+ * unrelated callers cannot collide by naming a gesture the same way. The store's own
+ * `HistoryGroup` is this same alias.
+ */
+export type HistoryGroup = symbol;
 
 /**
  * The editor is N+1 editing views: one body plus one per header/footer relationship, plus

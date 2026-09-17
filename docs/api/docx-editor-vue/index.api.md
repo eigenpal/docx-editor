@@ -3978,7 +3978,7 @@ export interface EditorValueCommandState<T extends string | number> {
     // (undocumented)
     readonly disabledReason: ComputedRef<string | null>;
     // (undocumented)
-    readonly execute: (value: T, options?: EditorExecOptions) => void;
+    readonly execute: (value: T) => void;
     // (undocumented)
     readonly isEnabled: ComputedRef<boolean>;
     // (undocumented)
