@@ -683,7 +683,9 @@
     "calendar": {
       "nextMonth": null,
       "previousMonth": null,
-      "today": null
+      "today": null,
+      "month": null,
+      "year": null
     }
   },
   "notes": {

@@ -21,6 +21,7 @@ import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
+import { ContentControlListNavigation } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
@@ -488,6 +489,10 @@ export interface DocxEditorContentControlWidgetNamespace {
     // (undocumented)
     readonly List: typeof ContentControlWidgetList;
     // (undocumented)
+    readonly Month: typeof ContentControlWidgetMonth;
+    // (undocumented)
+    readonly Navigation: typeof ContentControlWidgetNavigation;
+    // (undocumented)
     readonly NextMonth: typeof ContentControlWidgetNextMonth;
     // (undocumented)
     readonly PreviousMonth: typeof ContentControlWidgetPreviousMonth;
@@ -497,6 +502,8 @@ export interface DocxEditorContentControlWidgetNamespace {
     readonly Today: typeof ContentControlWidgetToday;
     // (undocumented)
     readonly Weekdays: typeof ContentControlWidgetWeekdays;
+    // (undocumented)
+    readonly Year: typeof ContentControlWidgetYear;
 }
 
 // @public
@@ -505,6 +512,8 @@ export interface DocxEditorContentControlWidgetPartProps {
     'aria-label'?: string;
     // (undocumented)
     [attribute: `data-${string}`]: unknown;
+    // (undocumented)
+    [attribute: `aria-${string}`]: unknown;
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
@@ -2498,9 +2507,12 @@ export function useContentControlWidget(): UseContentControlWidgetResult;
 export interface UseContentControlWidgetResult {
     apply(value?: string): boolean;
     // (undocumented)
+    applyDateText(): boolean;
+    // (undocumented)
     readonly calendar: CalendarMonth;
     // (undocumented)
     cancel(): void;
+    readonly dateText: string;
     focusDay(iso: string): void;
     readonly focusIso: string | null;
     readonly isEnabled: boolean;
@@ -2508,6 +2520,9 @@ export interface UseContentControlWidgetResult {
     readonly items: readonly ContentControlWidgetEntry[];
     // (undocumented)
     readonly kind: ContentControlWidgetSession['kind'];
+    readonly listId: string;
+    // (undocumented)
+    readonly listNavigation: ContentControlListNavigation;
     // (undocumented)
     nextMonth(): void;
     // (undocumented)
@@ -2518,7 +2533,10 @@ export interface UseContentControlWidgetResult {
     // (undocumented)
     readonly session: ContentControlWidgetSession;
     // (undocumented)
+    setDateText(text: string): void;
+    // (undocumented)
     setValue(value: string): void;
+    showMonth(year: number, month: number): void;
     // (undocumented)
     readonly value: string;
 }

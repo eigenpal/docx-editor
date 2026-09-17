@@ -1,3 +1,4 @@
+import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
   paintParagraphMark,
@@ -829,14 +830,6 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
   // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
   // relaying out, and because the review surface and tests want to find fields regardless.
   element.dataset.fieldAtom = field.formField ? 'form' : 'field';
-  if (field.formControl?.kind === 'checkbox') {
-    // The glyph IS the control: the surface toggles the field on a press here, the stylesheet
-    // draws Word's box over it, and assistive tech reads it as a checkbox.
-    element.dataset.docxFormCheckbox = '';
-    element.dataset.checked = field.formControl.checked ? 'true' : 'false';
-    element.setAttribute('role', 'checkbox');
-    element.setAttribute('aria-checked', field.formControl.checked ? 'true' : 'false');
-  }
   const shaded = field.formField
     ? ctx.shadeFormFields !== false
     : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';
@@ -1151,6 +1144,7 @@ function paintSpan(
     }
   }
   mountRunText(document, textHost, span.text, span.style, ctx.scale);
+  paintLegacyCheckbox(element, span, ctx.scale);
   if (span.projected) {
     element.dataset.docxField = '';
     element.setAttribute('contenteditable', 'false');

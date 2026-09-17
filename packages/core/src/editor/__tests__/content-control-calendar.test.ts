@@ -1,3 +1,8 @@
+import {
+  calendarDateForKey,
+  calendarDateFromText,
+  calendarDateText,
+} from '../content-control-calendar.ts';
 // The date-picker model: locale-first weekday order, a fixed 42-cell grid, and local dates.
 
 import { describe, expect, test } from 'bun:test';
@@ -56,5 +61,32 @@ describe('content-control calendar model', () => {
     expect(parseIsoDate('nonsense')).toBeNull();
     expect(shiftMonth(2026, 11, 1)).toEqual({ year: 2027, month: 0 });
     expect(shiftMonth(2026, 0, -1)).toEqual({ year: 2025, month: 11 });
+  });
+});
+
+describe('calendar keyboard and regional entry', () => {
+  test('Home/End honor the editor week and Page keys clamp leap days', () => {
+    expect(calendarDateForKey('2026-09-17', 'Home', 'en-US')).toBe('2026-09-13');
+    expect(calendarDateForKey('2026-09-17', 'Home', 'pl-PL')).toBe('2026-09-14');
+    expect(calendarDateForKey('2026-09-17', 'End', 'pl-PL')).toBe('2026-09-20');
+    expect(calendarDateForKey('2024-01-31', 'PageDown')).toBe('2024-02-29');
+    expect(calendarDateForKey('2024-02-29', 'PageDown', 'en-US', true)).toBe('2025-02-28');
+    expect(calendarDateForKey('2026-01-01', 'Enter')).toBeNull();
+  });
+  test('regional entry preserves date order and rejects impossible or ambiguous dates', () => {
+    expect(calendarDateFromText('9/17/2026', 'en-US')).toBe('2026-09-17');
+    expect(calendarDateFromText('17.9.2026', 'pl-PL')).toBe('2026-09-17');
+    expect(calendarDateFromText('2026-09-17', 'pl-PL')).toBe('2026-09-17');
+    expect(calendarDateFromText(calendarDateText('0100-01-01', 'ar-EG'), 'ar-EG')).toBe(
+      '0100-01-01'
+    );
+    expect(calendarDateFromText('2/30/2026', 'en-US')).toBeNull();
+    expect(calendarDateFromText('9/17/26', 'en-US')).toBeNull();
+    expect(calendarDateFromText('x'.repeat(10000), 'en-US')).toBeNull();
+    for (const locale of ['en-US', 'pl-PL', 'de-DE', 'ar-EG', 'ja-JP']) {
+      expect(calendarDateFromText(calendarDateText('2026-09-17', locale), locale)).toBe(
+        '2026-09-17'
+      );
+    }
   });
 });

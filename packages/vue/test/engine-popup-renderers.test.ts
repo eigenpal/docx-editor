@@ -53,7 +53,7 @@ test('widget normalizes authored dates and resets on a new session', async () =>
   );
   const selected = container.querySelector<HTMLButtonElement>('[data-selected]')!;
   expect(selected.dataset.iso).toBe('2026-09-08');
-  expect(container.querySelector('input')).toBeNull();
+  expect(container.querySelector('input[type="date"]')).toBeNull();
   selected.click();
   await nextTick();
   expect(first.writes).toEqual(['2026-09-08']);

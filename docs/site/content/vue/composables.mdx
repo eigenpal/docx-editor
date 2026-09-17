@@ -362,7 +362,12 @@ context.
 Returns the draft state of the enclosing content-control value pop-up: the
 session, `value`, `setValue`, `isEnabled`, `refused`, `apply`, `cancel`, and the
 calendar members `calendar`, `previousMonth`, `nextMonth`, `selectDay`,
-`selectToday`, and `focusDay`. Reactive members are refs. Call it inside a child
+`selectToday`, `focusIso`, and `focusDay`. `showMonth(year, month)` jumps to a
+zero-based month and a year from 100 through 9999. `dateText`, `setDateText`, and
+`applyDateText` support regional numeric entry while `value` stays ISO.
+`listId` connects a combo input to its list. `listNavigation.keyDown` supplies
+shared typeahead and roving focus. The packaged root calls it automatically.
+Reactive members are refs; `listId` and `listNavigation` are stable objects or values. Call it inside a child
 of `DocxEditorContentControlWidget`. For the parts it pairs with, see
 [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
 

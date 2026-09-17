@@ -302,8 +302,8 @@
       "emitsAddedInVue": []
     },
     "editor/content-control-widget/parts": {
-      "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "class"],
+      "propsAddedInReact": ["key"],
+      "propsAddedInVue": ["class", "class", "class"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },

@@ -74,6 +74,7 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
+import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
 import {
@@ -245,7 +246,13 @@ export function piecesOfParagraphForDisplay(
     // the surface toggles.
     const formControl =
       pending.formSpec === 'checkbox' && pending.formData?.kind === 'checkbox'
-        ? { formControl: { kind: 'checkbox' as const, checked: pending.formData.checked } }
+        ? {
+            formControl: {
+              kind: 'checkbox' as const,
+              checked: pending.formData.checked,
+              ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
+            },
+          }
         : {};
     let carriedMemo: PieceEmitExtras | undefined;
     const carried = (): PieceEmitExtras => {
@@ -506,6 +513,7 @@ export function piecesOfParagraphForDisplay(
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.
             formData: legacyFormFieldDataOf(grand),
+            formAccessibleName: legacyCheckboxAccessibleName(grand),
             beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),

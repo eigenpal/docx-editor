@@ -259,14 +259,24 @@ Each dropdown, combo box, and date control shows a button past its right edge,
 the way Word attaches its tab. The button scales with the page zoom. A checkbox
 control's button covers its glyph. Select the button to toggle a checkbox, open a
 dropdown menu, or open a date picker. The menu opens under the control's left
-edge and stays on the page. A menu closes when you press outside it, press the
+edge, flips above when space is limited, and stays inside the visible page sheet. A menu closes when you press outside it, press the
 control button again, or press Escape. Each edit supports undo and requires no
 application event handler. Checkbox toggles use MS Gothic when the document omits
 the state font.
 
 The date picker shows a month grid with a **Today** button. Month and weekday names
 and the first day of the week follow the editor's `locale`, not the browser. Arrow
-keys move between days and across month edges. A day press writes the date.
+keys move between days and across month edges. Home/End move to the week's edges.
+PageUp/PageDown move one month; Shift with either key moves one year. Month and
+year controls let you jump directly. Enter a regional numeric date or an ISO date
+in the text input, then press Enter or **Apply**. Invalid dates keep the popup open.
+The input requires a four-digit year. A day press writes the date immediately.
+Tab stays inside the popup; Escape returns focus to its opener. On short screens,
+the popup scrolls so all controls remain reachable.
+
+Dropdowns support locale-aware typeahead, arrows, and Home/End. The selected
+entry is marked. Combo boxes also accept free text and use ArrowDown to enter
+the suggestion list. Moving focus does not change the document.
 
 The engine paints these menus with the `docx-content-control-menu`,
 `docx-content-control-menu-item`, and `docx-content-control-calendar-*` classes,

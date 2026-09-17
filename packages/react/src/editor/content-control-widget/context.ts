@@ -1,6 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useId, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
   calendarMonth,
+  calendarDateText,
+  calendarDateFromText,
+  createContentControlListNavigation,
+  type ContentControlListNavigation,
   isoDateOf,
   parseIsoDate,
   shiftMonth,
@@ -49,6 +53,16 @@ export interface UseContentControlWidgetResult {
   readonly focusIso: string | null;
   /** Move keyboard focus to a day, turning the month if it lies outside the view. */
   focusDay(iso: string): void;
+  /** Numeric regional date entry, separate from the ISO value. */
+  readonly dateText: string;
+  setDateText(text: string): void;
+  applyDateText(): boolean;
+  /** Jump to a month without committing. Month is zero-based; year is 100–9999. */
+  showMonth(year: number, month: number): void;
+  /** ID shared by the combo input and listbox. */
+  readonly listId: string;
+  /** Shared typeahead and roving-focus behavior for replacement lists. */
+  readonly listNavigation: ContentControlListNavigation;
 }
 
 const Context = createContext<UseContentControlWidgetResult | null>(null);
@@ -79,8 +93,20 @@ function initialValue(session: ContentControlWidgetSession): string {
 export function useContentControlWidgetState(
   session: ContentControlWidgetSession
 ): UseContentControlWidgetResult {
+  const listId = `docx-cc-list-${useId()}`;
   const [value, setValue] = useState(() => initialValue(session));
+  const [dateText, setDateTextDraft] = useState(() =>
+    calendarDateText(session.value, session.locale)
+  );
+  const listNavigation = useMemo(
+    () => createContentControlListNavigation(session.locale),
+    [session]
+  );
   const [refused, setRefused] = useState(false);
+  const setDateText = useCallback((text: string) => {
+    setDateTextDraft(text);
+    setRefused(false);
+  }, []);
   const isEnabled = useEditorState(() => session.canApply());
   const selected = session.kind === 'date' ? parseIsoDate(session.value) : null;
   const [view, setView] = useState(() => {
@@ -121,6 +147,27 @@ export function useContentControlWidgetState(
     setView({ year: date.getFullYear(), month: date.getMonth() });
     setFocusIso(isoDateOf(date));
   }, []);
+  const applyDateText = useCallback(() => {
+    const iso = calendarDateFromText(dateText, session.locale);
+    if (!iso) {
+      setRefused(true);
+      return false;
+    }
+    return apply(iso);
+  }, [dateText, session.locale, apply]);
+  const showMonth = useCallback((year: number, month: number) => {
+    if (
+      !Number.isInteger(year) ||
+      year < 100 ||
+      year > 9999 ||
+      !Number.isInteger(month) ||
+      month < 0 ||
+      month > 11
+    )
+      return;
+    setView({ year, month });
+    setFocusIso(null);
+  }, []);
   return useMemo(
     () => ({
       session,
@@ -139,6 +186,12 @@ export function useContentControlWidgetState(
       selectToday,
       focusIso,
       focusDay,
+      dateText,
+      setDateText,
+      applyDateText,
+      showMonth,
+      listNavigation,
+      listId,
     }),
     [
       session,
@@ -154,6 +207,12 @@ export function useContentControlWidgetState(
       selectToday,
       focusIso,
       focusDay,
+      dateText,
+      setDateText,
+      applyDateText,
+      showMonth,
+      listNavigation,
+      listId,
     ]
   );
 }

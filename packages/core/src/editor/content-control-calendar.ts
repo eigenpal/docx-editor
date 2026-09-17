@@ -6,7 +6,11 @@
 // means. Locale comes from the editor's `locale` option, never from the browser, matching the
 // legacy text-form date conventions in `store/store/text-form-date-locale.ts`.
 
-import { resolveLocale } from '../store/store/text-form-date-locale.ts';
+import {
+  normalizeDateDigits,
+  textFormDateConvention,
+  resolveLocale,
+} from '../store/store/text-form-date-locale.ts';
 
 /** One cell of a month grid. @public */
 export interface CalendarDay {
@@ -262,4 +266,80 @@ export function shiftMonth(
 ): { readonly year: number; readonly month: number } {
   const date = new Date(year, month + delta, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
+}
+
+/** Calendar keyboard destination. Shift+PageUp/PageDown moves one year. @public */
+export function calendarDateForKey(
+  iso: string,
+  key: string,
+  locale?: string,
+  shift = false
+): string | null {
+  const date = parseIsoDate(iso);
+  if (!date) return null;
+  const steps: Readonly<Record<string, number>> = {
+    ArrowLeft: -1,
+    ArrowRight: 1,
+    ArrowUp: -7,
+    ArrowDown: 7,
+  };
+  const weekday = (date.getDay() - firstDayOfWeek(locale) + 7) % 7;
+  if (key === 'PageUp' || key === 'PageDown') {
+    const day = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + (key === 'PageUp' ? -1 : 1) * (shift ? 12 : 1));
+    const last = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(day, last));
+  } else {
+    const step = key === 'Home' ? -weekday : key === 'End' ? 6 - weekday : steps[key];
+    if (step === undefined) return null;
+    date.setDate(date.getDate() + step);
+  }
+  return date.getFullYear() >= 100 && date.getFullYear() <= 9999 ? isoDateOf(date) : null;
+}
+
+/** Format an ISO date for numeric entry in the editor locale. @public */
+export function calendarDateText(iso: string, locale?: string): string {
+  const date = parseIsoDate(iso);
+  if (!date) return '';
+  const resolved = resolveLocale(locale);
+  const zero = new Intl.NumberFormat(resolved, { useGrouping: false }).format(0);
+  return new Intl.DateTimeFormat(resolved, {
+    calendar: 'gregory',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  })
+    .formatToParts(date)
+    .map((part) => (part.type === 'year' ? part.value.padStart(4, zero) : part.value))
+    .join('');
+}
+
+/** Parse a complete ISO or regional numeric date; ambiguous two-digit years are refused. @public */
+export function calendarDateFromText(text: string, locale?: string): string | null {
+  if (text.length > 100) return null;
+  const trimmed = text.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const date = parseIsoDate(trimmed);
+    return date ? isoDateOf(date) : null;
+  }
+  const convention = textFormDateConvention(resolveLocale(locale));
+  const match = convention.pattern.exec(normalizeDateDigits(trimmed, convention));
+  if (!match) return null;
+  const parts = { year: '', month: '', day: '' };
+  convention.order.forEach((key, index) => {
+    parts[key] = match[index + 1]!;
+  });
+  if (parts.year.length !== 4) return null;
+  const iso = `${parts.year}-${parts.month.padStart(2, '0')}-${parts.day.padStart(2, '0')}`;
+  return parseIsoDate(iso) ? iso : null;
+}
+
+/** The twelve Gregorian month names for a month selector. @public */
+export function calendarMonthNames(locale?: string): readonly string[] {
+  const formatter = new Intl.DateTimeFormat(resolveLocale(locale), {
+    calendar: 'gregory',
+    month: 'long',
+  });
+  return Array.from({ length: 12 }, (_, month) => formatter.format(new Date(2000, month, 1)));
 }

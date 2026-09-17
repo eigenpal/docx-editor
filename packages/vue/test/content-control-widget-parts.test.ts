@@ -76,7 +76,9 @@ describe('DocxEditorContentControlWidget', () => {
     const container = await mount(() => h(DocxEditorContentControlWidget, { session: date }));
     const popup = container.querySelector<HTMLElement>('[data-docx-popup]')!;
     expect(popup.dataset.kind).toBe('date');
-    expect(popup.querySelector('input')).toBeNull();
+    expect(popup.querySelector('input[type=date]')).toBeNull();
+    expect(popup.querySelector('[data-docx-part=month]')).not.toBeNull();
+    expect(popup.querySelector('[data-docx-part=input]')).not.toBeNull();
     expect(popup.querySelector('[data-docx-part="title"]')?.textContent).toBe('September 2026');
     expect(popup.querySelectorAll('[data-docx-part="day"]')).toHaveLength(42);
     expect(popup.querySelectorAll('[role="row"]')).toHaveLength(6);

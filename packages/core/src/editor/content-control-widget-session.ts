@@ -18,6 +18,14 @@ function valueText(node: OoxmlNode): string {
   if (node.localName === 'sdtPr') return '';
   return node.children.map(valueText).join('');
 }
+/** The mapped list value, or authored free text. Shared by engine and host sessions. */
+export function contentControlWidgetValue(
+  control: OoxmlElement | null,
+  items: readonly { displayText: string; value: string }[]
+): string {
+  const displayed = control ? valueText(control) : '';
+  return items.find((item) => item.displayText === displayed)?.value ?? displayed;
+}
 function kindOf(control: OoxmlElement | null): string | undefined {
   const properties = control?.children.find(
     (node) => node.kind !== 'textValue' && node.localName === 'sdtPr'
@@ -58,8 +66,7 @@ export function createContentControlWidgetSessions(host: Host) {
       const canApply = () => isActive() && kindOf(host.find(id)) === kind && host.allowed(id);
       const control = host.find(id);
       const items = host.items(id).map((item) => ({ ...item }));
-      const displayed = control ? valueText(control) : '';
-      const value = items.find((item) => item.displayText === displayed)?.value ?? displayed;
+      const value = contentControlWidgetValue(control, items);
       const session: ContentControlWidgetSession = {
         controlId: id,
         kind: kind as ContentControlWidgetSession['kind'],

@@ -1,3 +1,6 @@
+import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
+import { contentControlMenuAnchor } from './content-control-widget-anchor.ts';
+import { contentControlWidgetValue } from './content-control-widget-session.ts';
 import { createFormFieldShading } from './surface-form-field-shading.ts';
 import {
   FIELD_CODE_INPUT_REFUSAL,
@@ -37,7 +40,6 @@ import {
   buildContentControlListMenu,
   focusContentControlCalendar,
   placeContentControlMenu,
-  type ContentControlMenuAnchor,
   type ContentControlMenuHost,
 } from './content-control-widget-menu.ts';
 import { createLegacyCheckboxInteraction } from './surface-legacy-checkbox.ts';
@@ -2134,7 +2136,14 @@ export function mountPaginatedSurface(
     request: options.onRequestContentControlWidget,
   });
 
+  let activeContentControlMenu: HTMLElement | null = null;
+  let stopContentControlMenuDismiss: (() => void) | undefined;
   function closeContentControlMenu(menu: HTMLElement): void {
+    if (activeContentControlMenu === menu) {
+      activeContentControlMenu = null;
+      stopContentControlMenuDismiss?.();
+      stopContentControlMenuDismiss = undefined;
+    }
     const controlId = menu.dataset.docxCcId;
     const restoreFocus = menu.contains(document.activeElement);
     menu.remove();
@@ -2144,53 +2153,9 @@ export function mountPaginatedSurface(
 
   function removeExistingContentControlMenu(): HTMLElement | null {
     widgetSessions.cancel();
-    const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
+    const existing = activeContentControlMenu;
     if (existing) closeContentControlMenu(existing);
     return existing;
-  }
-
-  /**
-   * Dismiss a widget menu on an outside press or Escape.
-   *
-   * `pointerdown`, not `mousedown`: the surface prevents the default on every page press,
-   * which suppresses the compatibility `mousedown` — a `mousedown` listener never fires for
-   * document clicks and the menu stands. The opening press cannot self-dismiss: it already
-   * passed document capture before this attached. A press on the owning widget is left for
-   * the opener, which toggles instead. Stale listeners (the menu closed through a commit)
-   * clean up silently so a later Escape still reaches the rest of the UI.
-   */
-  function armContentControlMenuDismiss(menu: HTMLElement, onOutsidePress: () => void): void {
-    const controlId = menu.dataset.docxCcId;
-    const cleanup = (): void => {
-      document.removeEventListener('pointerdown', onOutside, true);
-      document.removeEventListener('keydown', onKey, true);
-    };
-    const onOutside = (event: Event): void => {
-      // `parentNode`, not `isConnected`: a surface mounted in a detached container (tests,
-      // off-screen hosts) is live; a menu the surface closed or tore down has no parent.
-      if (menu.parentNode === null) {
-        cleanup();
-        return;
-      }
-      const target = event.target as Element | null;
-      const widget = target instanceof Element ? target.closest('[data-docx-cc-widget]') : null;
-      if (
-        target &&
-        (menu.contains(target) || widget?.getAttribute('data-docx-cc-id') === controlId)
-      )
-        return;
-      cleanup();
-      onOutsidePress();
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      cleanup();
-      if (menu.parentNode === null) return;
-      event.stopPropagation();
-      closeContentControlMenu(menu);
-    };
-    document.addEventListener('pointerdown', onOutside, true);
-    document.addEventListener('keydown', onKey, true);
   }
 
   /**
@@ -2246,23 +2211,6 @@ export function mountPaginatedSurface(
     navigation.goToPosition({ paragraphId: headingParagraphId, offset: 0 });
   }
 
-  /** Where a control's pop-up anchors: under its first fragment, clamped to that page sheet. */
-  function contentControlMenuAnchor(controlId: string): ContentControlMenuAnchor | null {
-    const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
-    const frag = record?.fragments[0];
-    const page = frag ? currentLayout.pages[frag.pageIndex] : undefined;
-    if (!frag || !page) return null;
-    const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
-    const contentLeft = page.contentBox.x - page.box.x;
-    const contentTop = page.contentBox.y - page.box.y;
-    return {
-      left: (page.box.x + offsetX + contentLeft + frag.box.x) * scale,
-      top: (page.box.y + contentTop + frag.box.y + frag.box.height) * scale,
-      sheetLeft: (page.box.x + offsetX) * scale,
-      sheetRight: (page.box.x + offsetX + page.box.width) * scale,
-    };
-  }
-
   const contentControlMenuHost: ContentControlMenuHost = {
     document,
     locale: () => dateLocale.get(),
@@ -2292,7 +2240,14 @@ export function mountPaginatedSurface(
     if (kind === 'dropdown' || kind === 'comboBox') {
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
-      menu = buildContentControlListMenu(contentControlMenuHost, controlId, kind, items, alias);
+      menu = buildContentControlListMenu(
+        contentControlMenuHost,
+        controlId,
+        kind,
+        items,
+        alias,
+        contentControlWidgetValue(findControl(controlId), items)
+      );
     } else if (kind === 'date') {
       menu = buildContentControlCalendar(
         contentControlMenuHost,
@@ -2303,11 +2258,29 @@ export function mountPaginatedSurface(
     } else {
       return;
     }
-    placeContentControlMenu(menu, pagesLayer, contentControlMenuAnchor(controlId));
+    activeContentControlMenu = menu;
+    placeContentControlMenu(
+      menu,
+      pagesLayer,
+      contentControlMenuAnchor(
+        currentLayout,
+        scale,
+        controlId,
+        pagesLayer,
+        materializedExtent?.pageOffsetX
+      )
+    );
     setContentControlWidgetOpen(controlId, true);
-    armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
+    stopContentControlMenuDismiss = armContentControlMenuDismiss(menu, () =>
+      closeContentControlMenu(menu)
+    );
     if (kind === 'date') focusContentControlCalendar(menu);
-    else menu.querySelector<HTMLElement>('input,button')?.focus({ preventScroll: true });
+    else
+      (
+        menu.querySelector<HTMLElement>('input') ??
+        menu.querySelector<HTMLElement>('[role=option][tabindex="0"]') ??
+        menu.querySelector<HTMLElement>('button')
+      )?.focus({ preventScroll: true });
   }
 
   const contentControlsOps: ContentControlOps = {
@@ -5788,7 +5761,7 @@ export function mountPaginatedSurface(
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
-    if (textFormInteraction?.keydown(event) || legacyCheckboxInteraction?.keydown(event)) return;
+    if (legacyCheckboxInteraction?.keydown(event) || textFormInteraction?.keydown(event)) return;
     dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);

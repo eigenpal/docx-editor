@@ -1,4 +1,5 @@
 import {
+  useId,
   computed,
   inject,
   provide,
@@ -10,6 +11,10 @@ import {
 } from 'vue';
 import {
   calendarMonth,
+  calendarDateText,
+  calendarDateFromText,
+  createContentControlListNavigation,
+  type ContentControlListNavigation,
   isoDateOf,
   parseIsoDate,
   shiftMonth,
@@ -57,6 +62,16 @@ export interface UseContentControlWidgetResult {
   readonly focusIso: Readonly<Ref<string | null>>;
   /** Move keyboard focus to a day, turning the month if it lies outside the view. */
   focusDay(iso: string): void;
+  /** Numeric regional date entry, separate from the ISO value. */
+  readonly dateText: Readonly<Ref<string>>;
+  setDateText(text: string): void;
+  applyDateText(): boolean;
+  /** Jump to a month without committing. Month is zero-based; year is 100–9999. */
+  showMonth(year: number, month: number): void;
+  /** ID shared by the combo input and listbox. */
+  readonly listId: string;
+  /** Shared typeahead and roving-focus behavior for replacement lists. */
+  readonly listNavigation: ContentControlListNavigation;
 }
 
 const key: InjectionKey<UseContentControlWidgetResult> = Symbol('docx-content-control-widget');
@@ -89,8 +104,11 @@ function initialValue(session: ContentControlWidgetSession): string {
 export function useContentControlWidgetState(
   session: Readonly<Ref<ContentControlWidgetSession>>
 ): UseContentControlWidgetResult {
+  const listId = `docx-cc-list-${useId()}`;
   const value = ref(initialValue(session.value));
   const refused = ref(false);
+  const dateText = ref(calendarDateText(session.value.value, session.value.locale));
+  const listNavigation = createContentControlListNavigation(session.value.locale);
   const focusIso = ref<string | null>(null);
   const view = shallowRef({ year: 0, month: 0 });
   const resetView = (current: ContentControlWidgetSession) => {
@@ -102,6 +120,8 @@ export function useContentControlWidgetState(
   watch(session, (current) => {
     value.value = initialValue(current);
     refused.value = false;
+    dateText.value = calendarDateText(current.value, current.locale);
+    listNavigation.reset();
     focusIso.value = null;
     resetView(current);
   });
@@ -121,6 +141,34 @@ export function useContentControlWidgetState(
   );
   return {
     session,
+    dateText,
+    setDateText: (text) => {
+      dateText.value = text;
+      refused.value = false;
+    },
+    applyDateText: () => {
+      const iso = calendarDateFromText(dateText.value, session.value.locale);
+      if (!iso) {
+        refused.value = true;
+        return false;
+      }
+      return apply(iso);
+    },
+    showMonth: (year, month) => {
+      if (
+        !Number.isInteger(year) ||
+        year < 100 ||
+        year > 9999 ||
+        !Number.isInteger(month) ||
+        month < 0 ||
+        month > 11
+      )
+        return;
+      view.value = { year, month };
+      focusIso.value = null;
+    },
+    listNavigation,
+    listId,
     kind: computed(() => session.value.kind),
     items: computed(() => session.value.items),
     value,

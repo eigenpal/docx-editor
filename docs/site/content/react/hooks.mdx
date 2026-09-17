@@ -365,3 +365,24 @@ for a complete control and its placement inside the dialog.
 - [React composition](/docs/2.x/react/composition)
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots)
 - [React API reference](/docs/2.x/api/react)
+
+### Content-control widget state
+
+Inside `DocxEditorContentControlWidget`, `useContentControlWidget()` exposes the
+same state and actions that its default parts use:
+
+| Members                                         | Purpose                                              |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `session`, `kind`, `items`, `value`, `setValue` | Current session and ISO or list draft                |
+| `isEnabled`, `refused`, `apply`, `cancel`       | Validated writes and dismissal                       |
+| `calendar`, `focusIso`, `focusDay`              | Month grid and keyboard focus                        |
+| `previousMonth`, `nextMonth`, `showMonth`       | Relative or direct month navigation                  |
+| `selectDay`, `selectToday`                      | Immediate date selection                             |
+| `dateText`, `setDateText`, `applyDateText`      | Regional numeric date entry                          |
+| `listId`, `listNavigation`                      | Combo relationship and shared list keyboard behavior |
+
+`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999.
+`apply()` accepts ISO dates; `applyDateText()` parses the regional draft first.
+Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior.
+For composition and CSS hooks, see
+[Compose the value pop-up](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).

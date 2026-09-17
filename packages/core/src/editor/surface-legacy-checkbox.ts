@@ -83,6 +83,13 @@ export function createLegacyCheckboxInteraction(host: Host): {
     toggle(hit.paragraphId, hit.field);
   };
   host.pagesLayer.addEventListener('pointerdown', onPointerDown, { capture: true });
+  const onFocus = (event: FocusEvent): void => {
+    const hit = checkboxAtTarget(host, event.target);
+    if (hit && event.target instanceof HTMLElement) {
+      event.target.setAttribute('aria-disabled', String(!host.editable() || !hit.field.enabled));
+    }
+  };
+  host.pagesLayer.addEventListener('focusin', onFocus);
 
   /** The checkbox the selection addresses: the whole field, or the caret on it under forms. */
   const selectedField = (): { paragraphId: string; field: LegacyCheckboxFieldRange } | null => {
@@ -103,15 +110,37 @@ export function createLegacyCheckboxInteraction(host: Host): {
 
   return {
     keydown(event) {
+      const direct = checkboxAtTarget(host, event.target);
+      // A focused checkbox uses native Tab navigation, never the paragraph Tab command.
+      if (direct && event.key === 'Tab') return true;
+      if (direct && !event.ctrlKey && !event.metaKey && event.key !== ' ') {
+        event.preventDefault();
+        return true;
+      }
       if (event.key !== ' ' || modified(event) || event.isComposing) return false;
-      const hit = selectedField();
-      if (!hit || !host.editable() || !hit.field.enabled) return false;
+      const hit = direct ?? selectedField();
+      if (!hit) return false;
+      if (!host.editable() || !hit.field.enabled) {
+        if (!direct) return false;
+        event.preventDefault();
+        return true;
+      }
       event.preventDefault();
-      toggle(hit.paragraphId, hit.field);
+      const applied = toggle(hit.paragraphId, hit.field);
+      if (direct && applied) {
+        [...host.pagesLayer.querySelectorAll<HTMLElement>('[data-docx-form-checkbox][data-start]')]
+          .find(
+            (span) =>
+              span.dataset.paragraphId === hit.paragraphId &&
+              Number(span.dataset.start) === hit.field.start
+          )
+          ?.focus({ preventScroll: true });
+      }
       return true;
     },
     destroy() {
       host.pagesLayer.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      host.pagesLayer.removeEventListener('focusin', onFocus);
     },
   };
 }

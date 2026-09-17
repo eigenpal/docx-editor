@@ -84,7 +84,7 @@ describe('a FORMCHECKBOX field', () => {
     // glyph back to know what a press should write.
     expect(box.fieldAtom).toEqual({
       formField: true,
-      formControl: { kind: 'checkbox', checked: false },
+      formControl: { kind: 'checkbox', checked: false, accessibleName: 'Check1' },
     });
     expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
   });

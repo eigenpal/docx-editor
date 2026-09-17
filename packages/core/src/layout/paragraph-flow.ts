@@ -1354,7 +1354,10 @@ export function breakParagraph(
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
-      let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
+      let width =
+        piece.fieldAtom?.formControl?.kind === 'checkbox'
+          ? faceStyle.fontSizePt
+          : measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity — the shared
       // decision in `lineOpenDecisionAt`, which the anchor-line probe above consumes too.
       const openDecision =

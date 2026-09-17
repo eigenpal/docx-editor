@@ -92,7 +92,10 @@ export function anchorLineStartsByModelOffset(input: {
       if (candidate.length === 0) continue;
       const style = styleForFontSlot(piece.style, piece.fontSlot);
       const measure = (text: string): number => measurer.measure(displayText(text, style), style);
-      let width = measure(piece.measureText ?? candidate);
+      let width =
+        piece.fieldAtom?.formControl?.kind === 'checkbox'
+          ? style.fontSizePt
+          : measure(piece.measureText ?? candidate);
       if (!probePieceLayoutOwned && piece.measureText === undefined) {
         const remaining = probeLineAvail() - probeWidth;
         width = clipWordEnd(candidate, width, remaining, measure, 0.001)?.width ?? width;

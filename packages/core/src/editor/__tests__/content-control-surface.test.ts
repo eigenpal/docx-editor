@@ -210,7 +210,7 @@ describe('content-control surface chrome', () => {
           menu!.querySelectorAll('.docx-content-control-calendar-weekdays > span')
         ).toHaveLength(7);
         // No native date input: the grid IS the picker, like Word's.
-        expect(menu!.querySelector('input')).toBeNull();
+        expect(menu!.querySelector('input[type=date]')).toBeNull();
         expect(menu!.querySelector('.docx-content-control-calendar-today')?.textContent).toBe(
           'Today'
         );

@@ -380,3 +380,20 @@ export type {
   CalendarMonth,
   CalendarMonthOptions,
 } from './content-control-calendar.ts';
+
+export {
+  calendarDateForKey,
+  calendarDateText,
+  calendarDateFromText,
+} from './content-control-calendar.ts';
+export {
+  positionContentControlPopup,
+  observeContentControlPopup,
+  contentControlPopupKeyDown,
+} from './content-control-popup-behavior.ts';
+export { createContentControlListNavigation } from './content-control-list-navigation.ts';
+export type { ContentControlListNavigation } from './content-control-list-navigation.ts';
+
+export { calendarMonthNames } from './content-control-calendar.ts';
+
+export { contentControlPopupOpener } from './content-control-popup-behavior.ts';

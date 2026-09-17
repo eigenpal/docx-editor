@@ -10,16 +10,23 @@ import {
   type VNode,
   type VNodeChild,
 } from 'vue';
-import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import {
+  contentControlPopupOpener,
+  observeContentControlPopup,
+  contentControlPopupKeyDown,
+  type ContentControlWidgetSession,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useFormControlTranslate } from './form-control-translate';
-import { absolutePointInScroller } from './scroller-geometry';
 import {
   provideContentControlWidget,
   useContentControlWidgetState,
   type UseContentControlWidgetResult,
 } from './content-control-widget/context';
 import {
+  ContentControlWidgetNavigation,
+  ContentControlWidgetMonth,
+  ContentControlWidgetYear,
   ContentControlWidgetApply,
   ContentControlWidgetCalendar,
   ContentControlWidgetCancel,
@@ -95,15 +102,13 @@ const ContentControlWidgetRoot = defineComponent({
     provideContentControlWidget(widget);
     const closed = ref(props.session.signal.aborted);
     const panel = ref<HTMLDivElement | null>(null);
-    const position = ref<CSSProperties>({});
     // A checkbox has no pop-up: the packaged arrangement IS the toggle, so configuring this
     // popup for a restyled dropdown never makes checkboxes stop working. A host that renders
     // its own children owns the decision instead.
     const immediate = computed(
       () => props.session.kind === 'checkbox' && !slots.default && props.children === undefined
     );
-    let opener: HTMLElement | null =
-      typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null);
+    let opener = contentControlPopupOpener(props.session.anchor);
     let focusPanel: HTMLDivElement | null = null;
     const restoreFocus = () => {
       const previous = opener;
@@ -133,29 +138,24 @@ const ContentControlWidgetRoot = defineComponent({
     );
     watch(
       [panel, session],
-      ([element, current]) => {
+      ([element, current], _old, onCleanup) => {
         if (!element) {
           restoreFocus();
           return;
         }
         if (focusPanel) {
           restoreFocus();
-          const active = element.ownerDocument.activeElement;
-          opener = active instanceof HTMLElement ? active : null;
+          opener = contentControlPopupOpener(current.anchor);
         }
         focusPanel = element;
-        const scroller = element.closest<HTMLElement>('.docx-editor__scroll-container');
-        if (current.anchor && scroller) {
-          const rect = current.anchor.getBoundingClientRect();
-          const sheet = current.anchor.closest('.docx-page')?.getBoundingClientRect();
-          const left = sheet
-            ? Math.max(sheet.left, Math.min(rect.left, sheet.right - element.offsetWidth))
-            : rect.left;
-          position.value = absolutePointInScroller(scroller, left, rect.bottom);
-        }
+        if (current.anchor) onCleanup(observeContentControlPopup(element, current.anchor));
         // The calendar grid places its own roving focus; everything else takes the first control.
         if (!element.querySelector('[data-docx-part="grid"]')) {
-          element.querySelector<HTMLElement>('input,select,button')?.focus({ preventScroll: true });
+          (
+            element.querySelector<HTMLElement>('input') ??
+            element.querySelector<HTMLElement>('[role=option][tabindex="0"]') ??
+            element.querySelector<HTMLElement>('select,button')
+          )?.focus({ preventScroll: true });
         }
       },
       { flush: 'post' }
@@ -182,21 +182,14 @@ const ContentControlWidgetRoot = defineComponent({
           role="dialog"
           aria-label={label}
           class={['docx-content-control-widget-popup', props.className]}
-          style={{ ...position.value, ...props.style }}
+          style={props.style}
           data-docx-popup="contentControlWidget"
+          data-docx-part="popup"
           data-kind={current.kind}
           onPointerdown={(event) => event.stopPropagation()}
           onKeydown={(event) => {
-            if (event.isComposing) return;
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              current.cancel();
-            }
-            if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
-              event.preventDefault();
-              widget.apply();
-            }
+            contentControlPopupKeyDown(event.currentTarget as HTMLElement, event, current.cancel);
+            widget.listNavigation.keyDown(event, event.currentTarget as HTMLElement);
           }}
         >
           {slots.default?.() ?? props.children ?? defaultArrangement(widget)}
@@ -209,6 +202,9 @@ const ContentControlWidgetRoot = defineComponent({
 /** The compound pop-up with its parts attached as statics. @public */
 export interface DocxEditorContentControlWidgetNamespace {
   (props: DocxEditorContentControlWidgetProps): VNode | null;
+  readonly Navigation: typeof ContentControlWidgetNavigation;
+  readonly Month: typeof ContentControlWidgetMonth;
+  readonly Year: typeof ContentControlWidgetYear;
   readonly Calendar: typeof ContentControlWidgetCalendar;
   readonly Header: typeof ContentControlWidgetHeader;
   readonly PreviousMonth: typeof ContentControlWidgetPreviousMonth;
@@ -229,6 +225,9 @@ export interface DocxEditorContentControlWidgetNamespace {
 
 /** Compact value editor for a configured content-control popup. @public */
 export const DocxEditorContentControlWidget = Object.assign(ContentControlWidgetRoot, {
+  Navigation: ContentControlWidgetNavigation,
+  Month: ContentControlWidgetMonth,
+  Year: ContentControlWidgetYear,
   Calendar: ContentControlWidgetCalendar,
   Header: ContentControlWidgetHeader,
   PreviousMonth: ContentControlWidgetPreviousMonth,

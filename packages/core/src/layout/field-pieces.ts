@@ -71,6 +71,8 @@ export interface FieldAtomMarker {
   readonly formControl?: {
     readonly kind: 'checkbox';
     readonly checked: boolean;
+    /** Plain accessible name; omitted for fields containing macro references. */
+    readonly accessibleName?: string;
   };
   /**
    * A BODY PAGE / NUMPAGES / SECTIONPAGES atom whose value depends on pagination.
@@ -351,6 +353,7 @@ export interface PendingFieldProjection {
    * ffData present with an unreadable payload still shades as a form field.
    */
   formData: LegacyFormFieldData | null;
+  formAccessibleName?: string;
   /**
    * Canonical node id of the field's begin `w:fldChar`.
    *

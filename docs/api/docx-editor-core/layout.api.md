@@ -987,6 +987,7 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
 // @public
 export interface FieldAtomMarker {
     readonly formControl?: {
+        readonly accessibleName?: string;
         readonly checked: boolean;
         readonly kind: 'checkbox';
     };

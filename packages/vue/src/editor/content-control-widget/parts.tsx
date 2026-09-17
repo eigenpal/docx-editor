@@ -7,7 +7,12 @@ import {
   type PropType,
   type VNodeChild,
 } from 'vue';
-import { isoDateOf, parseIsoDate, type CalendarDay } from '@docx-editor.dev/core/editor';
+import {
+  calendarMonthNames,
+  calendarDateForKey,
+  calendarDateText,
+  type CalendarDay,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { Slot } from '../toolbar/Slot';
 import { mergeHostClass } from '../../lib/mergeHostClass';
@@ -36,6 +41,7 @@ export interface DocxEditorContentControlWidgetPartProps {
   title?: string;
   'aria-label'?: string;
   [attribute: `data-${string}`]: unknown;
+  [attribute: `aria-${string}`]: unknown;
 }
 
 const partProps = {
@@ -47,7 +53,10 @@ const partProps = {
   children: { type: [Object, Array, String] as PropType<DocxEditorChildren>, default: undefined },
 } as const;
 
-type Wiring = Record<string, unknown> & { class: string; style?: CSSProperties };
+type Wiring = Record<string, unknown> & {
+  class: string;
+  style?: CSSProperties;
+};
 
 interface PartRender {
   readonly wiring: Wiring;
@@ -64,7 +73,7 @@ type Translate = ReturnType<typeof useFormControlTranslate>;
  * element is not outranked by it.
  */
 function renderPart(
-  tag: 'div' | 'button' | 'input',
+  tag: 'div' | 'button' | 'input' | 'select',
   props: DocxEditorContentControlWidgetPartProps,
   attrs: Record<string, unknown>,
   slotContent: VNodeChild | undefined,
@@ -95,7 +104,7 @@ function renderPart(
 
 function definePart(
   name: string,
-  tag: 'div' | 'button' | 'input',
+  tag: 'div' | 'button' | 'input' | 'select',
   build: (widget: UseContentControlWidgetResult, t: Translate) => PartRender
 ) {
   return defineComponent({
@@ -160,7 +169,7 @@ export const ContentControlWidgetTitle = definePart(
   })
 );
 
-/** Month navigation row: previous, title, next. @public */
+/** Month navigation row with month and year controls. @public */
 export const ContentControlWidgetHeader = definePart(
   'DocxEditorContentControlWidgetHeader',
   'div',
@@ -168,8 +177,9 @@ export const ContentControlWidgetHeader = definePart(
     wiring: { class: 'docx-content-control-calendar-header', 'data-docx-part': 'header' },
     content: () => [
       h(ContentControlWidgetPreviousMonth),
-      h(ContentControlWidgetTitle),
+      h(ContentControlWidgetNavigation),
       h(ContentControlWidgetNextMonth),
+      h(ContentControlWidgetTitle, { className: 'docx-content-control-calendar-announcement' }),
     ],
   })
 );
@@ -189,13 +199,6 @@ export interface ContentControlWidgetDayProps extends DocxEditorContentControlWi
   day: CalendarDay;
 }
 
-const ARROW_STEPS: Readonly<Record<string, number>> = {
-  ArrowLeft: -1,
-  ArrowRight: 1,
-  ArrowUp: -7,
-  ArrowDown: 7,
-};
-
 /** One calendar cell; a press commits that date, arrow keys roam the grid. @public */
 export const ContentControlWidgetDay = defineComponent({
   name: 'DocxEditorContentControlWidgetDay',
@@ -204,14 +207,16 @@ export const ContentControlWidgetDay = defineComponent({
   setup(props, { slots, attrs }) {
     const widget = useContentControlWidget();
     const roam = (event: KeyboardEvent) => {
-      const step = ARROW_STEPS[event.key];
-      if (step === undefined) return;
-      event.preventDefault();
-      const from = parseIsoDate(props.day.iso);
-      if (!from) return;
-      widget.focusDay(
-        isoDateOf(new Date(from.getFullYear(), from.getMonth(), from.getDate() + step))
+      if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+      const next = calendarDateForKey(
+        props.day.iso,
+        event.key,
+        widget.session.value.locale,
+        event.shiftKey
       );
+      if (!next) return;
+      event.preventDefault();
+      widget.focusDay(next);
     };
     return () => {
       const day = props.day;
@@ -230,6 +235,8 @@ export const ContentControlWidgetDay = defineComponent({
           tabindex: day.iso === focused?.iso ? 0 : -1,
           'aria-label': day.label,
           ...(day.selected ? { 'data-selected': '', 'aria-selected': 'true' } : {}),
+          'aria-current': day.today ? 'date' : undefined,
+          'aria-selected': day.selected,
           ...(day.today ? { 'data-today': '' } : {}),
           ...(day.otherMonth ? { 'data-other-month': '' } : {}),
           disabled: !widget.isEnabled.value,
@@ -257,7 +264,11 @@ export const ContentControlWidgetGrid = defineComponent({
       const element = grid.value;
       if (!element) return;
       // Month navigation keeps focus on its button, so repeated Enter presses keep paging.
-      if (element.ownerDocument.activeElement?.closest('.docx-content-control-calendar-nav'))
+      if (
+        element.ownerDocument.activeElement?.closest(
+          '[data-docx-part=previousMonth],[data-docx-part=nextMonth],[data-docx-part=month],[data-docx-part=year]'
+        )
+      )
         return;
       const focusIso = widget.focusIso.value;
       const target =
@@ -308,7 +319,7 @@ export const ContentControlWidgetToday = definePart(
   })
 );
 
-/** The whole date picker: header, weekdays, grid and Today. @public */
+/** The whole date picker, including regional date entry and actions. @public */
 export const ContentControlWidgetCalendar = definePart(
   'DocxEditorContentControlWidgetCalendar',
   'div',
@@ -318,7 +329,12 @@ export const ContentControlWidgetCalendar = definePart(
       h(ContentControlWidgetHeader),
       h(ContentControlWidgetWeekdays),
       h(ContentControlWidgetGrid),
-      h('div', { class: 'docx-content-control-calendar-footer' }, [h(ContentControlWidgetToday)]),
+      h('div', { class: 'docx-content-control-calendar-entry', 'data-docx-part': 'dateEntry' }, [
+        h(ContentControlWidgetToday),
+        h(ContentControlWidgetInput),
+      ]),
+      h(ContentControlWidgetError),
+      h(ContentControlWidgetFooter),
     ],
   })
 );
@@ -346,6 +362,14 @@ export const ContentControlWidgetItem = defineComponent({
           'data-docx-part': 'item',
           'data-value': props.item.value,
           role: 'option',
+          tabindex:
+            widget.items.value.findIndex((entry) => entry.value === widget.value.value) < 0
+              ? widget.items.value[0] === props.item
+                ? 0
+                : -1
+              : widget.value.value === props.item.value
+                ? 0
+                : -1,
           'aria-selected': widget.value.value === props.item.value ? 'true' : 'false',
           disabled: !widget.isEnabled.value,
           onMousedown: stopPress,
@@ -360,8 +384,14 @@ export const ContentControlWidgetItem = defineComponent({
 export const ContentControlWidgetList = definePart(
   'DocxEditorContentControlWidgetList',
   'div',
-  (widget) => ({
-    wiring: { class: 'docx-content-control-menu-list', 'data-docx-part': 'list', role: 'listbox' },
+  (widget, t) => ({
+    wiring: {
+      class: 'docx-content-control-menu-list',
+      'data-docx-part': 'list',
+      role: 'listbox',
+      id: widget.listId,
+      'aria-label': t(`contentControl.types.${widget.kind.value}`),
+    },
     content: () =>
       widget.items.value.map((item, index) => h(ContentControlWidgetItem, { key: index, item })),
   })
@@ -377,9 +407,28 @@ export const ContentControlWidgetInput = definePart(
       class: 'docx-content-control-menu-input',
       'data-docx-part': 'input',
       'aria-label': t(`contentControl.types.${widget.kind.value}`),
-      value: widget.value.value,
+      value: widget.kind.value === 'date' ? widget.dateText.value : widget.value.value,
+      placeholder:
+        widget.kind.value === 'date'
+          ? calendarDateText('2006-11-22', widget.session.value.locale)
+          : undefined,
+      'aria-invalid': widget.refused.value || undefined,
+      role: widget.kind.value === 'comboBox' ? 'combobox' : undefined,
+      'aria-expanded': widget.kind.value === 'comboBox' ? true : undefined,
+      'aria-controls': widget.kind.value === 'comboBox' ? widget.listId : undefined,
+      'aria-autocomplete': widget.kind.value === 'comboBox' ? 'list' : undefined,
+      onKeydown: (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' || event.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (widget.kind.value === 'date') widget.applyDateText();
+        else widget.apply();
+      },
       onMousedown: stopPress,
-      onInput: (event: Event) => widget.setValue((event.target as HTMLInputElement).value),
+      onInput: (event: Event) =>
+        (widget.kind.value === 'date' ? widget.setDateText : widget.setValue)(
+          (event.target as HTMLInputElement).value
+        ),
     },
     content: () => null,
   })
@@ -417,7 +466,7 @@ export const ContentControlWidgetApply = definePart(
       class: 'docx-dialog__button docx-dialog__button--primary',
       'data-docx-part': 'apply',
       disabled: !widget.isEnabled.value,
-      onClick: () => widget.apply(),
+      onClick: () => (widget.kind.value === 'date' ? widget.applyDateText() : widget.apply()),
     },
     content: () => t('common.apply'),
   })
@@ -445,5 +494,66 @@ export const ContentControlWidgetFooter = definePart(
   () => ({
     wiring: { class: 'docx-dialog__footer', 'data-docx-part': 'footer' },
     content: () => [h(ContentControlWidgetCancel), h(ContentControlWidgetApply)],
+  })
+);
+
+/** Month selector and numeric year entry. @public */
+export const ContentControlWidgetNavigation = definePart(
+  'DocxEditorContentControlWidgetNavigation',
+  'div',
+  () => ({
+    wiring: { class: 'docx-content-control-calendar-navigation', 'data-docx-part': 'navigation' },
+    content: () => [h(ContentControlWidgetMonth), h(ContentControlWidgetYear)],
+  })
+);
+/** Jump directly to a month. @public */
+export const ContentControlWidgetMonth = definePart(
+  'DocxEditorContentControlWidgetMonth',
+  'select',
+  (widget, t) => ({
+    wiring: {
+      class: 'docx-content-control-calendar-month',
+      'data-docx-part': 'month',
+      'aria-label': t('contentControl.calendar.month'),
+      value: widget.calendar.value.month,
+      onChange: (event: Event) =>
+        widget.showMonth(
+          widget.calendar.value.year,
+          Number((event.target as HTMLSelectElement).value)
+        ),
+    },
+    content: () =>
+      calendarMonthNames(widget.session.value.locale).map((label, index) =>
+        h('option', { value: index }, label)
+      ),
+  })
+);
+/** Jump directly to a four-digit year. @public */
+export const ContentControlWidgetYear = definePart(
+  'DocxEditorContentControlWidgetYear',
+  'input',
+  (widget, t) => ({
+    wiring: {
+      type: 'number',
+      min: 100,
+      max: 9999,
+      class: 'docx-content-control-calendar-year',
+      'data-docx-part': 'year',
+      'aria-label': t('contentControl.calendar.year'),
+      key: widget.calendar.value.year,
+      onKeydown: (event: KeyboardEvent) => {
+        if (event.key === 'Enter' && !event.isComposing) {
+          event.preventDefault();
+          (event.currentTarget as HTMLInputElement).blur();
+        }
+      },
+      value: widget.calendar.value.year,
+      onChange: (event: Event) =>
+        widget.showMonth(
+          Number((event.target as HTMLInputElement).value),
+          widget.calendar.value.month
+        ),
+    },
+    content: () => null,
   })
 );

@@ -165,14 +165,18 @@ arrangement: a list, a list with free-text entry, or a month calendar with a
 **Today** button, from the same stylesheet classes the engine's own menus use. A
 checkbox session applies its toggle at once and renders nothing.
 
+`Header` includes month and year selectors. `Title` announces the current month.
 The compound exposes these parts: `Calendar`, `Header`, `PreviousMonth`, `Title`,
-`NextMonth`, `Weekdays`, `Grid`, `Day`, `Today`, `List`, `Item`, `Input`,
+`NextMonth`, `Navigation`, `Month`, `Year`, `Weekdays`, `Grid`, `Day`, `Today`, `List`, `Item`, `Input`,
 `Error`, `Footer`, `Apply`, and `Cancel`. Parts accept `className`, `style`,
 `hidden`, and `asChild`, and forward `id`, `aria-*`, and `data-*`. `Day` takes a
 `day` from `calendar.days`; `Item` takes an `item` from `items`. Read the draft
 state with `useContentControlWidget()` inside any child. It supplies `value`,
 `setValue`, `isEnabled`, `refused`, `apply`, `cancel`, `calendar`,
-`previousMonth`, `nextMonth`, `selectDay`, `selectToday`, and `focusDay`. Vue
+`previousMonth`, `nextMonth`, `selectDay`, `selectToday`, `focusIso`, and `focusDay`.
+It also supplies `showMonth`, `dateText`, `setDateText`, `applyDateText`,
+`listId`, and `listNavigation`. `value` stays in ISO form for dates; `dateText`
+contains regional numeric input. Vue
 exposes the reactive members as refs.
 
 Check `session.kind` when replacing a calendar. The renderer also receives
@@ -197,6 +201,9 @@ const popups = {
         <DocxEditorContentControlWidget.Today asChild>
           <MyButton>Pick today</MyButton>
         </DocxEditorContentControlWidget.Today>
+        <DocxEditorContentControlWidget.Input />
+        <DocxEditorContentControlWidget.Error />
+        <DocxEditorContentControlWidget.Footer />
       </DocxEditorContentControlWidget>
     ),
 };
@@ -223,6 +230,9 @@ const popups = {
           h(DocxEditorContentControlWidget.Today, { asChild: true }, () =>
             h(MyButton, null, () => 'Pick today')
           ),
+          h(DocxEditorContentControlWidget.Input),
+          h(DocxEditorContentControlWidget.Error),
+          h(DocxEditorContentControlWidget.Footer),
         ]),
 };
 </script>
@@ -238,6 +248,91 @@ const popups = {
 The date session's `locale` member carries the editor's regional locale, so a
 custom picker can build its own grid with `calendarMonth()` from
 `@docx-editor.dev/core/editor`.
+
+### Style without replacing a renderer
+
+All three renderers use `data-docx-part` hooks. Scope your rules to the editor
+or your popup class. Override `--doc-*` tokens for colors, backgrounds, and focus rings.
+
+| Part hooks                                                          | Purpose                               |
+| ------------------------------------------------------------------- | ------------------------------------- |
+| `header`, `title`, `previousMonth`, `nextMonth`                     | Month title and previous/next buttons |
+| `navigation`, `month`, `year`                                       | Direct month and year navigation      |
+| `weekdays`, `grid`, `day`                                           | Calendar layout and date cells        |
+| `dateEntry`, `today`, `input`, `error`, `footer`, `apply`, `cancel` | Date entry and actions                |
+| `list`, `item`                                                      | Dropdown and combo suggestions        |
+
+Use `[data-selected]`, `[data-today]`, and `[data-other-month]` for calendar states.
+Use `[aria-selected="true"]` for selected list entries. Popup roots expose
+`data-placement="top"` or `"bottom"`. A narrow viewport scrolls the popup without
+moving it beyond the page sheet.
+
+```css
+.docx-editor [data-docx-part='day'] {
+  border-radius: 50%;
+}
+.docx-editor [data-docx-part='item'][aria-selected='true'] {
+  font-weight: 600;
+}
+```
+
+### Compose in a Vue template
+
+A component registered as `popups.contentControlWidget` can use ordinary template
+children. You do not need a render callback for each part. For example, register
+this component with `:popups="{ contentControlWidget: BrandedWidget }"`:
+
+```vue
+<script setup lang="ts">
+import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import { DocxEditorContentControlWidget as Widget } from '@docx-editor.dev/vue';
+
+defineProps<{ session: ContentControlWidgetSession }>();
+</script>
+
+<template>
+  <Widget v-if="session.kind === 'date'" :session="session" class-name="brand-popup">
+    <Widget.Header />
+    <Widget.Weekdays />
+    <Widget.Grid class-name="brand-grid" />
+    <Widget.Today />
+    <Widget.Input />
+    <Widget.Error />
+    <Widget.Footer />
+  </Widget>
+  <Widget v-else :session="session" />
+</template>
+```
+
+React accepts the same arrangement as JSX children. Register your component with
+`popups={{ contentControlWidget: BrandedWidget }}`. Both roots own placement,
+Escape, outside dismissal, focus return, and Tab wrapping. Parts retain their
+keyboard behavior when you replace their element with `asChild`.
+
+### Replace behavior with the shared model
+
+A replacement grid can call `calendarDateForKey(iso, key, locale, shiftKey)` and
+pass its result to `focusDay`. The helper implements arrows, Home/End, and
+PageUp/PageDown. Shift with a Page key moves one year. Use `calendar.days` for
+localized labels, selected state, and today's date. Only one day enters the Tab
+order. Set `aria-selected` on every cell and `aria-current="date"` on today.
+
+For a replacement list, render `role="option"` entries inside a `role="listbox"`
+with `id={listId}`. Connect the combo input through `aria-controls={listId}`.
+The root calls `listNavigation.keyDown(event, root)` for typeahead and roving focus.
+Home/End move to the first/last option. Input Home/End keep their text-editing meaning.
+Typing does not commit an option. Enter or a click commits it.
+
+The core helpers `calendarDateText` and `calendarDateFromText` use the editor's
+regional Gregorian convention. They accept complete ISO dates or regional numeric
+dates with a four-digit year. Invalid input stays open with an error. `applyDateText`
+uses these helpers and commits through the validated session.
+
+For a fully separate popup root, call `observeContentControlPopup(panel, session.anchor)`
+and run its returned cleanup on close. This follows scrolling and size changes,
+flips above when needed, and clamps to the visible sheet. `contentControlPopupKeyDown`
+provides Escape and Tab wrapping. Your root must also restore focus and dismiss
+outside presses. The packaged root already performs these steps.
 
 ## Connect a custom input
 

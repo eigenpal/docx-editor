@@ -6,12 +6,23 @@
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   calendarMonth,
+  calendarDateForKey,
+  calendarDateText,
+  calendarDateFromText,
+  calendarMonthNames,
   isoDateOf,
   parseIsoDate,
   shiftMonth,
   type CalendarDay,
 } from './content-control-calendar.ts';
+import {
+  contentControlPopupKeyDown,
+  observeContentControlPopup,
+} from './content-control-popup-behavior.ts';
+import { createContentControlListNavigation } from './content-control-list-navigation.ts';
 import { textFormTranslate } from './text-form-field-translations.ts';
+
+let listSequence = 0;
 
 /** Where a pop-up anchors, in pages-layer pixels. */
 export interface ContentControlMenuAnchor {
@@ -20,6 +31,7 @@ export interface ContentControlMenuAnchor {
   /** Bottom edge of that fragment. */
   readonly top: number;
   /** Horizontal extent of the page sheet the control sits on; the pop-up stays inside it. */
+  readonly element?: HTMLElement;
   readonly sheetLeft: number;
   readonly sheetRight: number;
 }
@@ -29,7 +41,7 @@ export interface ContentControlMenuHost {
   readonly locale: () => string;
   readonly translate: ((key: TranslationKey) => string) | undefined;
   /** Commit a value and close; the surface owns the write and the refusal path. */
-  readonly setValue: (controlId: string, value: string) => void;
+  readonly setValue: (controlId: string, value: string) => boolean;
   /** Remove the menu and clear the widget's open state. */
   readonly close: (menu: HTMLElement) => void;
 }
@@ -38,6 +50,10 @@ function menuShell(host: ContentControlMenuHost, controlId: string): HTMLElement
   const menu = host.document.createElement('div');
   menu.className = 'docx-content-control-menu';
   menu.dataset.docxMarker = '';
+  menu.dataset.docxPart = 'popup';
+  menu.addEventListener('keydown', (event) =>
+    contentControlPopupKeyDown(menu, event, () => host.close(menu))
+  );
   menu.dataset.docxCcId = controlId;
   menu.setAttribute('contenteditable', 'false');
   menu.style.position = 'absolute';
@@ -46,8 +62,8 @@ function menuShell(host: ContentControlMenuHost, controlId: string): HTMLElement
   // A press inside the pop-up is the pop-up's: the pages layer must not treat it as a caret
   // press (which prevents the default and swallows the compatibility mouse events).
   menu.addEventListener('pointerdown', (event) => event.stopPropagation());
-  // Inputs and buttons live inside the editable pages layer. Their events belong to the
-  // pop-up: Enter must not split a paragraph, and typing must not edit the document.
+  // Inputs and buttons own their events: Enter must not split a paragraph, and typing
+  // must not edit the document.
   for (const type of [
     'keydown',
     'beforeinput',
@@ -82,7 +98,21 @@ export function placeContentControlMenu(
   }
   menu.style.left = `${anchor.left}px`;
   menu.style.top = `${anchor.top}px`;
-  layer.append(menu);
+  const hostLayer = anchor.element
+    ? (layer.closest<HTMLElement>('.docx-editor__scroll-container') ?? layer.parentElement ?? layer)
+    : layer;
+  hostLayer.append(menu);
+  if (anchor.element) {
+    const stop = observeContentControlPopup(menu, anchor.element);
+    const observer = new MutationObserver(() => {
+      if (!menu.isConnected) {
+        stop();
+        observer.disconnect();
+      }
+    });
+    observer.observe(hostLayer, { childList: true });
+    return;
+  }
   const width = menu.offsetWidth;
   if (width <= 0) return;
   const overflow = anchor.left + width - anchor.sheetRight;
@@ -91,66 +121,101 @@ export function placeContentControlMenu(
   }
 }
 
+/** Retain a refused draft and expose the failure instead of silently dismissing it. */
+function commitMenuValue(
+  host: ContentControlMenuHost,
+  menu: HTMLElement,
+  controlId: string,
+  value: string
+): boolean {
+  if (host.setValue(controlId, value)) {
+    host.close(menu);
+    return true;
+  }
+  let error = menu.querySelector<HTMLElement>('[data-docx-part=error]');
+  if (!error) {
+    error = host.document.createElement('div');
+    error.dataset.docxPart = 'error';
+    error.className = 'docx-content-control-widget-error';
+    error.setAttribute('role', 'alert');
+    menu.append(error);
+  }
+  error.hidden = false;
+  error.textContent = textFormTranslate(host.translate)('disabledReason.invalidValue');
+  return false;
+}
+
 /** A dropdown / combo-box list; `items` come from the file's `w:listItem` entries. */
 export function buildContentControlListMenu(
   host: ContentControlMenuHost,
   controlId: string,
   kind: 'dropdown' | 'comboBox',
   items: readonly { readonly displayText: string; readonly value: string }[],
-  alias: string | undefined
+  alias: string | undefined,
+  selectedValue?: string
 ): HTMLElement {
   const menu = menuShell(host, controlId);
-  menu.setAttribute('role', 'listbox');
-  if (alias) menu.setAttribute('aria-label', alias);
-  menu.addEventListener('keydown', (event) => {
-    if (event.isComposing || event.target instanceof HTMLInputElement) return;
-    const options = [...menu.querySelectorAll<HTMLButtonElement>('[role="option"]')];
-    const index = options.indexOf(host.document.activeElement as HTMLButtonElement);
-    const next =
-      event.key === 'ArrowDown'
-        ? (index + 1) % options.length
-        : event.key === 'ArrowUp'
-          ? (index - 1 + options.length) % options.length
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? options.length - 1
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    options[next]?.focus();
-  });
-  for (const item of items) {
+  const t = textFormTranslate(host.translate);
+  menu.setAttribute('role', 'dialog');
+  menu.setAttribute('aria-label', alias || t(`contentControl.types.${kind}`));
+  const list = host.document.createElement('div');
+  list.className = 'docx-content-control-menu-list';
+  list.dataset.docxPart = 'list';
+  list.id = `docx-engine-cc-list-${++listSequence}`;
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', alias || t(`contentControl.types.${kind}`));
+  const navigation = createContentControlListNavigation(host.locale());
+  menu.addEventListener('keydown', (event) => navigation.keyDown(event, menu));
+  const selectedIndex = items.findIndex((entry) => entry.value === selectedValue);
+  for (const [index, item] of items.entries()) {
     const option = host.document.createElement('button');
     option.type = 'button';
     option.className = 'docx-content-control-menu-item';
-    option.dataset.docxMarker = '';
-    option.setAttribute('contenteditable', 'false');
+    option.dataset.docxPart = 'item';
+    option.dataset.value = item.value;
     option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', String(item.value === selectedValue));
+    option.tabIndex = index === Math.max(0, selectedIndex) ? 0 : -1;
     option.textContent = item.displayText;
-    option.addEventListener('mousedown', (event) => event.stopPropagation());
     option.addEventListener('click', () => {
-      host.close(menu);
-      host.setValue(controlId, item.value);
+      commitMenuValue(host, menu, controlId, item.value);
     });
-    menu.append(option);
+    list.append(option);
   }
   if (kind === 'comboBox') {
     const free = host.document.createElement('input');
     free.type = 'text';
     free.className = 'docx-content-control-menu-input';
-    free.dataset.docxMarker = '';
-    free.setAttribute('contenteditable', 'false');
-    if (alias) free.setAttribute('aria-label', alias);
-    free.addEventListener('mousedown', (event) => event.stopPropagation());
+    free.dataset.docxPart = 'input';
+    free.value = selectedValue ?? '';
+    free.setAttribute('aria-label', alias || t('contentControl.types.comboBox'));
+    free.setAttribute('aria-autocomplete', 'list');
+    free.setAttribute('role', 'combobox');
+    free.setAttribute('aria-expanded', 'true');
+    free.setAttribute('aria-controls', list.id);
     free.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' || event.isComposing) return;
       event.preventDefault();
-      host.close(menu);
-      host.setValue(controlId, free.value);
+      commitMenuValue(host, menu, controlId, free.value);
     });
     menu.append(free);
-  }
+    const footer = host.document.createElement('div');
+    footer.className = 'docx-dialog__footer';
+    footer.dataset.docxPart = 'footer';
+    for (const action of ['cancel', 'apply'] as const) {
+      const button = host.document.createElement('button');
+      button.type = 'button';
+      button.className = `docx-dialog__button${action === 'apply' ? ' docx-dialog__button--primary' : ''}`;
+      button.dataset.docxPart = action;
+      button.textContent = t(`common.${action}`);
+      button.addEventListener('click', () => {
+        if (action === 'apply') commitMenuValue(host, menu, controlId, free.value);
+        else host.close(menu);
+      });
+      footer.append(button);
+    }
+    menu.append(list, footer);
+  } else menu.append(list);
   return menu;
 }
 
@@ -171,13 +236,6 @@ export function focusContentControlCalendar(menu: HTMLElement, focusIso?: string
   target?.focus({ preventScroll: true });
 }
 
-const ARROW_STEPS: Readonly<Record<string, number>> = {
-  ArrowLeft: -1,
-  ArrowRight: 1,
-  ArrowUp: -7,
-  ArrowDown: 7,
-};
-
 /**
  * The date picker: month header, weekday row in the locale's order, a six-week grid and a
  * Today button, matching Word's picker. Arrow keys roam the grid and cross month edges; a
@@ -193,16 +251,16 @@ export function buildContentControlCalendar(
   const menu = menuShell(host, controlId);
   menu.classList.add('docx-content-control-calendar');
   menu.setAttribute('role', 'dialog');
-  if (alias) menu.setAttribute('aria-label', alias);
+  menu.setAttribute('aria-label', alias || t('contentControl.types.date'));
   const selected = authoredValue ? parseIsoDate(authoredValue) : null;
   const selectedIso = selected ? isoDateOf(selected) : null;
   const today = new Date();
   let view = { year: (selected ?? today).getFullYear(), month: (selected ?? today).getMonth() };
   let focusIso: string | null = null;
+  let draft = calendarDateText(selectedIso ?? '', host.locale());
 
   const commit = (iso: string): void => {
-    host.close(menu);
-    host.setValue(controlId, iso);
+    commitMenuValue(host, menu, controlId, iso);
   };
   const stopPress = (node: HTMLElement): void => {
     node.addEventListener('mousedown', (event) => event.stopPropagation());
@@ -216,19 +274,24 @@ export function buildContentControlCalendar(
     });
     const header = host.document.createElement('div');
     header.className = 'docx-content-control-calendar-header';
+    header.dataset.docxPart = 'header';
     const previous = host.document.createElement('button');
     previous.type = 'button';
     previous.className = 'docx-content-control-calendar-nav';
+    previous.dataset.docxPart = 'previousMonth';
     previous.dataset.docxCalendarNav = 'previous';
     previous.textContent = '‹';
     previous.setAttribute('aria-label', t('contentControl.calendar.previousMonth'));
     const title = host.document.createElement('div');
-    title.className = 'docx-content-control-calendar-title';
+    title.className =
+      'docx-content-control-calendar-title docx-content-control-calendar-announcement';
+    title.dataset.docxPart = 'title';
     title.setAttribute('aria-live', 'polite');
     title.textContent = month.title;
     const next = host.document.createElement('button');
     next.type = 'button';
     next.className = 'docx-content-control-calendar-nav';
+    next.dataset.docxPart = 'nextMonth';
     next.dataset.docxCalendarNav = 'next';
     next.textContent = '›';
     next.setAttribute('aria-label', t('contentControl.calendar.nextMonth'));
@@ -244,10 +307,56 @@ export function buildContentControlCalendar(
       focusIso = null;
       render();
     });
-    header.append(previous, title, next);
+    const navigation = host.document.createElement('div');
+    navigation.className = 'docx-content-control-calendar-navigation';
+    navigation.dataset.docxPart = 'navigation';
+    const monthSelect = host.document.createElement('select');
+    monthSelect.className = 'docx-content-control-calendar-month';
+    monthSelect.dataset.docxPart = 'month';
+    monthSelect.dataset.docxCalendarNav = 'month';
+    monthSelect.setAttribute('aria-label', t('contentControl.calendar.month'));
+    for (const [index, name] of calendarMonthNames(host.locale()).entries()) {
+      const option = host.document.createElement('option');
+      option.value = String(index);
+      option.textContent = name;
+      monthSelect.append(option);
+    }
+    monthSelect.value = String(view.month);
+    const year = host.document.createElement('input');
+    year.type = 'number';
+    year.min = '100';
+    year.max = '9999';
+    year.value = String(view.year);
+    year.className = 'docx-content-control-calendar-year';
+    year.dataset.docxPart = 'year';
+    year.dataset.docxCalendarNav = 'year';
+    year.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        year.blur();
+      }
+    });
+    year.setAttribute('aria-label', t('contentControl.calendar.year'));
+    monthSelect.addEventListener('change', () => {
+      view.month = Number(monthSelect.value);
+      focusIso = null;
+      render();
+    });
+    year.addEventListener('change', () => {
+      const value = Number(year.value);
+      if (!Number.isInteger(value) || value < 100 || value > 9999) {
+        year.value = String(view.year);
+        return;
+      }
+      view.year = value;
+      focusIso = null;
+      render();
+    });
+    navigation.append(monthSelect, year);
 
     const weekdays = host.document.createElement('div');
     weekdays.className = 'docx-content-control-calendar-weekdays';
+    weekdays.dataset.docxPart = 'weekdays';
     for (const label of month.weekdays) {
       const weekday = host.document.createElement('span');
       weekday.textContent = label;
@@ -256,6 +365,7 @@ export function buildContentControlCalendar(
 
     const grid = host.document.createElement('div');
     grid.className = 'docx-content-control-calendar-grid';
+    grid.dataset.docxPart = 'grid';
     grid.setAttribute('role', 'grid');
     grid.setAttribute('aria-label', month.title);
     for (let index = 0; index < month.days.length; index += 7) {
@@ -266,25 +376,76 @@ export function buildContentControlCalendar(
       grid.append(row);
     }
 
-    const footer = host.document.createElement('div');
-    footer.className = 'docx-content-control-calendar-footer';
+    const entry = host.document.createElement('div');
+    entry.className = 'docx-content-control-calendar-entry';
+    entry.dataset.docxPart = 'dateEntry';
     const todayButton = host.document.createElement('button');
     todayButton.type = 'button';
     todayButton.className = 'docx-content-control-calendar-today';
+    todayButton.dataset.docxPart = 'today';
     todayButton.textContent = t('contentControl.calendar.today');
     stopPress(todayButton);
     todayButton.addEventListener('click', () => commit(isoDateOf(today)));
-    footer.append(todayButton);
 
-    menu.replaceChildren(header, weekdays, grid, footer);
+    const input = host.document.createElement('input');
+    input.type = 'text';
+    input.className = 'docx-content-control-menu-input';
+    input.dataset.docxPart = 'input';
+    input.setAttribute('aria-label', t('contentControl.types.date'));
+    input.placeholder = calendarDateText('2006-11-22', host.locale());
+    input.value = draft;
+    input.addEventListener('input', () => {
+      draft = input.value;
+      input.removeAttribute('aria-invalid');
+      error.hidden = true;
+    });
+    const error = host.document.createElement('div');
+    error.className = 'docx-content-control-widget-error';
+    error.dataset.docxPart = 'error';
+    error.setAttribute('role', 'alert');
+    error.hidden = true;
+    error.textContent = t('disabledReason.invalidValue');
+    const applyDraft = () => {
+      const iso = calendarDateFromText(draft, host.locale());
+      if (iso) commit(iso);
+      else {
+        error.hidden = false;
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+      }
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        applyDraft();
+      }
+    });
+    const actions = host.document.createElement('div');
+    actions.className = 'docx-dialog__footer';
+    actions.dataset.docxPart = 'footer';
+    for (const action of ['cancel', 'apply'] as const) {
+      const button = host.document.createElement('button');
+      button.type = 'button';
+      button.dataset.docxPart = action;
+      button.className = `docx-dialog__button${action === 'apply' ? ' docx-dialog__button--primary' : ''}`;
+      button.textContent = t(`common.${action}`);
+      button.addEventListener('click', action === 'apply' ? applyDraft : () => host.close(menu));
+      actions.append(button);
+    }
+    header.append(previous, navigation, next, title);
+    entry.append(todayButton, input);
+    menu.replaceChildren(header, weekdays, grid, entry, error, actions);
     focusContentControlCalendar(menu, focusIso);
     if (focusedNav === 'previous') previous.focus({ preventScroll: true });
     if (focusedNav === 'next') next.focus({ preventScroll: true });
+    if (focusedNav === 'month') monthSelect.focus({ preventScroll: true });
+    if (focusedNav === 'year') year.focus({ preventScroll: true });
   };
   const dayButton = (day: CalendarDay): HTMLElement => {
     const button = host.document.createElement('button');
     button.type = 'button';
     button.className = 'docx-content-control-calendar-day';
+    button.dataset.docxPart = 'day';
     button.textContent = String(day.day);
     button.dataset.iso = day.iso;
     button.setAttribute('role', 'gridcell');
@@ -294,16 +455,20 @@ export function buildContentControlCalendar(
       button.dataset.selected = '';
       button.setAttribute('aria-selected', 'true');
     }
-    if (day.today) button.dataset.today = '';
+    button.setAttribute('aria-selected', String(day.selected));
+    if (day.today) {
+      button.dataset.today = '';
+      button.setAttribute('aria-current', 'date');
+    }
     stopPress(button);
     button.addEventListener('click', () => commit(day.iso));
     button.addEventListener('keydown', (event) => {
-      const step = ARROW_STEPS[event.key];
-      if (step === undefined) return;
+      if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+      const iso = calendarDateForKey(day.iso, event.key, host.locale(), event.shiftKey);
+      if (!iso) return;
       event.preventDefault();
-      const from = parseIsoDate(day.iso)!;
-      const target = new Date(from.getFullYear(), from.getMonth(), from.getDate() + step);
-      focusIso = isoDateOf(target);
+      const target = parseIsoDate(iso)!;
+      focusIso = iso;
       if (target.getFullYear() !== view.year || target.getMonth() !== view.month) {
         view = { year: target.getFullYear(), month: target.getMonth() };
         render();
