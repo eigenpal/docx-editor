@@ -5,19 +5,21 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 from . import ConversionError, Converter, FontFace, __version__
 
 
-def _font(spec: str) -> FontFace:
-    """``PATH:FAMILY[:WEIGHT[:STYLE]]``. A Windows drive letter is allowed in PATH."""
+def _font(spec: str) -> Union[FontFace, str]:
+    """``PATH`` alone reads family, weight, and style from the file (a directory is
+    scanned). ``PATH:FAMILY[:WEIGHT[:STYLE]]`` registers one file under a document's
+    family name. A Windows drive letter is allowed in PATH."""
     parts = spec.rsplit(":", 3)
     # Re-join a drive letter split off the path, as in C:\fonts\Aptos.ttf:Aptos.
     while len(parts) > 2 and len(parts[0]) == 1 and parts[0].isalpha():
         parts = [parts[0] + ":" + parts[1], *parts[2:]]
-    if len(parts) < 2:
-        raise argparse.ArgumentTypeError("expected PATH:FAMILY[:WEIGHT[:STYLE]]")
+    if len(parts) == 1 or (len(parts) == 2 and len(parts[0]) == 1 and parts[0].isalpha()):
+        return spec
     path, family = parts[0], parts[1]
     weight = int(parts[2]) if len(parts) > 2 and parts[2] else 400
     style = parts[3] if len(parts) > 3 and parts[3] else "normal"
@@ -59,8 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         type=_font,
-        metavar="PATH:FAMILY[:WEIGHT[:STYLE]]",
-        help="Register a font file under the family name the document uses. Repeatable.",
+        metavar="PATH[:FAMILY[:WEIGHT[:STYLE]]]",
+        help="A font file or directory to measure with; family, weight, and style are "
+        "read from each file. Add :FAMILY to register a file under the name the "
+        "document uses. Repeatable.",
     )
     parser.add_argument("--strict", action="store_true", help="Fail when a font is missing.")
     parser.add_argument(

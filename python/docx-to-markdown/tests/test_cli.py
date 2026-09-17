@@ -68,3 +68,12 @@ def test_module_entry_point(narrow_pages):
     )
     assert completed.returncode == 0, completed.stderr.decode()
     assert completed.stdout.strip()
+
+
+def test_font_spec_path_only_scans_directory(narrow_pages, font_assets, capsys):
+    from docx_to_markdown.cli import _font
+
+    assert _font(str(font_assets)) == str(font_assets)
+    assert _font("C:\\fonts") == "C:\\fonts"
+    assert main([str(narrow_pages), "--font", str(font_assets), "-q"]) == 0
+    assert capsys.readouterr().out.strip()

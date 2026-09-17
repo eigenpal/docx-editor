@@ -58,7 +58,8 @@ docx-to-markdown contract.docx                 # Markdown to stdout
 docx-to-markdown contract.docx -o contract.md
 docx-to-markdown contract.docx --json          # full result as JSON
 docx-to-markdown *.docx --bundle out/ --images # document.md, document.json, media/ per file
-docx-to-markdown contract.docx --font fonts/Aptos.ttf:Aptos --font fonts/Aptos-Bold.ttf:Aptos:700
+docx-to-markdown contract.docx --font fonts/            # family, weight, style read from each file
+docx-to-markdown contract.docx --font carlito/Carlito-Regular.ttf:Calibri
 ```
 
 `python -m docx_to_markdown` runs the same tool. Warnings go to stderr; `-q` hides them.
@@ -70,7 +71,23 @@ Word's default fonts: Calibri, Cambria, Times New Roman, Arial, Courier New, and
 Gothic. Documents that use other fonts paginate approximately unless you supply the font
 files.
 
-Register a family under the name the document uses:
+Point `fonts` at a directory or file. Family, weight, and style are read from each
+file, so a folder of licensed fonts is one argument:
+
+```python
+result = convert("contract.docx", fonts="fonts/")
+```
+
+When the file's own family name differs from the name the document uses, register it
+under the document's name:
+
+```python
+from docx_to_markdown import font_files
+
+result = convert("contract.docx", fonts=font_files("carlito/", family="Calibri"))
+```
+
+Or name each face yourself:
 
 ```python
 from docx_to_markdown import convert, font_family

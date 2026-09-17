@@ -215,6 +215,36 @@ describe('packagedFonts', () => {
     expect(requested).toHaveLength(0);
   });
 
+  test('a family covered only under the SUBSTITUTE name still gets its substitutions', async () => {
+    const { fetcher, requested } = countingFetcher();
+    // A caller who registers all four Carlito faces by their own name has the bytes
+    // Calibri needs but has not said so. Nothing loads, but the mapping must still be
+    // reported or the Word name resolves to nothing.
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Calibri'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('Carlito'),
+    });
+
+    expect(fragment.families).toHaveLength(0);
+    expect(requested).toHaveLength(0);
+    expect(fragment.sources).toHaveLength(0);
+    expect(fragment.substitutions.map((entry) => [entry.from, entry.to])).toEqual(
+      FOUR_FACES.map((face) => [
+        { family: 'Calibri', ...face },
+        { family: 'Carlito', ...face },
+      ])
+    );
+
+    // Covered under the Word name itself, there is nothing left to map.
+    const direct = await packagedFonts({ fetcher, install: false })({
+      families: ['Calibri'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('Calibri'),
+    });
+    expect(direct.substitutions).toHaveLength(0);
+  });
+
   test('a PARTLY covered family is loaded whole, so no face is left without bytes', async () => {
     const { fetcher, requested } = countingFetcher();
     // The composition an earlier origin of hand-supplied brand bytes produces: regular

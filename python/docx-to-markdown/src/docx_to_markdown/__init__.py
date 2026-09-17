@@ -36,7 +36,9 @@ from ._runtime import ConversionError, RuntimeNotFoundError, Worker, run_once, r
 from .fonts import (
     BUNDLED_FAMILIES,
     FontFace,
+    FontsArg,
     font_family,
+    font_files,
     font_requests,
     google_font_families,
     google_font_substitutes,
@@ -58,6 +60,7 @@ __all__ = [
     "RuntimeNotFoundError",
     "convert",
     "font_family",
+    "font_files",
     "google_font_families",
     "google_font_substitutes",
     "runtime_path",
@@ -302,7 +305,7 @@ def _to_result(payload: dict[str, Any]) -> MarkdownResult:
 def convert(
     source: Source,
     *,
-    fonts: Sequence[FontFace] = (),
+    fonts: FontsArg = (),
     font_policy: FontPolicy = "best-effort",
     google_fonts: bool = False,
     images: Union[bool, ImageSyntax] = False,
@@ -316,7 +319,10 @@ def convert(
     Args:
         source: A binary file object (``open(path, "rb")``), a path, or the file's bytes.
         fonts: Font files to measure with, first wins. They take precedence over the
-            bundled Word substitutes. Register each under the family name the document uses.
+            bundled Word substitutes. A directory or file path is scanned and each face's
+            family, weight, and style are read from the file. Use :func:`font_family` or
+            :func:`font_files` with ``family=`` to register files under the name the
+            document uses.
         font_policy: ``"strict"`` fails the conversion when a requested family is missing
             a face or a font origin fails. ``"best-effort"`` paginates with approximations
             and reports them in ``warnings`` and ``font_resolution``.
@@ -354,7 +360,7 @@ class Converter:
         timeout: Optional[float] = 300,
     ) -> None:
         self._defaults = dict(
-            fonts=tuple(fonts),
+            fonts=fonts if isinstance(fonts, (FontFace, str, os.PathLike)) else tuple(fonts),
             font_policy=font_policy,
             google_fonts=google_fonts,
             images=images,
@@ -368,7 +374,7 @@ class Converter:
         self,
         source: Source,
         *,
-        fonts: Optional[Sequence[FontFace]] = None,
+        fonts: Optional[FontsArg] = None,
         font_policy: Optional[FontPolicy] = None,
         google_fonts: Optional[bool] = None,
         images: Optional[Union[bool, ImageSyntax]] = None,

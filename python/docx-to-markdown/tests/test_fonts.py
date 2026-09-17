@@ -60,3 +60,79 @@ def test_google_fallback_serves_catalog_family(narrow_pages, network):
     faces = next(f for f in with_google.font_resolution["families"] if f["family"] == "Fira Sans")
     assert {face["via"] for face in faces["faces"]} == {"direct"}
     assert with_google.page_count != without.page_count
+
+
+def test_read_face_from_bundled_files(font_assets):
+    from docx_to_markdown._sfnt import read_face
+
+    bold = read_face((font_assets / "Carlito-Bold.ttf").read_bytes())
+    assert (bold.family, bold.weight, bold.italic, bold.variable) == ("Carlito", 700, False, False)
+    italic = read_face((font_assets / "Carlito-Italic.ttf").read_bytes())
+    assert (italic.family, italic.weight, italic.italic) == ("Carlito", 400, True)
+    otf = read_face((font_assets / "TeXGyreAdventor-BoldItalic.otf").read_bytes())
+    assert (otf.family, otf.weight, otf.italic) == ("TeX Gyre Adventor", 700, True)
+
+
+def test_read_face_rejects_non_fonts():
+    import pytest
+
+    from docx_to_markdown._sfnt import NotAFontError, read_face
+
+    with pytest.raises(NotAFontError):
+        read_face(b"not a font at all")
+
+
+def test_font_files_scans_a_directory(font_assets):
+    from docx_to_markdown import font_files
+
+    faces = font_files(font_assets)
+    assert len(faces) == 24
+    families = {f.family for f in faces}
+    assert {"Carlito", "Caladea", "Liberation Sans", "TeX Gyre Adventor"} <= families
+    carlito = sorted((f.weight, f.style) for f in faces if f.family == "Carlito")
+    assert carlito == [(400, "italic"), (400, "normal"), (700, "italic"), (700, "normal")]
+    aliased = font_files(font_assets / "Carlito-Regular.ttf", family="Calibri")
+    assert [(f.family, f.weight) for f in aliased] == [("Calibri", 400)]
+
+
+def test_font_files_skips_non_fonts_and_rejects_empty(tmp_path):
+    import pytest
+
+    from docx_to_markdown import font_files
+
+    (tmp_path / "notes.ttf").write_bytes(b"junk")
+    assert font_files(tmp_path) == []
+    with pytest.raises(FileNotFoundError):
+        font_files(tmp_path / "empty")
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(FileNotFoundError):
+        font_files(tmp_path / "empty")
+
+
+def test_convert_accepts_a_font_directory(narrow_pages, font_assets):
+    from docx_to_markdown import convert, font_files
+
+    doc = _with_family(narrow_pages, "Carlito")
+
+    def carlito_ids(result):
+        faces = next(f for f in result.font_resolution["families"] if f["family"] == "Carlito")
+        return sorted(face["id"] for face in faces["faces"])
+
+    # The bundled substitutes already serve Carlito, from their packaged files.
+    assert all(i.startswith("default-fonts:") for i in carlito_ids(convert(doc)))
+    # A scanned directory takes precedence: the same faces now come from caller bytes.
+    scanned = convert(doc, fonts=font_assets)
+    assert scanned.fonts_complete
+    assert all(i.startswith("bytes:Carlito#") for i in carlito_ids(scanned))
+    # A single file path works, and aliasing serves a family nothing else can.
+    assert convert(doc, fonts=font_assets / "Carlito-Regular.ttf").fonts_complete
+    roboto = _with_family(narrow_pages, "Roboto")
+    assert convert(roboto).missing_fonts == ["Roboto"]
+    partial = convert(
+        roboto, fonts=font_files(font_assets / "Carlito-Regular.ttf", family="Roboto")
+    )
+    assert partial.missing_fonts == ["Roboto"]  # one face is partial coverage, by design
+    four = [font_assets / f"Carlito-{s}.ttf" for s in ("Regular", "Bold", "Italic", "BoldItalic")]
+    aliased = convert(roboto, fonts=font_files(*four, family="Roboto"))
+    assert aliased.missing_fonts == []
+    assert aliased.fonts_complete

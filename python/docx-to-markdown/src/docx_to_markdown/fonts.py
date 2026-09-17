@@ -107,10 +107,71 @@ def font_family(
     return faces
 
 
-def font_requests(fonts: Sequence[FontFace]) -> list[dict[str, Any]]:
+FONT_EXTENSIONS = (".ttf", ".otf", ".ttc")
+
+
+def font_files(
+    *paths: PathLike,
+    family: Optional[str] = None,
+    recursive: bool = True,
+) -> list[FontFace]:
+    """Faces read from font files, with family, weight, and style taken from each file.
+
+    ``paths`` are ``.ttf``, ``.otf``, or ``.ttc`` files, or directories to scan. Pass
+    ``family`` to register every face under the name the document uses instead of the
+    name inside the file, for example ``font_files("carlito/", family="Calibri")``.
+    Files that are not fonts are skipped; a directory with no font files raises
+    ``FileNotFoundError``.
+    """
+    from ._sfnt import NotAFontError, read_face
+
+    files: list[Path] = []
+    for entry in paths:
+        path = Path(os.fspath(entry))
+        if path.is_dir():
+            found = sorted(
+                p
+                for p in (path.rglob("*") if recursive else path.iterdir())
+                if p.is_file() and p.suffix.lower() in FONT_EXTENSIONS
+            )
+            if not found:
+                raise FileNotFoundError(f"no font files under {path}")
+            files.extend(found)
+        elif path.is_file():
+            files.append(path)
+        else:
+            raise FileNotFoundError(path)
+
+    faces: list[FontFace] = []
+    for file in files:
+        try:
+            info = read_face(file.read_bytes())
+        except NotAFontError:
+            continue
+        faces.append(
+            FontFace(
+                str(file),
+                family or info.family,
+                info.weight,
+                "italic" if info.italic else "normal",
+            )
+        )
+    return faces
+
+
+FontsArg = Union[FontFace, PathLike, Sequence[Union[FontFace, PathLike]]]
+
+
+def font_requests(fonts: FontsArg) -> list[dict[str, Any]]:
+    """Normalize the ``fonts`` argument: faces as given, paths and directories scanned."""
+    if isinstance(fonts, (FontFace, str, os.PathLike)):
+        fonts = [fonts]
     requests = []
-    for face in fonts:
-        if not isinstance(face, FontFace):
-            raise TypeError(f"fonts must hold FontFace values, got {type(face).__name__}")
-        requests.append(face.to_request())
+    for entry in fonts:
+        if isinstance(entry, FontFace):
+            requests.append(entry.to_request())
+        elif isinstance(entry, (str, os.PathLike)):
+            requests.extend(face.to_request() for face in font_files(entry))
+        else:
+            raise TypeError(f"fonts must hold FontFace values or paths, got {type(entry).__name__}")
     return requests
