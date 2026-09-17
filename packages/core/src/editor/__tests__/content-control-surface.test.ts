@@ -765,3 +765,42 @@ test('custom content-control widget sessions retain core writes and invalidate s
     container.remove();
   }
 });
+
+describe('typing beside and clearing a prompt', () => {
+  const PROMPT = 'Click here to enter text.';
+  const body = `<w:p><w:r><w:t xml:space="preserve">Name: </w:t></w:r>${sdt(
+    `<w:alias w:val="Name"/><w:showingPlcHdr/><w:text/>`,
+    `<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>${PROMPT}</w:t></w:r>`
+  )}</w:p>`;
+
+  test('a caret at the end of the prompt types over it and lands after the text', () => {
+    const { surface } = mount(body);
+    // The prompt spans 6..31; the caret sits at its far edge, outside the control's text.
+    putCaret(surface, 6 + PROMPT.length);
+    surface.type(' ');
+    expect(surface.session.bodyText()).toBe('Name:  ');
+    expect(surface.state().selection.head.offset).toBe(7);
+    expect(surface.state().lastRejection ?? null).toBeNull();
+    // Every later keystroke lands where the reader is looking, not past the paragraph's end.
+    surface.type('x');
+    expect(surface.session.bodyText()).toBe('Name:  x');
+    expect(surface.state().selection.head.offset).toBe(8);
+  });
+
+  test('deleting everything typed brings the prompt back and keeps the control', () => {
+    const { surface } = mount(body);
+    putCaret(surface, 8);
+    surface.type('ab');
+    expect(surface.session.bodyText()).toBe('Name: ab');
+    surface.deleteBackward();
+    surface.deleteBackward();
+    expect(surface.session.bodyText()).toBe(`Name: ${PROMPT}`);
+    const control = surface.layout().contentControls?.find((entry) => entry.alias === 'Name');
+    expect(control?.placeholder).toBe(true);
+    expect(surface.state().lastRejection ?? null).toBeNull();
+    // A third Backspace takes the character before the control, as in Word; the control stays.
+    surface.deleteBackward();
+    expect(surface.layout().contentControls?.some((entry) => entry.alias === 'Name')).toBe(true);
+    expect(surface.session.bodyText()).toBe(`Name:${PROMPT}`);
+  });
+});

@@ -45,6 +45,8 @@ import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
 import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacency.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
+import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
+import { findContentControl } from '../store/store/tree-op-nodes.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
   orderedRangeOf,
@@ -141,9 +143,24 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const part = session.partFor(deps.storyScope()) ?? session.part();
     const paragraph = findNode(part, position.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return null;
-    return side === 'before'
-      ? inlineControlEndingAt(paragraph, position.offset)
-      : inlineControlStartingAt(paragraph, position.offset);
+    const span =
+      side === 'before'
+        ? inlineControlEndingAt(paragraph, position.offset)
+        : inlineControlStartingAt(paragraph, position.offset);
+    if (!span) return null;
+    // Only an ATOM goes as one unit: a content-locked chip (custom nodes), a checkbox glyph, a
+    // picture. A text, date or list control is typed into, so the key at its edge takes one
+    // character, as in Word, and a control emptied that way shows its prompt again instead of
+    // vanishing with its wrapper.
+    const control = findContentControl(part, span.controlId);
+    const summary = control ? contentControlPropertiesOf(control) : null;
+    if (!summary) return null;
+    const atom =
+      summary.lock === 'contentLocked' ||
+      summary.lock === 'sdtContentLocked' ||
+      summary.type === 'checkbox' ||
+      summary.type === 'picture';
+    return atom ? span : null;
   }
 
   /**

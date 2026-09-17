@@ -31,6 +31,7 @@ import {
   contentControlWidgetDate,
 } from './content-control-widget-session.ts';
 import { createContentControlPictureWidget } from './content-control-picture-widget.ts';
+import { promptInsertionLanding } from './content-control-prompt-landing.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
@@ -4438,11 +4439,15 @@ export function mountPaginatedSurface(
         ...plan.ops,
         { op: 'insertText', paragraphId: target.paragraphId, offset: target.offset, text },
       ];
-      const redoMark = {
-        paragraphId: target.paragraphId,
-        start: target.offset + text.length,
-        end: target.offset + text.length,
-      };
+      // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
+      // began; a caret counted from the pressed offset sat past the paragraph's new end.
+      const landing = promptInsertionLanding(
+        partOfNodeId(session, target.paragraphId) ?? session.part(),
+        target.paragraphId,
+        target.offset,
+        text.length
+      );
+      const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
       commit(
         () =>
           withoutPendingOnRejection(
@@ -4451,7 +4456,7 @@ export function mountPaginatedSurface(
             selectionMark(),
             redoMark
           ),
-        () => collapsedAt({ paragraphId: target.paragraphId, offset: target.offset + text.length })
+        () => collapsedAt({ paragraphId: target.paragraphId, offset: landing })
       );
     },
     proposeTextChange: (kind, text, author) => commitProposedTextChange(kind, text, author),

@@ -256,7 +256,9 @@ the reason.
 ## Checkbox, dropdown, date, gallery, and picture interactions
 
 Each dropdown, combo box, date, building block gallery, and picture control shows
-a button past its right edge, the way Word attaches its tab. The button scales
+a button past its right edge, the way Word attaches its tab. The button appears
+while the pointer or the caret is on the control, while its menu is open, and
+under show-all, and it stays reachable by keyboard the whole time. It scales
 with the page zoom. A checkbox control's button covers its glyph. Select the
 button to toggle a checkbox, open a dropdown menu, open a date picker, list the
 document's building blocks, or choose an image file. The menu opens under the control's left
@@ -282,9 +284,13 @@ the suggestion list. Moving focus does not change the document.
 A control that Word saved with empty content opens showing its placeholder, the
 way Word shows the glossary block its `w:placeholder` names, or the type's
 default prompt when the document carries no glossary. The caret can enter the
-prompt, a press selects it whole, and the first keystroke replaces it. The saved
-file then carries the prompt under `w:showingPlcHdr`, which is what Word writes
-once it has rendered the control.
+prompt, a press selects it whole, and the first keystroke replaces it. Typing at
+either edge of the prompt replaces it too, and the caret lands after the text.
+Deleting everything a control holds brings its prompt back, so the control never
+becomes an invisible gap; Backspace and Delete at the edge of a text, date, or
+list control take one character, and only a content-locked control, a checkbox,
+or a picture goes as one unit. The saved file carries a shown prompt under
+`w:showingPlcHdr`, which is what Word writes once it has rendered the control.
 
 A building block gallery control lists the blocks the document's glossary part
 stores for the control's gallery and category, sorted by category and name. A

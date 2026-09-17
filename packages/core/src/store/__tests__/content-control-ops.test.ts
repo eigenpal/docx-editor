@@ -1311,8 +1311,9 @@ describe('showingPlcHdr first-input replacement', () => {
     expect(collectTextV2(childNamedV2(after, 'sdtContent')!)).toBe('Apollo');
   });
 
-  test('emptying after a placeholder replace does not restore showingPlcHdr (no glossary)', () => {
-    // Honest limitation: without a durable glossary source this lane cannot restore a prompt.
+  test('emptying a filled control shows the prompt again, as Word does (no glossary)', () => {
+    // The wrapper stays and the type's own prompt returns under `w:showingPlcHdr`, so the
+    // control never becomes a zero-width gap the caret cannot enter.
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
         '<w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
@@ -1332,11 +1333,20 @@ describe('showingPlcHdr first-input replacement', () => {
       end: 2,
     });
     const after = findContentControl(emptied, control.id)!;
-    expect(isShowingPlaceholder(after)).toBe(false);
-    expect(paragraphTextOf(emptied, V2_PARAGRAPH)).toBe('');
+    expect(isShowingPlaceholder(after)).toBe(true);
+    expect(paragraphTextOf(emptied, V2_PARAGRAPH)).toBe('Click here to enter text.');
+    // The restored prompt is a prompt: the next keystroke replaces it whole.
+    const again = applyV2(emptied, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 0,
+      text: 'Yo',
+    });
+    expect(paragraphTextOf(again, V2_PARAGRAPH)).toBe('Yo');
+    expect(isShowingPlaceholder(findContentControl(again, control.id)!)).toBe(false);
   });
 
-  test('glossary docPart is preserved and still cannot invent a restore', () => {
+  test('glossary docPart is preserved across the fill and the restore', () => {
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr>' +
         '<w:placeholder><w:docPart w:val="DefaultPlaceholder"/></w:placeholder>' +
@@ -1360,8 +1370,11 @@ describe('showingPlcHdr first-input replacement', () => {
       start: 0,
       end: 4,
     });
-    // Still no restore: glossary is not resolved in this lane.
-    expect(isShowingPlaceholder(findContentControl(emptied, control.id)!)).toBe(false);
+    // The store lane cannot read the glossary, so the type's prompt stands in for the
+    // block's text; the reference itself survives for Word and for the next open.
+    const restored = findContentControl(emptied, control.id)!;
+    expect(isShowingPlaceholder(restored)).toBe(true);
+    expect(hasGlossaryPlaceholderRef(restored)).toBe(true);
   });
 
   test('bound refuses before a placeholder transition', () => {

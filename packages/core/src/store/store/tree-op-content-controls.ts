@@ -1581,7 +1581,7 @@ export function editedProperties(
 }
 
 /** Rebuild a control's content so it holds exactly `text`, keeping its block shape. */
-function contentWithText(
+export function contentWithText(
   content: OoxmlElement | undefined,
   text: string,
   nextId: () => string,

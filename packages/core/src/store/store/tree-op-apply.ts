@@ -172,6 +172,7 @@ import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 import { applyDrawingContentEdit } from './drawing-content-edit.ts';
 import { applyInsertBuildingBlock } from './building-block-insert.ts';
+import { restoreEmptiedPlaceholder } from './content-control-prompt-restore.ts';
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
@@ -1001,16 +1002,15 @@ function deferOptions(
   return options;
 }
 
-/**
- * After a successful content edit, unwrap a `w:temporary` control in the same effect.
- * Validation already refused when the effective wrapper lock forbids removal.
- */
+/** After a content edit: a temporary control unwraps (a locked wrapper was refused by
+ * validation), and any other control the edit emptied shows its prompt again. */
 function finishContentEdit(
   result: TreeOpResult,
   control: OoxmlNode | null,
   options?: EditOptions
 ): TreeOpResult {
-  if (!result.ok || !control || !isTemporaryControl(control)) return result;
+  if (!result.ok || !control) return result;
+  if (!isTemporaryControl(control)) return restoreEmptiedPlaceholder(result, control.id, options);
   // Re-find: the control id is stable across the preceding content edit.
   const stillThere = findContentControl(result.part, control.id);
   if (!stillThere) return result;

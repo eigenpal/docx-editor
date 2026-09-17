@@ -1119,3 +1119,97 @@
 .igloo-permit__file {
   font-size: 12px;
 }
+
+/* ── Content controls on the ice ──────────────────────────────────────────────────────────
+ *
+ * The library paints a control's chrome from documented classes (`docx-content-control-*`)
+ * and `--doc-*` tokens; the permit wants its fields to read as carved slots, not as the
+ * packaged blue outline. The tokens set the palette (glacier teal, aqua glow), the classes
+ * set the shape: a dashed teal underline while idle, a solid aqua shard when active, a label
+ * tab shaped like the demo's other chips, and a widget that is a round aqua button. */
+.igloo-shell .docx-content-control-chrome {
+  --igloo-control: #0b6b7a;
+  --igloo-control-glow: #7fe3ff;
+}
+
+.igloo-shell .docx-content-control-boundary {
+  border: 0;
+  border-bottom: 2px dashed color-mix(in srgb, var(--igloo-control) 55%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.igloo-shell .docx-content-control-chrome[data-active] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome[data-open] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome[data-hover] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome:hover .docx-content-control-boundary {
+  border-bottom-style: solid;
+  border-bottom-color: var(--igloo-control);
+  background: color-mix(in srgb, var(--igloo-control-glow) 28%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--igloo-control-glow) 35%, transparent);
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-shell .docx-content-control-label {
+  border-radius: 3px 10px 3px 10px;
+  background: var(--igloo-control);
+  color: #eafbff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  border-radius: 999px;
+  background: var(--igloo-control);
+  border-color: var(--igloo-control-glow) !important;
+  box-shadow: 0 4px 12px rgba(4, 32, 52, 0.35);
+}
+
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before {
+  color: #eafbff;
+}
+
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']),
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']),
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  background: var(--igloo-control-glow);
+  border-color: var(--igloo-control) !important;
+}
+
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before,
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before,
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before {
+  color: var(--igloo-control);
+}
+
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  background: color-mix(in srgb, var(--igloo-control-glow) 45%, transparent);
+  border-radius: 3px 8px 3px 8px;
+}

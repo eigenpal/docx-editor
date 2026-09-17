@@ -985,6 +985,31 @@ a.docx-hyperlink:focus-visible {
   border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
 }
 
+/* Word shows a control's tab only while the pointer or the caret is on the control; a page
+   of forms is otherwise plain text. The widget keeps its box (the press target and the
+   focus stop stay where they are) and only its paint waits: it appears under the pointer,
+   at the caret, while its pop-up is open, under show-all, and when it holds keyboard focus.
+   A checkbox paints nothing of its own anyway, so it is exempt. */
+.docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-widget,
+.docx-content-control-chrome[data-open] .docx-content-control-widget,
+.docx-content-control-chrome[data-hover] .docx-content-control-widget,
+.docx-content-control-chrome[data-boundary-visible] .docx-content-control-widget,
+.docx-content-control-chrome:hover .docx-content-control-widget,
+.docx-content-control-widget:focus-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-content-control-widget {
+    transition: none;
+  }
+}
+
 /* Same rule for the widget: a disabled button that lights under the pointer reads as live. */
 .docx-content-control-chrome[data-read-only]:hover .docx-content-control-widget {
   background: color-mix(in srgb, var(--doc-primary) 4%, var(--doc-page-bg-rendered));
