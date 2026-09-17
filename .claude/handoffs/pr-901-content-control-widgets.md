@@ -13,10 +13,10 @@ Head commit `19196f400` (on top of a merge of `main`, `c03b5be95`). The PR body 
   on the commit before the merge; the Playwright spec
   `e2e/content-control-widget.interaction.spec.ts` passed (19 cases) on the commit before the
   merge. Rerun the Playwright spec once before merging.
-- CI on `19196f400` was in progress when this was written (`CI`, `Performance benchmark`, and
-  `Python wheels`). Run `gh pr checks 901` to confirm. The `Python wheels` run is not from
-  this PR: `main` gained the Python package in #903, the merge of `main` carried its files, and
-  the workflow's `pull_request` path filter matched them. It builds wheels and nothing else.
+- CI on `bdd823b2d` (the handoff commit on top of `19196f400`) passed: `CI`, `Performance
+benchmark`, `Python wheels`, and `CLA`. The `Python wheels` run is not from this PR: `main`
+  gained the Python package in #903, the merge of `main` carried its files, and the workflow's
+  `pull_request` path filter matched them. It builds wheels and nothing else.
 - The `pull_request` workflows do not run while the PR conflicts with `main`. That is what
   happened on `d6445e68d` (three PRs landed on `main` first); the merge commit fixed it. If CI
   is missing again, check `gh pr view 901 --json mergeable` before anything else.
@@ -28,8 +28,7 @@ Head commit `19196f400` (on top of a merge of `main`, `c03b5be95`). The PR body 
 
 The rest of this PR is to be finished with Codex. What is left:
 
-1. Wait for CI on `19196f400`; if `CI` fails, read the failing lane's log with
-   `gh run view <id> --log-failed` and fix on this branch.
+1. Fix the two open bugs under "Open bugs" below, with tests, and push. CI runs on the push.
 2. Rerun `bunx playwright test e2e/content-control-widget.interaction.spec.ts` after the merge
    of `main` (the unit suite ran, the browser spec did not).
 3. Walk the manual checks under "What to check" once in the browser.
@@ -144,6 +143,73 @@ Rules for Codex on this branch:
      `packages/docx-to-markdown/test/node-defaults.test.ts` moved by exactly those glyphs.
 8. Earlier commits on the branch (widget parity, shared pop-up behavior, legacy
    `FORMCHECKBOX` toggling, composable React and Vue parts) are described in the PR body.
+
+## Open bugs
+
+### 1. Date pop-up lands at the page's bottom-left after a press on the prompt (igloo and any host renderer)
+
+Reproduced in the igloo permit (`bun run dev:igloo`,
+`http://localhost:5178/?fixture=expedition-permit.docx`): press the **Departure** prompt text
+(not its button). The pop-up renders at the page's bottom-left corner, below the sheet, and the
+native date input's focus scrolls that corner into view. A press on the widget button places
+the pop-up correctly under the control.
+
+Cause, verified with a probe in the browser:
+
+- `packages/core/src/editor/surface-pointer.ts`, placeholder branch of `onPointerDown` (search
+  `LIST_PROMPT_TYPES`): the prompt press calls `host.onContentControlWidget(...)` BEFORE
+  `host.selectContentControl(...)` / `host.setSelection(...)`.
+- `packages/core/src/editor/content-control-widget-session.ts` resolves the session's `anchor`
+  at open time as the control's painted `.docx-content-control-boundary` element.
+- The selection change that follows repaints the control chrome, so that anchor element is
+  detached by the time the host's pop-up mounts (its rect reads `0,0,0,0`).
+- `packages/core/src/editor/content-control-popup-behavior.ts` `observeContentControlPopup`
+  finds the pages layer with `anchor.closest('.docx-pages')`. For a detached anchor that is
+  `null`, so the re-anchoring lookup never runs, `current.isConnected` stays false, and
+  `positionContentControlPopup` is never applied. An absolutely positioned pop-up with no
+  `top`/`left` sits at its static position in `.docx-content-mount`: after the pages, at the
+  page's bottom-left.
+
+Fix, both halves:
+
+- Engine order: in the placeholder branch, call `host.onContentControlWidget` AFTER the
+  selection is applied, in both the `selectContentControl` branch and the
+  `placeholderSelectionRange` fallback, so the session's anchor is the repainted boundary.
+- Observer robustness: resolve the layer as
+  `anchor.closest('.docx-pages') ?? panel.closest('.docx-editor')?.querySelector('.docx-pages')`
+  and keep the control id from the anchor's `[data-docx-content-control]` ancestor (that
+  ancestor survives in the detached subtree), so a stale anchor re-anchors on the first
+  `update()`.
+
+Tests to add:
+
+- `packages/core/src/editor/__tests__/content-control-surface.test.ts`, in 'a press on a list
+  prompt': capture the session through a `contentControlWidget` renderer on the surface, and
+  assert `session.anchor.isConnected` is true after the press and that the anchor is the
+  boundary of the now-active chrome.
+- `packages/core/src/editor/__tests__/content-control-popup-behavior.test.ts`: observe a panel
+  with an anchor that has been removed from the layer while a replacement chrome with the same
+  control id exists, and assert the panel gets `style.top`/`style.left` from the replacement.
+
+### 2. Reported cursor flicker (I-beam vs arrow) on hover over the form-controls catalog
+
+Reported from a screenshot of the catalog fixture with the picture control highlighted. Not
+reproduced on this branch served from this worktree (port 5183, `bun run dev` in
+`examples/vite`):
+
+- Trusted-mouse Playwright sweeps across and through the picture control, and a stationary
+  real-mouse hover on the picture and date widgets: the element under the pointer and its
+  computed cursor stay constant per region; no `childList` mutations under `.docx-pages`;
+  `data-hover` toggles only at control edges.
+- The hit-test stack over a control is identical in idle, hover, and active states. The chrome
+  and its boundary compute `pointer-events: none`, so they never take the cursor.
+- The other dev server on port 5173 belongs to a different worktree and branch without this
+  PR's hover code; make sure the report comes from this branch.
+
+If it reproduces: check `packages/core/src/editor/content-control-hover.ts` (one
+`elementFromPoint` plus boundary `getBoundingClientRect` scan per frame on `pointermove`) and
+whether anything under the pointer is replaced per frame. A quick way to see: a
+`MutationObserver` on `.docx-pages` with `childList: true, subtree: true` while moving.
 
 ## What to check
 
