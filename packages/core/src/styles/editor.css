@@ -7418,3 +7418,9 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-toolbar__alt-text-panel .docx-dialog__footer {
   padding: 12px 0 0;
 }
+
+/* The native dropdown is transparent; focus belongs to the painted field value. */
+.docx-editor [data-docx-field]:has(> select[data-docx-form-dropdown]:focus-visible) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}

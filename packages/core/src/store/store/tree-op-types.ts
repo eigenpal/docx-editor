@@ -1,3 +1,4 @@
+import type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';
 import type { SetFieldCodeOp } from './tree-op-field-code.ts';
 import type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
 import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-form-fields.ts';
@@ -1038,6 +1039,7 @@ export type TreeDocOp =
   | SetTextFormFieldDefaultOp
   | CommitTextFormFieldOp
   | SetLegacyCheckboxOp
+  | SetLegacyDropdownOp
   | InsertBuildingBlockOp
   | {
       /**

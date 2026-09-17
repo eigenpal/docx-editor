@@ -430,3 +430,32 @@ for (const adapter of ['react', 'vue'] as const) {
       .not.toBe(before);
   });
 }
+
+test('legacy dropdown uses a native select, supports undo, and saves its choice', async ({
+  page,
+}) => {
+  const select = page.locator('select[data-docx-form-dropdown]');
+  await expect(select).toBeEnabled();
+  await expect(select).toHaveValue('1');
+  await expect(select.locator('option')).toHaveText(['Red', 'Green', 'Blue', 'Amber']);
+  const paragraph = select.locator('xpath=ancestor::*[contains(@class,"layout-paragraph")][1]');
+  const before = await paragraph.textContent();
+  await select.focus();
+  // Native typeahead works across platforms; native menu arrow behavior is OS-specific.
+  await page.keyboard.press('b');
+  await page.keyboard.press('Enter');
+  await expect(select).toHaveValue('2');
+  await expect(select).toBeFocused();
+  expect(await select.evaluate((node) => node.parentElement!.firstChild!.textContent)).toBe('Blue');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(select).toHaveValue('1');
+  expect(await paragraph.textContent()).toBe(before);
+  await select.selectOption('3');
+  expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.saveAndReopen())).toEqual({
+    ok: true,
+  });
+  await expect(select).toHaveValue('3');
+  expect(await select.evaluate((node) => node.parentElement!.firstChild!.textContent)).toBe(
+    'Amber'
+  );
+});

@@ -990,6 +990,11 @@ export interface FieldAtomMarker {
         readonly accessibleName?: string;
         readonly checked: boolean;
         readonly kind: 'checkbox';
+    } | {
+        readonly accessibleName?: string;
+        readonly entries: readonly string[];
+        readonly kind: 'dropdown';
+        readonly selectedIndex: number;
     };
     readonly formField: boolean;
     readonly pageField?: {

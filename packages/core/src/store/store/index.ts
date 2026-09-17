@@ -224,3 +224,5 @@ export {
   reportHistoryGroup,
   type HistoryCaptureKind,
 } from './history-group.ts';
+
+export type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';

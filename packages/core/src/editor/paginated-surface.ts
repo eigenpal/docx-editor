@@ -1,3 +1,4 @@
+import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
 import { contentControlMenuAnchor } from './content-control-widget-anchor.ts';
 import { contentControlWidgetValue } from './content-control-widget-session.ts';
@@ -2746,6 +2747,7 @@ export function mountPaginatedSurface(
   const dateLocale = createSurfaceDateLocale(options.locale, flushTypeBuffer);
   let translate = options.translate;
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
+  let legacyDropdownInteraction: ReturnType<typeof createLegacyDropdownInteraction> | null = null;
   let legacyCheckboxInteraction: ReturnType<typeof createLegacyCheckboxInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
@@ -5648,6 +5650,7 @@ export function mountPaginatedSurface(
         widgetSessions.destroy();
         pictureWidget.destroy();
         textFormInteraction?.destroy();
+        legacyDropdownInteraction?.destroy();
         legacyCheckboxInteraction?.destroy();
         pointer?.destroy();
         tableInteraction.destroy();
@@ -5844,6 +5847,17 @@ export function mountPaginatedSurface(
     select: (next) => setSelection(next),
     apply: (op) => applyTextFormOperation(op, commit, applyOps),
   });
+  legacyDropdownInteraction = createLegacyDropdownInteraction({
+    pagesLayer,
+    settings: () => settingsPartOf(session.currentPackage()),
+    part: (paragraphId) =>
+      partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
+    editable: () => editingMode === 'edit' && !showFieldCodes,
+    select: setSelection,
+    canApply: (op) => session.editable && writeRefusal(true, [op], false) === null,
+    history: (action) => surface[action](),
+    apply: (op) => applyTextFormOperation(op, commit, applyOps),
+  });
   const dispatchKeyDown = createKeyDownHandler(surface, {
     ...options,
     onToggleFieldCodes: () => {
@@ -5855,6 +5869,7 @@ export function mountPaginatedSurface(
     },
   });
   const onKeyDown = (event: KeyboardEvent): void => {
+    if (legacyDropdownInteraction?.keydown(event)) return;
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
@@ -6147,6 +6162,7 @@ export function mountPaginatedSurface(
   });
 
   render();
+  legacyDropdownInteraction?.sync();
   remoteSelectionRenderingReady = true;
   renderRemoteSelections();
   // The surface is fully constructed, so shared state can now be published through it.

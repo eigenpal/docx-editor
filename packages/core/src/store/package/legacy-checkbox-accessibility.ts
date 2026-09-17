@@ -22,7 +22,7 @@ export function legacyCheckboxAccessibleName(node: OoxmlNode): string | undefine
       (child) =>
         child.kind !== 'textValue' &&
         child.namespaceUri === WML_NAMESPACE_URI &&
-        child.localName === 'checkBox'
+        (child.localName === 'checkBox' || child.localName === 'ddList')
     )
   )
     return;

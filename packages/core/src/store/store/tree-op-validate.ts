@@ -1,3 +1,4 @@
+import { validateSetLegacyDropdown } from './legacy-dropdown-fields.ts';
 import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
 import { validateTableAuthoring } from './tree-op-table-batch.ts';
@@ -428,6 +429,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   if (op.op === 'setFieldCode') return validateSetFieldCode(part, op);
   if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
+  if (op.op === 'setLegacyDropdown') return validateSetLegacyDropdown(part, op);
   if (op.op === 'setLegacyCheckbox') return validateSetLegacyCheckbox(part, op);
   if (op.op === 'insertBuildingBlock') return validateInsertBuildingBlock(part, op);
   if (op.op === 'refreshFieldResults') {

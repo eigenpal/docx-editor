@@ -164,15 +164,20 @@ export function simpleFieldInstructionMaySynthesizeGlyph(
 }
 
 /**
- * The control marker a FORMCHECKBOX atom carries: its state, and the accessible name when the
- * field has a macro-free one. Paint reads it to draw Word's box and expose a checkbox role, and
- * the surface toggles the field from it, so neither has to parse the glyph back.
+ * Interactive legacy field state and its macro-free accessible name. Paint uses the marker
+ * for checkbox hit targets and native dropdowns without parsing displayed values.
  */
 export function formControlMarkerOf(pending: {
   readonly formSpec: FormFieldKind | null;
   readonly formData: LegacyFormFieldData | null;
   readonly formAccessibleName?: string;
 }): FieldAtomMarker['formControl'] | undefined {
+  if (pending.formSpec === 'dropdown' && pending.formData?.kind === 'dropdown') {
+    return {
+      ...pending.formData,
+      ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
+    };
+  }
   if (pending.formSpec !== 'checkbox' || pending.formData?.kind !== 'checkbox') return undefined;
   return {
     kind: 'checkbox',
@@ -228,8 +233,10 @@ export function formFieldResult(
     // suppresses synthesis too — the file said this result is not shown.
     if (pending.cachedText.length > 0 || pending.sawResultContent) return null;
     if (pending.formData?.kind !== 'dropdown') return null;
-    const text = pending.formData.entries[pending.formData.selectedIndex] ?? '';
-    if (text.length === 0) return null;
+    const entry = pending.formData.entries[pending.formData.selectedIndex];
+    if (entry === undefined) return null;
+    // An empty declared choice still needs a hit target so the picker can be reopened.
+    const text = entry || '\u00a0';
     return { text, props: pending.props, style: pending.style };
   }
   return null;

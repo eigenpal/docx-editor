@@ -520,8 +520,7 @@ export function piecesOfParagraphForDisplay(
             refSpec: null,
             autonumSpec: null,
             formData,
-            formAccessibleName:
-              formData?.kind === 'checkbox' ? legacyCheckboxAccessibleName(grand) : undefined,
+            formAccessibleName: formData ? legacyCheckboxAccessibleName(grand) : undefined,
             beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),

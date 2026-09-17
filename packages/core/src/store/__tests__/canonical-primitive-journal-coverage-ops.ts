@@ -775,6 +775,25 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       }
     ),
     story(
+      'setLegacyDropdown',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Box"/><w:ddList><w:result w:val="0"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/></w:ddList></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing checkbox form');
+        return {
+          op: 'setLegacyDropdown',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+          selectedIndex: 1,
+        };
+      }
+    ),
+    story(
       'insertBuildingBlock',
       zipDoc({
         body:

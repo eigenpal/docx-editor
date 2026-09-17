@@ -70,16 +70,22 @@ export interface FieldAtomMarker {
   /**
    * A legacy form CONTROL the reader can operate, with the state it paints.
    *
-   * A FORMCHECKBOX is the one so far: the surface finds the atom by this marker, draws Word's
-   * box over the glyph and toggles `w:checked` on a press, so the marker carries the state
-   * rather than making paint parse the glyph back.
+   * Checkboxes carry their checked state; dropdowns carry their declared entries and index.
+   * Paint supplies a matching hit target without parsing the displayed text back.
    */
-  readonly formControl?: {
-    readonly kind: 'checkbox';
-    readonly checked: boolean;
-    /** Plain accessible name; omitted for fields containing macro references. */
-    readonly accessibleName?: string;
-  };
+  readonly formControl?:
+    | {
+        readonly kind: 'checkbox';
+        readonly checked: boolean;
+        /** Plain accessible name; omitted for fields containing macro references. */
+        readonly accessibleName?: string;
+      }
+    | {
+        readonly kind: 'dropdown';
+        readonly entries: readonly string[];
+        readonly selectedIndex: number;
+        readonly accessibleName?: string;
+      };
   /**
    * A BODY PAGE / NUMPAGES / SECTIONPAGES atom whose value depends on pagination.
    *

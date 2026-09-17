@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Legacy dropdown form fields rendered their saved value but had no picker.",
+  "after": "A native select commits setLegacyDropdown, updating w:result and cached text in one undo step.",
+  "reason": "The operation reduces to existing canonical tree primitives. The journal replicates field-state and cached-result node replacements without changing the shared format. Native select state is local chrome.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-dropdown-fields.test.ts",
+    "packages/core/src/editor/__tests__/legacy-dropdown-interaction.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts"
+  ],
+  "changeset": "legacy-dropdown-native-select",
+  "migration": null
+}

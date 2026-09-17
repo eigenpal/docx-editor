@@ -182,8 +182,16 @@ The toggle writes only the field's `w:checked` state. A field
 with `w:enabled` off refuses, and a document open for viewing or comments refuses.
 Word toggles these boxes only in a document protected for forms; the editor also
 toggles them in edit mode, so legacy and content-control checkboxes behave the
-same way. Legacy dropdown form fields are not interactive; use
-[content controls](/docs/2.x/guides/content-controls) for that interaction.
+same way.
+
+Legacy dropdown form fields (`FORMDROPDOWN`) use a native select. Click
+the value or focus it with Tab to choose a declared entry. Each choice updates
+the displayed text and saved selection in one undo step. Disabled fields and
+viewing or suggesting mode refuse changes. Forms protection permits filling.
+
+For customizable list popups, use
+[content controls](/docs/2.x/guides/content-controls).
+
 A field's `w:name` supplies its accessible name as bounded plain text. Fields
 with entry or exit macro references supply no name through this path. Macro
 values are not read. Entry and exit macros never run.

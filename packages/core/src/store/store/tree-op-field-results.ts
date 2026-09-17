@@ -1,3 +1,4 @@
+import { applySetLegacyDropdown } from './legacy-dropdown-fields.ts';
 import { validLocale } from './text-form-date-locale.ts';
 import {
   validTextFormOptions,
@@ -82,6 +83,7 @@ interface LocatedField extends LocatedFieldResult {
   /** Result runs in order; the first receives the new text, the rest lose theirs. */
   readonly resultRunIds: readonly string[];
   readonly emptyResultEndRunId?: string;
+  readonly needsSeparator?: boolean;
 }
 
 interface LocateBudget {
@@ -209,7 +211,8 @@ function consumeComplexField(
       const rewritable =
         plain &&
         !locked &&
-        phase === 'result' &&
+        (phase === 'result' ||
+          (allowInstructionBookmarks && instruction.trim().toUpperCase() === 'FORMDROPDOWN')) &&
         (resultRunIds.length > 0 || allowInstructionBookmarks);
       return {
         field: {
@@ -219,6 +222,7 @@ function consumeComplexField(
           rewritable,
           containerId,
           resultRunIds,
+          ...(phase === 'instruction' ? { needsSeparator: true } : {}),
           ...(resultRunIds.length === 0 ? { emptyResultEndRunId: node.id } : {}),
         },
         nextIndex: index + 1,
@@ -233,7 +237,7 @@ function consumeComplexField(
       for (const child of node.children) {
         if (child.kind === 'runProperties') continue;
         if (isInstrText(child)) instruction += instrTextValue(child);
-        // Non-instruction content before `separate` is tolerated; the parse decides.
+        else plain = false;
       }
       continue;
     }
@@ -341,8 +345,11 @@ function locateFieldsInContainer(
  * The fields inside one paragraph whose cached results this op could address, in document
  * order. Bounded walk; a paragraph past the budget answers what it found so far.
  */
-export function locateFieldResults(paragraph: OoxmlElement): readonly LocatedFieldResult[] {
-  return locatePlainFields(paragraph);
+export function locateFieldResults(
+  paragraph: OoxmlElement,
+  allowInstructionBookmarks = false
+): readonly LocatedFieldResult[] {
+  return locatePlainFields(paragraph, allowInstructionBookmarks);
 }
 
 function locatePlainFields(
@@ -465,7 +472,36 @@ function rewriteFieldResult(
     }
     const children = node.children.flatMap((child) => {
       if (child.id === field.emptyResultEndRunId && child.kind === 'run') {
+        const separator: OoxmlNode[] = field.needsSeparator
+          ? [
+              {
+                ...child,
+                id: mint(),
+                children: [
+                  {
+                    id: mint(),
+                    kind: 'fldChar',
+                    namespaceUri: WML_NAMESPACE_URI,
+                    prefix: 'w',
+                    localName: 'fldChar',
+                    namespaceBindings: [],
+                    attributes: [
+                      {
+                        kind: 'genericExtension',
+                        namespaceUri: WML_NAMESPACE_URI,
+                        prefix: 'w',
+                        localName: 'fldCharType',
+                        value: 'separate',
+                      },
+                    ],
+                    children: [],
+                  },
+                ],
+              } as OoxmlNode,
+            ]
+          : [];
         return [
+          ...separator,
           { ...child, id: mint(), children: resultRunContent(text, mint) } as OoxmlNode,
           child,
         ];
@@ -492,7 +528,7 @@ export function applyRefreshFieldResults(
   return applyFieldResults(part, op, options);
 }
 
-function applyFieldResults(
+export function applyFieldResults(
   part: OoxmlPart,
   op: RefreshFieldResultsOp,
   options?: EditOptions,
@@ -701,7 +737,8 @@ export type FieldResultOp = Extract<
       | 'commitTextFormField'
       | 'setTextFormFieldDefault'
       | 'refreshFieldResults'
-      | 'setLegacyCheckbox';
+      | 'setLegacyCheckbox'
+      | 'setLegacyDropdown';
   }
 >;
 
@@ -711,7 +748,8 @@ export function isFieldResultOp(op: TreeDocOp): op is FieldResultOp {
     op.op === 'commitTextFormField' ||
     op.op === 'setTextFormFieldDefault' ||
     op.op === 'refreshFieldResults' ||
-    op.op === 'setLegacyCheckbox'
+    op.op === 'setLegacyCheckbox' ||
+    op.op === 'setLegacyDropdown'
   );
 }
 
@@ -730,6 +768,7 @@ export function applyFieldResultOp(
   if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
   if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'setLegacyCheckbox') return applySetLegacyCheckbox(part, op, options);
+  if (op.op === 'setLegacyDropdown') return applySetLegacyDropdown(part, op, options);
   return applyRefreshFieldResults(part, op, options);
 }
 

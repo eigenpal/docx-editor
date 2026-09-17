@@ -223,7 +223,15 @@ describe('a FORMDROPDOWN field', () => {
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['Cached']);
     expect(pieces[0]).toMatchObject({ start: 0, end: 1, projected: true });
-    expect(pieces[0]!.fieldAtom).toEqual({ formField: true });
+    expect(pieces[0]!.fieldAtom).toEqual({
+      formField: true,
+      formControl: {
+        kind: 'dropdown',
+        entries: ['Red', 'Green', 'Blue'],
+        selectedIndex: 1,
+        accessibleName: 'Dropdown1',
+      },
+    });
   });
 
   test('an empty cached result synthesizes the selected entry', () => {
@@ -233,7 +241,15 @@ describe('a FORMDROPDOWN field', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['A', 'Green']);
     const entry = pieces[1]!;
     expect(entry).toMatchObject({ start: 1, end: 2, projected: true });
-    expect(entry.fieldAtom).toEqual({ formField: true });
+    expect(entry.fieldAtom).toEqual({
+      formField: true,
+      formControl: {
+        kind: 'dropdown',
+        entries: ['Red', 'Green', 'Blue'],
+        selectedIndex: 1,
+        accessibleName: 'Dropdown1',
+      },
+    });
   });
 
   test('an out-of-range result falls back to default, then to the first entry', () => {
@@ -247,6 +263,17 @@ describe('a FORMDROPDOWN field', () => {
     expect(viaFirst.map((piece) => piece.text)).toEqual(['Red']);
   });
 
+  test('an empty declared choice keeps a projected hit target without adding model text', () => {
+    const pieces = project(
+      `<w:p>${dropdownField('<w:result w:val="0"/><w:listEntry w:val=""/><w:listEntry w:val="Blue"/>')}</w:p>`
+    );
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0]).toMatchObject({ text: '\u00a0', start: 0, end: 1, projected: true });
+    expect(pieces[0]!.fieldAtom?.formControl).toMatchObject({
+      kind: 'dropdown',
+      entries: ['', 'Blue'],
+    });
+  });
   test('an empty w:ddList paints nothing', () => {
     const pieces = project(
       `<w:p>${dropdownField('<w:result w:val="0"/>')}<w:r><w:t>B</w:t></w:r></w:p>`

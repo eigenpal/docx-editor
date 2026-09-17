@@ -538,6 +538,7 @@ const TREE_OP_REACH: {
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
   setLegacyCheckbox: (op) => whole(op.fieldNodeId),
+  setLegacyDropdown: (op) => whole(op.fieldNodeId),
   // A building block pick rebuilds `w:sdtContent`, exactly as a value write does.
   insertBuildingBlock: (op) => ({
     kind: 'control',
@@ -1105,8 +1106,7 @@ export function formsProtectionRefusal(
   if (op.op === 'setTextFormFieldDefault' && sectionProtectsForms(part, op.paragraphId))
     return 'locked';
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
-  // Ticking a legacy checkbox IS filling the form: the field's own `w:enabled` decides.
-  if (op.op === 'setLegacyCheckbox') return null;
+  if (op.op === 'setLegacyCheckbox' || op.op === 'setLegacyDropdown') return null;
   const textField = textFormFieldForEdit(part, op, preferredFieldId);
   if (
     (op.op === 'insertText' || op.op === 'deleteText') &&

@@ -1,3 +1,4 @@
+import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
@@ -1075,6 +1076,7 @@ function paintSpan(
   }
   mountRunText(document, textHost, span.text, span.style, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
+  paintLegacyDropdown(element, span);
   if (span.projected) {
     element.dataset.docxField = '';
     element.setAttribute('contenteditable', 'false');
