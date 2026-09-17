@@ -52,13 +52,15 @@ __all__ = [
 
 __version__ = "0.1.0"
 
+_UNSET: Any = object()
+
 DisplayMode = Literal["all-markup", "proposed", "original"]
 FontPolicy = Literal["best-effort", "strict"]
 ImageSyntax = Literal["markdown", "html"]
 Source = Union[str, "os.PathLike[str]", bytes, bytearray, memoryview, IO[bytes]]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Page:
     """One printed page, as Word lays it out."""
 
@@ -69,6 +71,12 @@ class Page:
     footer_markdown: str
     comments: list[dict[str, Any]] = field(default_factory=list)
     tracked_changes: list[dict[str, Any]] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        return (
+            f"Page(number={self.number}, {len(self.markdown)} chars, "
+            f"{len(self.comments)} comments, {len(self.tracked_changes)} tracked changes)"
+        )
 
 
 @dataclass(frozen=True)
@@ -102,8 +110,15 @@ class MediaAsset:
     pixel_height: int
     occurrences: list[dict[str, Any]] = field(default_factory=list)
 
+    def __repr__(self) -> str:
+        return (
+            f"MediaAsset(id={self.id!r}, path={self.path!r}, mime_type={self.mime_type!r}, "
+            f"{self.pixel_width}x{self.pixel_height}px, {len(self.bytes)} bytes, "
+            f"{len(self.occurrences)} occurrences)"
+        )
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, repr=False)
 class MarkdownResult:
     """One conversion.
 
@@ -120,9 +135,30 @@ class MarkdownResult:
     font_errors: list[FontFaceError]
     raw: dict[str, Any]
 
+    def __repr__(self) -> str:
+        fonts = "complete" if self.fonts_complete else f"missing {self.missing_fonts}"
+        return (
+            f"MarkdownResult({self.page_count} pages, {len(self.markdown)} chars, "
+            f"{len(self.media)} images, {len(self.warnings)} warnings, fonts {fonts})"
+        )
+
     @property
     def page_count(self) -> int:
         return len(self.pages)
+
+    @property
+    def missing_fonts(self) -> list[str]:
+        """Families the document uses that did not measure with all of their faces.
+
+        Supply these with :func:`font_family` for page breaks that match Word.
+        """
+        if self.font_resolution is None:
+            return []
+        return [
+            f["family"]
+            for f in self.font_resolution.get("families", [])
+            if f.get("coverage") != "complete"
+        ]
 
     @property
     def fonts_complete(self) -> bool:
@@ -311,15 +347,29 @@ class Converter:
         self.timeout = timeout
         self._worker = Worker()
 
-    def convert(self, source: Source, **overrides: Any) -> MarkdownResult:
-        """Convert one file. Keyword arguments match :func:`convert`."""
-        timeout = overrides.pop("timeout", self.timeout)
-        unknown = set(overrides) - set(self._defaults)
-        if unknown:
-            raise TypeError(f"unexpected keyword arguments: {', '.join(sorted(unknown))}")
-        options = {**self._defaults, **overrides}
+    def convert(
+        self,
+        source: Source,
+        *,
+        fonts: Optional[Sequence[FontFace]] = None,
+        font_policy: Optional[FontPolicy] = None,
+        google_fonts: Optional[bool] = None,
+        images: Optional[Union[bool, ImageSyntax]] = None,
+        display_mode: Optional[DisplayMode] = None,
+        timeout: Optional[float] = _UNSET,
+    ) -> MarkdownResult:
+        """Convert one file. Keywords match :func:`convert` and override the defaults."""
+        overrides = {
+            "fonts": fonts,
+            "font_policy": font_policy,
+            "google_fonts": google_fonts,
+            "images": images,
+            "display_mode": display_mode,
+        }
+        options = {**self._defaults, **{k: v for k, v in overrides.items() if v is not None}}
         request = _request(**options)
-        payload = _with_source(source, request, lambda r: self._worker.request(r, timeout=timeout))
+        wait = self.timeout if timeout is _UNSET else timeout
+        payload = _with_source(source, request, lambda r: self._worker.request(r, timeout=wait))
         return _to_result(payload)
 
     @property

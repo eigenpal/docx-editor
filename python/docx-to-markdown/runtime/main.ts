@@ -68,7 +68,24 @@ function errorResponse(cause: unknown): object {
       protocol: PROTOCOL_VERSION,
       error: { code: cause.code, message: cause.message, detail: cause.detail },
     };
-  const error = cause as { name?: string; code?: string; message?: string };
+  const error = cause as {
+    name?: string;
+    code?: string;
+    reason?: string;
+    detail?: string;
+    message?: string;
+  };
+  if (error.name === 'DocumentOpenError') {
+    // Stable code plus the engine's rejection reason, for callers that branch on it.
+    return {
+      protocol: PROTOCOL_VERSION,
+      error: {
+        code: 'invalid-docx',
+        message: `Not a DOCX file this converter can open (${error.reason ?? 'unknown'})`,
+        detail: { reason: error.reason, detail: error.detail },
+      },
+    };
+  }
   return {
     protocol: PROTOCOL_VERSION,
     error: {

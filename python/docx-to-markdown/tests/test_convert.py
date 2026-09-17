@@ -83,7 +83,16 @@ def test_missing_docx_raises(tmp_path):
 def test_corrupt_docx_raises_conversion_error():
     with pytest.raises(ConversionError) as info:
         convert(b"PK\x03\x04 definitely not a document")
-    assert info.value.code
+    assert info.value.code == "invalid-docx"
+    assert "DOCX" in info.value.message
+
+
+def test_reprs_are_compact(narrow_pages):
+    result = convert(narrow_pages)
+    assert len(repr(result)) < 200
+    assert repr(result).startswith("MarkdownResult(15 pages")
+    assert repr(result.pages[0]).startswith("Page(number=1")
+    assert result.missing_fonts == []
 
 
 def test_option_validation(narrow_pages):
@@ -144,7 +153,9 @@ class TestConverter:
             assert converter.convert(narrow_pages).page_count == 15
             assert converter.convert(narrow_pages, display_mode="original").page_count == 15
             with pytest.raises(TypeError):
-                converter.convert(narrow_pages, colour="red")
+                converter.convert(narrow_pages, colour="red")  # type: ignore[call-arg]
+            with pytest.raises(ValueError):
+                converter.convert(narrow_pages, images="svg")  # type: ignore[arg-type]
 
     def test_timeout_kills_and_restarts(self, narrow_pages):
         with Converter(timeout=0.001) as converter:

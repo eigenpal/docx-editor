@@ -99,8 +99,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for source in args.inputs:
             try:
                 result = converter.convert(source)
-            except (ConversionError, FileNotFoundError) as exc:
-                print(f"{source}: {exc}", file=sys.stderr)
+            except FileNotFoundError:
+                print(f"{source}: no such file", file=sys.stderr)
+                status = 1
+                continue
+            except ConversionError as exc:
+                print(f"{source}: {exc.message} [{exc.code}]", file=sys.stderr)
                 status = 1
                 continue
             if not args.quiet:
