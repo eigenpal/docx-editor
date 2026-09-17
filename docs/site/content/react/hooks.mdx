@@ -301,33 +301,34 @@ The result also includes these pairs:
 
 ## Other hooks
 
-| Hook                              | Return value                                                                                      |
-| --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation.                   |
-| `useEditorValueCommand(slotId)`   | Provides state for value commands such as `'image.wrap'` and `'image.altText'`.                   |
-| `useParagraphIndent()`            | Provides current indents and an `apply` action.                                                   |
-| `useHyperlinkPopup()`             | Provides state for a custom hyperlink panel.                                                      |
-| `useContentControl()`             | Provides content-control locks, value writes, and form-fill state.                                |
-| `useHeaderFooterState()`          | Returns the active header or footer scope, or `null`.                                             |
-| `useNoteScopeState()`             | Returns the active footnote or endnote scope.                                                     |
-| `useContextMenuTarget()`          | Returns the element that received the last context-menu action.                                   |
-| `useNavigationPane(options?)`     | Provides navigation-pane open state and width.                                                    |
-| `useTranslation()`                | Returns `{ t }` for the active locale catalog.                                                    |
-| `useChromeTranslate(overrides?)`  | Returns a catalog resolver that checks an override `Map` first.                                   |
-| `useFonts(source, ...fragments)`  | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts).                    |
-| `useNotePropertiesState()`        | Provides note-numbering properties for the current scope.                                         |
-| `useEditorSnapshot(editor)`       | Returns a revision counter for `useSyncExternalStore`.                                            |
-| `useNavigationShift()`            | Returns the horizontal offset for an open navigation pane.                                        |
-| `useReviewGutter()`               | Returns the inline reservations for the active review rail.                                       |
-| `useTableBorderTargetLabel()`     | Returns the active table-border target label.                                                     |
-| `useReviewAuthors()`              | Returns tracked-change authors, then comment-only authors. Each item includes its resolved style. |
-| `useEditorCaret()`                | Returns `{ paragraphId, offset }` for APIs that accept an `at` position.                          |
-| `useZoom()`                       | Reads and sets zoom from custom chrome.                                                           |
-| `useToolbarContext()`             | Returns toolbar compound context for custom slot parts.                                           |
-| `useToolbarLabel()`               | Returns the active toolbar-scope label.                                                           |
-| `useToolbarLabelFor(slotId)`      | Resolves the label for one slot ID.                                                               |
-| `useScopeClassName()`             | Returns the scoped chrome class prefix.                                                           |
-| `useScopedChromeAnchor()`         | Returns anchor metadata for scoped overlay chrome.                                                |
+| Hook                              | Return value                                                                                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation.                                                                                 |
+| `useEditorValueCommand(slotId)`   | Provides state for value commands such as `'image.wrap'` and `'image.altText'`.                                                                                 |
+| `useParagraphIndent()`            | Provides current indents and an `apply` action.                                                                                                                 |
+| `useHyperlinkPopup()`             | Provides state for a custom hyperlink panel.                                                                                                                    |
+| `useContentControl()`             | Provides content-control locks, value writes, and form-fill state.                                                                                              |
+| `useContentControlWidget()`       | Provides the draft value and calendar state of the enclosing value pop-up. See [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up). |
+| `useHeaderFooterState()`          | Returns the active header or footer scope, or `null`.                                                                                                           |
+| `useNoteScopeState()`             | Returns the active footnote or endnote scope.                                                                                                                   |
+| `useContextMenuTarget()`          | Returns the element that received the last context-menu action.                                                                                                 |
+| `useNavigationPane(options?)`     | Provides navigation-pane open state and width.                                                                                                                  |
+| `useTranslation()`                | Returns `{ t }` for the active locale catalog.                                                                                                                  |
+| `useChromeTranslate(overrides?)`  | Returns a catalog resolver that checks an override `Map` first.                                                                                                 |
+| `useFonts(source, ...fragments)`  | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts).                                                                                  |
+| `useNotePropertiesState()`        | Provides note-numbering properties for the current scope.                                                                                                       |
+| `useEditorSnapshot(editor)`       | Returns a revision counter for `useSyncExternalStore`.                                                                                                          |
+| `useNavigationShift()`            | Returns the horizontal offset for an open navigation pane.                                                                                                      |
+| `useReviewGutter()`               | Returns the inline reservations for the active review rail.                                                                                                     |
+| `useTableBorderTargetLabel()`     | Returns the active table-border target label.                                                                                                                   |
+| `useReviewAuthors()`              | Returns tracked-change authors, then comment-only authors. Each item includes its resolved style.                                                               |
+| `useEditorCaret()`                | Returns `{ paragraphId, offset }` for APIs that accept an `at` position.                                                                                        |
+| `useZoom()`                       | Reads and sets zoom from custom chrome.                                                                                                                         |
+| `useToolbarContext()`             | Returns toolbar compound context for custom slot parts.                                                                                                         |
+| `useToolbarLabel()`               | Returns the active toolbar-scope label.                                                                                                                         |
+| `useToolbarLabelFor(slotId)`      | Resolves the label for one slot ID.                                                                                                                             |
+| `useScopeClassName()`             | Returns the scoped chrome class prefix.                                                                                                                         |
+| `useScopedChromeAnchor()`         | Returns anchor metadata for scoped overlay chrome.                                                                                                              |
 
 Use `useContentControlInstance()` outside the owning content-control part.
 Use `useHyperlinkPopupInstance()` outside the owning hyperlink part.

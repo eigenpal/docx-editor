@@ -1,6 +1,7 @@
 import type { SetFieldCodeOp } from './tree-op-field-code.ts';
 import type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
 import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-form-fields.ts';
+import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
@@ -1035,6 +1036,7 @@ export type TreeDocOp =
     }
   | SetTextFormFieldDefaultOp
   | CommitTextFormFieldOp
+  | SetLegacyCheckboxOp
   | {
       /**
        * Rewrite recognized fields' cached RESULT runs in place — between the `separate` and

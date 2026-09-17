@@ -679,6 +679,11 @@
       "plainText": "纯文本",
       "repeatingSection": "重复节",
       "richText": "格式文本"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

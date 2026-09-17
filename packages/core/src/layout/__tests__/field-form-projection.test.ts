@@ -80,7 +80,12 @@ describe('a FORMCHECKBOX field', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['A', '☐', 'B']);
     const box = pieces[1]!;
     expect(box).toMatchObject({ start: 1, end: 2, projected: true });
-    expect(box.fieldAtom).toEqual({ formField: true });
+    // The atom also carries the control state, so paint and the surface need not read the
+    // glyph back to know what a press should write.
+    expect(box.fieldAtom).toEqual({
+      formField: true,
+      formControl: { kind: 'checkbox', checked: false },
+    });
     expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
   });
 

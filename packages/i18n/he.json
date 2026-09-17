@@ -679,6 +679,11 @@
       "plainText": "טקסט רגיל",
       "repeatingSection": "מקטע חוזר",
       "richText": "טקסט מעוצב"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

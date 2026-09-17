@@ -62,6 +62,17 @@ export interface FieldAtomMarker {
    */
   readonly formField: boolean;
   /**
+   * A legacy form CONTROL the reader can operate, with the state it paints.
+   *
+   * A FORMCHECKBOX is the one so far: the surface finds the atom by this marker, draws Word's
+   * box over the glyph and toggles `w:checked` on a press, so the marker carries the state
+   * rather than making paint parse the glyph back.
+   */
+  readonly formControl?: {
+    readonly kind: 'checkbox';
+    readonly checked: boolean;
+  };
+  /**
    * A BODY PAGE / NUMPAGES / SECTIONPAGES atom whose value depends on pagination.
    *
    * The paragraph walk cannot know which page the field lands on — layout runs before the page

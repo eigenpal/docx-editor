@@ -241,6 +241,12 @@ export function piecesOfParagraphForDisplay(
     // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
     const { resultLink, linkSpec, resultRevisions, capturedResultRevisions, formField } = pending;
+    // A FORMCHECKBOX carries its state on the atom, so the painted glyph is also the control
+    // the surface toggles.
+    const formControl =
+      pending.formSpec === 'checkbox' && pending.formData?.kind === 'checkbox'
+        ? { formControl: { kind: 'checkbox' as const, checked: pending.formData.checked } }
+        : {};
     let carriedMemo: PieceEmitExtras | undefined;
     const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
@@ -252,7 +258,7 @@ export function piecesOfParagraphForDisplay(
       carriedMemo = {
         ...(capturedResultRevisions ? { revisionsOverride: resultRevisions } : {}),
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
-        fieldAtom: { formField },
+        fieldAtom: { formField, ...formControl },
       };
       return carriedMemo;
     };

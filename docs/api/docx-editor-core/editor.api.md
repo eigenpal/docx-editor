@@ -31,6 +31,42 @@ export function blankDocumentBytes(): Uint8Array;
 export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
+export interface CalendarDay {
+    readonly day: number;
+    readonly iso: string;
+    readonly label: string;
+    readonly otherMonth: boolean;
+    readonly selected: boolean;
+    readonly today: boolean;
+}
+
+// @public
+export interface CalendarMonth {
+    readonly days: readonly CalendarDay[];
+    readonly month: number;
+    readonly title: string;
+    readonly weekdays: readonly string[];
+    // (undocumented)
+    readonly year: number;
+}
+
+// @public
+export function calendarMonth(year: number, month: number, options?: CalendarMonthOptions): CalendarMonth;
+
+// @public
+export interface CalendarMonthOptions {
+    readonly locale?: string;
+    readonly selected?: string | null;
+    readonly today?: Date;
+}
+
+// @public
+export function calendarMonthTitle(year: number, month: number, locale?: string): string;
+
+// @public
+export function calendarWeekdays(locale?: string): readonly string[];
+
+// @public
 export function canExecuteImageCommand(command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>, surface: PaginatedSurface | null): CanResult;
@@ -866,7 +902,8 @@ export interface ContentControlWidgetSession {
         readonly value: string;
     }[];
     // (undocumented)
-    readonly kind: 'dropdown' | 'comboBox' | 'date';
+    readonly kind: 'dropdown' | 'comboBox' | 'date' | 'checkbox';
+    readonly locale: string;
     // (undocumented)
     readonly signal: AbortSignal;
     // (undocumented)
@@ -1122,6 +1159,9 @@ export function finalizeImageOverlayInteraction(options: {
     readonly session: ImageInteractionSession;
     readonly shiftKey: boolean;
 }): FinalizedImageOverlayInteraction;
+
+// @public
+export function firstDayOfWeek(locale?: string): number;
 
 // @public
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
@@ -1423,6 +1463,9 @@ export interface InvalidTextFormFieldSession {
 
 // @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
+
+// @public
+export function isoDateOf(date: Date): string;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
@@ -2013,6 +2056,9 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export function parseIsoDate(value: string): Date | null;
+
+// @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
 
 // @public
@@ -2379,6 +2425,12 @@ export interface SemanticSelection {
     // (undocumented)
     readonly head: SemanticPosition;
 }
+
+// @public
+export function shiftMonth(year: number, month: number, delta: 1 | -1): {
+    readonly month: number;
+    readonly year: number;
+};
 
 // @public
 export const signedFirstLineOf: (kind: SpecialIndent, magnitudeTwips: number) => number;

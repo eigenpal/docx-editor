@@ -679,6 +679,11 @@
       "plainText": "Texto sem formatação",
       "repeatingSection": "Seção repetitiva",
       "richText": "Rich Text"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

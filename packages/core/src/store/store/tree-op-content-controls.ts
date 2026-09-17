@@ -536,6 +536,7 @@ const TREE_OP_REACH: {
   setFieldCode: (op) => whole(op.fieldNodeId),
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
+  setLegacyCheckbox: (op) => whole(op.fieldNodeId),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',
@@ -1096,6 +1097,8 @@ export function formsProtectionRefusal(
   if (op.op === 'setTextFormFieldDefault' && sectionProtectsForms(part, op.paragraphId))
     return 'locked';
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
+  // Ticking a legacy checkbox IS filling the form: the field's own `w:enabled` decides.
+  if (op.op === 'setLegacyCheckbox') return null;
   const textField = textFormFieldForEdit(part, op, preferredFieldId);
   if (
     (op.op === 'insertText' || op.op === 'deleteText') &&

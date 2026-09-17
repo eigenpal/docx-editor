@@ -357,6 +357,15 @@ Returns the link popover state and actions. Use
 `useHyperlinkPopupInstance` outside the component that owns the popover
 context.
 
+## useContentControlWidget
+
+Returns the draft state of the enclosing content-control value pop-up: the
+session, `value`, `setValue`, `isEnabled`, `refused`, `apply`, `cancel`, and the
+calendar members `calendar`, `previousMonth`, `nextMonth`, `selectDay`,
+`selectToday`, and `focusDay`. Reactive members are refs. Call it inside a child
+of `DocxEditorContentControlWidget`. For the parts it pairs with, see
+[Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
+
 ## useContentControl and useContentControlInstance
 
 Returns content-control locks, value actions, and form-fill state. Use

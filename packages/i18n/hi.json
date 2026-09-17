@@ -679,6 +679,11 @@
       "plainText": "सादा पाठ",
       "repeatingSection": "दोहराया जाने वाला अनुभाग",
       "richText": "रिच टेक्स्ट"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

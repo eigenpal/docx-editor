@@ -505,14 +505,19 @@ for (const mode of ['native', 'custom', 'component', 'manual'] as const) {
       expect(editor!.surface!.session.bodyText()).toContain('Two');
     }
     if (mode === 'custom' || mode === 'component') {
-      const select = view.getByRole('combobox') as HTMLSelectElement;
-      expect(select.value).toBe('1');
-      expect(document.activeElement === select).toBe(true);
+      // The packaged dropdown is the same list the engine paints: one option per entry, the
+      // current value marked, and a press commits at once — no Apply step, as in Word.
+      // Scoped to the pop-up: the painted widget button itself carries role="listbox".
+      const popup = view.container.querySelector<HTMLElement>(
+        '[data-docx-popup="contentControlWidget"]'
+      )!;
+      const list = popup.querySelector<HTMLElement>('[role="listbox"]')!;
+      const options = [...popup.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+      expect(options.map((option) => option.textContent)).toEqual(['One', 'Two']);
+      expect(options[0]!.getAttribute('aria-selected')).toBe('true');
+      expect(list.contains(document.activeElement)).toBe(true);
       await act(async () => {
-        fireEvent.change(select, { target: { value: '2' } });
-      });
-      await act(async () => {
-        fireEvent.click(view.getByRole('button', { name: 'Apply', exact: true }));
+        fireEvent.click(options[1]!);
       });
       expect(
         view.container.querySelectorAll('[data-docx-popup="contentControlWidget"]').length

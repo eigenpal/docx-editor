@@ -7,6 +7,8 @@ interface Host {
   apply(id: string, value: string): boolean;
   items(id: string): readonly { displayText: string; value: string }[];
   date(id: string): string | undefined;
+  checked(id: string): boolean;
+  locale(): string;
   layer: HTMLElement;
   setOpen(id: string, open: boolean): void;
   request?: ((session: ContentControlWidgetSession) => boolean) | undefined;
@@ -25,8 +27,10 @@ function kindOf(control: OoxmlElement | null): string | undefined {
     if (child.kind === 'textValue') continue;
     if (child.localName === 'dropDownList') return 'dropdown';
     if (child.localName === 'comboBox' || child.localName === 'date') return child.localName;
+    if (child.localName === 'checkbox') return 'checkbox';
   }
 }
+const SESSION_KINDS: readonly string[] = ['dropdown', 'comboBox', 'date', 'checkbox'];
 /** Typed host sessions over the existing content-control command lane. */
 export function createContentControlWidgetSessions(host: Host) {
   let active: { controller: AbortController; id: string } | null = null;
@@ -46,8 +50,7 @@ export function createContentControlWidgetSessions(host: Host) {
     },
     open(id: string, kind: string): boolean {
       cancel();
-      if (destroyed || !host.request || !['dropdown', 'comboBox', 'date'].includes(kind))
-        return false;
+      if (destroyed || !host.request || !SESSION_KINDS.includes(kind)) return false;
       const controller = new AbortController();
       active = { controller, id };
       const isActive = () =>
@@ -61,7 +64,13 @@ export function createContentControlWidgetSessions(host: Host) {
         controlId: id,
         kind: kind as ContentControlWidgetSession['kind'],
         items,
-        value: kind === 'date' ? (host.date(id) ?? '') : value,
+        value:
+          kind === 'date'
+            ? (host.date(id) ?? '')
+            : kind === 'checkbox'
+              ? String(host.checked(id))
+              : value,
+        locale: host.locale(),
         anchor:
           [...host.layer.querySelectorAll<HTMLElement>('[data-docx-content-control]')].find(
             (node) => node.getAttribute('data-docx-content-control') === id

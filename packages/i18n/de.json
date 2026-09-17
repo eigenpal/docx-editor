@@ -679,6 +679,11 @@
       "plainText": "Nur Text",
       "repeatingSection": "Wiederholungsabschnitt",
       "richText": "Rich Text"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

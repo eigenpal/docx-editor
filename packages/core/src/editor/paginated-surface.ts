@@ -33,6 +33,15 @@ import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-a
 import { beginSurfaceCommit } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import {
+  buildContentControlCalendar,
+  buildContentControlListMenu,
+  focusContentControlCalendar,
+  placeContentControlMenu,
+  type ContentControlMenuAnchor,
+  type ContentControlMenuHost,
+} from './content-control-widget-menu.ts';
+import { createLegacyCheckboxInteraction } from './surface-legacy-checkbox.ts';
+import {
   createTextFormFieldInteraction,
   type PendingTextFormInput,
 } from './surface-text-form-fields.ts';
@@ -2118,6 +2127,8 @@ export function mountPaginatedSurface(
     apply: (id, value) => contentControlsOps.setValue(id, value),
     items: listItemsOfControl,
     date: dateValueOfControl,
+    checked: checkboxChecked,
+    locale: () => dateLocale.get(),
     layer: pagesLayer,
     setOpen: setContentControlWidgetOpen,
     request: options.onRequestContentControlWidget,
@@ -2153,6 +2164,8 @@ export function mountPaginatedSurface(
       document.removeEventListener('keydown', onKey, true);
     };
     const onOutside = (event: Event): void => {
+      // `parentNode`, not `isConnected`: a surface mounted in a detached container (tests,
+      // off-screen hosts) is live; a menu the surface closed or tore down has no parent.
       if (menu.parentNode === null) {
         cleanup();
         return;
@@ -2231,6 +2244,31 @@ export function mountPaginatedSurface(
     navigation.goToPosition({ paragraphId: headingParagraphId, offset: 0 });
   }
 
+  /** Where a control's pop-up anchors: under its first fragment, clamped to that page sheet. */
+  function contentControlMenuAnchor(controlId: string): ContentControlMenuAnchor | null {
+    const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+    const frag = record?.fragments[0];
+    const page = frag ? currentLayout.pages[frag.pageIndex] : undefined;
+    if (!frag || !page) return null;
+    const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
+    const contentLeft = page.contentBox.x - page.box.x;
+    const contentTop = page.contentBox.y - page.box.y;
+    return {
+      left: (page.box.x + offsetX + contentLeft + frag.box.x) * scale,
+      top: (page.box.y + contentTop + frag.box.y + frag.box.height) * scale,
+      sheetLeft: (page.box.x + offsetX) * scale,
+      sheetRight: (page.box.x + offsetX + page.box.width) * scale,
+    };
+  }
+
+  const contentControlMenuHost: ContentControlMenuHost = {
+    document,
+    locale: () => dateLocale.get(),
+    translate: (key) => translate?.(key) ?? key,
+    setValue: (controlId, value) => contentControlsOps.setValue(controlId, value),
+    close: (menu) => closeContentControlMenu(menu),
+  };
+
   function openContentControlWidget(controlId: string, kind: string): void {
     const reason = contentControlsOps.disabledReason(controlId, 'edit');
     if (reason) {
@@ -2238,237 +2276,35 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
       return;
     }
+    // Re-pressing the native widget toggles its current menu shut.
+    if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
+    // A host renderer that took the session owns the interaction — for a checkbox too, so a
+    // host can confirm, refuse or restyle a toggle instead of only watching it land.
+    if (widgetSessions.open(controlId, kind)) return;
     if (kind === 'checkbox') {
       contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
       return;
     }
-    // Re-pressing the native widget toggles its current menu shut.
-    if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
-    if (widgetSessions.open(controlId, kind)) return;
+    const alias = contentControlsInLayout(currentLayout).find((c) => c.id === controlId)?.alias;
+    let menu: HTMLElement;
     if (kind === 'dropdown' || kind === 'comboBox') {
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
-      // Engine-level menu: no hardcoded English — displayText comes from the file.
-      const menu = document.createElement('div');
-      menu.className = 'docx-content-control-menu';
-      menu.dataset.docxMarker = '';
-      menu.dataset.docxCcId = controlId;
-      menu.setAttribute('contenteditable', 'false');
-      menu.setAttribute('role', 'listbox');
-      menu.style.position = 'absolute';
-      menu.style.zIndex = '20';
-      menu.style.pointerEvents = 'auto';
-      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
-      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
-      const frag = record?.fragments[0];
-      if (frag) {
-        const page = currentLayout.pages[frag.pageIndex];
-        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
-        if (page) {
-          const contentLeft = page.contentBox.x - page.box.x;
-          const contentTop = page.contentBox.y - page.box.y;
-          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
-          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
-          menu.style.transform = 'translateX(-100%)';
-        }
-      }
-      for (const item of items) {
-        const option = document.createElement('button');
-        option.type = 'button';
-        option.className = 'docx-content-control-menu-item';
-        option.dataset.docxMarker = '';
-        option.setAttribute('contenteditable', 'false');
-        option.setAttribute('role', 'option');
-        option.textContent = item.displayText;
-        option.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          closeContentControlMenu(menu);
-          contentControlsOps.setValue(controlId, item.value);
-        });
-        menu.append(option);
-      }
-      if (kind === 'comboBox') {
-        const free = document.createElement('input');
-        free.type = 'text';
-        free.className = 'docx-content-control-menu-input';
-        free.dataset.docxMarker = '';
-        free.setAttribute('contenteditable', 'false');
-        free.addEventListener('mousedown', (event) => event.stopPropagation());
-        free.addEventListener('keydown', (event) => {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          closeContentControlMenu(menu);
-          contentControlsOps.setValue(controlId, free.value);
-        });
-        menu.append(free);
-      }
-      pagesLayer.append(menu);
-      setContentControlWidgetOpen(controlId, true);
-      armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
+      menu = buildContentControlListMenu(contentControlMenuHost, controlId, kind, items, alias);
+    } else if (kind === 'date') {
+      menu = buildContentControlCalendar(
+        contentControlMenuHost,
+        controlId,
+        dateValueOfControl(controlId),
+        alias
+      );
+    } else {
       return;
     }
-    if (kind === 'date') {
-      const menu = document.createElement('div');
-      menu.className = 'docx-content-control-menu';
-      menu.dataset.docxMarker = '';
-      menu.dataset.docxCcId = controlId;
-      menu.setAttribute('contenteditable', 'false');
-      menu.style.position = 'absolute';
-      menu.style.zIndex = '20';
-      menu.style.pointerEvents = 'auto';
-      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
-      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
-      const frag = record?.fragments[0];
-      if (frag) {
-        const page = currentLayout.pages[frag.pageIndex];
-        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
-        if (page) {
-          const contentLeft = page.contentBox.x - page.box.x;
-          const contentTop = page.contentBox.y - page.box.y;
-          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
-          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
-          menu.style.transform = 'translateX(-100%)';
-        }
-      }
-      menu.classList.add('docx-content-control-calendar');
-      const authoredDate = dateValueOfControl(controlId);
-      const parsedDate = authoredDate ? new Date(authoredDate) : new Date();
-      const selectedDate = Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
-      const initialDate = selectedDate ?? new Date();
-      let viewYear = initialDate.getFullYear();
-      let viewMonth = initialDate.getMonth();
-      const monthFormatter = new Intl.DateTimeFormat(undefined, {
-        month: 'long',
-        year: 'numeric',
-      });
-      const dayFormatter = new Intl.DateTimeFormat(undefined, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'narrow' });
-      const isoDate = (date: Date): string =>
-        `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1)
-          .toString()
-          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-      const sameDay = (left: Date, right: Date): boolean =>
-        left.getFullYear() === right.getFullYear() &&
-        left.getMonth() === right.getMonth() &&
-        left.getDate() === right.getDate();
-      let commitPendingManualDate: (() => boolean) | null = null;
-      const renderCalendar = (): void => {
-        const manual = document.createElement('input');
-        manual.type = 'date';
-        manual.className = 'docx-content-control-calendar-input';
-        manual.value = selectedDate ? isoDate(selectedDate) : '';
-        const initialManualValue = manual.value;
-        if (record?.alias) manual.setAttribute('aria-label', record.alias);
-        const commitManualDate = (): boolean => {
-          if (!manual.value || manual.value === initialManualValue) return false;
-          const value = manual.value;
-          closeContentControlMenu(menu);
-          contentControlsOps.setValue(controlId, value);
-          return true;
-        };
-        commitPendingManualDate = commitManualDate;
-        manual.addEventListener('keydown', (event) => {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          if (!commitManualDate()) closeContentControlMenu(menu);
-        });
-        manual.addEventListener('blur', () => {
-          queueMicrotask(() => {
-            if (!menu.isConnected || menu.contains(document.activeElement)) return;
-            if (!commitManualDate()) closeContentControlMenu(menu);
-          });
-        });
-        const header = document.createElement('div');
-        header.className = 'docx-content-control-calendar-header';
-        const previous = document.createElement('button');
-        previous.type = 'button';
-        previous.className = 'docx-content-control-calendar-nav';
-        previous.textContent = '‹';
-        const previousMonth = new Date(viewYear, viewMonth - 1, 1);
-        previous.setAttribute('aria-label', monthFormatter.format(previousMonth));
-        const title = document.createElement('div');
-        title.className = 'docx-content-control-calendar-title';
-        title.textContent = monthFormatter.format(new Date(viewYear, viewMonth, 1));
-        const next = document.createElement('button');
-        next.type = 'button';
-        next.className = 'docx-content-control-calendar-nav';
-        next.textContent = '›';
-        const nextMonth = new Date(viewYear, viewMonth + 1, 1);
-        next.setAttribute('aria-label', monthFormatter.format(nextMonth));
-        previous.addEventListener('mousedown', (event) => event.stopPropagation());
-        next.addEventListener('mousedown', (event) => event.stopPropagation());
-        previous.addEventListener('click', () => {
-          viewMonth -= 1;
-          if (viewMonth < 0) {
-            viewMonth = 11;
-            viewYear -= 1;
-          }
-          renderCalendar();
-        });
-        next.addEventListener('click', () => {
-          viewMonth += 1;
-          if (viewMonth > 11) {
-            viewMonth = 0;
-            viewYear += 1;
-          }
-          renderCalendar();
-        });
-        header.append(previous, title, next);
-
-        const weekdays = document.createElement('div');
-        weekdays.className = 'docx-content-control-calendar-weekdays';
-        for (let index = 0; index < 7; index += 1) {
-          const weekday = document.createElement('span');
-          weekday.textContent = weekdayFormatter.format(new Date(2024, 0, 1 + index));
-          weekdays.append(weekday);
-        }
-
-        const grid = document.createElement('div');
-        grid.className = 'docx-content-control-calendar-grid';
-        grid.setAttribute('role', 'grid');
-        const firstWeekday = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
-        const today = new Date();
-        for (let index = 0; index < 42; index += 1) {
-          const date = new Date(viewYear, viewMonth, index - firstWeekday + 1);
-          const day = document.createElement('button');
-          day.type = 'button';
-          day.className = 'docx-content-control-calendar-day';
-          day.textContent = String(date.getDate());
-          day.setAttribute('role', 'gridcell');
-          day.setAttribute('aria-label', dayFormatter.format(date));
-          if (date.getMonth() !== viewMonth) day.dataset.otherMonth = '';
-          if (selectedDate && sameDay(date, selectedDate)) {
-            day.dataset.selected = '';
-            day.setAttribute('aria-selected', 'true');
-          }
-          if (sameDay(date, today)) day.dataset.today = '';
-          day.addEventListener('mousedown', (event) => event.stopPropagation());
-          day.addEventListener('click', () => {
-            closeContentControlMenu(menu);
-            contentControlsOps.setValue(controlId, isoDate(date));
-          });
-          grid.append(day);
-        }
-        menu.replaceChildren(manual, header, weekdays, grid);
-      };
-      renderCalendar();
-      pagesLayer.append(menu);
-      setContentControlWidgetOpen(controlId, true);
-      armContentControlMenuDismiss(menu, () => {
-        if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
-      });
-      menu
-        .querySelector<HTMLElement>(
-          '[data-selected], [data-today], .docx-content-control-calendar-day'
-        )
-        ?.focus({ preventScroll: true });
-    }
+    placeContentControlMenu(menu, pagesLayer, contentControlMenuAnchor(controlId));
+    setContentControlWidgetOpen(controlId, true);
+    armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
+    if (kind === 'date') focusContentControlCalendar(menu);
   }
 
   const contentControlsOps: ContentControlOps = {
@@ -2868,6 +2704,7 @@ export function mountPaginatedSurface(
   const dateLocale = createSurfaceDateLocale(options.locale, flushTypeBuffer);
   let translate = options.translate;
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
+  let legacyCheckboxInteraction: ReturnType<typeof createLegacyCheckboxInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
@@ -5734,8 +5571,12 @@ export function mountPaginatedSurface(
         container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
         viewportObserver?.disconnect();
         observedScroller = null;
+        // An open engine menu holds document-level dismiss listeners; a surface torn down
+        // with its menu still up would leave them swallowing the next editor's Escape.
+        removeExistingContentControlMenu();
         widgetSessions.destroy();
         textFormInteraction?.destroy();
+        legacyCheckboxInteraction?.destroy();
         pointer?.destroy();
         tableInteraction.destroy();
         navigation.destroy();
@@ -5918,6 +5759,18 @@ export function mountPaginatedSurface(
     runtimeOptions.initialTextFormInput
   );
   registerFormFieldIdentity(surface, textFormInteraction.fieldId);
+  legacyCheckboxInteraction = createLegacyCheckboxInteraction({
+    pagesLayer,
+    part: (paragraphId?: string) =>
+      partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
+    editable: () => editingMode === 'edit' && !showFieldCodes,
+    protected: (paragraphId) =>
+      formsProtectionEnabled(session.settingsRoot()) &&
+      sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+    selection: () => selection,
+    select: (next) => setSelection(next),
+    apply: (op) => applyTextFormOperation(op, commit, applyOps),
+  });
   const dispatchKeyDown = createKeyDownHandler(surface, {
     ...options,
     onToggleFieldCodes: () => {
@@ -5932,7 +5785,8 @@ export function mountPaginatedSurface(
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
-    if (!textFormInteraction?.keydown(event)) dispatchKeyDown(event);
+    if (textFormInteraction?.keydown(event) || legacyCheckboxInteraction?.keydown(event)) return;
+    dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
   const dispatchBeforeInput = createBeforeInputHandler(surface, {

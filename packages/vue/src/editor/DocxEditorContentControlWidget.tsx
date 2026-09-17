@@ -1,39 +1,107 @@
 import {
+  computed,
   defineComponent,
   onBeforeUnmount,
   ref,
+  toRef,
   watch,
   type CSSProperties,
   type PropType,
+  type VNode,
+  type VNodeChild,
 } from 'vue';
 import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
-import { useEditorState } from './useEditorState';
 import { useFormControlTranslate } from './form-control-translate';
 import { absolutePointInScroller } from './scroller-geometry';
+import {
+  provideContentControlWidget,
+  useContentControlWidgetState,
+  type UseContentControlWidgetResult,
+} from './content-control-widget/context';
+import {
+  ContentControlWidgetApply,
+  ContentControlWidgetCalendar,
+  ContentControlWidgetCancel,
+  ContentControlWidgetDay,
+  ContentControlWidgetError,
+  ContentControlWidgetFooter,
+  ContentControlWidgetGrid,
+  ContentControlWidgetHeader,
+  ContentControlWidgetInput,
+  ContentControlWidgetItem,
+  ContentControlWidgetList,
+  ContentControlWidgetNextMonth,
+  ContentControlWidgetPreviousMonth,
+  ContentControlWidgetTitle,
+  ContentControlWidgetToday,
+  ContentControlWidgetWeekdays,
+} from './content-control-widget/parts';
+
 /** Value-widget session and optional replacement controls. @public */
 export interface DocxEditorContentControlWidgetProps {
   session: ContentControlWidgetSession;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Replaces the packaged arrangement. Compose it from the compound's parts
+   * (`DocxEditorContentControlWidget.Calendar`, `.List`, …) or from `useContentControlWidget()`.
+   */
   children?: DocxEditorChildren;
 }
-/** Compact value editor for a configured content-control popup. @public */
-export const DocxEditorContentControlWidget = defineComponent({
+
+function defaultArrangement(widget: UseContentControlWidgetResult): VNodeChild {
+  const kind = widget.kind.value;
+  if (kind === 'date') return <ContentControlWidgetCalendar />;
+  if (kind === 'comboBox') {
+    return (
+      <>
+        <ContentControlWidgetInput />
+        <ContentControlWidgetList />
+        <ContentControlWidgetError />
+        <ContentControlWidgetFooter />
+      </>
+    );
+  }
+  return (
+    <>
+      <ContentControlWidgetList />
+      <ContentControlWidgetError />
+    </>
+  );
+}
+
+/**
+ * The packaged value pop-up for a dropdown, combo-box, date or checkbox content control.
+ *
+ * Anchored below the control inside the editor's scroll container. Without children it
+ * renders the same arrangement the engine paints on its own — a list, a list with free-text
+ * entry, or a month calendar with a Today button — from the same stylesheet classes, so one
+ * theme covers both. A checkbox session applies its toggle at once and shows nothing.
+ * @public
+ */
+const ContentControlWidgetRoot = defineComponent({
   name: 'DocxEditorContentControlWidget',
   props: {
     session: { type: Object as PropType<ContentControlWidgetSession>, required: true },
     className: String,
     style: Object as PropType<CSSProperties>,
-    children: Object as PropType<DocxEditorChildren>,
+    children: [Object, Array, String] as PropType<DocxEditorChildren>,
   },
   setup(props, { slots }) {
     const t = useFormControlTranslate();
-    const value = ref(props.session.value);
+    const session = toRef(props, 'session');
+    const widget = useContentControlWidgetState(session);
+    provideContentControlWidget(widget);
     const closed = ref(props.session.signal.aborted);
-    const refused = ref(false);
     const panel = ref<HTMLDivElement | null>(null);
     const position = ref<CSSProperties>({});
+    // A checkbox has no pop-up: the packaged arrangement IS the toggle, so configuring this
+    // popup for a restyled dropdown never makes checkboxes stop working. A host that renders
+    // its own children owns the decision instead.
+    const immediate = computed(
+      () => props.session.kind === 'checkbox' && !slots.default && props.children === undefined
+    );
     let opener: HTMLElement | null = null;
     let focusPanel: HTMLDivElement | null = null;
     const restoreFocus = () => {
@@ -47,29 +115,24 @@ export const DocxEditorContentControlWidget = defineComponent({
         previous.focus({ preventScroll: true });
     };
     onBeforeUnmount(restoreFocus);
-    const enabled = useEditorState(() => props.session.canApply(), Object.is, {
-      extraDeps: () => props.session,
-    });
     watch(
-      () => props.session,
-      (session, _old, onCleanup) => {
-        value.value =
-          session.kind === 'date' && /^\d{4}-\d{2}-\d{2}/.test(session.value)
-            ? session.value.slice(0, 10)
-            : session.value;
-        closed.value = session.signal.aborted;
-        refused.value = false;
+      session,
+      (current, _old, onCleanup) => {
+        closed.value = current.signal.aborted;
         const abort = () => {
           closed.value = true;
         };
-        session.signal.addEventListener('abort', abort, { once: true });
-        onCleanup(() => session.signal.removeEventListener('abort', abort));
+        current.signal.addEventListener('abort', abort, { once: true });
+        onCleanup(() => current.signal.removeEventListener('abort', abort));
+        if (immediate.value && !current.signal.aborted) {
+          current.apply(current.value === 'true' ? 'false' : 'true');
+        }
       },
       { immediate: true }
     );
     watch(
-      [panel, () => props.session],
-      ([element, session]) => {
+      [panel, session],
+      ([element, current]) => {
         if (!element) {
           restoreFocus();
           return;
@@ -79,11 +142,14 @@ export const DocxEditorContentControlWidget = defineComponent({
         opener = active instanceof HTMLElement ? active : null;
         focusPanel = element;
         const scroller = element.closest<HTMLElement>('.docx-editor__scroll-container');
-        if (session.anchor && scroller) {
-          const rect = session.anchor.getBoundingClientRect();
+        if (current.anchor && scroller) {
+          const rect = current.anchor.getBoundingClientRect();
           position.value = absolutePointInScroller(scroller, rect.left, rect.bottom);
         }
-        element.querySelector<HTMLElement>('input,select,button')?.focus({ preventScroll: true });
+        // The calendar grid places its own roving focus; everything else takes the first control.
+        if (!element.querySelector('[data-docx-part="grid"]')) {
+          element.querySelector<HTMLElement>('input,select,button')?.focus({ preventScroll: true });
+        }
       },
       { flush: 'post' }
     );
@@ -99,13 +165,10 @@ export const DocxEditorContentControlWidget = defineComponent({
       },
       { flush: 'post' }
     );
-    const apply = () => {
-      refused.value = !props.session.apply(value.value);
-    };
     return () => {
-      if (closed.value) return null;
-      const session = props.session;
-      const label = t(`contentControl.types.${session.kind}`);
+      if (closed.value || immediate.value) return null;
+      const current = props.session;
+      const label = t(`contentControl.types.${current.kind}`);
       return (
         <div
           ref={panel}
@@ -114,80 +177,65 @@ export const DocxEditorContentControlWidget = defineComponent({
           class={['docx-content-control-widget-popup', props.className]}
           style={{ ...position.value, ...props.style }}
           data-docx-popup="contentControlWidget"
+          data-kind={current.kind}
           onPointerdown={(event) => event.stopPropagation()}
           onKeydown={(event) => {
             if (event.isComposing) return;
             if (event.key === 'Escape') {
               event.preventDefault();
               event.stopPropagation();
-              session.cancel();
+              current.cancel();
             }
             if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
               event.preventDefault();
-              apply();
+              widget.apply();
             }
           }}
         >
-          {slots.default?.() ?? props.children ?? (
-            <>
-              {session.kind === 'dropdown' ? (
-                <select
-                  aria-label={label}
-                  value={value.value}
-                  onChange={(event) => {
-                    value.value = (event.target as HTMLSelectElement).value;
-                  }}
-                >
-                  {!session.items.some((item) => item.value === value.value) ? (
-                    <option value={value.value} disabled>
-                      {value.value}
-                    </option>
-                  ) : null}
-                  {session.items.map((item) => (
-                    <option value={item.value}>{item.displayText}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type={session.kind === 'date' ? 'date' : 'text'}
-                  aria-label={label}
-                  value={value.value}
-                  onInput={(event) => {
-                    value.value = (event.target as HTMLInputElement).value;
-                  }}
-                />
-              )}
-              {session.kind === 'comboBox'
-                ? session.items.map((item) => (
-                    <button
-                      type="button"
-                      disabled={!enabled.value}
-                      onClick={() => {
-                        refused.value = !session.apply(item.value);
-                      }}
-                    >
-                      {item.displayText}
-                    </button>
-                  ))
-                : null}
-              {refused.value ? <div role="alert">{t('disabledReason.invalidValue')}</div> : null}
-              <div class="docx-dialog__footer">
-                <button class="docx-dialog__button" type="button" onClick={() => session.cancel()}>
-                  {t('common.cancel')}
-                </button>
-                <button
-                  class="docx-dialog__button docx-dialog__button--primary"
-                  type="button"
-                  disabled={!enabled.value}
-                  onClick={apply}
-                >
-                  {t('common.apply')}
-                </button>
-              </div>
-            </>
-          )}
+          {slots.default?.() ?? props.children ?? defaultArrangement(widget)}
         </div>
       );
     };
   },
 });
+
+/** The compound pop-up with its parts attached as statics. @public */
+export interface DocxEditorContentControlWidgetNamespace {
+  (props: DocxEditorContentControlWidgetProps): VNode | null;
+  readonly Calendar: typeof ContentControlWidgetCalendar;
+  readonly Header: typeof ContentControlWidgetHeader;
+  readonly PreviousMonth: typeof ContentControlWidgetPreviousMonth;
+  readonly Title: typeof ContentControlWidgetTitle;
+  readonly NextMonth: typeof ContentControlWidgetNextMonth;
+  readonly Weekdays: typeof ContentControlWidgetWeekdays;
+  readonly Grid: typeof ContentControlWidgetGrid;
+  readonly Day: typeof ContentControlWidgetDay;
+  readonly Today: typeof ContentControlWidgetToday;
+  readonly List: typeof ContentControlWidgetList;
+  readonly Item: typeof ContentControlWidgetItem;
+  readonly Input: typeof ContentControlWidgetInput;
+  readonly Error: typeof ContentControlWidgetError;
+  readonly Footer: typeof ContentControlWidgetFooter;
+  readonly Apply: typeof ContentControlWidgetApply;
+  readonly Cancel: typeof ContentControlWidgetCancel;
+}
+
+/** Compact value editor for a configured content-control popup. @public */
+export const DocxEditorContentControlWidget = Object.assign(ContentControlWidgetRoot, {
+  Calendar: ContentControlWidgetCalendar,
+  Header: ContentControlWidgetHeader,
+  PreviousMonth: ContentControlWidgetPreviousMonth,
+  Title: ContentControlWidgetTitle,
+  NextMonth: ContentControlWidgetNextMonth,
+  Weekdays: ContentControlWidgetWeekdays,
+  Grid: ContentControlWidgetGrid,
+  Day: ContentControlWidgetDay,
+  Today: ContentControlWidgetToday,
+  List: ContentControlWidgetList,
+  Item: ContentControlWidgetItem,
+  Input: ContentControlWidgetInput,
+  Error: ContentControlWidgetError,
+  Footer: ContentControlWidgetFooter,
+  Apply: ContentControlWidgetApply,
+  Cancel: ContentControlWidgetCancel,
+}) as unknown as DocxEditorContentControlWidgetNamespace;

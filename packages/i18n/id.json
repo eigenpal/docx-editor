@@ -679,6 +679,11 @@
       "plainText": "Teks biasa",
       "repeatingSection": "Bagian berulang",
       "richText": "Teks kaya"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

@@ -679,6 +679,11 @@
       "plainText": "Düz metin",
       "repeatingSection": "Yinelenen bölüm",
       "richText": "Zengin metin"
+    },
+    "calendar": {
+      "nextMonth": null,
+      "previousMonth": null,
+      "today": null
     }
   },
   "notes": {

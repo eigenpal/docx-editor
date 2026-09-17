@@ -88,6 +88,7 @@ export const TREE_DOC_OP_KINDS = [
   'refreshFieldResults',
   'setTextFormFieldDefault',
   'commitTextFormField',
+  'setLegacyCheckbox',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be

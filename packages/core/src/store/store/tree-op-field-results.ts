@@ -9,6 +9,7 @@ import { splitsSurrogate } from './tree-op-segments.ts';
 import { namedOwnerRefusal } from './tree-op-validate.ts';
 import type { TextFormFieldRange } from './text-form-fields.ts';
 import { textFormFieldsOf, textFormFieldForEdit } from './text-form-fields.ts';
+import { applySetLegacyCheckbox } from './legacy-checkbox-fields.ts';
 // Field-result refresh TreeDocOp — rewrite a field's cached RESULT runs in place.
 //
 // The op carries the paragraph, the field anchor (the run holding the `begin` fldChar, or
@@ -690,6 +691,46 @@ export function applyTextFormFieldDefault(
     dependencyKeys: [op.paragraphId],
     impact: 'text-local',
   });
+}
+
+/** The ops this seam applies: the legacy form-field family plus result refreshes. */
+export type FieldResultOp = Extract<
+  TreeDocOp,
+  {
+    op:
+      | 'commitTextFormField'
+      | 'setTextFormFieldDefault'
+      | 'refreshFieldResults'
+      | 'setLegacyCheckbox';
+  }
+>;
+
+/** A type guard, so the apply dispatcher keeps narrowing `op` past this seam's ops. */
+export function isFieldResultOp(op: TreeDocOp): op is FieldResultOp {
+  return (
+    op.op === 'commitTextFormField' ||
+    op.op === 'setTextFormFieldDefault' ||
+    op.op === 'refreshFieldResults' ||
+    op.op === 'setLegacyCheckbox'
+  );
+}
+
+/**
+ * Apply one of {@link FieldResultOp}.
+ *
+ * One entry for the apply dispatcher, so the legacy form-field family (text default, commit,
+ * checkbox toggle) and result refreshes stay together instead of each adding a line to the
+ * composition root.
+ */
+export function applyFieldResultOp(
+  part: OoxmlPart,
+  op: FieldResultOp,
+  options?: EditOptions
+): TreeOpResult {
+  if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
+  if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
+  if (op.op === 'setLegacyCheckbox') return applySetLegacyCheckbox(part, op, options);
+  return applyRefreshFieldResults(part, op, options);
 }
 
 export function protectedTextFormEditRefusal(

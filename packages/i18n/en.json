@@ -680,6 +680,11 @@
       "sdtLocked": "Content control locked",
       "contentLocked": "Contents locked",
       "sdtContentLocked": "Content control and contents locked"
+    },
+    "calendar": {
+      "today": "Today",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month"
     }
   },
   "headerFooter": {

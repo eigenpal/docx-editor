@@ -986,6 +986,10 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
 
 // @public
 export interface FieldAtomMarker {
+    readonly formControl?: {
+        readonly checked: boolean;
+        readonly kind: 'checkbox';
+    };
     readonly formField: boolean;
     readonly pageField?: {
         readonly kind: AllowlistedPageField;

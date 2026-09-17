@@ -195,6 +195,11 @@ export {
 export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';
 
 export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
+export {
+  legacyCheckboxFieldsOf,
+  type LegacyCheckboxFieldRange,
+  type SetLegacyCheckboxOp,
+} from './legacy-checkbox-fields.ts';
 
 export { formsProtectionEnabled, sectionProtectsForms } from './tree-op-content-controls.ts';
 

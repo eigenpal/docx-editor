@@ -157,6 +157,82 @@ Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-se
 See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 
+## Compose the value pop-up
+
+`contentControlWidget` renders `DocxEditorContentControlWidget` for a dropdown,
+combo box, date, or checkbox control. Without children it renders the packaged
+arrangement: a list, a list with free-text entry, or a month calendar with a
+**Today** button, from the same stylesheet classes the engine's own menus use. A
+checkbox session applies its toggle at once and renders nothing.
+
+The compound exposes these parts: `Calendar`, `Header`, `PreviousMonth`, `Title`,
+`NextMonth`, `Weekdays`, `Grid`, `Day`, `Today`, `List`, `Item`, `Input`,
+`Error`, `Footer`, `Apply`, and `Cancel`. Parts accept `className`, `style`,
+`hidden`, and `asChild`, and forward `id`, `aria-*`, and `data-*`. `Day` takes a
+`day` from `calendar.days`; `Item` takes an `item` from `items`. Read the draft
+state with `useContentControlWidget()` inside any child. It supplies `value`,
+`setValue`, `isEnabled`, `refused`, `apply`, `cancel`, `calendar`,
+`previousMonth`, `nextMonth`, `selectDay`, `selectToday`, and `focusDay`. Vue
+exposes the reactive members as refs.
+
+This example keeps the packaged calendar, adds a class to the grid, and replaces
+the Today control with a design-system button:
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/react';
+
+const popups = {
+  contentControlWidget: (props) => (
+    <DocxEditorContentControlWidget {...props} className="brand-popup">
+      <DocxEditorContentControlWidget.Header />
+      <DocxEditorContentControlWidget.Weekdays />
+      <DocxEditorContentControlWidget.Grid className="brand-grid" />
+      <DocxEditorContentControlWidget.Today asChild>
+        <MyButton>Pick today</MyButton>
+      </DocxEditorContentControlWidget.Today>
+    </DocxEditorContentControlWidget>
+  ),
+};
+
+<DocxEditor document={source} popups={popups} />;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { h } from 'vue';
+import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/vue';
+
+const popups = {
+  contentControlWidget: (props) =>
+    h(DocxEditorContentControlWidget, { ...props, className: 'brand-popup' }, () => [
+      h(DocxEditorContentControlWidget.Header),
+      h(DocxEditorContentControlWidget.Weekdays),
+      h(DocxEditorContentControlWidget.Grid, { class: 'brand-grid' }),
+      h(DocxEditorContentControlWidget.Today, { asChild: true }, () =>
+        h(MyButton, null, () => 'Pick today')
+      ),
+    ]),
+};
+</script>
+
+<template>
+  <DocxEditor :document="source" :popups="popups" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The date session's `locale` member carries the editor's regional locale, so a
+custom picker can build its own grid with `calendarMonth()` from
+`@docx-editor.dev/core/editor`.
+
 ## Connect a custom input
 
 Put the input inside a named `Field`. Call the draft hook in the input component,

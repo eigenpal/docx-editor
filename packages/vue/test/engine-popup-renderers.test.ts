@@ -19,6 +19,7 @@ function widget(value: string, kind: ContentControlWidgetSession['kind'] = 'date
     kind,
     items: [{ displayText: 'First', value: 'first' }],
     value,
+    locale: 'en-US',
     anchor: null,
     signal: abort.signal,
     canApply: () => !abort.signal.aborted,
@@ -45,14 +46,24 @@ test('widget normalizes authored dates and resets on a new session', async () =>
     container.remove();
   });
   await nextTick();
-  expect((container.querySelector('input') as HTMLInputElement).value).toBe('2026-09-08');
-  (container.querySelectorAll('button')[1] as HTMLButtonElement).click();
+  // The picker opens on the authored month with the authored day marked; a press on that
+  // day writes the ISO date and closes the pop-up.
+  expect(container.querySelector('.docx-content-control-calendar-title')?.textContent).toBe(
+    'September 2026'
+  );
+  const selected = container.querySelector<HTMLButtonElement>('[data-selected]')!;
+  expect(selected.dataset.iso).toBe('2026-09-08');
+  expect(container.querySelector('input')).toBeNull();
+  selected.click();
   await nextTick();
   expect(first.writes).toEqual(['2026-09-08']);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   current.value = widget('2026-10-01').session;
   await nextTick();
-  expect((container.querySelector('input') as HTMLInputElement).value).toBe('2026-10-01');
+  expect(container.querySelector('.docx-content-control-calendar-title')?.textContent).toBe(
+    'October 2026'
+  );
+  expect(container.querySelector<HTMLElement>('[data-selected]')?.dataset.iso).toBe('2026-10-01');
 });
 
 test('invalid-field acknowledgement closes the native modal synchronously before core restoration', async () => {
@@ -180,11 +191,15 @@ for (const mode of ['native', 'custom', 'manual'] as const)
       expect(editor!.surface!.session.bodyText()).toContain('Two');
     }
     if (mode === 'custom') {
-      const cancel = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Cancel'
+      // Escape closes without a write and hands focus back to the opener.
+      const popup = container.querySelector<HTMLElement>(
+        '[data-docx-popup="contentControlWidget"]'
       )!;
-      cancel.click();
+      popup.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' })
+      );
       await flush();
+      expect(container.querySelector('[data-docx-popup="contentControlWidget"]')).toBeNull();
       expect(document.activeElement).toBe(opener);
       container.querySelector('[data-docx-cc-widget="dropdown"]')!.dispatchEvent(
         new PointerEvent('pointerdown', {
@@ -195,14 +210,19 @@ for (const mode of ['native', 'custom', 'manual'] as const)
         })
       );
       await flush();
-      const input = container.querySelector('select') as HTMLSelectElement;
-      input.value = '2';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      await nextTick();
-      const apply = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Apply'
+      // The packaged dropdown is the same list the engine paints: one option per entry, the
+      // current value marked, and a press commits at once — no Apply step, as in Word.
+      // Scoped to the pop-up: the painted widget button itself carries role="listbox".
+      const reopened = container.querySelector<HTMLElement>(
+        '[data-docx-popup="contentControlWidget"]'
       )!;
-      apply.click();
+      const options = [...reopened.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+      expect(options.map((option) => option.textContent)).toEqual(['One', 'Two']);
+      expect(options[0]!.getAttribute('aria-selected')).toBe('true');
+      expect(reopened.querySelector('[role="listbox"]')!.contains(document.activeElement)).toBe(
+        true
+      );
+      options[1]!.click();
       await flush();
       expect(editor!.surface!.session.bodyText()).toContain('Two');
       expect(container.querySelector('[data-docx-popup="contentControlWidget"]')).toBeNull();

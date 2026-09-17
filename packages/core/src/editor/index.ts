@@ -366,3 +366,17 @@ export type {
   InvalidTextFormFieldSession,
   InvalidTextFormFieldChromeHandlers,
 } from './popup-sessions.ts';
+export {
+  calendarMonth,
+  calendarMonthTitle,
+  calendarWeekdays,
+  firstDayOfWeek,
+  isoDateOf,
+  parseIsoDate,
+  shiftMonth,
+} from './content-control-calendar.ts';
+export type {
+  CalendarDay,
+  CalendarMonth,
+  CalendarMonthOptions,
+} from './content-control-calendar.ts';

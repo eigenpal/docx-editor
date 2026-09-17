@@ -6,6 +6,7 @@ import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { coveredTextFormDefinitionRefusal } from './text-form-field-deletion.ts';
 import { validateTextFormFieldDefault } from './tree-op-field-results.ts';
+import { validateSetLegacyCheckbox } from './legacy-checkbox-fields.ts';
 // Pre-application validation for tree ops (tree-ops seam).
 //
 // `validateTreeOp` runs BEFORE any tree work so a rejected op leaves the tree, revision
@@ -426,6 +427,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   if (op.op === 'setFieldCode') return validateSetFieldCode(part, op);
   if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
+  if (op.op === 'setLegacyCheckbox') return validateSetLegacyCheckbox(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);
   }

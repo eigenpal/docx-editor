@@ -301,6 +301,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/content-control-widget/parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["class", "class"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/images/ImageAltText": {
       "propsAddedInReact": ["children"],
       "propsAddedInVue": ["name", "props"],

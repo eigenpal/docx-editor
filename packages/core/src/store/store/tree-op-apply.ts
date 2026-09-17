@@ -7,7 +7,7 @@ import {
   isInlineControl,
 } from './content-control-checkbox.ts';
 import { valueContent, withParagraphDiff } from './content-control-value-content.ts';
-import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
+import { applyFieldResultOp, isFieldResultOp } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
 //
@@ -73,6 +73,7 @@ import {
   paraIdOf,
   usedParaIds,
   w14PrefixInScopeAt,
+  fnv1a32,
 } from '../package/para-id.ts';
 import {
   TEXT_DEPS,
@@ -145,7 +146,6 @@ import {
   applyReplaceTocResult,
   applyRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
-import { applyRefreshFieldResults } from './tree-op-field-results.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
@@ -168,7 +168,6 @@ import {
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
-import { fnv1a32 } from '../package/para-id.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 
@@ -288,10 +287,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
-  if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
+  if (isFieldResultOp(op)) return applyFieldResultOp(part, op, options);
   if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
-  if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
-  if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if ((op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') && op.range) {
     return applyPartialHyperlink(part, op, options);

@@ -191,20 +191,30 @@ describe('content-control surface chrome', () => {
       const fragment = records.find((record) => record.id === controlId)!.fragments[0]!;
       const page = surface.layout().pages[fragment.pageIndex]!;
       // Compared as numbers: CSS serializes to six decimals, so a coordinate that is a
-      // repeating decimal never matches its own `${value}px` spelling.
+      // repeating decimal never matches its own `${value}px` spelling. The pop-up lines up
+      // under the control's LEFT edge, as Word's does; right-aligning it to the widget hung
+      // it off the page for any control near the start of a line.
       expect(Number.parseFloat(menu!.style.left)).toBeCloseTo(
-        page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width,
+        page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x,
         5
       );
       expect(Number.parseFloat(menu!.style.top)).toBeCloseTo(
         page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height,
         5
       );
-      expect(menu!.style.transform).toBe('translateX(-100%)');
+      expect(menu!.style.transform).toBe('');
       if (widget.dataset.docxCcWidget === 'date') {
         expect(menu!.classList.contains('docx-content-control-calendar')).toBe(true);
         expect(menu!.querySelectorAll('.docx-content-control-calendar-day')).toHaveLength(42);
-        expect(menu!.querySelector('input[type="date"]')).not.toBeNull();
+        expect(
+          menu!.querySelectorAll('.docx-content-control-calendar-weekdays > span')
+        ).toHaveLength(7);
+        // No native date input: the grid IS the picker, like Word's.
+        expect(menu!.querySelector('input')).toBeNull();
+        expect(menu!.querySelector('.docx-content-control-calendar-today')?.textContent).toBe(
+          'Today'
+        );
+        expect(menu!.querySelector('[data-selected]')?.getAttribute('data-iso')).toBe('2026-08-04');
       }
       const owner = [
         ...container.querySelectorAll<HTMLElement>('[data-docx-content-control]'),
@@ -242,11 +252,101 @@ describe('content-control surface chrome', () => {
         expect(menu!.querySelector('.docx-content-control-calendar-title')?.textContent).not.toBe(
           beforeTitle
         );
-        expect(menu!.querySelector('.docx-content-control-calendar-input')).not.toBeNull();
         document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
         expect(menu!.isConnected).toBe(false);
       }
     }
+  });
+
+  test('the calendar Today button and arrow keys commit and roam like a picker', () => {
+    const body = `<w:p>${sdt(
+      `<w:date w:fullDate="2026-08-04T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/></w:date>`,
+      `<w:r><w:t>2026-08-04</w:t></w:r>`
+    )}</w:p>`;
+    const { container } = mount(body);
+    const press = (): void => {
+      container.querySelector<HTMLElement>('[data-docx-cc-widget="date"]')!.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 12,
+          pointerType: 'mouse',
+        })
+      );
+    };
+    const menu = (): HTMLElement | null =>
+      container.querySelector<HTMLElement>('.docx-content-control-menu');
+
+    // ArrowLeft from the first of the month crosses into the previous month's grid.
+    press();
+    const first = menu()!.querySelector<HTMLElement>('[data-iso="2026-08-01"]')!;
+    first.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowLeft' })
+    );
+    expect(menu()!.querySelector('.docx-content-control-calendar-title')?.textContent).toBe(
+      'July 2026'
+    );
+    expect(menu()!.querySelector<HTMLElement>('[data-iso="2026-07-31"]')).not.toBeNull();
+
+    // A day press commits that ISO date and closes the picker.
+    menu()!.querySelector<HTMLElement>('[data-iso="2026-07-15"]')!.click();
+    expect(menu()).toBeNull();
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain('2026-07-15');
+
+    // Today commits the current local date.
+    press();
+    menu()!.querySelector<HTMLElement>('.docx-content-control-calendar-today')!.click();
+    expect(menu()).toBeNull();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+      today.getDate()
+    ).padStart(2, '0')}`;
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain(iso);
+  });
+
+  test('a host renderer receives checkbox presses as a session before the engine toggles', () => {
+    // Text on both sides: the toggle rewrites the display run as a `w:sym`, which has no
+    // model width, and the control's fragment then comes from the line it sits on.
+    const body = `<w:p><w:r><w:t>Done: </w:t></w:r>${sdt(
+      `<w14:checkbox><w14:checked w14:val="0"/><w14:checkedState w14:val="2612" w14:font="MS Gothic"/>` +
+        `<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox>`,
+      `<w:r><w:t>☐</w:t></w:r>`
+    )}<w:r><w:t> yes</w:t></w:r></w:p>`;
+    const sessions: ContentControlWidgetSession[] = [];
+    const { surface, container } = mount(body, (session) => {
+      sessions.push(session);
+      return true;
+    });
+    surface.contentControls.setShowAll(true);
+    const press = (): void => {
+      container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]')!.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 21,
+          pointerType: 'mouse',
+        })
+      );
+    };
+    press();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.kind).toBe('checkbox');
+    expect(sessions[0]!.value).toBe('false');
+    expect(sessions[0]!.items).toEqual([]);
+    // The engine did NOT toggle on its own: the host owns the decision.
+    const checked = (): string | null =>
+      container
+        .querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]')
+        ?.getAttribute('data-checked') ?? null;
+    expect(checked()).toBe('false');
+    expect(sessions[0]!.apply('true')).toBe(true);
+    expect(checked()).toBe('true');
+    press();
+    expect(sessions[1]!.value).toBe('true');
+    sessions[1]!.cancel();
+    expect(checked()).toBe('true');
   });
 
   test('widget menus dismiss on outside press, Escape, and widget re-press', () => {
@@ -296,34 +396,6 @@ describe('content-control surface chrome', () => {
     press(widgets[0]!);
     press(widgets[1]!);
     expect(menu()?.textContent).toContain('A');
-  });
-
-  test('manual calendar entry commits an ISO date', () => {
-    const body = `<w:p>${sdt(
-      `<w:date w:fullDate="2026-08-04T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/></w:date>`,
-      `<w:r><w:t>2026-08-04</w:t></w:r>`
-    )}</w:p>`;
-    const { container } = mount(body);
-    const widget = container.querySelector<HTMLElement>('[data-docx-cc-widget="date"]')!;
-    widget.dispatchEvent(
-      new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        pointerId: 12,
-        pointerType: 'mouse',
-      })
-    );
-    const manual = container.querySelector<HTMLInputElement>(
-      '.docx-content-control-calendar-input'
-    )!;
-    manual.value = '2026-09-15';
-    manual.dispatchEvent(new InputEvent('input', { bubbles: true }));
-    manual.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(container.querySelector('.docx-content-control-menu')).not.toBeNull();
-    manual.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
-    expect(container.querySelector('.docx-content-control-menu')).toBeNull();
-    expect(container.querySelector('.docx-page-content')?.textContent).toContain('2026-09-15');
   });
 
   test('boundary furniture is excluded from native selection mapping', () => {

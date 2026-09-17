@@ -753,5 +753,24 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         };
       }
     ),
+    story(
+      'setLegacyCheckbox',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Box"/><w:checkBox><w:size w:val="24"/><w:default w:val="0"/></w:checkBox></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMCHECKBOX </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing checkbox form');
+        return {
+          op: 'setLegacyCheckbox',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+          checked: true,
+        };
+      }
+    ),
   ];
 }

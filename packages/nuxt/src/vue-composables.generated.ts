@@ -3,6 +3,7 @@ export const VUE_COMPOSABLES = [
   'useChromeTranslate',
   'useContentControl',
   'useContentControlInstance',
+  'useContentControlWidget',
   'useContextMenuTarget',
   'useDocumentOutline',
   'useDocumentSearch',

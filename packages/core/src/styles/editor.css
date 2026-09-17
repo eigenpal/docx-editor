@@ -985,8 +985,10 @@ a.docx-hyperlink:focus-visible {
   display: grid;
   place-items: center;
   color: var(--doc-primary);
+  /* The painter sets the widget's font-size to its painted side, so every glyph below is
+     drawn in `em` and follows the page zoom instead of staying a 16px chip at every scale. */
   font:
-    600 10px/1 system-ui,
+    600 0.625em/1 system-ui,
     sans-serif;
 }
 
@@ -997,31 +999,31 @@ a.docx-hyperlink:focus-visible {
 
 .docx-content-control-widget[data-docx-cc-widget='date']::after {
   content: '';
-  inset: 3px;
+  inset: 0.1875em;
   display: block;
-  border: 1.5px solid currentcolor;
-  border-radius: 2px;
-  background: linear-gradient(currentcolor, currentcolor) 0 3px / 100% 1px no-repeat;
+  border: 0.09em solid currentcolor;
+  border-radius: 0.125em;
+  background: linear-gradient(currentcolor, currentcolor) 0 0.1875em / 100% 0.0625em no-repeat;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='date']::before {
   content: '';
   position: absolute;
   z-index: 1;
-  top: 2px;
-  left: 5px;
-  width: 1px;
-  height: 3px;
+  top: 0.125em;
+  left: 0.3125em;
+  width: 0.0625em;
+  height: 0.1875em;
   background: currentcolor;
-  box-shadow: 4px 0 currentcolor;
+  box-shadow: 0.25em 0 currentcolor;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='checkbox']::after {
   content: '';
-  inset: 2px 5px 4px;
+  inset: 0.125em 0.3125em 0.25em;
   display: block;
-  border-right: 2px solid currentcolor;
-  border-bottom: 2px solid currentcolor;
+  border-right: 0.125em solid currentcolor;
+  border-bottom: 0.125em solid currentcolor;
   opacity: 0;
   transform: rotate(45deg);
 }
@@ -1083,30 +1085,36 @@ a.docx-hyperlink:focus-visible {
   border-radius: 12px;
 }
 
-.docx-content-control-calendar-input {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0 0 0.6rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--doc-border);
-  border-radius: 7px;
-  background: var(--doc-surface);
-  color: var(--doc-text);
+/* The picker footer holds the Today shortcut, as Word's does. */
+.docx-content-control-calendar-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-content-control-calendar-today {
+  padding: 0.3rem 0.85rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-primary);
+  cursor: pointer;
   font: inherit;
+  font-weight: 600;
 }
 
-.docx-content-control-calendar-input:focus {
-  border-color: var(--doc-primary);
-  outline: 2px solid var(--doc-primary-light);
+.docx-content-control-calendar-today:hover,
+.docx-content-control-calendar-today:focus-visible {
+  background: var(--doc-primary-light);
+  outline: none;
+}
+
+.docx-content-control-calendar-day:focus-visible,
+.docx-content-control-calendar-nav:focus-visible {
+  outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
-}
-
-.docx-content-control-calendar-input[aria-invalid='true'] {
-  border-color: var(--doc-danger);
-}
-
-.docx-content-control-calendar-input::-webkit-calendar-picker-indicator {
-  display: none;
 }
 
 .docx-content-control-calendar-header {
@@ -1774,6 +1782,65 @@ a.docx-hyperlink:focus-visible {
 .docx-field-atom--shaded,
 .docx-field-atom--active {
   background-color: var(--doc-field-shading);
+}
+
+/* A legacy FORMCHECKBOX paints Word's square box over its glyph: the run's font decides
+   the size (`w:size` lands as `w:sz`), and the box, not the fallback font's ballot glyph,
+   is what the reader sees and presses. The glyph stays in the DOM for copy and search. */
+.docx-page [data-docx-form-checkbox] {
+  position: relative;
+  color: transparent;
+}
+
+.docx-page [data-docx-form-checkbox]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: border-box;
+  width: 0.85em;
+  height: 0.85em;
+  transform: translate(-50%, -50%);
+  border: 0.0625em solid var(--doc-text, #000);
+  border-radius: 0.06em;
+  background: var(--doc-page-bg-rendered, #fff);
+}
+
+.docx-page [data-docx-form-checkbox][data-checked='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.85em;
+  height: 0.85em;
+  transform: translate(-50%, -50%);
+  /* Word's checked state is a bold X across the box. */
+  background:
+    linear-gradient(
+      to top right,
+      transparent 44%,
+      var(--doc-text, #000) 46%,
+      var(--doc-text, #000) 54%,
+      transparent 56%
+    ),
+    linear-gradient(
+      to top left,
+      transparent 44%,
+      var(--doc-text, #000) 46%,
+      var(--doc-text, #000) 54%,
+      transparent 56%
+    );
+}
+
+.docx-page [data-docx-form-checkbox]:hover::before {
+  border-color: var(--doc-primary);
+}
+
+/* The box prints, exactly like the field's glyph would; only the shading drops. */
+@media print {
+  .docx-page [data-docx-form-checkbox]:hover::before {
+    border-color: var(--doc-text, #000);
+  }
 }
 
 /* Field shading NEVER prints — Word does not print it either. A printed form has no blanks
