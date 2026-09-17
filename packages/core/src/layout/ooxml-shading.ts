@@ -8,7 +8,8 @@
 // into before/after spacing or bottom-border extent. Layout publishes that box; paint must not
 // invent it from the fragment outer box.
 
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
 const STRICT_HEX = /^[0-9A-Fa-f]{6}$/;

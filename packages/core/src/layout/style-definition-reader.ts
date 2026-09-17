@@ -1,6 +1,7 @@
 // Bounded styles.xml definition parsing, kept separate from cascade resolution.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import { styleOutlineLevel } from '../store/package/style-outline.ts';
 import { propertiesOf } from './paragraph-flow.ts';

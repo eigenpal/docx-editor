@@ -9,8 +9,8 @@ import {
   twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
-  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { borderStrokeWidthPt } from './border-metrics.ts';
 
 /**

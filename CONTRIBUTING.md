@@ -30,13 +30,14 @@ Working on the parser, serializer, or layout engine? `bun run reference:fetch` p
 
 `bun run build:preview` bundles all four demos directly from workspace source,
 assembles `examples/parity/dist`, and checks its assets and routing. It needs no
-package build first: previews skip the publishable JavaScript bundles and TypeScript
+package build first: deployments skip the publishable JavaScript bundles and TypeScript
 declarations. CI's browser lane runs this same command on a clean checkout; the
 build and typecheck lanes verify package artifacts and types separately.
 
-`bun run build` retains the package build used by production. Vercel selects the
-command using `VERCEL_ENV` and runs `bun install --frozen-lockfile` with Git hooks
-disabled, preserving restored dependencies between deployments.
+Vercel runs `bun run build:preview` for both production and preview deployments.
+`bun run build` retains the full package-backed demo build for local verification.
+Vercel runs `bun install --frozen-lockfile` with Git hooks disabled, preserving
+restored dependencies between deployments.
 
 ## Run tests
 

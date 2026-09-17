@@ -3,7 +3,9 @@
 
 import type { SurfaceParagraphFormat, ParagraphPropertyEdit } from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
+import type { BookmarkIndex } from '@docx-editor.dev/core/store';
+import type { StoryScope } from '../store/store/tree-package-store.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type {
   SelectionPin,
   TrackedChangeFilterMode,

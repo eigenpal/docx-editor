@@ -3,7 +3,7 @@
 // guard) and normalizes every entry name through the OPC profile (path-traversal
 // guard) BEFORE the bytes are handed on. Writing produces a deterministic archive.
 
-import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import { normalizePartName, partNameKey } from './opc-names.ts';
 
 /**
@@ -148,4 +148,4 @@ export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
   return zipSync(record, { mtime: FIXED_ENTRY_MTIME });
 }
 
-export { strToU8, strFromU8 };
+export { strToU8, strFromU8 } from 'fflate';

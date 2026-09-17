@@ -14,14 +14,15 @@ import type {
   OoxmlElement,
   OoxmlPackage,
   OoxmlPart,
-  ReviewItem,
-  SelectionMark,
-  StoryScope,
-  StoryTargetRejection,
-  TreeDocOp,
-  TreeModelChange,
-  TreeTransactOptions,
 } from '@docx-editor.dev/core/store';
+import type { ReviewItem } from '../store/store/review-items.ts';
+import type {
+  SelectionMark,
+  TreeModelChange,
+  TransactOptions as TreeTransactOptions,
+} from '../store/store/tree-store.ts';
+import type { StoryScope, StoryTargetRejection } from '../store/store/tree-package-store.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 import type { CollaborationDocumentPort } from '../collaboration/replication.ts';
 import type {

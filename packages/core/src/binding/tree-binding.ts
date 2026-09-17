@@ -11,6 +11,7 @@ import { isRunLevelMcAlternateContent } from '../store/package/drawing-projectio
 // A shape it cannot explain is rejected outright (task 6.3): a silently-dropped edit is
 // worse than a refused one, because only the refusal can be reconciled.
 
+import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-op-types.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { Node as PMNode } from 'prosemirror-model';
 import {
@@ -21,8 +22,6 @@ import {
   storyRootsOf,
   type OoxmlNode,
   type OoxmlPart,
-  type OoxmlProperty,
-  type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import {
   contentControlContentOf,

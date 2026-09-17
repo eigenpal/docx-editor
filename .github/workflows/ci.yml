@@ -93,7 +93,7 @@ jobs:
         run: 'bun run test --shard "$TEST_SHARD" --fail-fast'
       # Exercise the deployed source build without prebuilding the demo packages.
       # Package artifacts and declarations are verified separately in the build lane.
-      - name: Preview deployment build
+      - name: Demo deployment build
         if: "matrix.check == 'browser'"
         run: bun run build:preview
       - name: Install Chromium for Markdown preview checks

@@ -44,7 +44,7 @@ import {
   retainShellHyperlinks,
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
-import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
+import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
 import type { RevisionAttributionInput } from './tree-op-types.ts';
 import {
   deleteBlockMayStrandNote,

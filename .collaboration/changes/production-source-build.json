@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Core declarations traversed circular barrel re-exports during package builds.",
+  "after": "Core type imports resolve directly to their defining modules; deployed demos build from source.",
+  "reason": "Only type import paths and equivalent fflate re-exports change. Runtime operations, serialized documents, and collaboration formats are unchanged.",
+  "tests": [
+    "packages/core/src/__tests__/core-lane-graph.test.ts",
+    "packages/core/src/store/package/__tests__/zip-determinism.test.ts"
+  ],
+  "changeset": "production-source-build",
+  "migration": null
+}

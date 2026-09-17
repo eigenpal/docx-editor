@@ -10,7 +10,8 @@
 
 import type { EditorEvents } from './editor-events.ts';
 export type { EditorEvents } from './editor-events.ts';
-import type { ResolveReviewChangesOptions, ReviewDisplayMode } from './editor-review.ts';
+import type { ResolveReviewChangesOptions } from './editor-review.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 export type { ResolveReviewChangesOptions } from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';

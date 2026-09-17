@@ -59,7 +59,8 @@ const TRACKED_WRAPPER_OPS: ReadonlySet<string> = new Set([
  * content arrived.
  */
 const IMPORTS_REVISION_IDS: ReadonlySet<string> = new Set(['insertDrawing']);
-import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
+import { applyTreeOp } from './tree-ops.ts';
+import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
 /** A selection captured with a transaction, so undo restores where the caret was. */

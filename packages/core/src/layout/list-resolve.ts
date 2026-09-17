@@ -3,7 +3,8 @@
 
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { flattenContentControls } from '@docx-editor.dev/core/store';
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,

@@ -55,7 +55,7 @@ import {
 import { nextCommentId } from './comment-id-mint.ts';
 import { rewriteExtendedRoot, stampThreadParaIds } from './comment-resolution-rewrites.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
-import type { TreeOpRejection } from './tree-op-validate.ts';
+import type { TreeOpRejection } from './tree-op-types.ts';
 
 const COMMENTS_PART = '/word/comments.xml';
 const COMMENTS_EXTENDED_PART = '/word/commentsExtended.xml';

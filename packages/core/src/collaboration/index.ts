@@ -9,7 +9,7 @@
  */
 
 import type { StoryScope } from '../store/store/tree-package-store.ts';
-import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type { CollaborationDocumentPort } from './replication.ts';
 
 export { safeParticipantColor } from './participant-color.ts';

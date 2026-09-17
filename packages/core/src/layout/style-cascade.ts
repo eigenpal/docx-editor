@@ -18,8 +18,8 @@ import {
   twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
-  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { cjkTypographyFromSettings, type CjkTypographySettings } from './cjk-typography.ts';
 import {

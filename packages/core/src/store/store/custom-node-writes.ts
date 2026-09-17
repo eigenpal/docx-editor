@@ -38,7 +38,7 @@ import {
 import { contentControlsIn } from '../package/content-control-nodes.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
-import type { TreeOpRejection } from './tree-op-validate.ts';
+import type { TreeOpRejection } from './tree-op-types.ts';
 
 /**
  * The payload half of an insert: which store, which node, and what it holds.
