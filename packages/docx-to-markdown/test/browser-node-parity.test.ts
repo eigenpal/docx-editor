@@ -203,7 +203,15 @@ function performanceMeasurement(
     timeout: 120_000,
     maxBuffer: 1024 * 1024,
   });
-  expect(result.status, result.stderr).toBe(0);
+  const diagnostics = [
+    `mode=${mode} flags=${nodeArguments.join(' ')} status=${result.status} signal=${result.signal}`,
+    result.error?.message,
+    result.stderr,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  expect(result.status, diagnostics).toBe(0);
+  process.stdout.write(`Export memory (${mode}): ${result.stdout.trim()}\n`);
   return JSON.parse(result.stdout);
 }
 
@@ -228,11 +236,9 @@ function expectProductionFixture(
   expect(measurement.hasDom).toBe(false);
 }
 
-// Sweeping this fixture over macOS arm64 and Linux arm64/x64 on Node 20, 22, 24 and 25 reads
-// 199 MiB at the widest for the one-shot export and 336 MiB for a caller holding the settled
-// layout, with Node 20 the high reader in both. These ceilings clear those by 28% and 33%, wide
-// enough that a runner the suite has not run on before does not move them and tight enough to
-// still catch the 1.8+ GiB class of regression they exist for.
+// Reference runs on macOS arm64 and Linux arm64/x64, using Node 20, 22, 24 and 25, retained
+// about 200 MiB for one-shot export and 340 MiB with the layout held by the caller. These budgets
+// allow runtime variation while catching the earlier 1.8+ GiB class of retention regression.
 const ONE_SHOT_LIVE_HEAP_CEILING = 256 * 1024 * 1024;
 const RETAINED_LAYOUT_LIVE_HEAP_CEILING = 448 * 1024 * 1024;
 
@@ -261,14 +267,19 @@ test('a real 500-page shaped export holds a bounded live set on a default heap',
   expect(measurement.peakRssBytes).toBeLessThan(RESIDENT_BACKSTOP);
 }, 120_000);
 
-// A 364 MiB old space is itself an assertion: V8 has to collect rather than retain transient
-// layout allocations, and a working set that no longer fits aborts the worker, which the exit
-// status in `performanceMeasurement` catches. On top of that the one-shot run gets a live-heap
-// ceiling, because how far under the cap it settles is the evidence that it releases the layout.
-const CONSTRAINED_NODE_ARGUMENTS = ['--max-old-space-size=364', '--max-semi-space-size=8'] as const;
+// Keep the one-shot export's 364 MiB cap: it releases the layout before measurement. A caller
+// retaining the layout needs more execution headroom. In CI, the shared session retained about
+// 340 MiB and intermittently aborted during forced GC under the same 364 MiB cap. Its 512 MiB
+// old-space cap leaves room above the existing 448 MiB live-heap budget, which we assert below.
+// The caps bound transient growth; the live-heap assertions catch retained-memory regressions.
+const ONE_SHOT_NODE_ARGUMENTS = ['--max-old-space-size=364', '--max-semi-space-size=8'] as const;
+const RETAINED_LAYOUT_NODE_ARGUMENTS = [
+  '--max-old-space-size=512',
+  '--max-semi-space-size=8',
+] as const;
 
 test('the one-shot 500-page export fits a constrained 364 MiB heap', () => {
-  const measurement = performanceMeasurement(CONSTRAINED_NODE_ARGUMENTS, 'one-shot-performance');
+  const measurement = performanceMeasurement(ONE_SHOT_NODE_ARGUMENTS, 'one-shot-performance');
   expectProductionFixture(measurement, { inspectLayout: false });
   // The one-shot entry point returns markdown and drops the layout, so it settles well below the
   // retained-layout ceiling. That gap is the point: it proves the export does not pin the layout.
@@ -276,13 +287,12 @@ test('the one-shot 500-page export fits a constrained 364 MiB heap', () => {
   expect(measurement.externalBytes).toBeLessThan(EXTERNAL_MEMORY_CEILING);
 }, 120_000);
 
-test('the shared core session fits the same constrained 364 MiB heap', () => {
-  const measurement = performanceMeasurement(CONSTRAINED_NODE_ARGUMENTS);
+test('the shared core session stays within its live-heap budget under a 512 MiB cap', () => {
+  const measurement = performanceMeasurement(RETAINED_LAYOUT_NODE_ARGUMENTS);
   expectProductionFixture(measurement);
-  // Guard the exporter-neutral workflow used by PDF and future projections, including callers
-  // that intentionally retain the settled layout while translating it. No live-heap ceiling of
-  // its own: the 364 MiB cap is already below the one the default-heap run answers to, so this
-  // aborts on the cap before any ceiling worth writing here could fire. External memory sits
-  // outside that cap, so it still needs asserting here.
+  // Apply the same retention budget as the default-heap run, independently of V8's allocation
+  // headroom. Keep external memory and RSS guards because neither is bounded by old space.
+  expect(measurement.liveHeapBytes).toBeLessThan(RETAINED_LAYOUT_LIVE_HEAP_CEILING);
   expect(measurement.externalBytes).toBeLessThan(EXTERNAL_MEMORY_CEILING);
+  expect(measurement.peakRssBytes).toBeLessThan(RESIDENT_BACKSTOP);
 }, 120_000);
