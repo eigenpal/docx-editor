@@ -2,25 +2,62 @@
 
 Branch `feat/content-control-widget-parity`, worktree
 `.claude/worktrees/mellow-giggling-stream`, PR https://github.com/eigenpal/docx-editor/pull/901.
-Head commit: the last one on the branch (it adds typing that stays inside a control and the
-igloo deep-water pop-ups). The PR body ends with `Fixes #905`, `Fixes #906`, `Fixes #907`, so
-merging closes those three issues.
+Head commit `19196f400` (on top of a merge of `main`, `c03b5be95`). The PR body ends with
+`Fixes #905`, `Fixes #906`, `Fixes #907`, so merging closes those three issues.
 
 ## Status at handoff
 
-- Local gates on the head commit: `bun run test` 14554 pass, 0 fail; `bun run lint`,
-  `bun run typecheck`, `bun run i18n:validate`, `bun run check:parity`, `bun run api:check`,
-  `openspec validate typed-ooxml-paragraph-editor --strict` all pass; the Playwright spec
-  `e2e/content-control-widget.interaction.spec.ts` passes (19 cases).
-- CI on `66a97e6d0` passed. The head commit was pushed after; run `gh pr checks 901` to confirm
-  before merging.
-- Two Codex reviews (`gpt-6-astra`, high) ran against local Word and staged fixes that are
+- Local gates on `19196f400`: `bun run test` 14632 pass, 0 fail; the pre-commit hook passed
+  formatting, collaboration policy, typecheck, parity, license headers, API snapshot, and lint.
+  `bun run i18n:validate` and `openspec validate typed-ooxml-paragraph-editor --strict` passed
+  on the commit before the merge; the Playwright spec
+  `e2e/content-control-widget.interaction.spec.ts` passed (19 cases) on the commit before the
+  merge. Rerun the Playwright spec once before merging.
+- CI on `19196f400` was in progress when this was written (`CI`, `Performance benchmark`, and
+  `Python wheels`). Run `gh pr checks 901` to confirm. The `Python wheels` run is not from
+  this PR: `main` gained the Python package in #903, the merge of `main` carried its files, and
+  the workflow's `pull_request` path filter matched them. It builds wheels and nothing else.
+- The `pull_request` workflows do not run while the PR conflicts with `main`. That is what
+  happened on `d6445e68d` (three PRs landed on `main` first); the merge commit fixed it. If CI
+  is missing again, check `gh pr view 901 --json mergeable` before anything else.
+- Three Codex reviews (`gpt-6-astra`, high) ran against local Word and staged fixes that are
   in the commits below. Their reports are outside the repo; the findings that matter are
   listed under "Known limitations".
 
+## Finish with Codex
+
+The rest of this PR is to be finished with Codex. What is left:
+
+1. Wait for CI on `19196f400`; if `CI` fails, read the failing lane's log with
+   `gh run view <id> --log-failed` and fix on this branch.
+2. Rerun `bunx playwright test e2e/content-control-widget.interaction.spec.ts` after the merge
+   of `main` (the unit suite ran, the browser spec did not).
+3. Walk the manual checks under "What to check" once in the browser.
+4. Merge. Squash is the repo's default; the PR body is current.
+
+Rules for Codex on this branch:
+
+- Do not run `bun install` in the sandbox without network; it relinks `harfbuzzjs` to an old
+  version. Use `bun install --frozen-lockfile` only if `node_modules` is missing.
+- Do not raise a line cap. `paginated-surface.ts` sits at 6153 with the cap at 6300 (raised
+  on `main`); `tree-op-apply.ts` and `tree-op-content-controls.ts` sit at their caps. Extract.
+- `bun run api:check` reports drift when `dist/` is stale. Run `bun run build:packages` first,
+  then `bun run api:extract` if the snapshot really changed.
+- Never add a `.docx` other than the two named under "Rules that bit"; never write personal
+  names or the reporter's identity anywhere in the repo, the PR, or the commits.
+
 ## What changed, by commit (newest first)
 
-1. Head commit: typing stays inside a control, and the igloo deep-water pop-ups.
+1. `19196f400` a caret after a content-locked chip types beside it.
+   - `packages/core/src/editor/content-control-prompt-landing.ts` `insertOwnerOf`: the insert
+     owner is named only for a control that takes typing. A content-locked chip, a checkbox, or
+     a picture is an atom, so a keystroke at its trailing edge lands beside it (the full suite
+     caught this in `packages/pro/src/__tests__/insert-custom-node.test.ts`).
+2. `c03b5be95` merge of `main`. Four conflicts, all keep-both: the surface line cap (6300 from
+   `main`), the editor index export blocks, the React hooks table (main's wording plus the
+   `useContentControlWidget()` row), and the surface (the refusal helper plus `main`'s
+   history group).
+3. `d6445e68d` typing stays inside a control, and the igloo deep-water pop-ups.
    - `packages/core/src/editor/paginated-surface.ts` `type()` names the caret's control as the
      insert's owner (`insertText.inside`, an existing store field) when no prompt replace is
      planned. Before, the second keystroke after a prompt replace sat on the control's trailing
@@ -38,7 +75,7 @@ merging closes those three issues.
      bare class, so the selector must keep that specificity). The date pop-up uses a native
      `<input type="date">` (the system picker on macOS and Windows, `color-scheme: dark`) with
      an "Ice calendar" switch back to the packaged calendar parts.
-2. `66a97e6d0` hover tracking, active state for a selected prompt, prompt press opens lists.
+4. `66a97e6d0` hover tracking, active state for a selected prompt, prompt press opens lists.
    - `packages/core/src/editor/content-control-hover.ts`: the chrome layer passes pointer
      events through to the text, so CSS `:hover` never fired on the chrome. The surface now
      scans the boundary boxes on the page under the pointer once per frame and sets
@@ -49,7 +86,7 @@ merging closes those three issues.
    - `packages/core/src/editor/surface-pointer.ts`: a single press on the prompt of a
      dropdown, combo box, date, or gallery control also calls `onContentControlWidget`, so the
      menu opens in one step (`LIST_PROMPT_TYPES`).
-3. `8ac6481e2` prompt edge typing, prompt restore on empty, hover-only widgets, igloo style.
+5. `8ac6481e2` prompt edge typing, prompt restore on empty, hover-only widgets, igloo style.
    - `packages/core/src/editor/content-control-prompt-landing.ts`: the store replaces a
      `w:showingPlcHdr` prompt when text lands at either edge, so text goes where the prompt
      began. The surface's `type()` now places the caret from that landing. Before, the caret
@@ -69,7 +106,7 @@ merging closes those three issues.
      chrome `:hover`, or `:focus-visible`.
    - `examples/igloo/src/igloo.css`: the permit's controls are styled as carved slots (dashed
      teal underline, aqua glow when active, teal label tab, round aqua button).
-4. `21cc50327` glossary placeholders for empty controls, checkbox chrome, igloo permit, and
+6. `21cc50327` glossary placeholders for empty controls, checkbox chrome, igloo permit, and
    the Codex round-3 fixes.
    - `packages/core/src/store/store/placeholder-materialize.ts`: a control saved with empty
      `w:sdtContent` (Word does this for an unfilled date control) opens showing the glossary
@@ -90,7 +127,7 @@ merging closes those three issues.
      and `surface-image-ops.ts`, a 32 MiB input cap, `drawing-content-edit.ts` (placeholder
      and temporary-wrapper handling on picture replace), retry and Cancel in the React and
      Vue picture pop-ups, and a shared empty-gallery note.
-5. `31d898254` picture replace widget, building block gallery, leading `w:sym` layout.
+7. `31d898254` picture replace widget, building block gallery, leading `w:sym` layout.
    - Picture control: `content-control-picture-widget.ts`; session kind `picture` with
      `value` = drawing node id and `replaceImage(bytes)`; engine fallback is a hidden file
      input on the pages layer; adapters get `popups.contentControlPicture`,
@@ -105,7 +142,7 @@ merging closes those three issues.
      `layout/semantic-interaction.ts` `caretSpan` skips zero-width projected spans so the
      toolbar font at offset 0 reads the run, not the glyph face. The docx-to-markdown pin in
      `packages/docx-to-markdown/test/node-defaults.test.ts` moved by exactly those glyphs.
-6. Earlier commits on the branch (widget parity, shared pop-up behavior, legacy
+8. Earlier commits on the branch (widget parity, shared pop-up behavior, legacy
    `FORMCHECKBOX` toggling, composable React and Vue parts) are described in the PR body.
 
 ## What to check
