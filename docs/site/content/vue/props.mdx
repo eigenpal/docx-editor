@@ -260,7 +260,7 @@ The ref exposes seven methods:
 | `getDocumentHandle()`     | `DocumentHandle \| null`       | Returns the current handle and revision.       |
 | `getEditor()`             | `Editor \| null`               | Returns the full editor facade.                |
 | `focus()`                 | `void`                         | Focuses the mounted document surface.          |
-| `exec(command, options?)` | `ExecResult`                   | Runs a typed command in an optional scope.     |
+| `exec(command, options?)` | `ExecResult`                   | Runs a typed command; see `EditorExecOptions`. |
 | `snapshot(options?)`      | `EditorSnapshot`               | Reads state from an optional scope.            |
 
 Use `exec()` for commands that must use the same validation as packaged chrome.

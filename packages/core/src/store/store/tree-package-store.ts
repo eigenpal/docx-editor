@@ -18,6 +18,7 @@ import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { packageEditTouchesShell } from './package-shell-delta.ts';
+import { closeHistoryGroupsExcept } from './history-group.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { lifecycleProtectionRefusal } from './forms-protection.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
@@ -375,7 +376,8 @@ export class TreePackageStore {
     return runObservedStoreTransaction(
       this,
       () => this.commitStoryTransaction(scope, build, options),
-      packageTransactionPublished
+      packageTransactionPublished,
+      options.historyGroup
     );
   }
 
@@ -788,6 +790,7 @@ export class TreePackageStore {
   undo(): TreeModelChange | null {
     const pointer = this.undoOrder.pop();
     if (!pointer) return null;
+    closeHistoryGroupsExcept(this.body, this.stories, null);
     if (pointer.kind === 'package') {
       this.installPackageSnapshotInternal(pointer.before, true, pointer.restoreNumbering);
       this.redoOrder.push(pointer);
@@ -817,6 +820,7 @@ export class TreePackageStore {
   redo(): TreeModelChange | null {
     const pointer = this.redoOrder.pop();
     if (!pointer) return null;
+    closeHistoryGroupsExcept(this.body, this.stories, null);
     if (pointer.kind === 'package') {
       this.installPackageSnapshotInternal(pointer.after, true, pointer.restoreNumbering);
       this.undoOrder.push(pointer);
@@ -1224,6 +1228,8 @@ export class TreePackageStore {
   }
 
   private pushUndoPointer(pointer: HistoryPointer): void {
+    // A new pointer on top means every OTHER store's open group is now buried under it.
+    closeHistoryGroupsExcept(this.body, this.stories, pointer);
     if (
       pointer.kind === 'package' &&
       pointer.before.parts.get('/word/numbering.xml') !==

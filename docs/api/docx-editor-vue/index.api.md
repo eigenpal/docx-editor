@@ -38,6 +38,7 @@ import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
+import { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
@@ -3462,9 +3463,7 @@ export interface DocxEditorProps {
 // @public
 export interface DocxEditorRef {
     // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
     // (undocumented)
     focus(): void;
     // (undocumented)

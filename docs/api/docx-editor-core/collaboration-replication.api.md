@@ -104,6 +104,7 @@ export type CanonicalPrimitiveEffect = {
 export interface CanonicalPrimitiveJournal {
     // (undocumented)
     readonly effects: readonly CanonicalPrimitiveEffect[];
+    readonly historyGroup?: HistoryGroup;
 }
 
 // @public

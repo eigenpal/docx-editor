@@ -46,6 +46,7 @@ export {
 } from './tree-package-fragment.ts';
 export {
   TreeDocumentStore,
+  type HistoryGroup,
   type SelectionMark,
   type TransactionContext as TreeTransactionContext,
   type TransactOptions as TreeTransactOptions,

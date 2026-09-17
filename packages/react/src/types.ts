@@ -7,6 +7,7 @@ import type {
   Editor,
   EditorCommand,
   EditorFontError,
+  EditorExecOptions,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -266,7 +267,7 @@ export interface DocxEditorRef {
   getEditor(): Editor | null;
   focus(): void;
   /** Run a typed command through the facade; refused with `notFound` before mount. */
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   /** The current read model; a loading, non-editable snapshot before mount. */
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 }

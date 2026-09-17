@@ -12,8 +12,8 @@ import type { ResolveReviewChangesOptions, ReviewDisplayMode } from './editor-re
 export type { ResolveReviewChangesOptions } from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
-import type { EditorScope, ViewScope } from './editor-scope.ts';
-export type { EditorScope, ViewScope } from './editor-scope.ts';
+import type { EditorExecOptions, EditorScope, ViewScope } from './editor-scope.ts';
+export type { EditorExecOptions, EditorScope, HistoryGroup, ViewScope } from './editor-scope.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the store lane, which they are not allowed to import.
 import type {
@@ -347,9 +347,9 @@ export interface Editor {
    *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */
   getDocumentHandle(): DocumentHandle;
 
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
-  can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+  can(command: EditorCommand, options?: EditorExecOptions): CanResult;
   /**
    * Dry run for byte commands that require {@link Editor.executeImageCommand}.
    * Generic {@link Editor.can} on `insertImage` / `replaceImage` refuses with an async-path

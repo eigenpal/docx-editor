@@ -5,6 +5,7 @@
 // transaction. Core never imports a CRDT.
 
 import type { OoxmlElement } from './ooxml-tree.ts';
+import type { HistoryGroup } from '../store/tree-store.ts';
 
 /** Attribute name as the journal addresses it. Prefix is authored fidelity, not identity. @public */
 export interface CanonicalAttributeName {
@@ -131,6 +132,14 @@ export type CanonicalPrimitiveEffect =
  */
 export interface CanonicalPrimitiveJournal {
   readonly effects: readonly CanonicalPrimitiveEffect[];
+  /**
+   * The gesture the committing transaction belonged to, when it named one.
+   *
+   * Local history groups consecutive journals that carry the same token into one undo
+   * step. Shared state has its own undo authority, so the token travels with the journal
+   * for that authority to group by; it is process-local identity and is never replicated.
+   */
+  readonly historyGroup?: HistoryGroup;
 }
 
 /** Freeze one effect and any nested arrays it owns. */
@@ -176,9 +185,11 @@ function freezeCanonicalNodeDescriptor(
 
 /** Freeze a captured effect list into one journal object. */
 export function freezeCanonicalPrimitiveJournal(
-  effects: readonly CanonicalPrimitiveEffect[]
+  effects: readonly CanonicalPrimitiveEffect[],
+  historyGroup?: HistoryGroup
 ): CanonicalPrimitiveJournal {
   return Object.freeze({
     effects: Object.freeze(effects.map(freezeCanonicalPrimitiveEffect)),
+    ...(historyGroup !== undefined ? { historyGroup } : {}),
   });
 }

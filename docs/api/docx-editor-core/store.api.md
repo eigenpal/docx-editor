@@ -1728,6 +1728,9 @@ export interface HeadlessThemeFonts {
 export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView;
 
 // @public
+export type HistoryGroup = symbol;
+
+// @public
 export type HrefProjection = {
     readonly href: string;
     readonly ok: true;
@@ -4776,6 +4779,7 @@ export class TreeDocumentStore {
     // (undocumented)
     get canUndo(): boolean;
     checkpoint(): TreeDocumentCheckpoint;
+    closeHistoryGroup(): void;
     // (undocumented)
     get compositionActive(): boolean;
     endComposition(): void;
@@ -5060,6 +5064,7 @@ export interface TreeTransactionContext {
 // @public
 export interface TreeTransactOptions {
     readonly actorId?: string;
+    readonly historyGroup?: HistoryGroup;
     readonly minimumImpact?: ImpactClass;
     readonly operationId?: string;
     // (undocumented)

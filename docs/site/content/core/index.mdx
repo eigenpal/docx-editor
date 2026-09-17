@@ -61,6 +61,44 @@ function pageLabel(editor: Editor): string {
 
 `snapshot()` is version-cached: it returns the same reference until editor state changes, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every store notification.
 
+### Group one gesture into one undo step
+
+A live control applies every intermediate value while the user drags it, so the
+selection updates under the pointer. Each call to `exec` is one transaction, and
+by default each transaction is one undo step. To make a whole gesture one undo
+step, pass the same `historyGroup` token with every call of that gesture:
+
+```ts
+const gesture = Symbol('color-drag');
+
+picker.addEventListener('input', (event) => {
+  editor.exec(
+    { type: 'setMarkAttr', mark: 'color', attr: 'val', value: event.target.value },
+    { historyGroup: gesture }
+  );
+});
+```
+
+Every call still renders and replicates on its own. Undo restores the formatting
+from before the first call, exactly as it was, so a selection with mixed colors
+comes back mixed. Redo restores the last value applied.
+
+The token is the boundary. Create a new token for each gesture, and the engine
+closes the group when any of the following happens:
+
+- A call arrives without a token, or with a different token.
+- The user runs undo or redo.
+- A command records a whole-package unit, such as inserting an image or a table.
+
+A call that changes nothing adds no undo step and leaves the group open. Any
+command that edits a story accepts the option, so font-size steppers, spacing
+sliders, and indent controls group the same way.
+
+In a collaborative session, the shared undo manager owns undo. The token groups
+there too: frames of one gesture join one shared undo item however long the
+gesture lasts, and a change of group starts a new item. Calls without a token
+keep the manager's own rule, which joins local edits inside its capture window.
+
 ## The pipeline
 
 The pipeline has one direction:

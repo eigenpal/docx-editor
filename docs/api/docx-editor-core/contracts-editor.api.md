@@ -455,9 +455,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export interface Editor {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
-    can(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): CanResult;
+    can(command: EditorCommand, options?: EditorExecOptions): CanResult;
     canExecuteImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>, options?: {
@@ -467,9 +465,7 @@ export interface Editor {
     // (undocumented)
     destroy(): void;
     // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
     executeImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>): Promise<ExecResult>;
@@ -880,6 +876,12 @@ export interface EditorEvents {
 }
 
 // @public
+export interface EditorExecOptions {
+    readonly historyGroup?: HistoryGroup;
+    readonly scope?: EditorScope;
+}
+
+// @public
 export class EditorFontError extends Error {
     constructor(code: EditorFontErrorCode, message: string, details?: {
         readonly cause?: unknown;
@@ -1263,6 +1265,9 @@ export interface HeaderFooterState {
     readonly titlePage?: boolean;
     readonly variant?: FurnitureVariant;
 }
+
+// @public
+export type HistoryGroup = symbol;
 
 // @public
 export interface HyperlinkInfo {

@@ -1,4 +1,6 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
+import type { HistoryGroup } from './history-group.ts';
+export type { HistoryGroup } from './history-group.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
@@ -188,6 +190,15 @@ export interface TransactOptions {
   readonly minimumImpact?: ImpactClass;
   /** Story identity stamped onto the published ModelChange (package-aware targeting). */
   readonly story?: TreeStoryRef;
+  /**
+   * The gesture this transaction belongs to. Consecutive transactions carrying the SAME
+   * token extend one history entry instead of each recording their own: the entry keeps
+   * the package from before the first and the selection after the latest, so one undo
+   * restores the state before the gesture and one redo restores its final state. Any
+   * transaction carrying another token, or none, closes the group; so do undo and redo.
+   * See {@link HistoryGroup}.
+   */
+  readonly historyGroup?: HistoryGroup;
 }
 
 interface HistoryEntry {
@@ -203,6 +214,12 @@ interface HistoryEntry {
   readonly revision: number;
   readonly selectionBefore: SelectionMark | null;
   readonly selectionAfter: SelectionMark | null;
+  /**
+   * The gesture this entry is still collecting, while it is the newest entry and nothing
+   * has closed it. Only ever set on the top of the undo stack: {@link closeHistoryGroup}
+   * strips it, and undo and redo never copy it onto the entries they push.
+   */
+  readonly group?: HistoryGroup;
 }
 
 const IMPACT_RANK: Record<ImpactClass, number> = {
@@ -784,12 +801,21 @@ export class TreeDocumentStore {
           entry: { ...this.composition.entry, selectionAfter },
         };
       } else {
-        this.pushUndo({
-          pkg: before,
-          revision: beforeRevision,
-          selectionBefore,
-          selectionAfter,
-        });
+        const group = options.historyGroup;
+        const top = this.undoStack[this.undoStack.length - 1];
+        if (group !== undefined && top !== undefined && top.group === group) {
+          // Same gesture, still open: the entry keeps its `pkg` and `selectionBefore` — the
+          // state before the FIRST frame — and takes this frame's selection as its end.
+          this.undoStack[this.undoStack.length - 1] = { ...top, selectionAfter };
+        } else {
+          this.pushUndo({
+            pkg: before,
+            revision: beforeRevision,
+            selectionBefore,
+            selectionAfter,
+            ...(group !== undefined ? { group } : {}),
+          });
+        }
         this.redoStack.length = 0;
       }
     }
@@ -857,9 +883,28 @@ export class TreeDocumentStore {
     this.composition = null;
   }
 
+  /**
+   * Close the open history group, if any: the next transaction records its own entry
+   * whatever token it carries.
+   *
+   * The store closes its own group when a transaction with another token (or none) lands,
+   * and on undo and redo. What it cannot see is history moving ABOVE it — the package
+   * coordinator pushing a package unit, or another story's pointer — which is why the
+   * coordinator calls this on every store a pointer push or a history move leaves behind.
+   */
+  closeHistoryGroup(): void {
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top === undefined || top.group === undefined) return;
+    const { group: _closed, ...closed } = top;
+    this.undoStack[this.undoStack.length - 1] = closed;
+  }
+
   undo(): TreeModelChange | null {
     const entry = this.undoStack.pop();
     if (!entry) return null;
+    // Undo is a boundary: the entry now on top must not collect a gesture that resumes
+    // after it, and the one pushed to redo carries no group either.
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.redoStack.push({
       pkg: this.current,
@@ -875,6 +920,7 @@ export class TreeDocumentStore {
   redo(): TreeModelChange | null {
     const entry = this.redoStack.pop();
     if (!entry) return null;
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.undoStack.push({
       pkg: this.current,

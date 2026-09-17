@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { projectJournalToShared } from './document/projected-journal.ts';
+import { HistoryGroupCapture } from './document/history-group-capture.ts';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
@@ -128,6 +129,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
+  private readonly historyGroups = new HistoryGroupCapture(() => this.undoManager);
   private readonly stopBlobWatch: () => void;
   private readonly stopSeedWatch: () => void;
 
@@ -348,6 +350,7 @@ class DocumentSession implements DocumentCollaborationSession {
     // so the gate re-checks: undo must not write a room the session just diverged from.
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.undoStack.length === 0) return false;
+    this.historyGroups.reset();
     this.undoManager.undo();
     this.registry.normalizeRestoredSplitTextAnchors();
     return true;
@@ -358,6 +361,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.flushPendingJournals();
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.redoStack.length === 0) return false;
+    this.historyGroups.reset();
     this.undoManager.redo();
     this.registry.normalizeRestoredSplitTextAnchors();
     return true;
@@ -530,6 +534,7 @@ class DocumentSession implements DocumentCollaborationSession {
     }
     // A custom blob reader can run host code; recheck after that callback before writing.
     if (!this.canWriteSharedState()) return;
+    this.historyGroups.apply(journal.historyGroup);
     const refusal = this.ydoc.transact((): CollaborationFailure | null => {
       if (blobs !== null) {
         const published = this.putJournalBlobs(blobs.payloads);
@@ -599,6 +604,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private refuseLocalJournal(refusal: CollaborationFailure): void {
+    this.historyGroups.reset();
     this.undoManager.stopCapturing();
     // The status this replica held before the refusal. Recovery restores it, because a
     // realign repairs the DOCUMENT, not the transport: with offline editing on, the refused

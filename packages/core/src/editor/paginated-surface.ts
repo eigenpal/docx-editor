@@ -246,6 +246,7 @@ import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
+import { activeHistoryGroup, runWithHistoryGroup } from './history-group-scope.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -1394,8 +1395,10 @@ export function mountPaginatedSurface(
     typeBuffer = '';
     flushingTypeBuffer = true;
     try {
-      // `surface` is assigned below; a flush can only run once a caller holds it.
-      surface.type(text);
+      // `surface` is assigned below; a flush can only run once a caller holds it. The
+      // keystrokes are their own undo step: a flush at the head of a grouped command must
+      // not fold them into that command's gesture.
+      runWithHistoryGroup(undefined, () => surface.type(text));
     } catch (error) {
       // A throwing commit must not eat the keystrokes: put them back (ahead of
       // anything enqueued meanwhile, preserving order) for the next flush point.
@@ -2936,6 +2939,9 @@ export function mountPaginatedSurface(
       };
     }
     collaborationOperationCounter += 1;
+    // The gesture the command in flight named, if any: it travels with the transaction
+    // into local history and, through the journal, to the collaboration undo authority.
+    const historyGroup = activeHistoryGroup();
     return session.applyTreeOps(
       ops,
       selectionBefore,
@@ -2948,8 +2954,9 @@ export function mountPaginatedSurface(
             actorId: collaborationSession.identity.actorId,
             operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
+            historyGroup,
           }
-        : { packageEdits }
+        : { packageEdits, historyGroup }
     );
   }
 

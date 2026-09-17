@@ -124,6 +124,7 @@ import {
   unloadableSourceReason,
 } from './docx-editor-support.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
+import { runWithHistoryGroup } from './history-group-scope.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
@@ -1936,10 +1937,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // revision would report HF / create-header edits as `changed: false`.
       const before = mounted.session.packageRevision();
 
-      const result = execEditorCommand(mounted, command, {
-        ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
-        editor,
-      });
+      // The history group is bound for the span of the command, so the surface's one write
+      // path picks it up without every formatting verb growing an options parameter.
+      const result = runWithHistoryGroup(options?.historyGroup, () =>
+        execEditorCommand(mounted, command, {
+          ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
+          editor,
+        })
+      );
       if (result) return result;
       // `changed` is read from the model, not assumed: reporting `changed: true` where the
       // document did not move would be a lie. It answers for the DOCUMENT, not for
