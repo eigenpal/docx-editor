@@ -82,3 +82,14 @@ describe('mode guards', () => {
     }
   });
 });
+
+describe('canonicalize rejection names the field', () => {
+  test('an undefined value reports its key path', () => {
+    expect(() => canonicalize({ theme: { faces: [{ ok: 1 }, { face: undefined }] } })).toThrow(
+      'unsupported value type in comparator input: undefined at theme.faces.1.face'
+    );
+    expect(() => canonicalize(undefined)).toThrow(
+      'unsupported value type in comparator input: undefined'
+    );
+  });
+});

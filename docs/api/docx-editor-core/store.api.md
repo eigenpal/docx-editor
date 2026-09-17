@@ -1755,6 +1755,12 @@ export interface HeadlessThemeFonts {
 // @public
 export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView;
 
+// @public (undocumented)
+export type HistoryCaptureKind = 'started' | 'extended' | 'split';
+
+// @public
+export type HistoryGroup = symbol;
+
 // @public
 export type HrefProjection = {
     readonly href: string;
@@ -2518,6 +2524,9 @@ export function noteTypeOf(node: OoxmlNode): NoteType | undefined;
 
 // @public
 export function nullRecord<T = unknown>(): Record<string, T>;
+
+// @public (undocumented)
+export function observeHistoryGroup<T>(group: HistoryGroup, report: (kind: HistoryCaptureKind, reason?: HistoryCaptureReason) => void, run: () => T): T;
 
 // @public
 export const OFFICE_MATH_NAMESPACE_URI = "http://schemas.openxmlformats.org/officeDocument/2006/math";
@@ -3614,6 +3623,9 @@ export interface ReplayStore {
     applyStep(step: FixtureStep): ReplayOutcome;
     init(fixture: ConformanceFixture): number;
 }
+
+// @public (undocumented)
+export function reportHistoryGroup(group: HistoryGroup | undefined, kind: HistoryCaptureKind, reason?: HistoryCaptureReason): void;
 
 // @public
 export interface Reservation {
@@ -4844,6 +4856,7 @@ export class TreeDocumentStore {
     // (undocumented)
     get canUndo(): boolean;
     checkpoint(): TreeDocumentCheckpoint;
+    closeHistoryGroup(): void;
     // (undocumented)
     get compositionActive(): boolean;
     endComposition(): void;
@@ -5073,7 +5086,8 @@ export class TreePackageStore {
     // (undocumented)
     get packageRevision(): number;
     partFor(scope: StoryScope): OoxmlPart | null;
-    promoteStoryTransactionToPackageUnit(beforePackage: OoxmlPackage, store: TreeDocumentStore, checkpoint: TreeDocumentCheckpoint, beforeDepth: number): TreeModelChange;
+    promoteStoryTransactionToPackageUnit(beforePackage: OoxmlPackage, store: TreeDocumentStore, checkpoint: TreeDocumentCheckpoint,
+    _beforeDepth?: number): TreeModelChange;
     publishRemotePackage(pkg: OoxmlPackage, attribution: RemotePackageAttribution): PackageTransactResult;
     publishStoryWrite(change: TreeModelChange | null): TreeModelChange | null;
     // (undocumented)
@@ -5128,6 +5142,7 @@ export interface TreeTransactionContext {
 // @public
 export interface TreeTransactOptions {
     readonly actorId?: string;
+    readonly historyGroup?: HistoryGroup;
     readonly minimumImpact?: ImpactClass;
     readonly operationId?: string;
     // (undocumented)

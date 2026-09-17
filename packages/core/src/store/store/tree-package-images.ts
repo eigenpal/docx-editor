@@ -188,7 +188,6 @@ function commitPackageImage(
   const ownerPartName = story.partName;
   const beforePackage = store.currentPackage();
   const checkpoint = storyStore.checkpoint();
-  const beforeDepth = storyStore.historyDepth;
   let drawingNodeId: string | null = null;
   let staleEpoch = false;
   let commitBlocked = false;
@@ -248,12 +247,7 @@ function commitPackageImage(
   });
   if (createdDrawingId) drawingNodeId = createdDrawingId;
 
-  const change = store.promoteStoryTransactionToPackageUnit(
-    beforePackage,
-    storyStore,
-    checkpoint,
-    beforeDepth
-  );
+  const change = store.promoteStoryTransactionToPackageUnit(beforePackage, storyStore, checkpoint);
 
   return {
     ok: true,

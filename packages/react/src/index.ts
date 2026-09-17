@@ -496,3 +496,5 @@ export {
   DocxEditorInvalidTextFormFieldDialog,
   type DocxEditorInvalidTextFormFieldDialogProps,
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
+
+export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';

@@ -40,7 +40,9 @@ import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { EditorCommandExecute } from '@docx-editor.dev/core/editor';
 import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
+import { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
@@ -63,6 +65,7 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
@@ -113,6 +116,7 @@ import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { ToolbarValueMap } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
@@ -3548,9 +3552,7 @@ export interface DocxEditorProps {
 // @public
 export interface DocxEditorRef {
     // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
     // (undocumented)
     focus(): void;
     // (undocumented)
@@ -4036,7 +4038,7 @@ export interface EditorCommandState {
     // (undocumented)
     readonly disabledReason: ComputedRef<string | null>;
     // (undocumented)
-    readonly execute: () => boolean;
+    readonly execute: EditorCommandExecute;
     // (undocumented)
     readonly isActive: ComputedRef<boolean>;
     // (undocumented)
@@ -4065,7 +4067,7 @@ export interface EditorValueCommandState<T extends string | number> {
     // (undocumented)
     readonly disabledReason: ComputedRef<string | null>;
     // (undocumented)
-    readonly execute: (value: T) => void;
+    readonly execute: (value: T, options?: EditorExecOptions) => ExecResult;
     // (undocumented)
     readonly isEnabled: ComputedRef<boolean>;
     // (undocumented)
@@ -6209,11 +6211,8 @@ export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<
 // @public (undocumented)
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;
 
-// @public (undocumented)
-export function useEditorValueCommand(slotId: 'image.wrap'): EditorValueCommandState<ImageWrapTarget>;
-
-// @public (undocumented)
-export function useEditorValueCommand(slotId: 'image.altText'): EditorValueCommandState<string>;
+// @public
+export function useEditorValueCommand<K extends keyof ToolbarValueMap>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
 
 // @public (undocumented)
 export function useFontFamily(): UseFontFamilyResult;
@@ -6238,6 +6237,17 @@ export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): M
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
+
+// @public
+export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;
+
+// @public (undocumented)
+export interface UseHistoryGroupReturn {
+    // (undocumented)
+    readonly options: () => EditorExecOptions;
+    // (undocumented)
+    readonly ref: (element: HTMLElement | null) => void;
+}
 
 // @public (undocumented)
 export function useHyperlinkPopup(): UseHyperlinkPopupResult;

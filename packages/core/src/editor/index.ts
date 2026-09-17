@@ -398,3 +398,17 @@ export { calendarMonthNames } from './content-control-calendar.ts';
 
 export { contentControlPopupOpener } from './content-control-popup-behavior.ts';
 export { CONTENT_CONTROL_PICTURE_ACCEPT } from './content-control-picture-widget.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './bind-history-group.ts';
+
+export {
+  commandExecOptions,
+  type EditorCommandExecute,
+  type ToolbarValueMap,
+  type ToolbarValueSlot,
+  type ToolbarSlotValue,
+} from './toolbar-values.ts';

@@ -455,9 +455,8 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export interface Editor {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
-    can(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): CanResult;
+    beginHistoryGroup(): HistoryGroup;
+    can(command: EditorCommand, options?: EditorExecOptions): CanResult;
     canExecuteImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>, options?: {
@@ -467,9 +466,7 @@ export interface Editor {
     // (undocumented)
     destroy(): void;
     // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
     executeImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>): Promise<ExecResult>;
@@ -490,6 +487,7 @@ export interface Editor {
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
     getCustomNodeDefinitions(): readonly unknown[];
     getDocumentFonts(): readonly string[];
+    // (undocumented)
     getDocumentHandle(): DocumentHandle;
     getDocumentStyles(): readonly {
         readonly name: string;
@@ -876,7 +874,15 @@ export interface EditorEvents {
     change: (change: DocumentChange) => void;
     // (undocumented)
     error: (error: EditorError) => void;
+    // (undocumented)
+    historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
+}
+
+// @public
+export interface EditorExecOptions {
+    readonly historyGroup?: HistoryGroup;
+    readonly scope?: EditorScope;
 }
 
 // @public
@@ -1124,6 +1130,7 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    history?: HistoryGroupOutcome;
     ok: true;
     revisions?: RevisionBatchResult;
 } | {
@@ -1262,6 +1269,30 @@ export interface HeaderFooterState {
     readonly sectionIndex: number;
     readonly titlePage?: boolean;
     readonly variant?: FurnitureVariant;
+}
+
+// @public
+export interface HistoryDiagnostic {
+    // (undocumented)
+    readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly state: 'open' | 'closed';
+}
+
+// @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history' | 'package-unit' | 'composition';
 }
 
 // @public

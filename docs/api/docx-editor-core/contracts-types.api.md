@@ -153,6 +153,7 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    history?: HistoryGroupOutcome;
     ok: true;
     revisions?: RevisionBatchResult;
 } | {

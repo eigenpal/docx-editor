@@ -239,7 +239,7 @@ The ref has seven methods:
 | `load(document)`          | `void`                         | Load DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                        |
 | `getDocumentHandle()`     | `DocumentHandle \| null`       | Gets the current document identity and revision.                                    |
 | `getEditor()`             | `Editor \| null`               | Gets the full editor facade.                                                        |
-| `exec(command, options?)` | `ExecResult`                   | Run a typed command against the current scope.                                      |
+| `exec(command, options?)` | `ExecResult`                   | Run a typed command. Options name a scope and a `historyGroup` for the gesture.     |
 | `snapshot(options?)`      | `EditorSnapshot`               | Read the current facade snapshot.                                                   |
 | `focus()`                 | `void`                         | Focus the mounted editor surface.                                                   |
 

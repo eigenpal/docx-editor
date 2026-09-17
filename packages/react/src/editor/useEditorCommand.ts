@@ -17,6 +17,8 @@
 import { useCallback, useMemo, useRef } from 'react';
 import {
   editorCommandKey,
+  commandExecOptions,
+  type EditorCommandExecute,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
@@ -38,7 +40,7 @@ export interface EditorCommandState {
    *
    * @returns `true` when the engine accepted and ran the command; `false` on refusal.
    */
-  readonly execute: () => boolean;
+  readonly execute: EditorCommandExecute;
   /** Whether the command is currently applied at the selection (bold on bold text). */
   readonly isActive: boolean;
   /** Whether the engine will honour the command right now. */
@@ -137,15 +139,18 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
   );
   const slice = useEditorState(selectSlice, commandSliceEqual);
 
-  const execute = useCallback((): boolean => {
-    const current = latest.current;
-    if (isSlot(current)) {
-      return runToolbarCommand(editor, current).ok;
-    }
-    if (!editor) return false;
-    return editor.exec(current).ok;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
-  }, [editor, key]);
+  const execute = useCallback(
+    (input?: unknown): boolean => {
+      const options = commandExecOptions(input);
+      const current = latest.current;
+      if (isSlot(current)) {
+        return runToolbarCommand(editor, current, undefined, options ?? {}).ok;
+      }
+      if (!editor) return false;
+      return editor.exec(current, options).ok;
+    },
+    [editor]
+  );
 
   return useMemo(
     () => ({

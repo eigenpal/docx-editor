@@ -1,0 +1,13 @@
+docx-to-markdown
+Copyright 2024-2026 EigenPal
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This distribution contains a compiled executable that bundles the
+@docx-editor.dev/core, @docx-editor.dev/fonts, and
+@docx-editor.dev/docx-to-markdown packages (Apache-2.0), their npm
+dependencies, the HarfBuzz text shaper, the Bun runtime, and
+metric-compatible font files. Each of those components keeps its own
+license. The full texts are reproduced in
+docx_to_markdown/_vendor/licenses/, starting from
+THIRD_PARTY_NOTICES.md in that directory.

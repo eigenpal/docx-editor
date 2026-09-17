@@ -18,6 +18,7 @@ export const VUE_COMPOSABLES = [
   'useFontFamily',
   'useFonts',
   'useHeaderFooterState',
+  'useHistoryGroup',
   'useHyperlinkPopup',
   'useHyperlinkPopupInstance',
   'useNavigationPane',

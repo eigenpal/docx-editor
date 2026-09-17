@@ -1,3 +1,4 @@
+import type { HistoryGroupOutcome } from './editor-scope.ts';
 import type { RevisionBatchResult } from './editor.ts';
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
@@ -132,7 +133,7 @@ export interface DocRange {
  * distinct ContentControl error classes that a boolean would flatten.
  */
 export type ExecResult =
-  | { ok: true; changed: boolean; revisions?: RevisionBatchResult }
+  | { ok: true; changed: boolean; revisions?: RevisionBatchResult; history?: HistoryGroupOutcome }
   | {
       ok: false;
       code: ExecErrorCode;

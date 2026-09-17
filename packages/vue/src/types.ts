@@ -3,6 +3,7 @@ import type {
   DocumentSource,
   Editor,
   EditorCommand,
+  EditorExecOptions,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -69,6 +70,6 @@ export interface DocxEditorRef {
   getDocumentHandle(): DocumentHandle | null;
   getEditor(): Editor | null;
   focus(): void;
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 }

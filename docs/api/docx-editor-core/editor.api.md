@@ -25,6 +25,9 @@ export function applyThemeTint(hex: string, keep: number): string;
 export const AUTO_ZOOM_MODE: ZoomMode;
 
 // @public
+export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
+
+// @public
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
@@ -851,6 +854,9 @@ export type ColorLowerResult = {
 } | ColorLowerRefusal;
 
 // @public
+export function commandExecOptions(value: unknown): EditorExecOptions | undefined;
+
+// @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
@@ -1108,6 +1114,14 @@ export type DrawingSelectionIntent = {
     readonly kind: 'programmatic';
 };
 
+// @public
+export interface EditorCommandExecute {
+    // (undocumented)
+    (): boolean;
+    // (undocumented)
+    (options: EditorExecOptions): boolean;
+}
+
 // @internal
 export function editorCommandKey(command: EditorCommand): string;
 
@@ -1314,6 +1328,18 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
+
+// @public
+export interface HistoryGroupBinding {
+    dispose(): void;
+    options(): EditorExecOptions;
+}
+
+// @public
+export interface HistoryGroupBindingOptions {
+    // (undocumented)
+    readonly kind: 'native-color' | 'range' | 'repeat' | 'keyboard';
+}
 
 // @public
 export interface HyperlinkActivation {
@@ -2307,11 +2333,22 @@ export interface RunTableChromeCommandResult {
 }
 
 // @public
-export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult;
+export function runTableCommand(editor: Editor | null, command: EditorCommand, options?: EditorExecOptions): ExecResult;
 
 // @public
-export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
-value?: unknown): ExecResult;
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: Exclude<ChromeSlotId, ToolbarValueSlot>, options: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand<K extends keyof ToolbarValueMap>(editor: Editor | null, id: K, value: ToolbarValueMap[NoInfer<K>], options?: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, value: unknown, options?: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
 
 // @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
@@ -2808,6 +2845,34 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 
 // @public
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
+
+// @public (undocumented)
+export type ToolbarSlotValue<K extends ToolbarValueSlot> = K extends keyof ToolbarValueMap ? ToolbarValueMap[K] : unknown;
+
+// @public
+export interface ToolbarValueMap {
+    // (undocumented)
+    'font.family': string;
+    // (undocumented)
+    'font.size': number;
+    // (undocumented)
+    'image.altText': string;
+    // (undocumented)
+    'image.wrap': ImageWrapTarget;
+    // (undocumented)
+    'list.lineSpacing': number;
+    // (undocumented)
+    'review.editingMode': 'editing' | 'suggesting' | 'viewing';
+    // (undocumented)
+    'styles.style': string;
+    // (undocumented)
+    'text.color': string;
+    // (undocumented)
+    'text.highlight': string;
+}
+
+// @public (undocumented)
+export type ToolbarValueSlot = keyof ToolbarValueMap | TableChromeSlotId;
 
 // @public
 export type TrackedChangeFilterMode = 'accept' | 'reject';

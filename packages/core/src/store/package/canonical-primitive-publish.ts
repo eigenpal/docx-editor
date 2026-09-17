@@ -20,10 +20,12 @@ import {
   type CanonicalPrimitiveEffect,
   type CanonicalPrimitiveJournal,
 } from './canonical-primitive-journal.ts';
+import type { HistoryGroup } from '../store/history-group.ts';
 
 interface PendingJournal {
   readonly store: object;
   readonly effects: CanonicalPrimitiveEffect[];
+  readonly historyGroup: HistoryGroup | undefined;
 }
 
 type JournalListener = (journal: CanonicalPrimitiveJournal) => void;
@@ -119,7 +121,7 @@ function publishStore(store: object): void {
       const taken = takePending(store);
       if (taken.length === 0) return;
       for (const item of taken) {
-        notifyStore(store, freezeCanonicalPrimitiveJournal(item.effects));
+        notifyStore(store, freezeCanonicalPrimitiveJournal(item.effects, item.historyGroup));
       }
     }
   } finally {
@@ -136,8 +138,9 @@ function publishStore(store: object): void {
  */
 export function publishCanonicalPrimitiveJournal(
   store: object,
-  effects: CanonicalPrimitiveEffect[]
+  effects: CanonicalPrimitiveEffect[],
+  historyGroup?: HistoryGroup
 ): void {
-  pending.push({ store, effects });
+  pending.push({ store, effects, historyGroup });
   publishStore(store);
 }

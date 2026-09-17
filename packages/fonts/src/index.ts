@@ -63,7 +63,7 @@
 
 import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
 import type { WordDefaultFamily } from './family-plans.ts';
-import { resolvePackagedAssetRoot } from './asset-root.ts';
+import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 
 export type { WordDefaultFamily } from './family-plans.ts';
@@ -154,7 +154,9 @@ const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, e
  * `/_next/static/media/Caladea-Bold.d6e01b80.ttf`. Anything that needs a `URL` here has
  * to cope with both; see {@link FONT_ASSET_ROOT}.
  */
-const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
+const relocatedAssetRoot = packagedAssetRootOverride();
+const assetUrl = (file: string): URL | string =>
+  relocatedAssetRoot === undefined ? FONT_ASSET_URLS[file]! : new URL(file, relocatedAssetRoot);
 
 /**
  * Directory URL of the packaged font files this package serves.
@@ -171,11 +173,14 @@ const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
  * uncatchable and takes down the whole bundle that imported this package rather than
  * degrading font loading.
  *
+ * In Node, the `DOCX_EDITOR_FONT_ASSET_ROOT` environment variable relocates this
+ * directory. Single-file bundles set it to a copy of the package's `assets/` directory
+ * that ships beside the executable, and every packaged face is then read from there.
+ *
  * @public
  */
-export const FONT_ASSET_ROOT: URL = resolvePackagedAssetRoot(
-  assetUrl(FONT_ASSET_MANIFEST[0]!.file)
-);
+export const FONT_ASSET_ROOT: URL =
+  relocatedAssetRoot ?? resolvePackagedAssetRoot(assetUrl(FONT_ASSET_MANIFEST[0]!.file));
 
 /**
  * The families Word applies to a document by DEFAULT, and what
@@ -555,18 +560,37 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // renders in one, and leaving it out would load nothing for a file that is entirely
     // default-styled.
     const wanted = new Set<WordDefaultFamily>();
+    const seen = new Set<WordDefaultFamily>();
+    // Substitutions for families an earlier origin covers under the SUBSTITUTE's own name.
+    // The bytes are there, but nothing maps the Word name to them: a caller who registers
+    // Carlito by name has not said it stands in for Calibri, and without this record the
+    // Word name resolves to nothing at all. No bytes load for these.
+    const aliasOnly: DefaultFontSubstitution[] = [];
     for (const declared of [request.defaultFamily, ...request.families]) {
       const family = wordFamiliesByFoldedName.get(declared.toLowerCase());
-      if (!family) continue;
+      if (!family || seen.has(family)) continue;
+      seen.add(family);
       if (allowed && !allowed.has(family.toLowerCase())) continue;
-      if (fullyCovered(family)) continue;
+      if (fullyCovered(family)) {
+        const plan = FAMILY_PLANS.get(family)!;
+        for (const face of FACES) {
+          if (already.has(faceKey(family, face.weight, face.style))) continue;
+          const lineMetrics = planLineBox(plan, face.weight);
+          aliasOnly.push({
+            from: { family, weight: face.weight, style: face.style },
+            to: { family: plan.substitute, weight: face.weight, style: face.style },
+            ...(lineMetrics ? { lineMetrics } : {}),
+          });
+        }
+        continue;
+      }
       wanted.add(family);
     }
     // Stable order regardless of how the document happened to declare them, so the same
     // file composes to the same configuration on every load.
     const families = ALL_WORD_DEFAULT_FAMILIES.filter((family) => wanted.has(family));
     if (families.length === 0)
-      return { sources: [], substitutions: [], failures: [], families, supportedFamilies };
+      return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };
 
     const loadOptions = {
       families,
@@ -579,7 +603,12 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
     }
     // Core registers private aliases, preserving native glyph fallback and host-page fonts.
-    return { ...fragment, families, supportedFamilies };
+    return {
+      ...fragment,
+      substitutions: [...aliasOnly, ...fragment.substitutions],
+      families,
+      supportedFamilies,
+    };
   }
 
   return markResolver(resolvePackagedFonts);

@@ -1,3 +1,24 @@
+/** The engine-owned identity of one gesture. Create it with `Editor.beginHistoryGroup()`. @public */
+declare const historyGroupBrand: unique symbol;
+export interface HistoryGroup {
+  readonly [historyGroupBrand]: true;
+  /** Closed after `end()`, document replacement, detach, or destruction. */
+  readonly state: 'open' | 'closed';
+  /** End this gesture without reverting any edits. Safe to call more than once. */
+  end(): void;
+}
+
+/** The history authority's result for this frame. @public */
+export interface HistoryGroupOutcome {
+  readonly kind: 'started' | 'extended' | 'split' | 'none';
+  readonly reason?:
+    | 'history-boundary'
+    | 'undo-redo'
+    | 'no-history'
+    | 'package-unit'
+    | 'composition';
+}
+
 /**
  * The editor is N+1 editing views: one body plus one per header/footer relationship, plus
  * footnotes, text boxes, and other addressable regions. Commands must name their target.
@@ -35,3 +56,22 @@ export type EditorScope =
 
 /** A concrete editing view. */
 export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
+
+/** Options for a command's editing view and explicit gesture. @public */
+export interface EditorExecOptions {
+  /** Omitted, the command addresses the current selection. */
+  readonly scope?: EditorScope;
+  /**
+   * An open handle from this editor. Supported for synchronous formatting commands.
+   * Intervening writes and undo/redo can split a gesture; inspect `ExecResult.history`.
+   * Read-only commands do not close a gesture. Ungrouped collaboration uses timed capture.
+   * See the core history grouping guide for gesture bindings and boundary rules.
+   */
+  readonly historyGroup?: HistoryGroup;
+}
+
+/** Optional diagnostic notification; subscribing does not change history behavior. @public */
+export interface HistoryDiagnostic {
+  readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
+  readonly reason: string;
+}

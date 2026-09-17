@@ -124,6 +124,7 @@ import {
   unloadableSourceReason,
 } from './docx-editor-support.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
+import { EditorHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
@@ -500,6 +501,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     change: new Set(),
     selectionChange: new Set(),
     error: new Set(),
+    historyDiagnostic: new Set(),
   };
 
   function emitError(error: EditorError): void {
@@ -1753,7 +1755,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const { resolveReviewItem } = reviewCommands;
 
+  const historyGroups = new EditorHistoryGroups(
+    () => surface,
+    (diagnostic) => {
+      for (const handler of [...handlers.historyDiagnostic]) handler(diagnostic);
+    },
+    () => JSON.stringify(surface?.state().selection)
+  );
   const editor: DocxEditorInstance = {
+    beginHistoryGroup() {
+      openScheduler.flush();
+      return historyGroups.begin();
+    },
     get mountGeneration() {
       return mountGeneration;
     },
@@ -1863,6 +1876,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
+      const historyRefusal = historyGroups.gate(command, options);
+      if (historyRefusal) return historyRefusal;
+      historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
       // DESTROYED editor, though: there is no reader left.
@@ -1936,21 +1952,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // revision would report HF / create-header edits as `changed: false`.
       const before = mounted.session.packageRevision();
 
-      const result = execEditorCommand(mounted, command, {
-        ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
-        editor,
+      return historyGroups.run(mounted, command, options, () => {
+        const result = execEditorCommand(mounted, command, {
+          ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
+          editor,
+        });
+        if (result) return result;
+        // `changed` is read from the model, not assumed: reporting `changed: true` where the
+        // document did not move would be a lie. It answers for the DOCUMENT, not for
+        // observable state — a mark toggled at a collapsed caret ARMS the typing format
+        // (`toggleRunProperty`), which moves the snapshot and fires a tick while committing
+        // nothing, so it correctly reports `changed: false`. Package revision covers body,
+        // furniture stories, and lifecycle ops; body-only revision would miss HF edits.
+        return { ok: true, changed: mounted.session.packageRevision() !== before };
       });
-      if (result) return result;
-      // `changed` is read from the model, not assumed: reporting `changed: true` where the
-      // document did not move would be a lie. It answers for the DOCUMENT, not for
-      // observable state — a mark toggled at a collapsed caret ARMS the typing format
-      // (`toggleRunProperty`), which moves the snapshot and fires a tick while committing
-      // nothing, so it correctly reports `changed: false`. Package revision covers body,
-      // furniture stories, and lifecycle ops; body-only revision would miss HF edits.
-      return { ok: true, changed: mounted.session.packageRevision() !== before };
     },
 
     can(command, options): CanResult {
+      const historyRefusal = historyGroups.gate(command, options);
+      if (historyRefusal) return historyRefusal;
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
         if (options?.scope) {

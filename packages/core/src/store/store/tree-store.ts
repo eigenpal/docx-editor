@@ -1,4 +1,5 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
+import { reportHistoryGroup, type HistoryGroup } from './history-group.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
@@ -188,6 +189,12 @@ export interface TransactOptions {
   readonly minimumImpact?: ImpactClass;
   /** Story identity stamped onto the published ModelChange (package-aware targeting). */
   readonly story?: TreeStoryRef;
+  /**
+   * The gesture this transaction belongs to: consecutive transactions carrying the SAME
+   * token extend one history entry (package from before the first, selection after the
+   * latest). Another token, none, undo or redo closes the group. See {@link HistoryGroup}.
+   */
+  readonly historyGroup?: HistoryGroup;
 }
 
 interface HistoryEntry {
@@ -203,6 +210,12 @@ interface HistoryEntry {
   readonly revision: number;
   readonly selectionBefore: SelectionMark | null;
   readonly selectionAfter: SelectionMark | null;
+  /**
+   * The gesture this entry is still collecting, while it is the newest entry and nothing
+   * has closed it. Only ever set on the top of the undo stack: {@link closeHistoryGroup}
+   * strips it, and undo and redo never copy it onto the entries they push.
+   */
+  readonly group?: HistoryGroup;
 }
 
 const IMPACT_RANK: Record<ImpactClass, number> = {
@@ -451,6 +464,19 @@ export class TreeDocumentStore {
     options: TransactOptions
   ): TransactResult {
     const origin = options.origin ?? ORIGIN_IDS.mutationHuman;
+    // A PROJECTION-origin commit reconciles the view with state the store already holds.
+    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
+    // it must not become an undo step (task 5.6).
+    const recordsHistory =
+      options.recordsHistory ??
+      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
+    // An intent naming another gesture (or none) closes the open one HERE, whether it goes
+    // on to land, to change nothing or to be refused: the same input class, one rule. A
+    // frame of the same gesture leaves it open for the extension below.
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (recordsHistory && !this.composition && top?.group !== options.historyGroup) {
+      this.closeHistoryGroup();
+    }
     const before = this.current;
     const beforeRevision = this.rev;
 
@@ -767,29 +793,36 @@ export class TreeDocumentStore {
       };
     }
 
-    // A PROJECTION-origin commit reconciles the view with state the store already holds.
-    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
-    // it must not become an undo step (task 5.6).
-    const recordsHistory =
-      options.recordsHistory ??
-      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
-
     if (recordsHistory) {
       if (this.composition) {
         // Inside a composition every transaction folds into the entry opened at
         // compositionstart — however many transactions the IME emits (task 5.5).
+        reportHistoryGroup(options.historyGroup, 'split', 'composition');
         this.composition.committed = true;
         this.composition = {
           ...this.composition,
           entry: { ...this.composition.entry, selectionAfter },
         };
       } else {
-        this.pushUndo({
-          pkg: before,
-          revision: beforeRevision,
-          selectionBefore,
-          selectionAfter,
-        });
+        const group = options.historyGroup;
+        const top = this.undoStack[this.undoStack.length - 1];
+        if (group !== undefined && top !== undefined && top.group === group) {
+          // Same gesture, still open: the entry keeps its `pkg` and `selectionBefore` — the
+          // state before the FIRST frame — and takes this frame's selection as its end.
+          this.undoStack[this.undoStack.length - 1] = {
+            ...top,
+            selectionAfter: selectionAfter ?? top.selectionAfter,
+          };
+        } else {
+          this.pushUndo({
+            pkg: before,
+            revision: beforeRevision,
+            selectionBefore,
+            selectionAfter,
+            group,
+          });
+        }
+        reportHistoryGroup(group, top?.group === group ? 'extended' : 'started');
         this.redoStack.length = 0;
       }
     }
@@ -857,9 +890,24 @@ export class TreeDocumentStore {
     this.composition = null;
   }
 
+  /**
+   * Close the open history group, if any: the next transaction records its own entry.
+   * The store does this itself for another token, none, undo and redo; the package
+   * coordinator does it for history moving ABOVE the store (a package unit, another
+   * story's pointer), which the store cannot see.
+   */
+  closeHistoryGroup(): void {
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top === undefined || top.group === undefined) return;
+    this.undoStack[this.undoStack.length - 1] = { ...top, group: undefined };
+  }
+
   undo(): TreeModelChange | null {
     const entry = this.undoStack.pop();
     if (!entry) return null;
+    // Undo is a boundary: the entry now on top must not collect a gesture that resumes
+    // after it, and the one pushed to redo carries no group either.
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.redoStack.push({
       pkg: this.current,
@@ -875,6 +923,7 @@ export class TreeDocumentStore {
   redo(): TreeModelChange | null {
     const entry = this.redoStack.pop();
     if (!entry) return null;
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.undoStack.push({
       pkg: this.current,

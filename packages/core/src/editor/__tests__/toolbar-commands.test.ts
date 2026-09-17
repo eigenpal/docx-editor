@@ -69,6 +69,7 @@ function fakeEditor(
 ): { editor: Editor; calls: Calls } {
   const calls: Calls = { can: [], exec: [], saves: 0 };
   const editor = {
+    snapshot: () => ({ formatting: null }),
     can: (command: EditorCommand) => {
       calls.can.push(command);
       return canResult(command);
@@ -628,7 +629,7 @@ function editorWithImage(
   return {
     can: (command: EditorCommand) => canResult(command),
     canExecuteImageCommand: (command: EditorCommand) => canResult(command),
-    exec: (command: EditorCommand) => ({ ok: true, changed: true }),
+    exec: (_command: EditorCommand) => ({ ok: true, changed: true }),
     getSelectedImage: () => image,
     getEditingMode: () => 'editing',
   } as unknown as Editor;
@@ -765,4 +766,29 @@ describe('reports image value command state', () => {
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) expect(invalid.code).toBe('unsupported');
   });
+});
+
+test('toolbar command options cannot be swallowed as a value', () => {
+  const instance = createDocxEditor({ document: 'blank' });
+  const group = instance.beginHistoryGroup();
+  const options = { historyGroup: group };
+  const seen: unknown[] = [];
+  const editor = {
+    can: (_command: EditorCommand, opts: unknown) => {
+      seen.push(opts);
+      return { ok: true };
+    },
+    exec: (_command: EditorCommand, opts: unknown) => {
+      seen.push(opts);
+      return { ok: true, changed: true };
+    },
+  } as unknown as Editor;
+  expect(runToolbarCommand(editor, 'text.bold', options).ok).toBe(true);
+  expect(seen).toEqual([options, options]);
+  seen.length = 0;
+  expect(runToolbarCommand(editor, 'text.color', '0070C0', options).ok).toBe(true);
+  expect(seen).toEqual([options, options]);
+  expect(runToolbarCommand(editor, 'text.bold', 'bad value' as never).ok).toBe(false);
+  expect(runToolbarCommand(editor, 'text.color', options as never).ok).toBe(false);
+  instance.destroy();
 });

@@ -8,12 +8,21 @@
  * @public
  */
 
+import type { EditorEvents } from './editor-events.ts';
+export type { EditorEvents } from './editor-events.ts';
 import type { ResolveReviewChangesOptions, ReviewDisplayMode } from './editor-review.ts';
 export type { ResolveReviewChangesOptions } from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
-import type { EditorScope, ViewScope } from './editor-scope.ts';
-export type { EditorScope, ViewScope } from './editor-scope.ts';
+import type { EditorExecOptions, EditorScope, HistoryGroup, ViewScope } from './editor-scope.ts';
+export type {
+  EditorExecOptions,
+  EditorScope,
+  HistoryGroup,
+  HistoryDiagnostic,
+  HistoryGroupOutcome,
+  ViewScope,
+} from './editor-scope.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the store lane, which they are not allowed to import.
 import type {
@@ -343,13 +352,12 @@ export interface Editor {
    * Validation does not open a dialog. Other write refusals also reject the save.
    */
   save(): Promise<ArrayBuffer>;
-  /** An opaque handle to the current document (identity + revision). Replaces the former
-   *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */
   getDocumentHandle(): DocumentHandle;
-
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  /** Create an explicit gesture handle; creates no undo entry. */
+  beginHistoryGroup(): HistoryGroup;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
-  can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+  can(command: EditorCommand, options?: EditorExecOptions): CanResult;
   /**
    * Dry run for byte commands that require {@link Editor.executeImageCommand}.
    * Generic {@link Editor.can} on `insertImage` / `replaceImage` refuses with an async-path
@@ -1682,19 +1690,4 @@ export interface EditorSnapshot {
  */
 export interface EditorError extends Error {
   readonly code?: string;
-}
-
-/**
- * What `editor.on(...)` can be subscribed to, and what each handler receives.
- *
- * These are PUSH notifications and are not interchangeable with reading `snapshot()`: a snapshot
- * read cannot observe an event that was never emitted, which is why adapter behaviour is asserted
- * against these rather than against the snapshot.
- */
-export interface EditorEvents {
-  /** A document mutation committed, with the ids it touched. */
-  change: (change: DocumentChange) => void;
-  /** The selection or its derived formatting moved. */
-  selectionChange: (snapshot: EditorSnapshot) => void;
-  error: (error: EditorError) => void;
 }

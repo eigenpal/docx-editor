@@ -236,3 +236,124 @@ describe('useEditorCommand lifecycle', () => {
     app.unmount();
   });
 });
+
+import { useEditorValueCommand } from '../src/editor/useEditorValueCommand';
+import { useHistoryGroup } from '../src/editor/useHistoryGroup';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+
+test('range binding survives Vue updates, groups keyboard repeats and cleans up', async () => {
+  const results: ExecResult[] = [];
+  let options: ReturnType<typeof useHistoryGroup>['options'] | undefined;
+  const Range = defineComponent({
+    setup() {
+      const size = useEditorValueCommand('font.size');
+      const gesture = useHistoryGroup({ kind: 'range' });
+      options = gesture.options;
+      return () =>
+        h('input', {
+          'data-live-size': '',
+          type: 'range',
+          min: 16,
+          max: 100,
+          ref: (node: unknown) => gesture.ref(node as HTMLInputElement | null),
+          disabled: !size.isEnabled.value,
+          value: size.value.value ?? 22,
+          onInput: (event: Event) =>
+            results.push(
+              size.execute(Number((event.target as HTMLInputElement).value), gesture.options())
+            ),
+        });
+    },
+  });
+  const { app, container, editor } = mountProbe(() => h(Range));
+  try {
+    app.mount(container);
+    await flush();
+    editor().surface!.selectAll();
+    await flush();
+    const input = container.querySelector('[data-live-size]') as HTMLInputElement;
+    for (const values of [
+      [24, 28, 32],
+      [40, 44],
+    ]) {
+      for (const [index, value] of values.entries()) {
+        input.dispatchEvent(
+          new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowUp', repeat: index > 0 })
+        );
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await flush();
+      }
+      input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'ArrowUp' }));
+      await flush();
+    }
+    expect(results.map((r) => (r.ok ? r.history?.kind : r.reason))).toEqual([
+      'started',
+      'extended',
+      'extended',
+      'started',
+      'extended',
+    ]);
+    editor().exec({ type: 'undo' });
+    await flush();
+    expect(input.value).toBe('32');
+    editor().exec({ type: 'undo' });
+    await flush();
+    expect(editor().snapshot().canUndo).toBe(false);
+    const handle = options!().historyGroup!;
+    app.unmount();
+    expect(handle.state).toBe('closed');
+    expect(() => options!()).toThrow('not mounted');
+  } finally {
+    app.unmount();
+    container.remove();
+  }
+});
+
+test('held Vue stepper starts before its target keydown handler writes', async () => {
+  const results: ExecResult[] = [];
+  const Stepper = defineComponent({
+    setup() {
+      const size = useEditorValueCommand('font.size');
+      const gesture = useHistoryGroup({ kind: 'repeat' });
+      let value = 22;
+      return () =>
+        h(
+          'button',
+          {
+            ref: (node: unknown) => gesture.ref(node as HTMLElement | null),
+            'data-stepper': '',
+            onKeydown: () => {
+              value += 2;
+              results.push(size.execute(value, gesture.options()));
+            },
+          },
+          'Increase'
+        );
+    },
+  });
+  const { app, container, editor } = mountProbe(() => h(Stepper));
+  try {
+    app.mount(container);
+    await flush();
+    editor().surface!.selectAll();
+    await flush();
+    const button = container.querySelector('[data-stepper]')!;
+    for (const repeat of [false, true, true]) {
+      button.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowUp', repeat }));
+      await flush();
+    }
+    button.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'ArrowUp' }));
+    await flush();
+    expect(results.map((r) => (r.ok ? r.history?.kind : r.reason))).toEqual([
+      'started',
+      'extended',
+      'extended',
+    ]);
+    editor().exec({ type: 'undo' });
+    expect(editor().snapshot().canUndo).toBe(false);
+  } finally {
+    app.unmount();
+    container.remove();
+  }
+});

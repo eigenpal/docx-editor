@@ -52,10 +52,10 @@ export interface TreeApplyResult {
   readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
 
-/** Optional collaboration attribution for a direct tree-op transaction. */
+/** Optional collaboration attribution and history grouping for a direct tree-op transaction. */
 export type TreeApplyOptions = Pick<
   TreeTransactOptions,
-  'origin' | 'actorId' | 'operationId' | 'recordsHistory'
+  'origin' | 'actorId' | 'operationId' | 'recordsHistory' | 'historyGroup'
 > & {
   /** Package resources committed in the same transaction as the tree operations. */
   readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];

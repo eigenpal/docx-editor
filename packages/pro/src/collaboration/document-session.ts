@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { projectJournalToShared } from './document/projected-journal.ts';
+import { HistoryGroupCapture } from './document/history-group-capture.ts';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
@@ -31,9 +32,10 @@ import type {
   CollaborationStatus,
   CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-import type {
-  CanonicalPrimitiveJournal,
-  CollaborationDocumentPort,
+import {
+  historyGroupOfJournal,
+  type CanonicalPrimitiveJournal,
+  type CollaborationDocumentPort,
 } from '@docx-editor.dev/core/collaboration/replication';
 import {
   createCollaborationStatusTracker,
@@ -128,6 +130,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
+  private readonly historyGroups: HistoryGroupCapture;
   private readonly stopBlobWatch: () => void;
   private readonly stopSeedWatch: () => void;
 
@@ -152,6 +155,7 @@ class DocumentSession implements DocumentCollaborationSession {
       captureTimeout: UNDO_CAPTURE_TIMEOUT_MS,
       deleteFilter: registry.undoDeleteFilter(),
     });
+    this.historyGroups = new HistoryGroupCapture(this.undoManager);
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
     this.stopBlobWatch = blobs.observeChanges((digests) => {
@@ -348,6 +352,7 @@ class DocumentSession implements DocumentCollaborationSession {
     // so the gate re-checks: undo must not write a room the session just diverged from.
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.undoStack.length === 0) return false;
+    this.historyGroups.reset();
     this.undoManager.undo();
     this.registry.normalizeRestoredSplitTextAnchors();
     return true;
@@ -358,6 +363,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.flushPendingJournals();
     if (!this.canWriteSharedState()) return false;
     if (this.undoManager.redoStack.length === 0) return false;
+    this.historyGroups.reset();
     this.undoManager.redo();
     this.registry.normalizeRestoredSplitTextAnchors();
     return true;
@@ -530,20 +536,22 @@ class DocumentSession implements DocumentCollaborationSession {
     }
     // A custom blob reader can run host code; recheck after that callback before writing.
     if (!this.canWriteSharedState()) return;
-    const refusal = this.ydoc.transact((): CollaborationFailure | null => {
-      if (blobs !== null) {
-        const published = this.putJournalBlobs(blobs.payloads);
-        if (published !== null) return published;
-      }
-      const result = applyPrimitiveJournal(this.registry, shared);
-      if (!result.ok) {
-        return {
-          code: result.code as CollaborationFailureCode,
-          ...(result.detail ? { detail: result.detail } : {}),
-        };
-      }
-      return null;
-    }, this.localOrigin);
+    const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () =>
+      this.ydoc.transact((): CollaborationFailure | null => {
+        if (blobs !== null) {
+          const published = this.putJournalBlobs(blobs.payloads);
+          if (published !== null) return published;
+        }
+        const result = applyPrimitiveJournal(this.registry, shared);
+        if (!result.ok) {
+          return {
+            code: result.code as CollaborationFailureCode,
+            ...(result.detail ? { detail: result.detail } : {}),
+          };
+        }
+        return null;
+      }, this.localOrigin)
+    );
     if (refusal === null) {
       this.refusedInARow = 0;
       return;
@@ -599,6 +607,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private refuseLocalJournal(refusal: CollaborationFailure): void {
+    this.historyGroups.reset();
     this.undoManager.stopCapturing();
     // The status this replica held before the refusal. Recovery restores it, because a
     // realign repairs the DOCUMENT, not the transport: with offline editing on, the refused

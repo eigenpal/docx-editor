@@ -299,12 +299,157 @@ The result also includes these pairs:
 - `matchCase` and `setMatchCase`
 - `wholeWord` and `setWholeWord`
 
+## useHistoryGroup
+
+Use `useHistoryGroup` when your app applies formatting continuously, such as a
+font-size slider or color picker. The document updates on every input event,
+and one undo action restores the state before the gesture. A redo action
+restores the final value.
+
+Render the control inside `DocxEditor.Root`.
+You can use it in your own toolbar or a
+[toolbar slot override](/docs/2.x/react/composition). The hook returns two members:
+
+| Member      | How you use it                                              |
+| ----------- | ----------------------------------------------------------- |
+| `ref`       | Attach it to the input or button that receives the gesture. |
+| `options()` | Pass its result to each command produced by that gesture.   |
+
+### Add a live font-size slider
+
+Use `useEditorValueCommand` to read the selected value and apply changes. Its
+`isEnabled` and `disabledReason` come from the editor. `value` follows the
+selection and updates after undo and redo. Bind your control to `value` to keep
+it synchronized with the document.
+
+Font size uses half-points: `24` means 12 pt. `null` means mixed or unavailable.
+
+```tsx
+import { useState } from 'react';
+import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/react';
+
+export function FontSizeSlider() {
+  const size = useEditorValueCommand('font.size');
+  const gesture = useHistoryGroup({ kind: 'range' });
+  const [error, setError] = useState<string | null>(null);
+  const label = size.value === null ? 'Mixed or unavailable' : `${size.value / 2} pt`;
+
+  return (
+    <label title={size.disabledReason ?? undefined}>
+      Font size: {label}
+      <input
+        ref={gesture.ref}
+        type="range"
+        min={16}
+        max={144}
+        step={1}
+        value={size.value ?? 22}
+        aria-valuetext={label}
+        disabled={!size.isEnabled}
+        onChange={(event) => {
+          const result = size.execute(Number(event.currentTarget.value), gesture.options());
+          setError(result.ok ? null : result.reason);
+        }}
+      />
+      <output aria-live="polite">{error}</output>
+    </label>
+  );
+}
+```
+
+To check the behavior:
+
+1. Drag the slider, release it, and drag it again.
+2. Click **Undo**. The size returns to the value at the end of the first drag.
+3. Click **Undo** again. The original formatting returns.
+
+Holding an arrow key also forms one gesture. Releasing the key ends it.
+
+The binding handles pointer release outside the control, cancellation, lost
+pointer capture, and blur. It retains the gesture across rerenders and disposes it on unmount or
+editor replacement. Your value handler does not need to start or end a group.
+
+### Choose the gesture policy
+
+| `kind`         | Use it for                                       | What ends the gesture                                                 |
+| -------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| `range`        | A native range input or custom slider            | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `repeat`       | A button that applies repeated values while held | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `keyboard`     | A control driven by repeated keydown events      | Keyup, Escape, or blur                                                |
+| `native-color` | An HTML color input                              | Native `change`, next activation, Escape, or blur                     |
+
+For a repeat button, your app owns the repeat timer. Stop that timer on release
+or cancellation. The binding groups your writes; it does not generate them.
+
+### Add a native color input
+
+Change the slot to `text.color` and the policy to `native-color`. Color commands
+accept six hexadecimal digits without `#`. React `onChange` applies each value. The binding listens for the native `change`
+event to end the gesture.
+
+```tsx
+function LiveColor() {
+  const color = useEditorValueCommand('text.color');
+  const gesture = useHistoryGroup({ kind: 'native-color' });
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <label title={color.disabledReason ?? undefined}>
+      Text color
+      <input
+        ref={gesture.ref}
+        type="color"
+        disabled={!color.isEnabled}
+        value={`#${color.value ?? '000000'}`}
+        onChange={(event) => {
+          const result = color.execute(event.currentTarget.value.slice(1), gesture.options());
+          setError(result.ok ? null : result.reason);
+        }}
+      />
+      <span>{color.value === null ? 'Mixed or unavailable' : color.value}</span>
+      <output aria-live="polite">{error}</output>
+    </label>
+  );
+}
+```
+
+Native color controls differ between browsers. Native `change` means a committed
+value; it does not guarantee that a popup closed. If the browser sends no
+`change` event, the next activation, Escape, blur, or unmount ends the gesture.
+If you need consistent drag boundaries across browsers, use a custom slider.
+
+### Read command results
+
+`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for
+application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you
+whether the document changed. At a collapsed caret, a formatting command can
+set the next typing format without changing the document or creating undo history.
+
+For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or
+`none`. A split means another history boundary interrupted the gesture; it does
+not mean the formatting failed. See the
+[boundary table and supported commands](/docs/2.x/core#group-one-gesture-into-one-undo-step).
+
+`useEditorValueCommand` also accepts `font.family`, `text.highlight`,
+`styles.style`, and `list.lineSpacing`. Image value slots are available, but
+image commands reject the `historyGroup` option.
+
+`useEditorCommand().execute(options)` accepts the same options and returns a
+boolean. Its event-handler form, `onClick={command.execute}`, still works.
+If you need the full result for a raw command, get the editor with
+`useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
+
+For optional development feedback, subscribe with
+`useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted
+groups and possible cases where each update starts a separate group. Diagnostics
+do not change history behavior or write to the console.
+
 ## Other hooks
 
 | Hook                              | Return value                                                                                                                                                    |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation.                                                                                 |
-| `useEditorValueCommand(slotId)`   | Provides state for value commands such as `'image.wrap'` and `'image.altText'`.                                                                                 |
+| `useEditorValueCommand(slotId)`   | Reads selected values and runs typed formatting and image commands; `execute(value, options?)` returns `ExecResult`.                                            |
 | `useParagraphIndent()`            | Provides current indents and an `apply` action.                                                                                                                 |
 | `useHyperlinkPopup()`             | Provides state for a custom hyperlink panel.                                                                                                                    |
 | `useContentControl()`             | Provides content-control locks, value writes, and form-fill state.                                                                                              |
