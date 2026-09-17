@@ -170,6 +170,26 @@ describe('Enter and the style for the following paragraph', () => {
     expect(authoredStyles(surface)).toEqual(['Heading1', 'Heading1']);
   });
 
+  test('an empty formatted tail retains its face after save and re-open', async () => {
+    const body = '<w:p><w:r><w:rPr><w:sz w:val="52"/><w:b/></w:rPr><w:t>Title</w:t></w:r></w:p>';
+    const { editor, surface } = mount(docx(STYLES, body));
+    pressEnterAt(surface, 0, 5);
+    const reopened = mount(new Uint8Array(await editor.save()));
+    const id = reopened.surface.session.paragraphIds()[1]!;
+    reopened.surface.setSelection({
+      anchor: { paragraphId: id, offset: 0 },
+      head: { paragraphId: id, offset: 0 },
+    });
+    expect(reopened.surface.formatting().fontSizeHalfPoints).toBe(52);
+    expect(reopened.surface.formatting().bold).toBe(true);
+    reopened.surface.type('More');
+    expect(reopened.surface.formatting().fontSizeHalfPoints).toBe(52);
+    expect(reopened.surface.formatting().bold).toBe(true);
+    surface.undo();
+    expect(surface.session.paragraphIds()).toHaveLength(1);
+    expect(authoredNames(surface, 0)).not.toContain('rPr');
+  });
+
   test('Enter at the start of a heading leaves an empty heading above it', () => {
     const { surface } = mount(docx(STYLES, HEADING));
     pressEnterAt(surface, 0, 0);

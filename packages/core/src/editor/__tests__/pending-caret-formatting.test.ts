@@ -262,6 +262,18 @@ describe('pending caret formatting', () => {
     });
   });
 
+  test('an invalid armed size cannot prevent Enter or the next character', () => {
+    withSurface(paragraph(textRun('hello')), (surface) => {
+      caretAt(surface, 5);
+      surface.setRunProperty('sz', { 'bad attribute': '72' });
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toHaveLength(2);
+      expect(surface.state().lastRejection).toBeNull();
+      surface.type('x');
+      expect(runsOf(surface, 1)).toEqual([['x']]);
+    });
+  });
+
   for (const lineBreak of [false, true]) {
     test(`${lineBreak ? 'Shift+Enter' : 'Enter'} carries formatting applied to selected text`, () => {
       withSurface(paragraph(''), (surface) => {

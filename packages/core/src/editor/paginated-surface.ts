@@ -505,6 +505,26 @@ export function mountPaginatedSurface(
         layout: currentLayout,
         selection,
         measurer,
+        ...(armedAtCaret()
+          ? {
+              typingStyle: () => {
+                const typingFormat = format.formatting();
+                return typingFormat.fontSizeHalfPoints
+                  ? {
+                      fontSizePt: typingFormat.fontSizeHalfPoints / 2,
+                      fontFamily: typingFormat.fontFamily,
+                      bold: typingFormat.bold,
+                      italic: typingFormat.italic,
+                      verticalAlign: typingFormat.superscript
+                        ? ('superscript' as const)
+                        : typingFormat.subscript
+                          ? ('subscript' as const)
+                          : ('baseline' as const),
+                    }
+                  : null;
+              },
+            }
+          : {}),
         ...(active
           ? { preferredPageIndex: active.pageIndex }
           : notePageIndex !== null
@@ -705,8 +725,24 @@ export function mountPaginatedSurface(
     /** The range the insert REPLACES, when the caller's insert stands in for one. */
     replacing?: { readonly start: number; readonly end: number }
   ): TreeDocOp[] {
-    const armed = armedAtCaret();
-    if (!armed || length === 0) return [];
+    // A saved empty paragraph carries its typing face on the mark. It has no run
+    // for the insertion operation to extend, so copy that face onto the first text.
+    const armed =
+      armedAtCaret() ??
+      (textOf(selection.head.paragraphId).length === 0
+        ? {
+            base: [],
+            properties: authoredRunPropertiesAt(
+              partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+              selection.head.paragraphId,
+              selection.head.offset,
+              revisionDisplayMode(),
+              revisionFilter()
+            ),
+          }
+        : null);
+    if (!armed || length === 0 || (armed.properties.length === 0 && armed.base.length === 0))
+      return [];
     // The insert this format rides RELOCATES past a deletion the caret rests in — the rule
     // `rangeDeletionPlan` applies through `positionPastDeletion`. The armed anchor must
     // follow the same relocation, or the two positions disagree by construction and the
@@ -719,7 +755,7 @@ export function mountPaginatedSurface(
     // through the SAME rule the caller's landing came from. The IME readback composes over
     // the caret's own pending text — the anchor sat at the range end, the landing did not,
     // and the armed format silently dropped on every composed replacement.
-    const anchor = pendingFormats!.position;
+    const anchor = pendingFormats?.position ?? selection.head;
     const at =
       replacing &&
       anchor.paragraphId === paragraphId &&
@@ -1051,6 +1087,7 @@ export function mountPaginatedSurface(
     }
     // Not document state, but observable state: the toolbar's Bold must light up NOW,
     // and the snapshot cache invalidates on this report.
+    caret.update();
     options.onChange?.(currentState());
   }
 
@@ -4610,21 +4647,39 @@ export function mountPaginatedSurface(
       // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
       // paragraph's style names as its follower, which is what stops a heading from being
       // followed by a second heading.
-      const tailStyleId = splitEndsTheParagraph(position)
+      const endsParagraph = splitEndsTheParagraph(position);
+      const tailStyleId = endsParagraph
         ? nextStyle.followerStyleId(position.paragraphId)
         : undefined;
+      // Persist the insertion face on the marks of an end split. Stored marks alone
+      // disappear on a click away and cannot give the empty tail its line height.
+      // Only direct properties are copied, leaving the follower style free to inherit.
+      const markProperties = armed.properties.reduce(
+        (merged, property) =>
+          mergedProperties(merged, mergedMultiSettingProperty(merged, property)),
+        [...armed.base]
+      );
+      const markOps: TreeDocOp[] =
+        endsParagraph && editingMode === 'edit' && markProperties.length > 0
+          ? [
+              {
+                op: 'setParagraphMarkProperties',
+                paragraphId: position.paragraphId,
+                properties: markProperties,
+              },
+            ]
+          : [];
+      const splitOp: TreeDocOp = {
+        op: 'splitParagraph',
+        paragraphId: position.paragraphId,
+        offset: position.offset,
+        tailStyleId,
+      };
       commit(
         () =>
-          applyOps(
-            [
-              ...plan.ops,
-              {
-                op: 'splitParagraph',
-                paragraphId: position.paragraphId,
-                offset: position.offset,
-                tailStyleId,
-              },
-            ],
+          withoutPendingOnRejection(
+            [...plan.ops, ...markOps, splitOp],
+            [...plan.ops, splitOp],
             selectionMark()
           ),
         () => {

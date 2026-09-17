@@ -113,6 +113,60 @@ const geometryOf = (element: HTMLElement) => ({
 });
 
 describe('the painted caret', () => {
+  test('Enter sizes an empty paragraph caret to the format typing will inherit', () => {
+    const { surface, container } = mount(
+      '<w:p><w:r><w:rPr><w:sz w:val="72"/><w:b/></w:rPr><w:t>Title</w:t></w:r></w:p>'
+    );
+    try {
+      putCaret(surface, 5);
+      const originalHeight = caretElement(container)!.style.height;
+      surface.splitParagraph();
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      const emptyPosition = surface.state().selection.head;
+      expect(caretAt(surface.layout(), emptyPosition)!.height).toBeCloseTo(
+        parseFloat(originalHeight)
+      );
+      putCaret(surface, 2, 0);
+      surface.setSelection({ anchor: emptyPosition, head: emptyPosition });
+      expect(surface.formatting().fontSizeHalfPoints).toBe(72);
+      expect(surface.formatting().bold).toBe(true);
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.splitParagraph();
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.type('More');
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.splitParagraph();
+      surface.setRunProperty('sz', { val: '48' });
+      const resizedHeight = caretElement(container)!.style.height;
+      expect(parseFloat(resizedHeight)).toBeLessThan(parseFloat(originalHeight));
+      surface.type('Smaller');
+      expect(caretElement(container)!.style.height).toBe(resizedHeight);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('a pending font size immediately resizes a nonempty caret on the text baseline', () => {
+    const { surface, container } = mount(
+      '<w:p><w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>Large</w:t></w:r></w:p>'
+    );
+    try {
+      putCaret(surface, 5);
+      const originalHeight = parseFloat(caretElement(container)!.style.height);
+      surface.setRunProperty('sz', { val: '36' });
+      const pending = geometryOf(caretElement(container)!);
+      expect(parseFloat(pending.height)).toBeCloseTo(originalHeight / 2);
+      surface.type('x');
+      const typed = geometryOf(caretElement(container)!);
+      expect(typed.height).toBe(pending.height);
+      expect(typed.top).toBe(pending.top);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('it paints at the geometry layout published, not at a measured one', () => {
     const { surface, container } = mount(paragraph('hello world'));
     putCaret(surface, 6);

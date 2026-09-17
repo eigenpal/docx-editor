@@ -35,6 +35,14 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { isBottomToTopCaret } from '../layout/table-cell-text-direction.ts';
+import {
+  baselineShiftPtOf,
+  DEFAULT_RUN_STYLE,
+  type ResolvedRunStyle,
+} from '../layout/run-style.ts';
+import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
+import { clipParagraphBox } from '../layout/paragraph-frame-clip.ts';
+import { selectionRunStyle } from './surface-formatting.ts';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {
@@ -48,6 +56,11 @@ export interface SurfaceCaretInput {
    * letter rather than beside it.
    */
   readonly measurer?: TextMeasurer;
+  /** Font metrics for an armed typing format that has no painted run yet. */
+  readonly typingStyle?: () => Pick<
+    ResolvedRunStyle,
+    'fontSizePt' | 'fontFamily' | 'bold' | 'italic' | 'verticalAlign'
+  > | null;
   /** When true, hide the engine caret (range selection / IME still take precedence). */
   readonly suppress?: boolean;
   /**
@@ -159,7 +172,15 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    const { layout, selection, scopedHost, scopedHostKind, preferredPageIndex, measurer } = read();
+    const {
+      layout,
+      selection,
+      scopedHost,
+      scopedHostKind,
+      preferredPageIndex,
+      measurer,
+      typingStyle,
+    } = read();
     const currentScale = scale();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
@@ -169,13 +190,51 @@ export function createSurfaceCaret(
     }
     // Measured, not interpolated: the caret has to sit at a glyph edge, and a span's advance
     // divided by its character count only lands there in a monospaced face.
-    const geometry = caretAt(layout, selection.head, {
+    let geometry = caretAt(layout, selection.head, {
       ...(measurer ? { measurer } : {}),
       ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
     });
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();
       return;
+    }
+    if (typingStyle && measurer) {
+      const { pageIndex, lineId } = geometry;
+      const placedLine = paragraphLinesIndex(layout)
+        .get(selection.head.paragraphId)
+        ?.find((placed) => placed.pageIndex === pageIndex && placed.line.id === lineId);
+      const line = placedLine?.line;
+      // Stored marks describe the next glyph before any run carries that face.
+      // Align nonempty lines to their baseline; empty lines retain their top.
+      if (line && !line.drawings?.length && !isBottomToTopCaret(geometry)) {
+        const style = typingStyle();
+        if (style) {
+          const resolved = {
+            ...(selectionRunStyle(layout, selection) ?? DEFAULT_RUN_STYLE),
+            ...style,
+          };
+          const metrics = measurer.lineMetrics(resolved);
+          if (metrics.height > 0) {
+            const box = clipParagraphBox(
+              {
+                ...geometry,
+                width: 0,
+                y:
+                  line.spans.length > 0
+                    ? line.box.y + line.baseline - metrics.baseline - baselineShiftPtOf(resolved)
+                    : geometry.y,
+                height: metrics.height,
+              },
+              placedLine?.clipBox
+            );
+            if (!box) {
+              hide();
+              return;
+            }
+            geometry = box;
+          }
+        }
+      }
     }
     // Open scoped story: parent into the story host (story-relative coords). Body: page
     // content box (content-relative coords). Never paint scoped geometry into the body box.
