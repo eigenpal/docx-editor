@@ -20,7 +20,7 @@ import {
   type CanonicalPrimitiveEffect,
   type CanonicalPrimitiveJournal,
 } from './canonical-primitive-journal.ts';
-import type { HistoryGroup } from '../store/tree-store.ts';
+import type { HistoryGroup } from '../store/history-group.ts';
 
 interface PendingJournal {
   readonly store: object;

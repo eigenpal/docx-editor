@@ -1,6 +1,5 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
 import type { HistoryGroup } from './history-group.ts';
-export type { HistoryGroup } from './history-group.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).

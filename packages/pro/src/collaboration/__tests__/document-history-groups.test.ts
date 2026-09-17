@@ -4,8 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // History groups reach the shared undo authority: frames of one gesture are one shared undo
-// item however long the gesture lasts, and a change of group is a boundary. Journals with no
-// group keep the capture-window rule that lets a run of keystrokes stay one item.
+// item and a change of group is a boundary, on every replica. The clock rule itself is
+// exercised against the manager in `history-group-capture.test.ts`.
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { BODY, createPeerHarness, walk, zipDocument, type Peer } from './document-peer-support.ts';
@@ -44,17 +44,6 @@ function colors(peer: Peer): string[] {
   return found;
 }
 
-/** Run `body` with `Date.now` advanced by `ms`, so the capture window has visibly elapsed. */
-function later<T>(ms: number, body: () => T): T {
-  const now = Date.now;
-  Date.now = () => now() + ms;
-  try {
-    return body();
-  } finally {
-    Date.now = now;
-  }
-}
-
 describe('history groups in a collaborative session', () => {
   test('frames of one gesture are one shared undo item, on every replica', async () => {
     const { alice, bob } = await harness.pair(doc());
@@ -67,19 +56,6 @@ describe('history groups in a collaborative session', () => {
     alice.port.flushPendingJournals();
     expect(colors(alice)).toEqual([]);
     expect(colors(bob)).toEqual([]);
-    expect(alice.room.session.canUndo()).toBe(false);
-    harness.expectConverged(alice, bob);
-  });
-
-  test('a gesture longer than the capture window is still one item', async () => {
-    const { alice, bob } = await harness.pair(doc());
-    const gesture = Symbol('color-drag');
-    setColor(alice, 'FF0000', gesture);
-    later(10_000, () => setColor(alice, '00FF00', gesture));
-    later(20_000, () => setColor(alice, '0000FF', gesture));
-    expect(alice.room.session.undo()).toBe(true);
-    alice.port.flushPendingJournals();
-    expect(colors(alice)).toEqual([]);
     expect(alice.room.session.canUndo()).toBe(false);
     harness.expectConverged(alice, bob);
   });
@@ -121,7 +97,7 @@ describe('history groups in a collaborative session', () => {
     const { alice } = await harness.pair(doc());
     const gesture = Symbol('color-drag');
     setColor(alice, 'FF0000', gesture);
-    later(10_000, () => setColor(alice, '00FF00', Symbol('other')));
+    setColor(alice, '00FF00', Symbol('other'));
     expect(alice.room.session.undo()).toBe(true);
     expect(colors(alice)).toEqual(['FF0000']);
     setColor(alice, '0000FF', gesture);

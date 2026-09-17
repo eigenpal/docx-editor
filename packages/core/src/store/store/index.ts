@@ -46,7 +46,6 @@ export {
 } from './tree-package-fragment.ts';
 export {
   TreeDocumentStore,
-  type HistoryGroup,
   type SelectionMark,
   type TransactionContext as TreeTransactionContext,
   type TransactOptions as TreeTransactOptions,
@@ -211,3 +210,4 @@ export {
   type RevisionBatchResult,
   type RevisionBatchSkipReason,
 } from './revision-batch.ts';
+export type { HistoryGroup } from './history-group.ts';

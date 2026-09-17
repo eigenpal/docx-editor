@@ -32,9 +32,10 @@ import type {
   CollaborationStatus,
   CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-import type {
-  CanonicalPrimitiveJournal,
-  CollaborationDocumentPort,
+import {
+  historyGroupOfJournal,
+  type CanonicalPrimitiveJournal,
+  type CollaborationDocumentPort,
 } from '@docx-editor.dev/core/collaboration/replication';
 import {
   createCollaborationStatusTracker,
@@ -129,7 +130,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
-  private readonly historyGroups = new HistoryGroupCapture(() => this.undoManager);
+  private readonly historyGroups: HistoryGroupCapture;
   private readonly stopBlobWatch: () => void;
   private readonly stopSeedWatch: () => void;
 
@@ -154,6 +155,7 @@ class DocumentSession implements DocumentCollaborationSession {
       captureTimeout: UNDO_CAPTURE_TIMEOUT_MS,
       deleteFilter: registry.undoDeleteFilter(),
     });
+    this.historyGroups = new HistoryGroupCapture(this.undoManager);
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
     this.stopBlobWatch = blobs.observeChanges((digests) => {
@@ -534,7 +536,7 @@ class DocumentSession implements DocumentCollaborationSession {
     }
     // A custom blob reader can run host code; recheck after that callback before writing.
     if (!this.canWriteSharedState()) return;
-    this.historyGroups.apply(journal.historyGroup);
+    this.historyGroups.apply(historyGroupOfJournal(journal));
     const refusal = this.ydoc.transact((): CollaborationFailure | null => {
       if (blobs !== null) {
         const published = this.putJournalBlobs(blobs.payloads);

@@ -19,18 +19,18 @@ import type * as Y from 'yjs';
 export class HistoryGroupCapture {
   private previous: HistoryGroup | undefined;
 
-  constructor(private readonly undoManager: () => Y.UndoManager) {}
+  constructor(private readonly undoManager: Y.UndoManager) {}
 
   /** Prepare the undo manager for a local journal carrying `group`. */
   apply(group: HistoryGroup | undefined): void {
     const previous = this.previous;
     this.previous = group;
     if (group !== previous) {
-      this.undoManager().stopCapturing();
+      this.undoManager.stopCapturing();
     } else if (group !== undefined) {
       // `lastChange` is the manager's own clock for the merge rule; a frame of an open
       // gesture is always "just now", whatever the wall clock says.
-      this.undoManager().lastChange = Date.now();
+      this.undoManager.lastChange = Date.now();
     }
   }
 

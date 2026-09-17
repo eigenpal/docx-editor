@@ -87,6 +87,8 @@ The token is the boundary. Create a new token for each gesture, and the engine
 closes the group when any of the following happens:
 
 - A call arrives without a token, or with a different token.
+- A call lands in a different story, such as a header after the body.
+- Buffered typing flushes ahead of a call. The keystrokes are their own step.
 - The user runs undo or redo.
 - A command records a whole-package unit, such as inserting an image or a table.
 

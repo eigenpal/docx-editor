@@ -104,7 +104,6 @@ export type CanonicalPrimitiveEffect = {
 export interface CanonicalPrimitiveJournal {
     // (undocumented)
     readonly effects: readonly CanonicalPrimitiveEffect[];
-    readonly historyGroup?: HistoryGroup;
 }
 
 // @public
@@ -199,6 +198,9 @@ export interface CreateCollaborationDocumentPortOptions {
     // (undocumented)
     readonly documentId: string;
 }
+
+// @public
+export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
 // (No @packageDocumentation comment for this package)
 

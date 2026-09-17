@@ -5,7 +5,7 @@
 // transaction. Core never imports a CRDT.
 
 import type { OoxmlElement } from './ooxml-tree.ts';
-import type { HistoryGroup } from '../store/tree-store.ts';
+import type { HistoryGroup } from '../store/history-group.ts';
 
 /** Attribute name as the journal addresses it. Prefix is authored fidelity, not identity. @public */
 export interface CanonicalAttributeName {
@@ -132,14 +132,25 @@ export type CanonicalPrimitiveEffect =
  */
 export interface CanonicalPrimitiveJournal {
   readonly effects: readonly CanonicalPrimitiveEffect[];
-  /**
-   * The gesture the committing transaction belonged to, when it named one.
-   *
-   * Local history groups consecutive journals that carry the same token into one undo
-   * step. Shared state has its own undo authority, so the token travels with the journal
-   * for that authority to group by; it is process-local identity and is never replicated.
-   */
-  readonly historyGroup?: HistoryGroup;
+}
+
+/**
+ * The gesture each journal's transaction named, beside the journal rather than on it.
+ *
+ * Local history groups consecutive transactions carrying one token into one undo step, and
+ * the shared undo authority groups the matching journals the same way — so it needs the
+ * token. It is a symbol, and a host port may relay journals through `postMessage` or
+ * `structuredClone`, which refuse symbols; a property would have broken such a port the
+ * first time a gesture ran. Keyed by identity, so the entry lives exactly as long as the
+ * journal does.
+ */
+const journalHistoryGroups = new WeakMap<CanonicalPrimitiveJournal, HistoryGroup>();
+
+/** The history group the transaction behind `journal` named, if any. @public */
+export function historyGroupOfJournal(
+  journal: CanonicalPrimitiveJournal
+): HistoryGroup | undefined {
+  return journalHistoryGroups.get(journal);
 }
 
 /** Freeze one effect and any nested arrays it owns. */
@@ -188,8 +199,9 @@ export function freezeCanonicalPrimitiveJournal(
   effects: readonly CanonicalPrimitiveEffect[],
   historyGroup?: HistoryGroup
 ): CanonicalPrimitiveJournal {
-  return Object.freeze({
+  const journal: CanonicalPrimitiveJournal = Object.freeze({
     effects: Object.freeze(effects.map(freezeCanonicalPrimitiveEffect)),
-    ...(historyGroup !== undefined ? { historyGroup } : {}),
   });
+  if (historyGroup !== undefined) journalHistoryGroups.set(journal, historyGroup);
+  return journal;
 }

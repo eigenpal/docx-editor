@@ -19,7 +19,7 @@ import {
 } from './canonical-primitive-publish.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
-import type { HistoryGroup } from '../store/tree-store.ts';
+import type { HistoryGroup } from '../store/history-group.ts';
 
 export {
   flushPendingCanonicalJournals,
