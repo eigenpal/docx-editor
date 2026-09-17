@@ -8,7 +8,7 @@
  * @public
  */
 
-import type { ResolveReviewChangesOptions } from './editor-review.ts';
+import type { ResolveReviewChangesOptions, ReviewDisplayMode } from './editor-review.ts';
 export type { ResolveReviewChangesOptions } from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
@@ -1039,7 +1039,7 @@ export interface EditorCommands
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;
   /** Change the review projection without accepting or rejecting document revisions. */
-  setReviewDisplayMode: { mode: 'all-markup' | 'proposed' | 'original' };
+  setReviewDisplayMode: { mode: ReviewDisplayMode };
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
@@ -1612,7 +1612,7 @@ export interface EditorSnapshot {
   /** The document's `w:documentProtection`, as the file states it; null with no document. */
   readonly documentProtection?: DocumentProtectionState | null;
   /** The displayed revision projection. The document and its revision history stay unchanged. */
-  readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
+  readonly reviewDisplayMode?: ReviewDisplayMode;
   /**
    * Whether the document carries review content — tracked changes or comment
    * anchors — independent of any registered review module.

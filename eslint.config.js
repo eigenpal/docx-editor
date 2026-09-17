@@ -505,6 +505,18 @@ export default [
     },
   },
 
+  // semantic-records.ts is the record VOCABULARY: one interface per thing layout publishes,
+  // each carrying the note on what paint may and may not re-derive from it. It is long because
+  // the engine publishes a lot, and it is mostly comment — trimming the notes to fit 1000 would
+  // buy lines by deleting the part that stops a painter remeasuring. A ceiling with headroom,
+  // not a blanket disable: a new record type is a handful of lines, a new SUBSYSTEM is not.
+  {
+    files: ['packages/core/src/layout/semantic-records.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // semantic-layout.ts is the story loop: section flow and paragraph fragmentation advance
   // ONE cursor, and a paragraph that spans a page boundary is decided by both at once.
   // Table-row pagination used to live here too and now does not — it advances the same

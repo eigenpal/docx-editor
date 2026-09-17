@@ -154,11 +154,20 @@ describe('tracked drawings carry and paint their revision', () => {
     const body =
       `<w:p><w:r><w:t xml:space="preserve">text </w:t></w:r>${del(inlinePicture(6))}</w:p>` +
       `<w:p>${ins(inlinePicture(7))}</w:p>`;
+    // Without a review module the engine keeps the surviving picture attributed (its own
+    // reading of the proposal), and publishes the decision as a change site on its line as
+    // well, which is what a review view's Simple Markup bar reads.
+    const siteKinds = (surface: PaginatedSurface): string[] =>
+      surface
+        .layout()
+        .pages[0]!.fragments.flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+        .flatMap((line) => (line.changeSites ?? []).map((site) => site.kind));
     const proposed = await mount(docx(body), 'proposed');
     try {
       const drawings = lineDrawings(proposed.surface);
       expect(drawings).toHaveLength(1);
       expect(drawings[0]!.revisions![0]!.kind).toBe('insert');
+      expect(siteKinds(proposed.surface)).toEqual(['delete', 'insert']);
     } finally {
       proposed.surface.destroy();
       proposed.container.remove();
@@ -168,6 +177,7 @@ describe('tracked drawings carry and paint their revision', () => {
       const drawings = lineDrawings(original.surface);
       expect(drawings).toHaveLength(1);
       expect(drawings[0]!.revisions![0]!.kind).toBe('delete');
+      expect(siteKinds(original.surface)).toEqual(['delete', 'insert']);
     } finally {
       original.surface.destroy();
       original.container.remove();

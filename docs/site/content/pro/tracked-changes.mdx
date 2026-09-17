@@ -32,10 +32,47 @@ font, size, color, alignment, indentation, and paragraph spacing values.
 Separate formatting decisions remain independently reviewable even when their
 OOXML revision IDs match.
 
-**Review > Display for Review** offers **All Markup**, **No Markup**, and
-**Original**. These views preserve the document and its pending changes.
-Original restores prior run and paragraph formatting. Prior table, row, cell,
-and section formatting remains unsupported. Simple Markup is not offered.
+**Review > Display for Review** offers **Simple Markup**, **All Markup**,
+**No Markup**, and **Original**. These views preserve the document and its
+pending changes. Simple Markup shows the proposed text with a red change bar
+beside each changed line. Original restores prior run and paragraph formatting.
+Prior table, row, cell, and section formatting remains unsupported.
+
+To offer a view from your own chrome, drive the `review.simpleMarkup`,
+`review.allMarkup`, `review.noMarkup`, or `review.original` slot with
+`useEditorCommand`, and read the current view with `useEditorState`:
+
+```tsx
+import { useEditorCommand, useEditorState } from '@docx-editor.dev/react';
+
+function SimpleMarkupButton() {
+  const view = useEditorState((state) => state.reviewDisplayMode);
+  const simple = useEditorCommand('review.simpleMarkup');
+  return (
+    <button
+      type="button"
+      onClick={simple.execute}
+      disabled={!simple.isEnabled}
+      aria-pressed={view === 'simple-markup'}
+    >
+      Simple Markup
+    </button>
+  );
+}
+```
+
+`reviewDisplayMode` takes one of four values. Word models the same views as a
+markup setting and a view setting:
+
+| Word menu item | `reviewDisplayMode` | Word `RevisionsMarkup` | Word `RevisionsView` |
+| -------------- | ------------------- | ---------------------- | -------------------- |
+| Simple Markup  | `'simple-markup'`   | `Simple`               | `Final`              |
+| All Markup     | `'all-markup'`      | `All`                  | `Final`              |
+| No Markup      | `'proposed'`        | `None`                 | `Final`              |
+| Original       | `'original'`        | `None`                 | `Original`           |
+
+A click on a change bar changes the value too. Vue offers the same pair of
+composables.
 
 ## Choose an editing mode
 
@@ -226,8 +263,27 @@ paragraph ends (¶) and manual line breaks (↵, Shift+Enter). Tracked line-brea
 use their revision color and decoration. Automatic line wraps,
 page breaks, and column breaks do not receive a line-break arrow. Showing these symbols
 does not change copied text or saved documents. Adjacent inserted text and breaks by the same author form one
-review decision. A decision containing only breaks shows their count. Margin
-change bars remain visible, including inside table cells.
+review decision. A decision containing only breaks shows their count.
+
+## Change bars
+
+The editor draws Word's change bar: a rule in the left margin beside every line
+that carries a tracked change. The bar sits halfway into the margin, whatever the
+paragraph indent, and one bar covers adjacent changed lines and paragraphs,
+including their paragraph spacing. Body text, tables, headers, footers,
+footnotes, endnotes, and text boxes all get the bar, and so do formatting-only
+changes and tracked table rows.
+
+In **All Markup** the bar is a neutral gray hairline, as in Word. In **Simple
+Markup** the text reads as the proposed result, with no underlines, strikes, or
+author colors, and the bar is red and heavier beside every line a change
+touched, including a deleted word that is no longer shown. A click on the bar
+switches between Simple Markup and All Markup, as in Word. The resolved views,
+**No Markup** and **Original**, draw no bar. To change the bar's color or width,
+or to color it by change kind, see
+[Review colors and styling](/docs/2.x/pro/review-styling#style-the-change-bar).
+
+Mirrored margins do not move the bar to the outside edge.
 
 One paragraph mark can contain two decisions. For example, one author can insert
 a break before another author suggests its removal.

@@ -233,6 +233,63 @@ span effects.
 `--doc-review-author-current` contains the light-theme value in both themes.
 Define a dark-theme rule when you tint comment bands by author.
 
+## Style the change bar
+
+The change bar is the rule in the left margin beside every changed line. Two
+tokens control the gray bar of **All Markup**, and two more the red bar of
+**Simple Markup**. The bar is painted on the page sheet, outside the dark-mode
+inversion, so define both light and dark values when you change a color.
+
+```css
+.docx-editor {
+  --doc-review-change-bar: #8a8a8a;
+  --doc-review-change-bar-width: 2px;
+  --doc-review-change-bar-simple: #d32f2f;
+  --doc-review-change-bar-simple-width: 3px;
+}
+
+.docx-editor.dark {
+  --doc-review-change-bar: #b0b0b0;
+  --doc-review-change-bar-simple: #ef5350;
+}
+```
+
+Each bar is a `.docx-change-bar` element inside one `.docx-change-bars` overlay
+per page. A bar carries `docx-change-bar-insertion`, `docx-change-bar-deletion`,
+or `docx-change-bar-format` for each kind of change on its lines, so a bar over
+a replacement has both the insertion and the deletion class. The color and width
+are inline token references, so a selector on these classes overrides them only
+by redefining the token:
+
+```css
+.docx-editor .docx-change-bar-deletion {
+  --doc-review-change-bar: var(--doc-revision-deletion);
+}
+
+.docx-editor .docx-change-bar-insertion:not(.docx-change-bar-deletion) {
+  --doc-review-change-bar: var(--doc-revision-insertion);
+}
+
+/* The revision tokens are light-page values that the dark page inverts,
+   but the bar sits outside that inversion, so give it dark values of its own. */
+.docx-editor.dark .docx-change-bar-deletion {
+  --doc-review-change-bar: #ef9a9a;
+}
+
+.docx-editor.dark .docx-change-bar-insertion:not(.docx-change-bar-deletion) {
+  --doc-review-change-bar: #a5d6a7;
+}
+```
+
+Each bar also carries `data-docx-story` with `body`, `header`, `footer`,
+`footnote`, or `endnote`, and the overlay carries `data-docx-change-bars-mode`
+with `all-markup` or `simple-markup`. While a header or footer is being edited,
+the bars of the other stories dim with the text beside them. A click on a bar
+switches between Simple Markup and All Markup; the bars are the only painted
+furniture that takes the pointer.
+
+To hide the bars, set `display: none` on `.docx-change-bars`.
+
 ## Build custom review cards
 
 `useReviewAuthor` returns one author's resolved color, ramp slot, and declared

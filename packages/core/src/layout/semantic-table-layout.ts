@@ -47,6 +47,7 @@ import {
 } from './layout-cache.ts';
 import { alignDrawings, alignSpans, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
+import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
 import {
   publishDeferredRowAnchors,
@@ -693,6 +694,7 @@ function placeCellParagraph(
       ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
+      ...(pendingLine.changeSites ? { changeSites: pendingLine.changeSites } : {}),
     });
     if (!collapseHeight) y += pendingLine.height;
     nextLineIndex = lineIndex + 1;
@@ -841,6 +843,12 @@ function placeCellParagraph(
     : null;
   const markRevisions = markProjection?.revisions ?? [];
   const markFormatRevision = markProjection?.formatRevision ?? null;
+  // The resolved lanes (no mode, or a resolved one) still report the mark decisions they
+  // answered, for the Simple Markup change bar.
+  const resolvedMode = deps.displayMode ?? 'proposed';
+  const markChangeSites = complete
+    ? resolvedParagraphMarkChangeSites(paragraph, resolvedMode, deps.revisionAuthorFilter)
+    : [];
   const marker =
     lineStart === 0
       ? publishListMarker(
@@ -856,7 +864,10 @@ function placeCellParagraph(
   // merged half has to come back the same way it does in the body flow.
   const mergeGroup = paragraphMergeGroupOf(paragraph);
   const records = mergeGroup
-    ? remapMergedLines(rawRecords, mergeBoundariesOf(mergeGroup))
+    ? remapMergedLines(
+        rawRecords,
+        mergeBoundariesOf(mergeGroup, resolvedMode, deps.revisionAuthorFilter)
+      )
     : rawRecords;
   const fragment = {
     kind: 'paragraph' as const,
@@ -882,6 +893,7 @@ function placeCellParagraph(
     ...(shadingBox === undefined ? {} : { shadingBox }),
     ...(marker ? { marker } : {}),
     ...markRevisionFields(markRevisions, markFormatRevision),
+    ...(markChangeSites.length > 0 ? { markChangeSites } : {}),
     lines: records,
     ...emptyParagraphStyleFields(
       records,
@@ -1483,6 +1495,7 @@ export function layoutRowFragmentBounded(
       ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
       ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
       ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
+      ...(row.changeSites ? { changeSites: row.changeSites } : {}),
       rowIndex: 0,
       isHeaderRow: row.isHeader,
       isHeaderRepeat,

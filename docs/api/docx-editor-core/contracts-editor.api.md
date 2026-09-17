@@ -799,7 +799,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         beforePt?: number | null;
     };
     setReviewDisplayMode: {
-        mode: 'all-markup' | 'proposed' | 'original';
+        mode: ReviewDisplayMode;
     };
     setSelection: {
         anchor: DocAnchor;
@@ -1100,7 +1100,7 @@ export interface EditorSnapshot {
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
-    readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
+    readonly reviewDisplayMode?: ReviewDisplayMode;
     readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;

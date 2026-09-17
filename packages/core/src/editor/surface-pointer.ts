@@ -122,6 +122,8 @@ export interface PointerHost {
    * Called after mousedown is prevented so the caret is not stolen.
    */
   onContentControlWidget?(controlId: string, kind: string): void;
+  /** A change bar was clicked: Word toggles Simple and All Markup. The caret stays put. */
+  onChangeBarToggle?(): void;
   /** Options interaction on a legacy text form, before ordinary word selection. */
   onTextFormDoubleClick?(event: PointerEvent): boolean;
   onTextFormPointerUp?(event: PointerEvent): void;
@@ -741,6 +743,17 @@ export function createPointerController(
     // Content-control widgets: prevent mousedown so chrome does not steal the caret, then
     // dispatch the engine-level interaction (checkbox toggle, dropdown menu, date picker).
     // (Furniture clicks continue below into the scoped header/footer / note enter paths.)
+    // A change bar is furniture in the margin with one job: Word toggles the view on a
+    // click. Prevented like a widget so the press never reaches the caret.
+    if (
+      host.onChangeBarToggle &&
+      (event.target as Element | null)?.closest?.('[data-docx-change-bar-toggle]')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      host.onChangeBarToggle();
+      return;
+    }
     const widget = (event.target as Element | null)?.closest?.(
       '[data-docx-cc-widget]'
     ) as HTMLElement | null;

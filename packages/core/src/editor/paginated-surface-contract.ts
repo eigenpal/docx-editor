@@ -10,7 +10,7 @@ import type {
   TrackedChangePredicate,
   ViewScope,
 } from '../contracts/editor.ts';
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationOps } from './surface-equations.ts';
@@ -599,9 +599,9 @@ export interface PaginatedSurface {
    * them, so with markup on, a selection over a struck word means one thing to a reader and
    * would mean another to a script that assumed the resolved result.
    */
-  revisionDisplayMode(): RevisionDisplayMode;
+  revisionDisplayMode(): ReviewDisplayMode;
   /** Change the review display without accepting, rejecting, or changing author filters. */
-  setRevisionDisplayMode(mode: RevisionDisplayMode): void;
+  setRevisionDisplayMode(mode: ReviewDisplayMode): void;
   /**
    * Where a replacement for `[start, end)` of a paragraph lands, or null when the edit would
    * not be tracked.

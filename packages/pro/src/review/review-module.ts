@@ -31,7 +31,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   return {
     id: 'review',
     review: {
-      displayModes: ['all-markup', 'proposed', 'original'],
+      displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,
     },

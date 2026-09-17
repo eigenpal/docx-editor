@@ -50,6 +50,11 @@ import type {
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 import { paintContentControlChrome } from './semantic-paint-content-controls.ts';
 import {
+  paintPageChangeBars,
+  reconcilePageChangeBars,
+  type ChangeBarsMode,
+} from './semantic-paint-change-bars.ts';
+import {
   applyHeaderFooterPaintChrome,
   headerFooterBandHeightPt,
   headerFooterBandIsActive,
@@ -214,6 +219,19 @@ export interface PaintOptions {
    */
   readonly revisionStyles?: RevisionStyles;
   /**
+   * Which change bars the margin draws: All Markup's neutral rule beside attributed lines
+   * (the default, whatever the layout's projection — a layout that carries attribution gets
+   * its bars), Simple Markup's red rule beside the change sites a resolved layout published,
+   * or none, which the review chrome names for its resolved views.
+   */
+  readonly changeBars?: ChangeBarsMode;
+  /**
+   * Whether a change bar takes the pointer as Word's does — a click swaps Simple and All
+   * Markup. Only a host that can act on the press should set it; the bars stay inert
+   * furniture otherwise.
+   */
+  readonly changeBarsToggle?: boolean;
+  /**
    * Relationship id of the header/footer story currently open for editing.
    *
    * When set, the matching `[data-docx-hf]` container is editable and every body
@@ -289,6 +307,8 @@ type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 type DrawingPaintHostContext = PaintContext & {
   readonly drawingStrings?: DrawingPaintStrings;
   readonly urlRegistry?: DrawingUrlRegistry | null;
+  readonly changeBars?: ChangeBarsMode;
+  readonly changeBarsToggle?: boolean;
   /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
   readonly paintInstance?: string;
 };
@@ -296,6 +316,8 @@ type DrawingPaintHostContext = PaintContext & {
 interface ResolvedPaintContext extends DrawingPaintHostContext {
   readonly drawingStrings: DrawingPaintStrings;
   readonly urlRegistry: DrawingUrlRegistry | null;
+  readonly changeBars: ChangeBarsMode;
+  readonly changeBarsToggle: boolean;
 }
 
 function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintContext {
@@ -303,6 +325,8 @@ function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintCont
     ...ctx,
     drawingStrings: ctx.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS,
     urlRegistry: ctx.urlRegistry ?? null,
+    changeBars: ctx.changeBars ?? 'none',
+    changeBarsToggle: ctx.changeBarsToggle ?? false,
   };
 }
 
@@ -960,100 +984,6 @@ function applyRevisionPresentation(
   }
 }
 
-/**
- * The margin rules beside the lines that carry tracked changes.
- *
- * CONTIGUOUS lines MERGE into one rule. Drawn per line, a five-line edit reads as five separate
- * marks with hairline gaps between them at every line boundary — the eye sees a dashed rule
- * where Word draws a solid one, and the gaps imply the change stops and restarts.
- *
- * Coloured by kind, so the margin says what happened as well as that something did. A run of
- * lines carrying both an insertion and a deletion takes the deletion colour: removed text is
- * the stronger claim, and it is the one a reviewer scanning the margin must not miss.
- *
- * Furniture throughout: one overlay, `aria-hidden`, `pointer-events: none`, no model range, and
- * positioned in the margin the fragment box already leaves, so it can never move a glyph.
- */
-function paintChangeBars(
-  document: Document,
-  fragment: ParagraphFragmentRecord,
-  scale: number
-): HTMLElement | null {
-  interface BarRun {
-    top: number;
-    bottom: number;
-    deleted: boolean;
-  }
-  const runs: BarRun[] = [];
-  // The mark belongs to the LAST line, and it is a revision like any other. Reading only the
-  // spans left a paragraph whose sole change was its own pilcrow — a split or a merge, the
-  // most ordinary tracked edit there is — with a coloured ¶ and no rule in the margin, so a
-  // reader scanning the margin never saw that the paragraph had been changed at all.
-  const markLine = fragment.lines[fragment.lines.length - 1];
-  for (const line of fragment.lines) {
-    const revisions = [
-      ...line.spans.flatMap((span) => span.revisions ?? []),
-      // Drawings too: a line whose ONLY change is an inserted or deleted picture carries no
-      // revision span — an inline atom is projected, not a span, and an anchored drawing
-      // paints from the page layer — and without these the margin said nothing had changed
-      // on it (#479).
-      ...(line.drawings ?? []).flatMap((drawing) => drawing.revisions ?? []),
-      ...(line.anchorRevisions ?? []),
-      ...(line === markLine ? (fragment.markRevisions ?? []) : []),
-    ];
-    if (revisions.length === 0) continue;
-    const deleted = revisions.some(
-      (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
-    );
-    const top = line.box.y - fragment.box.y;
-    const bottom = top + line.box.height;
-    const previous = runs[runs.length - 1];
-    // Touching or overlapping lines of the same claim are one rule.
-    if (previous && previous.deleted === deleted && top <= previous.bottom + 0.5) {
-      previous.bottom = Math.max(previous.bottom, bottom);
-      continue;
-    }
-    runs.push({ top, bottom, deleted });
-  }
-  if (runs.length === 0) return null;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'docx-change-bars';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.pointerEvents = 'none';
-  for (const run of runs) {
-    const bar = document.createElement('div');
-    bar.className = `docx-change-bar docx-change-bar-${run.deleted ? 'deletion' : 'insertion'}`;
-    bar.style.position = 'absolute';
-    bar.style.top = `${run.top * scale}px`;
-    bar.style.height = `${(run.bottom - run.top) * scale}px`;
-    // ANCHORED TO THE MARGIN, NOT TO THE PARAGRAPH. The bar is a child of the fragment, whose
-    // left edge is the paragraph's indented column — so an offset from the fragment put the
-    // rule at a different x for every indent level, and a nested list drew a staircase down
-    // the page. Subtracting the fragment's own x lands every bar on one vertical line, which
-    // is what makes a column of them readable as "these lines changed".
-    bar.style.left = `${(-fragment.box.x - CHANGE_BAR_OFFSET_PT) * scale}px`;
-    bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
-    bar.style.pointerEvents = 'none';
-    bar.style.backgroundColor = run.deleted
-      ? 'var(--doc-revision-deletion)'
-      : 'var(--doc-revision-insertion)';
-    overlay.append(bar);
-  }
-  return overlay;
-}
-
-/**
- * Distance from the text column to the change bar, and its thickness, in points.
- *
- * Close enough to read as belonging to the line, far enough not to collide with a hanging
- * indent or a list marker.
- */
-const CHANGE_BAR_OFFSET_PT = 7.5;
-const CHANGE_BAR_WIDTH_PT = 1.5;
-
 function paintSpan(
   document: Document,
   span: StyleSpanRecord,
@@ -1631,10 +1561,6 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
-  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, and it
-  // is the only signal that a change exists at all once the reader is in a resolved view.
-  const bars = paintChangeBars(document, fragment, scale);
-  if (bars) element.append(bars);
   if (
     (ctx.showParagraphMarks && fragment.paragraphEnd) ||
     (fragment.markRevisions && fragment.markRevisions.length > 0)
@@ -1942,117 +1868,8 @@ function paintParagraphBorder(
   return rule;
 }
 
-/** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
-function isCompoundParagraphBorder(val: string): boolean {
-  return (
-    val === 'double' ||
-    val === 'triple' ||
-    val === 'doubleWave' ||
-    val.startsWith('thinThick') ||
-    val.startsWith('thickThin')
-  );
-}
-
-/**
- * Map authored `ST_Border` onto the painted rule.
- *
- * CSS gives `double` / `dashed` / `dotted` / `groove` / `ridge` / `inset` / `outset` almost
- * for free. Decorative art borders (apples, bats, …) stay solid — a deliberate approximation.
- */
-function applyParagraphBorderStyle(
-  rule: HTMLElement,
-  val: string,
-  color: string,
-  vertical: boolean,
-  thicknessPx: number,
-  scale: number
-): void {
-  switch (val) {
-    case 'dashed':
-    case 'dashSmallGap':
-    case 'dotDash':
-    case 'dotDotDash':
-    case 'dashDotStroked': {
-      const period = Math.max(4, 4 * scale);
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      return;
-    }
-    case 'dotted': {
-      const period = Math.max(3, 3 * scale);
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      return;
-    }
-    case 'double':
-    case 'doubleWave':
-    case 'triple':
-    case 'thinThickSmallGap':
-    case 'thickThinSmallGap':
-    case 'thinThickThinSmallGap':
-    case 'thinThickMediumGap':
-    case 'thickThinMediumGap':
-    case 'thinThickThinMediumGap':
-    case 'thinThickLargeGap':
-    case 'thickThinLargeGap':
-    case 'thinThickThinLargeGap': {
-      // Two hairlines inside the published box — layout owns the band (incl. thin-double floor).
-      // Triple and thinThick* compound vals approximate as double; decorative art stays solid.
-      const line = Math.max(1, thicknessPx / 3);
-      rule.style.backgroundColor = 'transparent';
-      if (vertical) {
-        rule.style.borderLeft = `${line}px solid #${color}`;
-        rule.style.borderRight = `${line}px solid #${color}`;
-      } else {
-        rule.style.borderTop = `${line}px solid #${color}`;
-        rule.style.borderBottom = `${line}px solid #${color}`;
-      }
-      rule.style.boxSizing = 'border-box';
-      return;
-    }
-    case 'threeDEmboss':
-    case 'ridge': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px ridge #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'threeDEngrave':
-    case 'groove': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px groove #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'inset': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px inset #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'outset': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px outset #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'single':
-    case 'thick':
-    case 'wave':
-    default:
-      // Solid fill already set. Art borders and unrecognised vals stay solid.
-      return;
-  }
-}
-
+import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
+import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
@@ -2226,6 +2043,14 @@ function paintPage(
     });
   }
 
+  // `w:zOrder` is a position in the sheet's child order, not a z-index: `back` goes under the
+  // content (but over the behind-doc drawings already appended, which are the paper's own
+  // watermarks), `front` over it and still under the in-front drawing layer.
+  const borderLayer = page.pageBorders
+    ? paintPageBorderFrame(document, page.pageBorders, options.scale)
+    : null;
+  if (borderLayer && page.pageBorders?.zOrder === 'back') element.append(borderLayer);
+
   const content = document.createElement('div');
   content.className = 'docx-page-content';
   content.style.position = 'absolute';
@@ -2263,6 +2088,7 @@ function paintPage(
     painted.blocks = blocks;
   }
   element.append(content);
+  if (borderLayer && page.pageBorders?.zOrder === 'front') element.append(borderLayer);
 
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
 
@@ -2413,6 +2239,18 @@ function paintPage(
   }
 
   paintContentControlChrome(document, element, page, options);
+  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, in
+  // one column per sheet. Painted from the whole page — body, notes, header, footer and
+  // text boxes — so a change that crosses a paragraph or a cell boundary is one unbroken
+  // rule. LAST on the sheet, which is also where block adoption puts a rebuilt one.
+  const changeBars = paintPageChangeBars(
+    document,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle
+  );
+  if (changeBars) element.append(changeBars);
   return element;
 }
 
@@ -2594,6 +2432,16 @@ function adoptPageBlocks(
     }
     content.insertBefore(element, cursor);
   }
+  // The margin rules are a page-level overlay over the adopted blocks, so they are the one
+  // piece of the sheet a block change can move; left alone when it did not.
+  reconcilePageChangeBars(
+    document,
+    retained.element,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle
+  );
   return { record: page, materialized: true, element: retained.element, content, blocks };
 }
 
@@ -2689,6 +2537,8 @@ export function paintSemanticLayoutWithAuthorSlots(
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
     showParagraphMarks: options.showParagraphMarks ?? false,
+    changeBars: options.changeBars ?? 'all-markup',
+    changeBarsToggle: options.changeBarsToggle ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(revisionStyles ? { revisionStyles } : {}),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
@@ -2722,7 +2572,8 @@ export function paintSemanticLayoutWithAuthorSlots(
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
-    `rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}`;
+    `rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}|` +
+    `bars:${resolved.changeBars}:${resolved.changeBarsToggle}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;
   const reusable = parametersUnchanged

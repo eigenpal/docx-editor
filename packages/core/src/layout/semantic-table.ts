@@ -17,7 +17,9 @@ import {
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { readTableFloatPosition } from './table-float-properties.ts';
 import {
+  revisionNodeIncluded,
   revisionNodeProjectionMode,
+  type RevisionAttribution,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -258,6 +260,8 @@ export interface SemanticTableRow {
   readonly revisionId?: string;
   readonly revisionAuthor?: string;
   readonly revisionDate?: string;
+  /** The row insertion a resolved view kept the row through; see the fragment record. */
+  readonly changeSites?: readonly RevisionAttribution[];
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -755,6 +759,7 @@ function readTableStructureUncached(
   interface RowPlan {
     readonly node: OoxmlElement;
     readonly revision: OoxmlElement | undefined;
+    readonly changeSites: readonly RevisionAttribution[] | undefined;
     /** The row's cells with any `CT_SdtCell` wrapper unwrapped, so both passes see one list. */
     readonly cells: readonly OoxmlNode[];
     readonly properties: OoxmlElement | undefined;
@@ -791,6 +796,25 @@ function readTableStructureUncached(
       continue;
     }
     const revision = projectedMode === 'all-markup' ? authoredRevision : undefined;
+    // A resolved view that KEEPS a tracked row (an accepted insertion) still owes the reader
+    // a change bar beside it, unless the reviewer filter hides the decision.
+    const changeSites =
+      authoredRevision &&
+      projectedMode !== 'all-markup' &&
+      revisionAuthor !== undefined &&
+      (!authorFilter || revisionNodeIncluded(authorFilter, authoredRevision.id, revisionAuthor))
+        ? [
+            {
+              kind: revisionKind === 'ins' ? ('insert' as const) : ('delete' as const),
+              id: wmlRevisionAttribute(authoredRevision, 'id') ?? '',
+              author: revisionAuthor,
+              ...(wmlRevisionAttribute(authoredRevision, 'date') === undefined
+                ? {}
+                : { date: wmlRevisionAttribute(authoredRevision, 'date')! }),
+              nodeId: authoredRevision.id,
+            },
+          ]
+        : undefined;
     const starts: number[] = [];
     const spans: number[] = [];
     const preferred: PreferredWidth[] = [];
@@ -837,6 +861,7 @@ function readTableStructureUncached(
     plans.push({
       node: rowNode,
       revision,
+      changeSites,
       cells: rowCells,
       properties,
       starts,
@@ -942,6 +967,7 @@ function readTableStructureUncached(
       ...(rowRevisionId !== undefined ? { revisionId: rowRevisionId } : {}),
       ...(rowRevisionAuthor !== undefined ? { revisionAuthor: rowRevisionAuthor } : {}),
       ...(rowRevisionDate !== undefined ? { revisionDate: rowRevisionDate } : {}),
+      ...(plan.changeSites ? { changeSites: plan.changeSites } : {}),
       isHeader,
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),

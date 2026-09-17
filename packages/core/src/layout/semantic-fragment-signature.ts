@@ -73,6 +73,7 @@ const PARAGRAPH_FIELDS = {
   markRevision: 'covered',
   // Its own field, not covered by the list: a mark can carry a format change and no decision.
   markFormatRevision: 'hashed',
+  markChangeSites: 'hashed',
   marker: 'hashed',
   // The resolved stops move where text lands on the line, so a fragment whose stops changed
   // is not the fragment it was even when every line box happens to match.

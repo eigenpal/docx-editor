@@ -8,6 +8,7 @@ import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import {
   createReviewCommands,
   dateOfReviewItem as dateOfItem,
+  reviewModelOption,
 } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
@@ -64,7 +65,7 @@ import type {
   ReviewItemQuery,
   ReviewRevisionKind,
 } from '../contracts/editor.ts';
-import { resolveEditorModules, type ReviewModelInput } from '../contracts/modules.ts';
+import { resolveEditorModules, type ReviewDisplayMode } from '../contracts/modules.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -461,7 +462,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let cachedVersion = -1;
   /** Closed until a mounted review model confirms that the document has review content. */
   let reviewPaneOpen = false;
-  let reviewDisplayMode: 'all-markup' | 'proposed' | 'original' = 'all-markup';
+  let reviewDisplayMode: ReviewDisplayMode = 'all-markup';
   const paragraphMarks = createEditorParagraphMarks((visible) => {
     surface?.setShowParagraphMarks(visible);
     bump();
@@ -584,29 +585,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // review-module display mode; with one registered the surface keeps the layout
       // default (`all-markup`), which is what the review rail annotates.
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
-      // The module's derivation reaches the session through the surface: the session
-      // owns the per-revision memo, the module owns the algorithm. Registered custom-node
-      // definitions ride along OPAQUELY so the derivation can contribute `custom` cards;
-      // core never looks inside them.
-      ...(modules.review
-        ? {
-            reviewModel: {
-              ...modules.review,
-              collectReviewItems: (input: ReviewModelInput) =>
-                modules.review!.collectReviewItems(
-                  modules.customNodes.length > 0
-                    ? {
-                        ...input,
-                        customNodes: modules.customNodes,
-                        ...(modules.customNodeDiagnostics.length > 0
-                          ? { reportCustomNodeDiagnostic: reportDiagnostic }
-                          : {}),
-                      }
-                    : input
-                ),
-            },
-          }
-        : {}),
+      ...reviewModelOption(modules, reportDiagnostic),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),

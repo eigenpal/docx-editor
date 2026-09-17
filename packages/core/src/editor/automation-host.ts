@@ -1,3 +1,4 @@
+import { layoutProjectionOf } from '../layout/revision-projection.ts';
 import {
   paginationSnapshotOf,
   paginationContextFor,
@@ -198,7 +199,9 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     // surface to ask — the lane then falls back to the resolved result, which is what a
     // caller with no view means.
     revisionDisplayMode: () =>
-      editor.surface?.revisionDisplayMode() ?? DEFAULT_FORMATTING_DISPLAY_MODE,
+      editor.surface
+        ? layoutProjectionOf(editor.surface.revisionDisplayMode())
+        : DEFAULT_FORMATTING_DISPLAY_MODE,
     replacementLanding: (paragraphId, start, end) =>
       editor.surface?.replacementLanding(paragraphId, start, end) ?? null,
     apply(

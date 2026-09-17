@@ -1383,12 +1383,22 @@ function cloneEmptyOverflowPage(
     : template.contentBox;
   const header = shell ? shell.header : template.header;
   const footer = shell ? shell.footer : template.footer;
+  // The frame belongs to the sheet's place in its section, so the shell resolves it. A template
+  // that is the section's first page has no `notFirstPage` frame, and copying its (absent) one
+  // left every sheet minted after it bare. Without a shell the template's frame is the best
+  // guess, minus a `firstPage` frame, which the template holds only because it IS page 0.
+  const pageBorders = shell
+    ? shell.pageBorders
+    : template.pageBorders?.display !== 'firstPage'
+      ? template.pageBorders
+      : undefined;
   return {
     id: `page-${index}`,
     index,
     box: template.box,
     contentBox,
     fragments: [],
+    ...(pageBorders ? { pageBorders } : {}),
     ...(noteStream ? { noteStream } : {}),
     ...(header ? { header } : {}),
     ...(footer ? { footer } : {}),

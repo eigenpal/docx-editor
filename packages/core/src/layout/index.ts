@@ -168,6 +168,12 @@ export {
   type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
+  type PageBorderDisplay,
+  type PageBorderFrameRecord,
+  type PageBorderOffsetFrom,
+  type PageBorderSide,
+  type PageBorderStrokeRecord,
+  type PageBorderZOrder,
   type PageGeometry,
   type PageRecord,
   type ListMarkerRecord,
@@ -567,6 +573,13 @@ export {
   type SectionPageNumbering,
   type SectionProperties,
 } from './section-properties.ts';
+export {
+  PAGE_BORDER_SIDES,
+  pageBordersFingerprint,
+  parsePageBorders,
+  type SectionPageBorders,
+} from './page-borders.ts';
+export { pageBorderFrame } from './page-border-frame.ts';
 export { pagesToMaterialize, type MaterializationInput, type ViewportWindow } from './viewport.ts';
 export {
   createParagraphLayoutCache,

@@ -6,6 +6,14 @@ export const REVIEW_CHROME_GROUP = {
   labelKey: 'formattingBar.commentsAndChanges',
   controls: [
     {
+      id: 'simpleMarkup',
+      shape: 'icon',
+      labelKey: 'review.simpleMarkup',
+      defaultToolbar: false,
+      paths: GENERATED_ICON_PATHS['visibility'],
+      state: { kind: 'command' },
+    },
+    {
       id: 'allMarkup',
       shape: 'icon',
       labelKey: 'review.allMarkup',

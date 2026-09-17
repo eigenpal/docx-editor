@@ -24,6 +24,19 @@ if (process.release.name !== 'node') throw new Error('export test worker require
 const fixturePath = process.env.DOCX_EDITOR_WORKER_FIXTURE;
 if (!fixturePath) throw new Error('DOCX_EDITOR_WORKER_FIXTURE is required');
 const mode = process.env.DOCX_EDITOR_WORKER_MODE;
+if (mode === 'performance' || mode === 'one-shot-performance') {
+  // Print before allocating the fixture so an OOM still identifies the runtime and heap flags.
+  process.stderr.write(
+    `${JSON.stringify({
+      node: process.version,
+      v8: process.versions.v8,
+      platform: process.platform,
+      arch: process.arch,
+      flags: process.execArgv,
+      mode,
+    })}\n`
+  );
+}
 const fixture = await readFile(fixturePath);
 if (mode === 'one-shot-performance') {
   const translated = await exportMarkdown(fixture);

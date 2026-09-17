@@ -1,3 +1,10 @@
+import type {
+  EditorModuleRegistry,
+  ReviewDisplayMode,
+  ReviewModelInput,
+  ReviewModuleContribution,
+} from '../contracts/modules.ts';
+
 import { partOfNodeId } from './surface-scope.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
@@ -30,8 +37,48 @@ interface ReviewCommandDependencies {
   visible(): readonly ReviewItem[];
   scope(item: ReviewItem): StoryScope;
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
-  setDisplayMode(mode: 'all-markup' | 'proposed' | 'original'): void;
+  setDisplayMode(mode: ReviewDisplayMode): void;
 }
+
+/**
+ * The surface's review model, when a module registered one.
+ *
+ * The module's derivation reaches the session through the surface: the session owns the
+ * per-revision memo, the module owns the algorithm. Registered custom-node definitions ride
+ * along OPAQUELY so the derivation can contribute `custom` cards; core never looks inside.
+ */
+export function reviewModelOption(
+  modules: EditorModuleRegistry,
+  reportDiagnostic: (diagnostic: unknown) => void
+): { readonly reviewModel: ReviewModuleContribution } | Record<never, never> {
+  const review = modules.review;
+  if (!review) return {};
+  return {
+    reviewModel: {
+      ...review,
+      collectReviewItems: (input: ReviewModelInput) =>
+        review.collectReviewItems(
+          modules.customNodes.length > 0
+            ? {
+                ...input,
+                customNodes: modules.customNodes,
+                ...(modules.customNodeDiagnostics.length > 0
+                  ? { reportCustomNodeDiagnostic: reportDiagnostic }
+                  : {}),
+              }
+            : input
+        ),
+    },
+  };
+}
+
+/** Every view the command accepts, Simple Markup included. */
+const REVIEW_DISPLAY_MODES: readonly ReviewDisplayMode[] = [
+  'all-markup',
+  'simple-markup',
+  'proposed',
+  'original',
+];
 
 /** Review commands share navigation, mutation gates, and atomic story resolution. */
 export function createReviewCommands(deps: ReviewCommandDependencies) {
@@ -101,7 +148,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const gate = ready();
     if (!gate.ok) return gate;
     if (command.type === 'setReviewDisplayMode')
-      return ['all-markup', 'proposed', 'original'].includes(command.mode)
+      return REVIEW_DISPLAY_MODES.includes(command.mode)
         ? { ok: true }
         : { ok: false, code: 'invalidArgs', reason: 'unknown review display mode' };
     if (

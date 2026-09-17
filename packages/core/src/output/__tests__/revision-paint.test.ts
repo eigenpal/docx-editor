@@ -12,7 +12,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
-import { paintSemanticLayout } from '../semantic-paint.ts';
+import { paintSemanticLayout, paintSemanticLayoutWithAuthorSlots } from '../semantic-paint.ts';
 import {
   authorSlotsOf,
   revisionPresentationOf,
@@ -38,15 +38,23 @@ const ins = (id: string, inner: string, author = 'QA') =>
 const del = (id: string, inner: string, author = 'Dev') =>
   `<w:del w:id="${id}" w:author="${author}" w:date="2026-03-26T11:00:00Z">${inner}</w:del>`;
 
-function paint(body: string, revisionStyles?: RevisionStyles): HTMLElement {
+function paintWithLayout(
+  body: string,
+  scale = 1,
+  revisionStyles?: RevisionStyles
+): { root: HTMLElement; layout: ReturnType<typeof layoutSemanticDocument> } {
   const layout = layoutSemanticDocument(load(body), 1, { measurer });
   const container = document.createElement('div');
   paintSemanticLayout(container, layout, {
-    scale: 1,
+    scale,
     ariaHidden: false,
     ...(revisionStyles !== undefined ? { revisionStyles } : {}),
   });
-  return container;
+  return { root: container, layout };
+}
+
+function paint(body: string, revisionStyles?: RevisionStyles): HTMLElement {
+  return paintWithLayout(body, 1, revisionStyles).root;
 }
 
 function trackedSpans(root: HTMLElement): HTMLElement[] {
@@ -379,9 +387,19 @@ describe('colouring by author', () => {
 });
 
 describe('change bars', () => {
+  // The painted overlay is one per SHEET, in Word's column: half the left margin in from
+  // the page edge, whatever the paragraph's indent.
+  const bars = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>('.docx-change-bar')];
+  const sheetTop = (layout: ReturnType<typeof layoutSemanticDocument>) => {
+    const page = layout.pages[0]!;
+    return page.contentBox.y - page.box.y;
+  };
+  const fragments = (layout: ReturnType<typeof layoutSemanticDocument>) =>
+    layout.pages[0]!.fragments.filter((block) => block.kind === 'paragraph');
+
   test('a line carrying a revision gets a margin rule', () => {
     const root = paint(`<w:p>${run('before ')}${ins('1', run('added'))}</w:p>`);
-    expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(1);
+    expect(bars(root)).toHaveLength(1);
   });
 
   test('contiguous tracked lines merge into ONE rule, not one per line', () => {
@@ -391,31 +409,253 @@ describe('change bars', () => {
     const root = paint(`<w:p>${ins('1', run(long))}</w:p>`);
     const lines = root.querySelectorAll('.layout-line').length;
     expect(lines).toBeGreaterThan(1);
-    expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(1);
+    expect(bars(root)).toHaveLength(1);
+  });
+
+  test('adjacent changed paragraphs draw one unbroken rule across the boundary', () => {
+    // Word's rule owns each changed line's whole pitch, spacing after included, so two
+    // changed paragraphs in a row are one mark. Two short bars with a gap between them read
+    // as two separate edits.
+    const { root, layout } = paintWithLayout(
+      `<w:p><w:pPr><w:spacing w:after="160"/></w:pPr>${ins('1', run('first'))}</w:p>` +
+        `<w:p><w:pPr><w:spacing w:after="160"/></w:pPr>${ins('2', run('second'))}</w:p>`
+    );
+    const [first, second] = fragments(layout);
+    expect(second!.box.y).toBeGreaterThan(first!.box.y + first!.box.height - 0.01);
+    const rules = bars(root);
+    expect(rules).toHaveLength(1);
+    expect(parseFloat(rules[0]!.style.top)).toBeCloseTo(sheetTop(layout) + first!.box.y, 3);
+    expect(parseFloat(rules[0]!.style.height)).toBeCloseTo(
+      first!.box.height + second!.box.height,
+      3
+    );
+  });
+
+  test('an untouched paragraph between two changes keeps them apart', () => {
+    const root = paint(
+      `<w:p>${ins('1', run('first'))}</w:p>` +
+        `<w:p>${run('nothing tracked here')}</w:p>` +
+        `<w:p>${ins('2', run('third'))}</w:p>`
+    );
+    expect(bars(root)).toHaveLength(2);
+  });
+
+  test("the rule covers the paragraph's spacing before and after, as Word's does", () => {
+    const { root, layout } = paintWithLayout(
+      `<w:p>${run('plain')}</w:p>` +
+        `<w:p><w:pPr><w:spacing w:before="480" w:after="480"/></w:pPr>${ins('1', run('spaced'))}</w:p>` +
+        `<w:p>${run('plain')}</w:p>`
+    );
+    const spaced = fragments(layout)[1]!;
+    expect(spaced.box.height).toBeGreaterThan(spaced.lines[0]!.box.height + 30);
+    const rule = bars(root)[0]!;
+    expect(parseFloat(rule.style.top)).toBeCloseTo(sheetTop(layout) + spaced.box.y, 3);
+    expect(parseFloat(rule.style.height)).toBeCloseTo(spaced.box.height, 3);
+  });
+
+  test('a change on one middle line marks that line only, to the next line top', () => {
+    const filler = 'word '.repeat(30);
+    const { root, layout } = paintWithLayout(
+      `<w:p>${run(filler)}${ins('1', run('changed'))}${run(filler)}</w:p>`
+    );
+    const fragment = fragments(layout)[0]!;
+    const changed = fragment.lines.findIndex((line) =>
+      line.spans.some((span) => span.revisions?.length)
+    );
+    expect(changed).toBeGreaterThan(0);
+    expect(changed).toBeLessThan(fragment.lines.length - 1);
+    const rule = bars(root)[0]!;
+    const line = fragment.lines[changed]!;
+    const next = fragment.lines[changed + 1]!;
+    expect(parseFloat(rule.style.top)).toBeCloseTo(sheetTop(layout) + line.box.y, 3);
+    expect(parseFloat(rule.style.height)).toBeCloseTo(next.box.y - line.box.y, 3);
   });
 
   test('the rule says what happened, not just that something did', () => {
     const inserted = paint(`<w:p>${ins('1', run('added'))}</w:p>`);
     const deleted = paint(`<w:p>${del('2', delRun('gone'))}</w:p>`);
-    expect(inserted.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain(
-      'insertion'
+    expect(bars(inserted)[0]!.className).toContain('docx-change-bar-insertion');
+    expect(bars(inserted)[0]!.className).not.toContain('deletion');
+    expect(bars(deleted)[0]!.className).toContain('docx-change-bar-deletion');
+    expect(bars(deleted)[0]!.className).not.toContain('insertion');
+    // One rule over a replacement carries both claims.
+    const both = paint(`<w:p>${del('2', delRun('gone'))}${ins('1', run('added'))}</w:p>`);
+    expect(bars(both)).toHaveLength(1);
+    expect(bars(both)[0]!.className).toContain('docx-change-bar-insertion');
+    expect(bars(both)[0]!.className).toContain('docx-change-bar-deletion');
+  });
+
+  test('a formatting-only change gets a rule too, marked as format', () => {
+    const root = paint(
+      `<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="QA" w:date="D"><w:rPr/></w:rPrChange></w:rPr>` +
+        `<w:t>bold now</w:t></w:r></w:p>`
     );
-    expect(deleted.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain('deletion');
+    expect(bars(root)).toHaveLength(1);
+    expect(bars(root)[0]!.className).toContain('docx-change-bar-format');
+    expect(bars(root)[0]!.className).not.toContain('insertion');
+  });
+
+  test('a tracked paragraph-property change gets a rule, marked as format', () => {
+    // Exactly what Suggesting mode writes for an alignment change: the revision lives in
+    // the paragraph's own properties, not on any run or on the mark.
+    const root = paint(
+      '<w:p><w:pPr><w:jc w:val="center"/>' +
+        '<w:pPrChange w:id="4" w:author="QA" w:date="D"><w:pPr/></w:pPrChange></w:pPr>' +
+        `${run('centered now')}</w:p>`
+    );
+    expect(bars(root)).toHaveLength(1);
+    expect(bars(root)[0]!.className).toContain('docx-change-bar-format');
+  });
+
+  test('the rule stops at the content box when the last paragraph overhangs it', () => {
+    // A page-final paragraph keeps its spacing after in its box even when that spacing runs
+    // past the content bottom; Word's rule stops at the text, not in the bottom margin.
+    const fillers = `<w:p>${run('filler')}</w:p>`.repeat(46);
+    const { root, layout } = paintWithLayout(
+      fillers +
+        `<w:p><w:pPr><w:spacing w:after="2400"/></w:pPr>${ins('1', run('tracked last'))}</w:p>`
+    );
+    const page = layout.pages[0]!;
+    const tracked = fragments(layout)[fragments(layout).length - 1]!;
+    expect(layout.pages).toHaveLength(1);
+    const contentBottom = page.contentBox.y - page.box.y + page.contentBox.height;
+    expect(tracked.box.y + tracked.box.height).toBeGreaterThan(page.contentBox.height + 0.01);
+    const rule = bars(root)[0]!;
+    const bottom = parseFloat(rule.style.top) + parseFloat(rule.style.height);
+    expect(bottom).toBeLessThanOrEqual(contentBottom + 0.01);
+    const lastLine = tracked.lines[tracked.lines.length - 1]!;
+    expect(bottom).toBeGreaterThanOrEqual(
+      sheetTop(layout) + lastLine.box.y + lastLine.box.height - 0.01
+    );
+  });
+
+  test('a merge join at a page break is one Simple Markup site, on the line that holds it', () => {
+    // Merged lines are remapped once per FRAGMENT: a removed paragraph mark whose join offset
+    // sits exactly at a page break used to be claimed by the last line of one page and the
+    // first line of the next. The join belongs to the line whose extent holds it.
+    const geometry = {
+      width: 200,
+      height: 60,
+      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    };
+    const body =
+      `<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+      `${run('one')}<w:r><w:br/></w:r>${run('two')}<w:r><w:br/></w:r>${run('three')}` +
+      `<w:r><w:br/></w:r></w:p>` +
+      `<w:p>${run('four')}</w:p>`;
+    const layout = layoutSemanticDocument(load(body), 1, {
+      measurer,
+      geometry,
+      displayMode: 'proposed',
+    });
+    // Three lines fit a page: the survivor's own line — and the join before it — opens page two.
+    expect(layout.pages).toHaveLength(2);
+    const sites = layout.pages.flatMap((page) =>
+      page.fragments.flatMap((block) =>
+        block.kind === 'paragraph'
+          ? block.lines.flatMap((line) => (line.changeSites ?? []).map((site) => site.id))
+          : []
+      )
+    );
+    expect(sites).toEqual(['1']);
   });
 
   test('a clean line gets none', () => {
     const root = paint(`<w:p>${run('nothing tracked here')}</w:p>`);
-    expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(0);
+    expect(bars(root)).toHaveLength(0);
+    expect(root.querySelector('.docx-change-bars')).toBeNull();
   });
 
-  test('the bar is furniture: no model range, hidden from assistive tech, not editable', () => {
+  test('the ink is the neutral change-bar token, never the revision colour', () => {
+    // Word's All Markup paints the rule grey whatever the change was; the coloured text
+    // already says what happened. A red rule beside a deletion and a green one beside an
+    // insertion is the look of no mode Word has.
+    const root = paint(`<w:p>${del('2', delRun('gone'))}${ins('1', run('added'))}</w:p>`);
+    const rule = bars(root)[0]!;
+    expect(rule.style.backgroundColor).toBe('var(--doc-review-change-bar)');
+    expect(rule.style.width).toBe('var(--doc-review-change-bar-width)');
+  });
+
+  test('the bar stands in the left margin, halfway in, whatever the indent', () => {
+    // A bar offset from the paragraph's own box lands at a different x for every indent
+    // level, so a nested list draws a staircase instead of a column.
+    const { root, layout } = paintWithLayout(
+      `<w:p>${ins('1', run('flush'))}</w:p>` +
+        `<w:p>${run('plain')}</w:p>` +
+        `<w:p><w:pPr><w:ind w:left="1440"/></w:pPr>${ins('2', run('indented'))}</w:p>`
+    );
+    const page = layout.pages[0]!;
+    const margin = page.contentBox.x - page.box.x;
+    expect(margin).toBeGreaterThan(0);
+    const rules = bars(root);
+    expect(rules).toHaveLength(2);
+    for (const rule of rules) expect(parseFloat(rule.style.left)).toBe(Math.round(margin / 2));
+  });
+
+  test('geometry follows the zoom', () => {
+    const body = `<w:p>${ins('1', run('added'))}</w:p>`;
+    const one = paintWithLayout(body, 1);
+    const two = paintWithLayout(body, 2);
+    const a = bars(one.root)[0]!;
+    const b = bars(two.root)[0]!;
+    expect(parseFloat(b.style.left)).toBeCloseTo(parseFloat(a.style.left) * 2, 0);
+    expect(parseFloat(b.style.top)).toBeCloseTo(parseFloat(a.style.top) * 2, 3);
+    expect(parseFloat(b.style.height)).toBeCloseTo(parseFloat(a.style.height) * 2, 3);
+    // A hairline at every zoom, as Word draws it: the width is the token, unscaled.
+    expect(b.style.width).toBe('var(--doc-review-change-bar-width)');
+  });
+
+  test('the bar is furniture on the sheet: no model range, inert, hidden from AT', () => {
     const root = paint(`<w:p>${ins('1', run('added'))}</w:p>`);
     const overlay = root.querySelector<HTMLElement>('.docx-change-bars')!;
+    expect(overlay.parentElement!.classList.contains('docx-page')).toBe(true);
     expect(overlay.getAttribute('aria-hidden')).toBe('true');
+    expect(overlay.getAttribute('contenteditable')).toBe('false');
     expect(overlay.style.pointerEvents).toBe('none');
-    const bar = root.querySelector<HTMLElement>('.docx-change-bar')!;
+    const bar = bars(root)[0]!;
     expect(bar.dataset.paragraphId).toBeUndefined();
     expect(bar.textContent).toBe('');
+    expect(bar.closest('.docx-page-content')).toBeNull();
+  });
+
+  test('a repaint that adopts the sheet rebuilds the rules for the new blocks', () => {
+    // The overlay is per page, not per block, so the block-adoption path — same sheet
+    // record, different fragments, same paint parameters — must replace it, or the margin
+    // keeps describing the previous revision. The author slot map is pinned as a surface
+    // pins its session map: a derived one would move with the authors and rebuild the sheet.
+    const container = document.createElement('div');
+    const slots = new Map([
+      ['QA', 0],
+      ['Dev', 1],
+    ]);
+    const repaint = (layout: ReturnType<typeof layoutSemanticDocument>) =>
+      paintSemanticLayoutWithAuthorSlots(container, layout, { scale: 1, ariaHidden: false }, slots);
+    const before = layoutSemanticDocument(
+      load(`<w:p>${ins('1', run('added'))}</w:p><w:p>${run('plain')}</w:p>`),
+      1,
+      { measurer }
+    );
+    repaint(before);
+    const sheet = container.querySelector('.docx-page')!;
+    expect(bars(container)).toHaveLength(1);
+    const adopting = (body: string, revision: number) => {
+      const next = layoutSemanticDocument(load(body), revision, { measurer });
+      const page = { ...before.pages[0]!, fragments: next.pages[0]!.fragments };
+      return { ...before, revision, pages: [page] };
+    };
+    repaint(adopting(`<w:p>${run('plain')}</w:p>`, 2));
+    expect(container.querySelector('.docx-page') === sheet).toBe(true);
+    expect(bars(container)).toHaveLength(0);
+    repaint(adopting(`<w:p>${run('plain')}</w:p><w:p>${del('2', delRun('gone'))}</w:p>`, 3));
+    expect(container.querySelector('.docx-page') === sheet).toBe(true);
+    expect(bars(container)).toHaveLength(1);
+    expect(bars(container)[0]!.className).toContain('deletion');
+    // A keystroke that leaves the rules where they are leaves the overlay alone.
+    const overlay = container.querySelector('.docx-change-bars');
+    repaint(adopting(`<w:p>${run('plain typed')}</w:p><w:p>${del('2', delRun('gone'))}</w:p>`, 4));
+    expect(container.querySelector('.docx-change-bars') === overlay).toBe(true);
+    // And the overlay stays the sheet's LAST child, as a fresh paint leaves it.
+    expect(sheet.lastElementChild === overlay).toBe(true);
   });
 });
 
@@ -538,24 +778,5 @@ describe('tracked text is findable when scanning, not only when reading', () => 
     const root = paint(`<w:p>${run('plain')}</w:p>`);
     const spans = [...root.querySelectorAll<HTMLElement>('.layout-run-text')];
     expect(spans.every((span) => span.style.backgroundColor === '')).toBe(true);
-  });
-});
-
-describe('change bars line up regardless of indentation', () => {
-  test('an indented paragraph puts its bar on the same vertical line as a flush one', () => {
-    // A bar offset from the paragraph's own box lands at a different x for every indent
-    // level, so a nested list draws a staircase instead of a column.
-    const indented =
-      `<w:p>${ins('1', run('flush'))}</w:p>` +
-      `<w:p><w:pPr><w:ind w:left="1440"/></w:pPr>${ins('2', run('indented'))}</w:p>`;
-    const root = paint(indented);
-    const bars = [...root.querySelectorAll<HTMLElement>('.docx-change-bar')];
-    expect(bars).toHaveLength(2);
-    // Both resolve to the same page-relative x once each fragment's own origin is added back.
-    const positions = bars.map((bar) => {
-      const fragment = bar.closest<HTMLElement>('.docx-paragraph-fragment')!;
-      return Math.round(parseFloat(bar.style.left) + parseFloat(fragment.style.left || '0'));
-    });
-    expect(positions[0]).toBe(positions[1]!);
   });
 });

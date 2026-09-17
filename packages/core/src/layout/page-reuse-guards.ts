@@ -62,6 +62,13 @@ export const PAGE_REUSE_GUARDS = {
   // resume and convergence paths require `resumable`, which is single-column, but the
   // unchanged-document exit gates on `comparable` and returns the previous pages by identity.
   columnSeparators: 'context',
+  // A pure function of (`w:pgBorders`, page geometry, SECTION-local page index). The first two
+  // are in the context string — `pageBordersContext` folds the frame, which nothing else in
+  // that string covers because a frame edit moves no paragraph key. The third is why
+  // `convergenceTailShiftAllowed` counts a `firstPage` / `notFirstPage` frame among the
+  // reasons index 0 differs from its neighbours: shifting such a tail across page 0 would
+  // carry a frame the sheet no longer resolves.
+  pageBorders: 'context',
   // Produced by the blocks on the page: the per-block key carries the drawing token, and the
   // open page's pending and deferred lists are compared where a pass may stop early. Their
   // POSITION also depends on the furniture, because a page-frame anchor resolves against the
@@ -120,6 +127,14 @@ export interface TailShiftInputs {
    * page 0 the host's box instead of resolving this section's own variant.
    */
   readonly continuedInsets: boolean;
+  /**
+   * This section's `w:pgBorders` carries `w:display="firstPage"` or `"notFirstPage"`.
+   *
+   * The third reason index 0 differs from every other page in a section: the frame this page
+   * publishes is decided by whether it IS page 0, so a sheet moved across that boundary keeps
+   * a frame — or a missing frame — the index it lands on does not resolve to.
+   */
+  readonly firstPageBorders: boolean;
   /** Per-page-index footnote reserves are in play. */
   readonly hasNoteReserves: boolean;
   /** Per-page-index wrap exclusion zones are in play. */
@@ -135,8 +150,9 @@ export interface TailShiftInputs {
  * inside/outside anchors), per-page-index note reserves, or per-page-index wrap exclusion
  * zones.
  *
- * INDEX 0 is special for two reasons — a `w:titlePg` variant, and a continued sheet whose
- * content box comes from the section before it — and the test has two halves either way. A
+ * INDEX 0 is special for three reasons — a `w:titlePg` variant, a continued sheet whose
+ * content box comes from the section before it, and a `w:pgBorders` frame filtered to (or away
+ * from) the section's first page — and the test has two halves either way. A
  * positive delta must not carry page 0 along inside the tail (`markPageCount > 0` proves the
  * tail starts after it). A negative delta must not land the tail ON index 0 either:
  * `delta + markPageCount` is the number of pages completed before the join, and at zero the
@@ -157,7 +173,7 @@ export function convergenceTailShiftAllowed(inputs: TailShiftInputs): boolean {
   const parityHolds =
     inputs.delta % 2 === 0 ||
     (!inputs.evenAndOddHeaders && !inputs.parityDependent && !inputs.usedPageParity);
-  const indexZeroIsSpecial = inputs.titlePage || inputs.continuedInsets;
+  const indexZeroIsSpecial = inputs.titlePage || inputs.continuedInsets || inputs.firstPageBorders;
   const indexZeroHolds =
     !indexZeroIsSpecial || (inputs.markPageCount > 0 && inputs.delta + inputs.markPageCount > 0);
   return parityHolds && indexZeroHolds && !inputs.hasNoteReserves && !inputs.hasExclusionZones;

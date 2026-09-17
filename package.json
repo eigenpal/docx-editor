@@ -35,6 +35,7 @@
     "build:markdown": "bun run build:packages:demo && bun run --filter './examples/docx-to-markdown' build",
     "build:markdown:source": "cd examples/docx-to-markdown && VITE_BASE_PATH=/docx-to-markdown/ vite build",
     "build:igloo:source": "cd examples/igloo && VITE_BASE_PATH=/igloo/ vite build",
+    "check:border-patterns": "node scripts/check-border-pattern-rendering.mjs",
     "check:app-build": "bun run check:app-build:react && bun run check:app-build:vue && bun run check:app-build:igloo && bun run check:app-build:markdown",
     "check:app-build:igloo": "cd examples/igloo && VITE_BASE_PATH=/igloo/ vite build --logLevel warn --outDir dist-check --emptyOutDir && node ../../scripts/check-demo-deployment.mjs --app dist-check /igloo/ sample.docx sample-igloo.docx",
     "check:app-build:markdown": "cd examples/docx-to-markdown && VITE_BASE_PATH=/docx-to-markdown/ vite build --logLevel warn --outDir dist-check --emptyOutDir && node ../../scripts/check-demo-deployment.mjs --app dist-check /docx-to-markdown/ sample.docx",
