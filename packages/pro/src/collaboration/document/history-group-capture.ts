@@ -50,10 +50,13 @@ export class HistoryGroupCapture {
     const previous = this.previous;
     this.previous = group;
     const stack = this.undoManager.undoStack;
+    const window = this.undoManager.captureTimeout;
     if (group === previous && group !== undefined && stack[stack.length - 1] === this.gestureItem) {
-      // `lastChange` is the manager's own clock for the merge rule; a frame of an open
-      // gesture is always "just now", whatever the wall clock says.
+      // The merge rule is `now - lastChange < captureTimeout`, measured when the transaction
+      // ENDS. A frame of an open gesture merges whatever the clock says and however long its
+      // body runs, so the window is opened wide for exactly this transaction.
       this.undoManager.lastChange = Date.now();
+      this.undoManager.captureTimeout = Number.POSITIVE_INFINITY;
     } else {
       if (group !== previous || group !== undefined) this.undoManager.stopCapturing();
       this.gestureItem = undefined;
@@ -68,6 +71,7 @@ export class HistoryGroupCapture {
       throw error;
     } finally {
       this.capturing = false;
+      this.undoManager.captureTimeout = window;
     }
   }
 

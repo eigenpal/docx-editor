@@ -464,6 +464,19 @@ export class TreeDocumentStore {
     options: TransactOptions
   ): TransactResult {
     const origin = options.origin ?? ORIGIN_IDS.mutationHuman;
+    // A PROJECTION-origin commit reconciles the view with state the store already holds.
+    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
+    // it must not become an undo step (task 5.6).
+    const recordsHistory =
+      options.recordsHistory ??
+      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
+    // An intent naming another gesture (or none) closes the open one HERE, whether it goes
+    // on to land, to change nothing or to be refused: the same input class, one rule. A
+    // frame of the same gesture leaves it open for the extension below.
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (recordsHistory && !this.composition && top?.group !== options.historyGroup) {
+      this.closeHistoryGroup();
+    }
     const before = this.current;
     const beforeRevision = this.rev;
 
@@ -733,22 +746,7 @@ export class TreeDocumentStore {
         ...(rejection.detail ? { detail: rejection.detail } : {}),
       };
     }
-    // A PROJECTION-origin commit reconciles the view with state the store already holds.
-    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
-    // it must not become an undo step (task 5.6).
-    const recordsHistory =
-      options.recordsHistory ??
-      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
-
-    if (applied === 0) {
-      // Nothing to record — but an intent naming another gesture (or none) still closes the
-      // open one, as it would have had it changed something; a same-gesture frame does not.
-      const top = this.undoStack[this.undoStack.length - 1];
-      if (recordsHistory && !this.composition && top?.group !== options.historyGroup) {
-        this.closeHistoryGroup();
-      }
-      return { ok: true, change: null };
-    }
+    if (applied === 0) return { ok: true, change: null };
 
     const selectionAfter = selectionAfterExplicit ? explicitSelectionAfter : opCaret;
 

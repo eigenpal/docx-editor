@@ -3251,7 +3251,9 @@ export function mountPaginatedSurface(
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
-    const result = commitHistoryGroup.around(surface, run);
+    const result = commitHistoryGroup.around(surface, run, (r) =>
+      typeof r === 'boolean' ? r : r.committed
+    );
     const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
     if (rejection) {
       lastRejection = writeRejectionReason(

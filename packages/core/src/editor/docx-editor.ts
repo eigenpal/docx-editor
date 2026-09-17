@@ -1937,12 +1937,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // revision would report HF / create-header edits as `changed: false`.
       const before = mounted.session.packageRevision();
 
-      // Bound around THIS family only: these verbs commit through the surface, which takes
-      // the group at its commit. Review, protection and content-control commands write
-      // through the session directly and record their own step, so nothing is bound for
-      // them — a listener writing back through the surface during their publish must not
-      // find a token to take.
-      const result = runWithHistoryGroup(mounted, options?.historyGroup, () =>
+      // Bound around THIS family only, and only for a command that edits: these verbs
+      // commit through the surface, which takes the group at its commit. Review, protection
+      // and content-control commands write through the session directly and record their
+      // own step; undo, redo and the read-only verbs commit nothing. For all of those nothing
+      // is bound — a listener writing back through the surface during their publish must
+      // not find a token to take.
+      const edits =
+        viewingGate.supported &&
+        viewingGate.mutating &&
+        command.type !== 'undo' &&
+        command.type !== 'redo';
+      const result = runWithHistoryGroup(mounted, edits ? options?.historyGroup : undefined, () =>
         execEditorCommand(mounted, command, {
           ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
           editor,

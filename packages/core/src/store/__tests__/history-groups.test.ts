@@ -162,6 +162,18 @@ describe('TreeDocumentStore history groups', () => {
     expect(s.historyDepth).toBe(2);
   });
 
+  test('a refused ungrouped transaction closes the group too', () => {
+    const { store: s, id } = story();
+    const gesture = Symbol('drag');
+    append(s, id, ' a', gesture);
+    const refused = s.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: 'no-such-paragraph', offset: 0, text: 'x' })
+    );
+    expect(refused.ok).toBe(false);
+    append(s, id, ' b', gesture);
+    expect(s.historyDepth).toBe(2);
+  });
+
   test('a composition records its own entry and closes the group', () => {
     const { store: s, id } = story();
     const gesture = Symbol('drag');

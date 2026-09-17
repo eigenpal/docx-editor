@@ -957,7 +957,9 @@ export class TreePackageStore {
   promoteStoryTransactionToPackageUnit(
     beforePackage: OoxmlPackage,
     store: TreeDocumentStore,
-    checkpoint: TreeDocumentCheckpoint
+    checkpoint: TreeDocumentCheckpoint,
+    /** Unused: the restore is unconditional now. Kept so existing callers compile. */
+    _beforeDepth?: number
   ): TreeModelChange {
     this.installPackageSnapshotInternal(store.package);
     // Unconditional: a frame that MERGED into an open group left the depth unchanged and

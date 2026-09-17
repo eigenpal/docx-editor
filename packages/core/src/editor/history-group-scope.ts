@@ -44,6 +44,11 @@ export function takeHistoryGroup(owner: object): HistoryGroup | undefined {
   return group;
 }
 
+/** Hand a taken group back: the commit that took it landed nothing, so the command's real write is still to come. */
+function returnHistoryGroup(owner: object, group: HistoryGroup): void {
+  if (active === null) active = { owner, group };
+}
+
 /**
  * The group of the commit a surface is running, for its write path to stamp on the
  * transaction.
@@ -53,7 +58,9 @@ export function takeHistoryGroup(owner: object): HistoryGroup | undefined {
  * cleared: a listener that writes back through a surface verb during the commit re-enters
  * `around`, and the outer command's later writes must keep their group. Taken AFTER the
  * type-buffer flush has run inside the same commit, which is safe because the flush binds
- * `undefined` for its own span and so finds nothing to take.
+ * `undefined` for its own span and so finds nothing to take. A commit that LANDS nothing —
+ * a verb reporting a refusal before its real write — hands the group back, so the write
+ * that follows in the same command still carries it.
  */
 export class CommitHistoryGroup {
   private current: HistoryGroup | undefined;
@@ -63,13 +70,17 @@ export class CommitHistoryGroup {
     return this.current;
   }
 
-  around<T>(owner: object, run: () => T): T {
+  around<T>(owner: object, run: () => T, landed: (result: T) => boolean): T {
     const outer = this.current;
-    this.current = takeHistoryGroup(owner);
+    const group = takeHistoryGroup(owner);
+    this.current = group;
+    let result: T;
     try {
-      return run();
+      result = run();
     } finally {
       this.current = outer;
     }
+    if (group !== undefined && !landed(result)) returnHistoryGroup(owner, group);
+    return result;
   }
 }

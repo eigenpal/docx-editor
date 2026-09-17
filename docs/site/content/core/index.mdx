@@ -103,7 +103,8 @@ through `runToolbarCommand`. The packaged toolbar does not pass a token.
 In a collaborative session, the shared undo manager owns undo. The token groups
 there too: frames of one gesture join one shared undo item however long the
 gesture lasts, and a change of group starts a new item. A story change inside
-one gesture does not split the shared item. Calls without a token keep the
+one gesture does not split the shared item. Inserting a hyperlink publishes its
+relationship as a separate shared item. Calls without a token keep the
 manager's own rule, which joins local edits inside its capture window.
 
 ## The pipeline
