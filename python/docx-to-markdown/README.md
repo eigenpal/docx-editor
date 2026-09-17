@@ -88,8 +88,24 @@ assert result.fonts_complete
 
 Your fonts take precedence over the bundled substitutes. A font file the converter cannot
 read is reported in `result.font_errors` and the conversion continues without it. Pass
-`font_policy="strict"` to fail instead of approximating, or `google_fonts=True` to fetch
-families the local fonts cannot serve from Google Fonts.
+`font_policy="strict"` to fail instead of approximating.
+
+### Google Fonts fallback
+
+`google_fonts=True` fetches families the local fonts cannot serve from a pinned Google
+Fonts catalog. It needs network access. The catalog is a closed set of families that ship
+four static faces, so it does not include variable-only families such as Roboto, Open
+Sans, or Lato. `google_font_families()` returns the list, and `result.missing_fonts`
+tells you what a document still needs:
+
+```python
+from docx_to_markdown import convert, google_font_families
+
+result = convert("report.docx", google_fonts=True)
+still_missing = [f for f in result.missing_fonts if f not in google_font_families()]
+```
+
+Supply anything still missing as font files.
 
 `result.font_resolution` reports which face measured each family. `result.fonts_complete`
 is `True` when every family measured with all of its faces. Check it before you rely on

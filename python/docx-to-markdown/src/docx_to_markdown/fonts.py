@@ -7,8 +7,10 @@ Register any other family with :func:`font_family`, under the name the document 
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, Optional, Sequence, Union
 
 FontStyle = Literal["normal", "italic"]
@@ -23,6 +25,30 @@ BUNDLED_FAMILIES: tuple[str, ...] = (
     "Courier New",
     "Century Gothic",
 )
+
+
+def _google_catalog() -> dict[str, Any]:
+    path = Path(__file__).with_name("_vendor") / "google-fonts.json"
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {"revision": None, "families": [], "substitutes": {}}
+
+
+def google_font_families() -> list[str]:
+    """Families ``google_fonts=True`` can fetch, in alphabetical order.
+
+    The catalog is a pinned, closed set of families that ship four static faces.
+    Variable-only families such as Roboto, Open Sans, and Lato are not in it; supply
+    those as files with :func:`font_family`.
+    """
+    return sorted(_google_catalog()["families"])
+
+
+def google_font_substitutes() -> dict[str, str]:
+    """Word families ``google_fonts=True`` serves through a metric-compatible catalog face."""
+    return dict(_google_catalog()["substitutes"])
 
 
 @dataclass(frozen=True)

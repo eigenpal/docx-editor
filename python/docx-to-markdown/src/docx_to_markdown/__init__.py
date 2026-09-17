@@ -33,7 +33,14 @@ from pathlib import Path
 from typing import IO, Any, Literal, Optional, Sequence, Union
 
 from ._runtime import ConversionError, RuntimeNotFoundError, Worker, run_once, runtime_path
-from .fonts import BUNDLED_FAMILIES, FontFace, font_family, font_requests
+from .fonts import (
+    BUNDLED_FAMILIES,
+    FontFace,
+    font_family,
+    font_requests,
+    google_font_families,
+    google_font_substitutes,
+)
 
 __all__ = [
     "BUNDLED_FAMILIES",
@@ -51,6 +58,8 @@ __all__ = [
     "RuntimeNotFoundError",
     "convert",
     "font_family",
+    "google_font_families",
+    "google_font_substitutes",
     "runtime_path",
 ]
 
@@ -311,8 +320,9 @@ def convert(
         font_policy: ``"strict"`` fails the conversion when a requested family is missing
             a face or a font origin fails. ``"best-effort"`` paginates with approximations
             and reports them in ``warnings`` and ``font_resolution``.
-        google_fonts: Fetch families the local fonts cannot serve from Google Fonts.
-            Needs network access.
+        google_fonts: Fetch families the local fonts cannot serve from a pinned Google
+            Fonts catalog. Needs network access. :func:`google_font_families` lists what
+            the catalog can serve; other families still need font files.
         images: ``True`` extracts images and links them with Markdown syntax.
             ``"html"`` uses ``<img>`` tags that keep displayed sizes.
         display_mode: How tracked changes are projected. ``"all-markup"`` keeps every

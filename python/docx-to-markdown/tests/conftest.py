@@ -23,3 +23,12 @@ def require_runtime():
 
     if not runtime_path().is_file():
         pytest.skip("runtime not built; run `bun run build:runtime` first")
+
+
+@pytest.fixture(scope="session")
+def network():
+    """Opt in to tests that reach Google Fonts with DOCX_TO_MARKDOWN_NETWORK_TESTS=1."""
+    import os
+
+    if os.environ.get("DOCX_TO_MARKDOWN_NETWORK_TESTS") != "1":
+        pytest.skip("set DOCX_TO_MARKDOWN_NETWORK_TESTS=1 to run tests that fetch fonts")

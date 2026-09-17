@@ -8,7 +8,7 @@
 // for the current machine. Output lands in `src/docx_to_markdown/_vendor/`, which the
 // wheel build hook requires and git ignores.
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync, readdirSync, mkdtempSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, readdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -73,6 +73,23 @@ for (const file of readdirSync(join(fontsRoot, 'assets'))) {
     cpSync(join(fontsRoot, 'assets', file), join(vendor, 'fonts', file));
 }
 cpSync(join(fontsRoot, 'licenses'), join(vendor, 'licenses'), { recursive: true });
+// Snapshot the pinned Google Fonts catalog so Python can say up front whether
+// `google_fonts=True` can serve a family, without starting the runtime.
+const catalog = spawnSync(
+  'bun',
+  [
+    '-e',
+    "import { GOOGLE_FONT_FAMILIES, GOOGLE_METRIC_SUBSTITUTES, GOOGLE_FONTS_REVISION } from '@docx-editor.dev/fonts/google';" +
+      'console.log(JSON.stringify({ revision: GOOGLE_FONTS_REVISION, families: GOOGLE_FONT_FAMILIES, substitutes: GOOGLE_METRIC_SUBSTITUTES }))',
+  ],
+  { cwd: packageRoot, encoding: 'utf8' }
+);
+if (catalog.status !== 0) {
+  console.error(catalog.stderr);
+  process.exit(catalog.status ?? 1);
+}
+writeFileSync(join(vendor, 'google-fonts.json'), catalog.stdout);
+
 const bunVersion = spawnSync('bun', ['--version'], { encoding: 'utf8' }).stdout.trim();
 const bundled = writeNotices({
   metafilePath: metafile,
