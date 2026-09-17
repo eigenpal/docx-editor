@@ -1,5 +1,23 @@
 # @docx-editor.dev/editor-api
 
+## 2.21.0
+
+### Patch Changes
+
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+
 ## 2.20.0
 
 ### Minor Changes
@@ -278,14 +296,12 @@
 
 - 6573c9b: `@docx-editor.dev/core` is now a peer dependency of `@docx-editor.dev/editor-api` instead of a regular dependency, so your project resolves one copy of the engine, shared with any editor adapter. Hosts whose package manager does not auto-install peers (for example Yarn) must add `@docx-editor.dev/core` explicitly.
 - 686a9d6: Add agent-safe document writing and revision APIs.
-  - Add an explicit `original` text projection. Pending deletions remain visible, while pending
-    insertions stay hidden. This matches Word's Original review view.
+  - Add an explicit `original` text projection. Pending deletions remain visible, while pending insertions stay hidden. This matches Word's Original review view.
   - Add the atomic `replaceStoryBlocks` automation operation with stable paragraph identities.
   - Add the DocxEditor `revisionTextView` runtime option outside the Office.js object model.
   - Implement `proposeInsertion`, `proposeDeletion`, and `proposeReplacement` editor commands.
 
-  Projected search ranges map back to editable model offsets and retain their projection for later
-  range reads and searches.
+  Projected search ranges map back to editable model offsets and retain their projection for later range reads and searches.
 
 ## 2.8.0
 
@@ -569,13 +585,7 @@
 
 - 1be9cf5: Edit and track-change footnote and endnote bodies.
 
-  Note bodies are now serialized on save, so edits and tracked changes (`w:ins` /
-  `w:del`) inside footnotes and endnotes persist instead of being dropped — the
-  run model preserves the separator markers and the in-body auto-number marks, and
-  `repackDocx` writes `word/footnotes.xml` / `word/endnotes.xml` from the model.
-  `DocxReviewer.getChanges()` gains `includeFootnotes` / `includeEndnotes` options;
-  when set, tracked changes inside note bodies are reported with `noteId` /
-  `noteType`.
+  Note bodies are now serialized on save, so edits and tracked changes (`w:ins` / `w:del`) inside footnotes and endnotes persist instead of being dropped — the run model preserves the separator markers and the in-body auto-number marks, and `repackDocx` writes `word/footnotes.xml` / `word/endnotes.xml` from the model. `DocxReviewer.getChanges()` gains `includeFootnotes` / `includeEndnotes` options; when set, tracked changes inside note bodies are reported with `noteId` / `noteType`.
 
 ## 1.2.1
 

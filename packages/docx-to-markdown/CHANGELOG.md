@@ -1,5 +1,29 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.21.0
+
+### Minor Changes
+
+- 45a1709: Add the `docx-to-markdown` Python package and CLI for Python 3.11+, with a bundled runtime and packaged fonts. Platform wheels support Linux and macOS on x64 and ARM64, and Windows on x64, without a separate Node.js or Bun installation.
+
+### Patch Changes
+
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [424a121]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/fonts@2.21.0
+
 ## 2.20.0
 
 ### Patch Changes

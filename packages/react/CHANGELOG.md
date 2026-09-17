@@ -1,5 +1,24 @@
 # @eigenpal/docx-js-editor
 
+## 2.21.0
+
+### Patch Changes
+
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/i18n@2.21.0
+
 ## 2.20.0
 
 ### Patch Changes
@@ -438,21 +457,14 @@
 
 - 26095c6: Initial release.
 
-  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints
-  the real paginated layout, edits it in place, and writes a `.docx` back out.
-  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the
-    packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks
-    (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
-  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical
-    OOXML tree, layout, paint, and the `Editor` contract the adapters render.
+  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints the real paginated layout, edits it in place, and writes a `.docx` back out.
+  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
+  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical OOXML tree, layout, paint, and the `Editor` contract the adapters render.
   - `@docx-editor.dev/i18n` — the shared string catalogue, with nine locales.
-  - `@docx-editor.dev/editor-api` — a batching document object model for automating a
-    document from a server or from an editor already open in a page.
+  - `@docx-editor.dev/editor-api` — a batching document object model for automating a document from a server or from an editor already open in a page.
   - `@docx-editor.dev/pro` — tracked changes, comments, and custom nodes.
 
-  Word fidelity is structural: styles, theme colours, tables, headers and footers, section
-  layout, numbering, and tab stops resolve through the same cascade Word uses, and content
-  the editor does not model round-trips untouched.
+  Word fidelity is structural: styles, theme colours, tables, headers and footers, section layout, numbering, and tab stops resolve through the same cascade Word uses, and content the editor does not model round-trips untouched.
 
 - 26095c6: Remove `EditorHost`, `EditorConfig` and `createEditor` from the public surface. They described a retired pipeline in which the adapter supplied DOM handles and a display sink; the editor has painted its own surface since `createDocxEditor` replaced it, and none of the three had a caller. Use `createDocxEditor` with `DocxEditorConfig`.
 
@@ -864,9 +876,7 @@
 
 ### Patch Changes
 
-- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic
-  locale loading can code-split a single locale instead of bundling the whole
-  set:
+- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic locale loading can code-split a single locale instead of bundling the whole set:
 
   ```ts
   // Static — bundler ships only this locale's strings
@@ -876,21 +886,11 @@
   const pl = (await import('@docx-editor.dev/i18n/pl')).default;
   ```
 
-  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`,
-  `/zh-CN`. The named exports on the package root still work — pick the
-  ergonomic path for static lists, the subpath for runtime locale switching.
+  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. The named exports on the package root still work — pick the ergonomic path for static lists, the subpath for runtime locale switching.
 
-  Also re-export `createEmptyDocument`, `createDocumentWithText`, and
-  `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and
-  `@docx-editor.dev/vue` so the common "spawn a blank editor"
-  affordance no longer requires installing `-core` alongside the adapter.
+  Also re-export `createEmptyDocument`, `createDocumentWithText`, and `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and `@docx-editor.dev/vue` so the common "spawn a blank editor" affordance no longer requires installing `-core` alongside the adapter.
 
-  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`,
-  `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`,
-  `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main
-  `@docx-editor.dev/core` entry. They were already public via
-  `@docx-editor.dev/core/headless`; the main entry just hadn't been
-  re-exporting them.
+  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`, `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`, `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main `@docx-editor.dev/core` entry. They were already public via `@docx-editor.dev/core/headless`; the main entry just hadn't been re-exporting them.
 
 - Updated dependencies [8d60d65]
 - Updated dependencies [7806b78]
@@ -1411,46 +1411,21 @@
 
 ### Patch Changes
 
-- 71a1836: Replace hardcoded `816` page-width literals in `DocxEditor` with the existing
-  `DEFAULT_PAGE_WIDTH` constant exported from `PagedEditor`, and fold the two
-  duplicated `pageWidth` fallback expressions into a single `pageWidthPx` value
-  shared by `UnifiedSidebar` and `CommentMarginMarkers`.
+- 71a1836: Replace hardcoded `816` page-width literals in `DocxEditor` with the existing `DEFAULT_PAGE_WIDTH` constant exported from `PagedEditor`, and fold the two duplicated `pageWidth` fallback expressions into a single `pageWidthPx` value shared by `UnifiedSidebar` and `CommentMarginMarkers`.
 - f31fd5a: Fix document outline overlap and ruler behavior
-  - Outline panel no longer sits on top of the page. On wide viewports the
-    page stays where it was (centered, or translated left by the comments
-    sidebar) — only the layout's min-width grows so the centered page never
-    overlaps the panel. On narrow viewports the page + outline scroll
-    horizontally as a unit instead.
-  - Outline panel header lines up with the doc's top margin and uses a
-    transparent background so the page's left-side shadow stays visible when
-    the viewport is squeezed.
-  - Vertical ruler stays pinned to the viewport's left edge during horizontal
-    scroll instead of scrolling out of view.
-  - Horizontal ruler is now sticky inside the scroll container, so it scrolls
-    horizontally with the doc and stays put on vertical scroll. Padding tracks
-    the outline (right shift) and comments sidebar (left shift) so the ruler
-    centers against the same axis as the page.
-  - Editor surround uses `--doc-bg` uniformly so the over-scroll/rubber-band
-    area matches the gutter.
+  - Outline panel no longer sits on top of the page. On wide viewports the page stays where it was (centered, or translated left by the comments sidebar) — only the layout's min-width grows so the centered page never overlaps the panel. On narrow viewports the page + outline scroll horizontally as a unit instead.
+  - Outline panel header lines up with the doc's top margin and uses a transparent background so the page's left-side shadow stays visible when the viewport is squeezed.
+  - Vertical ruler stays pinned to the viewport's left edge during horizontal scroll instead of scrolling out of view.
+  - Horizontal ruler is now sticky inside the scroll container, so it scrolls horizontally with the doc and stays put on vertical scroll. Padding tracks the outline (right shift) and comments sidebar (left shift) so the ruler centers against the same axis as the page.
+  - Editor surround uses `--doc-bg` uniformly so the over-scroll/rubber-band area matches the gutter.
 
 - 6a0b9a9: Fix crash when accepting a tracked replacement.
 
-  The `paragraphChangeTracker` plugin walked `tr.steps` using each step's raw
-  `from`/`to`/`pos` against `tr.doc` (the final doc after every step has been
-  applied). Those coords are valid only in the doc as it was _when that step
-  ran_, so a later doc-shrinking step could leave the earlier step's coords
-  past the final doc end and crash `Fragment.nodesBetween` on
-  `undefined.nodeSize`.
+  The `paragraphChangeTracker` plugin walked `tr.steps` using each step's raw `from`/`to`/`pos` against `tr.doc` (the final doc after every step has been applied). Those coords are valid only in the doc as it was _when that step ran_, so a later doc-shrinking step could leave the earlier step's coords past the final doc end and crash `Fragment.nodesBetween` on `undefined.nodeSize`.
 
-  Concretely: `acceptChange` emits `[RemoveMarkStep, ReplaceStep]` when the
-  range contains both an `insertion` mark and a `deletion` (a tracked
-  replace). The replace shrinks the doc, the mark step's `to` becomes
-  invalid in `tr.doc`, and the editor crashes.
+  Concretely: `acceptChange` emits `[RemoveMarkStep, ReplaceStep]` when the range contains both an `insertion` mark and a `deletion` (a tracked replace). The replace shrinks the doc, the mark step's `to` becomes invalid in `tr.doc`, and the editor crashes.
 
-  Remap each step's coords through `tr.mapping.slice(stepIndex + 1)` before
-  using them with `tr.doc`, and skip steps whose range was fully consumed by
-  a later deletion. Adds a regression test reproducing the
-  accept-tracked-replacement crash shape.
+  Remap each step's coords through `tr.mapping.slice(stepIndex + 1)` before using them with `tr.doc`, and skip steps whose range was fully consumed by a later deletion. Adds a regression test reproducing the accept-tracked-replacement crash shape.
 
 - 95f8df1: Add Brazilian Portuguese (pt-BR) locale support with 100% translation coverage.
 

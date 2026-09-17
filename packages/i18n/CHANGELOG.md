@@ -1,5 +1,7 @@
 # @docx-editor.dev/i18n
 
+## 2.21.0
+
 ## 2.20.0
 
 ### Patch Changes
@@ -156,9 +158,7 @@
 
 ### Patch Changes
 
-- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic
-  locale loading can code-split a single locale instead of bundling the whole
-  set:
+- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic locale loading can code-split a single locale instead of bundling the whole set:
 
   ```ts
   // Static — bundler ships only this locale's strings
@@ -168,21 +168,11 @@
   const pl = (await import('@docx-editor.dev/i18n/pl')).default;
   ```
 
-  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`,
-  `/zh-CN`. The named exports on the package root still work — pick the
-  ergonomic path for static lists, the subpath for runtime locale switching.
+  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. The named exports on the package root still work — pick the ergonomic path for static lists, the subpath for runtime locale switching.
 
-  Also re-export `createEmptyDocument`, `createDocumentWithText`, and
-  `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and
-  `@docx-editor.dev/vue` so the common "spawn a blank editor"
-  affordance no longer requires installing `-core` alongside the adapter.
+  Also re-export `createEmptyDocument`, `createDocumentWithText`, and `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and `@docx-editor.dev/vue` so the common "spawn a blank editor" affordance no longer requires installing `-core` alongside the adapter.
 
-  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`,
-  `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`,
-  `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main
-  `@docx-editor.dev/core` entry. They were already public via
-  `@docx-editor.dev/core/headless`; the main entry just hadn't been
-  re-exporting them.
+  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`, `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`, `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main `@docx-editor.dev/core` entry. They were already public via `@docx-editor.dev/core/headless`; the main entry just hadn't been re-exporting them.
 
 ## 1.0.0
 

@@ -1,5 +1,26 @@
 # @docx-editor.dev/core
 
+## 2.21.0
+
+### Minor Changes
+
+- db1b50c: Add keyboard-accessible content-control popups, regional date entry, replaceable React/Vue parts, picture replacement, and glossary building-block insertion with restored placeholders. Legacy checkboxes support click and Space toggling with larger pointer targets and matching caret geometry; symbol-only paragraphs now render.
+- be94e1c: Add engine-owned history groups, shared React and Vue gesture bindings, and history outcomes so live formatting controls record one undo step per gesture while every value renders and replicates. Fixes #902
+- f30cd6a: Legacy Word dropdown form fields (`FORMDROPDOWN`) use native select menus. Choices update the saved index and displayed text together, support undo and forms protection, and survive save/reopen. Disabled fields and viewing or suggesting mode refuse changes.
+- 87b8b3d: Add Word's Simple Markup view: the proposed text with a red change bar beside every changed line, and a click on the bar that switches to All Markup and back. All Markup now draws one neutral gray hairline per page, halfway into the left margin, continuous across changed lines, for every story, and No Markup and Original no longer paint insertion or deletion markup.
+- 06b79d7: Render section page borders with text-relative or page-relative offsets, first-page filters, and foreground or background placement. Art borders remain preserved without rendering, and page borders have no editing UI.
+
+### Patch Changes
+
+- ab9548d: Preserve empty paragraph typing formatting across caret moves and save/reopen, and update caret size immediately when the typing font changes.
+- 424a121: Hash layout cache tokens and admitted font bytes with the host's native SHA-256 in Node and Bun, which cuts headless export time by about a tenth on long documents. Browsers keep the JavaScript implementation.
+- 06b79d7: Fix dashed and dotted paragraph and page borders that incorrectly rendered as solid lines.
+- 40ef065: Remove circular declaration re-export warnings from core package builds without changing public APIs.
+- 14a3468: Use the shared page-margin revision bars for tables and drawings without duplicate colored row bars or image frames. All Markup uses gray bars; Simple Markup uses red bars. Remove unused legacy cell-revision styles and tint tokens. The Igloo demo also inherits the standard margin-bar colors.
+- 424a121: Headless export no longer fails with "unsupported value type in comparator input: undefined" for a document whose theme has no East Asian, complex-script, or supplemental font scheme.
+- 2d4e0e7: Resolve independent table and paragraph changes in bulk without blocking them on unsupported or excluded revisions. Preserve pending table properties when removing all rows, and group only the properties a selected revision can replace or remove.
+- @docx-editor.dev/i18n@2.21.0
+
 ## 2.20.0
 
 ### Minor Changes
@@ -158,18 +179,14 @@
 
 ### Minor changes
 
-- 5284df5: Add `@docx-editor.dev/core/export` for document layout without a DOM. Export sessions
-  share the browser editor's layout engine and return immutable pages, comments, tracked changes,
-  and font-resolution reports.
-- 0d81033: Add font resources, shaped text, embedded fonts, metadata, internal link targets, and
-  comment and tracked-change positions to export sessions.
+- 5284df5: Add `@docx-editor.dev/core/export` for document layout without a DOM. Export sessions share the browser editor's layout engine and return immutable pages, comments, tracked changes, and font-resolution reports.
+- 0d81033: Add font resources, shaped text, embedded fonts, metadata, internal link targets, and comment and tracked-change positions to export sessions.
 - 8e6133f: Apply author, mode, translation, and locale changes without rebuilding the editor, including Vue root and packaged components. Fixes #695 and #561.
 
 ### Patch changes
 
 - e9baf4d: Search headers, footers, footnotes, endnotes, table cells, and saved field results. Fixes #703 and #694.
-- 087bb78: Fix floating table positions, vertical cell text, stacked fractions, and inline pictures
-  in later columns. Preserve equation size and pagination with automatic line spacing. Fixes #662.
+- 087bb78: Fix floating table positions, vertical cell text, stacked fractions, and inline pictures in later columns. Preserve equation size and pagination with automatic line spacing. Fixes #662.
 - a3819aa: Wrap long words across tracked insertions in suggesting mode without splitting Unicode graphemes. Fixes #716.
 - a53f75c: Render hyperlinks in headers, footers, and anchored text boxes. While editing a header or footer, use Control+K to edit or remove its links. Links in these regions do not navigate. Fixes #643.
 - 36c1f04: Update list markers in text boxes inside tables and reduce repeated paragraph layout work. Fixes #639.
@@ -192,8 +209,7 @@
 - 7633b2c: Add Review > Markup Options > Reviewers to filter tracked changes and comments by author without changing saved document data. Keep an optional composable toolbar shortcut with a host-provided icon. Fixes #666.
 - 01022a4: CJK text now measures and paints in the `eastAsia` font the document names (`w:rFonts w:eastAsia` / `w:eastAsiaTheme`, including through `w:docDefaults` and the theme's `a:ea` typefaces) instead of the run's Latin face. `ResolvedRunStyle` gains `fontFamilyEastAsia`, and `StyleSpanRecord` gains `fontSlot`; the format painter copies the East Asian face into `w:eastAsia`, and the font catalog lists the theme's East Asian faces.
 - 6b5bb8d: Add `setTrackedChangesFilter` with a predicate over complete revision items. Filtered revisions render as accepted without changing saved OOXML. Fixes #668.
-- f731c52: Add an `accept` or `reject` content projection mode to `setTrackedChangesFilter`. Both modes
-  remain view-only and preserve tracked changes in saved DOCX files.
+- f731c52: Add an `accept` or `reject` content projection mode to `setTrackedChangesFilter`. Both modes remain view-only and preserve tracked changes in saved DOCX files.
 
 ### Patch Changes
 
@@ -280,8 +296,7 @@
 - e4872fb: Image insert, list numbering, and hyperlink minting now replicate to collaboration peers instead of staying local.
 - e4872fb: A collaborative replica now rebuilds only the nodes a received edit names, keeps the rest of the document by identity, and revalidates only the parts that changed.
 - e4872fb: Joining a collaboration room keeps inline images, and the image selection frame sits on the selected drawing.
-- e4872fb: Typing in a large document with a collaboration replica attached no longer costs a scan of
-  every node id in the part on each edit, so an attached editor now runs at close to solo speed.
+- e4872fb: Typing in a large document with a collaboration replica attached no longer costs a scan of every node id in the part on each edit, so an attached editor now runs at close to solo speed.
 - e4872fb: Add an `offlineEditing` option to the collaboration factories and hooks: a disconnected replica keeps accepting local edits, and the buffered updates merge on reconnect.
 - c4b4dab: Minify the shipped `dist/editor.css`, which halves it from 212 KiB to 109 KiB.
 - e4872fb: Keep a queued collaboration edit when a remote update arrives during it, and flush each document's queue independently so two documents in one process no longer strand each other.
@@ -349,14 +364,12 @@
 ### Minor Changes
 
 - 686a9d6: Add agent-safe document writing and revision APIs.
-  - Add an explicit `original` text projection. Pending deletions remain visible, while pending
-    insertions stay hidden. This matches Word's Original review view.
+  - Add an explicit `original` text projection. Pending deletions remain visible, while pending insertions stay hidden. This matches Word's Original review view.
   - Add the atomic `replaceStoryBlocks` automation operation with stable paragraph identities.
   - Add the DocxEditor `revisionTextView` runtime option outside the Office.js object model.
   - Implement `proposeInsertion`, `proposeDeletion`, and `proposeReplacement` editor commands.
 
-  Projected search ranges map back to editable model offsets and retain their projection for later
-  range reads and searches.
+  Projected search ranges map back to editable model offsets and retain their projection for later range reads and searches.
 
 - dfe6d27: Display and edit Word mathematical equations through a bounded linear-math editor.
 - 0fb376a: The store entry point now exports the full review-item vocabulary: `ReviewCustomItem` joins the `ReviewItem` union, and `ReviewModelInput` carries the custom-node inputs.
@@ -604,44 +617,27 @@
 
 - 26095c6: Initial release.
 
-  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints
-  the real paginated layout, edits it in place, and writes a `.docx` back out.
-  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the
-    packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks
-    (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
-  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical
-    OOXML tree, layout, paint, and the `Editor` contract the adapters render.
+  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints the real paginated layout, edits it in place, and writes a `.docx` back out.
+  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
+  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical OOXML tree, layout, paint, and the `Editor` contract the adapters render.
   - `@docx-editor.dev/i18n` — the shared string catalogue, with nine locales.
-  - `@docx-editor.dev/editor-api` — a batching document object model for automating a
-    document from a server or from an editor already open in a page.
+  - `@docx-editor.dev/editor-api` — a batching document object model for automating a document from a server or from an editor already open in a page.
   - `@docx-editor.dev/pro` — tracked changes, comments, and custom nodes.
 
-  Word fidelity is structural: styles, theme colours, tables, headers and footers, section
-  layout, numbering, and tab stops resolve through the same cascade Word uses, and content
-  the editor does not model round-trips untouched.
+  Word fidelity is structural: styles, theme colours, tables, headers and footers, section layout, numbering, and tab stops resolve through the same cascade Word uses, and content the editor does not model round-trips untouched.
 
-- 26095c6: `setSelection` now types the forms it actually accepts. `EditorSelection` gained the
-  `{ anchor, head }` paragraph-id pair the engine honours, and lost the `SemanticTarget` and
-  `DocLocation` arms it never accepted, so the outline and any other caller can move the caret
-  without a cast.
+- 26095c6: `setSelection` now types the forms it actually accepts. `EditorSelection` gained the `{ anchor, head }` paragraph-id pair the engine honours, and lost the `SemanticTarget` and `DocLocation` arms it never accepted, so the outline and any other caller can move the caret without a cast.
 
-  Breaking if you passed a `SemanticTarget` or a `DocLocation`-ended range to `setSelection`:
-  both were refused at runtime with `unsupported`, so working code is unaffected.
+  Breaking if you passed a `SemanticTarget` or a `DocLocation`-ended range to `setSelection`: both were refused at runtime with `unsupported`, so working code is unaffected.
 
 - 26095c6: Remove `EditorHost`, `EditorConfig` and `createEditor` from the public surface. They described a retired pipeline in which the adapter supplied DOM handles and a display sink; the editor has painted its own surface since `createDocxEditor` replaced it, and none of the three had a caller. Use `createDocxEditor` with `DocxEditorConfig`.
 
 ### Minor Changes
 
 - 26095c6: Put the caret in the right place on an empty paragraph. A centred or right-aligned one drew it at the left margin, and one with a first-line indent ignored the indent; in both cases it only jumped to the correct position once a character was typed. Lines now publish their aligned content origin as `LineRecord.contentX`.
-- 26095c6: The root entry and the `contracts/*` entries now export the types their own signatures hand
-  out — `CanResult` from `can()`, `TextMatch` from `findText()`, `TableContext` from `query()`
-  and around 60 more that were previously unnameable from the entry point that returns them.
-  The root re-exports the whole `Editor` contract rather than a hand-listed subset, so it cannot
-  drift from it again.
+- 26095c6: The root entry and the `contracts/*` entries now export the types their own signatures hand out — `CanResult` from `can()`, `TextMatch` from `findText()`, `TableContext` from `query()` and around 60 more that were previously unnameable from the entry point that returns them. The root re-exports the whole `Editor` contract rather than a hand-listed subset, so it cannot drift from it again.
 
-  Removes `@docx-editor.dev/core/contracts/plugin` and `@docx-editor.dev/core/contracts/mcp`.
-  Every function in them threw, and `coreTools` had no runtime binding at all. Extensions and
-  MCP are deferred to a separately specified contract; `EditorModule` is the supported seam.
+  Removes `@docx-editor.dev/core/contracts/plugin` and `@docx-editor.dev/core/contracts/mcp`. Every function in them threw, and `coreTools` had no runtime binding at all. Extensions and MCP are deferred to a separately specified contract; `EditorModule` is the supported seam.
 
 ### Patch Changes
 

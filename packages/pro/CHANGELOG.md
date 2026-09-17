@@ -1,5 +1,26 @@
 # @docx-editor.dev/pro
 
+## 2.21.0
+
+### Patch Changes
+
+- 2d4e0e7: Resolve independent tracked changes in bulk while preserving excluded and unsupported table and paragraph revisions.
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/react@2.21.0
+  - @docx-editor.dev/vue@2.21.0
+
 ## 2.20.0
 
 ### Patch Changes
@@ -233,10 +254,8 @@
 - e4872fb: Hold remote collaboration updates to the same node, part, relationship, and blob limits as local writes, so one peer can no longer drive unbounded allocation on every replica in the room.
 - e4872fb: Collaboration status now keeps a typed last-failure reason after the session recovers, so a host can learn why a replica failed. The session factory that always received `"document"` is removed; pass a ready session instead.
 - e4872fb: Resolving, reopening, and deleting a comment now replicate to collaboration peers without dropping the anchored text.
-- e4872fb: Keep both authors' work when two collaborators add the first footnote or endnote at the same
-  time, instead of dropping one of them.
-- e4872fb: Keep a collaborative room editable and converged when two people press Enter or paste in the
-  same paragraph at the same time, instead of leaving each author on their own copy.
+- e4872fb: Keep both authors' work when two collaborators add the first footnote or endnote at the same time, instead of dropping one of them.
+- e4872fb: Keep a collaborative room editable and converged when two people press Enter or paste in the same paragraph at the same time, instead of leaving each author on their own copy.
 - e4872fb: A cross-paragraph type-over now replicates to peers. Joining no longer adopts the removed paragraph's properties onto the survivor.
 - e4872fb: A character-format command no longer duplicates selected text. New text nodes fill by replacing their current value, so a replay cannot insert the same characters again.
 - e4872fb: Inserting an image in a collaborative document now copies only that image's bytes into the room, instead of serializing the whole document.
