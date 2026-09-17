@@ -88,7 +88,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    # Runs even when a platform build failed, so the wheels that did build still ship.
+    # The Slack message names any platform that is missing.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.wheel.result != 'cancelled'
     needs: wheel
     runs-on: ubuntu-24.04
     environment: pypi
@@ -100,50 +102,70 @@ jobs:
           pattern: wheel-*
           path: dist
           merge-multiple: true
-      - name: Read the version from the wheels
-        id: version
+      - name: Take stock of the wheels
+        id: stock
         run: |
-          ls -la dist
-          version=$(ls dist/*.whl | head -1 | sed -E 's/.*docx_to_markdown-([^-]+)-.*/\1/')
+          ls -la dist || true
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [ "${#wheels[@]}" -eq 0 ]; then
+            echo "No wheel was built; nothing to publish." >&2
+            exit 1
+          fi
+          version=$(basename "${wheels[0]}" | sed -E 's/docx_to_markdown-([^-]+)-.*/\1/')
+          missing=""
+          for tag in manylinux_2_28_x86_64 manylinux_2_28_aarch64 macosx_12_0_arm64 macosx_12_0_x86_64 win_amd64; do
+            ls dist/*-py3-none-"$tag".whl >/dev/null 2>&1 || missing="$missing $tag"
+          done
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "missing=${missing# }" >> "$GITHUB_OUTPUT"
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
-      - name: Notify Slack — wheels published
+      - name: Notify Slack
         continue-on-error: true
         if: ${{ env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.stock.outputs.version }}
+          MISSING: ${{ steps.stock.outputs.missing }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
-          wheels=$(ls dist/*.whl | sed -E 's/.*-py3-none-([a-z0-9_]+)\.whl/• \1/')
+          if [ -z "$MISSING" ]; then
+            headline=":snake: *docx-to-markdown $VERSION published to PyPI*"
+            summary=":snake: docx-to-markdown $VERSION published to PyPI"
+            detail=""
+          else
+            headline=":warning: *docx-to-markdown $VERSION published to PyPI without every platform*"
+            summary=":warning: docx-to-markdown $VERSION published to PyPI without every platform"
+            detail=$(printf '*Missing wheels*\n'; for t in $MISSING; do printf '• %s\n' "$t"; done)
+          fi
           payload=$(jq -n \
+            --arg summary "$summary" \
+            --arg headline "$headline" \
             --arg version "$VERSION" \
+            --arg detail "$detail" \
             --arg run_url "$RUN_URL" \
             --arg run_n "$RUN_NUMBER" \
-            --arg wheels "$wheels" \
             '{
-              text: ":snake: docx-to-markdown \($version) published to PyPI",
-              blocks: [
-                { type: "section", text: { type: "mrkdwn", text: ":snake: *docx-to-markdown \($version) published to PyPI*" } },
-                { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Package*\n<https://pypi.org/project/docx-to-markdown/\($version)/|docx-to-markdown==\($version)>" },
-                  { type: "mrkdwn", text: "*Wheels*\n\($wheels)" }
-                ] },
+              text: $summary,
+              blocks: ([
+                { type: "section", text: { type: "mrkdwn", text: ($headline + "\n<https://pypi.org/project/docx-to-markdown/" + $version + "/|docx-to-markdown==" + $version + ">") } }
+              ] + (if $detail == "" then [] else [ { type: "section", text: { type: "mrkdwn", text: $detail } } ] end) + [
                 { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
-              ]
+              ])
             }')
           curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
   notify-failure:
-    if: failure() && github.event_name == 'workflow_dispatch' && inputs.publish
+    # Nothing reached PyPI: no wheel built, or the upload itself failed.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.publish.result == 'failure'
     needs: [wheel, publish]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
-      - name: Notify Slack — wheels not published
+      - name: Notify Slack
         if: ${{ env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -152,9 +174,9 @@ jobs:
           REF: ${{ github.ref_name }}
         run: |
           payload=$(jq -n --arg run_url "$RUN_URL" --arg run_n "$RUN_NUMBER" --arg ref "$REF" '{
-            text: ":x: docx-to-markdown Python wheels for \($ref) were NOT published",
+            text: ":x: docx-to-markdown \($ref) was NOT published to PyPI",
             blocks: [
-              { type: "section", text: { type: "mrkdwn", text: ":x: *docx-to-markdown Python wheels for \($ref) were NOT published*\nA platform build or the PyPI upload failed. npm packages are unaffected." } },
+              { type: "section", text: { type: "mrkdwn", text: ":x: *docx-to-markdown \($ref) was NOT published to PyPI*\nNo wheel built, or the upload failed. npm packages are unaffected." } },
               { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
             ]
           }')

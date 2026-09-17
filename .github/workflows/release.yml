@@ -386,7 +386,6 @@ jobs:
             --arg run_url "$RUN_URL" \
             --arg release "$release_url" \
             --arg packages "$packages_md" \
-            --arg wheels "${{ github.server_url }}/${{ github.repository }}/actions/workflows/python-wheels.yml" \
             '{
               text: ":white_check_mark: docx-editor \($version) released",
               blocks: [
@@ -397,8 +396,6 @@ jobs:
                 ] },
                 { type: "section", text: { type: "mrkdwn",
                   text: "*Packages*\n\($packages)" } },
-                { type: "section", text: { type: "mrkdwn",
-                  text: "*PyPI*\n:hourglass_flowing_sand: docx-to-markdown \($version) is building on five platforms in <\($wheels)|Python wheels>; that run reports here when it publishes." } },
                 { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
               ]
             }')
