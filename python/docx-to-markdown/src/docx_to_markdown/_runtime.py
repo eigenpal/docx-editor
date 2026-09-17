@@ -1,4 +1,4 @@
-"""Locate and run the vendored converter."""
+"""Locate and run the vendored converter, one-shot or as a warm worker."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 PROTOCOL_VERSION = 1
 FONT_ASSET_ROOT_ENV = "DOCX_EDITOR_FONT_ASSET_ROOT"
@@ -17,7 +18,11 @@ _VENDOR = Path(__file__).with_name("_vendor")
 
 
 class ConversionError(RuntimeError):
-    """The converter refused or failed the request."""
+    """The converter refused or failed a request.
+
+    ``code`` is stable and machine-readable, for example ``"docx-unreadable"``,
+    ``"timeout"``, or ``"runtime-missing"``. ``message`` is for people.
+    """
 
     def __init__(self, code: str, message: str, detail: Any = None) -> None:
         super().__init__(f"{code}: {message}")
@@ -31,6 +36,7 @@ class RuntimeNotFoundError(ConversionError):
 
 
 def runtime_path() -> Path:
+    """The converter executable this installation uses."""
     override = os.environ.get(RUNTIME_ENV)
     if override:
         return Path(override)
@@ -39,10 +45,11 @@ def runtime_path() -> Path:
 
 
 def fonts_dir() -> Path:
+    """The directory of bundled Word substitute fonts."""
     return _VENDOR / "fonts"
 
 
-def run(request: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:
+def _binary() -> Path:
     binary = runtime_path()
     if not binary.is_file():
         raise RuntimeNotFoundError(
@@ -50,28 +57,24 @@ def run(request: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:
             f"No converter executable at {binary}. Reinstall docx-to-markdown for this "
             f"platform, or point {RUNTIME_ENV} at a built executable.",
         )
+    return binary
+
+
+def _env() -> dict[str, str]:
     env = dict(os.environ)
     env.setdefault(FONT_ASSET_ROOT_ENV, str(fonts_dir()))
-    request = {"protocol": PROTOCOL_VERSION, **request}
+    return env
+
+
+def _decode(stdout: bytes, stderr: bytes, returncode: Optional[int]) -> dict[str, Any]:
     try:
-        completed = subprocess.run(
-            [str(binary)],
-            input=json.dumps(request).encode("utf-8"),
-            capture_output=True,
-            env=env,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise ConversionError("timeout", f"Conversion exceeded {timeout} seconds") from exc
-    try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
+        payload = json.loads(stdout.decode("utf-8"))
     except ValueError as exc:
-        stderr = completed.stderr.decode("utf-8", "replace").strip()
+        text = stderr.decode("utf-8", "replace").strip()
         raise ConversionError(
             "runtime-crashed",
-            f"The converter exited with status {completed.returncode} and no JSON response",
-            stderr[-4000:],
+            f"The converter exited with status {returncode} and no JSON response",
+            text[-4000:],
         ) from exc
     if "error" in payload:
         error = payload["error"]
@@ -84,3 +87,110 @@ def run(request: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:
             f"Expected protocol {PROTOCOL_VERSION}, got {payload.get('protocol')!r}",
         )
     return payload
+
+
+def run_once(request: dict[str, Any], *, timeout: Optional[float]) -> dict[str, Any]:
+    """Spawn the converter for one request."""
+    binary = _binary()
+    body = json.dumps({"protocol": PROTOCOL_VERSION, **request}).encode("utf-8")
+    try:
+        completed = subprocess.run(
+            [str(binary)],
+            input=body,
+            capture_output=True,
+            env=_env(),
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ConversionError("timeout", f"Conversion exceeded {timeout} seconds") from exc
+    return _decode(completed.stdout, completed.stderr, completed.returncode)
+
+
+class Worker:
+    """One converter process that answers many requests.
+
+    The shaper and its caches stay warm between calls, which removes the process start
+    from every conversion after the first. Requests are serialized with a lock, so one
+    worker is safe to share between threads; use one worker per thread for parallelism.
+    """
+
+    def __init__(self) -> None:
+        self._process: Optional[subprocess.Popen[bytes]] = None
+        self._lock = threading.Lock()
+
+    def _start(self) -> subprocess.Popen[bytes]:
+        binary = _binary()
+        self._process = subprocess.Popen(
+            [str(binary), "--serve"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=_env(),
+        )
+        return self._process
+
+    @property
+    def running(self) -> bool:
+        return self._process is not None and self._process.poll() is None
+
+    def request(self, request: dict[str, Any], *, timeout: Optional[float]) -> dict[str, Any]:
+        with self._lock:
+            process = self._process if self.running else self._start()
+            assert process.stdin is not None and process.stdout is not None
+            body = json.dumps({"protocol": PROTOCOL_VERSION, **request}).encode("utf-8")
+            timer: Optional[threading.Timer] = None
+            timed_out = False
+            if timeout is not None:
+
+                def expire() -> None:
+                    nonlocal timed_out
+                    timed_out = True
+                    process.kill()
+
+                timer = threading.Timer(timeout, expire)
+                timer.daemon = True
+                timer.start()
+            try:
+                try:
+                    process.stdin.write(body + b"\n")
+                    process.stdin.flush()
+                    line = process.stdout.readline()
+                except (BrokenPipeError, OSError):
+                    line = b""
+            finally:
+                if timer is not None:
+                    timer.cancel()
+            if timed_out:
+                self.close()
+                raise ConversionError("timeout", f"Conversion exceeded {timeout} seconds")
+            if line == b"":
+                stderr = b""
+                if process.poll() is not None and process.stderr is not None:
+                    stderr = process.stderr.read()
+                self.close()
+                return _decode(b"", stderr, process.returncode)
+            return _decode(line, b"", None)
+
+    def close(self) -> None:
+        process = self._process
+        self._process = None
+        if process is None:
+            return
+        try:
+            if process.stdin is not None:
+                process.stdin.close()
+            process.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            process.kill()
+            process.wait()
+        finally:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass

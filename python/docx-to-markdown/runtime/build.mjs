@@ -50,11 +50,16 @@ const build = spawnSync(
 if (build.status !== 0) process.exit(build.status ?? 1);
 
 for (const file of readdirSync(join(fontsRoot, 'assets'))) {
-  if (/\.(?:ttf|otf)$/.test(file)) cpSync(join(fontsRoot, 'assets', file), join(vendor, 'fonts', file));
+  if (/\.(?:ttf|otf)$/.test(file))
+    cpSync(join(fontsRoot, 'assets', file), join(vendor, 'fonts', file));
 }
 cpSync(join(fontsRoot, 'licenses'), join(vendor, 'licenses'), { recursive: true });
 for (const name of ['THIRD_PARTY_NOTICES.md']) {
-  for (const pkg of ['@docx-editor.dev/core', '@docx-editor.dev/docx-to-markdown', '@docx-editor.dev/fonts']) {
+  for (const pkg of [
+    '@docx-editor.dev/core',
+    '@docx-editor.dev/docx-to-markdown',
+    '@docx-editor.dev/fonts',
+  ]) {
     const source = join(dirname(require.resolve(`${pkg}/package.json`)), name);
     if (existsSync(source)) {
       cpSync(source, join(vendor, 'licenses', `${pkg.split('/')[1]}-${name}`));

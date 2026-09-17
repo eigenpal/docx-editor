@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "docx-to-markdown"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Convert DOCX to Markdown with Word-faithful pages, headers, footers, comments, and tracked changes."
 readme = "README.md"
 license = "Apache-2.0"
@@ -18,11 +18,17 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+docx-to-markdown = "docx_to_markdown.cli:main"
+
 [project.urls]
 Homepage = "https://docx-editor.dev"
 Documentation = "https://www.docx-editor.dev/docs/2.x/export/markdown"
 Source = "https://github.com/eigenpal/docx-editor/tree/main/python/docx-to-markdown"
 Issues = "https://github.com/eigenpal/docx-editor/issues"
+
+[tool.hatch.version]
+path = "src/docx_to_markdown/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/docx_to_markdown"]

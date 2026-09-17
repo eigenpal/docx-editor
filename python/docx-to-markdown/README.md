@@ -1,12 +1,12 @@
 # DOCX to Markdown for Python
 
-Convert DOCX files to Markdown with the same layout engine that powers
-[docx-editor.dev](https://docx-editor.dev). The result carries the document body,
-one Markdown projection per printed page, headers and footers, comments, and tracked
-changes, so page citations match Word.
+Convert DOCX files to Markdown with the layout engine behind
+[docx-editor.dev](https://docx-editor.dev). The result carries the document body, one
+Markdown projection per printed page, headers and footers, comments, and tracked changes,
+so page citations match Word.
 
-The package wraps the `@docx-editor.dev/docx-to-markdown` npm package as a
-self-contained executable. No Node.js installation is required.
+The package wraps the [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown)
+converter as a self-contained executable. No Node.js installation is required.
 
 ## Install
 
@@ -14,8 +14,8 @@ self-contained executable. No Node.js installation is required.
 pip install docx-to-markdown
 ```
 
-Wheels are platform-specific. Supported platforms are Linux x64 and arm64, macOS x64 and
-arm64, and Windows x64.
+Wheels are platform-specific: Linux x64 and arm64, macOS x64 and arm64, and Windows x64.
+Python 3.9 or later.
 
 ## Convert a file
 
@@ -26,10 +26,39 @@ result = convert("contract.docx")
 print(result.markdown)
 
 for page in result.pages:
-    print(page["pageNumber"], page["markdown"][:80])
+    print(page.number, page.markdown[:80])
 ```
 
-`convert` also accepts the file's bytes.
+`convert` also accepts the file's bytes or a binary file object.
+
+## Convert many files
+
+Each `convert` call starts a converter process, which costs about half a second. A
+`Converter` keeps one process warm, so each later conversion costs only the layout itself:
+
+```python
+from docx_to_markdown import Converter
+
+with Converter() as converter:
+    for path in paths:
+        result = converter.convert(path)
+```
+
+Options given to `Converter` are defaults for every call. Pass the same keywords to
+`converter.convert` to override them per file. One `Converter` is safe to share between
+threads; use one per thread for parallelism.
+
+## Command line
+
+```sh
+docx-to-markdown contract.docx                 # Markdown to stdout
+docx-to-markdown contract.docx -o contract.md
+docx-to-markdown contract.docx --json          # full result as JSON
+docx-to-markdown *.docx --bundle out/ --images # document.md, document.json, media/ per file
+docx-to-markdown contract.docx --font fonts/Aptos.ttf:Aptos --font fonts/Aptos-Bold.ttf:Aptos:700
+```
+
+`python -m docx_to_markdown` runs the same tool. Warnings go to stderr; `-q` hides them.
 
 ## Fonts
 
@@ -51,6 +80,7 @@ aptos = font_family(
     bold_italic="fonts/Aptos-BoldItalic.ttf",
 )
 result = convert("contract.docx", fonts=aptos)
+assert result.fonts_complete
 ```
 
 Your fonts take precedence over the bundled substitutes. A font file the converter cannot
@@ -58,38 +88,47 @@ read is reported in `result.font_errors` and the conversion continues without it
 `font_policy="strict"` to fail instead of approximating, or `google_fonts=True` to fetch
 families the local fonts cannot serve from Google Fonts.
 
-`result.font_resolution` reports which face measured each family. Check it before you rely
-on page numbers.
+`result.font_resolution` reports which face measured each family. `result.fonts_complete`
+is `True` when every family measured with all of its faces. Check it before you rely on
+page numbers.
 
 ## Images
 
 ```python
 result = convert("report.docx", images=True)
-for asset in result.media:
-    with open(asset.path, "wb") as f:
-        f.write(asset.bytes)
+result.write("out/")   # document.md, document.json, media/
 ```
 
+`result.media` holds each unique image with its bytes, pixel size, and page occurrences.
 Pass `images="html"` to keep displayed sizes in `<img>` tags.
 
 ## Tracked changes
 
-`display_mode` selects how tracked changes are projected: `"all-markup"` (the default)
+`display_mode` selects how tracked changes are projected. `"all-markup"` (the default)
 keeps every insertion and deletion visible, `"proposed"` shows the document as if every
-change were accepted, and `"original"` as if every change were rejected.
+change were accepted, and `"original"` as if every change were rejected. Comments and
+tracked changes with their Markdown offsets are in `result.review_artifacts` and
+`result.review_bindings`.
 
-## Result fields
+## Result
 
-| Field                                 | Content                                                            |
-| ------------------------------------- | ------------------------------------------------------------------ |
-| `markdown`                            | The full logical document                                          |
-| `pages`                               | One entry per printed page with its Markdown, headers, and footers |
-| `warnings`                            | Omitted content and font problems                                  |
-| `media`                               | Extracted images with bytes and page occurrences                   |
-| `font_resolution`                     | Which face measured each family                                    |
-| `font_errors`                         | Font files that could not be admitted                              |
-| `review_artifacts`, `review_bindings` | Comments and tracked changes with Markdown offsets                 |
-| `raw`                                 | The converter's complete JSON result                               |
+| Field | Content |
+| --- | --- |
+| `markdown` | The full logical document |
+| `pages` | `Page` objects: `number`, `markdown`, `header_markdown`, `footer_markdown`, `comments`, `tracked_changes` |
+| `warnings` | `ExportWarning` objects with a stable `code`, a message, and a page number when known |
+| `media` | `MediaAsset` objects with bytes and page occurrences |
+| `font_resolution` | Which face measured each family |
+| `font_errors` | Font files that could not be admitted |
+| `raw` | The converter's complete JSON result |
+
+`write(directory)` saves `document.md`, `document.json`, and `media/`, the same layout
+as the Node.js package's `writeMarkdownBundle`.
+
+## Errors
+
+`ConversionError` carries a stable `code` such as `docx-unreadable`, `timeout`, or
+`runtime-missing`, and a message. A missing input path raises `FileNotFoundError`.
 
 ## Build from source
 
@@ -105,7 +144,8 @@ uv build --wheel
 
 `bun run build:runtime` compiles `runtime/main.ts` for the current machine and copies the
 packaged fonts and license texts into `src/docx_to_markdown/_vendor/`. Pass
-`--target bun-linux-x64` to cross-compile.
+`--target bun-linux-x64` to cross-compile. Set `DOCX_TO_MARKDOWN_RUNTIME` to run the
+package against an executable built elsewhere.
 
 ## License
 
