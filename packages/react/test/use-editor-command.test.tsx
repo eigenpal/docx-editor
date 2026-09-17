@@ -283,3 +283,65 @@ test('range binding survives React updates, groups two gestures, and cleans up',
   expect(handle.state).toBe('closed');
   expect(() => currentOptions!()).toThrow('not mounted');
 });
+
+test('React color onChange retains frames through the native final change', async () => {
+  const results: ExecResult[] = [];
+  function ColorProbe() {
+    const color = useEditorValueCommand('text.color');
+    const gesture = useHistoryGroup({ kind: 'native-color' });
+    return (
+      <input
+        data-testid="live-color"
+        ref={gesture.ref}
+        type="color"
+        value={`#${color.value ?? '000000'}`}
+        disabled={!color.isEnabled}
+        onChange={(event) =>
+          results.push(color.execute(event.currentTarget.value.slice(1), gesture.options()))
+        }
+      />
+    );
+  }
+  const { view, editor } = mount(<ColorProbe />);
+  await selectAll(editor());
+  const input = view.getByTestId('live-color') as HTMLInputElement;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  for (const [index, values] of [
+    ['#00ff00', '#007700', '#0070c0'],
+    ['#ff00ff', '#c00000'],
+  ].entries()) {
+    await act(async () => {
+      input.dispatchEvent(
+        index === 0
+          ? new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0 })
+          : new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })
+      );
+    });
+    for (const [frame, value] of values.entries()) {
+      await act(async () => {
+        setValue.call(input, value);
+        input.dispatchEvent(
+          new Event(frame === values.length - 1 ? 'change' : 'input', { bubbles: true })
+        );
+      });
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  expect(results.map((result) => (result.ok ? result.history?.kind : result.reason))).toEqual([
+    'started',
+    'extended',
+    'extended',
+    'started',
+    'extended',
+  ]);
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(input.value.toLowerCase()).toBe('#0070c0');
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(editor().snapshot().canUndo).toBe(false);
+});

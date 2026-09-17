@@ -374,6 +374,76 @@ Return the active note scope and its numbering properties.
 
 Returns the element that received the last context-menu action.
 
+## useHistoryGroup
+
+`useHistoryGroup({ kind })` returns an element callback `ref` and `options()`.
+Place the control inside `DocxEditor.Root`. Each input updates the document
+immediately; one gesture takes one Undo press. The composable retains the
+handle across component updates and disposes it on unmount or editor replacement. Use `range`, `repeat`, `keyboard`, or
+`native-color` to select the event policy.
+
+The following native color control reads the selected color and reports refusals.
+Null means mixed or unavailable; Undo and Redo update `value` automatically.
+Colors use six hexadecimal digits without `#`.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/vue';
+
+const { execute, value, isEnabled, disabledReason } = useEditorValueCommand('text.color');
+const gesture = useHistoryGroup({ kind: 'native-color' });
+const input = (node: unknown) => gesture.ref(node as HTMLInputElement | null);
+const error = ref<string | null>(null);
+function apply(event: Event) {
+  const color = (event.target as HTMLInputElement).value.slice(1);
+  const result = execute(color, gesture.options());
+  error.value = result.ok ? null : result.reason;
+}
+</script>
+
+<template>
+  <label :title="disabledReason ?? undefined">
+    Text color
+    <input
+      :ref="input"
+      type="color"
+      :disabled="!isEnabled"
+      :value="`#${value ?? '000000'}`"
+      @input="apply"
+    />
+    <span>{{ value === null ? 'Mixed or unavailable' : value }}</span>
+    <output aria-live="polite">{{ error }}</output>
+  </label>
+</template>
+```
+
+The native `change` event ends the color commitment. The input handler only
+applies values. `useEditorCommand().execute(options)` accepts group options and
+keeps its boolean result. Its nullary event-handler form still works.
+Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics.
+See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step)
+for native color limitations and a deterministic range example.
+
+For a font-size slider, use `useEditorValueCommand('font.size')` and
+`useHistoryGroup({ kind: 'range' })`. Set `type="range"` and pass
+`Number((event.target as HTMLInputElement).value)` to `execute`. Values use
+half-points: `24` means 12 pt. Pointer release and keyup end each gesture,
+including release outside the control. Keep your displayed value bound to the
+returned `value` ref.
+
+`execute(value, options?)` returns `ExecResult`. On refusal, use `code` in your
+application logic and display `reason`. On success, `changed` distinguishes a
+document edit from a caret-only formatting change. `result.history?.kind`
+reports `started`, `extended`, `split`, or `none`. An intervening edit can split
+a gesture without refusing its formatting.
+
+The native color `change` event means value commitment, not popup closure.
+If a browser sends no terminal commitment, the next activation, Escape, blur,
+or unmount ends the gesture. For portable drag boundaries, use a range control.
+A `repeat` binding groups writes from your held-button timer; your app must
+start and stop that timer itself.
+
 ## useEditorValueCommand
 
 Returns typed state and actions for `text.color`, `font.size`, `font.family`,
@@ -473,49 +543,3 @@ for a complete control and its placement inside the dialog.
 - [Vue composition](/docs/2.x/vue/composition): place custom controls.
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots): find every slot ID and toolbar part.
 - [Vue API reference](/docs/2.x/api/vue): inspect all composable types.
-
-## useHistoryGroup
-
-`useHistoryGroup({ kind })` returns an element callback `ref` and `options()`.
-It uses the same native gesture controller as React. It disposes bindings on
-unmount and editor replacement. Use `range`, `repeat`, `keyboard`, or
-`native-color` to select the event policy.
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/vue';
-
-const { execute, value, isEnabled, disabledReason } = useEditorValueCommand('text.color');
-const gesture = useHistoryGroup({ kind: 'native-color' });
-const input = (node: unknown) => gesture.ref(node as HTMLInputElement | null);
-const status = ref('');
-function apply(event: Event) {
-  const color = (event.target as HTMLInputElement).value.slice(1);
-  const result = execute(color, gesture.options());
-  status.value = result.ok ? (result.history?.kind ?? 'none') : result.reason;
-}
-</script>
-
-<template>
-  <label :title="disabledReason ?? undefined">
-    Text color
-    <input
-      :ref="input"
-      type="color"
-      :disabled="!isEnabled"
-      :value="`#${value ?? '000000'}`"
-      @input="apply"
-    />
-    <span>{{ value === null ? 'Mixed or unavailable' : value }}</span>
-    <output aria-live="polite">{{ status }}</output>
-  </label>
-</template>
-```
-
-The native `change` event ends the color commitment. The input handler only
-applies values. `useEditorCommand().execute(options)` accepts group options and
-keeps its boolean result. Its nullary event-handler form still works.
-Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics.
-See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step)
-for native color limitations and a deterministic range example.

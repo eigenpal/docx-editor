@@ -23,7 +23,7 @@ const GROUPABLE = new Set<EditorCommand['type']>([
 ]);
 interface GroupRecord {
   readonly token: symbol;
-  readonly owner: object | null;
+  owner: WeakRef<object> | undefined;
   closed: boolean;
   committed: boolean;
   undoEpoch: number;
@@ -55,26 +55,21 @@ export class EditorHistoryGroups {
   }
 
   begin(): HistoryGroup {
+    const owner = this.owner();
     const record: GroupRecord = {
       token: Symbol('gesture'),
-      owner: this.owner(),
+      owner: owner ? new WeakRef(owner) : undefined,
       closed: false,
       committed: false,
       undoEpoch: this.undoEpoch,
     };
-    const currentOwner = this.owner;
-    const handle = Object.freeze({
-      get state() {
-        return record.closed || !record.owner || record.owner !== currentOwner()
-          ? ('closed' as const)
-          : ('open' as const);
-      },
-      end() {
-        record.closed = true;
-      },
-    }) as HistoryGroup;
+    const handle = createHandle(record, new WeakRef(this));
     this.records.set(handle, record);
     return handle;
+  }
+
+  owns(owner: object | undefined): boolean {
+    return owner !== undefined && owner === this.owner();
   }
 
   gate(
@@ -152,4 +147,20 @@ export class EditorHistoryGroups {
       this.diagnose({ kind: 'split', reason: history.reason ?? 'history-boundary' });
     return { ...result, history };
   }
+}
+
+// This factory captures weak ownership only. Keeping an expired handle must not keep
+// a destroyed editor or an old document's surface, package, and layout alive.
+function createHandle(record: GroupRecord, manager: WeakRef<EditorHistoryGroups>): HistoryGroup {
+  return Object.freeze({
+    get state() {
+      return !record.closed && manager.deref()?.owns(record.owner?.deref())
+        ? ('open' as const)
+        : ('closed' as const);
+    },
+    end() {
+      record.closed = true;
+      record.owner = undefined;
+    },
+  }) as HistoryGroup;
 }

@@ -763,7 +763,7 @@
   inline-size: 2rem;
   block-size: 1.6rem;
   padding: 0;
-  border: 1px solid var(--doc-border, #d0d0d0);
+  border: 1px solid var(--doc-border);
   border-radius: 4px;
   background: transparent;
 }

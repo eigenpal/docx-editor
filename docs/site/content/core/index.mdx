@@ -63,9 +63,16 @@ function pageLabel(editor: Editor): string {
 
 ### Group one gesture into one undo step
 
-Use `bindHistoryGroup` for a live formatting control. Each value renders and
-replicates immediately. Undo restores the state before the first frame,
-including mixed formatting. Redo restores the last frame.
+If your app applies a value on every slider movement or color-picker input,
+group those writes into one user gesture. Each value renders and replicates
+immediately. One Undo restores the formatting before the gesture, including a
+mixed selection; Redo restores the final value.
+
+In React or Vue, start with `useEditorValueCommand` and `useHistoryGroup`:
+[React integration](/docs/2.x/react/hooks#usehistorygroup) ·
+[Vue integration](/docs/2.x/vue/composables#usehistorygroup).
+If your app owns the DOM directly, use `bindHistoryGroup` from the core package.
+You keep using `editor.exec` to apply commands.
 
 This range control changes font size in points. The command takes half-points:
 
@@ -105,7 +112,7 @@ function mountFontSize(editor: Editor, slider: HTMLInputElement, status: HTMLOut
       },
       gesture.options()
     );
-    status.value = result.ok ? (result.history?.kind ?? 'none') : result.reason;
+    status.value = result.ok ? '' : result.reason;
   };
   slider.addEventListener('input', apply);
   const off = editor.on('selectionChange', sync);
@@ -134,7 +141,11 @@ Escape, blur, or disposal. Use a custom range control when exact drag boundaries
 must be portable. See the [React recipe](/docs/2.x/react/hooks#usehistorygroup)
 and [Vue recipe](/docs/2.x/vue/composables#usehistorygroup).
 
-For a control with an explicit lifecycle, create the handle yourself:
+For a custom control with its own start, update, and finish callbacks, create
+a handle with `editor.beginHistoryGroup()`. Keep that handle for the gesture,
+pass it through `exec` options for every update, and call `end()` on finish or
+cancellation. Cancellation ends grouping; it does not roll back live edits.
+The following example shows one complete explicit group:
 
 ```ts
 const group = editor.beginHistoryGroup();

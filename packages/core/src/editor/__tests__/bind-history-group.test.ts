@@ -141,3 +141,54 @@ describe('native gesture lifecycle', () => {
     }
   });
 });
+
+test('activation precedes host target listeners registered before the binding', () => {
+  const element = document.createElement('button');
+  document.body.append(element);
+  const groups: HistoryGroup[] = [];
+  const editor = {
+    beginHistoryGroup() {
+      let closed = false;
+      return {
+        get state() {
+          return closed ? 'closed' : 'open';
+        },
+        end() {
+          closed = true;
+        },
+      } as HistoryGroup;
+    },
+  } as Editor;
+  const apply = () => groups.push(binding.options().historyGroup!);
+  element.addEventListener('keydown', apply);
+  element.addEventListener('pointerdown', apply);
+  const binding = bindHistoryGroup(editor, element, { kind: 'repeat' });
+  try {
+    element.dispatchEvent(key('keydown', 'ArrowUp'));
+    element.dispatchEvent(key('keydown', 'ArrowUp', true));
+    expect(groups[0]).toBe(groups[1]);
+    element.dispatchEvent(pointer('pointerdown'));
+    expect(groups[2]).toBe(binding.options().historyGroup);
+    expect(groups[2]).not.toBe(groups[1]);
+  } finally {
+    binding.dispose();
+    element.remove();
+  }
+});
+
+test('stopping keyup propagation cannot merge separate presses', async () => {
+  const f = fixture('keyboard');
+  f.element.addEventListener('keyup', (event) => event.stopPropagation());
+  try {
+    f.element.dispatchEvent(key('keydown', 'ArrowUp'));
+    const first = f.binding.options().historyGroup!;
+    f.element.dispatchEvent(key('keyup', 'ArrowUp'));
+    expect(f.binding.options().historyGroup).toBe(first);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(first.state).toBe('closed');
+    f.element.dispatchEvent(key('keydown', 'ArrowUp'));
+    expect(f.binding.options().historyGroup).not.toBe(first);
+  } finally {
+    f.dispose();
+  }
+});

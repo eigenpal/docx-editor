@@ -59,9 +59,14 @@ export function bindHistoryGroup(
       if (group === ending) end();
     }, 0);
   };
-  const listen = (target: EventTarget, type: string, listener: (event: Event) => void) => {
-    target.addEventListener(type, listener);
-    removers.push(() => target.removeEventListener(type, listener));
+  const listen = (
+    target: EventTarget,
+    type: string,
+    listener: (event: Event) => void,
+    capture = false
+  ) => {
+    target.addEventListener(type, listener, capture);
+    removers.push(() => target.removeEventListener(type, listener, capture));
   };
   const relevant = (key: string) =>
     config.kind === 'native-color'
@@ -78,51 +83,76 @@ export function bindHistoryGroup(
           ' ',
           'Enter',
         ].includes(key);
-  listen(element, 'pointerdown', (event) => {
-    const e = event as PointerEvent;
-    if (e.button !== 0 || config.kind === 'keyboard') return;
-    start();
-    pointer = e.pointerId;
-    if (config.kind !== 'native-color') {
-      // Capture is optional (synthetic events and detached nodes cannot capture).
-      try {
-        element.setPointerCapture?.(e.pointerId);
-      } catch {
-        /* outside listeners remain active */
+  listen(
+    element,
+    'pointerdown',
+    (event) => {
+      const e = event as PointerEvent;
+      if (e.button !== 0 || config.kind === 'keyboard') return;
+      start();
+      pointer = e.pointerId;
+      if (config.kind !== 'native-color') {
+        // Capture is optional (synthetic events and detached nodes cannot capture).
+        try {
+          element.setPointerCapture?.(e.pointerId);
+        } catch {
+          /* outside listeners remain active */
+        }
       }
-    }
-  });
-  listen(element, 'keydown', (event) => {
-    const e = event as KeyboardEvent;
-    if (e.key === 'Escape') {
-      finish();
-      return;
-    }
-    if (!relevant(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (!e.repeat && keys.size === 0) start();
-    keys.add(e.key);
-    ensure();
-  });
-  listen(element.ownerDocument, 'keyup', (event) => {
-    const key = (event as KeyboardEvent).key;
-    if (!keys.delete(key)) return;
-    if (config.kind !== 'native-color' && keys.size === 0) finish();
-  });
+    },
+    true
+  );
+  listen(
+    element,
+    'keydown',
+    (event) => {
+      const e = event as KeyboardEvent;
+      if (e.key === 'Escape') {
+        finish();
+        return;
+      }
+      if (!relevant(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!e.repeat && keys.size === 0) start();
+      keys.add(e.key);
+      ensure();
+    },
+    true
+  );
+  listen(
+    element.ownerDocument,
+    'keyup',
+    (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (!keys.delete(key)) return;
+      if (config.kind !== 'native-color' && keys.size === 0) finish();
+    },
+    true
+  );
   if (config.kind !== 'native-color') {
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      listen(type === 'lostpointercapture' ? element : element.ownerDocument, type, (event) => {
-        if (pointer !== undefined && (event as PointerEvent).pointerId === pointer) finish();
-      });
+      listen(
+        type === 'lostpointercapture' ? element : element.ownerDocument,
+        type,
+        (event) => {
+          if (pointer !== undefined && (event as PointerEvent).pointerId === pointer) finish();
+        },
+        true
+      );
     }
   }
-  listen(element, 'input', () => {
-    if (terminalTimer !== undefined) start();
-    else ensure();
-  });
+  listen(
+    element,
+    'input',
+    () => {
+      if (terminalTimer !== undefined) start();
+      else ensure();
+    },
+    true
+  );
   listen(element, 'change', () => {
     if (config.kind === 'native-color' || (pointer === undefined && keys.size === 0)) finish();
   });
-  listen(element, 'blur', finish);
+  listen(element, 'blur', finish, true);
   if (element.ownerDocument.defaultView) listen(element.ownerDocument.defaultView, 'blur', finish);
   return {
     options: () => ({ historyGroup: ensure() }),
