@@ -15,22 +15,10 @@ export {
 } from './forms-protection.ts';
 import { protectedTextFormEditRefusal } from './tree-op-field-results.ts';
 import { textFormFieldForEdit, textFormFieldsOf } from './text-form-fields.ts';
-// Writing content controls: values, metadata, insertion, removal — and the locks that refuse.
-//
-// EVERY refusal in this module is a STORE refusal. A widget that greys a button out is a
-// courtesy; the guarantee is that the op path itself says no, so a keyboard gesture, a toolbar
-// command and a script all meet the same answer. That is why the lock check runs in validation
-// and not beside the surface that happens to be mounted.
-//
-// A VALUE IS TYPED. A dropdown takes an item its own list declares, a combo box takes anything,
-// a date takes an ISO date and writes `@w:fullDate` beside the formatted content it paints, and
-// a checkbox writes the glyph its own `w14:checkbox` declares. Offering a value of the wrong
-// shape is `typeMismatch` rather than a coerced write, because a control that quietly accepted
-// the wrong kind of value would produce a document Word reads differently than the caller does.
-//
-// A BOUND CONTROL IS PRESERVED AND REFUSED. `w:dataBinding` names a custom XML part this engine
-// does not resolve; writing the content while the binding still points elsewhere would produce
-// a document whose two answers disagree the moment Word opens it.
+// Content-control writes enforce locks in the store for UI and script callers alike.
+// Values retain their declared type: list items, ISO dates, or checkbox glyphs.
+// Bound controls are preserved and refused; writing only their content would disagree
+// with the unresolved custom XML binding when Word opens the document.
 
 import {
   contentControlContentNodeOf,

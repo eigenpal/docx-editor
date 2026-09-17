@@ -795,12 +795,12 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     }
   });
 
-  test('an unsupported row refuses the collection without changing the story', () => {
+  test('a malformed row refuses the collection without changing the story', () => {
     const host = open(
       richDocx({
         body:
           `<w:p><w:ins w:id="10" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>` +
-          `<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>` +
+          `<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/><w:ins w:id="20" w:author="Grace"/></w:trPr>` +
           `<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
       })
     );
