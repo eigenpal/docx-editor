@@ -142,7 +142,7 @@ import { createSectionPageFurniture } from './section-page-furniture.ts';
 import { createPageContentInsets, registerOverflowPageShell } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { pageBorderFrame } from './page-border-frame.ts';
-import { pageBordersFingerprint } from './page-borders.ts';
+import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   attachContentControlBoundaries,
   contentControlContextToken,
@@ -881,31 +881,17 @@ function layoutBlocksPass(
   // `pageIndexStart` on (conservative, one full pass).
   const reserveKeyBound = session?.previous ? session.previous.pages.length + 1 : Infinity;
   const columnRegionBottom = options.columnRegionBottom;
-  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
-  // Body line ids are paragraph-local, so a changed line count in an earlier section does
-  // not invalidate this section. Geometry and flow start still do. The document page index
-  // is deliberately NOT here — numbers re-project at finalize and shells renumber at remap;
-  // keying on it re-laid every section below an Enter that added one page. The one real
-  // dependence, page PARITY, is checked by `comparable` through the session parity fields.
-  //
-  // The producer is compared BESIDE the context (`session.producer`), not embedded in it:
-  // it carries the control token, which runs to kilobytes on a control-heavy document, and
-  // embedding it copied that token into every section's context string on every pass.
   const continuedInsets = options.continuedPageInsets;
-  // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
-  // must not let this section resume a flow measured against the box it used to have.
-  const continuedContext = continuedInsets
-    ? `|cont:${continuedInsets.top},${continuedInsets.height}`
-    : '';
-  // A `w:pgBorders` edit moves NO paragraph key: the frame is drawn beside the text and never
-  // through it, so every per-block key and every checkpoint still matches and each reuse path
-  // would hand back the previous sheets carrying the previous frame. Geometry is already in
-  // this string for the same reason; the frame is geometry the flow happens not to read.
-  const pageBordersContext = options.sectionPageBorders
-    ? `|pgb:${pageBordersFingerprint(options.sectionPageBorders)}`
-    : '';
-  const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}${pageBordersContext}`;
+  const contextFor = layoutPassContextKey({
+    geometry,
+    flowStartY,
+    spaceBeforeCarry,
+    continuedInsets,
+    furnitureContext,
+    columns,
+    columnRegionBottom,
+    sectionPageBorders: options.sectionPageBorders,
+  });
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );
