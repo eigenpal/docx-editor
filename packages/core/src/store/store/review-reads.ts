@@ -178,8 +178,8 @@ function computeRevisionItemsOf(
   >();
 
   for (const site of sites) {
-    const id = wmlAttribute(site.node, 'id');
-    if (id === undefined) continue;
+    const sourceId = wmlAttribute(site.node, 'id');
+    const id = sourceId ?? `missing-${site.node.id}`;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it
     // anyway. Skipping those made the revision invisible in the pane AND invisible to
     // Accept All, which then reported success over a document that still held tracked
@@ -304,7 +304,7 @@ function computeRevisionItemsOf(
       nesting: site.nesting,
       // A format or paragraph-mark change is resolvable; the structural kinds are not, and
       // nor is one with no author to address it by.
-      readOnly: site.refused || authorless,
+      readOnly: site.refused || authorless || sourceId === undefined,
     });
   }
 
@@ -804,7 +804,10 @@ export function collectReviewItemsWith(
   // or the same shared header under two sections — cannot double every card in it.
   const parts: OoxmlPart[] = [input.storyPart];
   const seen = new Set<string>([input.storyPart.name]);
-  for (const part of input.furnitureParts ?? []) {
+  for (const part of [
+    ...(input.furnitureParts ?? []),
+    ...(input.stylesPart ? [input.stylesPart] : []),
+  ]) {
     if (seen.has(part.name)) continue;
     seen.add(part.name);
     parts.push(part);

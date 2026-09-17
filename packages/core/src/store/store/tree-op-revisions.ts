@@ -233,7 +233,10 @@ function collectRevisionSitesIn(
         PROPERTY_CHANGE_NAMES.has(node.localName) ||
         node.localName === 'ins' ||
         node.localName === 'del';
-      if (isNamedRevision && addressOf(node) !== null) {
+      if (
+        isNamedRevision &&
+        (wmlAttribute(node, 'id') !== undefined || part.root.localName === 'styles')
+      ) {
         // A revision on a RUN's `w:rPr` is not schema-valid — the paragraph mark is the only
         // `w:rPr` that carries one — so it is refused rather than resolved. Treating it as a
         // paragraph mark made accepting it merge two paragraphs; treating it as ordinary
@@ -264,7 +267,7 @@ function collectRevisionSitesIn(
         sites.push({
           node,
           parent,
-          refused: structural && !tableRevision,
+          refused: addressOf(node) === null || (structural && !tableRevision),
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,

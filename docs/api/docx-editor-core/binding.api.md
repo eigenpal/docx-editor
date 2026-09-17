@@ -92,6 +92,10 @@ export type StoryTargetRejection = 'unknown-scope' | 'dangling-relationship' | '
 // @public
 export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory' | 'historyGroup'> & {
     readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+    readonly partOps?: readonly {
+        readonly ops: readonly TreeDocOp[];
+        readonly partName: string;
+    }[];
 };
 
 // @public

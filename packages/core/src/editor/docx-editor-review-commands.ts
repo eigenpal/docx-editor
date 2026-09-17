@@ -6,6 +6,7 @@ import type {
 } from '../contracts/modules.ts';
 
 import { partOfNodeId } from './surface-scope.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 import { revisionSiteNodeIdsOf, reviewItemKey } from '../store/store/review-items.ts';
@@ -95,6 +96,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
   const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
+    const styles = stylesPartOf(deps.surface()!.session.currentPackage());
     const items = all();
     const selected = new Set(
       command.keys ??
@@ -121,15 +123,19 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       reason: 'unknown-revision',
     }));
     const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
+    const partOps: { partName: string; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
     for (const { scope, part, keys } of scopes.values()) {
       const plan = planRevisionBatch(part, command.action, keys);
       resolved.push(...plan.result.resolved);
       skipped.push(...plan.result.skipped);
       remaining += plan.result.remaining;
-      if (plan.ops.length) groups.push({ scope, ops: plan.ops });
+      if (plan.ops.length) {
+        if (part.name === styles?.name) partOps.push({ partName: part.name, ops: plan.ops });
+        else groups.push({ scope, ops: plan.ops });
+      }
     }
-    return { groups, result: { resolved, skipped, remaining } };
+    return { groups, partOps, result: { resolved, skipped, remaining } };
   };
   const ready = (): CanResult => {
     if (deps.destroyed())
@@ -216,6 +222,14 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       };
     let applied: { committed: boolean; reason?: unknown } | undefined;
     deps.surface()!.commitReviewOps(() => {
+      const session = deps.surface()!.session;
+      const part = partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
+      if (part && part.name === stylesPartOf(session.currentPackage())?.name) {
+        applied = session.applyTreeOpsAtomic([], {
+          partOps: [{ partName: part.name, ops: resolutionOps(item, action, part) }],
+        });
+        return applied;
+      }
       applied = deps
         .surface()!
         .session.applyTreeOps(
@@ -280,10 +294,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return deps.activate(target.key, !target.activatable && target.revisionKind === 'format');
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
-    const { groups, result } = bulkPlan(command);
+    const { groups, partOps, result } = bulkPlan(command);
     let applied: { committed: boolean; reason?: unknown } | undefined;
     surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(groups);
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
       return applied;
     }, 'revision-resolve');
     if (!applied?.committed)

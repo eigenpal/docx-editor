@@ -37,12 +37,13 @@ export function commitSessionTreeOpsAtomic(
   options: TreeApplyOptions = {}
 ): TreeApplyResult {
   const nonEmpty = groups.filter((group) => group.ops.length > 0);
-  const opCount = nonEmpty.reduce((sum, group) => sum + group.ops.length, 0);
+  const partOps = options.partOps ?? [];
+  const opCount = [...nonEmpty, ...partOps].reduce((sum, group) => sum + group.ops.length, 0);
   if (opCount === 0) return options.packageEdits?.length ? refused(0, 'invalidArgs') : EMPTY_APPLY;
-  if (nonEmpty.some((group) => group.ops.some(isHeaderFooterLifecycleOp))) {
+  if ([...nonEmpty, ...partOps].some((group) => group.ops.some(isHeaderFooterLifecycleOp))) {
     return refused(opCount, 'invalidArgs');
   }
-  if (nonEmpty.some((group) => group.ops.some(isNoteLifecycleOp))) {
+  if ([...nonEmpty, ...partOps].some((group) => group.ops.some(isNoteLifecycleOp))) {
     return refused(opCount, 'invalidArgs');
   }
   const [primary, ...rest] = nonEmpty;
@@ -55,11 +56,14 @@ export function commitSessionTreeOpsAtomic(
     restParts.push({ partName: part.name, ops: group.ops });
   }
   const result = packageStore.transact(
-    primary!.scope,
+    primary?.scope ?? { kind: 'body' },
     (ctx) => {
       for (const edit of options.packageEdits ?? []) ctx.applyPackage(edit);
-      for (const op of primary!.ops) ctx.apply(op);
+      for (const op of primary?.ops ?? []) ctx.apply(op);
       for (const group of restParts) {
+        for (const op of group.ops) ctx.applyTo(group.partName, op);
+      }
+      for (const group of partOps) {
         for (const op of group.ops) ctx.applyTo(group.partName, op);
       }
     },
@@ -77,12 +81,25 @@ export function commitSessionTreeOps(
   scope: StoryScope,
   options: TreeApplyOptions
 ): TreeApplyResult {
-  if (ops.length === 0 && !options.packageEdits?.length) return EMPTY_APPLY;
+  const partOps = options.partOps ?? [];
+  const opCount = ops.length + partOps.reduce((sum, group) => sum + group.ops.length, 0);
+  if (opCount === 0 && !options.packageEdits?.length) return EMPTY_APPLY;
+  if (
+    partOps.some((group) =>
+      group.ops.some((op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op))
+    )
+  )
+    return refused(opCount, 'invalidArgs');
   const lifecycleCount = ops.filter(
     (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
   ).length;
   if (lifecycleCount > 0) {
-    if (options.packageEdits?.length || lifecycleCount !== ops.length || ops.length !== 1) {
+    if (
+      partOps.length ||
+      options.packageEdits?.length ||
+      lifecycleCount !== ops.length ||
+      ops.length !== 1
+    ) {
       return refused(ops.length, 'invalidArgs');
     }
     const result = runWithTransactionActor(options.actorId, () =>
@@ -102,12 +119,15 @@ export function commitSessionTreeOps(
       if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
       for (const edit of options.packageEdits ?? []) ctx.applyPackage(edit);
       for (const op of ops) ctx.apply(op);
+      for (const group of partOps) {
+        for (const op of group.ops) ctx.applyTo(group.partName, op);
+      }
       if (partName) {
         ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));
       }
     },
     options
   );
-  if (!result.ok) return refused(ops.length, result.reason);
-  return { committed: true, rejected: false, opCount: ops.length };
+  if (!result.ok) return refused(opCount, result.reason);
+  return { committed: true, rejected: false, opCount };
 }
