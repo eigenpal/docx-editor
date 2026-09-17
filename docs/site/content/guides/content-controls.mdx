@@ -287,6 +287,9 @@ way Word shows the glossary block its `w:placeholder` names, or the type's
 default prompt when the document carries no glossary. The caret can enter the
 prompt, a press selects it whole, and the first keystroke replaces it. Typing at
 either edge of the prompt replaces it too, and the caret lands after the text.
+Typing at the end of a control's content stays inside the control, as in Word;
+ArrowRight leaves it. Inside a control, text typed at the end of a hyperlink
+leaves the link but stays in the control.
 Deleting everything a control holds brings its prompt back, so the control never
 becomes an invisible gap; Backspace and Delete at the edge of a text, date, or
 list control take one character, and only a content-locked control, a checkbox,

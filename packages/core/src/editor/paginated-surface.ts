@@ -31,7 +31,7 @@ import {
   contentControlWidgetDate,
 } from './content-control-widget-session.ts';
 import { createContentControlPictureWidget } from './content-control-picture-widget.ts';
-import { promptInsertionLanding } from './content-control-prompt-landing.ts';
+import { promptInsertionLanding, typedInsertText } from './content-control-prompt-landing.ts';
 import { createContentControlHover } from './content-control-hover.ts';
 import { contentControlAtSelection } from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
@@ -4431,10 +4431,10 @@ export function mountPaginatedSurface(
       // coexist with the delete ops below): the typed range gets the caret run's own
       // properties plus the armed ones, in the SAME transaction — one undo step.
       const pendingOps = consumePendingFormatOps(target.paragraphId, target.offset, text.length);
-      const insertOps: TreeDocOp[] = [
-        ...plan.ops,
-        { op: 'insertText', paragraphId: target.paragraphId, offset: target.offset, text },
-      ];
+      // The caret's own control OWNS the insert: at a control's trailing edge the store's
+      // default lands beside it (right for a link), but Word keeps typing inside a control.
+      const inside = plan.ops.length === 0 ? contentControlAtCaret()?.id : undefined;
+      const insertOps: TreeDocOp[] = [...plan.ops, typedInsertText(target, text, inside)];
       // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
       // began; a caret counted from the pressed offset sat past the paragraph's new end.
       const landing = promptInsertionLanding(

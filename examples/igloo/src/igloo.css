@@ -986,10 +986,67 @@
  * `--doc-*`), so what is left is the ice: the shard outline, a heading with a flake, tiles
  * for the carved photos. */
 
-.igloo-permit {
+/* Deep water, not pale ice: the permit's pop-ups invert the theme so they read as their own
+   layer over the page. The packaged parts pick the palette up through the tokens restated
+   here — list rows, the calendar grid, the dialog footer — so nothing inside is re-styled by
+   class except the demo's own wrappers. */
+.docx-editor .docx-content-control-widget-popup.igloo-permit {
+  --doc-surface: #0d3149;
+  --doc-card: #123d5a;
+  --doc-bg: #0d3149;
+  --doc-bg-subtle: rgba(127, 227, 255, 0.1);
+  --doc-bg-hover: rgba(127, 227, 255, 0.18);
+  --doc-bg-input: rgba(6, 26, 40, 0.7);
+  --doc-primary: #7fe3ff;
+  --doc-primary-hover: #a9ecff;
+  --doc-primary-light: rgba(127, 227, 255, 0.28);
+  --doc-accent: #7fe3ff;
+  --doc-on-primary: #062a3f;
+  --doc-text: #eafbff;
+  --doc-text-muted: rgba(234, 251, 255, 0.72);
+  --doc-text-subtle: rgba(234, 251, 255, 0.5);
+  --doc-border: rgba(127, 227, 255, 0.35);
+  --doc-border-light: rgba(127, 227, 255, 0.25);
+  --doc-border-dark: rgba(127, 227, 255, 0.55);
+  --doc-border-input: rgba(127, 227, 255, 0.45);
+  --doc-focus-ring: rgba(127, 227, 255, 0.6);
   min-width: 260px;
   padding: 10px 10px 8px;
+  border: 1px solid rgba(127, 227, 255, 0.6);
+  border-radius: 4px 14px 4px 14px;
+  background: linear-gradient(170deg, #143f5c, #0a2a40 70%);
+  box-shadow: 0 14px 30px rgba(4, 32, 52, 0.55);
   color: var(--doc-text);
+  color-scheme: dark;
+}
+
+.igloo-permit__switch {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--doc-primary);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.igloo-permit__native {
+  display: grid;
+  padding: 6px 2px;
+}
+
+.igloo-permit__native-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-bg-input);
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 15px;
 }
 
 .igloo-permit__heading {
@@ -1064,6 +1121,7 @@
   border-radius: 3px 10px 3px 10px;
   background: var(--doc-primary);
   color: var(--doc-on-primary);
+  font-weight: 600;
   font: inherit;
   font-size: 12px;
   cursor: pointer;

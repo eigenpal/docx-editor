@@ -104,8 +104,12 @@ root a `popups` map for them:
 
 - `contentControlWidget` renders lists, the combo box, the gallery, and the date
   picker from `DocxEditorContentControlWidget` parts with the demo's classes and
-  headings. The calendar keeps the packaged grid and keyboard model behind a
-  **Freeze today** button.
+  headings. The date opens the operating system's own picker through a native
+  `<input type="date">` whose ISO value goes to `apply`; a switch in the heading
+  brings back the packaged grid, which is the override a host uses for one look
+  on every platform. Both keep the **Freeze today** button. The pop-ups restate
+  the `--doc-*` tokens as deep water, so the packaged parts inside take the
+  palette without any per-class styling.
 - `contentControlPicture` carves three sled photos on a canvas and hands the PNG
   bytes to `replaceImage`; the packaged `Picture` part stays for a file of your own.
 - `contentControlCheckbox` applies the toggle at once and speaks through the

@@ -686,7 +686,29 @@ function rawInsertionSite(
           .flatMap((child) => runsUnder(child))
           .filter((run) => containsNode(owner, run.id));
   const last = runs[runs.length - 1];
-  if (last && last.kind !== 'textValue') return { kind: 'appendToRun', run: last };
+  if (last && last.kind !== 'textValue') {
+    // A named owner still LEAVES an inner wrapper at its trailing edge: typing after the last
+    // character of a hyperlink inside a control stays in the control and out of the link, the
+    // same escape the unowned path makes, bounded to wrappers the owner holds.
+    const exited =
+      owner === null || offsets.spanOf(last)?.end !== offset
+        ? null
+        : inlineContainersOf(paragraph, last.id)
+            .filter(
+              (container) =>
+                container.id !== owner.id &&
+                containsNode(owner, container.id) &&
+                container.kind !== 'contentControl' &&
+                container.kind !== 'contentControlContent' &&
+                isInlineRunContainer(container) &&
+                offsets.spanOf(container)?.end === offset
+            )
+            .at(-1);
+    if (!exited) return { kind: 'appendToRun', run: last };
+    const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+    const index = holder.children.findIndex((child) => child.id === exited.id);
+    return { kind: 'newRun', holder, ...(index < 0 ? {} : { index: index + 1 }) };
+  }
   // Nothing to join, so the run is minted — and WHICH NODE it is minted into is the whole of
   // which controls receive it. A named owner that HOLDS this paragraph gets the run in the
   // paragraph, which is inside every control between the owner and it; an inline owner gets it

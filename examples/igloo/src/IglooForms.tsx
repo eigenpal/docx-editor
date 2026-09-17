@@ -8,7 +8,7 @@
 // here re-implements a calendar, a listbox or an image write; the parts and the hook do the
 // work, and the demo decides what they look like and what sits beside them.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DocxEditorContentControlWidget as Widget,
   useContentControlWidget,
@@ -76,24 +76,73 @@ function IceList() {
   );
 }
 
-/** The calendar, re-cut: packaged grid and keyboard model, a frozen Today, an ice header. */
+/**
+ * The date, picked with the OPERATING SYSTEM's own calendar: a native `<input type="date">`
+ * opens the platform picker (macOS, Windows, iOS and Android each draw their own), and its
+ * ISO value goes straight to `apply`. The packaged grid stays one toggle away for a host that
+ * wants the same picker on every platform — that is the override, and either way the write,
+ * the validation and the undo step are the engine's.
+ */
 function IceCalendar() {
+  const widget = useContentControlWidget();
+  const [native, setNative] = useState(true);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!native) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    // Chromium and WebKit open the platform picker on request; elsewhere the input itself is
+    // the picker, which is the same thing one keystroke later.
+    try {
+      input.showPicker?.();
+    } catch {
+      // A picker that will not open here leaves the input, which still takes a typed date.
+    }
+  }, [native]);
   return (
     <>
       <div className="igloo-permit__heading" data-docx-part="heading">
         {SnowflakeIcon}
         <span>Departure</span>
+        <button
+          type="button"
+          className="igloo-permit__switch"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={() => setNative((on) => !on)}
+        >
+          {native ? 'Ice calendar' : 'System picker'}
+        </button>
       </div>
-      <Widget.Header className="igloo-permit__calendar-header" />
-      <Widget.Weekdays className="igloo-permit__weekdays" />
-      <Widget.Grid className="igloo-permit__grid" />
+      {native ? (
+        <div className="igloo-permit__native">
+          <input
+            ref={inputRef}
+            type="date"
+            className="igloo-permit__native-input"
+            aria-label="Departure date"
+            value={widget.value}
+            disabled={!widget.isEnabled}
+            onMouseDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              if (event.target.value) widget.apply(event.target.value);
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <Widget.Header className="igloo-permit__calendar-header" />
+          <Widget.Weekdays className="igloo-permit__weekdays" />
+          <Widget.Grid className="igloo-permit__grid" />
+        </>
+      )}
       <div className="igloo-permit__calendar-actions">
         <Widget.Today asChild>
           <button type="button" className="igloo-permit__today">
             Freeze today
           </button>
         </Widget.Today>
-        <Widget.Input className="igloo-permit__input" />
+        {native ? null : <Widget.Input className="igloo-permit__input" />}
       </div>
       <Widget.Error className="igloo-permit__error" />
       <Widget.Footer className="igloo-permit__footer" />
@@ -222,7 +271,7 @@ function IceCheckbox({ session }: { session: ContentControlWidgetSession }) {
 function IcePopup(props: { session: ContentControlWidgetSession }) {
   const { kind } = props.session;
   return (
-    <Widget {...props} className="igloo-shard igloo-permit">
+    <Widget {...props} className="igloo-permit">
       {kind === 'date' ? <IceCalendar /> : kind === 'picture' ? <IcePicture /> : <IceList />}
     </Widget>
   );

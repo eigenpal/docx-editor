@@ -10,7 +10,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { paintSemanticLayout } from '@docx-editor.dev/core/output';
 import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
-import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { CHROME_GROUPS, chromeSlotId, type ChromeSlotId } from '../chrome-controls.ts';
 import { commandForSlot } from '../toolbar-commands.ts';
 
@@ -841,5 +841,68 @@ describe('a press on a list prompt', () => {
     const menu = container.querySelector<HTMLElement>('.docx-content-control-menu');
     expect(menu).not.toBeNull();
     expect(menu!.querySelectorAll('[role="option"]')).toHaveLength(2);
+  });
+});
+
+describe('typing stays inside the control', () => {
+  const HL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+  const controlContent = (surface: PaginatedSurface) =>
+    serializeOoxmlPart(surface.session.part())
+      .replace(/[\s\S]*<w:sdtContent>/, '')
+      .replace(/<\/w:sdtContent>[\s\S]*/, '');
+
+  test('after the first keystroke replaces the prompt, the next ones join it inside', () => {
+    const { surface } = mount(
+      `<w:p><w:r><w:t xml:space="preserve">Name: </w:t></w:r>${sdt(
+        `<w:alias w:val="Name"/><w:showingPlcHdr/><w:richText/>`,
+        `<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Type here…</w:t></w:r>`
+      )}<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>`
+    );
+    putCaret(surface, 8);
+    surface.type('a');
+    surface.type('bc');
+    expect(surface.session.bodyText()).toBe('Name: abc tail');
+    expect(controlContent(surface)).toBe('<w:r><w:t>abc</w:t></w:r>');
+    expect(surface.contentControls.atCaret()?.alias).toBe('Name');
+    // ArrowRight is what leaves the control, as in Word; the next keystroke lands beside it.
+    surface.navigate('right');
+    surface.type('Z');
+    expect(surface.session.bodyText()).toBe('Name: abc Ztail');
+    expect(controlContent(surface)).toBe('<w:r><w:t>abc</w:t></w:r>');
+  });
+
+  test('at the end of a hyperlink inside a control the text leaves the link but not the control', () => {
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(
+      container,
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rIdL" Type="${HL}" Target="https://example.com/" TargetMode="External"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>` +
+            `<w:p>${sdt(
+              `<w:alias w:val="L"/><w:richText/>`,
+              `<w:r><w:t xml:space="preserve">See </w:t></w:r><w:hyperlink r:id="rIdL"><w:r><w:t>site</w:t></w:r></w:hyperlink>`
+            )}<w:r><w:t xml:space="preserve"> now</w:t></w:r></w:p></w:body></w:document>`
+        ),
+      }),
+      { scale: 1 }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+    putCaret(surface, 8);
+    surface.type('!');
+    expect(surface.session.bodyText()).toBe('See site! now');
+    expect(controlContent(surface)).toBe(
+      '<w:r><w:t xml:space="preserve">See </w:t></w:r><w:hyperlink r:id="rIdL"><w:r><w:t>site</w:t></w:r></w:hyperlink><w:r><w:t>!</w:t></w:r>'
+    );
   });
 });

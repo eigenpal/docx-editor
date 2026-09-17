@@ -34,7 +34,10 @@ export function contentControlAtSelection(
   const collapsed =
     selection.anchor.paragraphId === selection.head.paragraphId &&
     selection.anchor.offset === selection.head.offset;
-  if (collapsed) return null;
+  // A caret on a control's trailing edge is still IN the control, as Word's is: typing there
+  // continues the field, and ArrowRight is what leaves it. The edge itself hit-tests outside,
+  // so the caret is probed a hair to its left before it counts as beside the control.
+  if (collapsed) return probe(selection.head, -INSIDE);
   const headFirst =
     selection.head.paragraphId === selection.anchor.paragraphId &&
     selection.head.offset < selection.anchor.offset;
