@@ -46,6 +46,21 @@ function menuShell(host: ContentControlMenuHost, controlId: string): HTMLElement
   // A press inside the pop-up is the pop-up's: the pages layer must not treat it as a caret
   // press (which prevents the default and swallows the compatibility mouse events).
   menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+  // Inputs and buttons live inside the editable pages layer. Their events belong to the
+  // pop-up: Enter must not split a paragraph, and typing must not edit the document.
+  for (const type of [
+    'keydown',
+    'beforeinput',
+    'input',
+    'compositionstart',
+    'compositionupdate',
+    'compositionend',
+    'copy',
+    'cut',
+    'paste',
+  ]) {
+    menu.addEventListener(type, (event) => event.stopPropagation());
+  }
   return menu;
 }
 
@@ -87,6 +102,24 @@ export function buildContentControlListMenu(
   const menu = menuShell(host, controlId);
   menu.setAttribute('role', 'listbox');
   if (alias) menu.setAttribute('aria-label', alias);
+  menu.addEventListener('keydown', (event) => {
+    if (event.isComposing || event.target instanceof HTMLInputElement) return;
+    const options = [...menu.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    const index = options.indexOf(host.document.activeElement as HTMLButtonElement);
+    const next =
+      event.key === 'ArrowDown'
+        ? (index + 1) % options.length
+        : event.key === 'ArrowUp'
+          ? (index - 1 + options.length) % options.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? options.length - 1
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    options[next]?.focus();
+  });
   for (const item of items) {
     const option = host.document.createElement('button');
     option.type = 'button';
@@ -95,9 +128,8 @@ export function buildContentControlListMenu(
     option.setAttribute('contenteditable', 'false');
     option.setAttribute('role', 'option');
     option.textContent = item.displayText;
-    option.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    option.addEventListener('mousedown', (event) => event.stopPropagation());
+    option.addEventListener('click', () => {
       host.close(menu);
       host.setValue(controlId, item.value);
     });
@@ -112,7 +144,7 @@ export function buildContentControlListMenu(
     if (alias) free.setAttribute('aria-label', alias);
     free.addEventListener('mousedown', (event) => event.stopPropagation());
     free.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
+      if (event.key !== 'Enter' || event.isComposing) return;
       event.preventDefault();
       host.close(menu);
       host.setValue(controlId, free.value);
@@ -133,6 +165,9 @@ export function focusContentControlCalendar(menu: HTMLElement, focusIso?: string
     menu.querySelector<HTMLElement>('[data-selected]') ??
     menu.querySelector<HTMLElement>('[data-today]:not([data-other-month])') ??
     menu.querySelector<HTMLElement>('.docx-content-control-calendar-day:not([data-other-month])');
+  for (const day of menu.querySelectorAll<HTMLElement>('[data-iso]')) {
+    day.tabIndex = day === target ? 0 : -1;
+  }
   target?.focus({ preventScroll: true });
 }
 
@@ -173,6 +208,7 @@ export function buildContentControlCalendar(
     node.addEventListener('mousedown', (event) => event.stopPropagation());
   };
   const render = (): void => {
+    const focusedNav = (host.document.activeElement as HTMLElement | null)?.dataset.docxCalendarNav;
     const month = calendarMonth(view.year, view.month, {
       locale: host.locale(),
       selected: selectedIso,
@@ -221,8 +257,13 @@ export function buildContentControlCalendar(
     const grid = host.document.createElement('div');
     grid.className = 'docx-content-control-calendar-grid';
     grid.setAttribute('role', 'grid');
-    for (const day of month.days) {
-      grid.append(dayButton(day));
+    grid.setAttribute('aria-label', month.title);
+    for (let index = 0; index < month.days.length; index += 7) {
+      const row = host.document.createElement('div');
+      row.className = 'docx-content-control-calendar-week';
+      row.setAttribute('role', 'row');
+      for (const day of month.days.slice(index, index + 7)) row.append(dayButton(day));
+      grid.append(row);
     }
 
     const footer = host.document.createElement('div');
@@ -237,6 +278,8 @@ export function buildContentControlCalendar(
 
     menu.replaceChildren(header, weekdays, grid, footer);
     focusContentControlCalendar(menu, focusIso);
+    if (focusedNav === 'previous') previous.focus({ preventScroll: true });
+    if (focusedNav === 'next') next.focus({ preventScroll: true });
   };
   const dayButton = (day: CalendarDay): HTMLElement => {
     const button = host.document.createElement('button');
@@ -266,7 +309,7 @@ export function buildContentControlCalendar(
         render();
         return;
       }
-      menu.querySelector<HTMLElement>(`[data-iso="${focusIso}"]`)?.focus({ preventScroll: true });
+      focusContentControlCalendar(menu, focusIso);
     });
     return button;
   };

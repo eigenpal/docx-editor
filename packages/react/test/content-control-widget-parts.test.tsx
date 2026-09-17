@@ -47,6 +47,8 @@ describe('DocxEditorContentControlWidget', () => {
     expect(popup.querySelector('input')).toBeNull();
     expect(popup.querySelector('[data-docx-part="title"]')?.textContent).toBe('September 2026');
     expect(popup.querySelectorAll('[data-docx-part="day"]')).toHaveLength(42);
+    expect(popup.querySelectorAll('[role="row"]')).toHaveLength(6);
+    expect(popup.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
     expect(popup.querySelectorAll('[data-docx-part="weekdays"] > span')).toHaveLength(7);
     // en-US starts the week on Sunday, so the first cell is Sunday, August 30.
     expect(popup.querySelector<HTMLElement>('[data-docx-part="day"]')?.dataset.iso).toBe(
@@ -72,6 +74,7 @@ describe('DocxEditorContentControlWidget', () => {
     fireEvent.keyDown(first, { key: 'ArrowLeft' });
     expect(popup.querySelector('[data-docx-part="title"]')?.textContent).toBe('August 2026');
     expect(document.activeElement).toBe(popup.querySelector('[data-iso="2026-08-31"]'));
+    expect(popup.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
 
     fireEvent.click(popup.querySelector('[data-docx-part="today"]')!);
     const today = new Date();
@@ -79,6 +82,21 @@ describe('DocxEditorContentControlWidget', () => {
       today.getDate()
     ).padStart(2, '0')}`;
     expect(writes).toEqual([iso]);
+  });
+
+  test('month navigation keeps focus and closing restores the opener', () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    const { session: date } = session('date', '2026-09-08');
+    const view = render(<DocxEditorContentControlWidget session={date} />);
+    const next = view.container.querySelector<HTMLButtonElement>('[data-docx-part="nextMonth"]')!;
+    next.focus();
+    fireEvent.click(next);
+    expect(document.activeElement).toBe(next);
+    fireEvent.keyDown(next, { key: 'Escape' });
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
   });
 
   test('a checkbox session applies its toggle at once and renders nothing', async () => {

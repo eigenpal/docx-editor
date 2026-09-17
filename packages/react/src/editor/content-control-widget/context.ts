@@ -104,14 +104,14 @@ export function useContentControlWidgetState(
       }),
     [view, session]
   );
-  const previousMonth = useCallback(
-    () => setView((current) => shiftMonth(current.year, current.month, -1)),
-    []
-  );
-  const nextMonth = useCallback(
-    () => setView((current) => shiftMonth(current.year, current.month, 1)),
-    []
-  );
+  const previousMonth = useCallback(() => {
+    setView((current) => shiftMonth(current.year, current.month, -1));
+    setFocusIso(null);
+  }, []);
+  const nextMonth = useCallback(() => {
+    setView((current) => shiftMonth(current.year, current.month, 1));
+    setFocusIso(null);
+  }, []);
   const selectDay = useCallback((iso: string) => apply(iso), [apply]);
   const selectToday = useCallback(() => apply(isoDateOf(new Date())), [apply]);
   const [focusIso, setFocusIso] = useState<string | null>(null);

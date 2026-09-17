@@ -72,9 +72,9 @@ export function createContentControlWidgetSessions(host: Host) {
               : value,
         locale: host.locale(),
         anchor:
-          [...host.layer.querySelectorAll<HTMLElement>('[data-docx-content-control]')].find(
-            (node) => node.getAttribute('data-docx-content-control') === id
-          ) ?? null,
+          [...host.layer.querySelectorAll<HTMLElement>('[data-docx-content-control]')]
+            .find((node) => node.getAttribute('data-docx-content-control') === id)
+            ?.querySelector<HTMLElement>('.docx-content-control-boundary') ?? null,
         signal: controller.signal,
         canApply,
         apply(value) {

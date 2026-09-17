@@ -1081,6 +1081,7 @@ a.docx-hyperlink:focus-visible {
 .docx-content-control-calendar {
   width: 17rem;
   max-width: calc(100vw - 1.5rem);
+  max-height: none;
   padding: 0.65rem;
   border-radius: 12px;
 }
@@ -1160,6 +1161,10 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
   font-size: 0.75rem;
   text-align: center;
+}
+
+.docx-content-control-calendar-week {
+  display: contents;
 }
 
 .docx-content-control-calendar-day {
@@ -1784,9 +1789,10 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-field-shading);
 }
 
-/* A legacy FORMCHECKBOX paints Word's square box over its glyph: the run's font decides
-   the size (`w:size` lands as `w:sz`), and the box, not the fallback font's ballot glyph,
-   is what the reader sees and presses. The glyph stays in the DOM for copy and search. */
+/* A legacy FORMCHECKBOX paints Word's square box over its glyph. The run's font decides the
+   size (`w:size` lands as `w:sz`), and the box is 1em square, which is Word's 12pt box for a
+   12pt field. The box, not the fallback font's ballot glyph, is what the reader sees and
+   presses. The glyph stays in the DOM for copy and search. */
 .docx-page [data-docx-form-checkbox] {
   position: relative;
   color: transparent;
@@ -1798,8 +1804,8 @@ a.docx-hyperlink:focus-visible {
   top: 50%;
   left: 50%;
   box-sizing: border-box;
-  width: 0.85em;
-  height: 0.85em;
+  width: 1em;
+  height: 1em;
   transform: translate(-50%, -50%);
   border: 0.0625em solid var(--doc-text, #000);
   border-radius: 0.06em;
@@ -1811,8 +1817,8 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0.85em;
-  height: 0.85em;
+  width: 1em;
+  height: 1em;
   transform: translate(-50%, -50%);
   /* Word's checked state is a bold X across the box. */
   background:

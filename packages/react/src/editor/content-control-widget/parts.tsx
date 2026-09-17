@@ -164,6 +164,11 @@ const ARROW_STEPS: Readonly<Record<string, number>> = {
 /** One calendar cell; a press commits that date, arrow keys roam the grid. @public */
 export function ContentControlWidgetDay({ day, ...props }: ContentControlWidgetDayProps) {
   const widget = useContentControlWidget();
+  const focused =
+    widget.calendar.days.find((cell) => cell.iso === widget.focusIso) ??
+    widget.calendar.days.find((cell) => cell.selected) ??
+    widget.calendar.days.find((cell) => cell.today && !cell.otherMonth) ??
+    widget.calendar.days.find((cell) => !cell.otherMonth);
   const roam = (event: KeyboardEvent<HTMLElement>) => {
     const step = ARROW_STEPS[event.key];
     if (step === undefined) return;
@@ -183,6 +188,7 @@ export function ContentControlWidgetDay({ day, ...props }: ContentControlWidgetD
       'data-docx-part': 'day',
       'data-iso': day.iso,
       role: 'gridcell',
+      tabIndex: day.iso === focused?.iso ? 0 : -1,
       'aria-label': day.label,
       ...(day.selected ? { 'data-selected': '', 'aria-selected': true } : {}),
       ...(day.today ? { 'data-today': '' } : {}),
@@ -205,6 +211,9 @@ export function ContentControlWidgetGrid(props: DocxEditorContentControlWidgetPa
   useLayoutEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
+    // Month navigation keeps focus on its button, so repeated Enter presses keep paging.
+    const active = grid.ownerDocument.activeElement;
+    if (active?.closest('.docx-content-control-calendar-nav')) return;
     const target =
       (widget.focusIso
         ? grid.querySelector<HTMLElement>(`[data-iso="${widget.focusIso}"]`)
@@ -222,8 +231,15 @@ export function ContentControlWidgetGrid(props: DocxEditorContentControlWidgetPa
       className: 'docx-content-control-calendar-grid',
       'data-docx-part': 'grid',
       role: 'grid',
+      'aria-label': widget.calendar.title,
     },
-    widget.calendar.days.map((day) => <ContentControlWidgetDay key={day.iso} day={day} />)
+    Array.from({ length: 6 }, (_, index) => (
+      <div key={index} role="row" className="docx-content-control-calendar-week">
+        {widget.calendar.days.slice(index * 7, index * 7 + 7).map((day) => (
+          <ContentControlWidgetDay key={day.iso} day={day} />
+        ))}
+      </div>
+    ))
   );
 }
 

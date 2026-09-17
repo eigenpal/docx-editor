@@ -175,8 +175,9 @@ state with `useContentControlWidget()` inside any child. It supplies `value`,
 `previousMonth`, `nextMonth`, `selectDay`, `selectToday`, and `focusDay`. Vue
 exposes the reactive members as refs.
 
-This example keeps the packaged calendar, adds a class to the grid, and replaces
-the Today control with a design-system button:
+Check `session.kind` when replacing a calendar. The renderer also receives
+dropdown, combo box, and checkbox sessions. This example keeps their default
+controls, adds a class to the date grid, and replaces the Today button:
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -185,16 +186,19 @@ the Today control with a design-system button:
 import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/react';
 
 const popups = {
-  contentControlWidget: (props) => (
-    <DocxEditorContentControlWidget {...props} className="brand-popup">
-      <DocxEditorContentControlWidget.Header />
-      <DocxEditorContentControlWidget.Weekdays />
-      <DocxEditorContentControlWidget.Grid className="brand-grid" />
-      <DocxEditorContentControlWidget.Today asChild>
-        <MyButton>Pick today</MyButton>
-      </DocxEditorContentControlWidget.Today>
-    </DocxEditorContentControlWidget>
-  ),
+  contentControlWidget: (props) =>
+    props.session.kind !== 'date' ? (
+      <DocxEditorContentControlWidget {...props} />
+    ) : (
+      <DocxEditorContentControlWidget {...props} className="brand-popup">
+        <DocxEditorContentControlWidget.Header />
+        <DocxEditorContentControlWidget.Weekdays />
+        <DocxEditorContentControlWidget.Grid className="brand-grid" />
+        <DocxEditorContentControlWidget.Today asChild>
+          <MyButton>Pick today</MyButton>
+        </DocxEditorContentControlWidget.Today>
+      </DocxEditorContentControlWidget>
+    ),
 };
 
 <DocxEditor document={source} popups={popups} />;
@@ -210,14 +214,16 @@ import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/vue
 
 const popups = {
   contentControlWidget: (props) =>
-    h(DocxEditorContentControlWidget, { ...props, className: 'brand-popup' }, () => [
-      h(DocxEditorContentControlWidget.Header),
-      h(DocxEditorContentControlWidget.Weekdays),
-      h(DocxEditorContentControlWidget.Grid, { class: 'brand-grid' }),
-      h(DocxEditorContentControlWidget.Today, { asChild: true }, () =>
-        h(MyButton, null, () => 'Pick today')
-      ),
-    ]),
+    props.session.kind !== 'date'
+      ? h(DocxEditorContentControlWidget, props)
+      : h(DocxEditorContentControlWidget, { ...props, className: 'brand-popup' }, () => [
+          h(DocxEditorContentControlWidget.Header),
+          h(DocxEditorContentControlWidget.Weekdays),
+          h(DocxEditorContentControlWidget.Grid, { class: 'brand-grid' }),
+          h(DocxEditorContentControlWidget.Today, { asChild: true }, () =>
+            h(MyButton, null, () => 'Pick today')
+          ),
+        ]),
 };
 </script>
 

@@ -64,6 +64,9 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
   const widget = useContentControlWidgetState(session);
   const [closed, setClosed] = useState(session.signal.aborted);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [opener] = useState(() =>
+    typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)
+  );
   const [position, setPosition] = useState<CSSProperties>({});
   // A checkbox has no pop-up: the packaged arrangement IS the toggle, so configuring this
   // popup for a restyled dropdown never makes checkboxes stop working. A host that renders
@@ -83,12 +86,15 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
     if (closed || immediate) return;
     const panel = panelRef.current;
     const owner = panel?.ownerDocument;
-    const opener = owner?.activeElement as HTMLElement | null;
     const scroller = panel?.closest<HTMLElement>('.docx-editor__scroll-container');
     const anchor = session.anchor;
     if (anchor && scroller) {
       const rect = anchor.getBoundingClientRect();
-      setPosition(absolutePointInScroller(scroller, rect.left, rect.bottom));
+      const sheet = anchor.closest('.docx-page')?.getBoundingClientRect();
+      const left = sheet
+        ? Math.max(sheet.left, Math.min(rect.left, sheet.right - panel!.offsetWidth))
+        : rect.left;
+      setPosition(absolutePointInScroller(scroller, left, rect.bottom));
     }
     // The calendar grid places its own roving focus; everything else takes the first control.
     if (!panel?.querySelector('[data-docx-part="grid"]')) {
@@ -100,7 +106,7 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
         opener.focus({ preventScroll: true });
       }
     };
-  }, [session, closed, immediate]);
+  }, [session, closed, immediate, opener]);
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel || closed || immediate) return;

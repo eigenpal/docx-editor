@@ -61,6 +61,9 @@ export function createLegacyCheckboxInteraction(host: Host): {
       checked: !field.checked,
     });
     if (applied) {
+      // The pointer handler prevents native focus. Return keyboard input from toolbar
+      // controls or a replaced surface before selecting the field for Space.
+      host.pagesLayer.focus({ preventScroll: true });
       // Leave the field selected, as a FORMTEXT click does, so Space can flip it again.
       host.select({
         anchor: { paragraphId, offset: field.start },

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Legacy checkbox form fields could not be toggled, and content-control value pop-ups were engine-only.",
+  "after": "A new setLegacyCheckbox op rewrites w:checked, and pop-ups and widgets are host-composable; shared document state keeps the same OOXML shape.",
+  "reason": "The new op reduces to existing canonical tree primitives on the field's w:checkBox element, which the journal already replicates, so released participants read the resulting state unchanged. Pop-up and widget changes are local chrome and never enter shared updates.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-checkbox-fields.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/editor/__tests__/legacy-checkbox-interaction.test.ts"
+  ],
+  "changeset": "content-control-widget-parity",
+  "migration": null
+}

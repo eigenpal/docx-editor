@@ -2136,8 +2136,10 @@ export function mountPaginatedSurface(
 
   function closeContentControlMenu(menu: HTMLElement): void {
     const controlId = menu.dataset.docxCcId;
+    const restoreFocus = menu.contains(document.activeElement);
     menu.remove();
     if (controlId) setContentControlWidgetOpen(controlId, false);
+    if (restoreFocus) pagesLayer.focus({ preventScroll: true });
   }
 
   function removeExistingContentControlMenu(): HTMLElement | null {
@@ -2305,6 +2307,7 @@ export function mountPaginatedSurface(
     setContentControlWidgetOpen(controlId, true);
     armContentControlMenuDismiss(menu, () => closeContentControlMenu(menu));
     if (kind === 'date') focusContentControlCalendar(menu);
+    else menu.querySelector<HTMLElement>('input,button')?.focus({ preventScroll: true });
   }
 
   const contentControlsOps: ContentControlOps = {

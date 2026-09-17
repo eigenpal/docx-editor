@@ -231,7 +231,7 @@ describe('content-control surface chrome', () => {
         });
         option.dispatchEvent(pointerDown);
         expect(pointerDown.defaultPrevented).toBe(false);
-        option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        option.click();
         expect(menu!.isConnected).toBe(false);
         expect(container.querySelector('.docx-page-content')?.textContent).toContain('Two');
       } else {
@@ -303,6 +303,57 @@ describe('content-control surface chrome', () => {
       today.getDate()
     ).padStart(2, '0')}`;
     expect(container.querySelector('.docx-page-content')?.textContent).toContain(iso);
+  });
+
+  test('engine menu input stays outside the document editing handlers', () => {
+    const { surface, container } = mount(
+      `<w:p>${sdt(
+        '<w:comboBox><w:listItem w:displayText="One" w:value="1"/></w:comboBox>',
+        '<w:r><w:t>One</w:t></w:r>'
+      )}</w:p>`
+    );
+    container.querySelector<HTMLElement>('[data-docx-cc-widget]')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+      })
+    );
+    const input = container.querySelector<HTMLInputElement>('.docx-content-control-menu-input')!;
+    const before = surface.session.part();
+    const typing = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data: 'draft',
+    });
+    input.dispatchEvent(typing);
+    expect(typing.defaultPrevented).toBe(false);
+    expect(surface.session.part()).toBe(before);
+    const composing = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+      isComposing: true,
+    });
+    input.dispatchEvent(composing);
+    expect(surface.session.part()).toBe(before);
+    const option = container.querySelector<HTMLElement>('[role="option"]')!;
+    const enter = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+    });
+    option.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(surface.session.part()).toBe(before);
+    // The browser's keyboard activation dispatches click after the unprevented Enter.
+    option.click();
+    expect(container.querySelector('.docx-content-control-menu')).toBeNull();
+    expect(container.querySelector('.docx-page-content')?.textContent).toBe('One');
+    surface.destroy();
   });
 
   test('a host renderer receives checkbox presses as a session before the engine toggles', () => {
@@ -660,6 +711,7 @@ test('custom content-control widget sessions retain core writes and invalidate s
     expect(first.value).toBe('1');
     expect(first.items.map((item) => item.value)).toEqual(['1', '2']);
     expect(first.anchor).not.toBeNull();
+    expect(first.anchor?.className).toBe('docx-content-control-boundary');
     expect(container.querySelector('.docx-content-control-menu')).toBeNull();
     expect(first.apply('invalid')).toBe(false);
     expect(first.signal.aborted).toBe(false);

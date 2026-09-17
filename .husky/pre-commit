@@ -19,6 +19,17 @@ run_check() {
 # Fix staged formatting first, then validate the resulting source with every gate.
 run_check 'staged formatting and lint' npx lint-staged
 
+# The collaboration policy CI job needs a decision record for any change under the covered
+# implementation paths. The check reads the working tree and untracked files too, so it sees
+# what this commit adds. It compares against the merge base with main; a checkout without a
+# main ref (a shallow clone, a fork) skips it and leaves CI to enforce it.
+collaboration_base=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null)
+if [ -n "$collaboration_base" ]; then
+  run_check 'collaboration policy' node scripts/collaboration/cli.mjs check --base "$collaboration_base"
+else
+  printf '\nSkipping collaboration policy (no main ref to compare against).\n'
+fi
+
 # Each workspace gets compiler-managed build info under its own node_modules.
 # TypeScript tracks imported files and compiler options, not just the staged paths.
 run_check 'TypeScript type check' bun run typecheck --incremental --tsBuildInfoFile node_modules/.cache/precommit/typecheck.tsbuildinfo

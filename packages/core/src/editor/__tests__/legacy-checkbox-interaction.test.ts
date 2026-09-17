@@ -98,6 +98,26 @@ describe('legacy checkbox interaction', () => {
     expect(box(container)!.dataset.checked).toBe('false');
   });
 
+  test('a press returns keyboard focus from chrome to the selected field', () => {
+    const { surface, container } = mount(BODY);
+    const toolbarButton = document.createElement('button');
+    document.body.append(toolbarButton, container);
+    try {
+      toolbarButton.focus();
+      press(box(container)!);
+      const editable = container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+      expect(document.activeElement).toBe(editable);
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ' })
+      );
+      expect(box(container)!.dataset.checked).toBe('false');
+    } finally {
+      surface.destroy();
+      toolbarButton.remove();
+      container.remove();
+    }
+  });
+
   test('a press toggles under forms protection, where filling is the only edit', () => {
     const { container } = mount(BODY, { protectedForm: true });
     press(box(container)!);

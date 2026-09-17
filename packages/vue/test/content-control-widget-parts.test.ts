@@ -55,6 +55,22 @@ async function mount(render: () => ReturnType<typeof h> | null) {
 }
 
 describe('DocxEditorContentControlWidget', () => {
+  test('month navigation keeps focus and closing restores the opener', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    const { session: date } = session('date', '2026-09-08');
+    const container = await mount(() => h(DocxEditorContentControlWidget, { session: date }));
+    const next = container.querySelector<HTMLButtonElement>('[data-docx-part="nextMonth"]')!;
+    next.focus();
+    next.click();
+    await nextTick();
+    expect(document.activeElement).toBe(next);
+    next.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    await nextTick();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
   test('a date session renders the packaged calendar on the authored month', async () => {
     const { session: date, writes } = session('date', '2026-09-08T00:00:00Z');
     const container = await mount(() => h(DocxEditorContentControlWidget, { session: date }));
@@ -63,6 +79,8 @@ describe('DocxEditorContentControlWidget', () => {
     expect(popup.querySelector('input')).toBeNull();
     expect(popup.querySelector('[data-docx-part="title"]')?.textContent).toBe('September 2026');
     expect(popup.querySelectorAll('[data-docx-part="day"]')).toHaveLength(42);
+    expect(popup.querySelectorAll('[role="row"]')).toHaveLength(6);
+    expect(popup.querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
     expect(popup.querySelectorAll('[data-docx-part="weekdays"] > span')).toHaveLength(7);
     expect(popup.querySelector<HTMLElement>('[data-docx-part="day"]')?.dataset.iso).toBe(
       '2026-08-30'

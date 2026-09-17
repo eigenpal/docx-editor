@@ -102,7 +102,8 @@ const ContentControlWidgetRoot = defineComponent({
     const immediate = computed(
       () => props.session.kind === 'checkbox' && !slots.default && props.children === undefined
     );
-    let opener: HTMLElement | null = null;
+    let opener: HTMLElement | null =
+      typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null);
     let focusPanel: HTMLDivElement | null = null;
     const restoreFocus = () => {
       const previous = opener;
@@ -137,14 +138,20 @@ const ContentControlWidgetRoot = defineComponent({
           restoreFocus();
           return;
         }
-        restoreFocus();
-        const active = element.ownerDocument.activeElement;
-        opener = active instanceof HTMLElement ? active : null;
+        if (focusPanel) {
+          restoreFocus();
+          const active = element.ownerDocument.activeElement;
+          opener = active instanceof HTMLElement ? active : null;
+        }
         focusPanel = element;
         const scroller = element.closest<HTMLElement>('.docx-editor__scroll-container');
         if (current.anchor && scroller) {
           const rect = current.anchor.getBoundingClientRect();
-          position.value = absolutePointInScroller(scroller, rect.left, rect.bottom);
+          const sheet = current.anchor.closest('.docx-page')?.getBoundingClientRect();
+          const left = sheet
+            ? Math.max(sheet.left, Math.min(rect.left, sheet.right - element.offsetWidth))
+            : rect.left;
+          position.value = absolutePointInScroller(scroller, left, rect.bottom);
         }
         // The calendar grid places its own roving focus; everything else takes the first control.
         if (!element.querySelector('[data-docx-part="grid"]')) {
