@@ -39,8 +39,7 @@ const bold = useEditorCommand('text.bold');
 </template>
 ```
 
-`execute(options?)` returns `true` when the editor applies the command.
-Pass `historyGroup` in `options` to make one gesture one undo step. `isActive`,
+`execute()` returns `true` when the editor applies the command. `isActive`,
 `isEnabled`, and `disabledReason` are computed refs on a plain object. The
 template does not unwrap them, so read each one with `.value`.
 

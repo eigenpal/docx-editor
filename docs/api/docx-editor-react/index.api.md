@@ -1301,7 +1301,7 @@ export { EditorCommand }
 // @public
 export interface EditorCommandState {
     readonly disabledReason: string | null;
-    readonly execute: (options?: EditorExecOptions) => boolean;
+    readonly execute: () => boolean;
     readonly isActive: boolean;
     readonly isEnabled: boolean;
     readonly value: string | null;

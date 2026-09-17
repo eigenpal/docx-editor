@@ -3949,7 +3949,7 @@ export interface EditorCommandState {
     // (undocumented)
     readonly disabledReason: ComputedRef<string | null>;
     // (undocumented)
-    readonly execute: (options?: EditorExecOptions) => boolean;
+    readonly execute: () => boolean;
     // (undocumented)
     readonly isActive: ComputedRef<boolean>;
     // (undocumented)

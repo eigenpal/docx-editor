@@ -805,14 +805,17 @@ export class TreeDocumentStore {
         if (group !== undefined && top !== undefined && top.group === group) {
           // Same gesture, still open: the entry keeps its `pkg` and `selectionBefore` — the
           // state before the FIRST frame — and takes this frame's selection as its end.
-          this.undoStack[this.undoStack.length - 1] = { ...top, selectionAfter };
+          this.undoStack[this.undoStack.length - 1] = {
+            ...top,
+            selectionAfter: selectionAfter ?? top.selectionAfter,
+          };
         } else {
           this.pushUndo({
             pkg: before,
             revision: beforeRevision,
             selectionBefore,
             selectionAfter,
-            ...(group !== undefined ? { group } : {}),
+            group,
           });
         }
         this.redoStack.length = 0;
@@ -894,8 +897,7 @@ export class TreeDocumentStore {
   closeHistoryGroup(): void {
     const top = this.undoStack[this.undoStack.length - 1];
     if (top === undefined || top.group === undefined) return;
-    const { group: _closed, ...closed } = top;
-    this.undoStack[this.undoStack.length - 1] = closed;
+    this.undoStack[this.undoStack.length - 1] = { ...top, group: undefined };
   }
 
   undo(): TreeModelChange | null {

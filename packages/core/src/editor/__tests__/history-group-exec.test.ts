@@ -298,6 +298,37 @@ describe('exec history groups', () => {
     });
   });
 
+  test('a token never crosses editors: a listener writing to another editor groups nothing there', () => {
+    withEditor(MIXED, (a) => {
+      withEditor(MIXED, (b) => {
+        const bIds = b.surface!.session.paragraphIds();
+        b.surface!.setSelection({
+          anchor: { paragraphId: bIds[0]!, offset: 0 },
+          head: { paragraphId: bIds[0]!, offset: 0 },
+        });
+        // Host code mirroring every change of A into B through B's own surface verb —
+        // inside A's grouped call, so a leaked token would tag B's entries with A's gesture.
+        let mirrored = 0;
+        const off = a.on('change', () => {
+          mirrored += 1;
+          b.surface!.setParagraphProperty('spacing', { after: String(mirrored * 100) });
+        });
+        selectAll(a);
+        const gesture = Symbol('color-drag');
+        setColor(a, '00FF00', gesture);
+        setColor(a, '0070C0', gesture);
+        off();
+        expect(mirrored).toBeGreaterThanOrEqual(2);
+        // B recorded one step per mirrored write; one undo takes back only the last.
+        expect(b.exec({ type: 'undo' }).ok).toBe(true);
+        expect(spacingAfter(b)).toEqual([String((mirrored - 1) * 100)]);
+        // A's gesture is still one step.
+        expect(a.exec({ type: 'undo' }).ok).toBe(true);
+        expect(colors(a)).toEqual(['FF0000', '0000FF']);
+      });
+    });
+  });
+
   test('can() accepts the option and reports nothing about it', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);

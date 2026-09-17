@@ -69,11 +69,12 @@ by default each transaction is one undo step. To make a whole gesture one undo
 step, pass the same `historyGroup` token with every call of that gesture:
 
 ```ts
+const picker = document.querySelector<HTMLInputElement>('#text-color')!;
 const gesture = Symbol('color-drag');
 
-picker.addEventListener('input', (event) => {
+picker.addEventListener('input', () => {
   editor.exec(
-    { type: 'setMarkAttr', mark: 'color', attr: 'val', value: event.target.value },
+    { type: 'setMarkAttr', mark: 'color', attr: 'val', value: picker.value },
     { historyGroup: gesture }
   );
 });
@@ -92,9 +93,12 @@ closes the group when any of the following happens:
 - The user runs undo or redo.
 - A command records a whole-package unit, such as inserting an image or a footnote.
 
-A call that changes nothing adds no undo step and leaves the group open. Any
-command that edits a story accepts the option, so font-size steppers, spacing
-sliders, and indent controls group the same way.
+A call that changes nothing adds no undo step and leaves the group open. Every
+formatting and text command accepts the option, so font-size steppers, spacing
+sliders, and indent controls group the same way. Accepting or rejecting
+revisions, applying a form field, and refreshing fields always record their own
+step. A packaged control groups through `runToolbarCommand`, which forwards the
+same options.
 
 In a collaborative session, the shared undo manager owns undo. The token groups
 there too: frames of one gesture join one shared undo item however long the

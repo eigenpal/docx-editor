@@ -52,7 +52,10 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  * gesture; anything else closes the group — a call without a token or with another token,
  * a call landing in another story, buffered typing flushed ahead of a call, an undo, a
  * redo, or a command that records a whole-package unit such as inserting an image or a
- * footnote. A call that changes nothing adds no entry and leaves the group open.
+ * footnote. A call that changes nothing adds no entry and leaves the group open. Every
+ * formatting and text command honours the token; accepting or rejecting revisions,
+ * applying a form field and refreshing fields record their own step. Host code that runs
+ * inside the call, such as a change listener, writes its own steps too.
  *
  * In a collaborative session the shared undo manager is the undo authority, and the token
  * groups there too: frames of one gesture join one shared undo item however long the
@@ -61,10 +64,11 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  *
  * @example
  * ```ts
+ * const picker = document.querySelector<HTMLInputElement>('#text-color')!;
  * const gesture = Symbol('color-drag');
- * picker.addEventListener('input', (event) => {
+ * picker.addEventListener('input', () => {
  *   editor.exec(
- *     { type: 'setMarkAttr', mark: 'color', attr: 'val', value: event.target.value },
+ *     { type: 'setMarkAttr', mark: 'color', attr: 'val', value: picker.value },
  *     { historyGroup: gesture }
  *   );
  * });
