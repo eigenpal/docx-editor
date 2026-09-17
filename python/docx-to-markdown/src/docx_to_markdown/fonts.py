@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence, Union
+from typing import Any, Literal, Optional, Union
 
 FontStyle = Literal["normal", "italic"]
 PathLike = Union[str, "os.PathLike[str]"]

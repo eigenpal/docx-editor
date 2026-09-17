@@ -51,9 +51,9 @@ def test_bytes_and_file_object_match_path(narrow_pages):
 def test_text_mode_file_object_is_rejected(narrow_pages):
     with pytest.raises(TypeError, match="binary mode"):
         convert(io.StringIO("not bytes"))
-    with open(narrow_pages, "r", encoding="utf-8", errors="ignore") as handle:
-        with pytest.raises(TypeError, match="binary mode"):
-            convert(handle)
+    text_handle = open(narrow_pages, encoding="utf-8", errors="ignore")  # noqa: SIM115
+    with text_handle, pytest.raises(TypeError, match="binary mode"):
+        convert(text_handle)
     with open(narrow_pages, "rb") as handle:
         assert convert(handle).page_count == 15
 

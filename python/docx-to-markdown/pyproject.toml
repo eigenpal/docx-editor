@@ -55,3 +55,12 @@ reportUnnecessaryIsInstance = false
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
+# Explicit so a ruff upgrade cannot change what CI enforces.
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+  "UP007", # keep Optional/Union: X | Y must not reach runtime on Python 3.9
+  "UP037", # quoted annotations stay for Python 3.9 forward references
+  "UP045",
+]

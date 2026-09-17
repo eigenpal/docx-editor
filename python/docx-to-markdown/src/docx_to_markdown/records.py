@@ -7,8 +7,9 @@ so a wheel keeps working against a slightly newer converter.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, Optional, Union, cast
+from typing import Any, Literal, Optional, Union, cast
 
 Coverage = Literal["complete", "partial", "none"]
 FontStyle = Literal["normal", "italic"]

@@ -69,6 +69,8 @@ jobs:
         run: bun run build:runtime
       - name: Lint and type-check
         working-directory: python/docx-to-markdown
+        # bash on every runner: PowerShell would not stop at the first failing command.
+        shell: bash
         run: |
           uvx ruff check src tests hatch_build.py
           uvx ruff format --check src tests hatch_build.py

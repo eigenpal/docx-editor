@@ -33,6 +33,16 @@ from pathlib import Path
 from typing import IO, Any, Callable, Literal, Optional, Union, cast
 
 from ._runtime import ConversionError, RuntimeNotFoundError, Worker, run_once, runtime_path
+from .fonts import (
+    BUNDLED_FAMILIES,
+    FontFace,
+    FontsArg,
+    font_family,
+    font_files,
+    font_requests,
+    google_font_families,
+    google_font_substitutes,
+)
 from .records import (
     ChangeKind,
     Comment,
@@ -55,16 +65,6 @@ from .records import (
     ReviewRange,
     TrackedChange,
     review_artifact_from_json,
-)
-from .fonts import (
-    BUNDLED_FAMILIES,
-    FontFace,
-    FontsArg,
-    font_family,
-    font_files,
-    font_requests,
-    google_font_families,
-    google_font_substitutes,
 )
 
 __all__ = [
