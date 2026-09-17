@@ -470,3 +470,5 @@ export {
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
 
 export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
+
+export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';

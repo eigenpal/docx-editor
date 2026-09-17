@@ -212,3 +212,74 @@ describe('a raw command target', () => {
     expect(editor.surface!.session.revision()).toBe(revisionBefore);
   });
 });
+
+// A live control rerenders on every snapshot. That must not mint a new group per frame.
+import { useEditorValueCommand } from '../src/editor/useEditorValueCommand.ts';
+import { useHistoryGroup } from '../src/editor/useHistoryGroup.ts';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+
+test('range binding survives React updates, groups two gestures, and cleans up', async () => {
+  const results: ExecResult[] = [];
+  let currentOptions: ReturnType<typeof useHistoryGroup>['options'] | undefined;
+  function RangeProbe() {
+    const size = useEditorValueCommand('font.size');
+    const gesture = useHistoryGroup({ kind: 'range' });
+    currentOptions = gesture.options;
+    return (
+      <input
+        data-testid="live-size"
+        ref={gesture.ref}
+        type="range"
+        min="16"
+        max="100"
+        disabled={!size.isEnabled}
+        value={size.value ?? 22}
+        onInput={(event) =>
+          results.push(size.execute(Number(event.currentTarget.value), gesture.options()))
+        }
+      />
+    );
+  }
+  const { view, editor } = mount(<RangeProbe />);
+  await selectAll(editor());
+  const input = view.getByTestId('live-size') as HTMLInputElement;
+  for (const values of [
+    [24, 28, 32],
+    [40, 44],
+  ]) {
+    await act(async () => {
+      input.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0 })
+      );
+    });
+    for (const value of values) {
+      await act(async () => {
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+  expect(results.map((r) => (r.ok ? r.history?.kind : r.reason))).toEqual([
+    'started',
+    'extended',
+    'extended',
+    'started',
+    'extended',
+  ]);
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(input.value).toBe('32');
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(editor().snapshot().canUndo).toBe(false);
+  const handle = currentOptions!().historyGroup!;
+  view.unmount();
+  expect(handle.state).toBe('closed');
+  expect(() => currentOptions!()).toThrow('not mounted');
+});

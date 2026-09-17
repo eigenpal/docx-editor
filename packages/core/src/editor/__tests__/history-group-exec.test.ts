@@ -13,6 +13,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import type { HistoryGroup } from '../../contracts/editor.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -126,7 +127,7 @@ function selectAll(editor: DocxEditorInstance): void {
   });
 }
 
-const setColor = (editor: DocxEditorInstance, value: string, historyGroup?: symbol) =>
+const setColor = (editor: DocxEditorInstance, value: string, historyGroup?: HistoryGroup) =>
   editor.exec(
     { type: 'setMarkAttr', mark: 'color', attr: 'val', value },
     historyGroup ? { historyGroup } : undefined
@@ -139,7 +140,7 @@ describe('exec history groups', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
       for (const value of FRAMES)
-        expect(setColor(editor, value)).toEqual({ ok: true, changed: true });
+        expect(setColor(editor, value)).toMatchObject({ ok: true, changed: true });
       expect(colors(editor)).toEqual(['0070C0', '0070C0']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
       // Undo visits the frame before, not the state before the gesture.
@@ -150,9 +151,9 @@ describe('exec history groups', () => {
   test('grouped commands are one undo step that restores the original mixed formatting', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       for (const value of FRAMES) {
-        expect(setColor(editor, value, gesture)).toEqual({ ok: true, changed: true });
+        expect(setColor(editor, value, gesture)).toMatchObject({ ok: true, changed: true });
       }
       expect(colors(editor)).toEqual(['0070C0', '0070C0']);
       expect(editor.snapshot().canUndo).toBe(true);
@@ -171,7 +172,7 @@ describe('exec history groups', () => {
   test('every grouped frame renders immediately', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       const seen: string[] = [];
       for (const value of FRAMES) {
         setColor(editor, value, gesture);
@@ -185,7 +186,7 @@ describe('exec history groups', () => {
   test('a repeated value adds no entry and does not close the group', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       setColor(editor, '00FF00', gesture);
       expect(setColor(editor, '00FF00', gesture).ok).toBe(true);
       setColor(editor, '0070C0', gesture);
@@ -198,8 +199,8 @@ describe('exec history groups', () => {
   test('a new gesture is a new entry', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      setColor(editor, '00FF00', Symbol('first drag'));
-      setColor(editor, '0070C0', Symbol('second drag'));
+      setColor(editor, '00FF00', editor.beginHistoryGroup());
+      setColor(editor, '0070C0', editor.beginHistoryGroup());
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
       expect(colors(editor)).toEqual(['00FF00', '00FF00']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
@@ -210,7 +211,7 @@ describe('exec history groups', () => {
   test('an ungrouped edit between two grouped frames closes the group', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       setColor(editor, '00FF00', gesture);
       expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toEqual({
         ok: true,
@@ -228,7 +229,7 @@ describe('exec history groups', () => {
   test('undo closes the group: a later frame with the same token starts a new entry', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       setColor(editor, '00FF00', gesture);
       setColor(editor, '007700', gesture);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
@@ -243,7 +244,7 @@ describe('exec history groups', () => {
   test('redo closes the group too', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       setColor(editor, '00FF00', gesture);
       editor.exec({ type: 'undo' });
       editor.exec({ type: 'redo' });
@@ -257,11 +258,11 @@ describe('exec history groups', () => {
   test('a paragraph slider groups the same way', () => {
     withEditor(MIXED, (editor) => {
       selectAll(editor);
-      const gesture = Symbol('spacing-drag');
+      const gesture = editor.beginHistoryGroup();
       for (const afterPt of [6, 8, 10, 12]) {
         expect(
           editor.exec({ type: 'setParagraphSpacing', afterPt }, { historyGroup: gesture })
-        ).toEqual({ ok: true, changed: true });
+        ).toMatchObject({ ok: true, changed: true });
       }
       expect(spacingAfter(editor)).toEqual(['240']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
@@ -277,14 +278,14 @@ describe('exec history groups', () => {
         anchor: { paragraphId: ids[0]!, offset: 0 },
         head: { paragraphId: ids[0]!, offset: 0 },
       });
-      const gesture = Symbol('spacing-drag');
+      const gesture = editor.beginHistoryGroup();
       const spacing = (afterPt: number) =>
         editor.exec({ type: 'setParagraphSpacing', afterPt }, { historyGroup: gesture });
-      expect(spacing(6)).toEqual({ ok: true, changed: true });
+      expect(spacing(6)).toMatchObject({ ok: true, changed: true });
       // Buffered, not committed: the flush runs at the head of the NEXT command, inside the
       // grouped call — and the keystroke must still be its own undo step.
       editor.surface!.enqueueType('X');
-      expect(spacing(12)).toEqual({ ok: true, changed: true });
+      expect(spacing(12)).toMatchObject({ ok: true, changed: true });
       expect(editor.surface!.session.bodyText()).toBe('Xalpha beta');
       expect(spacingAfter(editor)).toEqual(['240']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
@@ -314,7 +315,7 @@ describe('exec history groups', () => {
           b.surface!.setParagraphProperty('spacing', { after: String(mirrored * 100) });
         });
         selectAll(a);
-        const gesture = Symbol('color-drag');
+        const gesture = a.beginHistoryGroup();
         setColor(a, '00FF00', gesture);
         setColor(a, '0070C0', gesture);
         off();
@@ -332,7 +333,7 @@ describe('exec history groups', () => {
   test('an image command refuses a history group instead of dropping it', () => {
     withEditor(MIXED, (editor) => {
       const result = editor.exec({ type: 'setImageProperties', altText: 'x' } as never, {
-        historyGroup: Symbol('alt-text'),
+        historyGroup: editor.beginHistoryGroup(),
       });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.code).toBe('unsupported');
@@ -345,9 +346,109 @@ describe('exec history groups', () => {
       expect(
         editor.can(
           { type: 'setMarkAttr', mark: 'color', attr: 'val', value: '00FF00' },
-          { historyGroup: Symbol('probe') }
+          { historyGroup: editor.beginHistoryGroup() }
         )
       ).toEqual({ ok: true });
+    });
+  });
+});
+
+describe('owned history handles and reporting', () => {
+  test('reports actual starts, extensions, splits and no-history frames', () => {
+    withEditor(MIXED, (editor) => {
+      const g = editor.beginHistoryGroup();
+      expect(editor.snapshot().canUndo).toBe(false);
+      expect(setColor(editor, '000000', g)).toMatchObject({ history: { kind: 'none' } });
+      selectAll(editor);
+      expect(setColor(editor, '00FF00', g)).toMatchObject({ history: { kind: 'started' } });
+      editor.exec({ type: 'selectAll' });
+      expect(setColor(editor, '007700', g)).toMatchObject({ history: { kind: 'extended' } });
+      setColor(editor, 'FFFFFF');
+      expect(setColor(editor, '000000', g)).toMatchObject({
+        history: { kind: 'split', reason: 'history-boundary' },
+      });
+      editor.exec({ type: 'undo' });
+      const diagnostics: unknown[] = [];
+      const off = editor.on('historyDiagnostic', (d) => diagnostics.push(d));
+      expect(setColor(editor, '007700', g)).toMatchObject({
+        history: { kind: 'split', reason: 'undo-redo' },
+      });
+      off();
+      expect(diagnostics).toEqual([{ kind: 'split', reason: 'undo-redo' }]);
+    });
+  });
+  test('rejects ended, foreign and forged handles in both can and exec', () => {
+    withEditor(MIXED, (editor) =>
+      withEditor(MIXED, (other) => {
+        selectAll(editor);
+        const ended = editor.beginHistoryGroup();
+        ended.end();
+        ended.end();
+        for (const historyGroup of [
+          ended,
+          other.beginHistoryGroup(),
+          Symbol('forged') as unknown as HistoryGroup,
+        ]) {
+          const command = {
+            type: 'setMarkAttr',
+            mark: 'color',
+            attr: 'val',
+            value: '00FF00',
+          } as const;
+          const can = editor.can(command, { historyGroup });
+          expect(can).toMatchObject({ ok: false, code: 'unsupported' });
+          expect(editor.exec(command, { historyGroup })).toEqual(can);
+        }
+        expect(editor.snapshot().canUndo).toBe(false);
+      })
+    );
+  });
+  test('document replacement and detach expire handles', () => {
+    withEditor(MIXED, (editor) => {
+      const first = editor.beginHistoryGroup();
+      editor.load(docx(MIXED));
+      expect(first.state).toBe('closed');
+      const next = editor.beginHistoryGroup();
+      editor.detach();
+      expect(next.state).toBe('closed');
+    });
+  });
+  test('unsupported families refuse before mutation with matching can results', () => {
+    withEditor(MIXED, (editor) => {
+      selectAll(editor);
+      const historyGroup = editor.beginHistoryGroup();
+      for (const type of [
+        'setHeaderFooterOptions',
+        'insertNote',
+        'setContentControlValue',
+        'setImageProperties',
+        'insertText',
+        'insertHyperlink',
+        'undo',
+        'setProtection',
+      ]) {
+        const command = { type } as never;
+        const can = editor.can(command, { historyGroup });
+        expect(can).toMatchObject({ ok: false, code: 'unsupported' });
+        expect(editor.exec(command, { historyGroup })).toEqual(can);
+      }
+      expect(editor.snapshot().canUndo).toBe(false);
+      expect(colors(editor)).toEqual(['FF0000', '0000FF']);
+    });
+  });
+  test('ending keeps edits and makes the next gesture a separate undo step', () => {
+    withEditor(MIXED, (editor) => {
+      selectAll(editor);
+      const first = editor.beginHistoryGroup();
+      setColor(editor, '00FF00', first);
+      first.end();
+      const second = editor.beginHistoryGroup();
+      setColor(editor, '007700', second);
+      second.end();
+      editor.exec({ type: 'undo' });
+      expect(colors(editor)).toEqual(['00FF00', '00FF00']);
+      editor.exec({ type: 'undo' });
+      expect(colors(editor)).toEqual(['FF0000', '0000FF']);
     });
   });
 });

@@ -376,8 +376,11 @@ Returns the element that received the last context-menu action.
 
 ## useEditorValueCommand
 
-Returns state and actions for value commands such as `'image.wrap'` and
-`'image.altText'`.
+Returns typed state and actions for `text.color`, `font.size`, `font.family`,
+`text.highlight`, `styles.style`, `list.lineSpacing`, and image value slots.
+`execute(value, options?)` returns `ExecResult`. Font size uses half-points.
+`value` stays synchronized with undo and selection changes; null means mixed or
+unavailable. Image commands refuse history groups.
 
 ## useTableBorderTargetLabel
 
@@ -470,3 +473,49 @@ for a complete control and its placement inside the dialog.
 - [Vue composition](/docs/2.x/vue/composition): place custom controls.
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots): find every slot ID and toolbar part.
 - [Vue API reference](/docs/2.x/api/vue): inspect all composable types.
+
+## useHistoryGroup
+
+`useHistoryGroup({ kind })` returns an element callback `ref` and `options()`.
+It uses the same native gesture controller as React. It disposes bindings on
+unmount and editor replacement. Use `range`, `repeat`, `keyboard`, or
+`native-color` to select the event policy.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/vue';
+
+const { execute, value, isEnabled, disabledReason } = useEditorValueCommand('text.color');
+const gesture = useHistoryGroup({ kind: 'native-color' });
+const input = (node: unknown) => gesture.ref(node as HTMLInputElement | null);
+const status = ref('');
+function apply(event: Event) {
+  const color = (event.target as HTMLInputElement).value.slice(1);
+  const result = execute(color, gesture.options());
+  status.value = result.ok ? (result.history?.kind ?? 'none') : result.reason;
+}
+</script>
+
+<template>
+  <label :title="disabledReason ?? undefined">
+    Text color
+    <input
+      :ref="input"
+      type="color"
+      :disabled="!isEnabled"
+      :value="`#${value ?? '000000'}`"
+      @input="apply"
+    />
+    <span>{{ value === null ? 'Mixed or unavailable' : value }}</span>
+    <output aria-live="polite">{{ status }}</output>
+  </label>
+</template>
+```
+
+The native `change` event ends the color commitment. The input handler only
+applies values. `useEditorCommand().execute(options)` accepts group options and
+keeps its boolean result. Its nullary event-handler form still works.
+Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics.
+See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step)
+for native color limitations and a deterministic range example.

@@ -14,6 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // is what lets a run of keystrokes stay one item.
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
+import { reportHistoryGroup } from '@docx-editor.dev/core/collaboration/replication';
 
 type StackItem = Y.UndoManager['undoStack'][number];
 
@@ -30,10 +31,14 @@ export class HistoryGroupCapture {
   private gestureItem: StackItem | undefined;
   /** Set while a grouped journal's own transaction runs: only ITS item is the gesture's. */
   private capturing = false;
+  private captured = false;
 
   constructor(private readonly undoManager: Y.UndoManager) {
     const noteItem = (event: { stackItem: StackItem; type: 'undo' | 'redo' }): void => {
-      if (this.capturing && event.type === 'undo') this.gestureItem = event.stackItem;
+      if (this.capturing && event.type === 'undo') {
+        this.gestureItem = event.stackItem;
+        this.captured = true;
+      }
     };
     undoManager.on('stack-item-added', noteItem);
     undoManager.on('stack-item-updated', noteItem);
@@ -61,9 +66,14 @@ export class HistoryGroupCapture {
       if (group !== previous || group !== undefined) this.undoManager.stopCapturing();
       this.gestureItem = undefined;
     }
+    const priorItem = this.gestureItem;
+    this.captured = false;
     this.capturing = group !== undefined;
     try {
-      return run();
+      const result = run();
+      if (this.captured)
+        reportHistoryGroup(group, this.gestureItem === priorItem ? 'extended' : 'started');
+      return result;
     } catch (error) {
       // The frame never landed: forget it, as a refusal does, or the next frame would merge
       // into an item that does not hold it.

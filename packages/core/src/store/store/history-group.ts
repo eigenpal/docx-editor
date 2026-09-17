@@ -44,3 +44,33 @@ export function closeHistoryGroupsExcept(
     if (partName !== keptPart) store.closeHistoryGroup();
   }
 }
+
+// Synchronous, nest-safe observation of the actual history authority. Tokens stay local.
+export type HistoryCaptureKind = 'started' | 'extended' | 'split';
+export type HistoryCaptureReason = 'package-unit' | 'composition';
+let captureObserver:
+  | {
+      group: HistoryGroup;
+      report: (kind: HistoryCaptureKind, reason?: HistoryCaptureReason) => void;
+    }
+  | undefined;
+export function observeHistoryGroup<T>(
+  group: HistoryGroup,
+  report: (kind: HistoryCaptureKind, reason?: HistoryCaptureReason) => void,
+  run: () => T
+): T {
+  const previous = captureObserver;
+  captureObserver = { group, report };
+  try {
+    return run();
+  } finally {
+    captureObserver = previous;
+  }
+}
+export function reportHistoryGroup(
+  group: HistoryGroup | undefined,
+  kind: HistoryCaptureKind,
+  reason?: HistoryCaptureReason
+): void {
+  if (group !== undefined && captureObserver?.group === group) captureObserver.report(kind, reason);
+}

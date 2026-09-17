@@ -1,3 +1,8 @@
+import {
+  toolbarFormattingValue,
+  type ToolbarValueSlot,
+  type ToolbarValueMap,
+} from './toolbar-values.ts';
 // Toolbar command wiring (interactive-paginated-editing M4.0 / M5.1).
 //
 // Shared by both adapters: the can-before-exec rule is one implementation, so
@@ -457,7 +462,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           ? selected?.wrap
           : id === 'image.altText'
             ? selected?.description
-            : undefined;
+            : toolbarFormattingValue(editor, id);
       return canApply.ok
         ? {
             id,
@@ -654,6 +659,34 @@ const SURFACE_RUN_SLOTS: ReadonlySet<ChromeSlotId> = new Set<ChromeSlotId>([
  *
  * @public
  */
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: Exclude<ChromeSlotId, ToolbarValueSlot>,
+  options: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand<K extends keyof ToolbarValueMap>(
+  editor: Editor | null,
+  id: K,
+  value: ToolbarValueMap[NoInfer<K>],
+  options?: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: TableChromeSlotId,
+  value: unknown,
+  options?: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: ChromeSlotId,
+  value: undefined,
+  options: EditorExecOptions
+): ExecResult;
 export function runToolbarCommand(
   editor: Editor | null,
   id: ChromeSlotId,
@@ -663,6 +696,20 @@ export function runToolbarCommand(
   options?: EditorExecOptions
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  if (
+    value &&
+    typeof value === 'object' &&
+    ('historyGroup' in value || 'scope' in value || Object.keys(value).length === 0)
+  ) {
+    if (options || VALUE_SLOT_PROBES[id] !== undefined || isTableChromeSlot(id))
+      return {
+        ok: false,
+        code: 'invalidArgs',
+        reason: 'pass a toolbar value before command options',
+      };
+    options = value as EditorExecOptions;
+    value = undefined;
+  }
   // These slots run on the surface and never reach `exec`, so the option cannot be honored
   // there; refused rather than dropped, so a caller is never told a group it did not get.
   if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
@@ -736,10 +783,7 @@ export function runToolbarCommand(
           reason: surface.state().lastRejection ?? 'removeContentControl was refused',
         };
   }
-  const command =
-    value === undefined
-      ? commandForSlot(id)
-      : (commandForSlotValue(id, value) ?? commandForSlot(id));
+  const command = value === undefined ? commandForSlot(id) : commandForSlotValue(id, value);
   if (!command) {
     if (value !== undefined) {
       return { ok: false, code: 'unsupported', reason: 'invalid value for toolbar command' };

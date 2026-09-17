@@ -67,13 +67,17 @@ describe('history groups through Editor.exec on a collaborating surface', () => 
         anchor: { paragraphId: ids[0]!, offset: 0 },
         head: { paragraphId: ids[0]!, offset: 5 },
       });
-      const gesture = Symbol('color-drag');
+      const gesture = editor.beginHistoryGroup();
       for (const value of ['FF0000', '00FF00', '0000FF']) {
         const result = editor.exec(
           { type: 'setMarkAttr', mark: 'color', attr: 'val', value },
           { historyGroup: gesture }
         );
-        expect(result).toEqual({ ok: true, changed: true });
+        expect(result).toMatchObject({
+          ok: true,
+          changed: true,
+          history: { kind: value === 'FF0000' ? 'started' : 'extended' },
+        });
       }
       expect(colors(surface.session.part().root)).toEqual(['0000FF']);
       expect(editor.snapshot().canUndo).toBe(true);

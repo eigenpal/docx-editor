@@ -366,3 +366,17 @@ export type {
   InvalidTextFormFieldSession,
   InvalidTextFormFieldChromeHandlers,
 } from './popup-sessions.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './bind-history-group.ts';
+
+export {
+  commandExecOptions,
+  type EditorCommandExecute,
+  type ToolbarValueMap,
+  type ToolbarValueSlot,
+  type ToolbarSlotValue,
+} from './toolbar-values.ts';

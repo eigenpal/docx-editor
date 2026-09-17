@@ -205,6 +205,9 @@ export type HistoryGroup = symbol;
 // @public
 export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
+// @public (undocumented)
+export function reportHistoryGroup(group: HistoryGroup | undefined, kind: HistoryCaptureKind, reason?: HistoryCaptureReason): void;
+
 // (No @packageDocumentation comment for this package)
 
 ```

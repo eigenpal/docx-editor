@@ -137,3 +137,9 @@ export type {
   DocQueryResults,
   ParagraphSummary,
 } from './contracts/document.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './editor/bind-history-group.ts';

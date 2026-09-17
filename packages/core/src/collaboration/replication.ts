@@ -90,6 +90,11 @@ export interface CollaborationDocumentPort {
    *
    * Disabled observation allocates no journal. This is the collaboration write seam;
    * adapters never write a CRDT through this port.
+   * Preserve the journal object's identity and deliver it synchronously to local capture.
+   * `historyGroupOfJournal` reads local identity metadata, outside replicated state.
+   * Cloning, spreading, serialization or postMessage loses that metadata. Custom worker
+   * ports must map local gesture identities explicitly; a serialized journal alone cannot
+   * preserve gesture grouping or synchronous `ExecResult.history` reporting.
    */
   observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
   /** True when a committed journal has not yet been frozen or delivered to observers. */
@@ -122,3 +127,5 @@ export type {
   CanonicalRelationshipRecord,
   CanonicalTextNodeDescriptor,
 } from './primitive-journal.ts';
+
+export { reportHistoryGroup } from '../store/store/history-group.ts';

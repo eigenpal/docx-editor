@@ -1,5 +1,5 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
-import type { HistoryGroup } from './history-group.ts';
+import { reportHistoryGroup, type HistoryGroup } from './history-group.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
@@ -797,6 +797,7 @@ export class TreeDocumentStore {
       if (this.composition) {
         // Inside a composition every transaction folds into the entry opened at
         // compositionstart — however many transactions the IME emits (task 5.5).
+        reportHistoryGroup(options.historyGroup, 'split', 'composition');
         this.composition.committed = true;
         this.composition = {
           ...this.composition,
@@ -821,6 +822,7 @@ export class TreeDocumentStore {
             group,
           });
         }
+        reportHistoryGroup(group, top?.group === group ? 'extended' : 'started');
         this.redoStack.length = 0;
       }
     }

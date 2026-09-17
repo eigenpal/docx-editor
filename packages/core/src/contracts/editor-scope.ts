@@ -1,10 +1,23 @@
-/**
- * The identity of one continuous user gesture, for history grouping: mint one per gesture
- * (`Symbol('color-drag')`) and pass it with every call of that gesture. A symbol, so two
- * unrelated callers cannot collide by naming a gesture the same way. The store's own
- * `HistoryGroup` is this same alias.
- */
-export type HistoryGroup = symbol;
+/** The engine-owned identity of one gesture. Create it with `Editor.beginHistoryGroup()`. @public */
+declare const historyGroupBrand: unique symbol;
+export interface HistoryGroup {
+  readonly [historyGroupBrand]: true;
+  /** Closed after `end()`, document replacement, detach, or destruction. */
+  readonly state: 'open' | 'closed';
+  /** End this gesture without reverting any edits. Safe to call more than once. */
+  end(): void;
+}
+
+/** The history authority's result for this frame. @public */
+export interface HistoryGroupOutcome {
+  readonly kind: 'started' | 'extended' | 'split' | 'none';
+  readonly reason?:
+    | 'history-boundary'
+    | 'undo-redo'
+    | 'no-history'
+    | 'package-unit'
+    | 'composition';
+}
 
 /**
  * The editor is N+1 editing views: one body plus one per header/footer relationship, plus
@@ -44,44 +57,21 @@ export type EditorScope =
 /** A concrete editing view. */
 export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
 
-/**
- * How one command runs: where it lands, and which gesture it belongs to.
- *
- * `historyGroup` is for a control that applies every intermediate value of one gesture — a
- * color picker the user drags, a font-size stepper held down, a spacing slider. Each call
- * renders and replicates on its own, but consecutive calls carrying the same token are ONE
- * undo step: undo restores the formatting from before the first call, exactly as it was
- * (a mixed selection comes back mixed), and redo restores the last value applied. Mint a
- * new token per gesture (`Symbol('color-drag')`) and pass it with every call of that
- * gesture; anything else closes the group — a call without a token or with another token,
- * a call landing in another story, buffered typing flushed ahead of a call, an undo, a
- * redo, or a command that records a whole-package unit such as inserting an image or a
- * footnote. A call that changes nothing adds no entry and leaves the group open. Every
- * formatting and text command honors the token; review, protection, content-control and
- * form-field commands record their own step. Host code that runs inside the call, such as
- * a change listener, writes its own steps too.
- *
- * In a collaborative session the shared undo manager is the undo authority, and the token
- * groups there too: frames of one gesture join one shared undo item however long the
- * gesture lasts, and a change of group starts a new item; a story change inside one
- * gesture does not split the shared item. Without a token that manager keeps its own rule
- * of joining local edits inside its capture window.
- *
- * @example
- * ```ts
- * const picker = document.querySelector<HTMLInputElement>('#text-color')!;
- * const gesture = Symbol('color-drag');
- * picker.addEventListener('input', () => {
- *   editor.exec(
- *     { type: 'setMarkAttr', mark: 'color', attr: 'val', value: picker.value },
- *     { historyGroup: gesture }
- *   );
- * });
- * ```
- */
+/** Options for a command's editing view and explicit gesture. @public */
 export interface EditorExecOptions {
-  /** The editing view the command addresses. Omitted, the command lands where the caret is. */
+  /** Omitted, the command addresses the current selection. */
   readonly scope?: EditorScope;
-  /** The gesture this call is one frame of. Omitted, the call is its own undo step. */
+  /**
+   * An open handle from this editor. Supported for synchronous formatting commands.
+   * Intervening writes and undo/redo can split a gesture; inspect `ExecResult.history`.
+   * Read-only commands do not close a gesture. Ungrouped collaboration uses timed capture.
+   * See the core history grouping guide for gesture bindings and boundary rules.
+   */
   readonly historyGroup?: HistoryGroup;
+}
+
+/** Optional diagnostic notification; subscribing does not change history behavior. @public */
+export interface HistoryDiagnostic {
+  readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
+  readonly reason: string;
 }

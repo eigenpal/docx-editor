@@ -364,3 +364,53 @@ for a complete control and its placement inside the dialog.
 - [React composition](/docs/2.x/react/composition)
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots)
 - [React API reference](/docs/2.x/api/react)
+
+## useHistoryGroup
+
+`useHistoryGroup({ kind })` binds a control's native gesture events. It returns
+`ref` and `options()`. The core controller owns boundaries; the hook cleans up
+when the element or editor changes and when the component unmounts.
+
+Use `range` for sliders, `repeat` for held buttons, `keyboard` for keyboard
+controls, and `native-color` for native color commitments. This color control
+applies React `onChange` values without ending each intermediate frame:
+
+```tsx
+import { useState } from 'react';
+import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/react';
+
+function LiveColor() {
+  const color = useEditorValueCommand('text.color');
+  const gesture = useHistoryGroup({ kind: 'native-color' });
+  const [status, setStatus] = useState('');
+  return (
+    <label title={color.disabledReason ?? undefined}>
+      Text color
+      <input
+        ref={gesture.ref}
+        type="color"
+        disabled={!color.isEnabled}
+        value={`#${color.value ?? '000000'}`}
+        onChange={(event) => {
+          const result = color.execute(event.currentTarget.value.slice(1), gesture.options());
+          setStatus(result.ok ? (result.history?.kind ?? 'none') : result.reason);
+        }}
+      />
+      <span>{color.value === null ? 'Mixed or unavailable' : color.value}</span>
+      <output aria-live="polite">{status}</output>
+    </label>
+  );
+}
+```
+
+`useEditorValueCommand` also accepts `font.family`, `font.size`,
+`text.highlight`, `styles.style`, and `list.lineSpacing`. Font size uses
+half-points. `execute(value, options?)` returns `ExecResult`; `value` stays
+synchronized with selection changes and undo. Null means mixed or unavailable.
+Image value slots accept options but refuse a history group.
+
+`useEditorCommand().execute(options)` retains its boolean result. Its nullary
+form remains safe as `onClick={command.execute}`; event arguments are ignored.
+Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics.
+See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step)
+for native color limitations and a deterministic range example.

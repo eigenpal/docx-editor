@@ -63,50 +63,151 @@ function pageLabel(editor: Editor): string {
 
 ### Group one gesture into one undo step
 
-A live control applies every intermediate value while the user drags it, so the
-selection updates under the pointer. Each call to `exec` is one transaction, and
-by default each transaction is one undo step. To make a whole gesture one undo
-step, pass the same `historyGroup` token with every call of that gesture:
+Use `bindHistoryGroup` for a live formatting control. Each value renders and
+replicates immediately. Undo restores the state before the first frame,
+including mixed formatting. Redo restores the last frame.
+
+This range control changes font size in points. The command takes half-points:
 
 ```ts
-const picker = document.querySelector<HTMLInputElement>('#text-color')!;
-const gesture = Symbol('color-drag');
+import { bindHistoryGroup, type Editor } from '@docx-editor.dev/core';
 
-picker.addEventListener('input', () => {
-  editor.exec(
-    { type: 'setMarkAttr', mark: 'color', attr: 'val', value: picker.value },
-    { historyGroup: gesture }
-  );
-});
+function mountFontSize(editor: Editor, slider: HTMLInputElement, status: HTMLOutputElement) {
+  slider.type = 'range';
+  slider.min = '8';
+  slider.max = '72';
+  slider.step = '0.5';
+  const gesture = bindHistoryGroup(editor, slider, { kind: 'range' });
+  const sync = () => {
+    const size = editor.snapshot().formatting?.fontSizePt;
+    slider.value = String(size ?? 11);
+    slider.setAttribute('aria-label', 'Font size');
+    slider.setAttribute(
+      'aria-valuetext',
+      size === undefined ? 'Mixed or unavailable' : `${size} points`
+    );
+    const allowed = editor.can({
+      type: 'setMarkAttr',
+      mark: 'fontSize',
+      attr: 'val',
+      value: 22,
+    });
+    slider.disabled = !allowed.ok;
+    slider.title = allowed.ok ? '' : allowed.reason;
+  };
+  const apply = () => {
+    const result = editor.exec(
+      {
+        type: 'setMarkAttr',
+        mark: 'fontSize',
+        attr: 'val',
+        value: Number(slider.value) * 2,
+      },
+      gesture.options()
+    );
+    status.value = result.ok ? (result.history?.kind ?? 'none') : result.reason;
+  };
+  slider.addEventListener('input', apply);
+  const off = editor.on('selectionChange', sync);
+  sync();
+  return () => {
+    slider.removeEventListener('input', apply);
+    off();
+    gesture.dispose();
+  };
+}
 ```
 
-Every call still renders and replicates on its own. Undo restores the formatting
-from before the first call, exactly as it was, so a selection with mixed colors
-comes back mixed. Redo restores the last value applied.
+The binding starts a range gesture on pointer down or the first relevant keydown.
+It retains the handle through repeat events. Pointer release, cancellation,
+lost capture, keyup, blur, or disposal ends the gesture. Outside releases work.
+Terminal events end after propagation, so the final value joins the gesture.
+For a held stepper, use `kind: 'repeat'` and stop your repeat timer on release.
+The binding groups writes; it does not schedule repeated commands.
 
-The token is the boundary. Create a new token for each gesture, and the engine
-closes the group when any of the following happens:
+For native color inputs, use `kind: 'native-color'`. Remove the leading `#`
+before executing a color command. Apply values in React `onChange` or Vue
+`@input`; the binding owns the native `change` listener. Native `change` means
+value commitment, **not popup closure**. Browser color controls differ: a
+control without a terminal commitment event ends on the next activation,
+Escape, blur, or disposal. Use a custom range control when exact drag boundaries
+must be portable. See the [React recipe](/docs/2.x/react/hooks#usehistorygroup)
+and [Vue recipe](/docs/2.x/vue/composables#usehistorygroup).
 
-- A call arrives without a token, or with a different token.
-- A call lands in a different story, such as a header after the body.
-- Buffered typing flushes ahead of a call. The keystrokes are their own step.
-- The user runs undo or redo.
-- A command records a whole-package unit, such as inserting an image or a footnote.
+For a control with an explicit lifecycle, create the handle yourself:
 
-A call that changes nothing adds no undo step and leaves the group open. Every
-formatting and text command accepts the option, so a font-size stepper, a
-spacing slider, or an indent control that you build groups the same way.
-Review, protection, content-control, and form-field commands always record
-their own step, and image commands refuse the option. A control that
-dispatches by slot passes the same options through `runToolbarCommand`. The
-packaged toolbar does not pass a token.
+```ts
+const group = editor.beginHistoryGroup();
+try {
+  const result = editor.exec({ type: 'setParagraphSpacing', afterPt: 12 }, { historyGroup: group });
+  if (!result.ok) console.error(result.reason);
+} finally {
+  group.end();
+}
+```
 
-In a collaborative session, the shared undo manager owns undo. The token groups
-there too: frames of one gesture join one shared undo item however long the
-gesture lasts, and a change of group starts a new item. A story change inside
-one gesture does not split the shared item. Inserting a hyperlink publishes its
-relationship as a separate shared item. Calls without a token keep the
-manager's own rule, which joins local edits inside its capture window.
+Keep one handle across the asynchronous events of one gesture; end it in your
+terminal handler. Creating or ending a handle does not change document content.
+`end()` is idempotent and never rolls edits back. Handles belong to one editor
+and mounted document. Ended, foreign, forged, and expired handles receive
+`unsupported` from both `can` and `exec`. Load, detach, and destruction expire
+handles. A remount also expires them; bindings create a fresh handle when needed.
+
+Grouping supports `toggleMark`, `setMarkAttr`, `setAlignment`,
+`clearFormatting`, `setLineSpacing`, `setParagraphSpacing`,
+`setParagraphStyle`, and `setParagraphFormat`. Other command families refuse
+`historyGroup` before mutation. This includes text and structural edits,
+images, hyperlinks, notes, header/footer lifecycle, review, protection, form
+fields, and content controls. Those commands can create separate package units
+or deferred writes. Omit the option to run their normal history behavior.
+
+| Event                                                                 | History behavior                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| First committed frame                                                 | `history.kind: 'started'`                                                       |
+| Further frame on the same open undo entry                             | `extended`                                                                      |
+| Intervening write, another group, typing flush, or local story change | Next committed frame reports `split`                                            |
+| Undo or redo                                                          | Next frame starts a separate entry; facade undo/redo reports reason `undo-redo` |
+| Read-only command without a group, such as `selectAll`                | Does not close the group                                                        |
+| No committed history, including formatting at a collapsed caret       | `none`; no undo entry                                                           |
+| Refusal before the store                                              | No history change                                                               |
+| Ungrouped store transaction, even if empty or refused                 | Closes the local group                                                          |
+| Ended handle                                                          | Further calls refuse; existing edits remain                                     |
+
+The outcome comes from the history authority, not the number of accepted calls.
+A repeated equal property value can still report `changed: true` and `extended`.
+`changed: false` does not mean refusal: formatting at a caret can arm future typing.
+
+Subscribe to `historyDiagnostic` for optional development feedback. A `split`
+notification explains an interrupted gesture. `possible-ungrouped-gesture`
+flags three ungrouped mark writes to the same selection within successive
+250 ms intervals. It is a heuristic: separate clicks can be intentional.
+`possible-fragmented-gesture` similarly flags creating a fresh handle for every
+frame. Events do not log automatically or change grouping behavior.
+
+`runToolbarCommand(editor, 'text.bold', { historyGroup })` accepts options in
+the third position. Value slots take a typed value first:
+`runToolbarCommand(editor, 'text.color', '0070C0', { historyGroup })`.
+Invalid supplied values refuse instead of falling back to a fixed command.
+
+#### Collaboration boundaries
+
+The shared undo manager groups this session's **local origin**. A handle does
+not give every collaborator the same undo stack. Grouped frames can extend
+one shared item beyond the normal capture timeout. Ungrouped edits retain
+collaboration's timed capture behavior; they are not always separate steps.
+A story change can remain in one shared item, unlike local store history.
+
+Another local item on top, undo/redo, or a refused journal resets shared
+capture. The next committed frame reports a split. A transaction that changes
+no tracked shared state creates no shared undo item. Commands that publish
+separate relationship journals, including external hyperlink insertion, refuse
+the grouping option.
+
+Custom collaboration ports must preserve journal identity and synchronous local
+capture. `historyGroupOfJournal(journal)` reads local metadata outside the
+replicated document. Spreading, `structuredClone`, serialization, and
+`postMessage` lose it. Worker ports need an explicit local identity mapping;
+a serialized journal alone cannot preserve grouping or synchronous outcomes.
 
 ## The pipeline
 

@@ -18,7 +18,7 @@ import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { packageEditTouchesShell } from './package-shell-delta.ts';
-import { closeHistoryGroupsExcept } from './history-group.ts';
+import { closeHistoryGroupsExcept, reportHistoryGroup } from './history-group.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { lifecycleProtectionRefusal } from './forms-protection.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
@@ -590,6 +590,7 @@ export class TreePackageStore {
     if (result.change) {
       this.packageRev += 1;
       const promoted = cascaded || promotedShellWrite;
+      if (promoted) reportHistoryGroup(options.historyGroup, 'split', 'package-unit');
       // `recordsHistory: false` opts a caller out of undo entirely; the promoted branch must
       // not push a package pointer for it either.
       if (
