@@ -63,7 +63,7 @@
 
 import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
 import type { WordDefaultFamily } from './family-plans.ts';
-import { resolvePackagedAssetRoot } from './asset-root.ts';
+import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 
 export type { WordDefaultFamily } from './family-plans.ts';
@@ -154,7 +154,9 @@ const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, e
  * `/_next/static/media/Caladea-Bold.d6e01b80.ttf`. Anything that needs a `URL` here has
  * to cope with both; see {@link FONT_ASSET_ROOT}.
  */
-const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
+const relocatedAssetRoot = packagedAssetRootOverride();
+const assetUrl = (file: string): URL | string =>
+  relocatedAssetRoot === undefined ? FONT_ASSET_URLS[file]! : new URL(file, relocatedAssetRoot);
 
 /**
  * Directory URL of the packaged font files this package serves.
@@ -171,11 +173,14 @@ const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
  * uncatchable and takes down the whole bundle that imported this package rather than
  * degrading font loading.
  *
+ * In Node, the `DOCX_EDITOR_FONT_ASSET_ROOT` environment variable relocates this
+ * directory. Single-file bundles set it to a copy of the package's `assets/` directory
+ * that ships beside the executable, and every packaged face is then read from there.
+ *
  * @public
  */
-export const FONT_ASSET_ROOT: URL = resolvePackagedAssetRoot(
-  assetUrl(FONT_ASSET_MANIFEST[0]!.file)
-);
+export const FONT_ASSET_ROOT: URL =
+  relocatedAssetRoot ?? resolvePackagedAssetRoot(assetUrl(FONT_ASSET_MANIFEST[0]!.file));
 
 /**
  * The families Word applies to a document by DEFAULT, and what

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "docx-to-markdown"
+version = "0.1.0"
+description = "Convert DOCX to Markdown with Word-faithful pages, headers, footers, comments, and tracked changes."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+keywords = ["docx", "markdown", "converter", "word", "pagination"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://docx-editor.dev"
+Documentation = "https://www.docx-editor.dev/docs/2.x/export/markdown"
+Source = "https://github.com/eigenpal/docx-editor/tree/main/python/docx-to-markdown"
+Issues = "https://github.com/eigenpal/docx-editor/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docx_to_markdown"]
+artifacts = ["src/docx_to_markdown/_vendor/**"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+# The sdist carries no runtime; wheels are platform-specific and built per target.
+exclude = ["src/docx_to_markdown/_vendor", "runtime", "package.json", "tsconfig.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

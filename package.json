@@ -20,7 +20,8 @@
     "examples/remix",
     "examples/vite",
     "examples/vue",
-    "examples/server-agent-review"
+    "examples/server-agent-review",
+    "python/docx-to-markdown"
   ],
   "type": "module",
   "scripts": {

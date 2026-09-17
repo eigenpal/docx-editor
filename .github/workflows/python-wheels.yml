@@ -1,0 +1,62 @@
+name: Python wheels
+
+# Builds the docx-to-markdown Python package: one platform-tagged wheel per runner,
+# each carrying a Bun executable compiled on that platform. Wheels are uploaded as
+# artifacts; publishing to PyPI is a separate, manual step.
+
+on:
+  pull_request:
+    paths:
+      - 'python/docx-to-markdown/**'
+      - 'packages/docx-to-markdown/**'
+      - 'packages/fonts/**'
+      - 'packages/core/**'
+      - '.github/workflows/python-wheels.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wheel:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            tag: linux-x64
+          - os: ubuntu-24.04-arm
+            tag: linux-arm64
+          - os: macos-15
+            tag: macos-arm64
+          - os: macos-15-intel
+            tag: macos-x64
+          - os: windows-2025
+            tag: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: astral-sh/setup-uv@v6
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - name: Build runtime
+        working-directory: python/docx-to-markdown
+        run: bun run build:runtime
+      - name: Test
+        working-directory: python/docx-to-markdown
+        run: uv run --no-project --with pytest --with-editable . pytest -q
+      - name: Build wheel
+        working-directory: python/docx-to-markdown
+        run: uv build --wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docx-to-markdown-${{ matrix.tag }}
+          path: python/docx-to-markdown/dist/*.whl
+          if-no-files-found: error
