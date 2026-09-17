@@ -356,6 +356,32 @@ describe('content-control surface chrome', () => {
     surface.destroy();
   });
 
+  test('arrowing into a prompt selects it whole, so typing replaces it and keeps going', () => {
+    const body = `<w:p><w:r><w:t xml:space="preserve">Name: </w:t></w:r>${sdt(
+      `<w:showingPlcHdr/><w:richText/>`,
+      `<w:r><w:rPr><w:rStyle w:val="PlaceholderText"/></w:rPr><w:t>Click here to enter text.</w:t></w:r>`
+    )}</w:p>`;
+    const { surface, container } = mount(body);
+    // Caret before the prompt, then one step right: Word selects the prompt as a unit rather
+    // than parking the caret inside text the first keystroke will replace.
+    putCaret(surface, 6);
+    surface.navigate('right');
+    const selected = surface.state().selection;
+    expect(Math.min(selected.anchor.offset, selected.head.offset)).toBe(6);
+    expect(Math.max(selected.anchor.offset, selected.head.offset)).toBe(
+      6 + 'Click here to enter text.'.length
+    );
+    surface.type('a');
+    surface.type('b');
+    surface.type('c');
+    // Navigation flushes buffered typing; every keystroke after the replacement must land.
+    surface.navigate('right');
+    expect(surface.session.bodyText()).toBe('Name: abc');
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain('Name: abc');
+    expect(surface.state().lastRejection ?? null).toBeNull();
+    expect(surface.state().selection.head.offset).toBe(9);
+  });
+
   test('a host renderer receives checkbox presses as a session before the engine toggles', () => {
     // Text on both sides: the toggle rewrites the display run as a `w:sym`, which has no
     // model width, and the control's fragment then comes from the line it sits on.

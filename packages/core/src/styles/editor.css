@@ -1030,18 +1030,30 @@ a.docx-hyperlink:focus-visible {
   box-shadow: 0.25em 0 currentcolor;
 }
 
-.docx-content-control-widget[data-docx-cc-widget='checkbox']::after {
-  content: '';
-  inset: 0.125em 0.3125em 0.25em;
-  display: block;
-  border-right: 0.125em solid currentcolor;
-  border-bottom: 0.125em solid currentcolor;
-  opacity: 0;
-  transform: rotate(45deg);
+/* A checkbox control's widget is a hit target over the document's own state glyph (☐ / ☒ in
+   the state font, exactly what Word shows), so it paints nothing of its own: a drawn check over
+   a see-through chip showed both the check and the glyph on hover. Hover and active states
+   outline the glyph instead. */
+.docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-active]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-open]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome:hover .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-read-only]:hover
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  background: transparent;
+  border-color: transparent !important;
 }
 
-.docx-content-control-widget[data-docx-cc-widget='checkbox'][data-checked='true']::after {
-  opacity: 1;
+.docx-content-control-chrome[data-active]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome:hover .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']::after {
+  content: none;
 }
 
 .docx-content-control-widget:disabled,

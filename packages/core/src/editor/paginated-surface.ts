@@ -222,7 +222,11 @@ import {
   mergedMultiSettingProperty,
   type SurfaceProperty,
 } from './surface-formatting.ts';
-import { createPointerController, type PointerController } from './surface-pointer.ts';
+import {
+  absorbPlaceholderControls,
+  createPointerController,
+  type PointerController,
+} from './surface-pointer.ts';
 import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
@@ -4688,10 +4692,11 @@ export function mountPaginatedSurface(
       ) {
         noteOps.setActiveNotePageIndex(moved.pageIndex);
       }
-      setSelection(
-        { anchor: extend ? selection.anchor : moved.position, head: moved.position },
-        true
-      );
+      const target = { anchor: extend ? selection.anchor : moved.position, head: moved.position };
+      // A prompt is one unit for the caret, as in Word: arrowing into it selects the whole
+      // prompt rather than parking the caret inside text the first keystroke replaces, which
+      // left the buffered keystrokes after it aimed past the end of the shortened paragraph.
+      setSelection(extend ? target : absorbPlaceholderControls(currentLayout, target), true);
     },
 
     deleteWordBackward() {
