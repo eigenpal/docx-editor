@@ -38,3 +38,9 @@ def network():
 def reviewed_document() -> Path:
     """A small document with comments and tracked changes."""
     return REPO / "e2e" / "fixtures" / "reviewer-filter.docx"
+
+
+@pytest.fixture(scope="session")
+def demo_document() -> Path:
+    """A real-world document whose theme lacks optional font schemes."""
+    return REPO / "e2e" / "fixtures" / "demo.docx"

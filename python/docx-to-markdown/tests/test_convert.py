@@ -194,3 +194,9 @@ class TestConverter:
 def test_export_warning_shape():
     warning = ExportWarning("incomplete-font", "x", 3, None)
     assert warning.page_number == 3
+
+
+def test_real_world_document_converts(demo_document):
+    result = convert(demo_document)
+    assert result.page_count > 0
+    assert result.markdown.strip()

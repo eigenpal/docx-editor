@@ -15,6 +15,8 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
  */
 export function canonicalize(value: unknown, ephemera: ReadonlySet<string> = new Set()): string {
   const seen = new WeakSet<object>();
+  // The path to the value being encoded, so a rejected input names the field at fault.
+  const path: (string | number)[] = [];
   const enc = (v: unknown): string => {
     if (v === null) return 'null';
     const t = typeof v;
@@ -26,7 +28,18 @@ export function canonicalize(value: unknown, ephemera: ReadonlySet<string> = new
     }
     if (t === 'string') return JSON.stringify(v);
     if (t === 'bigint') return `${(v as bigint).toString()}n`;
-    if (Array.isArray(v)) return `[${v.map(enc).join(',')}]`;
+    if (Array.isArray(v)) {
+      return `[${v
+        .map((item, index) => {
+          path.push(index);
+          try {
+            return enc(item);
+          } finally {
+            path.pop();
+          }
+        })
+        .join(',')}]`;
+    }
     if (t === 'object') {
       const obj = v as Record<string, unknown>;
       if (seen.has(obj)) throw new Error('cannot canonicalize a cyclic structure');
@@ -34,11 +47,21 @@ export function canonicalize(value: unknown, ephemera: ReadonlySet<string> = new
       const keys = Object.keys(obj)
         .filter((k) => !ephemera.has(k))
         .sort();
-      const body = keys.map((k) => `${JSON.stringify(k)}:${enc(obj[k])}`).join(',');
+      const body = keys
+        .map((k) => {
+          path.push(k);
+          try {
+            return `${JSON.stringify(k)}:${enc(obj[k])}`;
+          } finally {
+            path.pop();
+          }
+        })
+        .join(',');
       seen.delete(obj);
       return `{${body}}`;
     }
-    throw new Error(`unsupported value type in comparator input: ${t}`);
+    const at = path.length > 0 ? ` at ${path.map(String).join('.')}` : '';
+    throw new Error(`unsupported value type in comparator input: ${t}${at}`);
   };
   return enc(value);
 }

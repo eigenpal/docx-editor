@@ -389,6 +389,28 @@ export function tableCellStyleFormatting(
  * `styleId` values keep the last definition, matching Word's reader for this fixture class.
  * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
  */
+/**
+ * The theme as cache-key material: every face present, `null` when the theme has none.
+ *
+ * `ThemeFonts` leaves the East Asian, complex-script, and supplemental faces optional,
+ * and a producer that reads a theme with no such scheme hands over `undefined` for
+ * them. The comparator behind `stableHash` refuses `undefined` by design, so a key built
+ * from the raw object failed layout for any document whose theme lacked one of those
+ * faces.
+ */
+function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
+  return {
+    major: themeFonts.major ?? null,
+    minor: themeFonts.minor ?? null,
+    majorEastAsia: themeFonts.majorEastAsia ?? null,
+    minorEastAsia: themeFonts.minorEastAsia ?? null,
+    majorBidi: themeFonts.majorBidi ?? null,
+    minorBidi: themeFonts.minorBidi ?? null,
+    majorSupplemental: themeFonts.majorSupplemental ?? null,
+    minorSupplemental: themeFonts.minorSupplemental ?? null,
+  };
+}
+
 export function buildStyleCascadeTable(
   stylesRoot: OoxmlElement | null,
   themeFonts: ThemeFonts = NO_THEME_FONTS,
@@ -396,11 +418,12 @@ export function buildStyleCascadeTable(
 ): StyleCascadeTable {
   const typography = cjkTypographyFromSettings(settingsRoot);
   const styles = new Map<string, StyleDefinition>();
+  const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
-      cacheToken: stableHash({ empty: true, theme: themeFonts, typography }),
+      cacheToken: stableHash({ empty: true, theme, typography }),
       typography,
       docDefaultsRun: [],
       docDefaultsParagraph: [],
@@ -449,7 +472,7 @@ export function buildStyleCascadeTable(
     defT: defaultTableStyleId,
     // Retheming changes the face every theme-fonted run measures in while no style
     // material moves, so a break cached under the old theme must not be reused.
-    theme: themeFonts,
+    theme,
     styles: [...styles.values()].map((style) => ({
       id: style.styleId,
       type: style.type,
