@@ -61,9 +61,18 @@ function SimpleMarkupButton() {
 }
 ```
 
-`reviewDisplayMode` is `'simple-markup'`, `'all-markup'`, `'proposed'` (No
-Markup), or `'original'`. A click on a change bar changes it too. Vue offers the
-same pair of composables.
+`reviewDisplayMode` takes one of four values. Word models the same views as a
+markup setting and a view setting:
+
+| Word menu item | `reviewDisplayMode` | Word `RevisionsMarkup` | Word `RevisionsView` |
+| -------------- | ------------------- | ---------------------- | -------------------- |
+| Simple Markup  | `'simple-markup'`   | `Simple`               | `Final`              |
+| All Markup     | `'all-markup'`      | `All`                  | `Final`              |
+| No Markup      | `'proposed'`        | `None`                 | `Final`              |
+| Original       | `'original'`        | `None`                 | `Original`           |
+
+A click on a change bar changes the value too. Vue offers the same pair of
+composables.
 
 ## Choose an editing mode
 
