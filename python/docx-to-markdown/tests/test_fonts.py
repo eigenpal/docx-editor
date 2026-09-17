@@ -1,3 +1,5 @@
+import pytest
+
 from docx_to_markdown import (
     BUNDLED_FAMILIES,
     google_font_families,
@@ -57,8 +59,8 @@ def test_google_fallback_serves_catalog_family(narrow_pages, network):
     with_google = convert(_with_family(narrow_pages, "Fira Sans"), google_fonts=True)
     assert with_google.missing_fonts == []
     assert with_google.fonts_complete
-    faces = next(f for f in with_google.font_resolution["families"] if f["family"] == "Fira Sans")
-    assert {face["via"] for face in faces["faces"]} == {"direct"}
+    fira = with_google.font_resolution.family("Fira Sans")
+    assert fira is not None and {face.via for face in fira.faces} == {"direct"}
     assert with_google.page_count != without.page_count
 
 
@@ -115,8 +117,9 @@ def test_convert_accepts_a_font_directory(narrow_pages, font_assets):
     doc = _with_family(narrow_pages, "Carlito")
 
     def carlito_ids(result):
-        faces = next(f for f in result.font_resolution["families"] if f["family"] == "Carlito")
-        return sorted(face["id"] for face in faces["faces"])
+        carlito = result.font_resolution.family("Carlito")
+        assert carlito is not None
+        return sorted(face.id or "" for face in carlito.faces)
 
     # The bundled substitutes already serve Carlito, from their packaged files.
     assert all(i.startswith("default-fonts:") for i in carlito_ids(convert(doc)))
@@ -136,3 +139,28 @@ def test_convert_accepts_a_font_directory(narrow_pages, font_assets):
     aliased = convert(roboto, fonts=font_files(*four, family="Roboto"))
     assert aliased.missing_fonts == []
     assert aliased.fonts_complete
+
+
+def test_fonts_accepts_a_mixed_list(narrow_pages, font_assets, tmp_path):
+    import shutil
+
+    from docx_to_markdown import FontFace, convert, font_files
+
+    serif = tmp_path / "serif"
+    serif.mkdir()
+    for file in font_assets.glob("LiberationSerif-*.ttf"):
+        shutil.copy(file, serif)
+    fonts = [
+        serif,
+        font_assets / "LiberationMono-Regular.ttf",
+        *font_files(font_assets / "Carlito-Regular.ttf", family="Calibri"),
+        FontFace(str(font_assets / "Caladea-Bold.ttf"), "Cambria", 700),
+    ]
+    result = convert(narrow_pages, fonts=fonts)
+    assert result.fonts_complete
+    calibri = result.font_resolution.family("Calibri")
+    assert calibri is not None
+    regular = next(x for x in calibri.faces if x.weight == 400 and x.style == "normal")
+    assert (regular.id or "").startswith("bytes:Calibri")  # the aliased file, not the bundled one
+    with pytest.raises(TypeError):
+        convert(narrow_pages, fonts=[42])  # type: ignore[list-item]

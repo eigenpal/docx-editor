@@ -45,6 +45,13 @@ exclude = ["src/docx_to_markdown/_vendor", "runtime", "package.json", "tsconfig.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.9"
+typeCheckingMode = "strict"
+# Runtime validation of caller input keeps isinstance checks the types call redundant.
+reportUnnecessaryIsInstance = false
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"

@@ -32,3 +32,9 @@ def network():
 
     if os.environ.get("DOCX_TO_MARKDOWN_NETWORK_TESTS") != "1":
         pytest.skip("set DOCX_TO_MARKDOWN_NETWORK_TESTS=1 to run tests that fetch fonts")
+
+
+@pytest.fixture(scope="session")
+def reviewed_document() -> Path:
+    """A small document with comments and tracked changes."""
+    return REPO / "e2e" / "fixtures" / "reviewer-filter.docx"

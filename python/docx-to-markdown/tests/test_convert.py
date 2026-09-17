@@ -22,8 +22,14 @@ def test_bundled_fonts_paginate_like_word(narrow_pages):
     assert result.page_count == 15
     assert result.warnings == []
     assert result.fonts_complete
-    families = {f["family"]: f["coverage"] for f in result.font_resolution["families"]}
+    assert result.font_resolution is not None
+    families = {f.family: f.coverage for f in result.font_resolution.families}
     assert families == {"Calibri": "complete"}
+    face = result.font_resolution.families[0].faces[0]
+    assert (face.source_family, face.via) == ("Carlito", "substitution")
+    assert face.substitution is not None and face.substitution.requested.family == "Calibri"
+    assert result.pagination.display_mode == "all-markup"
+    assert result.review_artifacts == [] and result.review_bindings == []
     assert result.font_errors == []
     assert result.markdown.strip()
     first = result.pages[0]
@@ -63,7 +69,8 @@ def test_caller_fonts_take_precedence(narrow_pages, font_assets):
     result = convert(narrow_pages, fonts=carlito)
     assert result.page_count == 15
     assert result.font_errors == []
-    assert len(result.font_resolution["families"][0]["faces"]) == 4
+    assert result.font_resolution is not None
+    assert len(result.font_resolution.families[0].faces) == 4
 
 
 def test_unreadable_font_is_reported_not_fatal(narrow_pages, tmp_path):

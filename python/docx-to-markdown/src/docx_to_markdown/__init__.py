@@ -30,9 +30,32 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, Literal, Optional, Sequence, Union
+from typing import IO, Any, Callable, Literal, Optional, Union, cast
 
 from ._runtime import ConversionError, RuntimeNotFoundError, Worker, run_once, runtime_path
+from .records import (
+    ChangeKind,
+    Comment,
+    Coverage,
+    DocumentProjection,
+    DroppedEmbeddedFont,
+    FontFaceResolution,
+    FontFamilyResolution,
+    FontOriginFailure,
+    FontRequest,
+    FontResolution,
+    FontSubstitution,
+    ImageOccurrence,
+    PageProjection,
+    Pagination,
+    ReviewArtifact,
+    ReviewBinding,
+    ReviewOccurrence,
+    ReviewProjection,
+    ReviewRange,
+    TrackedChange,
+    review_artifact_from_json,
+)
 from .fonts import (
     BUNDLED_FAMILIES,
     FontFace,
@@ -46,18 +69,38 @@ from .fonts import (
 
 __all__ = [
     "BUNDLED_FAMILIES",
+    "ChangeKind",
+    "Comment",
     "ConversionError",
     "Converter",
+    "Coverage",
     "DisplayMode",
+    "DocumentProjection",
+    "DroppedEmbeddedFont",
     "ExportWarning",
     "FontFace",
     "FontFaceError",
+    "FontFaceResolution",
+    "FontFamilyResolution",
+    "FontOriginFailure",
     "FontPolicy",
+    "FontRequest",
+    "FontResolution",
+    "FontSubstitution",
+    "ImageOccurrence",
     "ImageSyntax",
     "MarkdownResult",
     "MediaAsset",
     "Page",
+    "PageProjection",
+    "Pagination",
+    "ReviewArtifact",
+    "ReviewBinding",
+    "ReviewOccurrence",
+    "ReviewProjection",
+    "ReviewRange",
     "RuntimeNotFoundError",
+    "TrackedChange",
     "convert",
     "font_family",
     "font_files",
@@ -73,6 +116,21 @@ _UNSET: Any = object()
 DisplayMode = Literal["all-markup", "proposed", "original"]
 FontPolicy = Literal["best-effort", "strict"]
 ImageSyntax = Literal["markdown", "html"]
+WarningCode = Literal[
+    "font-origin-failed",
+    "incomplete-font",
+    "content-scan-limit",
+    "image-placement-fallback",
+    "omitted-content",
+    "unknown",
+]
+_WARNING_CODES = (
+    "font-origin-failed",
+    "incomplete-font",
+    "content-scan-limit",
+    "image-placement-fallback",
+    "omitted-content",
+)
 Source = Union[str, "os.PathLike[str]", bytes, bytearray, memoryview, IO[bytes]]
 
 
@@ -85,8 +143,8 @@ class Page:
     markdown: str
     header_markdown: str
     footer_markdown: str
-    comments: list[dict[str, Any]] = field(default_factory=list)
-    tracked_changes: list[dict[str, Any]] = field(default_factory=list)
+    comments: list[Comment] = field(default_factory=lambda: [])
+    tracked_changes: list[TrackedChange] = field(default_factory=lambda: [])
 
     def __repr__(self) -> str:
         return (
@@ -99,7 +157,7 @@ class Page:
 class ExportWarning:
     """Content the export omitted or approximated. ``code`` is stable."""
 
-    code: str
+    code: WarningCode
     message: str
     page_number: Optional[int] = None
     part_name: Optional[str] = None
@@ -124,7 +182,7 @@ class MediaAsset:
     bytes: bytes
     pixel_width: int
     pixel_height: int
-    occurrences: list[dict[str, Any]] = field(default_factory=list)
+    occurrences: list[ImageOccurrence] = field(default_factory=lambda: [])
 
     def __repr__(self) -> str:
         return (
@@ -147,9 +205,13 @@ class MarkdownResult:
     pages: list[Page]
     warnings: list[ExportWarning]
     media: list[MediaAsset]
-    font_resolution: Optional[dict[str, Any]]
+    font_resolution: Optional[FontResolution]
     font_errors: list[FontFaceError]
+    review_artifacts: list[ReviewArtifact]
+    review_bindings: list[ReviewBinding]
+    pagination: Pagination
     raw: dict[str, Any]
+    """The converter's complete JSON result, for fields the typed records do not carry."""
 
     def __repr__(self) -> str:
         fonts = "complete" if self.fonts_complete else f"missing {self.missing_fonts}"
@@ -168,30 +230,20 @@ class MarkdownResult:
 
         Supply these with :func:`font_family` for page breaks that match Word.
         """
-        if self.font_resolution is None:
-            return []
-        return [
-            f["family"]
-            for f in self.font_resolution.get("families", [])
-            if f.get("coverage") != "complete"
-        ]
+        return [] if self.font_resolution is None else self.font_resolution.missing
 
     @property
     def fonts_complete(self) -> bool:
         """True when every family the document uses measured with all of its faces."""
-        if self.font_resolution is None:
-            return False
-        if self.font_resolution.get("originFailures"):
-            return False
-        return all(f.get("coverage") == "complete" for f in self.font_resolution["families"])
+        return self.font_resolution is not None and self.font_resolution.complete
 
     @property
-    def review_artifacts(self) -> list[dict[str, Any]]:
-        return list(self.raw.get("reviewArtifacts", []))
+    def comments(self) -> list[Comment]:
+        return [a for a in self.review_artifacts if isinstance(a, Comment)]
 
     @property
-    def review_bindings(self) -> list[dict[str, Any]]:
-        return list(self.raw.get("reviewBindings", []))
+    def tracked_changes(self) -> list[TrackedChange]:
+        return [a for a in self.review_artifacts if isinstance(a, TrackedChange)]
 
     def write(self, directory: Union[str, "os.PathLike[str]"]) -> Path:
         """Write ``document.md``, ``document.json``, and ``media/`` into a directory.
@@ -215,8 +267,11 @@ class MarkdownResult:
         return target
 
 
+Send = Callable[[dict[str, Any]], dict[str, Any]]
+
+
 def _request(
-    fonts: Sequence[FontFace],
+    fonts: FontsArg,
     font_policy: FontPolicy,
     google_fonts: bool,
     images: Union[bool, ImageSyntax],
@@ -237,7 +292,7 @@ def _request(
     }
 
 
-def _with_source(source: Source, request: dict[str, Any], send) -> dict[str, Any]:
+def _with_source(source: Source, request: dict[str, Any], send: Send) -> dict[str, Any]:
     if isinstance(source, (bytes, bytearray, memoryview)):
         data: Optional[bytes] = bytes(source)
     elif hasattr(source, "read"):
@@ -260,11 +315,23 @@ def _with_source(source: Source, request: dict[str, Any], send) -> dict[str, Any
     return send({**request, "docx": str(path.resolve())})
 
 
+def _warning(data: dict[str, Any]) -> ExportWarning:
+    code = data.get("code")
+    page = data.get("pageNumber")
+    return ExportWarning(
+        code=code if code in _WARNING_CODES else "unknown",
+        message=str(data.get("message", "")),
+        page_number=page if isinstance(page, int) else None,
+        part_name=data.get("partName") if isinstance(data.get("partName"), str) else None,
+    )
+
+
 def _to_result(payload: dict[str, Any]) -> MarkdownResult:
     raw = payload["result"]
     bytes_by_id = {
         entry["id"]: base64.b64decode(entry["bytes"]) for entry in payload.get("mediaBytes", [])
     }
+    font_resolution = raw.get("fontResolution")
     return MarkdownResult(
         markdown=raw["markdown"],
         pages=[
@@ -274,15 +341,12 @@ def _to_result(payload: dict[str, Any]) -> MarkdownResult:
                 markdown=p["markdown"],
                 header_markdown=p.get("headerMarkdown", ""),
                 footer_markdown=p.get("footerMarkdown", ""),
-                comments=list(p.get("comments", [])),
-                tracked_changes=list(p.get("trackedChanges", [])),
+                comments=[Comment.from_json(c) for c in p.get("comments", [])],
+                tracked_changes=[TrackedChange.from_json(c) for c in p.get("trackedChanges", [])],
             )
             for p in raw.get("pages", [])
         ],
-        warnings=[
-            ExportWarning(w["code"], w["message"], w.get("pageNumber"), w.get("partName"))
-            for w in raw.get("warnings", [])
-        ],
+        warnings=[_warning(w) for w in raw.get("warnings", [])],
         media=[
             MediaAsset(
                 id=a["id"],
@@ -292,12 +356,19 @@ def _to_result(payload: dict[str, Any]) -> MarkdownResult:
                 bytes=bytes_by_id.get(a["id"], b""),
                 pixel_width=a["pixelWidth"],
                 pixel_height=a["pixelHeight"],
-                occurrences=list(a.get("occurrences", [])),
+                occurrences=[ImageOccurrence.from_json(o) for o in a.get("occurrences", [])],
             )
             for a in raw.get("media", [])
         ],
-        font_resolution=raw.get("fontResolution"),
-        font_errors=[FontFaceError(e["path"], e["reason"]) for e in payload.get("fontErrors", [])],
+        font_resolution=FontResolution.from_json(cast("dict[str, Any]", font_resolution))
+        if isinstance(font_resolution, dict)
+        else None,
+        font_errors=[
+            FontFaceError(str(e["path"]), str(e["reason"])) for e in payload.get("fontErrors", [])
+        ],
+        review_artifacts=[review_artifact_from_json(a) for a in raw.get("reviewArtifacts", [])],
+        review_bindings=[ReviewBinding.from_json(b) for b in raw.get("reviewBindings", [])],
+        pagination=Pagination.from_json(raw.get("pagination") or {}),
         raw=raw,
     )
 
@@ -352,21 +423,19 @@ class Converter:
     def __init__(
         self,
         *,
-        fonts: Sequence[FontFace] = (),
+        fonts: FontsArg = (),
         font_policy: FontPolicy = "best-effort",
         google_fonts: bool = False,
         images: Union[bool, ImageSyntax] = False,
         display_mode: DisplayMode = "all-markup",
         timeout: Optional[float] = 300,
     ) -> None:
-        self._defaults = dict(
-            fonts=fonts if isinstance(fonts, (FontFace, str, os.PathLike)) else tuple(fonts),
-            font_policy=font_policy,
-            google_fonts=google_fonts,
-            images=images,
-            display_mode=display_mode,
-        )
-        _request(**self._defaults)  # validate eagerly
+        _request(fonts, font_policy, google_fonts, images, display_mode)  # validate eagerly
+        self._fonts: FontsArg = fonts
+        self._font_policy: FontPolicy = font_policy
+        self._google_fonts: bool = google_fonts
+        self._images: Union[bool, ImageSyntax] = images
+        self._display_mode: DisplayMode = display_mode
         self.timeout = timeout
         self._worker = Worker()
 
@@ -382,15 +451,13 @@ class Converter:
         timeout: Optional[float] = _UNSET,
     ) -> MarkdownResult:
         """Convert one file. Keywords match :func:`convert` and override the defaults."""
-        overrides = {
-            "fonts": fonts,
-            "font_policy": font_policy,
-            "google_fonts": google_fonts,
-            "images": images,
-            "display_mode": display_mode,
-        }
-        options = {**self._defaults, **{k: v for k, v in overrides.items() if v is not None}}
-        request = _request(**options)
+        request = _request(
+            self._fonts if fonts is None else fonts,
+            self._font_policy if font_policy is None else font_policy,
+            self._google_fonts if google_fonts is None else google_fonts,
+            self._images if images is None else images,
+            self._display_mode if display_mode is None else display_mode,
+        )
         wait = self.timeout if timeout is _UNSET else timeout
         payload = _with_source(source, request, lambda r: self._worker.request(r, timeout=wait))
         return _to_result(payload)

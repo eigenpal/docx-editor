@@ -116,10 +116,10 @@ class Worker:
     """
 
     def __init__(self) -> None:
-        self._process: Optional[subprocess.Popen[bytes]] = None
+        self._process: Optional["subprocess.Popen[bytes]"] = None
         self._lock = threading.Lock()
 
-    def _start(self) -> subprocess.Popen[bytes]:
+    def _start(self) -> "subprocess.Popen[bytes]":
         binary = _binary()
         self._process = subprocess.Popen(
             [str(binary), "--serve"],
@@ -136,8 +136,11 @@ class Worker:
 
     def request(self, request: dict[str, Any], *, timeout: Optional[float]) -> dict[str, Any]:
         with self._lock:
-            process = self._process if self.running else self._start()
-            assert process.stdin is not None and process.stdout is not None
+            process = self._process
+            if process is None or process.poll() is not None:
+                process = self._start()
+            stdin, stdout = process.stdin, process.stdout
+            assert stdin is not None and stdout is not None
             body = json.dumps({"protocol": PROTOCOL_VERSION, **request}).encode("utf-8")
             timer: Optional[threading.Timer] = None
             timed_out = False
@@ -153,9 +156,9 @@ class Worker:
                 timer.start()
             try:
                 try:
-                    process.stdin.write(body + b"\n")
-                    process.stdin.flush()
-                    line = process.stdout.readline()
+                    stdin.write(body + b"\n")
+                    stdin.flush()
+                    line = stdout.readline()
                 except (BrokenPipeError, OSError):
                     line = b""
             finally:

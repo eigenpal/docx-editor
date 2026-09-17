@@ -78,6 +78,16 @@ file, so a folder of licensed fonts is one argument:
 result = convert("contract.docx", fonts="fonts/")
 ```
 
+Pass a list to combine several families or sources. Entries can be folders, files, or
+faces, and the first entry that serves a face wins:
+
+```python
+result = convert(
+    "contract.docx",
+    fonts=["brand-fonts/", "extra/Roboto-Bold.ttf", *font_family("Aptos", "Aptos.ttf")],
+)
+```
+
 When the file's own family name differs from the name the document uses, register it
 under the document's name:
 
@@ -146,16 +156,38 @@ change were accepted, and `"original"` as if every change were rejected. Comment
 tracked changes with their Markdown offsets are in `result.review_artifacts` and
 `result.review_bindings`.
 
+## Typed end to end
+
+Every argument and every field of the result is typed, and the package ships `py.typed`.
+Pages, warnings, images, font resolution, comments, tracked changes, and Markdown
+bindings are frozen dataclasses with snake_case fields. `pyright` in strict mode passes on
+the package, so an editor completes and checks calls like these:
+
+```python
+from docx_to_markdown import PageProjection
+
+for change in result.tracked_changes:  # list[TrackedChange]
+    print(change.change, change.author, change.text)
+for binding in result.review_bindings:  # list[ReviewBinding]
+    if isinstance(binding.projection, PageProjection):
+        print(binding.projection.page_number, binding.ranges[0].start)
+```
+
+`result.raw` keeps the converter's complete JSON for anything the records do not carry.
+
 ## Result
 
 | Field | Content |
 | --- | --- |
 | `markdown` | The full logical document |
-| `pages` | `Page` objects: `number`, `markdown`, `header_markdown`, `footer_markdown`, `comments`, `tracked_changes` |
-| `warnings` | `ExportWarning` objects with a stable `code`, a message, and a page number when known |
-| `media` | `MediaAsset` objects with bytes and page occurrences |
-| `font_resolution` | Which face measured each family |
+| `pages` | `Page`: `number`, `markdown`, `header_markdown`, `footer_markdown`, `comments`, `tracked_changes` |
+| `warnings` | `ExportWarning` with a stable `code`, a message, and a page number when known |
+| `media` | `MediaAsset` with bytes, pixel size, and `ImageOccurrence` placements |
+| `font_resolution` | `FontResolution`: which face measured each family, with `missing` and `complete` |
 | `font_errors` | Font files that could not be admitted |
+| `review_artifacts` | `Comment` and `TrackedChange` records, also split as `comments` and `tracked_changes` |
+| `review_bindings` | `ReviewBinding`: where each artifact sits in the Markdown, in UTF-16 offsets |
+| `pagination` | `Pagination`: layout revision and display mode |
 | `raw` | The converter's complete JSON result |
 
 `write(directory)` saves `document.md`, `document.json`, and `media/`, the same layout

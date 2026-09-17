@@ -51,7 +51,7 @@ def _tables(data: bytes) -> dict[str, tuple[int, int]]:
     else:
         raise NotAFontError("not a TrueType or OpenType font")
     (count,) = struct.unpack(">H", data[offset + 4 : offset + 6])
-    tables = {}
+    tables: dict[str, tuple[int, int]] = {}
     pos = offset + 12
     for _ in range(count):
         if pos + 16 > len(data):

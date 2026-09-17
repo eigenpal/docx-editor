@@ -166,7 +166,7 @@ def font_requests(fonts: FontsArg) -> list[dict[str, Any]]:
     """Normalize the ``fonts`` argument: faces as given, paths and directories scanned."""
     if isinstance(fonts, (FontFace, str, os.PathLike)):
         fonts = [fonts]
-    requests = []
+    requests: list[dict[str, Any]] = []
     for entry in fonts:
         if isinstance(entry, FontFace):
             requests.append(entry.to_request())
