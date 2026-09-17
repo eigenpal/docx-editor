@@ -14,6 +14,7 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { symbolGlyphOf } from '../symbol-run.ts';
 import { styleForFontSlot } from '../script-itemization.ts';
 
@@ -213,5 +214,35 @@ describe('symbolGlyphOf', () => {
   test('is null for anything that is not a w:sym', () => {
     const part = partOf('<w:p><w:r><w:t>a</w:t></w:r></w:p>');
     expect(symbolGlyphOf(part.root)).toBeNull();
+  });
+});
+
+describe('a w:sym that opens the paragraph', () => {
+  // Word writes this shape for a toggled checkbox alone in a cell: the paragraph's only
+  // content is the `w:sym` glyph at offset 0. Its zero-width piece sits exactly at the
+  // paragraph's start offset, which must not read as "before the visible range".
+  const measurer = createFixedMeasurer(6, 14);
+  const spansOf = (body: string) => {
+    const layout = layoutSemanticDocument(partOf(body), 0, { measurer });
+    return layout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.lines.map((line) => line.spans.map((span) => span.text))
+    );
+  };
+
+  test('lays out the glyph when it is the only content', () => {
+    expect(spansOf(`<w:p><w:r>${SYM}</w:r></w:p>`)).toEqual([['✔']]);
+  });
+
+  test('keeps a leading glyph before text', () => {
+    expect(spansOf(`<w:p><w:r>${SYM}<w:t>a</w:t></w:r></w:p>`)).toEqual([['✔', 'a']]);
+  });
+
+  test('lays out a checkbox control whose glyph is alone in the paragraph', () => {
+    const body =
+      '<w:p><w:sdt><w:sdtPr><w14:checkbox xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">' +
+      '<w14:checked w14:val="1"/><w14:checkedState w14:val="2612" w14:font="MS Gothic"/>' +
+      '<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox></w:sdtPr>' +
+      '<w:sdtContent><w:r><w:sym w:font="MS Gothic" w:char="2612"/></w:r></w:sdtContent></w:sdt></w:p>';
+    expect(spansOf(body)).toEqual([['☒']]);
   });
 });

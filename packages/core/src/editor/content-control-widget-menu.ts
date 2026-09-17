@@ -149,7 +149,7 @@ function commitMenuValue(
 export function buildContentControlListMenu(
   host: ContentControlMenuHost,
   controlId: string,
-  kind: 'dropdown' | 'comboBox',
+  kind: 'dropdown' | 'comboBox' | 'buildingBlockGallery',
   items: readonly { readonly displayText: string; readonly value: string }[],
   alias: string | undefined,
   selectedValue?: string
@@ -181,6 +181,17 @@ export function buildContentControlListMenu(
       commitMenuValue(host, menu, controlId, item.value);
     });
     list.append(option);
+  }
+  // A gallery with nothing to offer says so, as Word's empty gallery does, instead of
+  // opening an empty list the reader cannot tell from a broken one.
+  if (kind === 'buildingBlockGallery' && items.length === 0) {
+    const empty = host.document.createElement('div');
+    empty.className = 'docx-content-control-menu-empty';
+    empty.dataset.docxPart = 'empty';
+    empty.setAttribute('role', 'note');
+    empty.tabIndex = 0;
+    empty.textContent = t('contentControl.gallery.empty');
+    list.append(empty);
   }
   if (kind === 'comboBox') {
     const free = host.document.createElement('input');

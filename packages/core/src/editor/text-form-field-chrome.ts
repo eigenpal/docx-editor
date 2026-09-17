@@ -56,9 +56,15 @@ export const createTextFormFieldChrome = () => createSessionChrome<TextFormField
 /** Facade wiring shared by the three core-owned popup session families. */
 export function createEditorPopupChrome() {
   const text = createTextFormFieldChrome();
-  // Checkbox presses reach only renderers that ask for them: a pop-up renderer written before
-  // checkbox sessions existed keeps working, and the engine toggles the box itself.
-  const widget = createSessionChrome<ContentControlWidgetSession>(['dropdown', 'comboBox', 'date']);
+  // Checkbox and picture presses reach only renderers that ask for them: a pop-up renderer
+  // written before those sessions existed keeps working, and the engine toggles the box or
+  // opens its own file picker itself. A gallery session is list-shaped, so it joins the list.
+  const widget = createSessionChrome<ContentControlWidgetSession>([
+    'dropdown',
+    'comboBox',
+    'date',
+    'buildingBlockGallery',
+  ]);
   const invalid = createSessionChrome<InvalidTextFormFieldSession>();
   return {
     surfaceOptions: {

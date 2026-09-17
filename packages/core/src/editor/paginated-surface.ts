@@ -26,9 +26,11 @@ import {
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
 import {
   createContentControlWidgetSessions,
+  contentControlValueOps,
   contentControlWidgetItems,
   contentControlWidgetDate,
 } from './content-control-widget-session.ts';
+import { createContentControlPictureWidget } from './content-control-picture-widget.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
@@ -554,6 +556,19 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  /**
+   * Publish an early-return refusal. It does not EMIT: the facade treats a publish that moves
+   * neither the selection nor the pending format as quiet, which a refusal is. What it does
+   * do is invalidate the version-cached `snapshot()`, so the reason is there the moment
+   * anyone reads it. Stored alone it was not — the snapshot kept its stale value until an
+   * unrelated tick bumped the version, and then delivered a section break's message on a
+   * caret move. Returns false so a refusing command can `return publishRefusal(reason)`.
+   */
+  function publishRefusal(reason: string): false {
+    lastRejection = reason;
+    options.onChange?.(currentState());
+    return false;
+  }
   const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
@@ -1092,16 +1107,7 @@ export function mountPaginatedSurface(
     // its corners in document order.
     selectedCells: () => cellSelection?.cellIds,
     editingMode: () => editingMode,
-    publishRefusal: (reason) => {
-      lastRejection = reason;
-      // Published like every other early-return refusal in this file. It does not EMIT: the
-      // facade treats a publish that moves neither the selection nor the pending format as
-      // quiet, which a refusal is. What it does do is invalidate the version-cached
-      // `snapshot()`, so the reason is there the moment anyone reads it. Stored alone it was
-      // not — the snapshot kept its stale value until an unrelated tick bumped the version,
-      // and then delivered a section break's message on a caret move.
-      options.onChange?.(currentState());
-    },
+    publishRefusal,
     // RAW, on purpose: `orderedRange()` flushes pending input, and this is asked from `can`.
     caretParagraphId: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
@@ -1437,27 +1443,17 @@ export function mountPaginatedSurface(
   ): boolean {
     flushTypeBuffer();
     const writer = authorOverride?.trim() || author?.trim();
-    if (!writer) {
-      lastRejection = 'tracked changes need a non-empty author';
-      options.onChange?.(currentState());
-      return false;
-    }
+    if (!writer) return publishRefusal('tracked changes need a non-empty author');
     // Empty text would commit a phantom `w:ins` holding nothing — a tracked change the
     // review pane must carry with no content to show. A replacement that only removes is
     // a deletion. A newline is not a paragraph mark: written into `w:t` it renders as
     // whitespace while claiming to be a break. The facade's support gate refuses the same
     // SHAPES (docx-editor-support.ts), so the automation `can` and this `exec` agree; the
     // messages differ only in naming the kind versus the command.
-    if (kind !== 'deletion' && text.length === 0) {
-      lastRejection = `${kind} requires non-empty text`;
-      options.onChange?.(currentState());
-      return false;
-    }
-    if (kind !== 'deletion' && /[\r\n\v\f\u2028\u2029]/.test(text)) {
-      lastRejection = `${kind} requires text without a paragraph mark`;
-      options.onChange?.(currentState());
-      return false;
-    }
+    if (kind !== 'deletion' && text.length === 0)
+      return publishRefusal(`${kind} requires non-empty text`);
+    if (kind !== 'deletion' && /[\r\n\v\f\u2028\u2029]/.test(text))
+      return publishRefusal(`${kind} requires text without a paragraph mark`);
     const revision = { author: writer, date: trackedDate() };
     const range = orderedRange();
     const collapsed =
@@ -1466,11 +1462,8 @@ export function mountPaginatedSurface(
     // covers a cell the user selected — the keyboard replaces over it, so automation must.
     // REPLACEMENT only: it always carries its insert op. A deletion over an all-empty
     // rectangle would commit zero ops, so it keeps the refusal `can` gives it.
-    if (kind !== 'insertion' && collapsed && !(kind === 'replacement' && cellSelection)) {
-      lastRejection = `${kind} needs a non-collapsed selection`;
-      options.onChange?.(currentState());
-      return false;
-    }
+    if (kind !== 'insertion' && collapsed && !(kind === 'replacement' && cellSelection))
+      return publishRefusal(`${kind} needs a non-collapsed selection`);
     // The deletion is tracked whatever the surface's editing mode is, so the plan computes
     // `replaceAt` as suggesting would — for THIS author, who may not be the configured one.
     // An insertion aimed INSIDE an existing deletion relocates past it in the store; the
@@ -2095,7 +2088,8 @@ export function mountPaginatedSurface(
     return true;
   }
 
-  const listItemsOfControl = (id: string) => contentControlWidgetItems(findControl(id));
+  const listItemsOfControl = (id: string) =>
+    contentControlWidgetItems(findControl(id), () => session.currentPackage());
 
   function checkboxChecked(controlId: string): boolean {
     const control = findControl(controlId);
@@ -2130,6 +2124,21 @@ export function mountPaginatedSurface(
     }
   }
 
+  const pictureWidget = createContentControlPictureWidget({
+    document,
+    layer: pagesLayer,
+    find: findControl,
+    layout: () => currentLayout,
+    selectDrawing: (drawingNodeId, paragraphId) =>
+      surface.selectDrawing(drawingNodeId, paragraphId),
+    replaceImage: (drawingNodeId, bytes, mime) =>
+      surface.replaceImage(drawingNodeId, bytes, mime, {
+        expectedPackageRevision: session.packageRevision(),
+      }),
+    setOpen: setContentControlWidgetOpen,
+    reject: publishRefusal,
+  });
+
   const widgetSessions = createContentControlWidgetSessions({
     find: findControl,
     allowed: (id) => !contentControlsOps.disabledReason(id, 'edit'),
@@ -2137,6 +2146,8 @@ export function mountPaginatedSurface(
     items: listItemsOfControl,
     date: dateValueOfControl,
     checked: checkboxChecked,
+    picture: pictureWidget.drawingOf,
+    replaceImage: pictureWidget.replace,
     locale: () => dateLocale.get(),
     layer: pagesLayer,
     setOpen: setContentControlWidgetOpen,
@@ -2235,16 +2246,20 @@ export function mountPaginatedSurface(
     }
     // Re-pressing the native widget toggles its current menu shut.
     if (removeExistingContentControlMenu()?.dataset.docxCcId === controlId) return;
+    // A picture press selects the picture first, as in Word, so the host's image commands
+    // address it whichever renderer takes the pick.
+    if (kind === 'picture') pictureWidget.select(controlId);
     // A host renderer that took the session owns the interaction — for a checkbox too, so a
     // host can confirm, refuse or restyle a toggle instead of only watching it land.
     if (widgetSessions.open(controlId, kind)) return;
+    if (kind === 'picture') return pictureWidget.pick(controlId);
     if (kind === 'checkbox') {
       contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
       return;
     }
     const alias = contentControlsInLayout(currentLayout).find((c) => c.id === controlId)?.alias;
     let menu: HTMLElement;
-    if (kind === 'dropdown' || kind === 'comboBox') {
+    if (kind === 'dropdown' || kind === 'comboBox' || kind === 'buildingBlockGallery') {
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
       menu = buildContentControlListMenu(
@@ -2320,11 +2335,15 @@ export function mountPaginatedSurface(
     },
     setValue(controlId, value) {
       const reason = contentControlsOps.disabledReason(controlId, 'edit');
-      if (reason) {
-        lastRejection = reason;
-        options.onChange?.(currentState());
-        return false;
-      }
+      if (reason) return publishRefusal(reason);
+      // A gallery control's value is a building block name, resolved against the glossary.
+      const ops = contentControlValueOps(
+        findControl(controlId),
+        () => session.currentPackage(),
+        controlId,
+        value
+      );
+      if (!ops) return publishRefusal('unknown-building-block');
       let committed = false;
       commit(() => {
         // `applyOps`, not `session.applyTreeOps`: this lane wrote straight past the mode
@@ -2337,7 +2356,7 @@ export function mountPaginatedSurface(
         // constant. Pinned to the body, this wrote body content while the reader was editing
         // a header, and a control in that header could never be written at all.
         const result = applyOps(
-          [{ op: 'setContentControlValue', controlId, value }],
+          ops,
           selectionMark(),
           undefined,
           storyScopeOfNodeId(session, controlId, storyScope()),
@@ -2350,17 +2369,9 @@ export function mountPaginatedSurface(
     },
     remove(controlId) {
       const id = controlId ?? contentControlAtCaret()?.id;
-      if (!id) {
-        lastRejection = 'notFound';
-        options.onChange?.(currentState());
-        return false;
-      }
+      if (!id) return publishRefusal('notFound');
       const reason = contentControlsOps.disabledReason(id, 'remove');
-      if (reason) {
-        lastRejection = reason;
-        options.onChange?.(currentState());
-        return false;
-      }
+      if (reason) return publishRefusal(reason);
       let committed = false;
       commit(() => {
         const result = applyOps(
@@ -5561,6 +5572,7 @@ export function mountPaginatedSurface(
         // with its menu still up would leave them swallowing the next editor's Escape.
         removeExistingContentControlMenu();
         widgetSessions.destroy();
+        pictureWidget.destroy();
         textFormInteraction?.destroy();
         legacyCheckboxInteraction?.destroy();
         pointer?.destroy();

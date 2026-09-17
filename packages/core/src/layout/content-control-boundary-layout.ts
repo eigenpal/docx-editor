@@ -434,9 +434,10 @@ function pageContribution(
           0,
           line.box.height - line.leading - (line.trailingSpacing ?? 0)
         );
+        const lineSpans: PlacedSpanBox[] = [];
         for (const span of line.spans) {
           work && (work.geometryEntries += 1);
-          spans.push({
+          lineSpans.push({
             pageIndex,
             paragraphId: span.range.paragraphId,
             start: span.range.start,
@@ -450,6 +451,22 @@ function pageContribution(
             },
           });
         }
+        // An inline drawing occupies one model unit and no span, and it can be a control's
+        // whole content (a picture control). Its painted bounds stand in for the span it does
+        // not have, merged in offset order so the paragraph's run stays ascending.
+        for (const drawing of line.drawings ?? []) {
+          work && (work.geometryEntries += 1);
+          lineSpans.push({
+            pageIndex,
+            paragraphId: drawing.paragraphId,
+            start: drawing.start,
+            end: drawing.start + 1,
+            line: lineKey,
+            box: shift(drawing.paintBounds),
+          });
+        }
+        if (line.drawings?.length) lineSpans.sort((a, b) => a.start - b.start || a.end - b.end);
+        for (const entry of lineSpans) spans.push(entry);
       }
       return;
     }

@@ -573,3 +573,154 @@ for (const configured of [false, true]) {
     expect(seen).toEqual(configured ? ['checkbox'] : []);
   });
 }
+
+const PNG_1X1 = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  ),
+  (c) => c.charCodeAt(0)
+);
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const IMG_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+const GLOSSARY_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/glossaryDocument';
+
+/** A document whose main part carries an image relationship and, optionally, a glossary. */
+function richDocx(body: string, glossary?: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="png" ContentType="image/png"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        (glossary
+          ? '<Override PartName="/word/glossary/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml"/>'
+          : '') +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" Type="${IMG_REL}" Target="media/image1.png"/>` +
+        (glossary
+          ? `<Relationship Id="rIdGl" Type="${GLOSSARY_REL}" Target="glossary/document.xml"/>`
+          : '') +
+        '</Relationships>'
+    ),
+    'word/media/image1.png': PNG_1X1,
+    ...(glossary ? { 'word/glossary/document.xml': strToU8(glossary) } : {}),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const PICTURE_PRESS = richDocx(
+  `<w:p><w:r><w:t xml:space="preserve">Photo: </w:t></w:r>${sdt(
+    '<w:alias w:val="Photo"/><w:picture/>',
+    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="457200" cy="457200"/><wp:docPr id="3" name="pic"/>' +
+      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
+      '<pic:nvPicPr><pic:cNvPr id="3" name="pic"/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>'
+  )}</w:p>`
+);
+
+const GALLERY_PRESS = richDocx(
+  `<w:p><w:r><w:t xml:space="preserve">Pick: </w:t></w:r>${sdt(
+    '<w:alias w:val="Block"/><w:showingPlcHdr/><w:docPartList><w:docPartGallery w:val="Quick Parts"/></w:docPartList>',
+    '<w:r><w:t>Choose a building block.</w:t></w:r>'
+  )}</w:p>`,
+  `<w:glossaryDocument xmlns:w="${W}"><w:docParts>` +
+    '<w:docPart><w:docPartPr><w:name w:val="Sign-off"/><w:category><w:name w:val="General"/><w:gallery w:val="docParts"/></w:category></w:docPartPr>' +
+    '<w:docPartBody><w:p><w:r><w:t>Approved by the board</w:t></w:r></w:p></w:docPartBody></w:docPart>' +
+    '<w:docPart><w:docPartPr><w:name w:val="Address"/><w:category><w:name w:val="General"/><w:gallery w:val="docParts"/></w:category></w:docPartPr>' +
+    '<w:docPartBody><w:p><w:r><w:t>1 Main St</w:t></w:r></w:p></w:docPartBody></w:docPart>' +
+    '</w:docParts></w:glossaryDocument>'
+);
+
+for (const configured of [false, true]) {
+  test(`picture presses reach a renderer only through contentControlPicture (${configured})`, async () => {
+    const seen: ContentControlWidgetSession['kind'][] = [];
+    const Recorder = (props: { session: ContentControlWidgetSession }) => {
+      seen.push(props.session.kind);
+      return <DocxEditorContentControlWidget {...props} />;
+    };
+    const view = render(
+      <DocxEditorRoot
+        document={PICTURE_PRESS}
+        popups={{
+          contentControlWidget: (props) => <Recorder {...props} />,
+          ...(configured ? { contentControlPicture: (props) => <Recorder {...props} /> } : {}),
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {});
+    const widget = view.container.querySelector<HTMLElement>('[data-docx-cc-widget="picture"]');
+    expect(widget !== null).toBe(true);
+    await act(async () => {
+      fireEvent.pointerDown(widget!, { button: 0, pointerId: 1, pointerType: 'mouse' });
+    });
+    // The packaged renderer is a file input in a panel that takes no room; without the
+    // entry the engine arms its own picker on the pages layer, and the pop-up renderer
+    // written for lists never sees the press.
+    const popup = view.container.querySelector<HTMLElement>(
+      '[data-docx-popup="contentControlWidget"]'
+    );
+    expect(popup !== null).toBe(configured);
+    expect(popup?.hasAttribute('data-picker') ?? false).toBe(configured);
+    expect(
+      view.container.querySelector('input[type="file"][data-docx-part="picture"]') !== null
+    ).toBe(configured);
+    expect(view.container.querySelector('.docx-content-control-picture-picker') !== null).toBe(
+      !configured
+    );
+    expect(seen).toEqual(configured ? ['picture'] : []);
+  });
+}
+
+test('a gallery press renders the packaged list of glossary blocks, and a pick lands one', async () => {
+  let editor: DocxEditorInstance | undefined;
+  const view = render(
+    <DocxEditorRoot
+      document={GALLERY_PRESS}
+      onReady={(instance) => {
+        editor = instance;
+      }}
+      popups={{ contentControlWidget: (props) => <DocxEditorContentControlWidget {...props} /> }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  await act(async () => {});
+  const widget = view.container.querySelector<HTMLElement>(
+    '[data-docx-cc-widget="buildingBlockGallery"]'
+  );
+  expect(widget !== null).toBe(true);
+  await act(async () => {
+    fireEvent.pointerDown(widget!, { button: 0, pointerId: 1, pointerType: 'mouse' });
+  });
+  const popup = view.container.querySelector<HTMLElement>(
+    '[data-docx-popup="contentControlWidget"]'
+  )!;
+  expect(popup.getAttribute('data-kind')).toBe('buildingBlockGallery');
+  const options = [...popup.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+  expect(options.map((option) => option.textContent)).toEqual(['Address', 'Sign-off']);
+  await act(async () => {
+    options[1]!.click();
+  });
+  expect(editor!.surface!.session.bodyText()).toBe('Pick: Approved by the board');
+  expect(view.container.querySelector('[data-docx-popup="contentControlWidget"]')).toBeNull();
+});

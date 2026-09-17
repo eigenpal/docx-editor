@@ -537,6 +537,13 @@ const TREE_OP_REACH: {
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
   setLegacyCheckbox: (op) => whole(op.fieldNodeId),
+  // A building block pick rebuilds `w:sdtContent`, exactly as a value write does.
+  insertBuildingBlock: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'value',
+    replacesContent: true,
+  }),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',

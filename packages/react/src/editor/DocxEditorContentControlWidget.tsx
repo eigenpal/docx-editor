@@ -29,6 +29,7 @@ import {
   ContentControlWidgetItem,
   ContentControlWidgetList,
   ContentControlWidgetNextMonth,
+  ContentControlWidgetPicture,
   ContentControlWidgetPreviousMonth,
   ContentControlWidgetTitle,
   ContentControlWidgetToday,
@@ -48,12 +49,14 @@ export interface DocxEditorContentControlWidgetProps {
 }
 
 /**
- * The packaged value pop-up for a dropdown, combo-box, date or checkbox content control.
+ * The packaged value pop-up for a dropdown, combo-box, date, building block gallery,
+ * checkbox or picture content control.
  *
  * Anchored below the control inside the editor's scroll container. Without `children` it
  * renders the same arrangement the engine paints on its own — a list, a list with free-text
  * entry, or a month calendar with a Today button — from the same stylesheet classes, so one
- * theme covers both. A checkbox session applies its toggle at once and shows nothing.
+ * theme covers both. A checkbox session applies its toggle at once and shows nothing; a
+ * picture session opens the browser's file dialog at once and shows nothing.
  * @public
  */
 function ContentControlWidgetRoot(props: DocxEditorContentControlWidgetProps) {
@@ -131,6 +134,7 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
         data-docx-popup="contentControlWidget"
         data-docx-part="popup"
         data-kind={session.kind}
+        data-picker={session.kind === 'picture' && children === undefined ? '' : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           contentControlPopupKeyDown(event.currentTarget, event.nativeEvent, session.cancel);
@@ -145,6 +149,7 @@ function WidgetPanel({ session, className, style, children }: DocxEditorContentC
 
 function defaultArrangement(widget: UseContentControlWidgetResult): ReactNode {
   if (widget.kind === 'date') return <ContentControlWidgetCalendar />;
+  if (widget.kind === 'picture') return <ContentControlWidgetPicture />;
   if (widget.kind === 'comboBox') {
     return (
       <>
@@ -181,6 +186,7 @@ export interface DocxEditorContentControlWidgetNamespace {
   readonly List: typeof ContentControlWidgetList;
   readonly Item: typeof ContentControlWidgetItem;
   readonly Input: typeof ContentControlWidgetInput;
+  readonly Picture: typeof ContentControlWidgetPicture;
   readonly Error: typeof ContentControlWidgetError;
   readonly Footer: typeof ContentControlWidgetFooter;
   readonly Apply: typeof ContentControlWidgetApply;
@@ -205,6 +211,7 @@ export const DocxEditorContentControlWidget: DocxEditorContentControlWidgetNames
     List: ContentControlWidgetList,
     Item: ContentControlWidgetItem,
     Input: ContentControlWidgetInput,
+    Picture: ContentControlWidgetPicture,
     Error: ContentControlWidgetError,
     Footer: ContentControlWidgetFooter,
     Apply: ContentControlWidgetApply,

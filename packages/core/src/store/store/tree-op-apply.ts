@@ -170,6 +170,7 @@ import {
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
+import { applyInsertBuildingBlock } from './building-block-insert.ts';
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
@@ -282,6 +283,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
 
   if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
+  if (op.op === 'insertBuildingBlock') return applyInsertBuildingBlock(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
@@ -1965,7 +1967,7 @@ function applyRemoveContentControl(
   return fromEdit(replaceChildren(part, owner.id, children, options), effect);
 }
 
-function replaceControlContent(
+export function replaceControlContent(
   control: OoxmlNode,
   contentChildren: readonly OoxmlNode[],
   nextId: () => string

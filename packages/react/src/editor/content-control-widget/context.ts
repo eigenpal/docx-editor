@@ -1,5 +1,6 @@
 import { useId, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
+  CONTENT_CONTROL_PICTURE_ACCEPT,
   calendarMonth,
   calendarDateText,
   calendarDateFromText,
@@ -63,6 +64,14 @@ export interface UseContentControlWidgetResult {
   readonly listId: string;
   /** Shared typeahead and roving-focus behavior for replacement lists. */
   readonly listNavigation: ContentControlListNavigation;
+  /** Picture sessions: the image types `replaceImage` takes, as a file input `accept` list. */
+  readonly accept: string;
+  /**
+   * Picture sessions: replace the control's image from a file or its bytes. The engine
+   * checks the format and size; false (and `refused`) when it declines or the session is
+   * not a picture session.
+   */
+  replaceImage(source: Blob | Uint8Array): Promise<boolean>;
 }
 
 const Context = createContext<UseContentControlWidgetResult | null>(null);
@@ -122,6 +131,20 @@ export function useContentControlWidgetState(
     [session, value]
   );
   const cancel = useCallback(() => session.cancel(), [session]);
+  const replaceImage = useCallback(
+    async (source: Blob | Uint8Array) => {
+      if (!session.replaceImage) {
+        setRefused(true);
+        return false;
+      }
+      const bytes =
+        source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
+      const accepted = await session.replaceImage(bytes);
+      setRefused(!accepted);
+      return accepted;
+    },
+    [session]
+  );
   const calendar = useMemo(
     () =>
       calendarMonth(view.year, view.month, {
@@ -192,9 +215,12 @@ export function useContentControlWidgetState(
       showMonth,
       listNavigation,
       listId,
+      accept: CONTENT_CONTROL_PICTURE_ACCEPT,
+      replaceImage,
     }),
     [
       session,
+      replaceImage,
       value,
       isEnabled,
       refused,

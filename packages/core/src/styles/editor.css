@@ -1005,8 +1005,55 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-content-control-widget[data-docx-cc-widget='dropdown']::after,
-.docx-content-control-widget[data-docx-cc-widget='comboBox']::after {
+.docx-content-control-widget[data-docx-cc-widget='comboBox']::after,
+.docx-content-control-widget[data-docx-cc-widget='buildingBlockGallery']::after {
   content: '▾';
+}
+
+/* A packaged picture pop-up is nothing but its file input: the browser's dialog is the UI,
+   so the panel takes no room on the sheet. A host that composes children gets the panel. */
+.docx-content-control-widget-popup[data-picker] {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.docx-content-control-picture-input {
+  font: inherit;
+}
+
+/* The engine's own picture picker is a file input that only ever opens the browser's dialog;
+   it takes no space on the sheet and never paints. */
+.docx-pages .docx-content-control-picture-picker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A picture control's widget opens a file picker: a small frame with a "mountain" inside,
+   the same glyph Word draws on its picture placeholder, in `em` so it follows the zoom. */
+.docx-content-control-widget[data-docx-cc-widget='picture']::after {
+  content: '';
+  inset: 0.1875em;
+  display: block;
+  border: 0.09em solid currentcolor;
+  border-radius: 0.125em;
+  background:
+    linear-gradient(currentcolor, currentcolor) 0.125em 0.125em / 0.125em 0.125em no-repeat,
+    linear-gradient(
+        to top right,
+        transparent 46%,
+        currentcolor 50%,
+        currentcolor 62%,
+        transparent 66%
+      )
+      0 0 / 100% 100% no-repeat;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='date']::after {

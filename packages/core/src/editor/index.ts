@@ -397,3 +397,4 @@ export type { ContentControlListNavigation } from './content-control-list-naviga
 export { calendarMonthNames } from './content-control-calendar.ts';
 
 export { contentControlPopupOpener } from './content-control-popup-behavior.ts';
+export { CONTENT_CONTROL_PICTURE_ACCEPT } from './content-control-picture-widget.ts';

@@ -678,7 +678,8 @@
       "picture": "Image",
       "plainText": "Texte",
       "repeatingSection": "Section répétitive",
-      "richText": "Texte enrichi"
+      "richText": "Texte enrichi",
+      "buildingBlockGallery": null
     },
     "calendar": {
       "nextMonth": null,
@@ -686,6 +687,9 @@
       "today": null,
       "month": null,
       "year": null
+    },
+    "gallery": {
+      "empty": null
     }
   },
   "notes": {

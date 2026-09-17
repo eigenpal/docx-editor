@@ -678,7 +678,8 @@
       "picture": "चित्र",
       "plainText": "सादा पाठ",
       "repeatingSection": "दोहराया जाने वाला अनुभाग",
-      "richText": "रिच टेक्स्ट"
+      "richText": "रिच टेक्स्ट",
+      "buildingBlockGallery": null
     },
     "calendar": {
       "nextMonth": null,
@@ -686,6 +687,9 @@
       "today": null,
       "month": null,
       "year": null
+    },
+    "gallery": {
+      "empty": null
     }
   },
   "notes": {

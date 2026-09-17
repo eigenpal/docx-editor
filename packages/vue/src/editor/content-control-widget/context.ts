@@ -10,6 +10,7 @@ import {
   type Ref,
 } from 'vue';
 import {
+  CONTENT_CONTROL_PICTURE_ACCEPT,
   calendarMonth,
   calendarDateText,
   calendarDateFromText,
@@ -72,6 +73,14 @@ export interface UseContentControlWidgetResult {
   readonly listId: string;
   /** Shared typeahead and roving-focus behavior for replacement lists. */
   readonly listNavigation: ContentControlListNavigation;
+  /** Picture sessions: the image types `replaceImage` takes, as a file input `accept` list. */
+  readonly accept: string;
+  /**
+   * Picture sessions: replace the control's image from a file or its bytes. The engine
+   * checks the format and size; false (and `refused`) when it declines or the session is
+   * not a picture session.
+   */
+  replaceImage(source: Blob | Uint8Array): Promise<boolean>;
 }
 
 const key: InjectionKey<UseContentControlWidgetResult> = Symbol('docx-content-control-widget');
@@ -185,6 +194,19 @@ export function useContentControlWidgetState(
     refused,
     apply,
     cancel: () => session.value.cancel(),
+    accept: CONTENT_CONTROL_PICTURE_ACCEPT,
+    replaceImage: async (source) => {
+      const current = session.value;
+      if (!current.replaceImage) {
+        refused.value = true;
+        return false;
+      }
+      const bytes =
+        source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
+      const accepted = await current.replaceImage(bytes);
+      refused.value = !accepted;
+      return accepted;
+    },
     calendar,
     previousMonth: () => {
       view.value = shiftMonth(view.value.year, view.value.month, -1);

@@ -1,4 +1,10 @@
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import {
+  buildingBlocksForControl,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPackage,
+} from '@docx-editor.dev/core/store';
+import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ContentControlWidgetSession } from './popup-sessions.ts';
 
 interface Host {
@@ -8,6 +14,10 @@ interface Host {
   items(id: string): readonly { displayText: string; value: string }[];
   date(id: string): string | undefined;
   checked(id: string): boolean;
+  /** The drawing a picture control holds, or undefined when it holds none. */
+  picture(id: string): string | undefined;
+  /** Replace a picture control's image; false when refused. */
+  replaceImage(id: string, bytes: Uint8Array): Promise<boolean>;
   locale(): string;
   layer: HTMLElement;
   setOpen(id: string, open: boolean): void;
@@ -36,9 +46,18 @@ function kindOf(control: OoxmlElement | null): string | undefined {
     if (child.localName === 'dropDownList') return 'dropdown';
     if (child.localName === 'comboBox' || child.localName === 'date') return child.localName;
     if (child.localName === 'checkbox') return 'checkbox';
+    if (child.localName === 'picture') return 'picture';
+    if (child.localName === 'docPartList') return 'buildingBlockGallery';
   }
 }
-const SESSION_KINDS: readonly string[] = ['dropdown', 'comboBox', 'date', 'checkbox'];
+const SESSION_KINDS: readonly string[] = [
+  'dropdown',
+  'comboBox',
+  'date',
+  'checkbox',
+  'picture',
+  'buildingBlockGallery',
+];
 /** Typed host sessions over the existing content-control command lane. */
 export function createContentControlWidgetSessions(host: Host) {
   let active: { controller: AbortController; id: string } | null = null;
@@ -67,6 +86,10 @@ export function createContentControlWidgetSessions(host: Host) {
       const control = host.find(id);
       const items = host.items(id).map((item) => ({ ...item }));
       const value = contentControlWidgetValue(control, items);
+      // A picture session stands for the drawing it replaces; without one there is nothing
+      // to replace, and the press is refused rather than opened onto nothing.
+      const drawingNodeId = kind === 'picture' ? host.picture(id) : undefined;
+      if (kind === 'picture' && !drawingNodeId) return false;
       const session: ContentControlWidgetSession = {
         controlId: id,
         kind: kind as ContentControlWidgetSession['kind'],
@@ -76,7 +99,11 @@ export function createContentControlWidgetSessions(host: Host) {
             ? (host.date(id) ?? '')
             : kind === 'checkbox'
               ? String(host.checked(id))
-              : value,
+              : kind === 'picture'
+                ? drawingNodeId!
+                : kind === 'buildingBlockGallery'
+                  ? ''
+                  : value,
         locale: host.locale(),
         anchor:
           [...host.layer.querySelectorAll<HTMLElement>('[data-docx-content-control]')]
@@ -85,13 +112,22 @@ export function createContentControlWidgetSessions(host: Host) {
         signal: controller.signal,
         canApply,
         apply(value) {
-          if (!canApply() || !host.apply(id, value)) return false;
+          if (kind === 'picture' || !canApply() || !host.apply(id, value)) return false;
           if (isActive()) cancel();
           return true;
         },
         cancel() {
           if (isActive()) cancel();
         },
+        ...(kind === 'picture'
+          ? {
+              async replaceImage(bytes: Uint8Array) {
+                if (!canApply() || !(await host.replaceImage(id, bytes))) return false;
+                if (isActive()) cancel();
+                return true;
+              },
+            }
+          : {}),
       };
       host.setOpen(id, true);
       if (host.request(session)) return true;
@@ -101,10 +137,21 @@ export function createContentControlWidgetSessions(host: Host) {
   };
 }
 
+/**
+ * The entries a list widget offers: the declared items of a dropdown or combo box, or the
+ * glossary's building blocks for a gallery control, each named by its `w:docPartPr/w:name`.
+ */
 export function contentControlWidgetItems(
-  control: OoxmlElement | null
+  control: OoxmlElement | null,
+  pkg?: () => OoxmlPackage
 ): readonly { displayText: string; value: string }[] {
   if (!control) return [];
+  if (pkg && isBuildingBlockGalleryControl(control)) {
+    return buildingBlocksForControl(pkg(), control).map((block) => ({
+      displayText: block.name,
+      value: block.name,
+    }));
+  }
   for (const child of control.children) {
     if (child.kind === 'textValue') continue;
     if (
@@ -140,4 +187,32 @@ export function contentControlWidgetDate(control: OoxmlElement | null): string |
     }
   }
   return undefined;
+}
+
+/** Whether a control lists a building block gallery (`w:docPartList` in `w:sdtPr`). */
+export function isBuildingBlockGalleryControl(control: OoxmlNode | null): boolean {
+  return (
+    kindOf(control && control.kind !== 'textValue' ? control : null) === 'buildingBlockGallery'
+  );
+}
+
+/**
+ * The ops one widget value stands for: a building block pick for a gallery control (its
+ * body resolved from the glossary), the value op for every other control. Null when the
+ * gallery has no block of that name, so the surface refuses instead of writing the name as
+ * text.
+ */
+export function contentControlValueOps(
+  control: OoxmlElement | null,
+  pkg: () => OoxmlPackage,
+  controlId: string,
+  value: string
+): readonly TreeDocOp[] | null {
+  if (!control || !isBuildingBlockGalleryControl(control)) {
+    return [{ op: 'setContentControlValue', controlId, value }];
+  }
+  const block = buildingBlocksForControl(pkg(), control).find((entry) => entry.name === value);
+  return block
+    ? [{ op: 'insertBuildingBlock', controlId, name: block.name, blocks: block.blocks }]
+    : null;
 }

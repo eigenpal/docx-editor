@@ -673,7 +673,11 @@
       "comboBox": "Combo box",
       "date": "Date",
       "picture": "Picture",
+      "buildingBlockGallery": "Building block gallery",
       "repeatingSection": "Repeating section"
+    },
+    "gallery": {
+      "empty": "This document has no building blocks for this gallery."
     },
     "lock": {
       "unlocked": "Unlocked",

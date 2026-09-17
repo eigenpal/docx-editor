@@ -100,7 +100,7 @@ export function validateInsertFragment(
 }
 
 /** Fresh `w14:paraId`/`w14:textId` on every cloned paragraph, deterministic per seat. */
-function withFreshParaIds(
+export function withFreshParaIds(
   node: OoxmlNode,
   used: Set<string>,
   seedBase: string,

@@ -389,6 +389,7 @@ export type ContentControlType =
   | 'comboBox'
   | 'date'
   | 'picture'
+  | 'buildingBlockGallery'
   | 'repeatingSection';
 
 /**
@@ -397,8 +398,8 @@ export type ContentControlType =
  * A NARROWING of {@link ContentControlType}, not a separate vocabulary: a kind read off an
  * existing control can be handed straight back to `insertContentControl`. Three kinds are
  * absent because an insertion would have to invent what they carry — a checkbox needs its two
- * declared glyph states, a picture needs an image part, and a repeating section is a container
- * whose items have their own verbs. Reading still answers the wider type; a document may hold
+ * declared glyph states, a picture needs an image part, a building block gallery needs a
+ * glossary to list, and a repeating section is a container whose items have their own verbs. Reading still answers the wider type; a document may hold
  * kinds this cannot create.
  *
  * `dropDownList` is the same kind as `dropdown`, spelt as OOXML spells it. Both are accepted,

@@ -119,6 +119,8 @@ function typeLabelKey(type: ContentControlInspectorState['controlType']): string
       return 'contentControl.types.date';
     case 'picture':
       return 'contentControl.types.picture';
+    case 'buildingBlockGallery':
+      return 'contentControl.types.buildingBlockGallery';
     case 'repeatingSection':
       return 'contentControl.types.repeatingSection';
     case 'richText':

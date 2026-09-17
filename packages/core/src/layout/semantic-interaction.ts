@@ -977,13 +977,19 @@ export function spansInSelection(
  */
 function caretSpan(layout: SemanticLayout, position: SemanticPosition): StyleSpanRecord[] {
   let rightward: StyleSpanRecord | null = null;
+  let furniture: StyleSpanRecord | null = null;
   for (const { line } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
     // This paragraph's spans only: on a merged line the other member's runs sit beside these
     // and would report their formatting for a caret that is not in them.
     for (const span of lineSegmentFor(line, position.paragraphId)?.spans ?? []) {
       if (span.range.start < position.offset && position.offset <= span.range.end) return [span];
-      if (rightward === null && span.range.start === position.offset) rightward = span;
+      if (span.range.start !== position.offset) continue;
+      // A zero-width projected span (a `w:sym` glyph, a field-code atom) paints in its own
+      // face but is no run the caret types into: the character after it answers, and the
+      // glyph itself only when the paragraph holds nothing else.
+      if (span.range.end === span.range.start && span.projected) furniture ??= span;
+      else rightward ??= span;
     }
   }
-  return rightward ? [rightward] : [];
+  return rightward ? [rightward] : furniture ? [furniture] : [];
 }

@@ -232,6 +232,11 @@ export interface ContentControlWidgetItemProps extends DocxEditorContentControlW
     item: ContentControlWidgetEntry;
 }
 
+// @public
+export interface ContentControlWidgetPictureProps extends DocxEditorContentControlWidgetPartProps {
+    autoOpen?: boolean;
+}
+
 // @public (undocumented)
 export interface ContextMenuAnchor {
     // (undocumented)
@@ -2259,6 +2264,8 @@ export interface DocxEditorContentControlWidgetNamespace {
     // (undocumented)
     readonly NextMonth: typeof ContentControlWidgetNextMonth;
     // (undocumented)
+    readonly Picture: typeof ContentControlWidgetPicture;
+    // (undocumented)
     readonly PreviousMonth: typeof ContentControlWidgetPreviousMonth;
     // (undocumented)
     readonly Title: typeof ContentControlWidgetTitle;
@@ -3469,6 +3476,7 @@ export interface DocxEditorPopups {
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+    contentControlPicture?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
     contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
@@ -6052,6 +6060,7 @@ export function useContentControlWidget(): UseContentControlWidgetResult;
 
 // @public
 export interface UseContentControlWidgetResult {
+    readonly accept: string;
     apply(value?: string): boolean;
     // (undocumented)
     applyDateText(): boolean;
@@ -6074,6 +6083,7 @@ export interface UseContentControlWidgetResult {
     // (undocumented)
     previousMonth(): void;
     readonly refused: Readonly<Ref<boolean>>;
+    replaceImage(source: Blob | Uint8Array): Promise<boolean>;
     selectDay(iso: string): boolean;
     selectToday(): boolean;
     // (undocumented)

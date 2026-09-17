@@ -678,7 +678,8 @@
       "picture": "Gambar",
       "plainText": "Teks biasa",
       "repeatingSection": "Bagian berulang",
-      "richText": "Teks kaya"
+      "richText": "Teks kaya",
+      "buildingBlockGallery": null
     },
     "calendar": {
       "nextMonth": null,
@@ -686,6 +687,9 @@
       "today": null,
       "month": null,
       "year": null
+    },
+    "gallery": {
+      "empty": null
     }
   },
   "notes": {

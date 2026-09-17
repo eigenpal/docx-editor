@@ -33,6 +33,8 @@ const WIDGET_TYPES = new Set<ContentControlMappedType>([
   'comboBox',
   'date',
   'checkbox',
+  'picture',
+  'buildingBlockGallery',
 ]);
 
 /**
@@ -235,9 +237,13 @@ function paintContentControlBoundary(
     widget.setAttribute('tabindex', '-1');
     // Role / name / value come from data + state; adapters localize labels.
     if (control.controlType === 'checkbox') widget.setAttribute('role', 'checkbox');
-    else if (control.controlType === 'dropdown' || control.controlType === 'comboBox') {
+    else if (
+      control.controlType === 'dropdown' ||
+      control.controlType === 'comboBox' ||
+      control.controlType === 'buildingBlockGallery'
+    ) {
       widget.setAttribute('role', 'listbox');
-    } else if (control.controlType === 'date') {
+    } else if (control.controlType === 'date' || control.controlType === 'picture') {
       widget.setAttribute('role', 'button');
     }
     if (control.alias) widget.dataset.name = control.alias;

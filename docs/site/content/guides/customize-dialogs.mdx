@@ -120,6 +120,7 @@ Each popup receives the props listed here.
 | `notePreview`            | `DocxEditorNotePreviewProps`               |
 | `contentControlWidget`   | `{ session: ContentControlWidgetSession }` |
 | `contentControlCheckbox` | `{ session: ContentControlWidgetSession }` |
+| `contentControlPicture`  | `{ session: ContentControlWidgetSession }` |
 | `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
 
 Omitted entries retain existing behavior, including native widget and invalid-field
@@ -161,9 +162,12 @@ See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 ## Compose the value pop-up
 
 `contentControlWidget` renders `DocxEditorContentControlWidget` for a dropdown,
-combo box, or date control. Without children it renders the packaged
-arrangement: a list, a list with free-text entry, or a month calendar with a
-**Today** button, from the same stylesheet classes the engine's own menus use.
+combo box, date, or building block gallery control. Without children it renders
+the packaged arrangement: a list, a list with free-text entry, or a month
+calendar with a **Today** button, from the same stylesheet classes the engine's
+own menus use. A gallery session is a list session: its `items` are the blocks
+the document's glossary stores for the control's gallery and category, named by
+their `w:docPartPr/w:name`, and `apply(name)` inserts one.
 
 Checkbox presses have their own entry, `contentControlCheckbox`. When you omit it,
 the engine toggles the box itself, and `contentControlWidget` never receives a
@@ -172,22 +176,33 @@ receives a session with `kind: 'checkbox'` and a `value` of `'true'` or
 `'false'`; `DocxEditorContentControlWidget` without children applies the toggle at
 once and renders nothing, and a renderer with children decides through `apply`.
 
+Picture presses also have their own entry, `contentControlPicture`. When you
+omit it, the engine opens the browser's file dialog itself, and
+`contentControlWidget` never receives a picture session. Configure it to pick
+from your own image source. It receives a session with `kind: 'picture'`, a
+`value` that names the control's drawing, and `replaceImage(bytes)`, which
+checks the format (PNG, JPEG, GIF, BMP, or WebP) and keeps the drawing's size.
+`DocxEditorContentControlWidget` without children renders its `Picture` part, a
+file input that opens the dialog at once in a panel that takes no room. Inside
+children, `useContentControlWidget()` exposes `accept` and
+`replaceImage(fileOrBytes)` for a custom picker.
+
 `Header` includes month and year selectors. `Title` announces the current month.
 The compound exposes these parts: `Calendar`, `Header`, `PreviousMonth`, `Title`,
 `NextMonth`, `Navigation`, `Month`, `Year`, `Weekdays`, `Grid`, `Day`, `Today`, `List`, `Item`, `Input`,
-`Error`, `Footer`, `Apply`, and `Cancel`. Parts accept `className`, `style`,
+`Picture`, `Error`, `Footer`, `Apply`, and `Cancel`. Parts accept `className`, `style`,
 `hidden`, and `asChild`, and forward `id`, `aria-*`, and `data-*`. `Day` takes a
 `day` from `calendar.days`; `Item` takes an `item` from `items`. Read the draft
 state with `useContentControlWidget()` inside any child. It supplies `value`,
 `setValue`, `isEnabled`, `refused`, `apply`, `cancel`, `calendar`,
 `previousMonth`, `nextMonth`, `selectDay`, `selectToday`, `focusIso`, and `focusDay`.
 It also supplies `showMonth`, `dateText`, `setDateText`, `applyDateText`,
-`listId`, and `listNavigation`. `value` stays in ISO form for dates; `dateText`
+`listId`, `listNavigation`, `accept`, and `replaceImage`. `value` stays in ISO form for dates; `dateText`
 contains regional numeric input. Vue
 exposes the reactive members as refs.
 
 Check `session.kind` when replacing a calendar. The renderer also receives
-dropdown and combo box sessions. This example keeps their default controls, adds
+dropdown, combo box, and building block gallery sessions. This example keeps their default controls, adds
 a class to the date grid, and replaces the Today button:
 
 <FrameworkTabs variant="block">

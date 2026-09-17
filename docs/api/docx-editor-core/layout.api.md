@@ -503,7 +503,7 @@ export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell';
 export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 // @public
-export type ContentControlMappedType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+export type ContentControlMappedType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
 
 // @public
 export function contentControlRecordsInPart(part: OoxmlPart,

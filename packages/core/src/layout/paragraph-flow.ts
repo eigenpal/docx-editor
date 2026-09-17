@@ -501,11 +501,15 @@ export function breakParagraph(
     bidiSourceBoundaries(paragraph)
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
+  // A zero-width projected piece at the start offset (a `w:sym` glyph, a field-code atom)
+  // owns no model text, so `end <= startOffset` would drop it. At the paragraph start no
+  // earlier fragment can have painted it, so it always stays; a continuation keeps it only
+  // in field-code view, where the atom is the continuation's first visible token.
   const visiblePieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
     if (
       piece.end <= startOffset &&
       !(
-        flow?.showFieldCodes &&
+        (startOffset === 0 || flow?.showFieldCodes) &&
         piece.projected &&
         piece.start === piece.end &&
         piece.start === startOffset

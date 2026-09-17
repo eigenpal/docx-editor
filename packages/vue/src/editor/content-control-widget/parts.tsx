@@ -1,6 +1,7 @@
 import {
   defineComponent,
   h,
+  onMounted,
   ref,
   watch,
   type CSSProperties,
@@ -577,3 +578,46 @@ export const ContentControlWidgetYear = definePart(
     content: () => null,
   })
 );
+
+/** Props for the picture file input. @public */
+export interface ContentControlWidgetPictureProps extends DocxEditorContentControlWidgetPartProps {
+  /** Open the browser's file dialog as soon as the part mounts. Defaults to true. */
+  autoOpen?: boolean;
+}
+
+/**
+ * The file input of a picture session. A chosen file replaces the control's image through
+ * the session; closing the dialog without a file cancels the session. @public
+ */
+export const ContentControlWidgetPicture = defineComponent({
+  name: 'DocxEditorContentControlWidgetPicture',
+  inheritAttrs: false,
+  props: { ...partProps, autoOpen: { type: Boolean, default: undefined } },
+  setup(props, { slots, attrs }) {
+    const widget = useContentControlWidget();
+    const t = useFormControlTranslate();
+    const input = ref<HTMLInputElement | null>(null);
+    onMounted(() => {
+      if (props.autoOpen !== false) input.value?.click();
+    });
+    return () =>
+      renderPart('input', props, attrs, slots.default?.(), {
+        wiring: {
+          ref: input,
+          type: 'file',
+          accept: widget.accept,
+          class: 'docx-content-control-picture-input',
+          'data-docx-part': 'picture',
+          'aria-label': t('contentControl.types.picture'),
+          'aria-invalid': widget.refused.value || undefined,
+          onMousedown: stopPress,
+          onCancel: () => widget.cancel(),
+          onChange: (event: Event) => {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (file) void widget.replaceImage(file);
+          },
+        },
+        content: () => null,
+      });
+  },
+});

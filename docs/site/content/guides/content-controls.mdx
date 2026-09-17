@@ -253,12 +253,13 @@ the reason.
 | Create       | The selection crosses paragraphs                             | Inline controls cannot wrap block content     |
 | Create       | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
 
-## Checkbox, dropdown, and date interactions
+## Checkbox, dropdown, date, gallery, and picture interactions
 
-Each dropdown, combo box, and date control shows a button past its right edge,
-the way Word attaches its tab. The button scales with the page zoom. A checkbox
-control's button covers its glyph. Select the button to toggle a checkbox, open a
-dropdown menu, or open a date picker. The menu opens under the control's left
+Each dropdown, combo box, date, building block gallery, and picture control shows
+a button past its right edge, the way Word attaches its tab. The button scales
+with the page zoom. A checkbox control's button covers its glyph. Select the
+button to toggle a checkbox, open a dropdown menu, open a date picker, list the
+document's building blocks, or choose an image file. The menu opens under the control's left
 edge, flips above when space is limited, and stays inside the visible page sheet. A menu closes when you press outside it, press the
 control button again, or press Escape. Each edit supports undo and requires no
 application event handler. Checkbox toggles use MS Gothic when the document omits
@@ -277,6 +278,17 @@ the popup scrolls so all controls remain reachable.
 Dropdowns support locale-aware typeahead, arrows, and Home/End. The selected
 entry is marked. Combo boxes also accept free text and use ArrowDown to enter
 the suggestion list. Moving focus does not change the document.
+
+A building block gallery control lists the blocks the document's glossary part
+stores for the control's gallery and category, sorted by category and name. A
+pick replaces the control's content with the block's body and gives its
+paragraphs fresh identities, as one undo step. A document with no matching block
+shows a note instead of an empty list.
+
+A picture control's button opens a file dialog. The chosen image replaces the
+control's picture and keeps the drawing's size. The picture is selected first,
+so image commands address it. The engine accepts PNG, JPEG, GIF, BMP, and WebP
+files and refuses anything else with a reason in `lastRejection`.
 
 The engine paints these menus with the `docx-content-control-menu`,
 `docx-content-control-menu-item`, and `docx-content-control-calendar-*` classes,
@@ -299,20 +311,29 @@ writes. See [Document protection](/docs/2.x/guides/document-protection).
 - `w:dataBinding` round-trips without bound-value resolution.
 - Repeating-section markup round-trips without item add, item remove, or
   section configuration edits.
+- A building block gallery lists only blocks stored in the document's own
+  glossary part. Blocks from Word's Building Blocks template are not available.
+  A one-paragraph block fills an inline control; a block with several paragraphs
+  or a table needs a block-level control.
+- Replacing a picture control's image is refused in suggesting mode, like every
+  image replacement.
 - Control creation, filling, and removal do not create revisions in suggesting
   mode.
 
 ## Customize control popups
 
 Use `popups.contentControl` for the control popup and `popups.contentControlWidget`
-for dropdown, combo box, and date entry. Omitted entries retain the engine's own
-menus. A configured `contentControlWidget` renders
+for dropdown, combo box, date, and building block gallery entry. Omitted entries
+retain the engine's own menus. A configured `contentControlWidget` renders
 `DocxEditorContentControlWidget`, a compound whose parts (`Calendar`, `Header`,
 `Grid`, `Day`, `Today`, `List`, `Item`, `Input`, `Footer`, and more) accept
 `className`, `hidden`, and `asChild`, and whose `useContentControlWidget()` hook
 exposes the draft state. Checkbox presses reach a renderer only through
 `popups.contentControlCheckbox`, as a session with `kind: 'checkbox'`; without
-that entry the engine toggles the box itself. See
+that entry the engine toggles the box itself. Picture presses reach a renderer
+only through `popups.contentControlPicture`, as a session with `kind: 'picture'`
+and a `replaceImage(bytes)` method; without that entry the engine opens its own
+file dialog. See
 [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
 for renderer ownership, sessions, and parts.
 

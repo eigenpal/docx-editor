@@ -831,6 +831,7 @@ export type ContentControlMappedType =
   | 'comboBox'
   | 'date'
   | 'picture'
+  | 'buildingBlockGallery'
   | 'repeatingSection';
 
 /** Where the control sits in the tree relative to its content. */

@@ -19,10 +19,12 @@ import {
   tableIds,
   transactBody,
   W,
+  W14,
   walkNodes,
   zipDoc,
   type JournalCoverageFixture,
 } from './canonical-primitive-journal-coverage-support.ts';
+import { readOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
 
 const TWO_P =
   '<w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>World</w:t></w:r></w:p><w:sectPr/>';
@@ -772,5 +774,32 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         };
       }
     ),
+    story(
+      'insertBuildingBlock',
+      zipDoc({
+        body:
+          '<w:sdt><w:sdtPr><w:id w:val="7"/><w:showingPlcHdr/><w:docPartList><w:docPartGallery w:val="Quick Parts"/></w:docPartList></w:sdtPr>' +
+          '<w:sdtContent><w:p><w:r><w:t>Choose a building block.</w:t></w:r></w:p></w:sdtContent></w:sdt>' +
+          '<w:p><w:r><w:t>after</w:t></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => ({
+        op: 'insertBuildingBlock',
+        controlId: findKind(store.bodyStore().part, 'contentControl').id,
+        name: 'Approval',
+        blocks: [
+          findKind(parseBodyPart('<w:p><w:r><w:t>Approved by</w:t></w:r></w:p>'), 'paragraph'),
+        ],
+      })
+    ),
   ];
+}
+
+/** A throwaway part whose body holds `xml`, for op payloads that carry foreign blocks. */
+function parseBodyPart(xml: string): OoxmlPart {
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${xml}</w:body></w:document>`,
+    { name: '/word/payload.xml', contentType: 'application/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  return parsed.part;
 }

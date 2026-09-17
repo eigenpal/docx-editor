@@ -7,11 +7,16 @@ import type {
 import { usePopupConfig, type DocxEditorPopups } from './popup-config';
 import { useDocxEditor } from './context';
 
-/** Which `popups` entry renders a widget session: checkbox presses have their own. */
+/** Which `popups` entry renders a widget session: checkbox and picture presses have their own. */
 function widgetEntry(
   kind: ContentControlWidgetSession['kind']
-): keyof Pick<DocxEditorPopups, 'contentControlWidget' | 'contentControlCheckbox'> {
-  return kind === 'checkbox' ? 'contentControlCheckbox' : 'contentControlWidget';
+): keyof Pick<
+  DocxEditorPopups,
+  'contentControlWidget' | 'contentControlCheckbox' | 'contentControlPicture'
+> {
+  if (kind === 'checkbox') return 'contentControlCheckbox';
+  if (kind === 'picture') return 'contentControlPicture';
+  return 'contentControlWidget';
 }
 
 export const ConfiguredEnginePopups = defineComponent({
@@ -26,14 +31,19 @@ export const ConfiguredEnginePopups = defineComponent({
         editor,
         () => config.value?.contentControlWidget !== undefined,
         () => config.value?.contentControlCheckbox !== undefined,
+        () => config.value?.contentControlPicture !== undefined,
       ],
-      ([instance, widgetConfigured, checkboxConfigured], _old, onCleanup) => {
-        if (!instance || (!widgetConfigured && !checkboxConfigured)) return;
+      ([instance, widgetConfigured, checkboxConfigured, pictureConfigured], _old, onCleanup) => {
+        if (!instance || (!widgetConfigured && !checkboxConfigured && !pictureConfigured)) return;
         // The registration names only the kinds a configured entry can render, so an omitted
-        // `contentControlCheckbox` leaves checkbox presses to the engine's own toggle.
+        // `contentControlCheckbox` leaves checkbox presses to the engine's own toggle and an
+        // omitted `contentControlPicture` leaves picture presses to the engine's file picker.
         const kinds: ContentControlWidgetSession['kind'][] = [
-          ...(widgetConfigured ? (['dropdown', 'comboBox', 'date'] as const) : []),
+          ...(widgetConfigured
+            ? (['dropdown', 'comboBox', 'date', 'buildingBlockGallery'] as const)
+            : []),
           ...(checkboxConfigured ? (['checkbox'] as const) : []),
+          ...(pictureConfigured ? (['picture'] as const) : []),
         ];
         const dispose = instance.setContentControlWidgetChrome(
           {

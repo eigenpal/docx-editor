@@ -335,6 +335,14 @@ export {
   walkStoryBlocks,
 } from './content-control-walk.ts';
 export {
+  buildingBlockGalleryOf,
+  buildingBlocksForControl,
+  buildingBlocksOf,
+  glossaryPartOf,
+  type BuildingBlock,
+  type BuildingBlockGalleryFilter,
+} from './building-blocks.ts';
+export {
   authorableHyperlinkTarget,
   ensureHyperlinkRelationship,
   relationshipTargetIn,

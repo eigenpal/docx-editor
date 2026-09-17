@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import type { ChangeEvent } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
   calendarMonthNames,
@@ -525,6 +526,48 @@ export function ContentControlWidgetYear(props: DocxEditorContentControlWidgetPa
           event.preventDefault();
           event.currentTarget.blur();
         }
+      },
+    },
+    undefined
+  );
+}
+
+/** Props for the picture file input. @public */
+export interface ContentControlWidgetPictureProps extends DocxEditorContentControlWidgetPartProps {
+  /** Open the browser's file dialog as soon as the part mounts. Defaults to true. */
+  autoOpen?: boolean;
+}
+
+/**
+ * The file input of a picture session. A chosen file replaces the control's image through
+ * the session; closing the dialog without a file cancels the session. @public
+ */
+export function ContentControlWidgetPicture({
+  autoOpen,
+  ...props
+}: ContentControlWidgetPictureProps) {
+  const widget = useContentControlWidget();
+  const t = useFormControlTranslate();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useLayoutEffect(() => {
+    if (autoOpen !== false) inputRef.current?.click();
+  }, [autoOpen]);
+  return part(
+    'input',
+    props,
+    {
+      ref: inputRef,
+      type: 'file',
+      accept: widget.accept,
+      className: 'docx-content-control-picture-input',
+      'data-docx-part': 'picture',
+      'aria-label': t('contentControl.types.picture'),
+      'aria-invalid': widget.refused || undefined,
+      onMouseDown: stopPress,
+      onCancel: widget.cancel,
+      onChange: (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) void widget.replaceImage(file);
       },
     },
     undefined

@@ -200,6 +200,7 @@ export {
   type LegacyCheckboxFieldRange,
   type SetLegacyCheckboxOp,
 } from './legacy-checkbox-fields.ts';
+export { type InsertBuildingBlockOp } from './building-block-insert.ts';
 
 export { formsProtectionEnabled, sectionProtectsForms } from './tree-op-content-controls.ts';
 

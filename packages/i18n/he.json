@@ -678,7 +678,8 @@
       "picture": "תמונה",
       "plainText": "טקסט רגיל",
       "repeatingSection": "מקטע חוזר",
-      "richText": "טקסט מעוצב"
+      "richText": "טקסט מעוצב",
+      "buildingBlockGallery": null
     },
     "calendar": {
       "nextMonth": null,
@@ -686,6 +687,9 @@
       "today": null,
       "month": null,
       "year": null
+    },
+    "gallery": {
+      "empty": null
     }
   },
   "notes": {

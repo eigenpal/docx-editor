@@ -266,3 +266,46 @@ test('the normal demo keeps the calendar actions visible on a laptop viewport', 
   ).toBeLessThanOrEqual(2);
   await page.screenshot({ path: test.info().outputPath('calendar-normal-demo.png') });
 });
+
+test('gallery: the engine menu lists the glossary blocks and a pick fills the control', async ({
+  page,
+}) => {
+  const paragraphs = page.locator('.docx-page-content .layout-paragraph');
+  const count = await paragraphs.count();
+  await page.locator('[data-docx-cc-widget="buildingBlockGallery"]').click();
+  const menu = page.locator('.docx-content-control-menu');
+  await expect(menu.locator('[role="option"]')).toHaveText(['Address block', 'Sign-off line']);
+  await menu.locator('[role="option"]').nth(1).click();
+  await expect(menu).toHaveCount(0);
+  await expect(paragraphs).toHaveCount(count);
+  await expect(page.locator('.docx-pages')).toContainText('Approved by:');
+  await expect(page.locator('.docx-pages')).not.toContainText('Choose a building block.');
+  expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.saveAndReopen())).toEqual({
+    ok: true,
+  });
+  await expect(page.locator('.docx-pages')).toContainText('Approved by:');
+});
+
+test('picture: the widget opens a file picker and the chosen image replaces the picture', async ({
+  page,
+}) => {
+  const image = page.locator('.docx-page-content img').first();
+  const before = await image.getAttribute('src');
+  // The engine's picker is a real file input, so the browser's chooser is the dialog.
+  const chooserOpened = page.waitForEvent('filechooser');
+  await page.locator('[data-docx-cc-widget="picture"]').click();
+  const chooser = await chooserOpened;
+  expect(chooser.isMultiple()).toBe(false);
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64'
+  );
+  await chooser.setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('.docx-content-control-picture-picker')).toHaveCount(0);
+  await expect
+    .poll(async () => page.locator('.docx-page-content img').first().getAttribute('src'))
+    .not.toBe(before);
+  expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.saveAndReopen())).toEqual({
+    ok: true,
+  });
+});

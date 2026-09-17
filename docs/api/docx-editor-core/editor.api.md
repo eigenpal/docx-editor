@@ -900,6 +900,9 @@ export function computeResizedImageExtentEmu(startWidthEmu: number, startHeightE
 };
 
 // @public
+export const CONTENT_CONTROL_PICTURE_ACCEPT = "image/png,image/jpeg,image/gif,image/bmp,image/webp";
+
+// @public
 export interface ContentControlListNavigation {
     keyDown(event: KeyboardEvent, root: HTMLElement): void;
     reset(): void;
@@ -936,8 +939,9 @@ export interface ContentControlWidgetSession {
         readonly value: string;
     }[];
     // (undocumented)
-    readonly kind: 'dropdown' | 'comboBox' | 'date' | 'checkbox';
+    readonly kind: 'dropdown' | 'comboBox' | 'date' | 'checkbox' | 'picture' | 'buildingBlockGallery';
     readonly locale: string;
+    replaceImage?(bytes: Uint8Array): Promise<boolean>;
     // (undocumented)
     readonly signal: AbortSignal;
     // (undocumented)

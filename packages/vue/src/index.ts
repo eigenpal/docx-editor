@@ -474,6 +474,7 @@ export {
   type DocxEditorContentControlWidgetPartProps,
   type ContentControlWidgetDayProps,
   type ContentControlWidgetItemProps,
+  type ContentControlWidgetPictureProps,
 } from './editor/content-control-widget/parts';
 export {
   DocxEditorInvalidTextFormFieldDialog,

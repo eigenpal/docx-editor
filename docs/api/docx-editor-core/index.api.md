@@ -787,7 +787,7 @@ export interface ContentControlSummary {
 }
 
 // @public
-export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
 
 // @public
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance;

@@ -116,10 +116,12 @@ describe('server-first defaults', () => {
       }).toEqual({
         pages: 26,
         bodyLineCount: 280,
-        markdownLength: 17_195,
+        // Four checkbox controls open their paragraphs with a `w:sym` glyph; the pin moved by
+        // exactly those four characters when a leading glyph started laying out.
+        markdownLength: 17_199,
         headers: 25,
         footers: 25,
-        markdownHash: '655193dabec1bd8a288ecbb906f54f601dd0f7254fbf83665f37eb098739b509',
+        markdownHash: '5f35722ea5e741e2323f036a6a336d1260265467637f97f5e599f700410d35db',
       });
       expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');
       expect(translated.markdown).toEndWith(
