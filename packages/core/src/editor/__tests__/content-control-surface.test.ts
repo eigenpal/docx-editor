@@ -871,6 +871,19 @@ describe('typing stays inside the control', () => {
     expect(controlContent(surface)).toBe('<w:r><w:t>abc</w:t></w:r>');
   });
 
+  test('after a content-locked chip the text lands beside it, not inside', () => {
+    const { surface } = mount(
+      `<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>${sdt(
+        `<w:alias w:val="Chip"/><w:lock w:val="contentLocked"/><w:richText/>`,
+        `<w:r><w:t>LABEL</w:t></w:r>`
+      )}</w:p>`
+    );
+    putCaret(surface, 12);
+    surface.type('x');
+    expect(surface.session.bodyText()).toBe('before LABELx');
+    expect(controlContent(surface)).toBe('<w:r><w:t>LABEL</w:t></w:r>');
+  });
+
   test('at the end of a hyperlink inside a control the text leaves the link but not the control', () => {
     const container = document.createElement('div');
     const result = mountPaginatedSurface(

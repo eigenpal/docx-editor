@@ -8,6 +8,7 @@
 // landing in the wrong place.
 
 import type { OoxmlPart, TreeDocOp } from '@docx-editor.dev/core/store';
+import type { ContentControlBoundaryRecord } from '../layout/semantic-records.ts';
 import { placeholderControlForInsertion } from '../store/store/tree-op-content-controls.ts';
 
 /** The caret offset after `textLength` characters land at `offset` in `paragraphId`. */
@@ -19,6 +20,21 @@ export function promptInsertionLanding(
 ): number {
   const prompt = placeholderControlForInsertion(part, paragraphId, offset);
   return (prompt?.offset ?? offset) + textLength;
+}
+
+/**
+ * The control that OWNS a keystroke at the caret, or `undefined` when the text should land
+ * where the store's default puts it. A text, date or list control is typed into, so its
+ * trailing edge is still "inside". A content-locked chip, a checkbox or a picture is an atom:
+ * nothing is typed into it, and a caret after it types beside it, as in Word.
+ */
+export function insertOwnerOf(control: ContentControlBoundaryRecord | null): string | undefined {
+  if (!control) return undefined;
+  if (control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked') {
+    return undefined;
+  }
+  if (control.controlType === 'checkbox' || control.controlType === 'picture') return undefined;
+  return control.id;
 }
 
 /**

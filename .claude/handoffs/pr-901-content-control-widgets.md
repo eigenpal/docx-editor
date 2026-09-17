@@ -143,8 +143,10 @@ Review points worth a second pair of eyes:
 - `contentControlAtSelection` probes a quarter point inside range ends, and a collapsed caret
   a quarter point to its left. Check a control at a line end, a control that spans two lines,
   and two controls that touch (the caret between them belongs to the first).
-- `insertText.inside` is only set by `type()`. Paste, IME commit, and automation inserts at a
-  control's trailing edge still land outside. Decide whether they should name the owner too.
+- `insertText.inside` is only set by `type()`, and only for controls that take typing
+  (`insertOwnerOf`: not content-locked, not checkbox, not picture, so a caret after a locked chip
+  types beside it). Paste, IME commit, and automation inserts at a control's trailing edge still
+  land outside. Decide whether they should name the owner too.
 - `content-control-hover.ts` scans boundary boxes with `getBoundingClientRect` once per
   frame on the page under the pointer. Check the cost on a page with hundreds of controls.
 - The prompt press opens the menu on `pointerdown` before the selection settles. Check that
