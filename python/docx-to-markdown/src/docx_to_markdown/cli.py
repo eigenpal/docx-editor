@@ -6,12 +6,11 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Union
 
 from . import ConversionError, Converter, FontFace, __version__
 
 
-def _font(spec: str) -> Union[FontFace, str]:
+def _font(spec: str) -> FontFace | str:
     """``PATH`` alone reads family, weight, and style from the file (a directory is
     scanned). ``PATH:FAMILY[:WEIGHT[:STYLE]]`` registers one file under a document's
     family name. A Windows drive letter is allowed in PATH."""
@@ -83,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.output and len(args.inputs) > 1:

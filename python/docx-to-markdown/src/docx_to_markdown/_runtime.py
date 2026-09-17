@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 PROTOCOL_VERSION = 1
 FONT_ASSET_ROOT_ENV = "DOCX_EDITOR_FONT_ASSET_ROOT"
@@ -67,7 +67,7 @@ def _env() -> dict[str, str]:
     return env
 
 
-def _decode(stdout: bytes, stderr: bytes, returncode: Optional[int]) -> dict[str, Any]:
+def _decode(stdout: bytes, stderr: bytes, returncode: int | None) -> dict[str, Any]:
     try:
         payload = json.loads(stdout.decode("utf-8"))
     except ValueError as exc:
@@ -90,7 +90,7 @@ def _decode(stdout: bytes, stderr: bytes, returncode: Optional[int]) -> dict[str
     return payload
 
 
-def run_once(request: dict[str, Any], *, timeout: Optional[float]) -> dict[str, Any]:
+def run_once(request: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:
     """Spawn the converter for one request."""
     binary = _binary()
     body = json.dumps({"protocol": PROTOCOL_VERSION, **request}).encode("utf-8")
@@ -117,10 +117,10 @@ class Worker:
     """
 
     def __init__(self) -> None:
-        self._process: Optional["subprocess.Popen[bytes]"] = None
+        self._process: subprocess.Popen[bytes] | None = None
         self._lock = threading.Lock()
 
-    def _start(self) -> "subprocess.Popen[bytes]":
+    def _start(self) -> subprocess.Popen[bytes]:
         binary = _binary()
         self._process = subprocess.Popen(
             [str(binary), "--serve"],
@@ -135,7 +135,7 @@ class Worker:
     def running(self) -> bool:
         return self._process is not None and self._process.poll() is None
 
-    def request(self, request: dict[str, Any], *, timeout: Optional[float]) -> dict[str, Any]:
+    def request(self, request: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:
         with self._lock:
             process = self._process
             if process is None or process.poll() is not None:
@@ -143,7 +143,7 @@ class Worker:
             stdin, stdout = process.stdin, process.stdout
             assert stdin is not None and stdout is not None
             body = json.dumps({"protocol": PROTOCOL_VERSION, **request}).encode("utf-8")
-            timer: Optional[threading.Timer] = None
+            timer: threading.Timer | None = None
             timed_out = False
             if timeout is not None:
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
-from typing import Optional
 
 _ITALIC_WORDS = ("italic", "oblique")
 _WEIGHT_WORDS = (
@@ -87,7 +86,7 @@ def _name_strings(data: bytes, start: int, length: int) -> dict[int, str]:
     return {k: v[1] for k, v in best.items()}
 
 
-def _weight_from_words(text: str) -> Optional[int]:
+def _weight_from_words(text: str) -> int | None:
     lowered = text.lower().replace(" ", "").replace("-", "")
     for word, weight in _WEIGHT_WORDS:
         if word in lowered:
@@ -106,7 +105,7 @@ def read_face(data: bytes) -> FaceInfo:
         raise NotAFontError("font names no family")
     subfamily = names.get(17) or names.get(2) or ""
 
-    weight: Optional[int] = None
+    weight: int | None = None
     italic = False
     if "OS/2" in tables:
         start, length = tables["OS/2"]

@@ -12,10 +12,10 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 FontStyle = Literal["normal", "italic"]
-PathLike = Union[str, "os.PathLike[str]"]
+PathLike = str | os.PathLike[str]
 
 #: Word families the package measures with bundled metric-compatible substitutes.
 BUNDLED_FAMILIES: tuple[str, ...] = (
@@ -89,9 +89,9 @@ class FontFace:
 def font_family(
     family: str,
     regular: PathLike,
-    bold: Optional[PathLike] = None,
-    italic: Optional[PathLike] = None,
-    bold_italic: Optional[PathLike] = None,
+    bold: PathLike | None = None,
+    italic: PathLike | None = None,
+    bold_italic: PathLike | None = None,
 ) -> list[FontFace]:
     """The static faces of one family.
 
@@ -113,7 +113,7 @@ FONT_EXTENSIONS = (".ttf", ".otf", ".ttc")
 
 def font_files(
     *paths: PathLike,
-    family: Optional[str] = None,
+    family: str | None = None,
     recursive: bool = True,
 ) -> list[FontFace]:
     """Faces read from font files, with family, weight, and style taken from each file.
@@ -160,7 +160,7 @@ def font_files(
     return faces
 
 
-FontsArg = Union[FontFace, PathLike, Sequence[Union[FontFace, PathLike]]]
+FontsArg = FontFace | PathLike | Sequence[FontFace | PathLike]
 
 
 def font_requests(fonts: FontsArg) -> list[dict[str, Any]]:

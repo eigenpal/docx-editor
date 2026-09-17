@@ -74,10 +74,10 @@ jobs:
         run: |
           uvx ruff check src tests hatch_build.py
           uvx ruff format --check src tests hatch_build.py
-          uv run --no-project --with pyright --with-editable . pyright
+          uv run --python 3.11 --no-project --with pyright --with-editable . pyright
       - name: Test
         working-directory: python/docx-to-markdown
-        run: uv run --no-project --with pytest --with-editable . pytest -q
+        run: uv run --python 3.11 --no-project --with pytest --with-editable . pytest -q
       - name: Build wheel
         working-directory: python/docx-to-markdown
         run: uv build --wheel

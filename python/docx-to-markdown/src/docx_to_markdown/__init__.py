@@ -28,9 +28,10 @@ import io
 import json
 import os
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, Callable, Literal, Optional, Union, cast
+from typing import IO, Any, Literal, cast
 
 from ._runtime import ConversionError, RuntimeNotFoundError, Worker, run_once, runtime_path
 from .fonts import (
@@ -131,7 +132,7 @@ _WARNING_CODES = (
     "image-placement-fallback",
     "omitted-content",
 )
-Source = Union[str, "os.PathLike[str]", bytes, bytearray, memoryview, IO[bytes]]
+Source = str | os.PathLike[str] | bytes | bytearray | memoryview | IO[bytes]
 
 
 @dataclass(frozen=True, repr=False)
@@ -159,8 +160,8 @@ class ExportWarning:
 
     code: WarningCode
     message: str
-    page_number: Optional[int] = None
-    part_name: Optional[str] = None
+    page_number: int | None = None
+    part_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -205,7 +206,7 @@ class MarkdownResult:
     pages: list[Page]
     warnings: list[ExportWarning]
     media: list[MediaAsset]
-    font_resolution: Optional[FontResolution]
+    font_resolution: FontResolution | None
     font_errors: list[FontFaceError]
     review_artifacts: list[ReviewArtifact]
     review_bindings: list[ReviewBinding]
@@ -245,7 +246,7 @@ class MarkdownResult:
     def tracked_changes(self) -> list[TrackedChange]:
         return [a for a in self.review_artifacts if isinstance(a, TrackedChange)]
 
-    def write(self, directory: Union[str, "os.PathLike[str]"]) -> Path:
+    def write(self, directory: str | os.PathLike[str]) -> Path:
         """Write ``document.md``, ``document.json``, and ``media/`` into a directory.
 
         The directory is created if needed. The layout matches the Node.js package's
@@ -274,7 +275,7 @@ def _request(
     fonts: FontsArg,
     font_policy: FontPolicy,
     google_fonts: bool,
-    images: Union[bool, ImageSyntax],
+    images: bool | ImageSyntax,
     display_mode: DisplayMode,
 ) -> dict[str, Any]:
     if font_policy not in ("best-effort", "strict"):
@@ -294,7 +295,7 @@ def _request(
 
 def _with_source(source: Source, request: dict[str, Any], send: Send) -> dict[str, Any]:
     if isinstance(source, (bytes, bytearray, memoryview)):
-        data: Optional[bytes] = bytes(source)
+        data: bytes | None = bytes(source)
     elif hasattr(source, "read"):
         if isinstance(source, io.TextIOBase) or "b" not in getattr(source, "mode", "b"):
             raise TypeError("open the file in binary mode: open(path, 'rb')")
@@ -379,9 +380,9 @@ def convert(
     fonts: FontsArg = (),
     font_policy: FontPolicy = "best-effort",
     google_fonts: bool = False,
-    images: Union[bool, ImageSyntax] = False,
+    images: bool | ImageSyntax = False,
     display_mode: DisplayMode = "all-markup",
-    timeout: Optional[float] = 300,
+    timeout: float | None = 300,
 ) -> MarkdownResult:
     """Convert one DOCX file to Markdown.
 
@@ -426,15 +427,15 @@ class Converter:
         fonts: FontsArg = (),
         font_policy: FontPolicy = "best-effort",
         google_fonts: bool = False,
-        images: Union[bool, ImageSyntax] = False,
+        images: bool | ImageSyntax = False,
         display_mode: DisplayMode = "all-markup",
-        timeout: Optional[float] = 300,
+        timeout: float | None = 300,
     ) -> None:
         _request(fonts, font_policy, google_fonts, images, display_mode)  # validate eagerly
         self._fonts: FontsArg = fonts
         self._font_policy: FontPolicy = font_policy
         self._google_fonts: bool = google_fonts
-        self._images: Union[bool, ImageSyntax] = images
+        self._images: bool | ImageSyntax = images
         self._display_mode: DisplayMode = display_mode
         self.timeout = timeout
         self._worker = Worker()
@@ -443,12 +444,12 @@ class Converter:
         self,
         source: Source,
         *,
-        fonts: Optional[FontsArg] = None,
-        font_policy: Optional[FontPolicy] = None,
-        google_fonts: Optional[bool] = None,
-        images: Optional[Union[bool, ImageSyntax]] = None,
-        display_mode: Optional[DisplayMode] = None,
-        timeout: Optional[float] = _UNSET,
+        fonts: FontsArg | None = None,
+        font_policy: FontPolicy | None = None,
+        google_fonts: bool | None = None,
+        images: bool | ImageSyntax | None = None,
+        display_mode: DisplayMode | None = None,
+        timeout: float | None = _UNSET,
     ) -> MarkdownResult:
         """Convert one file. Keywords match :func:`convert` and override the defaults."""
         request = _request(
@@ -469,7 +470,7 @@ class Converter:
     def close(self) -> None:
         self._worker.close()
 
-    def __enter__(self) -> "Converter":
+    def __enter__(self) -> Converter:
         return self
 
     def __exit__(self, *exc: object) -> None:

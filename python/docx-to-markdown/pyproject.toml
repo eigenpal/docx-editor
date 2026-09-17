@@ -9,12 +9,16 @@ description = "Convert DOCX to Markdown with Word-faithful pages, headers, foote
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 keywords = ["docx", "markdown", "converter", "word", "pagination"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Text Processing :: Markup :: Markdown",
 ]
 dependencies = []
@@ -47,20 +51,15 @@ testpaths = ["tests"]
 
 [tool.pyright]
 include = ["src"]
-pythonVersion = "3.9"
+pythonVersion = "3.11"
 typeCheckingMode = "strict"
 # Runtime validation of caller input keeps isinstance checks the types call redundant.
 reportUnnecessaryIsInstance = false
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.lint]
 # Explicit so a ruff upgrade cannot change what CI enforces.
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = [
-  "UP007", # keep Optional/Union: X | Y must not reach runtime on Python 3.9
-  "UP037", # quoted annotations stay for Python 3.9 forward references
-  "UP045",
-]

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional, Union, cast
+from typing import Any, Literal, cast
 
 Coverage = Literal["complete", "partial", "none"]
 FontStyle = Literal["normal", "italic"]
@@ -26,11 +26,11 @@ def _int(value: Any, default: int = 0) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else default
 
 
-def _opt_str(value: Any) -> Optional[str]:
+def _opt_str(value: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _opt_int(value: Any) -> Optional[int]:
+def _opt_int(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
@@ -50,7 +50,7 @@ class FontRequest:
     style: FontStyle
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontRequest":
+    def from_json(cls, data: Mapping[str, Any]) -> FontRequest:
         style = data.get("style")
         return cls(
             family=_str(data.get("family")),
@@ -67,7 +67,7 @@ class FontSubstitution:
     resolved: FontRequest
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontSubstitution":
+    def from_json(cls, data: Mapping[str, Any]) -> FontSubstitution:
         return cls(
             requested=FontRequest.from_json(data.get("requested") or {}),
             resolved=FontRequest.from_json(data.get("resolved") or {}),
@@ -82,14 +82,14 @@ class FontFaceResolution:
     style: FontStyle
     source_family: str
     via: Literal["direct", "substitution"]
-    id: Optional[str] = None
-    hash: Optional[str] = None
-    identity: Optional[str] = None
-    face_index: Optional[int] = None
-    substitution: Optional[FontSubstitution] = None
+    id: str | None = None
+    hash: str | None = None
+    identity: str | None = None
+    face_index: int | None = None
+    substitution: FontSubstitution | None = None
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontFaceResolution":
+    def from_json(cls, data: Mapping[str, Any]) -> FontFaceResolution:
         substitution = data.get("substitution")
         return cls(
             weight=_int(data.get("weight"), 400),
@@ -119,7 +119,7 @@ class FontFamilyResolution:
         return self.coverage == "complete"
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontFamilyResolution":
+    def from_json(cls, data: Mapping[str, Any]) -> FontFamilyResolution:
         coverage = data.get("coverage")
         return cls(
             family=_str(data.get("family")),
@@ -134,10 +134,10 @@ class FontOriginFailure:
 
     origin_index: int
     cause: str
-    origin_name: Optional[str] = None
+    origin_name: str | None = None
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontOriginFailure":
+    def from_json(cls, data: Mapping[str, Any]) -> FontOriginFailure:
         cause = data.get("cause")
         return cls(
             origin_index=_int(data.get("originIndex")),
@@ -155,7 +155,7 @@ class DroppedEmbeddedFont:
     reason: Literal["overLimit", "malformed"]
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "DroppedEmbeddedFont":
+    def from_json(cls, data: Mapping[str, Any]) -> DroppedEmbeddedFont:
         return cls(
             request=FontRequest.from_json(data.get("request") or {}),
             part_name=_str(data.get("partName")),
@@ -183,11 +183,11 @@ class FontResolution:
         """Families that did not measure with all of their faces."""
         return [f.family for f in self.families if not f.complete]
 
-    def family(self, name: str) -> Optional[FontFamilyResolution]:
+    def family(self, name: str) -> FontFamilyResolution | None:
         return next((f for f in self.families if f.family == name), None)
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "FontResolution":
+    def from_json(cls, data: Mapping[str, Any]) -> FontResolution:
         return cls(
             requested_families=[_str(f) for f in _list(data.get("requestedFamilies"))],
             default_family=_str(data.get("defaultFamily")),
@@ -213,15 +213,15 @@ class ReviewOccurrence:
     story: Story
     root_story: Story
     textbox_path: list[str] = field(default_factory=lambda: [])
-    note_scope_id: Optional[str] = None
-    note_area_kind: Optional[Literal["footnotes", "endnotes"]] = None
-    revision_role: Optional[Literal["replaced", "replacement", "neutral"]] = None
+    note_scope_id: str | None = None
+    note_area_kind: Literal["footnotes", "endnotes"] | None = None
+    revision_role: Literal["replaced", "replacement", "neutral"] | None = None
     source: Mapping[str, Any] = field(default_factory=lambda: {})
     """The engine's anchor for this occurrence, kept as the converter reports it."""
-    geometry: Optional[Mapping[str, Any]] = None
+    geometry: Mapping[str, Any] | None = None
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "ReviewOccurrence":
+    def from_json(cls, data: Mapping[str, Any]) -> ReviewOccurrence:
         note_area = data.get("noteAreaKind")
         role = data.get("revisionRole")
         source = data.get("source")
@@ -252,15 +252,15 @@ class Comment:
     text: str
     resolved: bool
     orphaned: bool
-    date: Optional[str] = None
-    parent_id: Optional[str] = None
-    parent_revision_id: Optional[str] = None
+    date: str | None = None
+    parent_id: str | None = None
+    parent_revision_id: str | None = None
     reply_ids: list[str] = field(default_factory=lambda: [])
     occurrences: list[ReviewOccurrence] = field(default_factory=lambda: [])
     kind: Literal["comment"] = "comment"
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "Comment":
+    def from_json(cls, data: Mapping[str, Any]) -> Comment:
         return cls(
             id=_str(data.get("id")),
             author=_str(data.get("author")),
@@ -309,16 +309,16 @@ class TrackedChange:
     replaced_text: str
     nesting: int
     read_only: bool
-    date: Optional[str] = None
-    mark_direction: Optional[Literal["insert", "delete", "moveFrom", "moveTo"]] = None
-    replaced_range_count: Optional[int] = None
-    paired_with: Optional[str] = None
+    date: str | None = None
+    mark_direction: Literal["insert", "delete", "moveFrom", "moveTo"] | None = None
+    replaced_range_count: int | None = None
+    paired_with: str | None = None
     reply_ids: list[str] = field(default_factory=lambda: [])
     occurrences: list[ReviewOccurrence] = field(default_factory=lambda: [])
     kind: Literal["tracked-change"] = "tracked-change"
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "TrackedChange":
+    def from_json(cls, data: Mapping[str, Any]) -> TrackedChange:
         change = data.get("change")
         direction = data.get("markDirection")
         return cls(
@@ -340,7 +340,7 @@ class TrackedChange:
         )
 
 
-ReviewArtifact = Union[Comment, TrackedChange]
+ReviewArtifact = Comment | TrackedChange
 
 
 def review_artifact_from_json(data: Mapping[str, Any]) -> ReviewArtifact:
@@ -359,7 +359,7 @@ class ReviewRange:
     unit: Literal["utf16-code-unit"] = "utf16-code-unit"
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "ReviewRange":
+    def from_json(cls, data: Mapping[str, Any]) -> ReviewRange:
         return cls(
             start=_int(data.get("start")),
             end=_int(data.get("end")),
@@ -384,7 +384,7 @@ class PageProjection:
     kind: Literal["page"] = "page"
 
 
-ReviewProjection = Union[DocumentProjection, PageProjection]
+ReviewProjection = DocumentProjection | PageProjection
 
 
 def _projection_from_json(data: Mapping[str, Any]) -> ReviewProjection:
@@ -410,16 +410,15 @@ class ReviewBinding:
     projection: ReviewProjection
     coverage: Coverage
     ranges: list[ReviewRange] = field(default_factory=lambda: [])
-    unmapped_reason: Optional[
+    unmapped_reason: (
         Literal[
-            "not-represented-in-markdown",
-            "non-linear-structural-change",
-            "omitted-story-content",
+            "not-represented-in-markdown", "non-linear-structural-change", "omitted-story-content"
         ]
-    ] = None
+        | None
+    ) = None
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "ReviewBinding":
+    def from_json(cls, data: Mapping[str, Any]) -> ReviewBinding:
         coverage = data.get("coverage")
         reason = data.get("unmappedReason")
         return cls(
@@ -461,7 +460,7 @@ class ImageOccurrence:
     alt: str
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "ImageOccurrence":
+    def from_json(cls, data: Mapping[str, Any]) -> ImageOccurrence:
         return cls(
             page_number=_int(data.get("pageNumber")),
             story=_str(data.get("story")),
@@ -488,7 +487,7 @@ class Pagination:
     scope: str = "export-snapshot"
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any]) -> "Pagination":
+    def from_json(cls, data: Mapping[str, Any]) -> Pagination:
         mode = data.get("displayMode")
         return cls(
             layout_revision=_int(data.get("layoutRevision")),

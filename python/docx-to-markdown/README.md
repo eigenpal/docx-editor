@@ -15,7 +15,7 @@ pip install docx-to-markdown
 ```
 
 Wheels are platform-specific: Linux x64 and arm64, macOS x64 and arm64, and Windows x64.
-Python 3.9 or later.
+Python 3.11 or later.
 
 ## Convert a file
 
