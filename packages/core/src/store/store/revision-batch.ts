@@ -1,12 +1,21 @@
+import {
+  tableRevisionContentTarget,
+  tableRevisionRemovals,
+  tableRevisionNeighbours,
+  tableMergeDependencies,
+} from './revision-table-plan.ts';
 import { paragraphMergeSources } from './revision-paragraph-merge.ts';
-import { isParagraphMarkRevision } from './tree-op-nodes.ts';
-import { isWmlNamed } from './tree-op-tracked.ts';
+import { preservedRevisionProperty } from './revision-property-records.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';
-import { parentNodeOf } from '../package/ooxml-edit.ts';
+import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { revisionItemsOf } from './review-reads.ts';
 import { reviewItemKey, revisionSiteNodeIdsOf, type ReviewRevisionItem } from './review-items.ts';
-import { collectRevisionSites, namedMoveRanges, trackedRowRevisions } from './tree-op-revisions.ts';
+import {
+  collectRevisionSites,
+  namedMoveRanges,
+  orphanMoveDestinationSites,
+} from './tree-op-revisions.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 
 /** A canonical review decision. Keys are valid only in the open document. @public */
@@ -63,6 +72,7 @@ export function planRevisionBatch(
     if (item) for (const id of revisionSiteNodeIdsOf(item)) selectedSites.add(id);
   }
   const sites = collectRevisionSites(scopedPart);
+  const orphanDestinations = orphanMoveDestinationSites(root, sites);
   const indices = new Map(sites.map((site, index) => [site.node.id, index]));
   const parents = sites.map((_, index) => index);
   const find = (index: number): number => {
@@ -83,7 +93,6 @@ export function planRevisionBatch(
     });
     for (const index of own) join(own[0]!, index);
   }
-  const rowSites = new Map<string, typeof sites>();
   const mergeSources = new Map<string, ReadonlySet<string>>();
   // Row decisions can remove every descendant. Property restoration replaces the live
   // property container. Containment also protects wrappers the resolver would sweep empty.
@@ -97,10 +106,7 @@ export function planRevisionBatch(
       // Restoration preserves live paragraph marks and, for pPrChange, rPr/sectPr.
       // Only children actually replaced by the resolver depend on this decision.
       for (const child of site.parent.children) {
-        const preserved =
-          site.node.localName === 'pPrChange'
-            ? isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')
-            : isParagraphMarkRevision(child);
+        const preserved = preservedRevisionProperty(site.node.localName, child);
         if (!preserved) owners.set(child.id, index);
       }
     }
@@ -110,7 +116,13 @@ export function planRevisionBatch(
       action === 'accept'
         ? site.node.localName === 'del' || site.node.localName === 'moveFrom'
         : site.node.localName === 'ins' || site.node.localName === 'moveTo';
-    if (site.paragraphMark && site.parent && removesMark && selectedSites.has(site.node.id)) {
+    if (
+      site.paragraphMark &&
+      site.parent &&
+      removesMark &&
+      !orphanDestinations.has(site.node.id) &&
+      selectedSites.has(site.node.id)
+    ) {
       const properties = parentNodeOf(part, site.parent.id);
       const paragraph = properties && parentNodeOf(part, properties.id);
       const container = paragraph && parentNodeOf(part, paragraph.id);
@@ -123,36 +135,18 @@ export function planRevisionBatch(
         if (sources.has(paragraph.id)) owners.set(properties.id, index);
       }
     }
-    if (
-      !(
-        (site.node.localName === 'ins' || site.node.localName === 'del') &&
-        site.parent?.localName === 'trPr'
-      ) &&
-      site.node.localName !== 'cellIns' &&
-      site.node.localName !== 'cellDel'
-    )
-      continue;
-    let node: OoxmlNode | null = site.node;
-    while (node && node.kind !== 'tableRow') node = parentNodeOf(part, node.id);
-    if (node) {
-      const group = rowSites.get(node.id) ?? [];
-      if (group.length) join(indices.get(group[0]!.node.id)!, index);
-      group.push(site);
-      rowSites.set(node.id, group);
+    if (selectedSites.has(site.node.id) && tableRevisionContentTarget(part, site, action)) {
+      const target = tableRevisionContentTarget(part, site, action);
+      if (target && !site.refused) owners.set(target.id, index);
     }
   }
-  const removalTables = new Map<string, OoxmlNode>();
-  for (const [rowId, group] of rowSites) {
-    const revisions = trackedRowRevisions(part, group);
-    if (typeof revisions === 'string') continue;
-    const revision = revisions.get(rowId);
-    const removesRow = revision?.kind === (action === 'accept' ? 'del' : 'ins');
-    // Unsupported row markers cannot remove content; retained rows only lose their markers.
-    // Neither decision should prevent independent changes inside those rows from resolving.
-    if (removesRow && group.every((site) => selectedSites.has(site.node.id))) {
-      owners.set(rowId, indices.get(group[0]!.node.id)!);
-      const table = parentNodeOf(part, rowId);
-      if (table?.kind === 'table') removalTables.set(table.id, table);
+  const selectedTableSites = sites.filter((site) => selectedSites.has(site.node.id));
+  for (const [cellId, markers] of tableRevisionNeighbours(part, selectedTableSites, action)) {
+    const cell = findNode(part, cellId);
+    const markerIndex = indices.get(markers[0]!);
+    if (cell?.kind !== 'tableCell' || markerIndex === undefined) continue;
+    for (const property of cell.children) {
+      if (property.localName === 'tcPr') owners.set(property.id, markerIndex);
     }
   }
   const visit = (node: OoxmlNode, ancestor?: number): void => {
@@ -172,6 +166,15 @@ export function planRevisionBatch(
     });
     for (const index of own) join(own[0]!, index);
   }
+  for (const ids of sites.some((site) => site.node.localName === 'cellMerge')
+    ? tableMergeDependencies(scopedPart)
+    : []) {
+    const group = ids.flatMap((id) => {
+      const index = indices.get(id);
+      return index === undefined ? [] : [index];
+    });
+    for (const index of group) join(group[0]!, index);
+  }
   const groups = new Map<number, typeof sites>();
   for (const [index, site] of sites.entries()) {
     const id = find(index);
@@ -186,8 +189,7 @@ export function planRevisionBatch(
         (site) =>
           site.refused ||
           (action === 'reject' && site.propertyChange && recordedProperties(site.node) === null)
-      ) ||
-      typeof trackedRowRevisions(part, group) === 'string'
+      )
     ) {
       reasons.set(id, 'unsupported-revision');
     } else if (group.some((site) => !selectedSites.has(site.node.id))) {
@@ -201,25 +203,22 @@ export function planRevisionBatch(
       if (index !== undefined) reasons.set(find(index), 'unsupported-revision');
     }
   }
-  // Removing all direct rows also removes their table, including its property revisions.
-  let removedTable = false;
-  for (const table of removalTables.values()) {
-    if (table.kind !== 'table') continue;
-    const rows = table.children.filter((child) => child.kind === 'tableRow');
-    if (
-      rows.length &&
-      rows.every((row) => {
-        const owner = owners.get(row.id);
-        return owner !== undefined && !reasons.has(find(owner));
-      })
-    ) {
-      owners.set(table.id, owners.get(rows[0]!.id)!);
-      removedTable = true;
+  // Cell removal may remove its row; row removal may remove the containing table.
+  // Only eligible groups contribute to this closure, so a retained row does not block peers.
+  const eligible = sites.filter(
+    (site, index) => selectedSites.has(site.node.id) && !reasons.has(find(index))
+  );
+  let removedContainer = false;
+  for (const [id, markerIds] of tableRevisionRemovals(part, eligible, action)) {
+    if (owners.has(id)) continue;
+    const owner = indices.get(markerIds[0]!);
+    if (owner !== undefined) {
+      owners.set(id, owner);
+      removedContainer = true;
     }
   }
-  if (removedTable) {
+  if (removedContainer) {
     visit(root);
-    // Table dependencies can join previously separate groups; carry their refusal forward.
     for (const [group, reason] of [...reasons]) {
       const root = find(group);
       if (reasons.get(root) !== 'unsupported-revision') reasons.set(root, reason);

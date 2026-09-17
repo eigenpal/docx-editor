@@ -65,17 +65,17 @@ for (const action of ['accept', 'reject'] as const) {
       serializeOoxmlPart(part).match(/<w:p>.*?<\/w:p>/)?.[0]
     );
   });
-  test(`${action}: complete rows resolve; incomplete rows and independent content survive`, () => {
+  test(`${action}: row markers resolve with and without matching cell markers`, () => {
     const row = (id: number, complete: boolean) =>
       `<w:tr><w:trPr>${ins(id, 'Ada', '')}</w:trPr><w:tc>${complete ? `<w:tcPr><w:cellIns w:id="${id}" w:author="Ada"/></w:tcPr>` : ''}<w:p>${run(`row${id}`)}</w:p></w:tc></w:tr>`;
     const part = load(`<w:p>${ins(1)}</w:p><w:tbl>${row(2, true)}${row(3, false)}</w:tbl>`);
     const plan = planRevisionBatch(part, action);
-    expect(plan.result.resolved).toHaveLength(2);
-    expect(plan.result.skipped).toHaveLength(1);
+    expect(plan.result.resolved).toHaveLength(3);
+    expect(plan.result.skipped).toHaveLength(0);
     const applied = applyTreeOp(part, plan.ops[0]!);
     if (!applied.ok) throw new Error(applied.reason);
-    expect(revisionItemsOf(applied.part)).toHaveLength(1);
-    expect(serializeOoxmlPart(applied.part)).toContain('row3');
+    expect(revisionItemsOf(applied.part)).toHaveLength(0);
+    expect(serializeOoxmlPart(applied.part).includes('row3')).toBe(action === 'accept');
     expect(serializeOoxmlPart(applied.part).includes('row2')).toBe(action === 'accept');
   });
   test(`${action}: empty and all-unsupported selections create no operations`, () => {

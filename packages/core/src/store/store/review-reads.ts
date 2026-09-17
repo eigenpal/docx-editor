@@ -185,7 +185,8 @@ function computeRevisionItemsOf(
     // Accept All, which then reported success over a document that still held tracked
     // markup. It is listed instead, read-only, because there is no author to resolve it as.
     const author = wmlAttribute(site.node, 'author') ?? '';
-    const authorless = wmlAttribute(site.node, 'author') === undefined;
+    const authorless =
+      wmlAttribute(site.node, 'author') === undefined && site.node.localName !== 'tblGridChange';
     const date = wmlAttribute(site.node, 'date');
     const address: RevisionAddress = date === undefined ? { id, author } : { id, author, date };
 

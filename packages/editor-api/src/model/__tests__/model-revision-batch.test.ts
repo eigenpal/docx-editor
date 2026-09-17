@@ -17,7 +17,15 @@ const row = (complete: boolean) =>
 const xml = (bytes: Uint8Array) => strFromU8(unzipSync(bytes)['word/document.xml']!);
 for (const action of ['accept', 'reject'] as const) {
   test(`${action} batch resolves supported revisions and reports omitted structural records`, async () => {
-    const runtime = await createServer(docx(ins(1) + row(false)));
+    const runtime = await createServer(
+      docx(
+        ins(1) +
+          row(false).replace(
+            '<w:ins w:id="20" w:author="Grace"/>',
+            '<w:ins w:id="20" w:author="Grace"/><w:ins w:id="20" w:author="Grace"/>'
+          )
+      )
+    );
     try {
       await runtime.run(async (context) => {
         const revisions = context.document.revisions;
@@ -81,21 +89,22 @@ for (const action of ['accept', 'reject'] as const) {
       runtime.dispose();
     }
   });
-  test(`${action} batch includes complete rows absent from items`, async () => {
-    const runtime = await createServer(docx(ins(1) + row(true)));
-    try {
-      await runtime.run(async (context) => {
-        const result = context.document.revisions.resolve(action);
-        await context.sync();
-        expect(result.value.resolved).toHaveLength(2);
-        expect(result.value.remaining).toBe(0);
-        expect(result.value.skipped).toEqual([]);
-      });
-      expect(xml(await runtime.save()).includes('row text')).toBe(action === 'accept');
-    } finally {
-      runtime.dispose();
-    }
-  });
+  for (const complete of [false, true])
+    test(`${action} batch includes ${complete ? 'complete' : 'row-only'} rows absent from items`, async () => {
+      const runtime = await createServer(docx(ins(1) + row(complete)));
+      try {
+        await runtime.run(async (context) => {
+          const result = context.document.revisions.resolve(action);
+          await context.sync();
+          expect(result.value.resolved).toHaveLength(2);
+          expect(result.value.remaining).toBe(0);
+          expect(result.value.skipped).toEqual([]);
+        });
+        expect(xml(await runtime.save()).includes('row text')).toBe(action === 'accept');
+      } finally {
+        runtime.dispose();
+      }
+    });
   test(`${action} empty batch preserves bytes and reports pending changes`, async () => {
     const runtime = await createServer(docx(ins(1)));
     try {

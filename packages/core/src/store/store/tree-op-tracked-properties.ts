@@ -1,3 +1,4 @@
+import { REVISION_PROPERTY_CONTAINERS } from './revision-property-records.ts';
 // Tracked FORMAT changes — `w:rPrChange` and `w:pPrChange` (tracked-edits seam).
 //
 // The third kind of tracked edit, beside content wrappers (`tree-op-tracked.ts`) and
@@ -144,13 +145,13 @@ function sameProperties(left: readonly OoxmlNode[], right: readonly OoxmlNode[])
  */
 export function recordedProperties(wrapper: OoxmlNode): readonly OoxmlNode[] | null {
   if (wrapper.kind === 'textValue') return null;
-  const inner = wrapper.localName === 'rPrChange' ? 'rPr' : 'pPr';
-  for (const child of wrapper.children) {
-    if (child.kind === 'textValue' || !isWmlNamed(child, inner)) continue;
-    const children: readonly OoxmlNode[] = child.children;
-    return children;
+  const inner = REVISION_PROPERTY_CONTAINERS.get(wrapper.localName);
+  if (!inner) return null;
+  const snapshots = wrapper.children.filter((child) => isWmlNamed(child, inner));
+  if (snapshots.length === 1 && snapshots[0]!.kind !== 'textValue') {
+    return snapshots[0]!.children;
   }
-  return null;
+  return wrapper.localName === 'sectPrChange' && wrapper.children.length === 0 ? [] : null;
 }
 
 /**

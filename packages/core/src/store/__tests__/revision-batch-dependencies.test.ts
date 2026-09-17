@@ -33,11 +33,14 @@ for (const action of ['accept', 'reject'] as const) {
     expect(serializeOoxmlPart(applied.part)).toContain(numbering);
     expect(revisionItemsOf(applied.part)).toHaveLength(plan.result.remaining);
   });
-  test(`${action}: formatting resolution preserves live section revisions`, () => {
+  test(`${action}: formatting resolution preserves excluded live section revisions`, () => {
     const section =
       '<w:sectPr><w:sectPrChange w:author="Grace" w:id="2"><w:sectPr/></w:sectPrChange></w:sectPr>';
     const part = load(`<w:p><w:pPr>${section}${format}</w:pPr>${run}</w:p>`);
-    const plan = planRevisionBatch(part, action);
+    const keys = revisionItemsOf(part)
+      .filter((item) => item.author === 'Ada')
+      .map(reviewItemKey);
+    const plan = planRevisionBatch(part, action, keys);
     expect(plan.result.resolved).toHaveLength(1);
     const applied = applyTreeOp(part, plan.ops[0]!);
     if (!applied.ok) throw new Error(applied.reason);
@@ -57,16 +60,19 @@ for (const action of ['accept', 'reject'] as const) {
     expect(serializeOoxmlPart(applied.part)).toContain(mark);
     expect(revisionItemsOf(applied.part)).toHaveLength(plan.result.remaining);
   });
-  test(`${action}: deleting the last rows cannot consume an unsupported table revision`, () => {
+  test(`${action}: deleting the last rows cannot consume an excluded table revision`, () => {
     const kind = action === 'accept' ? 'del' : 'ins';
     const row = (id: number) =>
       `<w:tr><w:trPr><w:${kind} w:author="Ada" w:id="${id}"/></w:trPr><w:tc><w:tcPr><w:cell${kind === 'ins' ? 'Ins' : 'Del'} w:author="Ada" w:id="${id}"/></w:tcPr><w:p>${run}</w:p></w:tc></w:tr>`;
     const part = load(
       `<w:tbl><w:tblPr><w:tblPrChange w:author="Grace" w:id="3"><w:tblPr/></w:tblPrChange></w:tblPr>${row(1)}${row(2)}</w:tbl><w:p/>`
     );
-    const plan = planRevisionBatch(part, action);
+    const keys = revisionItemsOf(part)
+      .filter((item) => item.author === 'Ada')
+      .map(reviewItemKey);
+    const plan = planRevisionBatch(part, action, keys);
     expect(plan.ops).toEqual([]);
-    expect(plan.result.skipped).toHaveLength(3);
+    expect(plan.result.skipped).toHaveLength(2);
     // Removing only one row leaves the table and its pending properties intact.
     const key = reviewItemKey(revisionItemsOf(part).find((item) => item.author === 'Ada')!);
     const partial = planRevisionBatch(part, action, [key]);
@@ -113,7 +119,7 @@ for (const action of ['accept', 'reject'] as const) {
     const kind = action === 'accept' ? 'del' : 'ins';
     const row = (id: number, properties = '') =>
       `<w:tr><w:trPr><w:${kind} w:author="Ada" w:id="${id}"/></w:trPr><w:tc><w:tcPr><w:cell${kind === 'ins' ? 'Ins' : 'Del'} w:author="Ada" w:id="${id}"/>${properties}</w:tcPr><w:p>${run}</w:p></w:tc></w:tr>`;
-    const unsupported = '<w:tcPrChange w:author="Grace" w:id="3"><w:tcPr/></w:tcPrChange>';
+    const unsupported = '<w:cellMerge w:author="Grace" w:id="3" w:vMerge="invalid"/>';
     const part = load(`<w:tbl>${row(1)}${row(2, unsupported)}</w:tbl><w:p/>`);
     const plan = planRevisionBatch(part, action);
     expect(plan.result.resolved).toHaveLength(1);

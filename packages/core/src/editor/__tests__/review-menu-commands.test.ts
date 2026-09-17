@@ -437,9 +437,9 @@ for (const action of ['accept', 'reject'] as const) {
 }
 
 for (const action of ['accept', 'reject'] as const) {
-  test(`bulk ${action} beside unsupported table properties exports and undoes as one action`, async () => {
+  test(`bulk ${action} beside malformed table properties exports and undoes as one action`, async () => {
     const editor = mountEditor(
-      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="9" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr><w:tc>' +
+      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="9" w:author="Grace"><w:trPr/></w:trPrChange><w:trPrChange w:id="9" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr><w:tc>' +
         ins(1) +
         ins(2) +
         '</w:tc></w:tr></w:tbl><w:p/>'

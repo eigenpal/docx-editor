@@ -70,7 +70,7 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
-import { removedRowsForRevisionDecision, type RevisionOpAction } from './tree-op-revisions.ts';
+import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import type {
   RevisionAddress,
   TreeDocOp,
@@ -935,33 +935,38 @@ function resolveRevisionReach(
     }
   };
   walk(root, []);
-  // A complete tracked-row decision removes the ROW, not its marker. Ask every control in that
-  // exact row—including sibling cells the marker walk never enters—with ancestor locks in force.
-  const removedRowIds = new Set(
-    removedRowsForRevisionDecision(part, action, revision, {
-      ...(localName === undefined ? {} : { localName }),
-      ...(siteNodeIds === undefined ? {} : { siteNodeIds }),
-      ...(scopeRootId === undefined ? {} : { scopeRootId }),
-    }).map((row) => row.id)
-  );
-  const walkRemovedRows = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
-    if (node.kind === 'textValue' || removedRowIds.size === 0) return;
-    if (removedRowIds.delete(node.id)) {
+  // Markers can sit outside the cells and controls whose content or geometry they change.
+  const structural = revisionStructuralReach(part, action, revision, {
+    ...(localName === undefined ? {} : { localName }),
+    ...(siteNodeIds === undefined ? {} : { siteNodeIds }),
+    ...(scopeRootId === undefined ? {} : { scopeRootId }),
+  });
+  const walkStructural = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
+    if (node.kind === 'textValue' || structural.size === 0) return;
+    const removed = structural.get(node.id);
+    if (removed !== undefined) {
+      for (let index = 0; index < controls.length; index += 1) {
+        touches.push({
+          control: controls[index]!,
+          locks: locksOf(controls.slice(0, index + 1)),
+          removed: false,
+          discarded: false,
+        });
+      }
       for (const entry of contentControlsIn(node)) {
         touches.push({
           control: entry.node,
           locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
-          removed: true,
+          removed,
           discarded: false,
         });
       }
-      return;
+      if (removed) return;
     }
-    for (const child of node.children) {
-      walkRemovedRows(child, child.kind === 'contentControl' ? [...controls, child] : controls);
-    }
+    for (const child of node.children)
+      walkStructural(child, child.kind === 'contentControl' ? [...controls, child] : controls);
   };
-  walkRemovedRows(root, []);
+  walkStructural(root, []);
   return { touches, unprotected };
 }
 
@@ -977,6 +982,7 @@ const REVISION_LOCAL_NAMES: ReadonlySet<string> = new Set([
   'rPrChange',
   'pPrChange',
   'tblPrChange',
+  'tblPrExChange',
   'trPrChange',
   'tcPrChange',
   'sectPrChange',
@@ -1003,7 +1009,11 @@ function isRevisionNode(
       (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
     )?.value;
   if (attribute('id') !== revision.id) return false;
-  if (attribute('author') !== revision.author) return false;
+  if (
+    (attribute('author') ?? (node.localName === 'tblGridChange' ? '' : undefined)) !==
+    revision.author
+  )
+    return false;
   if (revision.date !== undefined && attribute('date') !== revision.date) return false;
   return true;
 }

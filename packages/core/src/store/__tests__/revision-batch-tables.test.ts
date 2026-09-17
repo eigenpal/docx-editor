@@ -28,14 +28,13 @@ for (const action of ['accept', 'reject'] as const) {
     test(`${action}: ${name} does not block independent text revisions`, () => {
       const part = load(row, cell);
       const batch = planRevisionBatch(part, action);
-      expect(batch.result.resolved).toHaveLength(1);
-      expect(batch.result.skipped).toHaveLength(1);
-      expect(batch.result.skipped[0]?.reason).toBe('unsupported-revision');
+      expect(batch.result.resolved).toHaveLength(2);
+      expect(batch.result.skipped).toHaveLength(0);
       const applied = applyTreeOp(part, batch.ops[0]!);
       if (!applied.ok) throw new Error(applied.reason);
       expect(revisionItemsOf(applied.part)).toHaveLength(batch.result.remaining);
       const xml = serializeOoxmlPart(applied.part);
-      expect(xml).toContain(row || cell);
+      expect(xml).not.toContain(row || cell);
       expect(xml.includes('Added')).toBe(action === 'accept');
     });
   }
@@ -72,8 +71,8 @@ for (const action of ['accept', 'reject'] as const) {
       expect(serializeOoxmlPart(applied.part).includes('<w:tbl>')).toBe(!removes);
     });
 
-    test(`${action}: ${removes ? 'removed' : 'retained'} row with unsupported cell formatting`, () => {
-      const formatting = '<w:tcPrChange w:author="Grace" w:id="2"><w:tcPr/></w:tcPrChange>';
+    test(`${action}: ${removes ? 'removed' : 'retained'} row with malformed cell merge`, () => {
+      const formatting = '<w:cellMerge w:author="Grace" w:id="2" w:vMerge="invalid"/>';
       const part = load(
         `<w:${kind} w:author="Grace" w:id="1"/>`,
         `<w:cell${kind === 'ins' ? 'Ins' : 'Del'} w:author="Grace" w:id="1"/>${formatting}`

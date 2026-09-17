@@ -170,9 +170,9 @@ for (const action of ['accept', 'reject'] as const) {
 }
 
 for (const action of ['accept', 'reject'] as const) {
-  test(`bulk ${action} resolves table text beside unsupported row properties on both peers`, async () => {
+  test(`bulk ${action} resolves table text beside malformed row properties on both peers`, async () => {
     const bytes = zipDocument(
-      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="2" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr>' +
+      '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="2" w:author="Grace"><w:trPr/></w:trPrChange><w:trPrChange w:id="2" w:author="Grace"><w:trPr/></w:trPrChange></w:trPr>' +
         '<w:tc><w:p><w:ins w:id="1" w:author="Ada"><w:r><w:t>selected</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl><w:p/>'
     );
     const { alice, bob } = await peers.pair(bytes);
