@@ -44,6 +44,9 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   // the selected-image read model names drawing, crop and image-resource types the store
   // lane owns. Compile-time only, and one fewer line in a file at its cap.
   { file: 'contracts/editor-image-state.ts', to: 'store' },
+  // Same split, same reason: `EditorExecOptions` names the store's `HistoryGroup` token,
+  // which the store must own because its history is what the token groups. Erased.
+  { file: 'contracts/editor-scope.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'layout' },
   { file: 'contracts/modules.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'collaboration' },
