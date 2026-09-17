@@ -6,7 +6,7 @@
   "description": "Bun runtime entry and build script for the docx-to-markdown Python package.",
   "scripts": {
     "build:runtime": "node runtime/build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck:runtime": "tsc --noEmit"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",

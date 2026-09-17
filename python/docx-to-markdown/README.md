@@ -138,6 +138,7 @@ The runtime is a Bun executable built from this repository. From the repository 
 bun install
 bun run build:packages
 cd python/docx-to-markdown
+bun run typecheck:runtime
 bun run build:runtime
 uv build --wheel
 ```
