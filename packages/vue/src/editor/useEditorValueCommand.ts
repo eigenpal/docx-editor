@@ -5,12 +5,13 @@ import {
   toolbarCommandState,
   type ImageWrapTarget,
 } from '@docx-editor.dev/core/editor';
+import type { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
 /** @public */
 export interface EditorValueCommandState<T extends string | number> {
-  readonly execute: (value: T) => void;
+  readonly execute: (value: T, options?: EditorExecOptions) => void;
   readonly value: ComputedRef<T | null>;
   readonly options: ComputedRef<readonly T[]>;
   readonly isEnabled: ComputedRef<boolean>;
@@ -54,7 +55,8 @@ export function useEditorValueCommand(
 
   if (slotId === 'image.wrap') {
     return {
-      execute: (value: ImageWrapTarget) => runToolbarCommand(editorRef.value, 'image.wrap', value),
+      execute: (value: ImageWrapTarget, options?: EditorExecOptions) =>
+        runToolbarCommand(editorRef.value, 'image.wrap', value, options),
       value: computed(() => (slice.value.value as ImageWrapTarget | null) ?? null),
       options: computed(() => IMAGE_WRAP_TARGETS),
       isEnabled: computed(() => slice.value.enabled),
@@ -63,7 +65,8 @@ export function useEditorValueCommand(
   }
 
   return {
-    execute: (value: string) => runToolbarCommand(editorRef.value, 'image.altText', value),
+    execute: (value: string, options?: EditorExecOptions) =>
+      runToolbarCommand(editorRef.value, 'image.altText', value, options),
     value: computed(() => slice.value.value),
     options: computed(() => [] as readonly string[]),
     isEnabled: computed(() => slice.value.enabled),

@@ -277,26 +277,24 @@ describe('exec history groups', () => {
         anchor: { paragraphId: ids[0]!, offset: 0 },
         head: { paragraphId: ids[0]!, offset: 0 },
       });
-      const gesture = Symbol('color-drag');
-      selectAll(editor);
-      setColor(editor, '00FF00', gesture);
-      // Buffered typing flushes as its own transaction at the head of the next command, so
-      // it lands INSIDE the grouped call — and must still be its own undo step.
-      editor.surface!.setSelection({
-        anchor: { paragraphId: ids[0]!, offset: 0 },
-        head: { paragraphId: ids[0]!, offset: 0 },
-      });
+      const gesture = Symbol('spacing-drag');
+      const spacing = (afterPt: number) =>
+        editor.exec({ type: 'setParagraphSpacing', afterPt }, { historyGroup: gesture });
+      expect(spacing(6)).toEqual({ ok: true, changed: true });
+      // Buffered, not committed: the flush runs at the head of the NEXT command, inside the
+      // grouped call — and the keystroke must still be its own undo step.
       editor.surface!.enqueueType('X');
-      selectAll(editor);
-      setColor(editor, '0070C0', gesture);
+      expect(spacing(12)).toEqual({ ok: true, changed: true });
+      expect(editor.surface!.session.bodyText()).toBe('Xalpha beta');
+      expect(spacingAfter(editor)).toEqual(['240']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-      expect(colors(editor)).toEqual(['00FF00', '00FF00']);
+      expect(spacingAfter(editor)).toEqual(['120']);
       expect(editor.surface!.session.bodyText()).toBe('Xalpha beta');
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
       expect(editor.surface!.session.bodyText()).toBe('alpha beta');
-      expect(colors(editor)).toEqual(['00FF00', '00FF00']);
+      expect(spacingAfter(editor)).toEqual(['120']);
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-      expect(colors(editor)).toEqual(['FF0000', '0000FF']);
+      expect(spacingAfter(editor)).toEqual([null]);
     });
   });
 

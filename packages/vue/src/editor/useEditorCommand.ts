@@ -5,7 +5,7 @@ import {
   toolbarCommandState,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
-import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import type { EditorCommand, EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 import { useTranslation } from '../i18n';
@@ -14,7 +14,7 @@ import { useEditorState } from './useEditorState';
 
 /** @public */
 export interface EditorCommandState {
-  readonly execute: () => boolean;
+  readonly execute: (options?: EditorExecOptions) => boolean;
   readonly isActive: ComputedRef<boolean>;
   readonly isEnabled: ComputedRef<boolean>;
   readonly disabledReason: ComputedRef<string | null>;
@@ -100,11 +100,11 @@ export function useEditorCommand(
 
   void key.value;
 
-  const execute = (): boolean => {
+  const execute = (options?: EditorExecOptions): boolean => {
     const current = latest.value;
-    if (isSlot(current)) return runToolbarCommand(editorRef.value, current).ok;
+    if (isSlot(current)) return runToolbarCommand(editorRef.value, current, undefined, options).ok;
     if (!editorRef.value) return false;
-    return editorRef.value!.exec(current).ok;
+    return editorRef.value!.exec(current, options).ok;
   };
 
   return {

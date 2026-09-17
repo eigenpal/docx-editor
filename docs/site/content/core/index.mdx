@@ -90,7 +90,7 @@ closes the group when any of the following happens:
 - A call lands in a different story, such as a header after the body.
 - Buffered typing flushes ahead of a call. The keystrokes are their own step.
 - The user runs undo or redo.
-- A command records a whole-package unit, such as inserting an image or a table.
+- A command records a whole-package unit, such as inserting an image or a footnote.
 
 A call that changes nothing adds no undo step and leaves the group open. Any
 command that edits a story accepts the option, so font-size steppers, spacing

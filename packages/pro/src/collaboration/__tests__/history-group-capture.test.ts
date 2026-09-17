@@ -78,6 +78,23 @@ describe('HistoryGroupCapture', () => {
     }
   });
 
+  test('a frame that pushed no item does not let the next frame merge into older work', () => {
+    const { undo, frame, capture, text, destroy } = setup();
+    try {
+      frame('typed'); // the user's earlier, unrelated work
+      const gesture = Symbol('drag');
+      // Frame 1 of the gesture: the capture is told, but the shared transaction changes
+      // nothing tracked, so no item lands.
+      capture.apply(gesture);
+      frame('a', gesture);
+      expect(undo.undoStack).toHaveLength(2);
+      undo.undo();
+      expect(text.toString()).toBe('typed');
+    } finally {
+      destroy();
+    }
+  });
+
   test('reset makes the next frame of the same gesture a new item', () => {
     const { undo, frame, capture, elapse, destroy } = setup();
     try {

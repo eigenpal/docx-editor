@@ -111,6 +111,7 @@ export {
   type CreateCollaborationDocumentPortOptions,
 } from './document-port.ts';
 export { historyGroupOfJournal } from './primitive-journal.ts';
+export type { HistoryGroup } from '../store/store/history-group.ts';
 export type {
   CanonicalAttributeName,
   CanonicalBinaryDescriptor,

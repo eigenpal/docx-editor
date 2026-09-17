@@ -15,27 +15,46 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
 
+type StackItem = Y.UndoManager['undoStack'][number];
+
 /** The group of the last local journal applied, and what the next one does about it. */
 export class HistoryGroupCapture {
   private previous: HistoryGroup | undefined;
+  /**
+   * The undo item the open gesture's frames have been merging into, or `undefined` when
+   * the gesture has not put one on the stack yet. Re-arming the window is only right while
+   * THAT item is on top: a frame whose shared transaction changed nothing tracked pushes no
+   * item, and re-arming after it would merge the next frame into whatever the user did
+   * before the gesture began.
+   */
+  private gestureItem: StackItem | undefined;
 
-  constructor(private readonly undoManager: Y.UndoManager) {}
+  constructor(private readonly undoManager: Y.UndoManager) {
+    const noteItem = (event: { stackItem: StackItem; type: 'undo' | 'redo' }): void => {
+      if (event.type === 'undo' && this.previous !== undefined) this.gestureItem = event.stackItem;
+    };
+    undoManager.on('stack-item-added', noteItem);
+    undoManager.on('stack-item-updated', noteItem);
+  }
 
   /** Prepare the undo manager for a local journal carrying `group`. */
   apply(group: HistoryGroup | undefined): void {
     const previous = this.previous;
     this.previous = group;
-    if (group !== previous) {
-      this.undoManager.stopCapturing();
-    } else if (group !== undefined) {
+    const stack = this.undoManager.undoStack;
+    if (group === previous && group !== undefined && stack[stack.length - 1] === this.gestureItem) {
       // `lastChange` is the manager's own clock for the merge rule; a frame of an open
       // gesture is always "just now", whatever the wall clock says.
       this.undoManager.lastChange = Date.now();
+      return;
     }
+    if (group !== previous || group !== undefined) this.undoManager.stopCapturing();
+    this.gestureItem = undefined;
   }
 
   /** Forget the open gesture: undo, redo and a refused journal are boundaries. */
   reset(): void {
     this.previous = undefined;
+    this.gestureItem = undefined;
   }
 }

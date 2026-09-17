@@ -2772,7 +2772,8 @@ export interface RunFormatting {
 
 // @public
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
-value?: unknown): ExecResult;
+value?: unknown,
+options?: EditorExecOptions): ExecResult;
 
 // @public
 export interface Section {

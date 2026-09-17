@@ -2223,11 +2223,12 @@ export interface RunTableChromeCommandResult {
 }
 
 // @public
-export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult;
+export function runTableCommand(editor: Editor | null, command: EditorCommand, options?: EditorExecOptions): ExecResult;
 
 // @public
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
-value?: unknown): ExecResult;
+value?: unknown,
+options?: EditorExecOptions): ExecResult;
 
 // @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;

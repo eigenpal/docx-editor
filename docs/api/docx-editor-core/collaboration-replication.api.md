@@ -200,6 +200,9 @@ export interface CreateCollaborationDocumentPortOptions {
 }
 
 // @public
+export type HistoryGroup = symbol;
+
+// @public
 export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
 // (No @packageDocumentation comment for this package)

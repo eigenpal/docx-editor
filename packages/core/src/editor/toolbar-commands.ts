@@ -21,6 +21,7 @@ import type {
   DocumentEditingMode,
   Editor,
   EditorCommand,
+  EditorExecOptions,
   ExecResult,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
@@ -648,7 +649,9 @@ export function runToolbarCommand(
   editor: Editor | null,
   id: ChromeSlotId,
   /** The chosen value, for a slot whose command carries one (the editing-mode pill). */
-  value?: unknown
+  value?: unknown,
+  /** Forwarded to `exec`: a live control names its gesture here (`historyGroup`). */
+  options?: EditorExecOptions
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
   if (id === 'format.painter') {
@@ -743,9 +746,9 @@ export function runToolbarCommand(
     }
     return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
   }
-  const allowed = editor.can(command);
+  const allowed = editor.can(command, options);
   if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-  return editor.exec(command);
+  return editor.exec(command, options);
 }
 
 /**
@@ -783,9 +786,13 @@ export function tableCommandToolbarState(
  *
  * @public
  */
-export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult {
+export function runTableCommand(
+  editor: Editor | null,
+  command: EditorCommand,
+  options?: EditorExecOptions
+): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-  const allowed = editor.can(command);
+  const allowed = editor.can(command, options);
   if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-  return editor.exec(command);
+  return editor.exec(command, options);
 }

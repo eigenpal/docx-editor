@@ -52,7 +52,7 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
  * gesture; anything else closes the group — a call without a token or with another token,
  * a call landing in another story, buffered typing flushed ahead of a call, an undo, a
  * redo, or a command that records a whole-package unit such as inserting an image or a
- * table. A call that changes nothing adds no entry and leaves the group open.
+ * footnote. A call that changes nothing adds no entry and leaves the group open.
  *
  * In a collaborative session the shared undo manager is the undo authority, and the token
  * groups there too: frames of one gesture join one shared undo item however long the
