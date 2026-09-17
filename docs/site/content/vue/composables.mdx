@@ -378,12 +378,13 @@ Returns the element that received the last context-menu action.
 
 `useHistoryGroup({ kind })` returns an element callback `ref` and `options()`.
 Place the control inside `DocxEditor.Root`. Each input updates the document
-immediately; one gesture takes one Undo press. The composable retains the
-handle across component updates and disposes it on unmount or editor replacement. Use `range`, `repeat`, `keyboard`, or
+immediately, and one undo action restores the state before the gesture. The
+composable retains the handle across component updates. It disposes the handle
+on unmount or editor replacement. Use `range`, `repeat`, `keyboard`, or
 `native-color` to select the event policy.
 
-The following native color control reads the selected color and reports refusals.
-Null means mixed or unavailable; Undo and Redo update `value` automatically.
+The following native color control reads the selected color and reports rejected commands.
+`null` means mixed or unavailable. Undo and redo update `value` automatically.
 Colors use six hexadecimal digits without `#`.
 
 ```vue
@@ -418,12 +419,11 @@ function apply(event: Event) {
 </template>
 ```
 
-The native `change` event ends the color commitment. The input handler only
-applies values. `useEditorCommand().execute(options)` accepts group options and
-keeps its boolean result. Its nullary event-handler form still works.
+The native `change` event ends the gesture. The `input` handler applies values. `useEditorCommand().execute(options)` accepts group options and
+keeps its boolean result. You can also use `execute` as an event handler without passing options.
 Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics.
 See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step)
-for native color limitations and a deterministic range example.
+for browser differences and a complete range control example.
 
 For a font-size slider, use `useEditorValueCommand('font.size')` and
 `useHistoryGroup({ kind: 'range' })`. Set `type="range"` and pass
@@ -432,15 +432,17 @@ half-points: `24` means 12 pt. Pointer release and keyup end each gesture,
 including release outside the control. Keep your displayed value bound to the
 returned `value` ref.
 
-`execute(value, options?)` returns `ExecResult`. On refusal, use `code` in your
-application logic and display `reason`. On success, `changed` distinguishes a
-document edit from a caret-only formatting change. `result.history?.kind`
+`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code`
+in application logic and display `reason`. If `ok` is `true`, `changed` tells
+you whether the document changed. Formatting at a caret can set the format for
+subsequent typing without changing the document. `result.history?.kind`
 reports `started`, `extended`, `split`, or `none`. An intervening edit can split
-a gesture without refusing its formatting.
+a gesture while still applying the formatting.
 
-The native color `change` event means value commitment, not popup closure.
-If a browser sends no terminal commitment, the next activation, Escape, blur,
-or unmount ends the gesture. For portable drag boundaries, use a range control.
+For native color inputs, `change` signals a committed value. It does not
+guarantee that the color picker closed. If the browser sends no `change` event,
+the next activation, Escape, blur, or unmount ends the gesture. If you need
+consistent drag boundaries across browsers, use a range control.
 A `repeat` binding groups writes from your held-button timer; your app must
 start and stop that timer itself.
 
@@ -449,8 +451,8 @@ start and stop that timer itself.
 Returns typed state and actions for `text.color`, `font.size`, `font.family`,
 `text.highlight`, `styles.style`, `list.lineSpacing`, and image value slots.
 `execute(value, options?)` returns `ExecResult`. Font size uses half-points.
-`value` stays synchronized with undo and selection changes; null means mixed or
-unavailable. Image commands refuse history groups.
+`value` stays synchronized with undo and selection changes. A `null` value means mixed or
+unavailable. Image commands reject the `historyGroup` option.
 
 ## useTableBorderTargetLabel
 

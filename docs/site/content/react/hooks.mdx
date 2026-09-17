@@ -303,9 +303,10 @@ The result also includes these pairs:
 
 Use `useHistoryGroup` when your app applies formatting continuously, such as a
 font-size slider or color picker. The document updates on every input event,
-but one gesture takes one Undo press. Redo restores the final value.
+and one undo action restores the state before the gesture. A redo action
+restores the final value.
 
-Render the control inside `DocxEditor.Root`, just like other editor hooks.
+Render the control inside `DocxEditor.Root`.
 You can use it in your own toolbar or a
 [toolbar slot override](/docs/2.x/react/composition). The hook returns two members:
 
@@ -318,10 +319,10 @@ You can use it in your own toolbar or a
 
 Use `useEditorValueCommand` to read the selected value and apply changes. Its
 `isEnabled` and `disabledReason` come from the editor. `value` follows the
-selection, including Undo and Redo, so your app does not need a second copy of
-the document's formatting state.
+selection and updates after undo and redo. Bind your control to `value` to keep
+it synchronized with the document.
 
-Font size uses half-points: `24` means 12 pt. Null means mixed or unavailable.
+Font size uses half-points: `24` means 12 pt. `null` means mixed or unavailable.
 
 ```tsx
 import { useState } from 'react';
@@ -356,22 +357,26 @@ export function FontSizeSlider() {
 }
 ```
 
-Drag the slider twice, then press Undo. The first Undo returns to the end of
-the first drag. The second returns to the original formatting. A held arrow
-key also forms one gesture, ending when you release it.
+To check the behavior:
 
-The binding handles outside pointer release, cancellation, lost capture, and
-blur. It retains the gesture across rerenders and disposes it on unmount or
+1. Drag the slider, release it, and drag it again.
+2. Click **Undo**. The size returns to the value at the end of the first drag.
+3. Click **Undo** again. The original formatting returns.
+
+Holding an arrow key also forms one gesture. Releasing the key ends it.
+
+The binding handles pointer release outside the control, cancellation, lost
+pointer capture, and blur. It retains the gesture across rerenders and disposes it on unmount or
 editor replacement. Your value handler does not need to start or end a group.
 
 ### Choose the gesture policy
 
-| `kind`         | Use it for                                       | What ends the gesture                                     |
-| -------------- | ------------------------------------------------ | --------------------------------------------------------- |
-| `range`        | A native range input or custom slider            | Pointer release/cancel, lost capture, keyup, or blur      |
-| `repeat`       | A button that applies repeated values while held | Pointer release/cancel, lost capture, keyup, or blur      |
-| `keyboard`     | A control driven by repeated keydown events      | Keyup, Escape, or blur                                    |
-| `native-color` | An HTML color input                              | Native value commitment, next activation, Escape, or blur |
+| `kind`         | Use it for                                       | What ends the gesture                                                 |
+| -------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| `range`        | A native range input or custom slider            | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `repeat`       | A button that applies repeated values while held | Pointer release or cancellation, lost pointer capture, keyup, or blur |
+| `keyboard`     | A control driven by repeated keydown events      | Keyup, Escape, or blur                                                |
+| `native-color` | An HTML color input                              | Native `change`, next activation, Escape, or blur                     |
 
 For a repeat button, your app owns the repeat timer. Stop that timer on release
 or cancellation. The binding groups your writes; it does not generate them.
@@ -379,8 +384,8 @@ or cancellation. The binding groups your writes; it does not generate them.
 ### Add a native color input
 
 Change the slot to `text.color` and the policy to `native-color`. Color commands
-accept six hexadecimal digits without `#`. React `onChange` applies the live
-values; the binding listens for the native commitment event separately.
+accept six hexadecimal digits without `#`. React `onChange` applies each value. The binding listens for the native `change`
+event to end the gesture.
 
 ```tsx
 function LiveColor() {
@@ -409,14 +414,14 @@ function LiveColor() {
 ```
 
 Native color controls differ between browsers. Native `change` means a committed
-value; it does not guarantee that a popup closed. If a browser sends no terminal
-commitment event, the next activation, Escape, blur, or unmount ends the gesture.
-Use a custom slider when you need exact drag boundaries across browsers.
+value; it does not guarantee that a popup closed. If the browser sends no
+`change` event, the next activation, Escape, blur, or unmount ends the gesture.
+If you need consistent drag boundaries across browsers, use a custom slider.
 
 ### Read command results
 
-`execute(value, options?)` returns `ExecResult`. If `ok` is false, use `code` for
-application logic and `reason` for feedback. If `ok` is true, `changed` tells you
+`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for
+application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you
 whether the document changed. At a collapsed caret, a formatting command can
 set the next typing format without changing the document or creating undo history.
 
@@ -427,17 +432,17 @@ not mean the formatting failed. See the
 
 `useEditorValueCommand` also accepts `font.family`, `text.highlight`,
 `styles.style`, and `list.lineSpacing`. Image value slots are available, but
-image commands refuse a history group.
+image commands reject the `historyGroup` option.
 
 `useEditorCommand().execute(options)` accepts the same options and returns a
 boolean. Its event-handler form, `onClick={command.execute}`, still works.
-Use `useDocxEditor().exec(command, options)` when you need the full result for a
-raw command; check that the editor exists before calling it.
+If you need the full result for a raw command, get the editor with
+`useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
 
 For optional development feedback, subscribe with
 `useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted
-groups and possible accidental per-frame groups. Diagnostics do not change
-history behavior or log automatically.
+groups and possible cases where each update starts a separate group. Diagnostics
+do not change history behavior or write to the console.
 
 ## Other hooks
 
