@@ -23,8 +23,8 @@ const SHA256_CONSTANTS = new Uint32Array([
 const rotateRight = (value: number, count: number): number =>
   (value >>> count) | (value << (32 - count));
 
-/** Synchronous platform-neutral SHA-256 used before font bytes cross into a shaping implementation. */
-export const sha256FontBytes = (bytes: Uint8Array): string => {
+/** Pure-JavaScript SHA-256, the reference every runtime agrees with. Exported for tests. */
+export const sha256FontBytesPure = (bytes: Uint8Array): string => {
   const paddedLength = Math.ceil((bytes.byteLength + 9) / 64) * 64;
   const padded = new Uint8Array(paddedLength);
   padded.set(bytes);
@@ -89,3 +89,60 @@ export const sha256FontBytes = (bytes: Uint8Array): string => {
   }
   return `sha256:${Array.from(hash, (word) => word.toString(16).padStart(8, '0')).join('')}`;
 };
+
+type NativeSha256 = (bytes: Uint8Array) => string;
+
+/**
+ * A native SHA-256 when the host has one, or null.
+ *
+ * The pure-JavaScript block above is correct everywhere and 40 to 80 times slower than the
+ * platform's implementation. Layout hashes a token for every node it keys, and font
+ * admission hashes every face it trusts, so on a long document the pure path spends more
+ * time hashing than shaping. Node exposes `crypto.createHash` synchronously through
+ * `process.getBuiltinModule` (20.16+, 22.3+, the engine's own floor) with no import that a
+ * browser bundler would have to resolve, and Bun exposes `Bun.CryptoHasher`. Browsers have
+ * only the asynchronous `crypto.subtle`, so they keep the pure path. The native answer is
+ * checked against a known vector once; a runtime whose hasher disagrees falls back.
+ */
+function detectNativeSha256(): NativeSha256 | null {
+  const host = globalThis as {
+    Bun?: {
+      CryptoHasher?: new (algorithm: string) => {
+        update(b: Uint8Array): { digest(e: 'hex'): string };
+      };
+    };
+    process?: { getBuiltinModule?: (id: string) => unknown };
+  };
+  let candidate: NativeSha256 | null = null;
+  try {
+    const Hasher = host.Bun?.CryptoHasher;
+    if (Hasher) {
+      candidate = (bytes) => new Hasher('sha256').update(bytes).digest('hex');
+    } else if (typeof host.process?.getBuiltinModule === 'function') {
+      const crypto = host.process.getBuiltinModule('node:crypto') as
+        | { createHash?: (a: string) => { update(b: Uint8Array): { digest(e: 'hex'): string } } }
+        | undefined;
+      const createHash = crypto?.createHash;
+      if (typeof createHash === 'function')
+        candidate = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    }
+    if (!candidate) return null;
+    // FIPS 180-4 test vector for "abc".
+    const probe = candidate(new Uint8Array([0x61, 0x62, 0x63]));
+    return probe === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+      ? candidate
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const nativeSha256 = detectNativeSha256();
+
+/** Whether this runtime hashes natively. Exported for tests and diagnostics. */
+export const sha256IsNative = nativeSha256 !== null;
+
+/** Synchronous platform-neutral SHA-256 used before font bytes cross into a shaping implementation. */
+export const sha256FontBytes: (bytes: Uint8Array) => string = nativeSha256
+  ? (bytes) => `sha256:${nativeSha256(bytes)}`
+  : sha256FontBytesPure;

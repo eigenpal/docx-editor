@@ -100,7 +100,7 @@
     },
     "examples/collaboration": {
       "name": "@docx-editor.dev/example-collaboration",
-      "version": "0.0.12",
+      "version": "0.0.13",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/editor-api": "workspace:*",
@@ -393,9 +393,9 @@
     },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.18.0",
+        "@docx-editor.dev/i18n": "^2.20.0",
         "bidi-js": "1.1.0",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^5.10.1",
@@ -427,9 +427,9 @@
     },
     "packages/docx-to-markdown": {
       "name": "@docx-editor.dev/docx-to-markdown",
-      "version": "2.15.1",
+      "version": "2.20.0",
       "dependencies": {
-        "@docx-editor.dev/fonts": "~2.18.0",
+        "@docx-editor.dev/fonts": "~2.20.0",
         "fflate": "^0.8.2",
       },
       "devDependencies": {
@@ -440,12 +440,12 @@
         "typescript": "^5.3.3",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "~2.18.0",
+        "@docx-editor.dev/core": "~2.20.0",
       },
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
@@ -454,12 +454,12 @@
         "license-check-and-add": "^4.0.5",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "~2.18.0",
+        "@docx-editor.dev/core": "~2.20.0",
       },
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@happy-dom/global-registrator": "^20.8.3",
@@ -469,7 +469,7 @@
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -477,9 +477,9 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "2.18.0",
+      "version": "2.19.0",
       "dependencies": {
-        "@docx-editor.dev/vue": "^2.9.1",
+        "@docx-editor.dev/vue": "^2.20.0",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
         "prosemirror-commands": "^1.5.2",
         "prosemirror-dropcursor": "^1.8.2",
@@ -503,7 +503,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "dependencies": {
         "y-protocols": "^1.0.7",
       },
@@ -527,9 +527,9 @@
         "zod": "^4.4.3",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "~2.18.0",
-        "@docx-editor.dev/react": "~2.18.0",
-        "@docx-editor.dev/vue": "~2.18.0",
+        "@docx-editor.dev/core": "~2.20.0",
+        "@docx-editor.dev/react": "~2.20.0",
+        "@docx-editor.dev/vue": "~2.20.0",
         "@hocuspocus/provider": "^4.6.0",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
@@ -550,9 +550,9 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.18.0",
+        "@docx-editor.dev/i18n": "^2.20.0",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -562,7 +562,7 @@
         "fflate": "^0.8.2",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "~2.18.0",
+        "@docx-editor.dev/core": "~2.20.0",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
@@ -573,9 +573,9 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "2.18.0",
+      "version": "2.20.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.18.0",
+        "@docx-editor.dev/i18n": "^2.20.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
@@ -583,12 +583,25 @@
         "vue": "^3.5.29",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "~2.18.0",
+        "@docx-editor.dev/core": "~2.20.0",
         "vue": "^3.3.0",
       },
       "optionalPeers": [
         "vue",
       ],
+    },
+    "python/docx-to-markdown": {
+      "name": "@docx-editor.dev/python-docx-to-markdown",
+      "version": "0.0.0",
+      "dependencies": {
+        "@docx-editor.dev/core": "workspace:*",
+        "@docx-editor.dev/docx-to-markdown": "workspace:*",
+        "@docx-editor.dev/fonts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "typescript": "^5.3.3",
+      },
     },
   },
   "overrides": {
@@ -794,6 +807,8 @@
     "@docx-editor.dev/nuxt": ["@docx-editor.dev/nuxt@workspace:packages/nuxt"],
 
     "@docx-editor.dev/pro": ["@docx-editor.dev/pro@workspace:packages/pro"],
+
+    "@docx-editor.dev/python-docx-to-markdown": ["@docx-editor.dev/python-docx-to-markdown@workspace:python/docx-to-markdown"],
 
     "@docx-editor.dev/react": ["@docx-editor.dev/react@workspace:packages/react"],
 
@@ -3703,6 +3718,8 @@
 
     "@docx-editor.dev/example-collaboration/vite": ["vite@8.1.5", "", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.5", "postcss": "^8.5.17", "rolldown": "~1.1.5", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.3.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw=="],
 
+    "@docx-editor.dev/python-docx-to-markdown/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
+
     "@dxup/nuxt/@nuxt/kit": ["@nuxt/kit@4.4.5", "", { "dependencies": { "c12": "^3.3.4", "consola": "^3.4.2", "defu": "^6.1.7", "destr": "^2.0.5", "errx": "^0.1.0", "exsolve": "^1.0.8", "ignore": "^7.0.5", "jiti": "^2.6.1", "klona": "^2.0.6", "mlly": "^1.8.2", "ohash": "^2.0.11", "pathe": "^2.0.3", "pkg-types": "^2.3.1", "rc9": "^3.0.1", "scule": "^1.3.0", "semver": "^7.7.4", "tinyglobby": "^0.2.16", "ufo": "^1.6.4", "unctx": "^2.5.0", "untyped": "^2.0.0" } }, "sha512-J0BpoOomzd3iVZozYlZJ7AwAVliXRgeChZnAkQLfg8d0h/Q+aMK9kkHuhwFULASaRn5idiD4BIhOUz7/uoLbSw=="],
 
     "@dxup/nuxt/chokidar": ["chokidar@5.0.0", "", { "dependencies": { "readdirp": "^5.0.0" } }, "sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw=="],
@@ -4478,6 +4495,8 @@
     "@docx-editor.dev/example-collaboration/vite/rolldown": ["rolldown@1.1.5", "", { "dependencies": { "@oxc-project/types": "=0.139.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm64": "1.1.5", "@rolldown/binding-darwin-arm64": "1.1.5", "@rolldown/binding-darwin-x64": "1.1.5", "@rolldown/binding-freebsd-x64": "1.1.5", "@rolldown/binding-linux-arm-gnueabihf": "1.1.5", "@rolldown/binding-linux-arm64-gnu": "1.1.5", "@rolldown/binding-linux-arm64-musl": "1.1.5", "@rolldown/binding-linux-ppc64-gnu": "1.1.5", "@rolldown/binding-linux-s390x-gnu": "1.1.5", "@rolldown/binding-linux-x64-gnu": "1.1.5", "@rolldown/binding-linux-x64-musl": "1.1.5", "@rolldown/binding-openharmony-arm64": "1.1.5", "@rolldown/binding-wasm32-wasi": "1.1.5", "@rolldown/binding-win32-arm64-msvc": "1.1.5", "@rolldown/binding-win32-x64-msvc": "1.1.5" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-t9z29cJjXf/vxQ8dyhCSpt6H6aSwHTk8cT5I3iy6SMXuFpk5mB6PL6XfC8PCwrPTx93udwKUm9HRteAlTGBLiA=="],
 
     "@docx-editor.dev/example-collaboration/vite/tinyglobby": ["tinyglobby@0.2.17", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g=="],
+
+    "@docx-editor.dev/python-docx-to-markdown/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@dxup/nuxt/@nuxt/kit/jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
 

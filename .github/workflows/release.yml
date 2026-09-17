@@ -263,6 +263,7 @@ jobs:
       contents: write # push tags, create GitHub Releases
       pull-requests: write # changesets/action opens / updates the release PR
       id-token: write # OIDC for npm Trusted Publishing
+      actions: write # dispatch the Python wheels workflow after npm publishes
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -399,6 +400,18 @@ jobs:
               ]
             }')
           curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+
+      # The Python package is versioned with the fixed group and built per platform, so
+      # it publishes from its own workflow at the release tag. That run posts its own
+      # Slack message with the PyPI link, or a failure notice.
+      - name: Publish Python wheels
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: |
+          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          gh workflow run python-wheels.yml --ref "v$version" -f publish=true
 
   # Distinguish three failure modes when notifying Slack:
   #   - MODE=pre-release → a prepublish job failed, or a release-job step failed

@@ -20,7 +20,8 @@
     "examples/remix",
     "examples/vite",
     "examples/vue",
-    "examples/server-agent-review"
+    "examples/server-agent-review",
+    "python/docx-to-markdown"
   ],
   "type": "module",
   "scripts": {
@@ -110,7 +111,7 @@
     "i18n:status": "node scripts/validate-i18n.mjs status",
     "i18n:validate": "node scripts/validate-i18n.mjs validate && node scripts/check-i18n-unused.mjs",
     "i18n:unused": "node scripts/check-i18n-unused.mjs --list",
-    "lint": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/",
+    "lint": "node scripts/check-eslint-max-lines-globs.mjs && node scripts/check-lockfile-workspaces.mjs && eslint packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/",
     "lint:fix": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ --fix",
     "notices:check": "bun scripts/generate-third-party-notices.mjs --check",
     "notices:generate": "bun scripts/generate-third-party-notices.mjs",
@@ -129,13 +130,14 @@
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
     "typecheck:root": "tsc -p tsconfig.json --noEmit",
-    "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
+    "version-packages": "changeset version && bun install --lockfile-only && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
     "dev:server-agent-review": "bun run build:packages && node examples/server-agent-review/dev.mjs",
     "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts",
     "collaboration:change": "node scripts/collaboration/cli.mjs change",
     "collaboration:check": "node scripts/collaboration/cli.mjs check",
     "collaboration:catalog": "node scripts/collaboration/cli.mjs catalog",
-    "collaboration:test": "node scripts/collaboration/test.mjs"
+    "collaboration:test": "node scripts/collaboration/test.mjs",
+    "check:lockfile-workspaces": "node scripts/check-lockfile-workspaces.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

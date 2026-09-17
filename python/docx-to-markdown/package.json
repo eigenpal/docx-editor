@@ -1,0 +1,20 @@
+{
+  "name": "@docx-editor.dev/python-docx-to-markdown",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bun runtime entry and build script for the docx-to-markdown Python package.",
+  "scripts": {
+    "build:runtime": "node runtime/build.mjs",
+    "typecheck:runtime": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/docx-to-markdown": "workspace:*",
+    "@docx-editor.dev/fonts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.3.3"
+  }
+}

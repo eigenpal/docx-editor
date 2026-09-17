@@ -61,3 +61,59 @@ export const resolvePackagedAssetRoot = (
   }
   return new URL(BUNDLED_FACE_BASE);
 };
+
+/**
+ * Environment variable that relocates the packaged asset directory.
+ *
+ * Single-file bundles (Bun `--compile`, Node single executable applications, `pkg`)
+ * cannot keep the `new URL(face, import.meta.url)` entries pointing at real files: the
+ * bundle lives in a virtual filesystem and the faces stay outside it. A host that ships
+ * the `assets/` directory beside such a bundle sets this variable to that directory
+ * before the process starts, and every packaged face resolves inside it.
+ *
+ * Node only. Browsers have no process environment, and the variable is ignored there.
+ */
+export const FONT_ASSET_ROOT_ENV = 'DOCX_EDITOR_FONT_ASSET_ROOT';
+
+const readAssetRootEnv = (): string | undefined => {
+  // `process` is absent in browsers and under some bundlers is an empty shim; both
+  // read as "no override" here rather than as an error.
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  return env?.[FONT_ASSET_ROOT_ENV];
+};
+
+/**
+ * Directory URL for a relocated asset root, or `undefined` when there is none.
+ *
+ * Accepts a `file:` URL or an absolute filesystem path (POSIX or Windows). A relative
+ * path, an unparsable value, or a filesystem root is ignored: `createPackagedFileFetch`
+ * refuses a broad `trustedRoot` by throwing, and this runs at module scope where a throw
+ * is uncatchable. `value` is a parameter so every arm is testable.
+ */
+export const packagedAssetRootOverride = (
+  value: string | undefined = readAssetRootEnv()
+): URL | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  try {
+    let root: URL;
+    if (/^file:/i.test(trimmed)) {
+      root = new URL(trimmed);
+    } else if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
+      root = new URL(`file:///${trimmed.replace(/\\/g, '/')}`);
+    } else if (trimmed.startsWith('/')) {
+      root = new URL(`file://${trimmed}`);
+    } else {
+      return undefined;
+    }
+    if (root.protocol !== 'file:') return undefined;
+    const directory = new URL(root.pathname.endsWith('/') ? root.href : `${root.href}/`);
+    // A path root (`/` or `C:/`) is the broad directory the trusted reader refuses.
+    if (/^\/(?:[A-Za-z]:\/)?$/.test(directory.pathname)) return undefined;
+    return directory;
+  } catch {
+    return undefined;
+  }
+};
