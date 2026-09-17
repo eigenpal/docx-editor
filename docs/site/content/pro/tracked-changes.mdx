@@ -38,6 +38,33 @@ pending changes. Simple Markup shows the proposed text with a red change bar
 beside each changed line. Original restores prior run and paragraph formatting.
 Prior table, row, cell, and section formatting remains unsupported.
 
+To offer a view from your own chrome, drive the `review.simpleMarkup`,
+`review.allMarkup`, `review.noMarkup`, or `review.original` slot with
+`useEditorCommand`, and read the current view with `useEditorState`:
+
+```tsx
+import { useEditorCommand, useEditorState } from '@docx-editor.dev/react';
+
+function SimpleMarkupButton() {
+  const view = useEditorState((state) => state.reviewDisplayMode);
+  const simple = useEditorCommand('review.simpleMarkup');
+  return (
+    <button
+      type="button"
+      onClick={simple.execute}
+      disabled={!simple.isEnabled}
+      aria-pressed={view === 'simple-markup'}
+    >
+      Simple Markup
+    </button>
+  );
+}
+```
+
+`reviewDisplayMode` is `'simple-markup'`, `'all-markup'`, `'proposed'` (No
+Markup), or `'original'`. A click on a change bar changes it too. Vue offers the
+same pair of composables.
+
 ## Choose an editing mode
 
 | Root `mode` value | Engine state   | Behavior                              |
