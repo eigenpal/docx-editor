@@ -8,6 +8,7 @@ dynamic = ["version"]
 description = "Convert DOCX to Markdown with Word-faithful pages, headers, footers, comments, and tracked changes."
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.9"
 keywords = ["docx", "markdown", "converter", "word", "pagination"]
 classifiers = [

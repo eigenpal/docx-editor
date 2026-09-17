@@ -8,10 +8,12 @@
 // for the current machine. Output lands in `src/docx_to_markdown/_vendor/`, which the
 // wheel build hook requires and git ignores.
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, readdirSync, mkdtempSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeNotices } from './notices.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
@@ -33,37 +35,51 @@ mkdirSync(join(vendor, 'fonts'), { recursive: true });
 mkdirSync(join(vendor, 'licenses'), { recursive: true });
 
 const binary = join(vendor, windows ? 'docx-to-markdown.exe' : 'docx-to-markdown');
+const bundleArgs = [
+  // The converter's own tsconfig maps core subpaths to TypeScript source for its tests.
+  // This package's tsconfig has no such paths, so Bun bundles the published dist.
+  `--tsconfig-override=${join(packageRoot, 'tsconfig.json')}`,
+  // The shaper reads `harfbuzz.wasm` from beside the bundle by its original name.
+  '--asset-naming=[name].[ext]',
+  join(here, 'main.ts'),
+];
 const build = spawnSync(
   'bun',
   [
     'build',
     '--compile',
     ...(target ? [`--target=${target}`] : []),
-    // The shaper reads `harfbuzz.wasm` from beside the bundle by its original name.
-    '--asset-naming=[name].[ext]',
     '--outfile',
     binary,
-    join(here, 'main.ts'),
+    ...bundleArgs,
   ],
   { cwd: packageRoot, stdio: 'inherit' }
 );
 if (build.status !== 0) process.exit(build.status ?? 1);
+
+// A second, non-compiled build of the same graph writes the metafile the notices need;
+// `--compile` does not emit one.
+const scratch = mkdtempSync(join(tmpdir(), 'docx-to-markdown-meta-'));
+const metafile = join(scratch, 'meta.json');
+const meta = spawnSync(
+  'bun',
+  ['build', '--target=bun', `--outdir=${scratch}`, `--metafile=${metafile}`, ...bundleArgs],
+  { cwd: packageRoot, stdio: ['ignore', 'ignore', 'inherit'] }
+);
+if (meta.status !== 0) process.exit(meta.status ?? 1);
 
 for (const file of readdirSync(join(fontsRoot, 'assets'))) {
   if (/\.(?:ttf|otf)$/.test(file))
     cpSync(join(fontsRoot, 'assets', file), join(vendor, 'fonts', file));
 }
 cpSync(join(fontsRoot, 'licenses'), join(vendor, 'licenses'), { recursive: true });
-for (const name of ['THIRD_PARTY_NOTICES.md']) {
-  for (const pkg of [
-    '@docx-editor.dev/core',
-    '@docx-editor.dev/docx-to-markdown',
-    '@docx-editor.dev/fonts',
-  ]) {
-    const source = join(dirname(require.resolve(`${pkg}/package.json`)), name);
-    if (existsSync(source)) {
-      cpSync(source, join(vendor, 'licenses', `${pkg.split('/')[1]}-${name}`));
-    }
-  }
-}
+const bunVersion = spawnSync('bun', ['--version'], { encoding: 'utf8' }).stdout.trim();
+const bundled = writeNotices({
+  metafilePath: metafile,
+  cwd: packageRoot,
+  vendorLicensesDir: join(vendor, 'licenses'),
+  bunVersion,
+});
+rmSync(scratch, { recursive: true, force: true });
 console.log(`built ${binary}`);
+console.log(`third-party notices cover ${bundled.length} bundled packages: ${bundled.join(', ')}`);

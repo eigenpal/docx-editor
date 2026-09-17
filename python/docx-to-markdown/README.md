@@ -153,5 +153,17 @@ package against an executable built elsewhere.
 
 ## License
 
-Apache-2.0. The bundled fonts carry their own licenses, reproduced in the installed
-`_vendor/licenses` directory.
+The package is licensed under the Apache License, Version 2.0. `LICENSE` and `NOTICE`
+ship in the wheel's metadata.
+
+The executable is a compiled bundle. Everything it contains keeps its own license, and
+every text travels with the wheel in `docx_to_markdown/_vendor/licenses/`:
+
+- `THIRD_PARTY_NOTICES.md` lists each bundled npm package with its license text. The
+  list is generated from the bundle graph at build time, and a package without a license
+  text fails the build.
+- `bun-LICENSE.md` covers the Bun runtime (MIT) and the libraries it links, including
+  JavaScriptCore under the LGPL.
+- `harfbuzz-COPYING.txt` covers the HarfBuzz text shaper.
+- `OFL-*.txt`, `LICENSE-Liberation.txt`, `GUST-FONT-LICENSE.txt`, and `LPPL-1.3c.txt` cover
+  the bundled font files.
