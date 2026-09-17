@@ -399,6 +399,14 @@
       "single": "Single",
       "double": "Double",
       "auto": "Automatic"
+    },
+    "structuralDetails": {
+      "rowInsert": "Inserted table row",
+      "rowDelete": "Deleted table row",
+      "cellInsert": "Inserted table cell",
+      "cellDelete": "Deleted table cell",
+      "cellMerge": "Changed cell merge",
+      "numberingInsert": "Inserted numbering reference"
     }
   },
   "contextMenu": {

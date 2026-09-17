@@ -217,7 +217,7 @@ test('rejecting section properties preserves live header and footer references',
   expect(result.xml).toContain('12000');
   expect(result.xml).not.toContain('10000');
 });
-test('a schema-valid empty section snapshot restores default section properties', () => {
+test('an empty section snapshot leaves unrecorded properties unchanged, as in Word', () => {
   const result = resolve(
     load(
       `${p()}<w:sectPr><w:pgSz w:w="10000"/><w:sectPrChange w:author="Ada" w:id="1"/></w:sectPr>`
@@ -225,5 +225,6 @@ test('a schema-valid empty section snapshot restores default section properties'
     'reject'
   );
   expect(result.plan.result.skipped).toEqual([]);
-  expect(result.xml).not.toContain('pgSz');
+  expect(result.xml).toContain('<w:pgSz w:w="10000"/>');
+  expect(result.xml).not.toContain('sectPrChange');
 });

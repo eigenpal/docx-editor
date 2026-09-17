@@ -93,6 +93,8 @@ export function planRevisionBatch(
     });
     for (const index of own) join(own[0]!, index);
   }
+  const selectedTableSites = sites.filter((site) => selectedSites.has(site.node.id));
+  const removedTables = new Set(tableRevisionRemovals(part, selectedTableSites, action).keys());
   const mergeSources = new Map<string, ReadonlySet<string>>();
   // Row decisions can remove every descendant. Property restoration replaces the live
   // property container. Containment also protects wrappers the resolver would sweep empty.
@@ -129,7 +131,7 @@ export function planRevisionBatch(
       if (properties && paragraph && container) {
         let sources = mergeSources.get(container.id);
         if (!sources) {
-          sources = paragraphMergeSources(container.children);
+          sources = paragraphMergeSources(container.children, removedTables);
           mergeSources.set(container.id, sources);
         }
         if (sources.has(paragraph.id)) owners.set(properties.id, index);
@@ -140,7 +142,6 @@ export function planRevisionBatch(
       if (target && !site.refused) owners.set(target.id, index);
     }
   }
-  const selectedTableSites = sites.filter((site) => selectedSites.has(site.node.id));
   for (const [cellId, markers] of tableRevisionNeighbours(part, selectedTableSites, action)) {
     const cell = findNode(part, cellId);
     const markerIndex = indices.get(markers[0]!);

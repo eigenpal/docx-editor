@@ -94,11 +94,7 @@ test('accepting paragraph formatting preserves unsupported numbering; rejecting 
 });
 
 for (const action of ['accept', 'reject'] as const) {
-  for (const boundary of [
-    '',
-    '<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl><w:p/>',
-    '<w:sdt><w:sdtContent><w:p/></w:sdtContent></w:sdt><w:p/>',
-  ]) {
+  for (const boundary of ['', '<w:sdt><w:sdtContent><w:p/></w:sdtContent></w:sdt><w:p/>']) {
     test(`${action}: a paragraph mark at boundary ${boundary || 'end'} preserves properties`, () => {
       const kind = action === 'accept' ? 'del' : 'ins';
       const part = load(

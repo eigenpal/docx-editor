@@ -1849,7 +1849,9 @@ export interface PaginatedSurface {
         readonly mergeAttributes?: boolean;
     }): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
+        readonly formattingKinds?: readonly string[];
+    }): void;
     setRevisionAuthorVisible(author: string, visible: boolean): void;
     setRevisionDisplayMode(mode: ReviewDisplayMode): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;

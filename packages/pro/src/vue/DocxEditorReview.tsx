@@ -41,6 +41,7 @@ import {
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
 import { provideEditorRenderRevision, useEditorRenderRevision } from './useEditorRenderRevision.ts';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
+import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
   COLLAPSED_CARD_HEIGHT,
@@ -148,7 +149,7 @@ const ReviewRoot = defineComponent({
       type: Function as PropType<(item: ReviewItemView) => boolean>,
       default: undefined,
     },
-    structural: { type: Boolean, default: false },
+    structural: { type: Boolean, default: true },
     formatting: { type: Boolean, default: false },
   },
   setup(props, { slots }) {
@@ -165,14 +166,16 @@ const ReviewRoot = defineComponent({
       return excluded.length > 0 ? excluded : undefined;
     });
 
-    const railQuery = computed(() =>
-      excludeRevisionKinds.value ? { excludeRevisionKinds: excludeRevisionKinds.value } : undefined
-    );
+    const railQuery = computed(() => ({
+      excludeRevisionKinds: excludeRevisionKinds.value?.filter((kind) => kind !== 'format'),
+    }));
 
     watch(
       [editorRef, excludeRevisionKinds],
       () => {
-        editorRef.value?.setReviewActivationExclusions(excludeRevisionKinds.value ?? null);
+        editorRef.value?.setReviewActivationExclusions(excludeRevisionKinds.value ?? null, {
+          formattingKinds: ['rPrChange', 'pPrChange'],
+        });
       },
       { immediate: true }
     );
@@ -225,9 +228,11 @@ const ReviewRoot = defineComponent({
     const expanded = computed(() => open.value && !compact.value);
 
     const items = computed(() =>
-      props.filter
-        ? reviewHook.items.value.filter((entry) => props.filter!(entry))
-        : reviewHook.items.value
+      reviewHook.items.value.filter(
+        (entry) =>
+          (props.formatting || !hasFormattingBalloon(entry)) &&
+          (!props.filter || props.filter(entry))
+      )
     );
     const expandedResolvedKey = ref<string | null>(null);
     watch(

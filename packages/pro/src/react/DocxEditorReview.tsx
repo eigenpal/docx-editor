@@ -356,15 +356,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /** Show only some of the queue — comments in one rail, revisions in another. */
   filter?: (item: ReviewItemView) => boolean;
   /**
-   * Show the "changed the document structure" cards. Default `false`: a heavily revised
-   * document carries one per structural site and together they crowd out the cards a
-   * reviewer can act on. The revisions stay marked in the document, where clicking one
-   * opens its balloon — this hides only their rail cards.
+   * Show structural changes in the sidebar. Default `true`: row, cell, merge, and
+   * numbering decisions must remain discoverable even without a clickable page marker.
+   * Set `false` to hide their cards; painted row markers still open a balloon.
    */
   structural?: boolean;
   /**
    * Show formatting changes in the rail. Default `false`: inspect formatting in the
-   * page balloon. Set `true` to also include its decisions in the sidebar.
+   * page balloon. Changes without a painted formatting anchor stay in the sidebar.
+   * Set `true` to include all formatting decisions in the sidebar.
    */
   formatting?: boolean;
 }
@@ -390,6 +390,7 @@ import { ReviewActionSlot } from './review-action-slot.tsx';
 import { revisionItemLabel, revisionLabelKey } from './review-labels.ts';
 import {
   activeItemNeedsBalloon,
+  hasFormattingBalloon,
   anchorFromRevisionElement,
   findPaintedRevisionElement,
   matchBalloonReviewItem,
@@ -417,7 +418,7 @@ function ReviewRoot({
   stack = true,
   gap = 8,
   filter,
-  structural = false,
+  structural = true,
   formatting = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
@@ -435,16 +436,17 @@ function ReviewRoot({
   }, [structural, formatting]);
 
   const railQuery = useMemo(
-    () => (excludeRevisionKinds ? { excludeRevisionKinds } : undefined),
+    () => ({ excludeRevisionKinds: excludeRevisionKinds?.filter((kind) => kind !== 'format') }),
     [excludeRevisionKinds]
   );
 
-  // What the rail hides, the caret must not activate: without this, clicking tracked
-  // text under a format or structural change activated a card this rail never renders,
-  // and nothing on screen lit up. Cleared on unmount so a rail-less host keeps the
-  // engine's unfiltered activation.
+  // Exclude caret activation for opt-out structural cards and balloon-only formatting.
+  // Other formatting retains activation for its fallback sidebar card.
+  // Clear on unmount so a rail-less host keeps unfiltered activation.
   useEffect(() => {
-    editor?.setReviewActivationExclusions(excludeRevisionKinds ?? null);
+    editor?.setReviewActivationExclusions(excludeRevisionKinds ?? null, {
+      formattingKinds: ['rPrChange', 'pPrChange'],
+    });
     return () => editor?.setReviewActivationExclusions(null);
   }, [editor, excludeRevisionKinds]);
 
@@ -475,8 +477,10 @@ function ReviewRoot({
   const expanded = open && !compact;
 
   const items = useMemo(() => {
-    return filter ? review.items.filter((entry) => filter(entry)) : review.items;
-  }, [review.items, filter]);
+    return review.items.filter(
+      (entry) => (formatting || !hasFormattingBalloon(entry)) && (!filter || filter(entry))
+    );
+  }, [review.items, filter, formatting]);
   const configuredAuthor = useSyncExternalStore(
     useCallback((notify) => editor?.on('selectionChange', notify) ?? (() => {}), [editor]),
     () => editor?.getConfiguredAuthor() ?? null,

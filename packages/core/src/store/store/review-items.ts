@@ -86,6 +86,15 @@ export interface ReviewRevisionItem {
   readonly revisionKind: ReviewRevisionKind;
   /** OOXML property-change element, used to resolve independently numbered formatting kinds. */
   readonly formattingKind?: string;
+  /** Distinct structural operations covered by this decision, in document order. */
+  readonly structuralChanges?: readonly (
+    | 'rowInsert'
+    | 'rowDelete'
+    | 'cellInsert'
+    | 'cellDelete'
+    | 'cellMerge'
+    | 'numberingInsert'
+  )[];
   /** Changed direct formatting values, ready for localized review summaries. */
   readonly formattingChanges?: readonly {
     readonly property:

@@ -47,13 +47,14 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind, isRangeMarkerKind } from '../package/ooxml-shared.ts';
-import { isWmlNamed } from './tree-op-tracked.ts';
-import { paragraphMergeSources } from './revision-paragraph-merge.ts';
+import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
   REVISION_PROPERTY_CONTAINERS,
   preservedRevisionProperty,
   validRevisionPropertyRecord,
+  restoredSectionProperties,
+  validNumberingRevision,
 } from './revision-property-records.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
@@ -247,6 +248,7 @@ function collectRevisionSitesIn(
           grandparentName !== 'pPr' &&
           (node.localName === 'ins' || node.localName === 'del');
         const tableRevision = validTableRevision(node, parent, grandparent);
+        const numberingRevision = grandparentName === 'pPr' && validNumberingRevision(node, parent);
         const structural =
           misplacedMark ||
           CELL_REVISION_NAMES.has(node.localName) ||
@@ -267,7 +269,7 @@ function collectRevisionSitesIn(
         sites.push({
           node,
           parent,
-          refused: addressOf(node) === null || (structural && !tableRevision),
+          refused: addressOf(node) === null || (structural && !tableRevision && !numberingRevision),
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,
@@ -438,12 +440,43 @@ export function revisionStructuralReach(
     options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
   );
   if (matched.some((site) => site.refused)) return new Map();
+  const orphanDestinations = orphanMoveDestinationSites(
+    options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
+    matched
+  );
   const reach = new Map<string, boolean>();
   for (const id of tableRevisionNeighbours(part, matched, action).keys()) reach.set(id, false);
-  for (const id of tableRevisionRemovals(part, matched, action).keys()) reach.set(id, true);
+  const removed = new Set(tableRevisionRemovals(part, matched, action).keys());
+  for (const id of removed) reach.set(id, true);
   for (const site of matched) {
     const target = tableRevisionContentTarget(part, site, action);
     if (target) reach.set(target.id, true);
+  }
+  for (const site of matched) {
+    if (
+      !site.paragraphMark ||
+      orphanDestinations.has(site.node.id) ||
+      !(
+        (action === 'accept' && ['del', 'moveFrom'].includes(site.node.localName)) ||
+        (action === 'reject' && ['ins', 'moveTo'].includes(site.node.localName))
+      )
+    )
+      continue;
+    const id = paragraphOwning(part, site.node.id);
+    const container = id && parentNodeOf(part, id);
+    if (!container) continue;
+    const at = container.children.findIndex((n) => n.id === id);
+    const next = container.children
+      .slice(at + 1)
+      .find(
+        (n) =>
+          !removed.has(n.id) &&
+          (n.kind === 'paragraph' || n.kind === 'table' || n.kind === 'contentControl')
+      );
+    if (next) {
+      const target = tableParagraphMergeTarget(next, removed);
+      if (target) reach.set(target.id, false);
+    }
   }
   return reach;
 }
@@ -548,8 +581,6 @@ function isInertMarker(node: OoxmlNode): boolean {
 function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
-  let carried: OoxmlNode[] = [];
-  let mergeSources: ReadonlySet<string> | undefined;
 
   for (const child of children) {
     if (child.kind !== 'textValue' && plan.removeStructures.has(child.id)) continue;
@@ -602,54 +633,10 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
       for (const marker of hollow.children) out.push(marker);
       continue;
     }
-    if (child.kind === 'paragraph') {
-      const paragraph = rebuilt[0];
-      if (paragraph !== undefined && paragraph.kind !== 'textValue') {
-        // Everything this paragraph would hold: what earlier paragraphs handed it, then its
-        // own. Its `w:pPr` is kept apart, because the properties that govern a merge are the
-        // surviving mark's — this paragraph's, if the mark survives here.
-        const properties = paragraph.children.filter((entry) => isWmlNamed(entry, 'pPr'));
-        const content = [...carried, ...paragraph.children.filter((e) => !isWmlNamed(e, 'pPr'))];
-        carried = [];
-        // Only when there IS a following paragraph in this container. Otherwise the paragraph
-        // keeps its content and simply loses the mark revision — spilling its runs into
-        // `w:body` or `w:tc` produced a tree the invariants reject, so the whole transaction
-        // was refused and Accept All failed for the entire document with an opaque reason.
-        // Deleting a trailing paragraph with tracking on is exactly what Word writes, so this
-        // was not an exotic file.
-        // The NEXT BLOCK, not any later paragraph, and EVERY kind of block counts. Scanning
-        // ahead past a `w:tbl` — or past a `w:sdt`, which holds paragraphs of its own that
-        // this one is not a sibling of — reported a paragraph that is not this one's
-        // neighbour, and the content then merged into it, arriving behind the block in a
-        // place the reader never put it.
-        // Only a removed paragraph mark needs its next block. Avoid copying the rest of
-        // the story for every paragraph: that made bulk text decisions quadratic.
-        let followed = false;
-        if (plan.mergeForward.has(child.id)) {
-          mergeSources ??= paragraphMergeSources(children);
-          followed = mergeSources.has(child.id);
-        }
-        if (followed) {
-          // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
-          // at its end rather than pairwise. Word merges all of them; stopping at the first
-          // absorption left every second paragraph behind, so accepting sixteen deleted marks
-          // in a row produced eight paragraphs and eight blank lines that no decision asked for.
-          carried = content;
-          continue;
-        }
-        if (content.length > paragraph.children.length - properties.length) {
-          out.push({ ...paragraph, children: [...properties, ...content] } as OoxmlElement);
-          continue;
-        }
-      }
-    }
     out.push(...rebuilt);
   }
 
-  // Unreachable now that the merge only starts when a paragraph follows; kept as a belt
-  // against a plan built some other way, where losing the content would be silent.
-  if (carried.length > 0) out.push(...carried);
-  return out;
+  return mergeRevisionParagraphs(out, plan.mergeForward);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
@@ -736,9 +723,15 @@ function rebuildNode(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
         node.children.filter((child) => preservedRevisionProperty(restoring.localName, child)),
         plan
       );
-      const base = recorded.filter(
-        (child) => !preservedRevisionProperty(restoring.localName, child)
-      );
+      let base = recorded.filter((child) => !preservedRevisionProperty(restoring.localName, child));
+      if (restoring.localName === 'sectPrChange')
+        base = restoredSectionProperties(
+          node.children.filter(
+            (child) =>
+              child.id !== restoring.id && !preservedRevisionProperty(restoring.localName, child)
+          ),
+          base
+        );
       const children =
         restoring.localName === 'rPrChange' || restoring.localName === 'sectPrChange'
           ? [...preserved, ...base]

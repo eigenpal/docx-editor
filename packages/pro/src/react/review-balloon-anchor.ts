@@ -151,3 +151,14 @@ export function matchBalloonReviewItem(
   if (byRange !== null && !byRangeAmbiguous) return byRange;
   return null;
 }
+
+/** Run/paragraph formatting has painted anchors; other formatting needs a sidebar fallback. */
+export function hasFormattingBalloon(item: ReviewItemView): boolean {
+  return (
+    item.kind === 'revision' &&
+    item.item.kind === 'revision' &&
+    item.revisionKind === 'format' &&
+    item.item.ranges.length > 0 &&
+    (item.item.formattingKind === 'rPrChange' || item.item.formattingKind === 'pPrChange')
+  );
+}

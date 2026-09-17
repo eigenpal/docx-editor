@@ -303,6 +303,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the first mount, which reads it.
    */
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
+  let reviewActivationFormattingKinds: readonly string[] | undefined;
   let allowExcludedFormatNavigation = false;
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
@@ -672,7 +673,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Same remount rule for the host's activation filter: the rail set it once, and a
     // rebuilt surface that forgot it would activate cards the rail does not render.
     if (reviewActivationExclusions !== null) {
-      surface.setReviewActivationExclusions(reviewActivationExclusions);
+      surface.setReviewActivationExclusions(reviewActivationExclusions, {
+        formattingKinds: reviewActivationFormattingKinds,
+      });
     }
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
     unsubscribeSession = result.surface.session.subscribe((change) => {
@@ -1249,35 +1252,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     authorFilterKey: () => reviewAuthorVisibility.stateKey,
   });
 
-  /*
-   * The ACTIVE card is the one the caret is in — not something a click stores. Clicking a
-   * card moves the caret into its range, so both routes converge on one rule, and a caret
-   * arriving by keyboard, by find, or by an outline jump opens the same card a click would.
-   * A stored key would have had to be invalidated by every one of those. The surface
-   * answers, because it also paints the band, and two derivations of "which item is open"
-   * can disagree.
-   */
-
+  // The surface derives the active card from its caret and explicit selection pin.
+  // Sharing that answer keeps card state and painted highlights consistent.
   function firstReviewRange(item: ReviewItem): ReviewRange | null {
     if (item.kind === 'revision') return item.ranges[0] ?? null;
     return item.range;
   }
 
-  /**
-   * Whether `setActiveReviewItem` would take this item.
-   *
-   * The one definition both the flag on a placement and the verb itself read, so a rail can
-   * never be told an item is clickable by one and refused by the other. Two grounds, and
-   * they are the ones activation checks first: an item with no range has nothing to select,
-   * and a kind the host's rail hides must not be reachable — the band would light a card
-   * nothing on screen renders.
-   */
+  /** Shared by the placement flag and activation: an addressable, non-excluded range. */
   function reviewItemActivatable(item: ReviewItem): boolean {
     if (firstReviewRange(item) === null) return false;
     return !(
       item.kind === 'revision' &&
       reviewActivationExclusions !== null &&
-      reviewActivationExclusions.includes(item.revisionKind)
+      reviewActivationExclusions.includes(item.revisionKind) &&
+      (item.revisionKind !== 'format' ||
+        reviewActivationFormattingKinds === undefined ||
+        reviewActivationFormattingKinds.includes(item.formattingKind ?? ''))
     );
   }
   const anchorIndexOf = createAnchorIndex();
@@ -2413,9 +2404,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return { ok: true, changed: false };
     },
 
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null) {
+    setReviewActivationExclusions(
+      kinds: readonly ReviewRevisionKind[] | null,
+      options?: { readonly formattingKinds?: readonly string[] }
+    ) {
       reviewActivationExclusions = kinds === null ? null : [...kinds];
-      surface?.setReviewActivationExclusions(reviewActivationExclusions);
+      reviewActivationFormattingKinds = options?.formattingKinds
+        ? [...options.formattingKinds]
+        : undefined;
+      surface?.setReviewActivationExclusions(reviewActivationExclusions, {
+        formattingKinds: reviewActivationFormattingKinds,
+      });
     },
 
     acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
