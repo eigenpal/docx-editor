@@ -5,6 +5,19 @@ Branch `feat/content-control-widget-parity`, worktree
 Head commit `19196f400` (on top of a merge of `main`, `c03b5be95`). The PR body ends with
 `Fixes #905`, `Fixes #906`, `Fixes #907`, so merging closes those three issues.
 
+## Codex follow-up (2026-09-17)
+
+- Fixed the date popup anchor: prompt selection precedes opening in both pointer paths;
+  the observer finds replacement chrome through the panel's editor root.
+- Added connected-anchor and detached-anchor regression tests. Full suite: 14634 pass,
+  0 fail. Browser interaction suite: 19 pass against React on 5183 and Vue on 5274.
+- Reworked the composition guide and PR description around typed React parts, Vue
+  template children, registration, custom actions, and error handling. React snippets
+  type-check; the Vue single-file component compiles. Documentation checks pass.
+- Cursor flicker remains unreproduced. The diagnostic notes below still apply.
+- The PR remains open for review; the original manual checklist is not a claim that
+  every item was repeated in this follow-up.
+
 ## Status at handoff
 
 - Local gates on `19196f400`: `bun run test` 14632 pass, 0 fail; the pre-commit hook passed
@@ -28,7 +41,7 @@ benchmark`, `Python wheels`, and `CLA`. The `Python wheels` run is not from this
 
 The rest of this PR is to be finished with Codex. What is left:
 
-1. Fix the two open bugs under "Open bugs" below, with tests, and push. CI runs on the push.
+1. The date bug is fixed in the Codex follow-up. Investigate cursor flicker only if it reproduces.
 2. Rerun `bunx playwright test e2e/content-control-widget.interaction.spec.ts` after the merge
    of `main` (the unit suite ran, the browser spec did not).
 3. Walk the manual checks under "What to check" once in the browser.
@@ -146,7 +159,7 @@ Rules for Codex on this branch:
 
 ## Open bugs
 
-### 1. Date pop-up lands at the page's bottom-left after a press on the prompt (igloo and any host renderer)
+### 1. Fixed in Codex follow-up: date pop-up lands at the page's bottom-left after a press on the prompt (igloo and any host renderer)
 
 Reproduced in the igloo permit (`bun run dev:igloo`,
 `http://localhost:5178/?fixture=expedition-permit.docx`): press the **Departure** prompt text

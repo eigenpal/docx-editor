@@ -161,133 +161,157 @@ See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 
 ## Compose the value pop-up
 
-`contentControlWidget` renders `DocxEditorContentControlWidget` for a dropdown,
-combo box, date, or building block gallery control. Without children it renders
-the packaged arrangement: a list, a list with free-text entry, or a month
-calendar with a **Today** button, from the same stylesheet classes the engine's
-own menus use. A gallery session is a list session: its `items` are the blocks
-the document's glossary stores for the control's gallery and category, named by
-their `w:docPartPr/w:name`, and `apply(name)` inserts one.
+Use `DocxEditorContentControlWidget` to customize content-control popups. Omit
+children to keep the default UI, or pass parts to replace its contents. The root
+handles placement, Escape, outside clicks, focus return, and Tab wrapping.
 
-Checkbox presses have their own entry, `contentControlCheckbox`. When you omit it,
-the engine toggles the box itself, and `contentControlWidget` never receives a
-checkbox session. Configure it to confirm, refuse, or restyle the toggle. It
-receives a session with `kind: 'checkbox'` and a `value` of `'true'` or
-`'false'`; `DocxEditorContentControlWidget` without children applies the toggle at
-once and renders nothing, and a renderer with children decides through `apply`.
+Choose an entry in the editor's `popups` prop:
 
-Picture presses also have their own entry, `contentControlPicture`. When you
-omit it, the engine opens the browser's file dialog itself, and
-`contentControlWidget` never receives a picture session. Configure it to pick
-from your own image source. It receives a session with `kind: 'picture'`, a
-`value` that names the control's drawing, and `replaceImage(bytes)`, which
-checks the format (PNG, JPEG, GIF, BMP, or WebP) and keeps the drawing's size.
-`DocxEditorContentControlWidget` without children renders its `Picture` part, a
-file input that opens the dialog at once. Its panel keeps retry errors and a Cancel action visible. Inside
-children, `useContentControlWidget()` exposes `accept` and
-`replaceImage(fileOrBytes)` for a custom picker.
+| Entry                    | Controls                                              | Default when omitted |
+| ------------------------ | ----------------------------------------------------- | -------------------- |
+| `contentControlWidget`   | Dropdown, combo box, date, and building block gallery | List or calendar     |
+| `contentControlCheckbox` | Checkbox                                              | Toggle immediately   |
+| `contentControlPicture`  | Picture                                               | Open a file dialog   |
 
-`Header` includes month and year selectors. `Title` announces the current month.
-The compound exposes these parts: `Calendar`, `Header`, `PreviousMonth`, `Title`,
-`NextMonth`, `Navigation`, `Month`, `Year`, `Weekdays`, `Grid`, `Day`, `Today`, `List`, `Item`, `Input`,
-`Picture`, `Error`, `Footer`, `Apply`, and `Cancel`. Parts accept `className`, `style`,
-`hidden`, and `asChild`, and forward `id`, `aria-*`, and `data-*`. `Day` takes a
-`day` from `calendar.days`; `Item` takes an `item` from `items`. Read the draft
-state with `useContentControlWidget()` inside any child. It supplies `value`,
-`setValue`, `isEnabled`, `refused`, `apply`, `cancel`, `calendar`,
-`previousMonth`, `nextMonth`, `selectDay`, `selectToday`, `focusIso`, and `focusDay`.
-It also supplies `showMonth`, `dateText`, `setDateText`, `applyDateText`,
-`listId`, `listNavigation`, `accept`, and `replaceImage`. `value` stays in ISO form for dates; `dateText`
-contains regional numeric input. Vue
-exposes the reactive members as refs.
+### Arrange parts
 
-Check `session.kind` when replacing a calendar. The renderer also receives
-dropdown, combo box, and building block gallery sessions. This example keeps their default controls, adds
-a class to the date grid, and replaces the Today button:
+Check `session.kind` before rendering date-specific parts. Keep the default root
+for other kinds. This example styles the grid and uses `asChild` to replace the
+Today button's element while retaining its behavior.
 
 <FrameworkTabs variant="block">
 <Framework value="react">
 
+Create `BrandedWidget.tsx`:
+
 ```tsx
-import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/react';
+import {
+  DocxEditorContentControlWidget as Widget,
+  type DocxEditorContentControlWidgetProps,
+} from '@docx-editor.dev/react';
 
-const popups = {
-  contentControlWidget: (props) =>
-    props.session.kind !== 'date' ? (
-      <DocxEditorContentControlWidget {...props} />
-    ) : (
-      <DocxEditorContentControlWidget {...props} className="brand-popup">
-        <DocxEditorContentControlWidget.Header />
-        <DocxEditorContentControlWidget.Weekdays />
-        <DocxEditorContentControlWidget.Grid className="brand-grid" />
-        <DocxEditorContentControlWidget.Today asChild>
-          <MyButton>Pick today</MyButton>
-        </DocxEditorContentControlWidget.Today>
-        <DocxEditorContentControlWidget.Input />
-        <DocxEditorContentControlWidget.Error />
-        <DocxEditorContentControlWidget.Footer />
-      </DocxEditorContentControlWidget>
-    ),
-};
+export function BrandedWidget({ session }: DocxEditorContentControlWidgetProps) {
+  if (session.kind !== 'date') return <Widget session={session} />;
 
-<DocxEditor document={source} popups={popups} />;
+  return (
+    <Widget session={session} className="brand-popup">
+      <Widget.Header />
+      <Widget.Weekdays />
+      <Widget.Grid className="brand-grid" />
+      <Widget.Today asChild>
+        <button type="button" className="brand-button">
+          Pick today
+        </button>
+      </Widget.Today>
+      <Widget.Input />
+      <Widget.Error />
+      <Widget.Footer />
+    </Widget>
+  );
+}
+```
+
+Import `BrandedWidget` and register it on your editor:
+
+```tsx
+<DocxEditor document={source} popups={{ contentControlWidget: BrandedWidget }} />
 ```
 
 </Framework>
 <Framework value="vue">
 
+Create `BrandedWidget.vue`:
+
 ```vue
 <script setup lang="ts">
-import { h } from 'vue';
-import { DocxEditor, DocxEditorContentControlWidget } from '@docx-editor.dev/vue';
+import {
+  DocxEditorContentControlWidget as Widget,
+  type DocxEditorContentControlWidgetProps,
+} from '@docx-editor.dev/vue';
 
-const popups = {
-  contentControlWidget: (props) =>
-    props.session.kind !== 'date'
-      ? h(DocxEditorContentControlWidget, props)
-      : h(DocxEditorContentControlWidget, { ...props, className: 'brand-popup' }, () => [
-          h(DocxEditorContentControlWidget.Header),
-          h(DocxEditorContentControlWidget.Weekdays),
-          h(DocxEditorContentControlWidget.Grid, { class: 'brand-grid' }),
-          h(DocxEditorContentControlWidget.Today, { asChild: true }, () =>
-            h(MyButton, null, () => 'Pick today')
-          ),
-          h(DocxEditorContentControlWidget.Input),
-          h(DocxEditorContentControlWidget.Error),
-          h(DocxEditorContentControlWidget.Footer),
-        ]),
-};
+defineProps<DocxEditorContentControlWidgetProps>();
 </script>
 
 <template>
-  <DocxEditor :document="source" :popups="popups" />
+  <Widget v-if="session.kind === 'date'" :session="session" class-name="brand-popup">
+    <Widget.Header />
+    <Widget.Weekdays />
+    <Widget.Grid class-name="brand-grid" />
+    <Widget.Today as-child>
+      <button type="button" class="brand-button">Pick today</button>
+    </Widget.Today>
+    <Widget.Input />
+    <Widget.Error />
+    <Widget.Footer />
+  </Widget>
+  <Widget v-else :session="session" />
 </template>
+```
+
+Import `BrandedWidget` and register it on your editor:
+
+```vue
+<DocxEditor :document="source" :popups="{ contentControlWidget: BrandedWidget }" />
 ```
 
 </Framework>
 </FrameworkTabs>
 
-The date session's `locale` member carries the editor's regional locale, so a
-custom picker can build its own grid with `calendarMonth()` from
-`@docx-editor.dev/core/editor`.
+`source` is your existing editor document. Import `DocxEditor` from your framework's
+package. Parts accept `className`, `style`, `hidden`, and `asChild` and forward
+`id`, `aria-*`, and `data-*`. With `asChild`, provide one element; custom components
+must forward its props, events, and ref.
+
+| Task                               | Parts                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| Render a complete date picker      | `Calendar`                                                                     |
+| Arrange calendar navigation        | `Header`, `PreviousMonth`, `Title`, `NextMonth`, `Navigation`, `Month`, `Year` |
+| Arrange dates and entry            | `Weekdays`, `Grid`, `Day`, `Today`, `Input`                                    |
+| Render choices or a picture picker | `List`, `Item`, `Picture`                                                      |
+| Show errors and actions            | `Error`, `Footer`, `Apply`, `Cancel`                                           |
+
+`Header` includes month and year selectors. `Footer` includes Cancel and Apply.
+Keep `Error` in custom arrangements so users can see rejected writes.
+
+### Add a custom action
+
+Call `useContentControlWidget()` in a child of `Widget`. This React button commits
+a date through the same validation as the packaged picker:
+
+```tsx
+import { useContentControlWidget } from '@docx-editor.dev/react';
+
+function UseDepartureDate() {
+  const { isEnabled, apply } = useContentControlWidget();
+  return (
+    <button type="button" disabled={!isEnabled} onClick={() => apply('2026-12-01')}>
+      Depart December 1
+    </button>
+  );
+}
+```
+
+Place `<UseDepartureDate />` inside the date arrangement above. In Vue, import the
+composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates
+unwrap automatically.
+
+- `setValue(value)` updates the draft. `apply()` commits it; `apply(value)` commits
+  an explicit value. A refused write returns `false`, keeps the popup open, and
+  sets `refused`. `cancel()` closes without applying the draft.
+- Dates use `YYYY-MM-DD`. `dateText`, `setDateText`, and `applyDateText` handle
+  regional numeric entry using `session.locale`.
+- Lists expose `items`. Pass an entry to `Item`, or call `apply(item.value)`.
+  Gallery values name blocks in the document's glossary.
+- Pictures expose `accept` and `replaceImage(fileOrBytes)`. Replacement returns
+  `Promise<boolean>` and preserves the drawing's size.
+- Checkbox values are `'true'` and `'false'`. A checkbox root without children
+  toggles immediately; custom children must call `apply`.
 
 ### Style without replacing a renderer
 
-All three renderers use `data-docx-part` hooks. Scope your rules to the editor
-or your popup class. Override `--doc-*` tokens for colors, backgrounds, and focus rings.
-
-| Part hooks                                                          | Purpose                               |
-| ------------------------------------------------------------------- | ------------------------------------- |
-| `header`, `title`, `previousMonth`, `nextMonth`                     | Month title and previous/next buttons |
-| `navigation`, `month`, `year`                                       | Direct month and year navigation      |
-| `weekdays`, `grid`, `day`                                           | Calendar layout and date cells        |
-| `dateEntry`, `today`, `input`, `error`, `footer`, `apply`, `cancel` | Date entry and actions                |
-| `list`, `item`                                                      | Dropdown and combo suggestions        |
-
-Use `[data-selected]`, `[data-today]`, and `[data-other-month]` for calendar states.
-Use `[aria-selected="true"]` for selected list entries. Popup roots expose
-`data-placement="top"` or `"bottom"`. A narrow viewport scrolls the popup without
-moving it beyond the page sheet.
+Use `--doc-*` tokens for colors and `data-docx-part` attributes for individual
+parts. These hooks work with the engine, React, and Vue renderers. Load your
+stylesheet after the editor stylesheet.
 
 ```css
 .docx-editor [data-docx-part='day'] {
@@ -298,63 +322,21 @@ moving it beyond the page sheet.
 }
 ```
 
-### Compose in a Vue template
+Calendar cells expose `data-selected`, `data-today`, and `data-other-month`.
+Popup roots expose `data-placement="top"` or `"bottom"`.
 
-A component registered as `popups.contentControlWidget` can use ordinary template
-children. You do not need a render callback for each part. For example, register
-this component with `:popups="{ contentControlWidget: BrandedWidget }"`:
+### Build a custom grid or root
 
-```vue
-<script setup lang="ts">
-import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
-import { DocxEditorContentControlWidget as Widget } from '@docx-editor.dev/vue';
+Prefer packaged parts to retain keyboard behavior. For a custom grid, use
+`calendar.days`, `focusDay`, and `calendarDateForKey` from
+`@docx-editor.dev/core/editor`. Preserve grid roles, selected states, and one
+focusable day. For a custom list, use `listId` and `listNavigation` to preserve
+listbox relationships, typeahead, and roving focus.
 
-defineProps<{ session: ContentControlWidgetSession }>();
-</script>
-
-<template>
-  <Widget v-if="session.kind === 'date'" :session="session" class-name="brand-popup">
-    <Widget.Header />
-    <Widget.Weekdays />
-    <Widget.Grid class-name="brand-grid" />
-    <Widget.Today />
-    <Widget.Input />
-    <Widget.Error />
-    <Widget.Footer />
-  </Widget>
-  <Widget v-else :session="session" />
-</template>
-```
-
-React accepts the same arrangement as JSX children. Register your component with
-`popups={{ contentControlWidget: BrandedWidget }}`. Both roots own placement,
-Escape, outside dismissal, focus return, and Tab wrapping. Parts retain their
-keyboard behavior when you replace their element with `asChild`.
-
-### Replace behavior with the shared model
-
-A replacement grid can call `calendarDateForKey(iso, key, locale, shiftKey)` and
-pass its result to `focusDay`. The helper implements arrows, Home/End, and
-PageUp/PageDown. Shift with a Page key moves one year. Use `calendar.days` for
-localized labels, selected state, and today's date. Only one day enters the Tab
-order. Set `aria-selected` on every cell and `aria-current="date"` on today.
-
-For a replacement list, render `role="option"` entries inside a `role="listbox"`
-with `id={listId}`. Connect the combo input through `aria-controls={listId}`.
-The root calls `listNavigation.keyDown(event, root)` for typeahead and roving focus.
-Home/End move to the first/last option. Input Home/End keep their text-editing meaning.
-Typing does not commit an option. Enter or a click commits it.
-
-The core helpers `calendarDateText` and `calendarDateFromText` use the editor's
-regional Gregorian convention. They accept complete ISO dates or regional numeric
-dates with a four-digit year. Invalid input stays open with an error. `applyDateText`
-uses these helpers and commits through the validated session.
-
-For a fully separate popup root, call `observeContentControlPopup(panel, session.anchor)`
-and run its returned cleanup on close. This follows scrolling and size changes,
-flips above when needed, and clamps to the visible sheet. `contentControlPopupKeyDown`
-provides Escape and Tab wrapping. Your root must also restore focus and dismiss
-outside presses. The packaged root already performs these steps.
+For a separate popup root, call `observeContentControlPopup(panel, session.anchor)`
+and run its returned cleanup on close. Use `contentControlPopupKeyDown` for Escape
+and Tab wrapping. You must also handle outside clicks, focus return, and
+`session.signal` cancellation. The packaged root handles these requirements.
 
 ## Connect a custom input
 

@@ -971,12 +971,12 @@ export function createPointerController(
 
     const placeholder = placeholderAtHit(layout, hit);
     if (placeholder && !event.shiftKey) {
-      // A press on a LIST control's prompt opens its menu as well as selecting the prompt: the
-      // prompt of a dropdown, date or gallery is a value to pick, not text to type over, and
-      // reaching for a button that only paints under the pointer is one press too many.
-      if (count === 1 && LIST_PROMPT_TYPES.has(placeholder.controlType)) {
-        host.onContentControlWidget?.(placeholder.id, placeholder.controlType);
-      }
+      // Select before opening: selection repaints chrome and replaces the popup anchor.
+      const openPromptWidget = () => {
+        if (count === 1 && LIST_PROMPT_TYPES.has(placeholder.controlType)) {
+          host.onContentControlWidget?.(placeholder.id, placeholder.controlType);
+        }
+      };
       // Prefer the host's atomic select when wired (form-fill / selectContentControl); otherwise
       // expand from layout boundary geometry so placeholder presses never land mid-prompt.
       if (host.selectContentControl?.(placeholder.id)) {
@@ -996,6 +996,7 @@ export function createPointerController(
           clientX: event.clientX,
           clientY: event.clientY,
         };
+        openPromptWidget();
         return;
       }
       const unit = placeholderSelectionRange(layout, placeholder);
@@ -1010,6 +1011,7 @@ export function createPointerController(
           clientY: event.clientY,
         };
         publish(() => host.setSelection({ anchor: unit.from, head: unit.to }));
+        openPromptWidget();
         return;
       }
     }

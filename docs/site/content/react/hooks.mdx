@@ -505,13 +505,7 @@ state, not a separate `Field`.
 See [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input)
 for a complete control and its placement inside the dialog.
 
-## Next steps
-
-- [React composition](/docs/2.x/react/composition)
-- [Chrome slot reference](/docs/2.x/guides/chrome-slots)
-- [React API reference](/docs/2.x/api/react)
-
-### Content-control widget state
+## Content-control widget state
 
 Inside `DocxEditorContentControlWidget`, `useContentControlWidget()` exposes the
 same state and actions that its default parts use:
@@ -528,7 +522,13 @@ same state and actions that its default parts use:
 | `accept`, `replaceImage`                        | Picture file types and image replacement             |
 
 `showMonth(year, month)` takes a zero-based month and a year from 100 through 9999.
-`apply()` accepts ISO dates; `applyDateText()` parses the regional draft first.
+For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first.
 Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior.
 For composition and CSS hooks, see
 [Compose the value pop-up](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
+
+## Next steps
+
+- [React composition](/docs/2.x/react/composition)
+- [Chrome slot reference](/docs/2.x/guides/chrome-slots)
+- [React API reference](/docs/2.x/api/react)

@@ -40,7 +40,8 @@ export function positionContentControlPopup(panel: HTMLElement, anchor: HTMLElem
 /** Follow scrolling, zoom, and size changes. Call the returned cleanup when the popup closes. @public */
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void {
   const view = panel.ownerDocument.defaultView;
-  const layer = anchor.closest('.docx-pages');
+  const layer =
+    anchor.closest('.docx-pages') ?? panel.closest('.docx-editor')?.querySelector('.docx-pages');
   const controlId = anchor.closest<HTMLElement>('[data-docx-content-control]')?.dataset
     .docxContentControl;
   let current = anchor;

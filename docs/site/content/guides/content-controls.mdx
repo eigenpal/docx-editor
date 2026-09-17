@@ -343,20 +343,21 @@ writes. See [Document protection](/docs/2.x/guides/document-protection).
 
 ## Customize control popups
 
-Use `popups.contentControl` for the control popup and `popups.contentControlWidget`
-for dropdown, combo box, date, and building block gallery entry. Omitted entries
-retain the engine's own menus. A configured `contentControlWidget` renders
-`DocxEditorContentControlWidget`, a compound whose parts (`Calendar`, `Header`,
-`Grid`, `Day`, `Today`, `List`, `Item`, `Input`, `Footer`, and more) accept
-`className`, `hidden`, and `asChild`, and whose `useContentControlWidget()` hook
-exposes the draft state. Checkbox presses reach a renderer only through
-`popups.contentControlCheckbox`, as a session with `kind: 'checkbox'`; without
-that entry the engine toggles the box itself. Picture presses reach a renderer
-only through `popups.contentControlPicture`, as a session with `kind: 'picture'`
-and a `replaceImage(bytes)` method; without that entry the engine opens its own
-file dialog. See
-[Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
-for renderer ownership, sessions, and parts.
+Use `popups.contentControl` for the inspector. To customize value entry, choose:
+
+| Popup entry              | Controls                                              |
+| ------------------------ | ----------------------------------------------------- |
+| `contentControlWidget`   | Dropdown, combo box, date, and building block gallery |
+| `contentControlCheckbox` | Checkbox                                              |
+| `contentControlPicture`  | Picture                                               |
+
+Omit an entry to keep the engine's default behavior. In React and Vue,
+`DocxEditorContentControlWidget` provides composable parts and
+`useContentControlWidget()` exposes their draft state and actions. The root
+handles placement, keyboard navigation, dismissal, and focus return.
+
+See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
+for React and Vue examples, custom actions, and styling hooks.
 
 Picture picks reject files larger than 32 MiB before reading them. A failed pick
 keeps a file input and an error message available for retry. Canceling the session,

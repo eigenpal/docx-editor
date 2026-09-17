@@ -5,6 +5,7 @@ import { createContentControlListNavigation } from '../content-control-list-navi
 import {
   contentControlPopupKeyDown,
   positionContentControlPopup,
+  observeContentControlPopup,
 } from '../content-control-popup-behavior.ts';
 
 test('list typeahead cycles repeated letters and respects native input keys and composition', () => {
@@ -92,4 +93,35 @@ test('placement flips above, clamps to the sheet, and includes scroller gutters'
   expect(panel.dataset.placement).toBe('top');
   expect(parseFloat(panel.style.top)).toBe(window.innerHeight - 230);
   root.remove();
+});
+
+test('a detached anchor reattaches to replacement chrome in the panel editor', () => {
+  const root = document.createElement('div');
+  root.className = 'docx-editor';
+  const layer = document.createElement('div');
+  layer.className = 'docx-pages';
+  const chrome = document.createElement('div');
+  chrome.dataset.docxContentControl = 'departure';
+  const anchor = document.createElement('span');
+  anchor.className = 'docx-content-control-boundary';
+  chrome.append(anchor);
+  layer.append(chrome);
+  const panel = document.createElement('div');
+  root.append(layer, panel);
+  document.body.append(root);
+  const replacement = chrome.cloneNode(true) as HTMLElement;
+  chrome.replaceWith(replacement);
+  replacement.firstElementChild!.getBoundingClientRect = () => new DOMRect(120, 100, 80, 20);
+  root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+  panel.getBoundingClientRect = () => new DOMRect(0, 0, 200, 100);
+  Object.defineProperty(panel, 'offsetParent', { value: root });
+  const cleanup = observeContentControlPopup(panel, anchor);
+  try {
+    expect(anchor.isConnected).toBe(false);
+    expect(panel.style.left).toBe('120px');
+    expect(panel.style.top).toBe('120px');
+  } finally {
+    cleanup();
+    root.remove();
+  }
 });

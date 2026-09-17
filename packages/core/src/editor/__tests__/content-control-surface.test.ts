@@ -842,6 +842,48 @@ describe('a press on a list prompt', () => {
     expect(menu).not.toBeNull();
     expect(menu!.querySelectorAll('[role="option"]')).toHaveLength(2);
   });
+  test('opens a host renderer against the connected active boundary after selecting the prompt', () => {
+    const sessions: ContentControlWidgetSession[] = [];
+    const { surface, container } = mount(body, (session) => {
+      sessions.push(session);
+      return true;
+    });
+    document.body.append(container);
+    try {
+      // Pressed by LAYOUT geometry: the DOM has no boxes under happy-dom, and the pointer maps
+      // client coordinates onto the pages layer, whose rect sits at the origin there.
+      const control = surface.layout().contentControls![0]!;
+      const fragment = control.fragments[0]!;
+      const page = surface.layout().pages[fragment.pageIndex]!;
+      const x =
+        page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width / 2;
+      const y =
+        page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height / 2;
+      container.querySelector<HTMLElement>('.docx-pages')!.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+        })
+      );
+      const selection = surface.state().selection;
+      expect([selection.anchor.offset, selection.head.offset]).toEqual([6, 21]);
+      // A range over the prompt is still IN the control: its chrome stays active.
+      expect(surface.contentControls.atCaret()?.alias).toBe('Size');
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]!.anchor.isConnected).toBe(true);
+      expect(sessions[0]!.anchor).toBe(
+        container.querySelector('[data-active] .docx-content-control-boundary')
+      );
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
 });
 
 describe('typing stays inside the control', () => {
