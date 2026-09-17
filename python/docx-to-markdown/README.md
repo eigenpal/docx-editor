@@ -22,14 +22,16 @@ Python 3.9 or later.
 ```python
 from docx_to_markdown import convert
 
-result = convert("contract.docx")
-print(result.markdown)
+with open("contract.docx", "rb") as f:
+    result = convert(f)
 
+print(result.markdown)
 for page in result.pages:
     print(page.number, page.markdown[:80])
 ```
 
-`convert` also accepts the file's bytes or a binary file object.
+`convert` also takes a path or the file's bytes. Open files in binary mode; a text-mode
+handle raises `TypeError`.
 
 ## Convert many files
 
@@ -41,7 +43,8 @@ from docx_to_markdown import Converter
 
 with Converter() as converter:
     for path in paths:
-        result = converter.convert(path)
+        with open(path, "rb") as f:
+            result = converter.convert(f)
 ```
 
 Options given to `Converter` are defaults for every call. Pass the same keywords to

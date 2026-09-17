@@ -4,10 +4,13 @@ Convert one file::
 
     from docx_to_markdown import convert
 
-    result = convert("contract.docx")
+    with open("contract.docx", "rb") as f:
+        result = convert(f)
     print(result.markdown)
     for page in result.pages:
         print(page.number, page.markdown[:80])
+
+``convert`` also takes a path or the file's bytes.
 
 Convert many files with one warm process::
 
@@ -21,6 +24,7 @@ Convert many files with one warm process::
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import tempfile
@@ -225,9 +229,12 @@ def _with_source(source: Source, request: dict[str, Any], send) -> dict[str, Any
     if isinstance(source, (bytes, bytearray, memoryview)):
         data: Optional[bytes] = bytes(source)
     elif hasattr(source, "read"):
+        if isinstance(source, io.TextIOBase) or "b" not in getattr(source, "mode", "b"):
+            raise TypeError("open the file in binary mode: open(path, 'rb')")
         data = source.read()  # type: ignore[union-attr]
-        if not isinstance(data, bytes):
-            raise TypeError("file objects must be opened in binary mode")
+        if not isinstance(data, (bytes, bytearray)):
+            raise TypeError("open the file in binary mode: open(path, 'rb')")
+        data = bytes(data)
     else:
         data = None
     if data is not None:
@@ -298,7 +305,7 @@ def convert(
     Each call starts a converter process. For many files, use :class:`Converter`.
 
     Args:
-        source: A path to a ``.docx`` file, its bytes, or a binary file object.
+        source: A binary file object (``open(path, "rb")``), a path, or the file's bytes.
         fonts: Font files to measure with, first wins. They take precedence over the
             bundled Word substitutes. Register each under the family name the document uses.
         font_policy: ``"strict"`` fails the conversion when a requested family is missing

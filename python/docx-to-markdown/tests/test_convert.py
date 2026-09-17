@@ -43,8 +43,13 @@ def test_bytes_and_file_object_match_path(narrow_pages):
 
 
 def test_text_mode_file_object_is_rejected(narrow_pages):
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="binary mode"):
         convert(io.StringIO("not bytes"))
+    with open(narrow_pages, "r", encoding="utf-8", errors="ignore") as handle:
+        with pytest.raises(TypeError, match="binary mode"):
+            convert(handle)
+    with open(narrow_pages, "rb") as handle:
+        assert convert(handle).page_count == 15
 
 
 def test_caller_fonts_take_precedence(narrow_pages, font_assets):
