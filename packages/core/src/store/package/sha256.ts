@@ -23,7 +23,6 @@ const SHA256_CONSTANTS = new Uint32Array([
 const rotateRight = (value: number, count: number): number =>
   (value >>> count) | (value << (32 - count));
 
-/** Synchronous platform-neutral SHA-256 used before font bytes cross into a shaping implementation. */
 /** Pure-JavaScript SHA-256, the reference every runtime agrees with. Exported for tests. */
 export const sha256FontBytesPure = (bytes: Uint8Array): string => {
   const paddedLength = Math.ceil((bytes.byteLength + 9) / 64) * 64;
@@ -143,7 +142,7 @@ const nativeSha256 = detectNativeSha256();
 /** Whether this runtime hashes natively. Exported for tests and diagnostics. */
 export const sha256IsNative = nativeSha256 !== null;
 
-/** `sha256:<hex>` over raw bytes, natively where the host allows and in JavaScript elsewhere. */
+/** Synchronous platform-neutral SHA-256 used before font bytes cross into a shaping implementation. */
 export const sha256FontBytes: (bytes: Uint8Array) => string = nativeSha256
   ? (bytes) => `sha256:${nativeSha256(bytes)}`
   : sha256FontBytesPure;

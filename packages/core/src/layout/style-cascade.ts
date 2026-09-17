@@ -383,13 +383,6 @@ export function tableCellStyleFormatting(
 }
 
 /**
- * Build a cascade table from a styles part root.
- *
- * Only direct `w:style` children of the root participate (bounded count). Duplicate
- * `styleId` values keep the last definition, matching Word's reader for this fixture class.
- * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
- */
-/**
  * The theme as cache-key material: every face present, `null` when the theme has none.
  *
  * `ThemeFonts` leaves the East Asian, complex-script, and supplemental faces optional,
@@ -411,6 +404,13 @@ function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
   };
 }
 
+/**
+ * Build a cascade table from a styles part root.
+ *
+ * Only direct `w:style` children of the root participate (bounded count). Duplicate
+ * `styleId` values keep the last definition, matching Word's reader for this fixture class.
+ * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
+ */
 export function buildStyleCascadeTable(
   stylesRoot: OoxmlElement | null,
   themeFonts: ThemeFonts = NO_THEME_FONTS,

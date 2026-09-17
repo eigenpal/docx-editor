@@ -1,17 +1,16 @@
 name: Python wheels
 
 # Builds the docx-to-markdown Python package: one platform-tagged wheel per runner,
-# each carrying a Bun executable compiled on that platform. Pull requests upload the
-# wheels as artifacts. A manual run with `publish` set uploads them to PyPI through
-# trusted publishing (the `pypi` environment; no token is stored).
+# each carrying a Bun executable compiled on that platform. Pull requests that touch
+# the Python package upload the wheels as artifacts; engine changes are covered by the
+# main CI and do not rebuild wheels. The release workflow dispatches this one at the
+# release tag with `publish` set, which uploads to PyPI through trusted publishing
+# (the `pypi` environment; no token is stored).
 
 on:
   pull_request:
     paths:
       - 'python/docx-to-markdown/**'
-      - 'packages/docx-to-markdown/**'
-      - 'packages/fonts/**'
-      - 'packages/core/**'
       - '.github/workflows/python-wheels.yml'
   workflow_dispatch:
     inputs:
