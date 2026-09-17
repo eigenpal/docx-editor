@@ -665,11 +665,9 @@ function paintTextboxStory(
 /**
  * The tracked-change cue on a painted drawing (#479).
  *
- * The same statement `applyRevisionPresentation` makes for text, translated to a box: the
- * stylesheet draws an insertion- or deletion-coloured outline under
- * `docx-drawing--revision-*` and dims a pending removal, and the element carries the same
- * `data-revision-*` datasets spans do, so review chrome resolves a hovered picture to its
- * decision exactly like a hovered word.
+ * Drawings share the page-margin change bars with text. The stylesheet dims a pending
+ * removal, while the `data-revision-*` datasets let review chrome resolve a hovered
+ * picture to its decision exactly like a hovered word.
  *
  * Applied on EVERY paint — including the ready-image path's signature-matched reuse, whose
  * cached element would otherwise keep the marking of a decision the document no longer
@@ -698,7 +696,6 @@ function applyDrawingRevisionPresentation(
     delete element.dataset.reviewAuthor;
     delete element.dataset.revisionDate;
     delete element.dataset.reviewAuthorSlot;
-    element.style.outlineColor = '';
     return;
   }
   const { attribution } = presentation;
@@ -715,13 +712,7 @@ function applyDrawingRevisionPresentation(
   else delete element.dataset.reviewAuthor;
   if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
   else delete element.dataset.revisionDate;
-  // The spans' selective ink rule: the outline follows the author under author colouring
-  // (inline style beats the stylesheet's kind colour), and stays on the kind tokens
-  // otherwise. `spanClassName` tokens are NOT mirrored here — they are documented as span
-  // classes, and a reused image element would accumulate stale host tokens no scrub knows.
-  const authorStyle = colors?.styles.get(attribution.author);
-  const byAuthor =
-    colors !== undefined && (authorStyle?.color !== undefined || colors.others === 'author');
+  // Keep author attribution available to review chrome without painting a colored frame.
   if (colors) {
     element.dataset.reviewAuthorSlot = String(
       (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
@@ -729,7 +720,6 @@ function applyDrawingRevisionPresentation(
   } else {
     delete element.dataset.reviewAuthorSlot;
   }
-  element.style.outlineColor = byAuthor ? presentation.authorColor : '';
 }
 
 export function paintDrawingRecord(

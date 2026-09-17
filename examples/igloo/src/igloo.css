@@ -350,14 +350,10 @@
 .igloo-page {
   --doc-revision-insertion: #0f6f95;
   --doc-revision-deletion: #7d93a6;
-  --doc-revision-insertion-tint: rgba(15, 111, 149, 0.13);
-  --doc-revision-deletion-tint: rgba(125, 147, 166, 0.13);
   --doc-revision-insertion-wash: rgba(15, 111, 149, 0.06);
   --doc-revision-deletion-wash: rgba(125, 147, 166, 0.06);
   --doc-revision-format: #4a7c98;
   --doc-revision-format-wash: rgba(74, 124, 152, 0.1);
-  /* The margin rule is a one-pixel hairline, so it takes the format ink, not the pale sky. */
-  --doc-review-change-bar: #4a7c98;
 }
 
 /* The stage does the centring, so the surface's own margin goes.

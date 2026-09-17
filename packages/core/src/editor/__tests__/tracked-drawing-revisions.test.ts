@@ -1,7 +1,7 @@
 // A drawing inside a tracked insertion or deletion carries the change (#479).
 //
 // The record folds the owning run's revision stack in, paint marks the element with the
-// same `data-revision-*` datasets spans carry plus a kind-coloured outline class, deleted
+// same `data-revision-*` datasets spans carry and a shared margin change bar; deleted
 // pictures stay laid out under `all-markup` (dimmed, like struck text), and the resolved
 // display modes remove what they resolve away — inline and anchored alike.
 
@@ -95,7 +95,7 @@ function lineDrawings(surface: PaginatedSurface): readonly InlineDrawingRecord[]
 }
 
 describe('tracked drawings carry and paint their revision', () => {
-  test('an inserted inline picture is outlined, attributed, and gets a change bar', async () => {
+  test('an inserted inline picture is attributed and gets a shared change bar', async () => {
     const { surface, container } = await mount(
       docx(`<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>${ins(inlinePicture(5))}</w:p>`)
     );
@@ -122,7 +122,10 @@ describe('tracked drawings carry and paint their revision', () => {
 
       // The line's only change is the picture — no revision span — and the margin still says
       // something changed on it.
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -143,7 +146,10 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(element!.classList.contains('docx-drawing--revision-deletion')).toBe(true);
       expect(element!.dataset.revisionKind).toBe('delete');
       expect(element!.dataset.reviewAuthor).toBe('Bob');
-      expect(container.querySelector('.docx-change-bar-deletion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-deletion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -221,7 +227,10 @@ describe('tracked drawings carry and paint their revision', () => {
 
       // The anchor line carries no span or line drawing for the picture, so the bar reads
       // the line's own anchor attribution.
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -244,7 +253,11 @@ describe('tracked drawings carry and paint their revision', () => {
         .flatMap((cell) => cell.blocks)
         .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []));
       expect(cellLines.some((line) => (line.anchorRevisions ?? []).length > 0)).toBe(true);
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      const element = container.querySelector<HTMLElement>('.docx-drawing');
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -270,7 +283,10 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(after[0]!.revisions![0]).toMatchObject({ kind: 'delete', author: 'Demo Reviewer' });
       const element = container.querySelector<HTMLElement>('.docx-drawing');
       expect(element!.classList.contains('docx-drawing--revision-deletion')).toBe(true);
-      expect(container.querySelector('.docx-change-bar-deletion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-deletion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
 
       // The review queue offers the deletion itself — NOT a "deleted paragraph break" card.
       const items = revisionItemsOf(surface.session.part());

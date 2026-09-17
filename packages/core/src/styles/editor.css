@@ -145,8 +145,6 @@
   /* Revision indicators */
   --doc-revision-insertion: #2e7d32;
   --doc-revision-deletion: #c62828;
-  --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
-  --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
   /* Word marks inserted text with a thin solid underline that sits slightly below the
      glyphs. Hosts can change these three presentation tokens without changing revision
      data or editor configuration. */
@@ -1715,24 +1713,7 @@ a.docx-hyperlink:focus-visible {
   * Visible painter cues live here so React and Vue stay in lockstep.
   * ========================================================================== */
 
-.docx-table-row--revision::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -8px;
-  width: 2px;
-  pointer-events: none;
-}
-
-.docx-table-row--revision.layout-revision-ins::before {
-  background-color: var(--doc-revision-insertion);
-}
-
-.docx-table-row--revision.layout-revision-del::before {
-  background-color: var(--doc-revision-deletion);
-}
-
+/* Tracked rows use the shared page-margin change-bar overlay, like text revisions. */
 .docx-table-row--revision.layout-revision-ins .layout-run-text {
   color: var(--doc-revision-insertion);
 }
@@ -1754,20 +1735,9 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-revision-deletion-wash);
 }
 
-/* A DRAWING inside a tracked change. The outline is the box's underline/strike: there is no
-   text to decorate, so the frame carries the claim, in the same kind tokens the text rules
-   use. Drawn INSIDE the box (negative offset) because pages, cells and clipped paint bounds
-   crop at the box edge and would shave an outer ring off. Under author colouring the painter
-   overrides `outline-color` inline, exactly as span ink follows the author. */
-.docx-drawing--revision-insertion {
-  outline: 2px solid var(--doc-revision-insertion);
-  outline-offset: -2px;
-}
-
+/* Tracked drawings share the page-margin change bars. A pending removal stays dimmed
+   so it remains distinguishable from an insertion without a second revision frame. */
 .docx-drawing--revision-deletion {
-  outline: 2px solid var(--doc-revision-deletion);
-  outline-offset: -2px;
-  /* Pending removal reads as on its way out — the box twin of the strike-through. */
   opacity: 0.6;
 }
 
@@ -1816,23 +1786,6 @@ a.docx-hyperlink:focus-visible {
 }
 .docx-show-paragraph-marks .docx-paragraph-mark {
   opacity: 1;
-}
-
-.docx-editor-revision-cell.docx-editor-revision-ins {
-  box-shadow: inset 0 3px 0 var(--doc-revision-insertion);
-  background-color: var(--doc-revision-insertion-tint);
-}
-
-.docx-editor-revision-cell.docx-editor-revision-del {
-  box-shadow: inset 0 3px 0 var(--doc-revision-deletion);
-  background-color: var(--doc-revision-deletion-tint);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--doc-revision-deletion) 60%, transparent);
-}
-
-.docx-editor-revision-cell.docx-editor-revision-merge {
-  box-shadow: inset 0 3px 0 var(--doc-text-muted);
-  background-color: color-mix(in srgb, var(--doc-text-muted) 8%, transparent);
 }
 
 /* ========================================================================
