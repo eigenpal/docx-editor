@@ -527,3 +527,49 @@ for (const mode of ['native', 'custom', 'component', 'manual'] as const) {
     }
   });
 }
+
+const CHECKBOX_PRESS = docx(
+  `<w:p><w:r><w:t xml:space="preserve">Done: </w:t></w:r>${sdt(
+    `<w14:checkbox><w14:checked w14:val="0"/><w14:checkedState w14:val="2612" w14:font="MS Gothic"/>` +
+      `<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox>`,
+    `<w:r><w:t>☐</w:t></w:r>`
+  )}<w:r><w:t xml:space="preserve"> yes</w:t></w:r></w:p>`
+);
+
+for (const configured of [false, true]) {
+  test(`checkbox presses reach a renderer only through contentControlCheckbox (${configured})`, async () => {
+    const seen: ContentControlWidgetSession['kind'][] = [];
+    const Recorder = (props: { session: ContentControlWidgetSession }) => {
+      seen.push(props.session.kind);
+      return <DocxEditorContentControlWidget {...props} />;
+    };
+    const view = render(
+      <DocxEditorRoot
+        document={CHECKBOX_PRESS}
+        popups={{
+          contentControlWidget: (props) => <Recorder {...props} />,
+          ...(configured ? { contentControlCheckbox: (props) => <Recorder {...props} /> } : {}),
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {});
+    const widget = view.container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]');
+    expect(widget !== null).toBe(true);
+    await act(async () => {
+      fireEvent.pointerDown(widget!, { button: 0, pointerId: 1, pointerType: 'mouse' });
+    });
+    // Either way the box flips: the engine toggles it when no renderer takes the press, and
+    // the packaged renderer applies the toggle at once when one does.
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]')
+        ?.getAttribute('data-checked')
+    ).toBe('true');
+    // A pop-up renderer written for dropdowns never sees the checkbox session.
+    expect(seen).toEqual(configured ? ['checkbox'] : []);
+  });
+}

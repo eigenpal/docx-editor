@@ -51,9 +51,26 @@ function part(
   defaultChildren: ReactNode
 ): ReactNode {
   if (props.hidden) return null;
-  const { children, asChild, className, style, hidden: _hidden, ...rest } = props;
+  const {
+    children,
+    asChild,
+    className,
+    style,
+    hidden: _hidden,
+    id,
+    title,
+    'aria-label': ariaLabel,
+    ...rest
+  } = props;
   const content = children === undefined ? defaultChildren : children;
   const { key, ...elementWiring } = wiring;
+  // Presentation attributes the props type advertises win over the packaged defaults;
+  // handlers, roles and state stay the part's own.
+  const presentation = {
+    ...(id !== undefined ? { id } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(ariaLabel !== undefined ? { 'aria-label': ariaLabel } : {}),
+  };
   if (asChild) {
     const { className: _packaged, style: packagedStyle, ...handlers } = elementWiring;
     return (
@@ -61,6 +78,7 @@ function part(
         key={key}
         {...rest}
         {...handlers}
+        {...presentation}
         {...(className ? { className } : {})}
         style={{ ...packagedStyle, ...style }}
       >
@@ -74,6 +92,7 @@ function part(
       key={key}
       {...rest}
       {...elementWiring}
+      {...presentation}
       className={[wiring.className, className].filter(Boolean).join(' ')}
       style={{ ...wiring.style, ...style }}
     >
@@ -492,7 +511,14 @@ export function ContentControlWidgetYear(props: DocxEditorContentControlWidgetPa
       key: widget.calendar.year,
       defaultValue: widget.calendar.year,
       onBlur: (event: { target: { value: string } }) => {
-        widget.showMonth(Number(event.target.value), widget.calendar.month);
+        const year = Number(event.target.value);
+        // A refused year snaps the field back to the month in view, as the engine menu does,
+        // so the box never shows a year the grid is not on.
+        if (!Number.isInteger(year) || year < 100 || year > 9999) {
+          event.target.value = String(widget.calendar.year);
+          return;
+        }
+        widget.showMonth(year, widget.calendar.month);
       },
       onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter' && !event.nativeEvent.isComposing) {

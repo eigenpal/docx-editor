@@ -82,11 +82,24 @@ function renderPart(
   if (props.hidden) return null;
   const body = slotContent ?? props.children ?? render.content();
   const hostClass = [props.class, props.className].filter(Boolean).join(' ') || undefined;
+  // Presentation attributes the props type advertises win over the packaged defaults;
+  // handlers, roles and state stay the part's own.
+  const presentation = Object.fromEntries(
+    ['id', 'title', 'aria-label']
+      .filter((name) => attrs[name] !== undefined)
+      .map((name) => [name, attrs[name]])
+  );
   if (props.asChild) {
     const { class: _packaged, style: packagedStyle, ...handlers } = render.wiring;
     return h(
       Slot,
-      { ...attrs, ...handlers, class: hostClass, style: { ...packagedStyle, ...props.style } },
+      {
+        ...attrs,
+        ...handlers,
+        ...presentation,
+        class: hostClass,
+        style: { ...packagedStyle, ...props.style },
+      },
       () => body
     );
   }
@@ -95,6 +108,7 @@ function renderPart(
     {
       ...attrs,
       ...render.wiring,
+      ...presentation,
       class: mergeHostClass(render.wiring.class, hostClass),
       style: { ...render.wiring.style, ...props.style },
     },
@@ -548,11 +562,17 @@ export const ContentControlWidgetYear = definePart(
         }
       },
       value: widget.calendar.value.year,
-      onChange: (event: Event) =>
-        widget.showMonth(
-          Number((event.target as HTMLInputElement).value),
-          widget.calendar.value.month
-        ),
+      onChange: (event: Event) => {
+        const input = event.target as HTMLInputElement;
+        const year = Number(input.value);
+        // A refused year snaps the field back to the month in view, as the engine menu does,
+        // so the box never shows a year the grid is not on.
+        if (!Number.isInteger(year) || year < 100 || year > 9999) {
+          input.value = String(widget.calendar.value.year);
+          return;
+        }
+        widget.showMonth(year, widget.calendar.value.month);
+      },
     },
     content: () => null,
   })

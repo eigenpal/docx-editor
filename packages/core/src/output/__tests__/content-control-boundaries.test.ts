@@ -123,13 +123,16 @@ describe('content-control boundary paint seam', () => {
     });
     const widget = container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]');
     expect(widget).not.toBeNull();
-    const size = fragment.box.height * scale;
+    // Glyph-sized and centred on the line: the fragment is the LINE box, so a tall line must
+    // not inflate the widget over the text beside the glyph.
+    const size = Math.min(fragment.box.height, 16) * scale;
     const center =
       (page.contentBox.x - page.box.x + fragment.box.x + fragment.box.width / 2) * scale;
     // Compared as numbers: CSS serializes to six decimals.
     expect(Number.parseFloat(widget!.style.left)).toBeCloseTo(center - size / 2, 4);
     expect(Number.parseFloat(widget!.style.top)).toBeCloseTo(
-      (page.contentBox.y - page.box.y + fragment.box.y) * scale,
+      (page.contentBox.y - page.box.y + fragment.box.y) * scale +
+        Math.max(0, (fragment.box.height * scale - size) / 2),
       4
     );
     expect(Number.parseFloat(widget!.style.width)).toBeCloseTo(size, 4);

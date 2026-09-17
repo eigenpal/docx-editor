@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
-import { createTextFormFieldChrome } from '../text-form-field-chrome.ts';
+import { createEditorPopupChrome, createTextFormFieldChrome } from '../text-form-field-chrome.ts';
 import type { TextFormFieldDialogSession } from '../text-form-field-session.ts';
+import type { ContentControlWidgetSession } from '../popup-sessions.ts';
 
 function session(): TextFormFieldDialogSession {
   const controller = new AbortController();
@@ -80,3 +81,40 @@ for (const fallbackFirst of [true, false]) {
     expect(chrome.request(session())).toBe(false);
   });
 }
+
+test('widget chrome routes checkbox sessions only to renderers that name the kind', () => {
+  const chrome = createEditorPopupChrome();
+  const make = (kind: 'dropdown' | 'checkbox'): ContentControlWidgetSession => {
+    const controller = new AbortController();
+    return {
+      controlId: 'sdt:1',
+      kind,
+      items: [],
+      value: kind === 'checkbox' ? 'false' : '',
+      locale: 'en-US',
+      anchor: null,
+      signal: controller.signal,
+      canApply: () => true,
+      apply: () => true,
+      cancel: () => controller.abort(),
+    };
+  };
+  const seen: string[] = [];
+  // A renderer written for the pop-ups never sees a checkbox press.
+  const disposeDefault = chrome.setters.setContentControlWidgetChrome({
+    onRequest: (session) => void seen.push(`default:${session.kind}`),
+  });
+  expect(chrome.surfaceOptions.onRequestContentControlWidget(make('dropdown'))).toBe(true);
+  expect(chrome.surfaceOptions.onRequestContentControlWidget(make('checkbox'))).toBe(false);
+  // Naming the kind opts in, and only registrations that take a kind compete for it.
+  const disposeCheckbox = chrome.setters.setContentControlWidgetChrome(
+    { kinds: ['checkbox'], onRequest: (session) => void seen.push(`fallback:${session.kind}`) },
+    { fallback: true }
+  );
+  expect(chrome.surfaceOptions.onRequestContentControlWidget(make('checkbox'))).toBe(true);
+  expect(chrome.surfaceOptions.onRequestContentControlWidget(make('dropdown'))).toBe(true);
+  expect(seen).toEqual(['default:dropdown', 'fallback:checkbox', 'default:dropdown']);
+  disposeDefault();
+  disposeCheckbox();
+  expect(chrome.surfaceOptions.onRequestContentControlWidget(make('dropdown'))).toBe(false);
+});

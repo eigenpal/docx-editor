@@ -5,9 +5,16 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+
+// Every surface registers document-level listeners; tear each one down so nothing leaks into
+// the next test or, under the serial run, the next file.
+const mounted: PaginatedSurface[] = [];
+afterEach(() => {
+  for (const surface of mounted.splice(0)) surface.destroy();
+});
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -48,6 +55,7 @@ function mount(
     ...(options.editingMode ? { editingMode: options.editingMode } : {}),
   });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  mounted.push(result.surface);
   return { surface: result.surface, container };
 }
 
@@ -99,7 +107,7 @@ describe('legacy checkbox interaction', () => {
   });
 
   test('a press returns keyboard focus from chrome to the selected field', () => {
-    const { surface, container } = mount(BODY);
+    const { container } = mount(BODY);
     const toolbarButton = document.createElement('button');
     document.body.append(toolbarButton, container);
     try {
@@ -112,7 +120,6 @@ describe('legacy checkbox interaction', () => {
       );
       expect(box(container)!.dataset.checked).toBe('false');
     } finally {
-      surface.destroy();
       toolbarButton.remove();
       container.remove();
     }

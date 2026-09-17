@@ -3468,6 +3468,7 @@ export type DocxEditorPopup<P extends object> = false | ((props: P) => DocxEdito
 export interface DocxEditorPopups {
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
+    contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
     contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
@@ -6067,7 +6068,6 @@ export interface UseContentControlWidgetResult {
     // (undocumented)
     readonly kind: Readonly<Ref<ContentControlWidgetSession['kind']>>;
     readonly listId: string;
-    // (undocumented)
     readonly listNavigation: ContentControlListNavigation;
     // (undocumented)
     nextMonth(): void;

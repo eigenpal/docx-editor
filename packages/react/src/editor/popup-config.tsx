@@ -22,6 +22,12 @@ import { DocxEditorContextMenu, type DocxEditorContextMenuProps } from './contex
 /** Render overrides for automatically mounted editor popups. `false` disables automatic rendering. @public */
 export interface DocxEditorPopups {
   contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+  /**
+   * Renderer for checkbox presses. Omitted, the engine toggles the box itself and
+   * `contentControlWidget` never sees a checkbox session. Configure it to confirm, refuse or
+   * restyle the toggle; `DocxEditorContentControlWidget` without children applies it at once.
+   */
+  contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
   invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
   imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
   imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;

@@ -108,7 +108,13 @@ export function useContentControlWidgetState(
   const value = ref(initialValue(session.value));
   const refused = ref(false);
   const dateText = ref(calendarDateText(session.value.value, session.value.locale));
-  const listNavigation = createContentControlListNavigation(session.value.locale);
+  // Rebuilt per session so a live `locale` change re-collates typeahead, as the React twin and
+  // the engine menu do; the public member stays one stable object that delegates.
+  let navigation = createContentControlListNavigation(session.value.locale);
+  const listNavigation: ContentControlListNavigation = {
+    keyDown: (event, root) => navigation.keyDown(event, root),
+    reset: () => navigation.reset(),
+  };
   const focusIso = ref<string | null>(null);
   const view = shallowRef({ year: 0, month: 0 });
   const resetView = (current: ContentControlWidgetSession) => {
@@ -121,7 +127,7 @@ export function useContentControlWidgetState(
     value.value = initialValue(current);
     refused.value = false;
     dateText.value = calendarDateText(current.value, current.locale);
-    listNavigation.reset();
+    navigation = createContentControlListNavigation(current.locale);
     focusIso.value = null;
     resetView(current);
   });

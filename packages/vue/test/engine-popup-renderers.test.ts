@@ -252,3 +252,62 @@ test('widget cleanup preserves focus moved to an outside control', async () => {
   await nextTick();
   expect(document.activeElement).toBe(other);
 });
+
+for (const configured of [false, true])
+  test(`checkbox presses reach a renderer only through contentControlCheckbox (${configured})`, async () => {
+    const { DocxEditorRoot } = await import('../src/editor/DocxEditorRoot');
+    const { DocxEditorViewport } = await import('../src/editor/DocxEditorViewport');
+    const { DocxEditorContent } = await import('../src/editor/DocxEditorContent');
+    const { docx, flush } = await import('./helpers/fixtures');
+    const source = docx(
+      '<w:p><w:r><w:t xml:space="preserve">Done: </w:t></w:r><w:sdt><w:sdtPr>' +
+        '<w14:checkbox xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"><w14:checked w14:val="0"/>' +
+        '<w14:checkedState w14:val="2612" w14:font="MS Gothic"/><w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>' +
+        '</w14:checkbox></w:sdtPr><w:sdtContent><w:r><w:t>☐</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t xml:space="preserve"> yes</w:t></w:r></w:p>'
+    );
+    const seen: ContentControlWidgetSession['kind'][] = [];
+    const recorder = (props: { session: ContentControlWidgetSession }) => {
+      seen.push(props.session.kind);
+      return h(DocxEditorContentControlWidget, props);
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          {
+            document: source,
+            popups: {
+              contentControlWidget: recorder,
+              ...(configured ? { contentControlCheckbox: recorder } : {}),
+            },
+          },
+          { default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }) }
+        ),
+    });
+    app.mount(container);
+    cleanups.push(() => {
+      app.unmount();
+      container.remove();
+    });
+    await flush();
+    const widget = container.querySelector('[data-docx-cc-widget="checkbox"]');
+    expect(widget).not.toBeNull();
+    widget!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+      })
+    );
+    await flush();
+    // Either way the box flips: the engine toggles it when no renderer takes the press, and
+    // the packaged renderer applies the toggle at once when one does.
+    expect(
+      container.querySelector('[data-docx-cc-widget="checkbox"]')?.getAttribute('data-checked')
+    ).toBe('true');
+    // A pop-up renderer written for dropdowns never sees the checkbox session.
+    expect(seen).toEqual(configured ? ['checkbox'] : []);
+  });

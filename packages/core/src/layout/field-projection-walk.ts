@@ -57,7 +57,7 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
-import { captureInstructionSpecs } from './field-form.ts';
+import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
@@ -259,18 +259,7 @@ export function piecesOfParagraphForDisplay(
     // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
     const { resultLink, linkSpec, formField } = pending;
     const captured = capturedResultAttribution(pending);
-    // A FORMCHECKBOX carries its state on the atom, so the painted glyph is also the control
-    // the surface toggles.
-    const formControl =
-      pending.formSpec === 'checkbox' && pending.formData?.kind === 'checkbox'
-        ? {
-            formControl: {
-              kind: 'checkbox' as const,
-              checked: pending.formData.checked,
-              ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
-            },
-          }
-        : {};
+    const formControl = formControlMarkerOf(pending);
     let carriedMemo: PieceEmitExtras | undefined;
     const carried = (): PieceEmitExtras => {
       if (carriedMemo) return carriedMemo;
@@ -282,7 +271,7 @@ export function piecesOfParagraphForDisplay(
       carriedMemo = {
         ...captured,
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
-        fieldAtom: { formField, ...formControl },
+        fieldAtom: { formField, ...(formControl ? { formControl } : {}) },
       };
       return carriedMemo;
     };
@@ -518,6 +507,8 @@ export function piecesOfParagraphForDisplay(
           abandonPending();
           nestedPage.reset();
           openAtomicBeginId = atomic ? grand.id : null;
+          // Bounded ffData STATE read, macros never; `formField` stays presence-based.
+          const formData = legacyFormFieldDataOf(grand);
           pending = {
             kind: null,
             picture: null,
@@ -528,11 +519,9 @@ export function piecesOfParagraphForDisplay(
             docPropertySpec: null,
             refSpec: null,
             autonumSpec: null,
-            // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
-            // macros never); `formField` below stays presence-based so an unreadable payload
-            // still shades.
-            formData: legacyFormFieldDataOf(grand),
-            formAccessibleName: legacyCheckboxAccessibleName(grand),
+            formData,
+            formAccessibleName:
+              formData?.kind === 'checkbox' ? legacyCheckboxAccessibleName(grand) : undefined,
             beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),

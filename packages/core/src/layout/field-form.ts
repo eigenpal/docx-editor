@@ -16,6 +16,7 @@
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
+import type { FieldAtomMarker } from './field-pieces.ts';
 import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts';
 import { parseDocPropertyInstruction, type DocPropertyField } from './field-doc-property.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
@@ -160,6 +161,24 @@ export function simpleFieldInstructionMaySynthesizeGlyph(
       (options.allowPageRef || !refSpecModifiersOf(specs.refSpec).pageRef)) ||
     (options.allowAutonum && specs.autonumSpec !== null)
   );
+}
+
+/**
+ * The control marker a FORMCHECKBOX atom carries: its state, and the accessible name when the
+ * field has a macro-free one. Paint reads it to draw Word's box and expose a checkbox role, and
+ * the surface toggles the field from it, so neither has to parse the glyph back.
+ */
+export function formControlMarkerOf(pending: {
+  readonly formSpec: FormFieldKind | null;
+  readonly formData: LegacyFormFieldData | null;
+  readonly formAccessibleName?: string;
+}): FieldAtomMarker['formControl'] | undefined {
+  if (pending.formSpec !== 'checkbox' || pending.formData?.kind !== 'checkbox') return undefined;
+  return {
+    kind: 'checkbox',
+    checked: pending.formData.checked,
+    ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
+  };
 }
 
 /** The synthesized form-field result: text plus the props/style the piece should carry. */

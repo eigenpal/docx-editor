@@ -119,6 +119,7 @@ Each popup receives the props listed here.
 | `notesContextMenu`       | `DocxEditorNotesContextMenuProps`          |
 | `notePreview`            | `DocxEditorNotePreviewProps`               |
 | `contentControlWidget`   | `{ session: ContentControlWidgetSession }` |
+| `contentControlCheckbox` | `{ session: ContentControlWidgetSession }` |
 | `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
 
 Omitted entries retain existing behavior, including native widget and invalid-field
@@ -160,10 +161,16 @@ See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
 ## Compose the value pop-up
 
 `contentControlWidget` renders `DocxEditorContentControlWidget` for a dropdown,
-combo box, date, or checkbox control. Without children it renders the packaged
+combo box, or date control. Without children it renders the packaged
 arrangement: a list, a list with free-text entry, or a month calendar with a
-**Today** button, from the same stylesheet classes the engine's own menus use. A
-checkbox session applies its toggle at once and renders nothing.
+**Today** button, from the same stylesheet classes the engine's own menus use.
+
+Checkbox presses have their own entry, `contentControlCheckbox`. When you omit it,
+the engine toggles the box itself, and `contentControlWidget` never receives a
+checkbox session. Configure it to confirm, refuse, or restyle the toggle. It
+receives a session with `kind: 'checkbox'` and a `value` of `'true'` or
+`'false'`; `DocxEditorContentControlWidget` without children applies the toggle at
+once and renders nothing, and a renderer with children decides through `apply`.
 
 `Header` includes month and year selectors. `Title` announces the current month.
 The compound exposes these parts: `Calendar`, `Header`, `PreviousMonth`, `Title`,
@@ -180,8 +187,8 @@ contains regional numeric input. Vue
 exposes the reactive members as refs.
 
 Check `session.kind` when replacing a calendar. The renderer also receives
-dropdown, combo box, and checkbox sessions. This example keeps their default
-controls, adds a class to the date grid, and replaces the Today button:
+dropdown and combo box sessions. This example keeps their default controls, adds
+a class to the date grid, and replaces the Today button:
 
 <FrameworkTabs variant="block">
 <Framework value="react">

@@ -1888,7 +1888,10 @@ a.docx-hyperlink:focus-visible {
    presses. The glyph stays in the DOM for copy and search. */
 .docx-page [data-docx-form-checkbox] {
   position: relative;
-  color: transparent;
+  /* Hide the fallback glyph without touching `color`: the box and its X are drawn in
+     `currentcolor`, so they follow the run's own colour and stay canvas ink (which the dark
+     theme inverts with the page) instead of picking up chrome tokens. */
+  -webkit-text-fill-color: transparent;
 }
 
 .docx-page [data-docx-form-checkbox]::before {
@@ -1900,7 +1903,7 @@ a.docx-hyperlink:focus-visible {
   width: 1em;
   height: 1em;
   transform: translate(-50%, -50%);
-  border: 0.0625em solid var(--doc-text, #000);
+  border: 0.0625em solid currentcolor;
   border-radius: 0;
   background: inherit;
   z-index: 1;
@@ -1920,37 +1923,37 @@ a.docx-hyperlink:focus-visible {
     linear-gradient(
       to top right,
       transparent 44%,
-      var(--doc-text, #000) 46%,
-      var(--doc-text, #000) 54%,
+      currentcolor 46%,
+      currentcolor 54%,
       transparent 56%
     ),
     linear-gradient(
       to top left,
       transparent 44%,
-      var(--doc-text, #000) 46%,
-      var(--doc-text, #000) 54%,
+      currentcolor 46%,
+      currentcolor 54%,
       transparent 56%
     );
 }
 
+/* Focus and hover affordances are canvas ink too, so they survive the dark theme's inversion. */
 .docx-page [data-docx-form-checkbox]:focus-visible {
-  outline: 2px solid var(--doc-primary);
+  outline: 2px solid currentcolor;
   outline-offset: 2px;
 }
 
 .docx-page [data-docx-form-checkbox]:hover::before {
-  border-color: var(--doc-primary);
+  border-width: 0.125em;
 }
 
-/* The box prints, exactly like the field's glyph would; only the shading drops. */
+/* The box prints, exactly like the field's glyph would; only the affordances drop. */
 @media print {
   .docx-page [data-docx-form-checkbox]:focus-visible {
-    outline: 2px solid var(--doc-primary);
-    outline-offset: 2px;
+    outline: none;
   }
 
   .docx-page [data-docx-form-checkbox]:hover::before {
-    border-color: var(--doc-text, #000);
+    border-width: 0.0625em;
   }
 }
 

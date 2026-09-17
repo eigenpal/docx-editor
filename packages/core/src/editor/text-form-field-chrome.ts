@@ -2,14 +2,31 @@ import type { ContentControlWidgetSession, InvalidTextFormFieldSession } from '.
 import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 
-/** Manual renderers take priority over automatic adapter fallbacks in either mount order. */
-export function createSessionChrome<Session extends { signal: AbortSignal; cancel(): void }>() {
-  type Handlers = { readonly onRequest?: (session: Session) => void };
+/**
+ * Manual renderers take priority over automatic adapter fallbacks in either mount order.
+ *
+ * A session family whose sessions carry a `kind` can scope each registration with
+ * `handlers.kinds`; `defaultKinds` is what a registration that names none takes. A session no
+ * registration takes is refused, and the engine keeps its own behavior for it.
+ */
+export function createSessionChrome<Session extends { signal: AbortSignal; cancel(): void }>(
+  defaultKinds?: readonly string[]
+) {
+  type Handlers = {
+    readonly onRequest?: (session: Session) => void;
+    readonly kinds?: readonly string[];
+  };
   const registrations: { handlers: Handlers; fallback: boolean; sessions: Set<Session> }[] = [];
+  const takes = (entry: { handlers: Handlers }, session: Session): boolean => {
+    const kind = (session as { kind?: unknown }).kind;
+    const kinds = entry.handlers.kinds ?? defaultKinds;
+    return typeof kind !== 'string' || !kinds || kinds.includes(kind);
+  };
   return {
     request(session: Session): boolean {
+      const candidates = registrations.filter((entry) => takes(entry, session));
       const registration =
-        [...registrations].reverse().find((entry) => !entry.fallback) ?? registrations.at(-1);
+        [...candidates].reverse().find((entry) => !entry.fallback) ?? candidates.at(-1);
       if (!registration?.handlers.onRequest) return false;
       const { sessions, handlers } = registration;
       sessions.add(session);
@@ -39,7 +56,9 @@ export const createTextFormFieldChrome = () => createSessionChrome<TextFormField
 /** Facade wiring shared by the three core-owned popup session families. */
 export function createEditorPopupChrome() {
   const text = createTextFormFieldChrome();
-  const widget = createSessionChrome<ContentControlWidgetSession>();
+  // Checkbox presses reach only renderers that ask for them: a pop-up renderer written before
+  // checkbox sessions existed keeps working, and the engine toggles the box itself.
+  const widget = createSessionChrome<ContentControlWidgetSession>(['dropdown', 'comboBox', 'date']);
   const invalid = createSessionChrome<InvalidTextFormFieldSession>();
   return {
     surfaceOptions: {

@@ -113,7 +113,16 @@ export function createLegacyCheckboxInteraction(host: Host): {
       const direct = checkboxAtTarget(host, event.target);
       // A focused checkbox uses native Tab navigation, never the paragraph Tab command.
       if (direct && event.key === 'Tab') return true;
-      if (direct && !event.ctrlKey && !event.metaKey && event.key !== ' ') {
+      // Printable keys must not type into the document from a focused box; navigation keys
+      // (arrows, Escape, Enter, function keys) keep their normal meaning.
+      if (
+        direct &&
+        event.key.length === 1 &&
+        event.key !== ' ' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
         event.preventDefault();
         return true;
       }

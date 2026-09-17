@@ -120,7 +120,9 @@ export function contentControlWidgetBox(
   const contentLeft = page.contentBox.x - page.box.x;
   const contentTop = page.contentBox.y - page.box.y;
   if (controlType === 'checkbox') {
-    const size = Math.max(1, fragment.height) * scale;
+    // The fragment is the LINE box, which a tall neighbour or wide line spacing inflates; the
+    // widget must stay glyph-sized, or it swallows presses meant for the text beside it.
+    const size = Math.max(1, Math.min(fragment.height, CONTROL_WIDGET_SIZE)) * scale;
     // A `w:sym` glyph (Word's own checkbox shape) has no model width: its fragment is a
     // zero-width box at the insertion point and the glyph paints to the RIGHT of it, so the
     // widget starts there. A text glyph has a real box and the widget centres on it.
@@ -128,7 +130,9 @@ export function contentControlWidgetBox(
       fragment.width > 0
         ? (contentLeft + fragment.x + fragment.width / 2) * scale - size / 2
         : (contentLeft + fragment.x) * scale;
-    return { left, top: (contentTop + fragment.y) * scale, size };
+    const top =
+      (contentTop + fragment.y) * scale + Math.max(0, (fragment.height * scale - size) / 2);
+    return { left, top, size };
   }
   const size = CONTROL_WIDGET_SIZE * scale;
   const right = (contentLeft + fragment.x + fragment.width) * scale;

@@ -28,6 +28,13 @@ export interface ContentControlWidgetSession {
 /** Framework rendering for content-control value widgets. @public */
 export interface ContentControlWidgetChromeHandlers {
   readonly onRequest?: (session: ContentControlWidgetSession) => void;
+  /**
+   * Session kinds this renderer takes. Defaults to `dropdown`, `comboBox` and `date`, so a
+   * renderer written for the pop-ups never receives a checkbox press it does not expect.
+   * Include `'checkbox'` to take those presses too; the engine then leaves the toggle to
+   * `apply`, and a press nobody takes toggles the box as before.
+   */
+  readonly kinds?: readonly ContentControlWidgetSession['kind'][];
 }
 /** An invalid protected-field acknowledgement. @public */
 export interface InvalidTextFormFieldSession {

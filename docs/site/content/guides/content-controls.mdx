@@ -305,14 +305,14 @@ writes. See [Document protection](/docs/2.x/guides/document-protection).
 ## Customize control popups
 
 Use `popups.contentControl` for the control popup and `popups.contentControlWidget`
-for dropdown, combo box, date, and checkbox entry. Omitted entries retain the
-engine's own menus. A configured `contentControlWidget` renders
+for dropdown, combo box, and date entry. Omitted entries retain the engine's own
+menus. A configured `contentControlWidget` renders
 `DocxEditorContentControlWidget`, a compound whose parts (`Calendar`, `Header`,
 `Grid`, `Day`, `Today`, `List`, `Item`, `Input`, `Footer`, and more) accept
 `className`, `hidden`, and `asChild`, and whose `useContentControlWidget()` hook
-exposes the draft state. A checkbox press also reaches this renderer as a session
-with `kind: 'checkbox'`; the packaged renderer applies the toggle at once, and a
-renderer with its own children decides. See
+exposes the draft state. Checkbox presses reach a renderer only through
+`popups.contentControlCheckbox`, as a session with `kind: 'checkbox'`; without
+that entry the engine toggles the box itself. See
 [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up)
 for renderer ownership, sessions, and parts.
 

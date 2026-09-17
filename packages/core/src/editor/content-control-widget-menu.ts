@@ -265,6 +265,13 @@ export function buildContentControlCalendar(
   const stopPress = (node: HTMLElement): void => {
     node.addEventListener('mousedown', (event) => event.stopPropagation());
   };
+  // One persistent title: a live region only announces CHANGES to an element already in the
+  // tree, so a title recreated on every render would never read out a month change.
+  const title = host.document.createElement('div');
+  title.className =
+    'docx-content-control-calendar-title docx-content-control-calendar-announcement';
+  title.dataset.docxPart = 'title';
+  title.setAttribute('aria-live', 'polite');
   const render = (): void => {
     const focusedNav = (host.document.activeElement as HTMLElement | null)?.dataset.docxCalendarNav;
     const month = calendarMonth(view.year, view.month, {
@@ -282,11 +289,6 @@ export function buildContentControlCalendar(
     previous.dataset.docxCalendarNav = 'previous';
     previous.textContent = '‹';
     previous.setAttribute('aria-label', t('contentControl.calendar.previousMonth'));
-    const title = host.document.createElement('div');
-    title.className =
-      'docx-content-control-calendar-title docx-content-control-calendar-announcement';
-    title.dataset.docxPart = 'title';
-    title.setAttribute('aria-live', 'polite');
     title.textContent = month.title;
     const next = host.document.createElement('button');
     next.type = 'button';

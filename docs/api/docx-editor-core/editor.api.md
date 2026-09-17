@@ -913,6 +913,7 @@ export function contentControlPopupOpener(anchor: HTMLElement | null): HTMLEleme
 
 // @public
 export interface ContentControlWidgetChromeHandlers {
+    readonly kinds?: readonly ContentControlWidgetSession['kind'][];
     // (undocumented)
     readonly onRequest?: (session: ContentControlWidgetSession) => void;
 }
