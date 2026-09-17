@@ -178,6 +178,11 @@ for (const action of ['accept', 'reject'] as const) {
     const selected = planRevisionBatch(part, action, [reviewItemKey(continuation)]);
     expect(selected.ops).toEqual([]);
     expect(selected.result.skipped[0]?.reason).toBe('incomplete-group');
+    const direct = applyTreeOp(part, {
+      op: action === 'accept' ? 'acceptRevision' : 'rejectRevision',
+      revision: continuation.address,
+    });
+    expect(direct.ok).toBe(false);
   });
   test(`${action}: deleting a merge head preserves a surviving multi-row merge`, () => {
     const xml = resolve(
@@ -194,6 +199,38 @@ for (const action of ['accept', 'reject'] as const) {
     );
     expect(xml).toContain('w:val="restart"');
     expect(xml.match(/<w:vMerge/g)).toHaveLength(2);
+  });
+  test(`${action}: deleting a merge head keeps nonempty legacy continuations visible`, () => {
+    const xml = resolve(
+      table(
+        row(
+          cell('head', 2000, '<w:vMerge w:val="restart"/>'),
+          marker(action === 'accept' ? 'del' : 'ins')
+        ) +
+          row(cell('next', 2000, '<w:vMerge/>')) +
+          row(cell('visible', 2000, '<w:vMerge/>')),
+        [2000]
+      ),
+      action
+    );
+    expect(xml).toContain('visible');
+    expect(xml.match(/<w:vMerge/g)).toHaveLength(1);
+  });
+  test(`${action}: cell deletion cannot change a neighbour inside a locked cell control`, () => {
+    const body = table(
+      row(
+        '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+          cell('protected') +
+          '</w:sdtContent></w:sdt>' +
+          cell('gone', 2000, marker(action === 'accept' ? 'cellDel' : 'cellIns'))
+      ),
+      [2000, 2000]
+    );
+    const part = load(body);
+    const before = serializeOoxmlPart(part);
+    const batch = planRevisionBatch(part, action);
+    expect(applyTreeOp(part, batch.ops[0]!).ok).toBe(false);
+    expect(serializeOoxmlPart(part)).toBe(before);
   });
 }
 

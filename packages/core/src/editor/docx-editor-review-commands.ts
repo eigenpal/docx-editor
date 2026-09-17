@@ -357,7 +357,7 @@ function resolutionOps(
     const revision = item.addresses.find(
       (address) =>
         address.id === attr('id') &&
-        address.author === attr('author') &&
+        address.author === (attr('author') ?? '') &&
         (address.date ?? '') === (attr('date') ?? '')
     );
     if (!revision) continue;

@@ -34,3 +34,5 @@ Named move destinations with no matching source are retained on accept and rejec
 Tests cover both actions, partial selections, independent authors, duplicate/malformed records, historical cell markers, nested/wrapped tables, first/middle/last-cell geometry, merge content, live section references, export/reload, and two-peer undo/redo.
 
 Local Microsoft Word comparisons use synthetic row, cell, grid, merge, and property examples. Compare text, table topology, cell widths/spans, property values, and rendered results rather than ZIP bytes: Word renumbers relationship IDs, materializes defaults, and normalizes redundant XML during save. Customer documents are used only for private local verification and are not committed as fixtures.
+
+Document-wide Word parity also requires shared-style revision resolution. The existing review commands operate on story parts and do not resolve tracked properties in `styles.xml`; those records can still produce a formatting revision bar after all story decisions are resolved. This separate package-level gap is tracked in [#917](https://github.com/eigenpal/docx-editor/issues/917).

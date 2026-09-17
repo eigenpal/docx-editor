@@ -10,6 +10,7 @@ import {
   tableRevisionContentTarget,
   tableRevisionNeighbours,
   tableRevisionRemovals,
+  tableMergeDependencies,
   revisionAttribute,
 } from './revision-table-plan.ts';
 // Accept and reject over the canonical tree.
@@ -797,7 +798,7 @@ export function resolveRevisions(
 ): RevisionResolveResult {
   const scopeRoot =
     options?.scopeRootId === undefined ? part.root : scopedRevisionRoot(part, options.scopeRootId);
-  if (scopeRoot === null) {
+  if (scopeRoot === null || scopeRoot.kind === 'textValue') {
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
@@ -808,6 +809,20 @@ export function resolveRevisions(
     options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
   );
   if (matched.length === 0) return { ok: false, reason: 'unknown-revision' };
+  const selected = new Set(matched.map((site) => site.node.id));
+  const mergeIds = new Set(
+    sites.filter((site) => site.node.localName === 'cellMerge').map((site) => site.node.id)
+  );
+  if (
+    mergeIds.size &&
+    tableMergeDependencies({ ...part, root: scopeRoot }).some(
+      (group) =>
+        group.some((id) => mergeIds.has(id)) &&
+        group.some((id) => selected.has(id)) &&
+        group.some((id) => !selected.has(id))
+    )
+  )
+    return { ok: false, reason: 'unsupported-revision' };
   if (
     matched.some(
       (site) =>

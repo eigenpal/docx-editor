@@ -77,6 +77,19 @@ function mountEditor(body: string): DocxEditorInstance {
 
 describe('shared Review menu commands', () => {
   for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+    test(`${action} resolves an authorless table-grid record`, () => {
+      const editor = mountEditor(
+        '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/>' +
+          '<w:tblGridChange w:id="1"><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid></w:tblGridChange>' +
+          '</w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+      );
+      const item = editor.getReviewItems().find((item) => item.kind === 'revision');
+      expect(item).toBeDefined();
+      expect(editor[action](item!.key).ok).toBe(true);
+      expect(editor.getReviewItems()).toHaveLength(0);
+      editor.destroy();
+    });
+
     test(`${action} on a replacement preserves formatting with the same revision address`, () => {
       const editor = mountEditor(
         '<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Base</w:t></w:r><w:del w:id="1" w:author="Ada"><w:r><w:delText>Old</w:delText></w:r></w:del><w:ins w:id="2" w:author="Ada"><w:r><w:t>New</w:t></w:r></w:ins></w:p>'
