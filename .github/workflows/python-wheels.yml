@@ -100,7 +100,62 @@ jobs:
           pattern: wheel-*
           path: dist
           merge-multiple: true
-      - run: ls -la dist
+      - name: Read the version from the wheels
+        id: version
+        run: |
+          ls -la dist
+          version=$(ls dist/*.whl | head -1 | sed -E 's/.*docx_to_markdown-([^-]+)-.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+      - name: Notify Slack — wheels published
+        continue-on-error: true
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          wheels=$(ls dist/*.whl | sed -E 's/.*-py3-none-([a-z0-9_]+)\.whl/• \1/')
+          payload=$(jq -n \
+            --arg version "$VERSION" \
+            --arg run_url "$RUN_URL" \
+            --arg run_n "$RUN_NUMBER" \
+            --arg wheels "$wheels" \
+            '{
+              text: ":snake: docx-to-markdown \($version) published to PyPI",
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: ":snake: *docx-to-markdown \($version) published to PyPI*" } },
+                { type: "section", fields: [
+                  { type: "mrkdwn", text: "*Package*\n<https://pypi.org/project/docx-to-markdown/\($version)/|docx-to-markdown==\($version)>" },
+                  { type: "mrkdwn", text: "*Wheels*\n\($wheels)" }
+                ] },
+                { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
+              ]
+            }')
+          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+
+  notify-failure:
+    if: failure() && github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [wheel, publish]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Notify Slack — wheels not published
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          REF: ${{ github.ref_name }}
+        run: |
+          payload=$(jq -n --arg run_url "$RUN_URL" --arg run_n "$RUN_NUMBER" --arg ref "$REF" '{
+            text: ":x: docx-to-markdown Python wheels for \($ref) were NOT published",
+            blocks: [
+              { type: "section", text: { type: "mrkdwn", text: ":x: *docx-to-markdown Python wheels for \($ref) were NOT published*\nA platform build or the PyPI upload failed. npm packages are unaffected." } },
+              { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
+            ]
+          }')
+          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
