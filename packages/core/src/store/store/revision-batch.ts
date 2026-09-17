@@ -73,6 +73,7 @@ export function planRevisionBatch(
     });
     for (const index of own) join(own[0]!, index);
   }
+  const rowSites = new Map<string, typeof sites>();
   // Row decisions can remove every descendant. Property restoration replaces the live
   // property container. Containment also protects wrappers the resolver would sweep empty.
   for (const [index, site] of sites.entries()) {
@@ -84,7 +85,10 @@ export function planRevisionBatch(
       if (properties) owners.set(properties.id, index);
     }
     if (
-      site.parent?.localName !== 'trPr' &&
+      !(
+        (site.node.localName === 'ins' || site.node.localName === 'del') &&
+        site.parent?.localName === 'trPr'
+      ) &&
       site.node.localName !== 'cellIns' &&
       site.node.localName !== 'cellDel'
     )
@@ -92,10 +96,20 @@ export function planRevisionBatch(
     let node: OoxmlNode | null = site.node;
     while (node && node.kind !== 'tableRow') node = parentNodeOf(part, node.id);
     if (node) {
-      const known = owners.get(node.id);
-      if (known !== undefined) join(known, index);
-      owners.set(node.id, index);
+      const group = rowSites.get(node.id) ?? [];
+      if (group.length) join(indices.get(group[0]!.node.id)!, index);
+      group.push(site);
+      rowSites.set(node.id, group);
     }
+  }
+  for (const [rowId, group] of rowSites) {
+    const revisions = trackedRowRevisions(part, group);
+    if (typeof revisions === 'string') continue;
+    const revision = revisions.get(rowId);
+    const removesRow = revision?.kind === (action === 'accept' ? 'del' : 'ins');
+    // Unsupported row markers cannot remove content; retained rows only lose their markers.
+    // Neither decision should prevent independent changes inside those rows from resolving.
+    if (removesRow) owners.set(rowId, indices.get(group[0]!.node.id)!);
   }
   const visit = (node: OoxmlNode, ancestor?: number): void => {
     const own = indices.get(node.id) ?? owners.get(node.id);
