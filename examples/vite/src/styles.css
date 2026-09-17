@@ -751,23 +751,3 @@
 .citation-card:not(:popover-open) {
   display: none;
 }
-
-/* Host-built live colour control (history-group demo). */
-.demo-live-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-}
-.demo-live-color input[type='color'] {
-  inline-size: 2rem;
-  block-size: 1.6rem;
-  padding: 0;
-  border: 1px solid var(--doc-border);
-  border-radius: 4px;
-  background: transparent;
-}
-.demo-live-color__count {
-  opacity: 0.7;
-  white-space: nowrap;
-}

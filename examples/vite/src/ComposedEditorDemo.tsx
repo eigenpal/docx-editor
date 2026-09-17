@@ -36,7 +36,6 @@ import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
-import { LiveColorPicker } from './LiveColorPicker';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
 import { DemoHeaderButton } from './DemoHeaderButton';
@@ -489,7 +488,6 @@ function EditorChrome({
         </div>
 
         <div className="demo-header__right">
-          <LiveColorPicker />
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
           <DemoHeaderButton
             variant="primary"
