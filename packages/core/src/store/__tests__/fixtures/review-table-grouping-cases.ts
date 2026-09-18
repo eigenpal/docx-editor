@@ -1,3 +1,4 @@
+import { wordCreatedTableAlignment } from './word-created-table-alignment.ts';
 /** Synthetic inputs for native Word revision-grouping comparisons. */
 import { structuralWordXmlParts } from './structural-word-cases.ts';
 import { wordCreatedNestedRow, wordCreatedNestedRowDeletion } from './word-created-nested-row.ts';
@@ -440,6 +441,7 @@ add('word-created-nested-row-ins', wordCreatedNestedRow);
 add('word-created-nested-row-del', wordCreatedNestedRowDeletion);
 add('word-created-table-width', wordCreatedTableWidth);
 add('word-created-row-height', wordCreatedNewRowHeight);
+add('word-created-table-alignment', wordCreatedTableAlignment);
 export const reviewTableGroupingCases = cases;
 export const reviewTableGroupingParts = (entry: { name: string; body: string }) =>
   structuralWordXmlParts([entry]);

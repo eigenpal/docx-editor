@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
-import { collectReviewItems, findNode, revisionItemsOf } from '../../store/index.ts';
+import {
+  collectReviewItems,
+  findNode,
+  revisionItemsOf,
+  serializeOoxmlPart,
+} from '../../store/index.ts';
 import {
   reviewTableGroupingCases,
   reviewTableGroupingParts,
@@ -182,6 +187,38 @@ for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
       expect(remaining).toHaveLength(1);
       expect(editor[command](remaining[0]!.key).ok).toBe(true);
       expect(editor.getReviewItems({ placement: false })).toHaveLength(0);
+    } finally {
+      editor.destroy();
+    }
+  });
+}
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`${action}: document-wide cleanup preserves unbound table alignment with undo/redo`, () => {
+    const editor = mount('format-table-property');
+    try {
+      const session = editor.surface!.session;
+      const xml = () => serializeOoxmlPart(session.part());
+      const before = xml();
+      expect(editor.getReviewItems()).toHaveLength(0);
+      expect(
+        editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document', keys: [] }).ok
+      ).toBe(false);
+      expect(xml()).toBe(before);
+      expect(
+        editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' })
+      ).toMatchObject({
+        ok: true,
+        changed: true,
+        revisions: { resolved: [], skipped: [], remaining: 0 },
+      });
+      expect(xml()).not.toContain('tblPrChange');
+      expect(xml()).toContain('w:val="center"');
+      const after = xml();
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(xml()).toBe(before);
+      expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+      expect(xml()).toBe(after);
     } finally {
       editor.destroy();
     }

@@ -70,6 +70,7 @@ const wordCounts: Record<string, number> = {
   'row-multiple-paragraphs-ins': 1,
   'row-multiple-paragraphs-del': 1,
   'format-one-cell': 1,
+  'format-table-property': 0,
   'format-separate-tables': 2,
   'adjacent-format-authors': 2,
   'adjacent-format-dates': 1,
@@ -100,6 +101,7 @@ const wordCounts: Record<string, number> = {
   'word-created-nested-row-del': 1,
   'word-created-table-width': 1,
   'word-created-row-height': 1,
+  'word-created-table-alignment': 1,
 };
 function fixture(name: string) {
   const c = reviewTableGroupingCases.find((c) => c.name === name)!;
@@ -362,7 +364,8 @@ for (const entry of reviewTableGroupingCases.filter((c) => c.name.startsWith('fo
   for (const action of ['accept', 'reject'] as const) {
     test(`${action} all formatting histories: ${entry.name}`, () => {
       let part = fixture(entry.name);
-      expect(revisionItemsOf(part).length).toBeGreaterThan(0);
+      if (entry.name === 'format-table-property') expect(revisionItemsOf(part)).toHaveLength(0);
+      else expect(revisionItemsOf(part).length).toBeGreaterThan(0);
       const plan = planRevisionBatch(part, action);
       expect(plan.result.skipped).toEqual([]);
       for (const op of plan.ops) {
@@ -375,7 +378,10 @@ for (const entry of reviewTableGroupingCases.filter((c) => c.name.startsWith('fo
       expect(xml).not.toMatch(/<w:(?:tcPr|trPr|tblPr|tblGrid|tblPrEx)Change\b/);
       // Accept retains current properties; reject restores the earlier snapshot.
       for (const property of ['<w:shd', '<w:trHeight', '<w:jc']) {
-        if (entry.body.includes(property)) expect(xml.includes(property)).toBe(action === 'accept');
+        if (entry.body.includes(property))
+          expect(xml.includes(property)).toBe(
+            action === 'accept' || entry.name === 'format-table-property'
+          );
       }
       if (entry.name === 'format-grid-and-cells') {
         expect(xml.includes('w:w="1800"')).toBe(action === 'reject');

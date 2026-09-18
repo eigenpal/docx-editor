@@ -1,3 +1,4 @@
+import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
 import { deferredTableGridSites } from './revision-table-grid-history.ts';
 import { planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
@@ -57,9 +58,22 @@ export function planRevisionBatch(
   const root = scopeRoot ?? part.root;
   const scopedPart = root.kind === 'textValue' ? part : { ...part, root };
   const items = revisionItemsOf(scopedPart);
+  const auxiliaryIds =
+    keys === undefined
+      ? [...unboundTableAlignmentHistories(scopedPart, collectRevisionSites(scopedPart))]
+      : [];
+  const cleanup: TreeDocOp[] = auxiliaryIds.length
+    ? [
+        {
+          op: 'acceptAllRevisions',
+          siteNodeIds: auxiliaryIds,
+          ...(scopeRoot ? { scopeRootId: scopeRoot.id } : {}),
+        },
+      ]
+    : [];
   if (keys?.length === 0 || items.length === 0) {
     return {
-      ops: [],
+      ops: cleanup,
       result: {
         resolved: [],
         skipped: [...new Set(keys ?? [])].map((key) => ({ key, reason: 'unknown-revision' })),
@@ -301,13 +315,14 @@ export function planRevisionBatch(
   return {
     ops: acceptedSites.size
       ? [
+          ...cleanup,
           {
             op: action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions',
             siteNodeIds,
             ...(scopeRoot ? { scopeRootId: scopeRoot.id } : {}),
           },
         ]
-      : [],
+      : cleanup,
     result: { resolved, skipped, remaining },
   };
 }

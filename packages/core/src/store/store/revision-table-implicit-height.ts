@@ -1,3 +1,4 @@
+import { implicitTableRowAlignments } from './revision-table-implicit-alignment.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlPart } from '../package/ooxml-tree.ts';
@@ -18,7 +19,7 @@ const attr = (node: OoxmlElement, name: string) =>
 
 /** Word omits an old row-property snapshot when a newly added height replaces no properties.
  * Recognize only its complete, otherwise unchanged table/grid/cell snapshot bundle. */
-export function implicitTableRowHeights(
+export function implicitTableRowProperties(
   part: OoxmlPart,
   matched: readonly RevisionSite[]
 ): ReadonlyMap<string, string> {
@@ -41,7 +42,7 @@ export function implicitTableRowHeights(
     } as OoxmlElement;
     return ooxmlTreesEqual(current, previous[0]!);
   };
-  const result = new Map<string, string>();
+  const result = new Map(implicitTableRowAlignments(part, matched).rows);
   for (const site of matched) {
     if (
       site.node.localName !== 'tblPrChange' ||

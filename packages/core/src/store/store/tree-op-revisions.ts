@@ -1,4 +1,5 @@
-import { implicitTableRowHeights } from './revision-table-implicit-height.ts';
+import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
+import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
   applyCellMerge,
@@ -461,7 +462,7 @@ export function revisionStructuralReach(
   );
   const reach = new Map<string, boolean>();
   if (action === 'reject')
-    for (const row of implicitTableRowHeights(part, matched).values()) reach.set(row, false);
+    for (const row of implicitTableRowProperties(part, matched).values()) reach.set(row, false);
   const moves = planOrdinaryMoves(
     options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
     collectRevisionSitesIn(part, options?.scopeRootId),
@@ -815,6 +816,7 @@ export function resolveRevisions(
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
+  const unboundAlignments = unboundTableAlignmentHistories(part, sites);
   let matched = matchingRevisionSites(
     sites,
     address,
@@ -856,7 +858,7 @@ export function resolveRevisions(
   const actions = new Map<string, Resolution>();
   const dropMarks = new Set(movePlan.markers);
   if (action === 'reject')
-    for (const id of implicitTableRowHeights(part, matched).keys()) dropMarks.add(id);
+    for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
   const removeStructures = new Set([
@@ -916,9 +918,7 @@ export function resolveRevisions(
       continue;
     }
     if (site.propertyChange) {
-      // Accepting keeps the current properties and drops the record; rejecting puts the
-      // recorded properties back.
-      if (action === 'accept') dropMarks.add(site.node.id);
+      if (action === 'accept' || unboundAlignments.has(site.node.id)) dropMarks.add(site.node.id);
       else restoreProperties.add(site.node.id);
       continue;
     }

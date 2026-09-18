@@ -1,3 +1,4 @@
+import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
 import { ordinaryMoveRanges } from './revision-move-ranges.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
@@ -99,12 +100,8 @@ const interactiveReviewDerivation: ReviewDerivationDependencies = {
  * range it touches. Keying per site would show the reviewer four decisions where there is one,
  * and accepting any of them would make the other three vanish.
  *
- * Memoized per part root like the indexes it reads, and for the same reason: a heavily
- * tracked document produces tens of thousands of cards, and rebuilding them per read cost
- * more than everything the memos above saved. The paragraph-scoped view the local review
- * patch derives (`revisionItemsOfParagraph`'s synthetic paragraph-root part) is NOT cached:
- * each keystroke would insert a fresh root and churn the bounded ring. The instance is
- * SHARED, so the return type is readonly.
+ * Cached by part root except for paragraph-scoped synthetic roots. Results are shared
+ * and readonly; part names are checked because ranges embed them.
  */
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[] {
   return revisionItemsOfWith(part, interactiveReviewDerivation);
@@ -172,7 +169,9 @@ function computeRevisionItemsOf(
     }
   >();
 
+  const unboundAlignments = unboundTableAlignmentHistories(part, sites);
   for (const site of sites) {
+    if (unboundAlignments.has(site.node.id)) continue;
     const moveRange = moveRanges.get(site.node.id);
     const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
     const sourceId = wmlAttribute(site.node, 'id');

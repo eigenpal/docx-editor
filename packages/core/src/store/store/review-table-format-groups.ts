@@ -1,3 +1,4 @@
+import { implicitTableRowAlignments } from './revision-table-implicit-alignment.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
@@ -34,6 +35,7 @@ export function groupTableFormatting(
       .map((site) => [site.node.id, site])
   );
   if (!formatting.size) return [...items];
+  const alignmentHistories = implicitTableRowAlignments(part, sites).tableHistories;
   const groups: FormatGroup[] = [];
   const owner = new Map<string, FormatGroup>();
   const authorOf = (site: RevisionSite) =>
@@ -92,13 +94,14 @@ export function groupTableFormatting(
               site.parent?.kind === 'tableProperties' &&
               previous &&
               authorOf(site) === last.author &&
-              ooxmlTreesEqual(
-                {
-                  ...site.parent,
-                  children: site.parent.children.filter((child) => child.id !== site.node.id),
-                },
-                previous
-              )
+              (alignmentHistories.has(site.node.id) ||
+                ooxmlTreesEqual(
+                  {
+                    ...site.parent,
+                    children: site.parent.children.filter((child) => child.id !== site.node.id),
+                  },
+                  previous
+                ))
             )
               last.ids.add(site.node.id);
           }
