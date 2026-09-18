@@ -70,10 +70,6 @@ function contentProjection(root: OoxmlNode) {
 
 for (const reference of references) {
   const title = `Word bulk content: ${reference.action} ${reference.name}`;
-  if (reference.unverified) {
-    test.todo(`${title}: ${reference.unverified}`);
-    continue;
-  }
   test(title, () => {
     const fixture = reviewTableGroupingCases.find((entry) => entry.name === reference.name)!;
     const parsed = readOoxmlPart(reviewTableGroupingParts(fixture)['word/document.xml']!, {
@@ -84,13 +80,14 @@ for (const reference of references) {
     let part = parsed.part;
     const action = reference.action === 'accept' ? 'accept' : 'reject';
     const plan = planRevisionBatch(part, action);
-    expect(plan.result.skipped).toEqual([]);
+    expect(plan.result.skipped).toHaveLength(reference.remaining ?? 0);
+    expect(plan.result.remaining).toBe(reference.remaining ?? 0);
     for (const op of plan.ops) {
       const result = applyTreeOp(part, op);
       if (!result.ok) throw new Error(result.reason);
       part = result.part;
     }
-    expect(revisionItemsOf(part)).toEqual([]);
+    expect(revisionItemsOf(part)).toHaveLength(reference.remaining ?? 0);
     expect(contentProjection(part.root)).toEqual(reference.expected);
   });
 }

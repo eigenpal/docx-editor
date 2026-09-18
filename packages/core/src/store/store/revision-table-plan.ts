@@ -1,3 +1,4 @@
+import { retainsNestedTable } from './revision-table-preserve-nested.ts';
 import { tableChildren, isTableWrapper } from './revision-table-children.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import {
@@ -86,7 +87,8 @@ export function tableRevisionRemovals(
   for (const site of sites) {
     if (site.refused || !tableRevisionRemoves(site, action)) continue;
     const target = tableRevisionTarget(part, site);
-    if (target) removed.set(target.id, [...(removed.get(target.id) ?? []), site.node.id]);
+    if (target && !retainsNestedTable(target, action))
+      removed.set(target.id, [...(removed.get(target.id) ?? []), site.node.id]);
   }
   if (!removed.size) return removed;
   const visit = (node: OoxmlNode): void => {
@@ -117,7 +119,10 @@ export function tableRevisionContentTarget(
   action: 'accept' | 'reject'
 ): OoxmlElement | null {
   if (site.refused) return null;
-  if (tableRevisionRemoves(site, action)) return tableRevisionTarget(part, site);
+  if (tableRevisionRemoves(site, action)) {
+    const target = tableRevisionTarget(part, site);
+    return target && !retainsNestedTable(target, action) ? target : null;
+  }
   return site.node.localName === 'cellMerge' &&
     revisionAttribute(site.node, action === 'accept' ? 'vMerge' : 'vMergeOrig') === 'cont'
     ? tableRevisionTarget(part, site)

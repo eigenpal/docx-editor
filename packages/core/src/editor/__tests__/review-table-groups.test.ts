@@ -257,3 +257,50 @@ for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
     });
   }
 }
+
+for (const [name, action] of [
+  ['nested-plain-ins', 'reject'],
+  ['nested-plain-del', 'accept'],
+  ['nested-opposite-row-ins', 'reject'],
+  ['nested-opposite-row-del', 'accept'],
+] as const) {
+  test(`${action} ${name} reports a retained structure and undoes the partial decision`, () => {
+    const editor = mount(name);
+    try {
+      const session = editor.surface!.session;
+      const xml = () => serializeOoxmlPart(session.part());
+      const before = xml();
+      const count = editor.getReviewItems().length;
+      expect(
+        editor.exec({
+          type: 'resolveAllReviewChanges',
+          action,
+          scope: 'document',
+          unsupported: 'fail',
+        }).ok
+      ).toBe(false);
+      expect(xml()).toBe(before);
+      const result = editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' });
+      expect(result).toMatchObject({
+        ok: true,
+        changed: true,
+        revisions: { remaining: 1, skipped: [{ reason: 'retained-structure' }] },
+      });
+      expect(editor.getReviewItems()).toHaveLength(1);
+      expect(xml().match(/<w:tbl\b/g)).toHaveLength(2);
+      expect(xml()).not.toContain('>Outer<');
+      const after = xml();
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(xml()).toBe(before);
+      expect(editor.getReviewItems()).toHaveLength(count);
+      expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+      expect(xml()).toBe(after);
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' }).ok).toBe(
+        false
+      );
+      expect(xml()).toBe(after);
+    } finally {
+      editor.destroy();
+    }
+  });
+}

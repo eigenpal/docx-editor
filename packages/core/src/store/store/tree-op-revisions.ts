@@ -1,3 +1,4 @@
+import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
@@ -810,6 +811,7 @@ export function resolveRevisions(
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
   const unboundHistories = unboundTableHistories(part, sites);
+  const retainedRows = retainedNestedRowSites(part, sites, action);
   let matched = matchingRevisionSites(
     sites,
     address,
@@ -888,6 +890,7 @@ export function resolveRevisions(
   };
 
   for (const site of matched) {
+    if (retainedRows.has(site.node.id)) continue;
     if (site.node.kind === 'moveFromRangeStart' || site.node.kind === 'moveToRangeStart') continue;
     if (tableRevisionTarget(part, site)) {
       dropMarks.add(site.node.id);
@@ -943,8 +946,6 @@ export function resolveRevisions(
     addWrapper(site.node);
   }
 
-  // A move resolves as a pair. Pull in every wrapper sharing a `@w:name` with a matched half,
-  // so accepting the `moveTo` alone — which duplicates the content — is unreachable.
   const movesMatched = matched.filter(
     (site) => site.node.kind === 'revisionMoveFrom' || site.node.kind === 'revisionMoveTo'
   );

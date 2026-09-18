@@ -2,7 +2,7 @@
   {
     "name": "one-row-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE one-row-insFirst AFirst BEND one-row-ins",
       "boldText": "",
@@ -20,7 +20,7 @@
   {
     "name": "one-row-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE one-row-insEND one-row-ins",
       "boldText": "",
@@ -33,7 +33,7 @@
   {
     "name": "two-rows-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE two-rows-insFirst AFirst BSecond ASecond BEND two-rows-ins",
       "boldText": "",
@@ -51,7 +51,7 @@
   {
     "name": "two-rows-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE two-rows-insEND two-rows-ins",
       "boldText": "",
@@ -64,7 +64,7 @@
   {
     "name": "paragraph-marks-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE paragraph-marks-insFirst AFirst BSecond ASecond BEND paragraph-marks-ins",
       "boldText": "",
@@ -82,7 +82,7 @@
   {
     "name": "paragraph-marks-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE paragraph-marks-insEND paragraph-marks-ins",
       "boldText": "",
@@ -95,7 +95,7 @@
   {
     "name": "separated-rows-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-rows-insFirst AFirst BExisting AExisting BLast ALast BEND separated-rows-ins",
       "boldText": "",
@@ -113,7 +113,7 @@
   {
     "name": "separated-rows-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-rows-insExisting AExisting BEND separated-rows-ins",
       "boldText": "",
@@ -131,7 +131,7 @@
   {
     "name": "different-row-authors-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-authors-insFirst AFirst BSecond ASecond BEND different-row-authors-ins",
       "boldText": "",
@@ -149,7 +149,7 @@
   {
     "name": "different-row-authors-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-authors-insEND different-row-authors-ins",
       "boldText": "",
@@ -162,7 +162,7 @@
   {
     "name": "different-row-dates-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-dates-insFirst AFirst BSecond ASecond BEND different-row-dates-ins",
       "boldText": "",
@@ -180,7 +180,7 @@
   {
     "name": "different-row-dates-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-dates-insEND different-row-dates-ins",
       "boldText": "",
@@ -193,7 +193,7 @@
   {
     "name": "plain-row-text-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE plain-row-text-insPlain APlain BEND plain-row-text-ins",
       "boldText": "",
@@ -211,7 +211,7 @@
   {
     "name": "plain-row-text-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE plain-row-text-insEND plain-row-text-ins",
       "boldText": "",
@@ -224,7 +224,7 @@
   {
     "name": "different-text-author-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-author-insOther ASame BEND different-text-author-ins",
       "boldText": "",
@@ -242,7 +242,7 @@
   {
     "name": "different-text-author-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-author-insEND different-text-author-ins",
       "boldText": "",
@@ -255,7 +255,7 @@
   {
     "name": "different-text-date-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-date-insLater ASame BEND different-text-date-ins",
       "boldText": "",
@@ -273,7 +273,7 @@
   {
     "name": "different-text-date-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-date-insEND different-text-date-ins",
       "boldText": "",
@@ -286,7 +286,7 @@
   {
     "name": "cell-markers-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE cell-markers-insCell ACell BEND cell-markers-ins",
       "boldText": "",
@@ -304,7 +304,7 @@
   {
     "name": "cell-markers-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE cell-markers-insEND cell-markers-ins",
       "boldText": "",
@@ -317,7 +317,7 @@
   {
     "name": "row-and-cell-markers-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-and-cell-markers-insCell ACell BEND row-and-cell-markers-ins",
       "boldText": "",
@@ -335,7 +335,7 @@
   {
     "name": "row-and-cell-markers-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-and-cell-markers-insEND row-and-cell-markers-ins",
       "boldText": "",
@@ -348,7 +348,7 @@
   {
     "name": "nested-table-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-table-insNested ANested BOuterNeighbourEND nested-table-ins",
       "boldText": "",
@@ -370,7 +370,7 @@
   {
     "name": "nested-table-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-table-insEND nested-table-ins",
       "boldText": "",
@@ -383,7 +383,7 @@
   {
     "name": "one-row-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE one-row-delEND one-row-del",
       "boldText": "",
@@ -396,7 +396,7 @@
   {
     "name": "one-row-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE one-row-delFirst AFirst BEND one-row-del",
       "boldText": "",
@@ -414,7 +414,7 @@
   {
     "name": "two-rows-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE two-rows-delEND two-rows-del",
       "boldText": "",
@@ -427,7 +427,7 @@
   {
     "name": "two-rows-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE two-rows-delFirst AFirst BSecond ASecond BEND two-rows-del",
       "boldText": "",
@@ -445,7 +445,7 @@
   {
     "name": "paragraph-marks-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE paragraph-marks-delEND paragraph-marks-del",
       "boldText": "",
@@ -458,7 +458,7 @@
   {
     "name": "paragraph-marks-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE paragraph-marks-delFirst AFirst BSecond ASecond BEND paragraph-marks-del",
       "boldText": "",
@@ -476,7 +476,7 @@
   {
     "name": "separated-rows-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-rows-delExisting AExisting BEND separated-rows-del",
       "boldText": "",
@@ -494,7 +494,7 @@
   {
     "name": "separated-rows-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-rows-delFirst AFirst BExisting AExisting BLast ALast BEND separated-rows-del",
       "boldText": "",
@@ -512,7 +512,7 @@
   {
     "name": "different-row-authors-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-authors-delEND different-row-authors-del",
       "boldText": "",
@@ -525,7 +525,7 @@
   {
     "name": "different-row-authors-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-authors-delFirst AFirst BSecond ASecond BEND different-row-authors-del",
       "boldText": "",
@@ -543,7 +543,7 @@
   {
     "name": "different-row-dates-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-dates-delEND different-row-dates-del",
       "boldText": "",
@@ -556,7 +556,7 @@
   {
     "name": "different-row-dates-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-row-dates-delFirst AFirst BSecond ASecond BEND different-row-dates-del",
       "boldText": "",
@@ -574,7 +574,7 @@
   {
     "name": "plain-row-text-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE plain-row-text-delEND plain-row-text-del",
       "boldText": "",
@@ -587,7 +587,7 @@
   {
     "name": "plain-row-text-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE plain-row-text-delPlain APlain BEND plain-row-text-del",
       "boldText": "",
@@ -605,7 +605,7 @@
   {
     "name": "different-text-author-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-author-delEND different-text-author-del",
       "boldText": "",
@@ -618,7 +618,7 @@
   {
     "name": "different-text-author-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-author-delOther ASame BEND different-text-author-del",
       "boldText": "",
@@ -636,7 +636,7 @@
   {
     "name": "different-text-date-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-date-delEND different-text-date-del",
       "boldText": "",
@@ -649,7 +649,7 @@
   {
     "name": "different-text-date-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE different-text-date-delLater ASame BEND different-text-date-del",
       "boldText": "",
@@ -667,7 +667,7 @@
   {
     "name": "cell-markers-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE cell-markers-delEND cell-markers-del",
       "boldText": "",
@@ -680,7 +680,7 @@
   {
     "name": "cell-markers-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE cell-markers-delCell ACell BEND cell-markers-del",
       "boldText": "",
@@ -698,7 +698,7 @@
   {
     "name": "row-and-cell-markers-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-and-cell-markers-delEND row-and-cell-markers-del",
       "boldText": "",
@@ -711,7 +711,7 @@
   {
     "name": "row-and-cell-markers-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-and-cell-markers-delCell ACell BEND row-and-cell-markers-del",
       "boldText": "",
@@ -729,7 +729,7 @@
   {
     "name": "nested-table-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-table-delEND nested-table-del",
       "boldText": "",
@@ -742,7 +742,7 @@
   {
     "name": "nested-table-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-table-delNested ANested BOuterNeighbourEND nested-table-del",
       "boldText": "",
@@ -764,7 +764,7 @@
   {
     "name": "untracked-row-inserted-text",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE untracked-row-inserted-textAdded AAdded BEND untracked-row-inserted-text",
       "boldText": "",
@@ -782,7 +782,7 @@
   {
     "name": "untracked-row-inserted-text",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE untracked-row-inserted-textEND untracked-row-inserted-text",
       "boldText": "",
@@ -800,7 +800,7 @@
   {
     "name": "row-insert-with-deletion",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-deletionAddedSameEND row-insert-with-deletion",
       "boldText": "",
@@ -818,7 +818,7 @@
   {
     "name": "row-insert-with-deletion",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-deletionEND row-insert-with-deletion",
       "boldText": "",
@@ -831,7 +831,7 @@
   {
     "name": "row-insert-with-format",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-formatFormattedAddedEND row-insert-with-format",
       "boldText": "Formatted",
@@ -849,7 +849,7 @@
   {
     "name": "row-insert-with-format",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-formatEND row-insert-with-format",
       "boldText": "",
@@ -862,7 +862,7 @@
   {
     "name": "adjacent-tables",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-tablesFirst AFirst BBetweenSecond ASecond BEND adjacent-tables",
       "boldText": "",
@@ -884,7 +884,7 @@
   {
     "name": "adjacent-tables",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-tablesBetweenEND adjacent-tables",
       "boldText": "",
@@ -897,7 +897,7 @@
   {
     "name": "nested-only-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-insNested ANested BOuterNeighbourEND nested-only-ins",
       "boldText": "",
@@ -919,7 +919,7 @@
   {
     "name": "nested-only-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-insOuterNeighbourEND nested-only-ins",
       "boldText": "",
@@ -937,7 +937,7 @@
   {
     "name": "nested-plain-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-plain-insExisting AExisting BOuterNeighbourEND nested-plain-ins",
       "boldText": "",
@@ -959,7 +959,7 @@
   {
     "name": "nested-plain-ins",
     "action": "reject",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "remaining": 1,
     "expected": {
       "text": "CASE nested-plain-insExisting AExisting BEND nested-plain-ins",
       "boldText": "",
@@ -981,7 +981,7 @@
   {
     "name": "nested-other-author-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-other-author-insNested ANested BOuterNeighbourEND nested-other-author-ins",
       "boldText": "",
@@ -1003,7 +1003,7 @@
   {
     "name": "nested-other-author-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-other-author-insEND nested-other-author-ins",
       "boldText": "",
@@ -1016,7 +1016,7 @@
   {
     "name": "row-opposite-text-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-opposite-text-insSameEND row-opposite-text-ins",
       "boldText": "",
@@ -1034,7 +1034,7 @@
   {
     "name": "row-opposite-text-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-opposite-text-insEND row-opposite-text-ins",
       "boldText": "",
@@ -1047,7 +1047,7 @@
   {
     "name": "row-multiple-paragraphs-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-multiple-paragraphs-insFirstSecondLastEND row-multiple-paragraphs-ins",
       "boldText": "",
@@ -1065,7 +1065,7 @@
   {
     "name": "row-multiple-paragraphs-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-multiple-paragraphs-insEND row-multiple-paragraphs-ins",
       "boldText": "",
@@ -1078,7 +1078,7 @@
   {
     "name": "nested-only-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-delOuterNeighbourEND nested-only-del",
       "boldText": "",
@@ -1096,7 +1096,7 @@
   {
     "name": "nested-only-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-delNested ANested BOuterNeighbourEND nested-only-del",
       "boldText": "",
@@ -1118,7 +1118,7 @@
   {
     "name": "nested-plain-del",
     "action": "accept",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "remaining": 1,
     "expected": {
       "text": "CASE nested-plain-delExisting AExisting BEND nested-plain-del",
       "boldText": "",
@@ -1140,7 +1140,7 @@
   {
     "name": "nested-plain-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-plain-delExisting AExisting BOuterNeighbourEND nested-plain-del",
       "boldText": "",
@@ -1162,7 +1162,7 @@
   {
     "name": "nested-other-author-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-other-author-delEND nested-other-author-del",
       "boldText": "",
@@ -1175,7 +1175,7 @@
   {
     "name": "nested-other-author-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-other-author-delNested ANested BOuterNeighbourEND nested-other-author-del",
       "boldText": "",
@@ -1197,7 +1197,7 @@
   {
     "name": "row-opposite-text-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-opposite-text-delEND row-opposite-text-del",
       "boldText": "",
@@ -1210,7 +1210,7 @@
   {
     "name": "row-opposite-text-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-opposite-text-delSameEND row-opposite-text-del",
       "boldText": "",
@@ -1228,7 +1228,7 @@
   {
     "name": "row-multiple-paragraphs-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-multiple-paragraphs-delEND row-multiple-paragraphs-del",
       "boldText": "",
@@ -1241,7 +1241,7 @@
   {
     "name": "row-multiple-paragraphs-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-multiple-paragraphs-delFirstSecondLastEND row-multiple-paragraphs-del",
       "boldText": "",
@@ -1259,7 +1259,7 @@
   {
     "name": "row-insert-with-inserted-format",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-inserted-formatBoldAddedEND row-insert-with-inserted-format",
       "boldText": "Bold",
@@ -1277,7 +1277,7 @@
   {
     "name": "row-insert-with-inserted-format",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-inserted-formatEND row-insert-with-inserted-format",
       "boldText": "",
@@ -1290,7 +1290,7 @@
   {
     "name": "inserted-format-outside-table",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE inserted-format-outside-tableBoldEND inserted-format-outside-table",
       "boldText": "Bold",
@@ -1303,7 +1303,7 @@
   {
     "name": "inserted-format-outside-table",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE inserted-format-outside-tableEND inserted-format-outside-table",
       "boldText": "",
@@ -1316,7 +1316,7 @@
   {
     "name": "adjacent-identical-format",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-identical-formatBoldBoldEND adjacent-identical-format",
       "boldText": "BoldBold",
@@ -1329,7 +1329,7 @@
   {
     "name": "adjacent-identical-format",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-identical-formatBoldBoldEND adjacent-identical-format",
       "boldText": "",
@@ -1342,7 +1342,7 @@
   {
     "name": "separated-identical-format",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-identical-formatBoldGapBoldEND separated-identical-format",
       "boldText": "BoldBold",
@@ -1355,7 +1355,7 @@
   {
     "name": "separated-identical-format",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE separated-identical-formatBoldGapBoldEND separated-identical-format",
       "boldText": "",
@@ -1368,7 +1368,7 @@
   {
     "name": "row-insert-with-paragraph-format",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-paragraph-formatAddedSecondEND row-insert-with-paragraph-format",
       "boldText": "",
@@ -1386,7 +1386,7 @@
   {
     "name": "row-insert-with-paragraph-format",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE row-insert-with-paragraph-formatEND row-insert-with-paragraph-format",
       "boldText": "",
@@ -1399,7 +1399,7 @@
   {
     "name": "format-one-cell",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-one-cellABEND format-one-cell",
       "boldText": "",
@@ -1417,7 +1417,7 @@
   {
     "name": "format-one-cell",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-one-cellABEND format-one-cell",
       "boldText": "",
@@ -1435,7 +1435,7 @@
   {
     "name": "format-adjacent-cells",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-adjacent-cellsABEND format-adjacent-cells",
       "boldText": "",
@@ -1453,7 +1453,7 @@
   {
     "name": "format-adjacent-cells",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-adjacent-cellsABEND format-adjacent-cells",
       "boldText": "",
@@ -1471,7 +1471,7 @@
   {
     "name": "format-cell-authors",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-cell-authorsABEND format-cell-authors",
       "boldText": "",
@@ -1489,7 +1489,7 @@
   {
     "name": "format-cell-authors",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-cell-authorsABEND format-cell-authors",
       "boldText": "",
@@ -1507,7 +1507,7 @@
   {
     "name": "format-cell-dates",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-cell-datesABEND format-cell-dates",
       "boldText": "",
@@ -1525,7 +1525,7 @@
   {
     "name": "format-cell-dates",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-cell-datesABEND format-cell-dates",
       "boldText": "",
@@ -1543,7 +1543,7 @@
   {
     "name": "format-adjacent-rows",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-adjacent-rowsFirst AFirst BSecond ASecond BEND format-adjacent-rows",
       "boldText": "",
@@ -1561,7 +1561,7 @@
   {
     "name": "format-adjacent-rows",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-adjacent-rowsFirst AFirst BSecond ASecond BEND format-adjacent-rows",
       "boldText": "",
@@ -1579,7 +1579,7 @@
   {
     "name": "format-row-authors",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-authorsFirst AFirst BSecond ASecond BEND format-row-authors",
       "boldText": "",
@@ -1597,7 +1597,7 @@
   {
     "name": "format-row-authors",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-authorsFirst AFirst BSecond ASecond BEND format-row-authors",
       "boldText": "",
@@ -1615,7 +1615,7 @@
   {
     "name": "format-separated-rows",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-separated-rowsFirst AFirst BExisting AExisting BLast ALast BEND format-separated-rows",
       "boldText": "",
@@ -1633,7 +1633,7 @@
   {
     "name": "format-separated-rows",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-separated-rowsFirst AFirst BExisting AExisting BLast ALast BEND format-separated-rows",
       "boldText": "",
@@ -1651,7 +1651,7 @@
   {
     "name": "format-separate-tables",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-separate-tablesFirst AFirst BBetweenSecond ASecond BEND format-separate-tables",
       "boldText": "",
@@ -1673,7 +1673,7 @@
   {
     "name": "format-separate-tables",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-separate-tablesFirst AFirst BBetweenSecond ASecond BEND format-separate-tables",
       "boldText": "",
@@ -1695,7 +1695,7 @@
   {
     "name": "format-nested-cells",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-nested-cellsNested ANested BOuterNeighbourEND format-nested-cells",
       "boldText": "",
@@ -1717,7 +1717,7 @@
   {
     "name": "format-nested-cells",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-nested-cellsNested ANested BOuterNeighbourEND format-nested-cells",
       "boldText": "",
@@ -1739,7 +1739,7 @@
   {
     "name": "format-row-and-cells",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-and-cellsABEND format-row-and-cells",
       "boldText": "",
@@ -1757,7 +1757,7 @@
   {
     "name": "format-row-and-cells",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-and-cellsABEND format-row-and-cells",
       "boldText": "",
@@ -1775,7 +1775,7 @@
   {
     "name": "format-table-property",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-table-propertyExisting AExisting BEND format-table-property",
       "boldText": "",
@@ -1793,7 +1793,7 @@
   {
     "name": "format-table-property",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-table-propertyExisting AExisting BEND format-table-property",
       "boldText": "",
@@ -1811,7 +1811,7 @@
   {
     "name": "format-grid-and-cells",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-and-cellsABEND format-grid-and-cells",
       "boldText": "",
@@ -1829,7 +1829,7 @@
   {
     "name": "format-grid-and-cells",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-and-cellsABEND format-grid-and-cells",
       "boldText": "",
@@ -1847,7 +1847,7 @@
   {
     "name": "format-row-exceptions",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-exceptionsExisting AExisting BEND format-row-exceptions",
       "boldText": "",
@@ -1865,7 +1865,7 @@
   {
     "name": "format-row-exceptions",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-row-exceptionsExisting AExisting BEND format-row-exceptions",
       "boldText": "",
@@ -1883,7 +1883,7 @@
   {
     "name": "adjacent-format-authors",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-authorsFirstSecondEND adjacent-format-authors",
       "boldText": "FirstSecond",
@@ -1896,7 +1896,7 @@
   {
     "name": "adjacent-format-authors",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-authorsFirstSecondEND adjacent-format-authors",
       "boldText": "",
@@ -1909,7 +1909,7 @@
   {
     "name": "adjacent-format-dates",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-datesFirstSecondEND adjacent-format-dates",
       "boldText": "FirstSecond",
@@ -1922,7 +1922,7 @@
   {
     "name": "adjacent-format-dates",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-datesFirstSecondEND adjacent-format-dates",
       "boldText": "",
@@ -1935,7 +1935,7 @@
   {
     "name": "adjacent-format-different-current",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-currentFirstSecondEND adjacent-format-different-current",
       "boldText": "First",
@@ -1948,7 +1948,7 @@
   {
     "name": "adjacent-format-different-current",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-currentFirstSecondEND adjacent-format-different-current",
       "boldText": "",
@@ -1961,7 +1961,7 @@
   {
     "name": "adjacent-format-different-previous",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-previousFirstSecondEND adjacent-format-different-previous",
       "boldText": "FirstSecond",
@@ -1974,7 +1974,7 @@
   {
     "name": "adjacent-format-different-previous",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-previousFirstSecondEND adjacent-format-different-previous",
       "boldText": "",
@@ -1987,7 +1987,7 @@
   {
     "name": "adjacent-format-different-baseline",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-baselineFirstSecondEND adjacent-format-different-baseline",
       "boldText": "FirstSecond",
@@ -2000,7 +2000,7 @@
   {
     "name": "adjacent-format-different-baseline",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE adjacent-format-different-baselineFirstSecondEND adjacent-format-different-baseline",
       "boldText": "",
@@ -2013,7 +2013,7 @@
   {
     "name": "format-across-paragraphs",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-across-paragraphsFirstSecondEND format-across-paragraphs",
       "boldText": "FirstSecond",
@@ -2026,7 +2026,7 @@
   {
     "name": "format-across-paragraphs",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-across-paragraphsFirstSecondEND format-across-paragraphs",
       "boldText": "",
@@ -2039,7 +2039,7 @@
   {
     "name": "format-across-cells",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-across-cellsFirstSecondEND format-across-cells",
       "boldText": "FirstSecond",
@@ -2057,7 +2057,7 @@
   {
     "name": "format-across-cells",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-across-cellsFirstSecondEND format-across-cells",
       "boldText": "",
@@ -2075,7 +2075,7 @@
   {
     "name": "format-grid-with-gap",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-with-gapFirst AFirst BExisting AExisting BLast ALast BEND format-grid-with-gap",
       "boldText": "",
@@ -2093,7 +2093,7 @@
   {
     "name": "format-grid-with-gap",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-with-gapFirst AFirst BExisting AExisting BLast ALast BEND format-grid-with-gap",
       "boldText": "",
@@ -2111,7 +2111,7 @@
   {
     "name": "format-grid-row-authors",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-row-authorsFirst AFirst BSecond ASecond BEND format-grid-row-authors",
       "boldText": "",
@@ -2129,7 +2129,7 @@
   {
     "name": "format-grid-row-authors",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-row-authorsFirst AFirst BSecond ASecond BEND format-grid-row-authors",
       "boldText": "",
@@ -2147,7 +2147,7 @@
   {
     "name": "nested-opposite-row-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-opposite-row-insOuterNeighbourEND nested-opposite-row-ins",
       "boldText": "",
@@ -2165,7 +2165,7 @@
   {
     "name": "nested-opposite-row-ins",
     "action": "reject",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "remaining": 1,
     "expected": {
       "text": "CASE nested-opposite-row-insNested ANested BEND nested-opposite-row-ins",
       "boldText": "",
@@ -2187,7 +2187,7 @@
   {
     "name": "nested-partial-rows-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-partial-rows-insFirst AFirst BExisting AExisting BLast ALast BOuterNeighbourEND nested-partial-rows-ins",
       "boldText": "",
@@ -2209,7 +2209,7 @@
   {
     "name": "nested-partial-rows-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-partial-rows-insEND nested-partial-rows-ins",
       "boldText": "",
@@ -2222,7 +2222,7 @@
   {
     "name": "nested-deep-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-deep-insDeep ADeep BMiddleMiddle neighbourOuterNeighbourEND nested-deep-ins",
       "boldText": "",
@@ -2248,7 +2248,7 @@
   {
     "name": "nested-deep-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-deep-insEND nested-deep-ins",
       "boldText": "",
@@ -2261,7 +2261,7 @@
   {
     "name": "nested-opposite-row-del",
     "action": "accept",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "remaining": 1,
     "expected": {
       "text": "CASE nested-opposite-row-delNested ANested BEND nested-opposite-row-del",
       "boldText": "",
@@ -2283,7 +2283,7 @@
   {
     "name": "nested-opposite-row-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-opposite-row-delOuterNeighbourEND nested-opposite-row-del",
       "boldText": "",
@@ -2301,7 +2301,7 @@
   {
     "name": "nested-partial-rows-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-partial-rows-delEND nested-partial-rows-del",
       "boldText": "",
@@ -2314,7 +2314,7 @@
   {
     "name": "nested-partial-rows-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-partial-rows-delFirst AFirst BExisting AExisting BLast ALast BOuterNeighbourEND nested-partial-rows-del",
       "boldText": "",
@@ -2336,7 +2336,7 @@
   {
     "name": "nested-deep-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-deep-delEND nested-deep-del",
       "boldText": "",
@@ -2349,7 +2349,7 @@
   {
     "name": "nested-deep-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-deep-delDeep ADeep BMiddleMiddle neighbourOuterNeighbourEND nested-deep-del",
       "boldText": "",
@@ -2375,7 +2375,7 @@
   {
     "name": "format-grid-only",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-onlyExisting AExisting BEND format-grid-only",
       "boldText": "",
@@ -2393,7 +2393,7 @@
   {
     "name": "format-grid-only",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE format-grid-onlyExisting AExisting BEND format-grid-only",
       "boldText": "",
@@ -2411,7 +2411,7 @@
   {
     "name": "nested-two-rows-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-two-rows-insFirst AFirst BSecond ASecond BOuterNeighbourEND nested-two-rows-ins",
       "boldText": "",
@@ -2433,7 +2433,7 @@
   {
     "name": "nested-two-rows-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-two-rows-insEND nested-two-rows-ins",
       "boldText": "",
@@ -2446,7 +2446,7 @@
   {
     "name": "nested-last-unchanged-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-last-unchanged-insFirst AFirst BExisting AExisting BOuterNeighbourEND nested-last-unchanged-ins",
       "boldText": "",
@@ -2468,7 +2468,7 @@
   {
     "name": "nested-last-unchanged-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-last-unchanged-insEND nested-last-unchanged-ins",
       "boldText": "",
@@ -2481,7 +2481,7 @@
   {
     "name": "nested-only-two-rows-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-two-rows-insFirst AFirst BSecond ASecond BOuterNeighbourEND nested-only-two-rows-ins",
       "boldText": "",
@@ -2503,7 +2503,7 @@
   {
     "name": "nested-only-two-rows-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-only-two-rows-insOuterNeighbourEND nested-only-two-rows-ins",
       "boldText": "",
@@ -2521,7 +2521,7 @@
   {
     "name": "nested-two-tables-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-two-tables-insFirst AFirst BBetweenSecond ASecond BOuterNeighbourEND nested-two-tables-ins",
       "boldText": "",
@@ -2547,7 +2547,7 @@
   {
     "name": "nested-two-tables-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-two-tables-insEND nested-two-tables-ins",
       "boldText": "",
@@ -2560,7 +2560,7 @@
   {
     "name": "nested-following-gap-ins",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-following-gap-insNested ANested BUnchangedFollowingNeighbourEND nested-following-gap-ins",
       "boldText": "",
@@ -2582,7 +2582,7 @@
   {
     "name": "nested-following-gap-ins",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-following-gap-insUnchangedNeighbourEND nested-following-gap-ins",
       "boldText": "",
@@ -2600,7 +2600,7 @@
   {
     "name": "nested-following-gap-del",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-following-gap-delUnchangedNeighbourEND nested-following-gap-del",
       "boldText": "",
@@ -2618,7 +2618,7 @@
   {
     "name": "nested-following-gap-del",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE nested-following-gap-delNested ANested BUnchangedFollowingNeighbourEND nested-following-gap-del",
       "boldText": "",
@@ -2640,7 +2640,7 @@
   {
     "name": "move-range-insertion",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-insertionDestinationEND move-range-insertion",
       "boldText": "",
@@ -2653,7 +2653,7 @@
   {
     "name": "move-range-insertion",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-insertionEND move-range-insertion",
       "boldText": "",
@@ -2666,7 +2666,7 @@
   {
     "name": "move-range-deletion",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-deletionEND move-range-deletion",
       "boldText": "",
@@ -2679,7 +2679,7 @@
   {
     "name": "move-range-deletion",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-deletionSourceEND move-range-deletion",
       "boldText": "",
@@ -2692,7 +2692,7 @@
   {
     "name": "move-range-pair",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-pairMovedEND move-range-pair",
       "boldText": "",
@@ -2705,7 +2705,7 @@
   {
     "name": "move-range-pair",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-pairEND move-range-pair",
       "boldText": "",
@@ -2718,7 +2718,7 @@
   {
     "name": "move-range-multiple-insertions",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-multiple-insertionsFirstSecondEND move-range-multiple-insertions",
       "boldText": "",
@@ -2731,7 +2731,7 @@
   {
     "name": "move-range-multiple-insertions",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-multiple-insertionsEND move-range-multiple-insertions",
       "boldText": "",
@@ -2744,7 +2744,7 @@
   {
     "name": "move-wrapper-destination",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-wrapper-destinationDestinationEND move-wrapper-destination",
       "boldText": "",
@@ -2757,7 +2757,7 @@
   {
     "name": "move-wrapper-destination",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-wrapper-destinationEND move-wrapper-destination",
       "boldText": "",
@@ -2770,7 +2770,7 @@
   {
     "name": "move-range-wrapper-destination",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-wrapper-destinationDestinationEND move-range-wrapper-destination",
       "boldText": "",
@@ -2783,7 +2783,7 @@
   {
     "name": "move-range-wrapper-destination",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-wrapper-destinationDestinationEND move-range-wrapper-destination",
       "boldText": "",
@@ -2796,7 +2796,7 @@
   {
     "name": "move-range-wrapper-pair",
     "action": "accept",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-wrapper-pairMovedEND move-range-wrapper-pair",
       "boldText": "",
@@ -2809,7 +2809,7 @@
   {
     "name": "move-range-wrapper-pair",
     "action": "reject",
-    "unverified": null,
+    "remaining": 0,
     "expected": {
       "text": "CASE move-range-wrapper-pairMovedEND move-range-wrapper-pair",
       "boldText": "",

@@ -1,3 +1,4 @@
+import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { deferredTableGridSites } from './revision-table-grid-history.ts';
 import { planOrdinaryMoves } from './revision-move-ranges.ts';
@@ -34,6 +35,7 @@ export interface RevisionBatchEntry {
 export type RevisionBatchSkipReason =
   | 'unsupported-revision'
   | 'incomplete-group'
+  | 'retained-structure'
   | 'unknown-revision';
 
 /** Outcome of one selected-set decision. Counts refer to review decisions, not XML markers. @public */
@@ -255,6 +257,7 @@ export function planRevisionBatch(
   const resolved: RevisionBatchEntry[] = [];
   const skipped: RevisionBatchResult['skipped'][number][] = [];
   const acceptedSites = new Set<string>();
+  const retainedRows = retainedNestedRowSites(part, sites, action);
   for (const key of selected) {
     const item = byKey.get(key);
     if (!item) {
@@ -277,8 +280,10 @@ export function planRevisionBatch(
     if (!ids.length) reason = 'unsupported-revision';
     if (reason) skipped.push({ key, reason, revision: entry });
     else {
-      resolved.push(entry);
-      for (const id of ids) acceptedSites.add(id);
+      if (ids.some((id) => retainedRows.has(id)))
+        skipped.push({ key, reason: 'retained-structure', revision: entry });
+      else resolved.push(entry);
+      for (const id of ids) if (!retainedRows.has(id)) acceptedSites.add(id);
     }
   }
   const gridCandidates = deferredTableGridSites(part, sites, acceptedSites);

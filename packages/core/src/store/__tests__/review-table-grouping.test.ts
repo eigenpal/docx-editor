@@ -1,3 +1,4 @@
+import wordBulkReferences from './fixtures/word-bulk-content-reference.json';
 import { expect, test } from 'bun:test';
 import {
   applyTreeOp,
@@ -339,24 +340,27 @@ for (const entry of reviewTableGroupingCases.filter((candidate) =>
   candidate.name.startsWith('nested-')
 )) {
   for (const action of ['accept', 'reject'] as const) {
-    test(`${action} all nested decisions leaves no unresolved markers: ${entry.name}`, () => {
+    test(`${action} all nested decisions preserves the native remaining count: ${entry.name}`, () => {
       let part = fixture(entry.name);
       const plan = planRevisionBatch(part, action);
-      expect(plan.result.skipped).toEqual([]);
+      const remaining =
+        wordBulkReferences.find((r) => r.name === entry.name && r.action === action)?.remaining ??
+        0;
+      expect(plan.result.skipped).toHaveLength(remaining);
       for (const op of plan.ops) {
         const result = applyTreeOp(part, op);
         if (!result.ok) throw new Error(result.reason);
         part = result.part;
       }
-      expect(revisionItemsOf(part)).toEqual([]);
+      expect(revisionItemsOf(part)).toHaveLength(remaining);
       const xml = serializeOoxmlPart(part);
-      expect(xml).not.toMatch(/<w:(?:ins|del)\b/);
+      expect(xml.match(/<w:(?:ins|del)\b/g) ?? []).toHaveLength(remaining);
       const reopened = readOoxmlPart(xml, {
         name: '/word/document.xml',
         contentType: 'application/xml',
       });
       if (!reopened.ok) throw new Error(reopened.reason);
-      expect(revisionItemsOf(reopened.part)).toEqual([]);
+      expect(revisionItemsOf(reopened.part)).toHaveLength(remaining);
     });
   }
 }

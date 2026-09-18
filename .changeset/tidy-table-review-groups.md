@@ -9,3 +9,5 @@ Resolve shared table-grid histories with their remaining row decisions, and expo
 Keep an unchanged table-property snapshot with its unambiguous cell-formatting decision, including nested width edits created by Word.
 
 Restore the absence of a prior row height when rejecting Word’s complete implicit table-formatting snapshot bundle, while preserving partial or independent histories.
+
+Match table alignment decisions and standalone table/grid metadata, and expose separate move and insertion decisions for orphan move destinations. Preserve existing nested tables during destructive row resolution and report a `retained-structure` reason when the outer row decision remains pending after its selected text changes resolve.

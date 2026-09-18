@@ -3936,7 +3936,7 @@ export interface RevisionBatchResult {
 }
 
 // @public
-export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'unknown-revision';
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
 
 // @public
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
