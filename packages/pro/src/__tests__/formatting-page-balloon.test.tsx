@@ -13,11 +13,60 @@ import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-edi
 import { DocxEditorReview } from '../react/index.ts';
 import { findPaintedRevisionElement } from '../react/review-balloon-anchor.ts';
 import { reviewModule } from '../index.ts';
+import { strToU8, zipSync } from 'fflate';
+import {
+  reviewTableGroupingCases,
+  reviewTableGroupingParts,
+} from '../../../core/src/store/__tests__/fixtures/review-table-grouping-cases.ts';
 import {
   source,
   navigationSource,
   checkFormattingPageBalloons,
 } from './formatting-page-balloon-harness.ts';
+
+test('React: either formatted run opens the shared balloon and resolves the whole group', async () => {
+  const fixture = reviewTableGroupingCases.find(
+    (entry) => entry.name === 'adjacent-format-different-baseline'
+  )!;
+  const bytes = zipSync(
+    Object.fromEntries(
+      Object.entries(reviewTableGroupingParts(fixture)).map(([name, xml]) => [name, strToU8(xml)])
+    )
+  );
+  let editor: DocxEditorInstance | undefined;
+  const mounted = render(
+    <DocxEditorRoot
+      document={bytes}
+      modules={[reviewModule()]}
+      onReady={(instance) => {
+        editor = instance as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+        <DocxEditorReview />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  try {
+    expect(editor!.getReviewItems({ placement: false })).toHaveLength(1);
+    const anchors = [...mounted.container.querySelectorAll('[data-formatting-kind="rPrChange"]')];
+    expect(anchors).toHaveLength(2);
+    for (const anchor of anchors) {
+      await act(async () => {
+        anchor.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      });
+      expect(mounted.getByTestId('review-balloon-card').dataset.kind).toBe('format');
+    }
+    await act(async () => {
+      (mounted.getByTestId('review-accept') as HTMLElement).click();
+    });
+    expect(editor!.getReviewItems({ placement: false })).toHaveLength(0);
+    expect(mounted.container.querySelector('[data-formatting-kind="rPrChange"]')).toBeNull();
+  } finally {
+    mounted.unmount();
+  }
+});
 
 test('React: paragraph and empty-mark formatting opens page balloons without sidebar cards or pilcrows', async () => {
   let editor: DocxEditorInstance | undefined;

@@ -1,3 +1,4 @@
+import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
 import { textUnder } from './review-text.ts';
 export { commentBodyText, commentInitials } from './review-text.ts';
@@ -348,7 +349,8 @@ function computeRevisionItemsOf(
   // Finish inline chains before a paragraph mark connects their endpoints. Otherwise a
   // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
   // an atomic field, leaving those wrappers as separate review decisions.
-  const inlineItems = mergeAdjacentSameKindEdits(items, order);
+  const tableItems = groupTableRevisions(part, items, sites, located);
+  const inlineItems = mergeAdjacentSameKindEdits(tableItems, order);
   return pairReplacements(mergeParagraphBreakEdits(inlineItems, part, order, previewByNode), order);
 }
 

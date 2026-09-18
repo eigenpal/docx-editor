@@ -76,9 +76,9 @@ export interface ReviewRevisionItem {
   /**
    * EVERY address this decision covers, `address` first.
    *
-   * More than one only for a replacement, whose halves a foreign editor may have written
-   * as two independent revisions. Accept and reject walk all of them in one transaction:
-   * resolving one half and leaving the other is a state no reviewer asked for.
+   * Replacements, table fragments, and adjacent formatting changes can combine multiple
+   * original revisions into one decision. Review commands resolve the complete decision
+   * in one transaction while preserving independent changes outside the group.
    */
   readonly addresses: readonly RevisionAddress[];
   /** The words a replacement removes. Empty for every other kind. */

@@ -114,7 +114,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal } from './plan-proposal.ts';
-import { planRevisionDecision } from './revision-operations.ts';
+import { planRevisionDecision, revisionItemOps } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
   planDeleteComment,
@@ -2383,20 +2383,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const plan = planFor(found.reads);
         const conflict = pinWrite(plan);
         if (conflict) return conflict;
-        // EVERY ADDRESS THE DECISION COVERS, in one transaction — a replacement written as two
-        // revisions is one decision, and resolving half of it is a state no reviewer asked for.
-        const accept = operation.op === 'acceptRevision';
-        return {
-          ok: true,
-          kind: 'command',
-          story: found.reads.story,
-          ops: found.item.item.addresses.map((address) =>
-            accept
-              ? ({ op: 'acceptRevision', revision: address } as const)
-              : ({ op: 'rejectRevision', revision: address } as const)
-          ),
-          answer: () => APPLIED,
-        };
+        const ops = revisionItemOps(
+          found.reads,
+          found.item.item,
+          operation.op === 'acceptRevision' ? 'accept' : 'reject'
+        );
+        if (!ops.length)
+          return refuse('unsupported-revision', 'the table decision has unresolved dependencies');
+        return { ok: true, kind: 'command', story: found.reads.story, ops, answer: () => APPLIED };
       }
 
       case 'resolveRevisionBatch':

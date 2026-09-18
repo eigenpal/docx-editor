@@ -25,10 +25,10 @@ for (const action of ['accept', 'reject'] as const) {
     ['cell-only marker', '', '<w:cellIns w:author="Grace" w:id="1"/>'],
     ['row formatting', '<w:trPrChange w:author="Grace" w:id="1"><w:trPr/></w:trPrChange>', ''],
   ] as const) {
-    test(`${action}: ${name} does not block independent text revisions`, () => {
+    test(`${action}: ${name} resolves with its text revisions`, () => {
       const part = load(row, cell);
       const batch = planRevisionBatch(part, action);
-      expect(batch.result.resolved).toHaveLength(2);
+      expect(batch.result.resolved).toHaveLength(name === 'row-only marker' ? 1 : 2);
       expect(batch.result.skipped).toHaveLength(0);
       const applied = applyTreeOp(part, batch.ops[0]!);
       if (!applied.ok) throw new Error(applied.reason);

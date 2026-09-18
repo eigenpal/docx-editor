@@ -353,6 +353,14 @@ function resolutionOps(
 ): TreeDocOp[] {
   const op = action === 'accept' ? 'acceptRevision' : 'rejectRevision';
   if (!part) return [];
+  // A grouped row decision can remove later constituents. Resolve its sites
+  // together, with the same dependency preflight as the bulk command.
+  if (
+    item.revisionKind === 'structural' ||
+    (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
+  ) {
+    return [...planRevisionBatch(part, action, [reviewItemKey(item)]).ops];
+  }
   const nodeIds = new Set(revisionSiteNodeIdsOf(item));
   const operations = new Map<
     string,
@@ -375,8 +383,7 @@ function resolutionOps(
         (address.date ?? '') === (attr('date') ?? '')
     );
     if (!revision) continue;
-    // A tracked row is one decision across its `del` and `cellDel` markers.
-    const localName = item.revisionKind === 'structural' ? undefined : site.node.localName;
+    const localName = site.node.localName;
     const key = JSON.stringify([revision, localName]);
     const known = operations.get(key);
     if (known) known.siteNodeIds.push(site.node.id);

@@ -757,9 +757,8 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(refusal(response)).toBe('invalid-handle');
   });
 
-  test('a structural change is not answered as a typed decision', () => {
-    // Incomplete `w:trPr/w:ins` (no matching `w:cellIns`) is omitted from the listing because
-    // this protocol cannot name its Word subtype. Collection membership is not the decision set.
+  test('a tracked row is answered as an insertion decision', () => {
+    // Word exposes a tracked row as an insertion, even without cell markers.
     const host = open(
       richDocx({
         body:
@@ -768,7 +767,12 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
       })
     );
     const { body } = roots(host);
-    expect(revisionsOf(host, body)).toEqual([]);
+    const revisions = revisionsOf(host, body);
+    expect(revisions).toHaveLength(1);
+    expect(
+      host.execute({ operations: [{ op: 'acceptRevision', revision: revisions[0]! }] }).ok
+    ).toBe(true);
+    expect(revisionsOf(host, body)).toHaveLength(0);
   });
 
   test('accepting a complete tracked row keeps the row and drops the marks', () => {
