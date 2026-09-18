@@ -84,7 +84,7 @@ export function groupTableFormatting(
         // Word writes unchanged table snapshots alongside a cell-width edit.
         // With one unambiguous row group, those snapshots belong to its entry.
         // Keep meaningful table changes and multi-group lifetimes independent.
-        if (tableGroups.length === 1)
+        if (tableGroups.length === 1 && grid.length > 0)
           for (const site of tableProperties) {
             const previous = site.node.children.find((child) => isW(child, 'tblPr'));
             if (

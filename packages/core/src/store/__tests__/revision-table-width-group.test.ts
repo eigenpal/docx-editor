@@ -71,3 +71,9 @@ test('a table snapshot spanning separate row groups remains independently addres
   );
   expect(revisionItemsOf(load(body))).toHaveLength(3);
 });
+
+test('a standalone table snapshot without the shared-grid bundle stays independent', () => {
+  const body = wordCreatedTableWidth.replace(/<w:tblGridChange\b[^>]*>.*?<\/w:tblGridChange>/, '');
+  expect(body).not.toBe(wordCreatedTableWidth);
+  expect(revisionItemsOf(load(body))).toHaveLength(2);
+});

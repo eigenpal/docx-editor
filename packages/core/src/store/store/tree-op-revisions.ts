@@ -1,3 +1,4 @@
+import { implicitTableRowHeights } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
   applyCellMerge,
@@ -459,6 +460,8 @@ export function revisionStructuralReach(
     matched
   );
   const reach = new Map<string, boolean>();
+  if (action === 'reject')
+    for (const row of implicitTableRowHeights(part, matched).values()) reach.set(row, false);
   const moves = planOrdinaryMoves(
     options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
     collectRevisionSitesIn(part, options?.scopeRootId),
@@ -852,6 +855,8 @@ export function resolveRevisions(
   const orphanDestinations = orphanMoveDestinationSites(scopeRoot, sites);
   const actions = new Map<string, Resolution>();
   const dropMarks = new Set(movePlan.markers);
+  if (action === 'reject')
+    for (const id of implicitTableRowHeights(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
   const removeStructures = new Set([

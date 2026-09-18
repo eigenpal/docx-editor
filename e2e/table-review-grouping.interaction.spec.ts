@@ -14,6 +14,7 @@ for (const name of [
   'format-grid-with-gap',
   'move-range-pair',
   'word-created-table-width',
+  'word-created-row-height',
 ]) {
   for (const action of ['Accept', 'Reject']) {
     test(`${action} ${name}: rendered groups, undo, and save/reopen`, async ({
@@ -94,6 +95,9 @@ for (const name of [
       } else if (name === 'move-range-pair') {
         expect(xml.includes('>Moved<')).toBe(action === 'Accept');
         expect(xml).not.toMatch(/<w:move(?:From|To)Range/);
+      } else if (name === 'word-created-row-height') {
+        expect(xml).not.toMatch(/<w:\w+Change\b/);
+        expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');
       } else if (name === 'word-created-table-width') {
         expect(xml).not.toMatch(/<w:\w+Change\b/);
         expect(

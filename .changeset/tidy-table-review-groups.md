@@ -7,3 +7,5 @@ Group adjacent tracked table rows, row and cell formatting histories, and equiva
 Resolve shared table-grid histories with their remaining row decisions, and expose and resolve paragraph-local move ranges over ordinary tracked text, preserving dependent revisions and protected content.
 
 Keep an unchanged table-property snapshot with its unambiguous cell-formatting decision, including nested width edits created by Word.
+
+Restore the absence of a prior row height when rejecting Word’s complete implicit table-formatting snapshot bundle, while preserving partial or independent histories.

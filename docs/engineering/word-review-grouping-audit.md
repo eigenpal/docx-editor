@@ -11,7 +11,7 @@ Native Microsoft Word Reviewing Pane observations from 2026-09-18. All examples 
 - Cell insertion/deletion markers remain independent, including when a row marker is present.
 - Untracked rows do not group independent insertions across their cells.
 
-The matrix contains 88 synthetic fixtures inspected in Word, including seven move controls and two unchanged-gap controls. The tests record matching Reviewing Pane entry counts for 85 cases. They additionally verify canonical site membership, individual and batch resolution, preservation of independent decisions, undo/redo, live cell edits, activation, automation handles, and reused identities outside a group.
+The matrix contains 89 synthetic fixtures inspected in Word, including seven move controls and two unchanged-gap controls. The tests record matching Reviewing Pane entry counts for 86 cases. They additionally verify canonical site membership, individual and batch resolution, preservation of independent decisions, undo/redo, live cell edits, activation, automation handles, and reused identities outside a group.
 
 ## Nested tables
 
@@ -47,7 +47,9 @@ Individual structural decisions now use dependency preflight even when they cont
 
 A later fixture created by changing a nested cell's width in Word shows one “Formatted Table” entry. Word also writes an unchanged `tblPrChange` alongside the cell/grid snapshots. The engine now includes that same-author, unchanged table snapshot when there is exactly one unambiguous row-formatting group. Meaningful table changes and ambiguous multi-group histories stay independent. The normalized fixture was reopened in Word and still shows one entry; native accept/reject outputs retain/restore the changed cell width (1600/2000 twips), clear all histories and preserve the other seven cell widths. Store and browser tests cover this case, including undo/redo and save/reopen.
 
-A separate Word-created row-height control remains an open restoration case: Word rejection removes a row height even though the saved source has no `trPrChange` snapshot for it. It is not covered by the width result and must not be treated as verified engine parity. Word's AppleScript revision collection returned zero for these nested fixtures while the visible Reviewing Pane showed one entry; the UI count and saved XML are the evidence used here.
+A Word-created row-height edit additionally establishes an implicit absent-property case: Word omits `trPrChange` when there were no prior row properties, yet Reject All removes the new height. A control with a pre-existing 400-twip height produces an explicit snapshot and restores 400 after an edit to 800. The engine now removes an implicitly added height only when the selected unchanged table/grid snapshots and every direct cell snapshot form the complete same-author/date bundle; the row must have no other properties or revision markers. Missing or changed snapshots, other row properties, different authors, and partial canonical-site operations retain their existing behavior. The inferred row is included in structural protection checks. Store tests cover both prior states and protected controls; browser tests cover the absent-property case.
+
+Word's AppleScript revision collection returned zero for these nested fixtures while the visible Reviewing Pane showed one entry; UI counts and saved XML are the evidence used here.
 
 ## Move controls
 
