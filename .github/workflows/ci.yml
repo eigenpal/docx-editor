@@ -71,6 +71,9 @@ jobs:
       - name: Lane boundary compile check
         run: bun run check:lane-boundaries
         if: "matrix.check == 'lint'"
+      - name: Example README shape check
+        run: bun run check:example-readmes
+        if: "matrix.check == 'lint'"
       - name: tsconfig lib floor check
         run: bun run check:tsconfig-lib-floor
         if: "matrix.check == 'lint'"

@@ -2,6 +2,8 @@
 
 This example stores a custom legal citation as a Word content control. You can insert, edit, and save the citation.
 
+## Run the example
+
 From the repository root, run:
 
 ```bash

@@ -4,7 +4,7 @@ This example uses `y-webrtc` to replicate a document between browsers. It has no
 
 For server-backed rooms, see the [Hocuspocus collaboration example](../collaboration-hocuspocus/README.md).
 
-## Set up the example
+## Run the example
 
 Run these commands from the repository root on each machine:
 

@@ -4,7 +4,7 @@ An LLM reading a DOCX and leaving comments on it, live, in the editor the reader
 
 The agent is read + comment only. It has no tool that edits text.
 
-## Run it
+## Run the example
 
 From the repository root, install dependencies and build the workspace packages:
 

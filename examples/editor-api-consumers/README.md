@@ -2,9 +2,13 @@
 
 These deterministic agents execute document action plans using public editor-api imports. They create their input fixtures, save edited DOCX files, reopen them, and assert targeted edits and preserved content. No LLM credentials are needed.
 
-Run from the repository root after `bun install` and `bun run build:packages`:
+## Run the example
+
+From the repository root, run:
 
 ```sh
+bun install
+bun run build:packages
 bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published
 bun run --filter '@docx-editor-examples/editor-api-consumers' contract
 bun run --filter '@docx-editor-examples/editor-api-consumers' report

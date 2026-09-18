@@ -4,7 +4,7 @@ Run a Node.js worker that joins a Hocuspocus room as **Review agent** and propos
 
 The browser renders the editor and requests jobs. All model calls and proposal execution happen on the worker. The job continues if its initiating browser closes.
 
-## Run
+## Run the example
 
 Use Node.js 22.18 or later and Bun for workspace installation and builds. The worker uses native WebSocket support and TypeScript stripping in Node.js; the client uses the Hocuspocus provider.
 
@@ -14,7 +14,7 @@ cp examples/server-agent-review/.env.example examples/server-agent-review/.env
 bun run dev:server-agent-review
 ```
 
-Open [localhost:5180](http://localhost:5180). This command builds the workspace packages and starts Vite, Hocuspocus, and the worker. Stop all three with Ctrl+C.
+Open `http://localhost:5180`. This command builds the workspace packages and starts Vite, Hocuspocus, and the worker. Stop all three with Ctrl+C.
 
 1. Enter your display name and open the sample agreement, or upload a DOCX (up to 10 MiB) to create a new room.
 2. Copy the invite link into another browser or browser profile and join under a different name.

@@ -2,15 +2,16 @@
 
 Convert a DOCX in your browser and compare the document with its Markdown output.
 
-## Run the demo
+## Run the example
 
-Install the workspace dependencies with `bun install` from the repository root, then start the demo:
+From the repository root, run:
 
 ```bash
-bun dev:markdown
+bun install
+bun run dev:markdown
 ```
 
-Open [localhost:5177](http://localhost:5177). Drop a `.docx` or edit the sample. Markdown updates after you pause typing.
+Open `http://localhost:5177`. Drop a `.docx` or edit the sample. Markdown updates after you pause typing.
 
 ## Use the demo
 

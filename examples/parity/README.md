@@ -11,7 +11,7 @@ bun install
 bun run dev
 ```
 
-Open React at `http://localhost:5173/`. Open Vue at `http://localhost:5174/`.
+Open React at `http://localhost:5173`. Open Vue at `http://localhost:5174`.
 
 ## Build the parity site
 

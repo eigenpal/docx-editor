@@ -2,6 +2,8 @@
 
 This example uses the packaged `<DocxEditor>` component without custom composition.
 
+## Run the example
+
 From the repository root, run:
 
 ```bash
@@ -9,7 +11,7 @@ bun install
 bun run dev:happypath
 ```
 
-Open `http://localhost:5175/`.
+Open `http://localhost:5175`.
 
 ## Use the packaged editor
 

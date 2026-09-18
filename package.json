@@ -53,6 +53,7 @@
     "bench:scope-waste": "bun scripts/bench/scope-waste-bench.ts",
     "changeset": "changeset",
     "check:adapter-css-thin": "node scripts/check-adapter-css-thin.mjs",
+    "check:example-readmes": "node scripts/check-example-readmes.mjs",
     "check:pro-license-headers": "bun run --filter '@docx-editor.dev/pro' license:check",
     "fix:pro-license-headers": "bun run --filter '@docx-editor.dev/pro' license:add",
     "check:consumer-install": "node scripts/check-consumer-install.mjs",
