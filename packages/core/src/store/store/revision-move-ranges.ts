@@ -11,6 +11,7 @@ export interface OrdinaryMoveRange {
   direction: 'from' | 'to';
   name?: string;
   supported: boolean;
+  orphanDestination?: boolean;
 }
 const cache = new WeakMap<OoxmlNode, readonly OrdinaryMoveRange[]>();
 const containsRangeCache = new WeakMap<OoxmlNode, boolean>();
@@ -32,6 +33,7 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
   if (cached) return cached;
   const ranges: OrdinaryMoveRange[] = [];
   const wrapperNames = new Set<string>();
+  const sourceNames = new Set<string>();
   const containsWrapper = (node: OoxmlNode): boolean =>
     node.kind !== 'textValue' &&
     (['revisionMoveFrom', 'revisionMoveTo'].includes(node.kind) ||
@@ -47,6 +49,7 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
       return;
     if (node.kind === 'moveFromRangeStart' || node.kind === 'moveToRangeStart') {
       const name = attr(node, 'name');
+      if (node.kind === 'moveFromRangeStart' && name !== undefined) sourceNames.add(name);
       if (name !== undefined)
         open.push({ name, id: attr(node, 'id'), direction: node.kind.replace('Start', '') });
     } else if (node.kind === 'moveFromRangeEnd' || node.kind === 'moveToRangeEnd') {
@@ -93,13 +96,20 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
     }
     for (const [index, start] of node.children.entries()) {
       if (start.kind !== 'moveFromRangeStart' && start.kind !== 'moveToRangeStart') continue;
-      if (wrapperNames.has(attr(start, 'name') ?? '')) continue;
       const direction = start.kind === 'moveFromRangeStart' ? 'from' : 'to';
       const endKind = direction === 'from' ? 'moveFromRangeEnd' : 'moveToRangeEnd';
       const ends = endsByKey.get(`${endKind}:${attr(start, 'id')}`) ?? [];
       const endIndex = ends.length === 1 && ends[0]! > index ? ends[0]! : -1;
       const content = endIndex < 0 ? [] : node.children.slice(index + 1, endIndex);
-      if (content.some(containsWrapper)) {
+      const substantive = content.filter((n) => n.kind !== 'textValue' || n.value.trim());
+      const orphanDestination =
+        direction === 'to' &&
+        !sourceNames.has(attr(start, 'name') ?? '') &&
+        substantive.length === 1 &&
+        substantive[0]!.kind === 'revisionMoveTo' &&
+        substantive[0]!.children.every((n) => n.kind === 'run' && safeContent(n));
+      if (!orphanDestination && wrapperNames.has(attr(start, 'name') ?? '')) continue;
+      if (!orphanDestination && content.some(containsWrapper)) {
         const name = attr(start, 'name');
         if (name !== undefined) wrapperNames.add(name);
         continue;
@@ -111,6 +121,7 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
         parent: node,
         content,
         direction,
+        ...(orphanDestination ? { orphanDestination: true } : {}),
         name: attr(start, 'name'),
         supported:
           node.kind === 'paragraph' &&
@@ -118,7 +129,7 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
           attr(start, 'name') !== undefined &&
           attr(start, 'id') !== undefined &&
           attr(start, 'author') !== undefined &&
-          content.every(safeContent),
+          (orphanDestination || content.every(safeContent)),
       });
     }
     for (const child of node.children) visit(child);
@@ -126,7 +137,8 @@ export function ordinaryMoveRanges(root: OoxmlNode): readonly OrdinaryMoveRange[
   visit(root);
   const identities = new Map<string, OrdinaryMoveRange[]>();
   for (const range of ranges) {
-    if (range.name !== undefined && wrapperNames.has(range.name)) range.supported = false;
+    if (!range.orphanDestination && range.name !== undefined && wrapperNames.has(range.name))
+      range.supported = false;
     const key = `${range.direction}:${range.name}`;
     const own = identities.get(key) ?? [];
     own.push(range);
@@ -149,6 +161,7 @@ export interface OrdinaryMovePlan {
   remove: Set<string>;
   markers: Set<string>;
   relocate: Map<string, readonly OoxmlNode[]>;
+  wrapperActions: Map<string, 'unwrap' | 'remove'>;
 }
 
 /** Native move rejection carries destination revisions back to the source position. */
@@ -166,11 +179,24 @@ export function planOrdinaryMoves(
     remove: new Set(),
     markers: new Set(),
     relocate: new Map(),
+    wrapperActions: new Map(),
   };
   const ranges = ordinaryMoveRanges(root);
   const byName = new Map<string, OrdinaryMoveRange[]>();
   for (const range of ranges) {
     if (!range.supported || range.name === undefined) continue;
+    if (range.orphanDestination)
+      for (const node of range.content) {
+        if (node.kind !== 'revisionMoveTo') continue;
+        const aliases = sites.filter(
+          (site) =>
+            site.node.kind === 'revisionMoveTo' &&
+            ['id', 'author', 'date'].every((name) => attr(site.node, name) === attr(node, name))
+        );
+        if (requested.has(range.start.id) || aliases.some((site) => requested.has(site.node.id)))
+          result.dependencies.push(aliases.map((site) => site.node.id));
+      }
+
     const own = byName.get(range.name) ?? [];
     own.push(range);
     byName.set(range.name, own);
@@ -184,17 +210,33 @@ export function planOrdinaryMoves(
     if (node.kind !== 'textValue')
       for (const child of node.children) selectDescendants(child, dependencies);
   };
-  const emptied = (range: OrdinaryMoveRange) =>
-    range.content.length > 0 &&
-    range.content.every(
-      (node) =>
-        requested.has(node.id) &&
-        (action === 'accept' ? node.kind === 'revisionDelete' : node.kind === 'revisionInsert')
+  const emptied = (range: OrdinaryMoveRange) => {
+    const content = range.content.filter((n) => n.kind !== 'textValue' || n.value.trim());
+    return (
+      content.length > 0 &&
+      content.every(
+        (node) =>
+          requested.has(node.id) &&
+          (action === 'accept'
+            ? node.kind === 'revisionDelete'
+            : node.kind === 'revisionInsert' ||
+              (range.orphanDestination && node.kind === 'revisionMoveTo'))
+      )
     );
+  };
   for (const pair of byName.values()) {
     const from = pair.find((range) => range.direction === 'from');
     const to = pair.find((range) => range.direction === 'to');
     const explicit = pair.some((range) => requested.has(range.start.id));
+    for (const range of pair)
+      if (range.orphanDestination) {
+        for (const node of range.content)
+          if (node.kind === 'revisionMoveTo' && (explicit || requested.has(node.id))) {
+            const operation = explicit || action === 'accept' ? 'unwrap' : 'remove';
+            result.wrapperActions.set(node.id, operation);
+            if (operation === 'remove') result.remove.add(node.id);
+          }
+      }
     if (!explicit && !pair.some(emptied)) continue;
     const dependencies = pair.map((range) => range.start.id);
     result.dependencies.push(dependencies);
@@ -207,6 +249,7 @@ export function planOrdinaryMoves(
       result.markers.add(range.end!.id);
     }
     if (!explicit) continue;
+    if (to?.orphanDestination) for (const node of to.content) selectDescendants(node, dependencies);
     if (from && (to || action === 'accept')) {
       for (const node of from.content) {
         result.remove.add(node.id);
@@ -219,4 +262,13 @@ export function planOrdinaryMoves(
     }
   }
   return result;
+}
+
+/** Native orphan destination wrappers expose an insertion separately from the move. */
+export function ordinaryMoveInsertionSites(root: OoxmlNode): ReadonlySet<string> {
+  return new Set(
+    ordinaryMoveRanges(root)
+      .filter((r) => r.supported && r.orphanDestination)
+      .flatMap((r) => r.content.filter((n) => n.kind === 'revisionMoveTo').map((n) => n.id))
+  );
 }

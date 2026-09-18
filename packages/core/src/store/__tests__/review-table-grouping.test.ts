@@ -97,6 +97,7 @@ const wordCounts: Record<string, number> = {
   'move-range-pair': 4,
   'move-range-multiple-insertions': 2,
   'move-wrapper-destination': 1,
+  'move-range-wrapper-destination': 2,
   'move-range-wrapper-pair': 2,
   'word-created-nested-row-ins': 1,
   'word-created-nested-row-del': 1,

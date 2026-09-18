@@ -230,3 +230,30 @@ for (const name of ['format-table-property', 'format-grid-only'])
       }
     });
   }
+
+for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+  for (const target of ['moveTo', 'insert'] as const) {
+    test(`${action} orphan ${target} matches Word and undoes atomically`, () => {
+      const editor = mount('move-range-wrapper-destination');
+      try {
+        const before = editor.getReviewItems();
+        expect(before).toHaveLength(2);
+        const item = before.find((i) => i.kind === 'revision' && i.revisionKind === target)!;
+        expect(editor[action](item.key).ok).toBe(true);
+        expect(editor.getReviewItems()).toHaveLength(
+          action === 'acceptReviewItem' && target === 'insert' ? 1 : 0
+        );
+        const after = serializeOoxmlPart(editor.surface!.session.part());
+        expect(after.includes('>Destination<')).toBe(
+          action !== 'rejectReviewItem' || target !== 'insert'
+        );
+        expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+        expect(editor.getReviewItems().map((i) => i.key)).toEqual(before.map((i) => i.key));
+        expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+        expect(serializeOoxmlPart(editor.surface!.session.part())).toBe(after);
+      } finally {
+        editor.destroy();
+      }
+    });
+  }
+}

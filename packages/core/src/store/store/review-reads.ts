@@ -1,5 +1,5 @@
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
-import { ordinaryMoveRanges } from './revision-move-ranges.ts';
+import { ordinaryMoveRanges, ordinaryMoveInsertionSites } from './revision-move-ranges.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
 import { textUnder } from './review-text.ts';
@@ -95,10 +95,8 @@ const interactiveReviewDerivation: ReviewDerivationDependencies = {
 /**
  * Every revision in one story, one card per DECISION.
  *
- * Sites sharing an `(id, author, date)` triple are ONE revision — a tracked row insertion is
- * `w:trPr/w:ins` plus `w:cellIns` on every cell — so they coalesce into one card listing every
- * range it touches. Keying per site would show the reviewer four decisions where there is one,
- * and accepting any of them would make the other three vanish.
+ * Sites sharing an `(id, author, date)` and revision kind coalesce into one decision
+ * containing every canonical site and affected range.
  *
  * Cached by part root except for paragraph-scoped synthetic roots. Results are shared
  * and readonly; part names are checked because ranges embed them.
@@ -144,6 +142,7 @@ function computeRevisionItemsOf(
   if (sites.length === 0) return [];
   const located = dependencies.locations(part);
   const moveRanges = new Map(ordinaryMoveRanges(part.root).map((range) => [range.start.id, range]));
+  const moveInsertions = ordinaryMoveInsertionSites(part.root);
   const hasParagraphMarks = sites.some((site) => site.paragraphMark);
   const previewByNode = new Map<string, { range: ReviewRange; text: string }>();
   const byAddress = new Map<
@@ -186,11 +185,13 @@ function computeRevisionItemsOf(
     const date = wmlAttribute(site.node, 'date');
     const address: RevisionAddress = date === undefined ? { id, author } : { id, author, date };
 
-    const kind: ReviewRevisionKind = site.propertyChange
-      ? 'format'
-      : site.paragraphMark
-        ? 'paragraphMark'
-        : (CONTENT_KINDS[site.node.kind] ?? 'structural');
+    const kind: ReviewRevisionKind = moveInsertions.has(site.node.id)
+      ? 'insert'
+      : site.propertyChange
+        ? 'format'
+        : site.paragraphMark
+          ? 'paragraphMark'
+          : (CONTENT_KINDS[site.node.kind] ?? 'structural');
     // The element name IS the decision for a mark, and it is the only place the direction
     // survives: `w:pPr/w:rPr` holds the revision as a bare element, not as a wrapper kind.
     const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;

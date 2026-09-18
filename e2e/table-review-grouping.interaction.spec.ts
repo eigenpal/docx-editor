@@ -13,6 +13,7 @@ for (const name of [
   'word-created-nested-row-del',
   'format-grid-with-gap',
   'move-range-pair',
+  'move-range-wrapper-destination',
   'word-created-table-width',
   'word-created-row-height',
   'word-created-table-alignment',
@@ -40,7 +41,7 @@ for (const name of [
       const count =
         name === 'nested-two-rows-ins'
           ? 5
-          : name === 'format-grid-with-gap'
+          : ['format-grid-with-gap', 'move-range-wrapper-destination'].includes(name)
             ? 2
             : name === 'move-range-pair'
               ? 4
@@ -93,6 +94,9 @@ for (const name of [
         for (const text of ['Second A', 'Second B', 'Outer', 'Neighbour'])
           expect(xml).toContain(text);
         await expect(page.locator('.docx-pages')).toContainText('Second A');
+      } else if (name === 'move-range-wrapper-destination') {
+        expect(xml).toContain('>Destination<');
+        expect(xml).not.toMatch(/<w:moveTo(?:RangeStart|RangeEnd)?\b/);
       } else if (name === 'move-range-pair') {
         expect(xml.includes('>Moved<')).toBe(action === 'Accept');
         expect(xml).not.toMatch(/<w:move(?:From|To)Range/);

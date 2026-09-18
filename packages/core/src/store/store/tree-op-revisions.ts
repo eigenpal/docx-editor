@@ -792,14 +792,7 @@ export function resolveRevisionOperation(
   });
 }
 
-/**
- * Resolve every site carrying `address` (or every revision in the part, when `address` is
- * absent) in one transaction.
- *
- * Refuses without touching the tree when the revision is absent, or when ANY matched site is a
- * kind this pass does not resolve. A shared revision address is atomic: resolving only its
- * supported sites would falsely report that the whole decision had been applied.
- */
+/** Resolve the selected canonical sites atomically; refuse unsupported sites without mutation. */
 export function resolveRevisions(
   part: OoxmlPart,
   action: RevisionOpAction,
@@ -887,7 +880,11 @@ export function resolveRevisions(
   }
 
   const addWrapper = (node: OoxmlElement): void => {
-    actions.set(node.id, orphanDestinations.has(node.id) ? 'unwrap' : resolutionOf(node, action));
+    actions.set(
+      node.id,
+      movePlan.wrapperActions.get(node.id) ??
+        (orphanDestinations.has(node.id) ? 'unwrap' : resolutionOf(node, action))
+    );
   };
 
   for (const site of matched) {
@@ -953,11 +950,13 @@ export function resolveRevisions(
   );
   if (movesMatched.length > 0) {
     for (const [, range] of namedMoveRanges(scopeRoot)) {
-      if (!range.wrappers.some((wrapper) => actions.has(wrapper.id))) continue;
+      if (
+        range.wrappers.some((wrapper) => movePlan.wrapperActions.has(wrapper.id)) ||
+        !range.wrappers.some((wrapper) => actions.has(wrapper.id))
+      )
+        continue;
       for (const wrapper of range.wrappers) addWrapper(wrapper);
-      // The range markers describe a move that no longer exists once it is resolved. Leaving
-      // them behind would keep an empty named bookmark pair in the file, which Word removes
-      // and which would pair with nothing on the next read.
+      // Legacy paired wrappers consume their range metadata together.
       for (const marker of range.markers) dropMarks.add(marker.id);
     }
   }
