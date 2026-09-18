@@ -479,7 +479,7 @@
       "name": "@docx-editor.dev/nuxt",
       "version": "2.19.0",
       "dependencies": {
-        "@docx-editor.dev/vue": "^2.20.0",
+        "@docx-editor.dev/vue": "workspace:*",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
         "prosemirror-commands": "^1.5.2",
         "prosemirror-dropcursor": "^1.8.2",

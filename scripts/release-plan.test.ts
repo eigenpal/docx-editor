@@ -84,4 +84,8 @@ test('releases public packages without versioning private workspaces', async () 
     expect(manifest.version).toBe(version);
     expect(existsSync(join(directory, dirname(path), 'CHANGELOG.md'))).toBe(false);
   }
+  // Nuxt follows the local Vue package without a versioned range that can drift
+  // when Changesets updates dependencies but leaves private package versions alone.
+  const nuxt = JSON.parse(readFileSync(join(directory, 'packages/nuxt/package.json'), 'utf8'));
+  expect(nuxt.dependencies['@docx-editor.dev/vue']).toBe('workspace:*');
 });
