@@ -84,11 +84,12 @@ export interface ParagraphSpacing {
 export const AUTO_PARAGRAPH_SPACING_PT = 14;
 
 /**
- * Where a paragraph sits, for the two contexts in which Word's auto spacing resolves to 0
+ * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
- * Both come from the HTML model the attribute emulates: a `<li>` and a `<td>` collapse the
- * paragraph margin, a bare `<p>` does not. A caller that says nothing gets the body answer.
+ * This resolves the interior list-item or table-cell value. Body layout restores each
+ * outer list margin in `resolveListAutoSpacing`, where neighboring blocks are available.
+ * A caller that says nothing gets the body answer.
  */
 export interface ParagraphAutoSpacingContext {
   /** The paragraph participates in numbering (`w:numPr`), i.e. it is a list item. */

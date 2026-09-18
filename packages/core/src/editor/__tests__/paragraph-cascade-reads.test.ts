@@ -284,7 +284,7 @@ describe('auto paragraph spacing yields to an explicit write', () => {
     expect(paintedSpacing(editor).before).toBe(14);
   });
 
-  test('inside a list the flag is worth nothing, and the read says so', () => {
+  test('list boundary auto spacing does not change the authored spacing read', () => {
     const numbering =
       `<w:numbering xmlns:w="${W}">` +
       '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>' +
@@ -318,8 +318,8 @@ describe('auto paragraph spacing yields to an explicit write', () => {
       ),
     });
     const editor = createDocxEditor({ container, document: bytes });
-    // The flag is worth nothing inside a list, so the page draws the item flush.
-    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 0 });
+    // A list at section start has no leading auto margin, but keeps its trailing one.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
     // The read answers the MEASUREMENT the cascade states (100 twips), not that resolved
     // gap: resolving it needs list and cell membership, which this lane cannot see without
     // guessing. Documented on `spaceBeforePt`.

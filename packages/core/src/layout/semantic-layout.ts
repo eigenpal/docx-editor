@@ -3,6 +3,7 @@ import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
 import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
+import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 import {
   readParagraphFrame,
@@ -1160,8 +1161,10 @@ function layoutBlocksPass(
       prepassInputsValid && columns.count === 1 && !options.disabledParagraphFrameIds
         ? prepassMemo
         : null;
-    const prepared = sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
-      prepareBlock(block, contentWidth)
+    const prepared = resolveListAutoSpacing(
+      sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
+        prepareBlock(block, contentWidth)
+      )
     );
     const keys = prepared.map((entry) => entry.key);
     const terminalTextTables = terminalTables.terminalTextTableGroup(
@@ -1200,16 +1203,19 @@ function layoutBlocksPass(
     // FLOW keys — what incremental resume compares. The composition, its fold order and
     // the argument for that order live with the folds in `pagination-keeps.ts`, where the
     // order is testable.
-    const flow = composeFlowKeys(paragraphFrameFlowKeys(keys, prepared), {
-      terminalTableGroup: terminalTextTables,
-      contextualSpacingAt: (index) => contextualSpacings[index]!,
-      styleIdAt: (index) => styleIds[index] ?? null,
-      borderGroupKeyAt: (index) => borderGroupKeys[index]!,
-      tocVerdicts,
-      markerTextAt: (index) => markerTexts[index],
-      keepsNextAt: (index) => keepsNext[index]!,
-      skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
-    });
+    const flow = composeFlowKeys(
+      listAutoSpacingFlowKeys(paragraphFrameFlowKeys(keys, prepared), prepared),
+      {
+        terminalTableGroup: terminalTextTables,
+        contextualSpacingAt: (index) => contextualSpacings[index]!,
+        styleIdAt: (index) => styleIds[index] ?? null,
+        borderGroupKeyAt: (index) => borderGroupKeys[index]!,
+        tocVerdicts,
+        markerTextAt: (index) => markerTexts[index],
+        keepsNextAt: (index) => keepsNext[index]!,
+        skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
+      }
+    );
 
     return {
       framePolicy,
@@ -2102,16 +2108,11 @@ function layoutBlocksPass(
     }
 
     const frame = entry.frame;
-    const {
-      paragraph,
-      props,
-      spacing: authoredSpacing,
-      contextualSpacing,
-      styleId,
-      borders,
-      shading,
-      keeps,
-    } = entry;
+    const { paragraph, props, contextualSpacing, styleId, borders, shading, keeps } = entry;
+    // Width-specific preparation owns line inputs; the prepass owns neighbor spacing.
+    const preparedEntry = prepared[index]!;
+    const authoredSpacing =
+      preparedEntry.kind === 'paragraph' ? preparedEntry.spacing : entry.spacing;
     let { indent, alignment, markRunProperties } = entry;
     const rtl = paragraphIsRtl(entry.props);
     let available = entry.available;

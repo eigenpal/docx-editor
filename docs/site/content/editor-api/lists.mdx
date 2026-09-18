@@ -34,6 +34,12 @@ await runtime.run(async (context) => {
 
 A new list starts as an independent bullet list and defines all nine levels. `List.insertParagraph(text, location)` accepts `Start`, `End`, `Before`, and `After`. `Before` and `After` insert inside the list, at its first or last position. Use `Paragraph.insertParagraph()` to create content outside the list. The returned paragraph requires sync before dependent work.
 
+## Paragraph spacing
+
+List items inherit paragraph spacing from document defaults, paragraph styles, and direct formatting. Enter preserves these settings. Automatic spacing stays tight between adjacent items in the same list, including nested levels. The list keeps its outer automatic margins, except before a list at section start.
+
+Explicit spacing still applies between items unless the paragraph enables **Don’t add space between paragraphs of the same style**. Blank paragraphs and line breaks add height independently of these spacing settings.
+
 ## Discover and join existing lists
 
 `ListCollection` exposes `items`, `getFirst()`, and `getById(id)`. Load a list's `id` before using its numeric value. `List.paragraphs` returns all its paragraphs. `List.getLevelParagraphs(level)` returns the paragraphs at one level. Load collection items, then load their text or formatting properties.
