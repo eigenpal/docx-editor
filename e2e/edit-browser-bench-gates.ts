@@ -69,9 +69,12 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
  * retains both phases in one session. The headless settle-bench has one phase.
  */
 export const PINNED_HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
-  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
-  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  // Correcting the inherited paragraph-mark height moves the closing body text
+  // onto page 520. Page 521 becomes an endnote-overflow page, outside body-page
+  // reuse accounting. Total pages stay 521; placed/total/fullPasses stay unchanged.
+  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 2 },
+  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 2 },
+  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 2 },
 };
 
 /**

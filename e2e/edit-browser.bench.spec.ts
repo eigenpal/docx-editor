@@ -215,6 +215,8 @@ test('browser editing latency is measurable and structurally stable', async ({
       true,
       EDIT_BROWSER_PINNED_HUGE_FIXTURE
     );
+    // Keep total pagination explicit: reusedPages excludes appended note-only pages.
+    await expect(page.locator('.docx-page')).toHaveCount(521);
     const pinnedHugeScenarios = [
       { name: '521pp-editing-character', mode: 'edit' as const, text: 'X' },
       { name: '521pp-editing-wrap', mode: 'edit' as const, text: 'word '.repeat(20) },

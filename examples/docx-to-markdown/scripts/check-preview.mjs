@@ -41,7 +41,12 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`http://localhost:${address.port}/`);
-  await page.waitForSelector('#markdown-page-28 .md-page-sheet', { timeout: 60000 });
+  // Verified against Word: the summary table and endnotes finish on page 27.
+  const expectedPages = 27;
+  await page.waitForSelector(`#markdown-page-${expectedPages} .md-page-sheet`, {
+    timeout: 60000,
+  });
+  assert.equal(await page.locator('.md-page-wrap').count(), expectedPages);
 
   async function overflow() {
     return page.locator('.md-page-wrap').evaluateAll((pages) => {
@@ -94,7 +99,8 @@ try {
     for (const [number, fraction] of [
       [2, 0.4],
       [11, 0],
-      [27, 0.5],
+      // Use the penultimate page so the scroll range permits a half-page offset.
+      [expectedPages - 1, 0.5],
     ]) {
       for (const mode of ['Source', 'Preview']) {
         await page.locator('.md-preview-scroll').evaluate(
@@ -207,7 +213,7 @@ try {
       }, number - 1);
     }
     console.log(
-      `${width}px: all 28 pages contain their content; review controls and reading position pass in Preview and Source`
+      `${width}px: all ${expectedPages} pages contain their content; review controls and reading position pass in Preview and Source`
     );
   }
   assert.deepEqual(errors, []);
