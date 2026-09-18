@@ -129,7 +129,7 @@ A decision can contain several XML markers, such as both halves of a replacement
 | --- | --- |
 | `unsupported-revision` | Resolve the unsupported structure in Word. Independent supported changes can still resolve. |
 | `incomplete-group` | Review and select all related decisions together. |
-| `retained-structure` | A row remains to preserve nested table content, as in Word. Other selected text changes may have applied; inspect the remaining decision. |
+| `retained-structure` | A row remains to preserve nested table content. Other selected text changes may have applied; inspect the remaining decision. |
 | `unknown-revision` | Reload the collection; the target no longer exists. |
 
 Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection. A `retained-structure` result is different: supported text changes in the selected row can resolve while its structural marker stays pending to preserve the nested table.
