@@ -166,6 +166,11 @@ test('a native range inside a FORMTEXT result is preserved for Backspace', async
   await delayNativeSelectionReport(page);
   const field = streetField(page);
   const fieldStart = Number(await field.getAttribute('data-start'));
+  const box = await field.boundingBox();
+  if (!box) throw new Error('FORMTEXT result is not painted');
+  // Pointerdown focuses the actual native editing host before the queued-range race.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
   // Deliberately make native selection newer than the model. Native dragging
   // with the editor's pointer handler disabled differs across Chromium platforms;
   // the Selection API establishes the exact race this Backspace test exercises.
@@ -180,6 +185,7 @@ test('a native range inside a FORMTEXT result is preserved for Backspace', async
   expect(before.modelOffset).toBe(PARAGRAPH_TEXT.length);
 
   await page.keyboard.press('Backspace');
+  await page.mouse.up();
 
   await expect(fieldAtStart(page, fieldStart)).toHaveText('St');
   await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(
