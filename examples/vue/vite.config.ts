@@ -100,7 +100,11 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
           },
           {
-            find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
+            find: '@docx-editor.dev/core/collaboration/replication',
+            replacement: path.join(monorepoRoot, 'packages/core/src/collaboration/replication.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|layout|output|store|sync|clients|server)$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
           },
           {

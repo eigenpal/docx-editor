@@ -23,15 +23,21 @@ async function waitForEditor(page: Page): Promise<void> {
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__DOCX_EDITOR_E2E__?.ready());
   await page.waitForSelector('.docx-page');
-  // Let the document fonts settle so the pointer geometry stays fixed during the gesture.
-  await page.waitForTimeout(250);
+  // Wait for actual font readiness rather than an OS-dependent delay.
+  await page.waitForFunction(() => window.__DOCX_EDITOR_E2E__?.fontMeasurer() === 'shaped');
 }
 
 async function placeStaleModelCaretAtParagraphEnd(page: Page): Promise<void> {
-  const paragraph = page.locator('.docx-paragraph-fragment').filter({ hasText: PARAGRAPH_TEXT });
-  const box = await paragraph.locator('.docx-line').last().boundingBox();
-  if (!box) throw new Error('FORMTEXT regression paragraph is not painted');
-  await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  // This is setup, not the pointer gesture under test. Establish the stale caret
+  // explicitly so platform font metrics cannot place it short of the final glyph.
+  await page.evaluate((offset) => {
+    const editor = window.__DOCX_EDITOR_E2E__!.getEditor() as DocxEditorInstance;
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const position = { paragraphId, offset };
+    surface.setSelection({ anchor: position, head: position });
+    document.querySelector<HTMLElement>('.docx-pages')!.focus();
+  }, PARAGRAPH_TEXT.length);
   await expect
     .poll(() =>
       page.evaluate(() => {
