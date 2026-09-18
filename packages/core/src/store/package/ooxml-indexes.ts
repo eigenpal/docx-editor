@@ -19,7 +19,7 @@ import {
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
-import type { RelationshipRecord } from './relationships.ts';
+import { resolveRelationship, type RelationshipRecord } from './relationships.ts';
 
 /** One paragraph in the index: its node id, its story, and its position. */
 export interface ParagraphIndexEntry {
@@ -191,6 +191,20 @@ const STYLES_PART_RE = /\/styles\.xml$/i;
 
 /** The package's style definitions part, if it has one. */
 export function stylesPartOf(pkg: OoxmlPackage): OoxmlPart | undefined {
+  const relationship = pkg.relationships
+    .get(pkg.mainDocumentPart)
+    ?.find(
+      (record) =>
+        record.type === 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
+    );
+  if (relationship) {
+    const resolved = resolveRelationship(relationship);
+    if (resolved.mode === 'Internal' && resolved.target.ok) {
+      const part = pkg.parts.get(resolved.target.partName);
+      if (part) return part;
+    }
+  }
+  // Retain support for older packages that omit the styles relationship.
   return [...pkg.parts.values()].find((part) => STYLES_PART_RE.test(part.name));
 }
 

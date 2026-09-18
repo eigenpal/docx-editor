@@ -344,6 +344,40 @@ describe('Enter continues a single blank separator between list items', () => {
     ).toHaveLength(1);
   });
 
+  test('creates the built-in in a relocated styles part and preserves undo and reload', async () => {
+    const entries = unzipSync(docx(item('First') + paragraph('') + item('Second'), NORMAL));
+    entries['custom/formatting.xml'] = entries['word/styles.xml']!;
+    delete entries['word/styles.xml'];
+    entries['[Content_Types].xml'] = strToU8(
+      new TextDecoder()
+        .decode(entries['[Content_Types].xml'])
+        .replace('/word/styles.xml', '/custom/formatting.xml')
+    );
+    entries['word/_rels/document.xml.rels'] = strToU8(
+      new TextDecoder()
+        .decode(entries['word/_rels/document.xml.rels'])
+        .replace('Target="styles.xml"', 'Target="../custom/formatting.xml"')
+    );
+    const editor = mount(zipSync(entries));
+    enter(editor, 2, 6);
+    expect(texts(editor)).toHaveLength(5);
+    const surface = editor.surface!;
+    expect(
+      surface.session.documentStyles().some((style) => style.styleId === 'ListParagraph')
+    ).toBe(true);
+    const saved = new Uint8Array(await editor.save());
+    expect(unzipSync(saved)['word/styles.xml']).toBeUndefined();
+    expect(markers(mount(saved))).toEqual(['1.', null, '2.', null, '3.']);
+    surface.undo();
+    expect(texts(editor)).toEqual(['First', '', 'Second']);
+    expect(
+      surface.session.documentStyles().some((style) => style.styleId === 'ListParagraph')
+    ).toBe(false);
+    surface.redo();
+    surface.type('New');
+    expect(texts(editor)[4]).toBe('New');
+  });
+
   test('creates a complete styles part when the document has none', async () => {
     const entries = unzipSync(docx(item('First') + paragraph('') + item('Second')));
     delete entries['word/styles.xml'];

@@ -46,6 +46,8 @@ The separator uses the document's **List Paragraph** style and the direct typing
 
 Automatic spacing stays tight between adjacent items in the same list, including nested levels. The list keeps its outer automatic margins, except before a list at section start. Explicit spacing still applies between items unless the paragraph enables **Don’t add space between paragraphs of the same style**. Blank paragraphs and line breaks add height independently of these settings.
 
+The editor follows the document relationship when style definitions use a different package filename. Line-unit paragraph margins (`w:beforeLines` and `w:afterLines`) are not yet resolved. Numbering-level paragraph properties other than indentation also need further compatibility work. These limits apply independently of Enter preserving the authored style references.
+
 ## Discover and join existing lists
 
 `ListCollection` exposes `items`, `getFirst()`, and `getById(id)`. Load a list's `id` before using its numeric value. `List.paragraphs` returns all its paragraphs. `List.getLevelParagraphs(level)` returns the paragraphs at one level. Load collection items, then load their text or formatting properties.

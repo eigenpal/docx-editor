@@ -3,11 +3,12 @@
   "fields": [],
   "before": "Enter inserted one paragraph break and omitted established blank separators between list items.",
   "after": "Enter uses existing paragraph, style-resource, and revision operations to preserve list separators, following styles, and undo/redo selection.",
-  "reason": "Styles and any missing styles part are created through journaled package primitives. Existing canonical nodes and protocol rules are unchanged. Regression coverage replays style creation into another package and verifies undo/redo.",
+  "reason": "Styles and any missing styles part are created through journaled package primitives. Existing canonical nodes and protocol rules are unchanged. Regression coverage replays style creation into another package and verifies undo/redo. Style-part lookup follows the existing OPC relationship without changing package or journal formats.",
   "tests": [
     "packages/core/src/editor/__tests__/list-separator-enter.test.ts",
     "packages/core/src/layout/__tests__/list-auto-spacing.test.ts",
-    "packages/core/src/editor/__tests__/next-paragraph-style.test.ts"
+    "packages/core/src/editor/__tests__/next-paragraph-style.test.ts",
+    "packages/core/src/store/__tests__/ooxml-indexes-digest.test.ts"
   ],
   "changeset": "tidy-list-margins",
   "migration": null
