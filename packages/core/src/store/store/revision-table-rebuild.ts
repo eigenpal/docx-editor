@@ -132,11 +132,14 @@ export function restoredCellRows(part: OoxmlPart, sites: readonly RevisionSite[]
     if (node?.kind === 'tableRow') rows.add(node.id);
   }
   const selected = new Set(sites.map((s) => s.node.id));
-  for (const id of [...rows]) {
+  const tables = new Map<string, OoxmlElement>();
+  for (const id of rows) {
     let table = parentNodeOf(part, id);
     while (table && table.kind !== 'table') table = parentNodeOf(part, table.id);
-    if (table && implicitGridRows(table, selected).size) rows.add(table.id);
+    if (table) tables.set(table.id, table);
   }
+  for (const table of tables.values())
+    if (implicitGridRows(table, selected).size) rows.add(table.id);
   return [...rows];
 }
 
