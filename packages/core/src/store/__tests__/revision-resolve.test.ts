@@ -555,7 +555,7 @@ describe('a run of removed paragraph marks', () => {
     expect(out).not.toContain('before after');
   });
 
-  test('a table is a boundary: the content stays in front of it', () => {
+  test('a removed mark before a table merges into its first cell, as in Word', () => {
     // `followed` looked at any later paragraph, so the text merged into the one AFTER the
     // table and arrived behind it — in a place the reader never put it.
     const table =
@@ -565,7 +565,9 @@ describe('a run of removed paragraph marks', () => {
       '</w:tc></w:tr></w:tbl>';
     const part = load(delMark('before ') + table + `<w:p>${run('after')}</w:p>`);
     const out = xml(apply(part, { op: 'acceptAllRevisions' }));
-    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('<w:tbl'));
+    expect(out.indexOf('before ')).toBeGreaterThan(out.indexOf('<w:tc>'));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('cell'));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('</w:tc>'));
     expect(out).not.toContain('before after');
   });
 });

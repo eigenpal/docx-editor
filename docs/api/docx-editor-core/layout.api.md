@@ -3110,6 +3110,7 @@ export interface ReviewModelInput {
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
     readonly reportCustomNodeDiagnostic?: ((diagnostic: unknown) => void) | undefined;
     readonly storyPart: OoxmlPart;
+    readonly stylesPart?: OoxmlPart | undefined;
 }
 
 // @public
@@ -3180,6 +3181,7 @@ export interface ReviewRevisionItem {
     readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     readonly text: string;
 }
 

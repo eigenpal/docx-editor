@@ -38,3 +38,26 @@ for (const action of ['accept', 'reject'] as const) {
     expect(serializeOoxmlPart(bob.store.bodyStore().part)).toBe(after);
   });
 }
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`${action} paragraph-table joins and numbering history replay with undo/redo`, async () => {
+    const mark = action === 'accept' ? 'del' : 'ins';
+    const body = `<w:p><w:pPr><w:rPr><w:${mark} w:id="1" w:author="Ada"/></w:rPr></w:pPr><w:r><w:t>Before</w:t></w:r></w:p><w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:pPr><w:numPr><w:numId w:val="1"/><w:ins w:id="2" w:author="Ada"/></w:numPr></w:pPr><w:r><w:t>List</w:t></w:r></w:p>`;
+    const { alice, bob } = await peers.pair(zipDocument(body));
+    const before = serializeOoxmlPart(alice.store.bodyStore().part);
+    const batch = planRevisionBatch(alice.store.bodyStore().part, action);
+    expect(batch.result.skipped).toEqual([]);
+    peers.apply(alice, batch.ops);
+    peers.expectConverged(alice, bob);
+    const after = serializeOoxmlPart(bob.store.bodyStore().part);
+    expect(after.indexOf('<w:tc>')).toBeLessThan(after.indexOf('Before'));
+    expect(after).toContain('<w:numId w:val="1"/>');
+    expect(revisionItemsOf(bob.store.bodyStore().part)).toHaveLength(0);
+    expect(alice.room.session.undo()).toBe(true);
+    peers.expectConverged(alice, bob);
+    expect(serializeOoxmlPart(bob.store.bodyStore().part)).toBe(before);
+    expect(alice.room.session.redo()).toBe(true);
+    peers.expectConverged(alice, bob);
+    expect(serializeOoxmlPart(bob.store.bodyStore().part)).toBe(after);
+  });
+}

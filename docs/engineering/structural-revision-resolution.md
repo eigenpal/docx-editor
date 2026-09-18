@@ -23,9 +23,9 @@ Removing the last cell removes its row; removing the last row removes its table.
 
 ## Selection, malformed records, and protection
 
-Bulk planning groups dependent decisions before applying one operation. Excluded or unsupported descendants cannot disappear through removal of a cell, row, table, or merged continuation. Changes to a neighbouring cell's geometry depend on its pending property decisions. Merge heads and continuations are grouped, including across authors. Duplicate live records and invalid merge states remain visible and unresolved. Rejecting a missing required property snapshot refuses before mutation; an empty section snapshot is valid and restores defaults.
+Bulk planning groups dependent decisions before applying one operation. Excluded or unsupported descendants cannot disappear through removal of a cell, row, table, or merged continuation. Changes to a neighbouring cell's geometry depend on its pending property decisions. Merge heads and continuations are grouped, including across authors. Duplicate live records and invalid merge states remain visible and unresolved. Rejecting a missing required property snapshot refuses before mutation; an empty section snapshot is valid and retains current section fields. Section rejection restores recorded fields while retaining attributes and properties absent from the snapshot.
 
-The operation path enforces content-control locks, including controls inside discarded content and cells affected by geometry changes. A failed guard leaves the document unchanged. Existing unsupported numbering-reference revisions remain unsupported.
+The operation path enforces content-control locks, including controls inside discarded content and cells affected by geometry changes. A failed guard leaves the document unchanged. A valid numbering-reference insertion (`numPr/ins`) resolves by removing its history marker while retaining the current numbering on both accept and reject, as in Word. Malformed numbering records remain unresolved.
 
 Named move destinations with no matching source are retained on accept and reject, matching Word's handling of these imported records. Their paragraph marks remain separate; valid paired moves retain their existing behavior.
 
@@ -35,4 +35,10 @@ Tests cover both actions, partial selections, independent authors, duplicate/mal
 
 Local Microsoft Word comparisons use synthetic row, cell, grid, merge, and property examples. Compare text, table topology, cell widths/spans, property values, and rendered results rather than ZIP bytes: Word renumbers relationship IDs, materializes defaults, and normalizes redundant XML during save. Customer documents are used only for private local verification and are not committed as fixtures.
 
-Document-wide Word parity also requires shared-style revision resolution. The existing review commands operate on story parts and do not resolve tracked properties in `styles.xml`; those records can still produce a formatting revision bar after all story decisions are resolved. This separate package-level gap is tracked in [#917](https://github.com/eigenpal/docx-editor/issues/917).
+## Shared styles
+
+The editor's document-wide review command includes tracked properties in `styles.xml`, including paragraph, character, table, and conditional table style definitions. These decisions appear in the review queue without a paragraph range and may also be resolved individually. Explicit selections and author filters retain excluded style decisions. Unsupported authorless records remain visible and unresolved.
+
+Style and story changes commit in one protected package transaction, with one undo unit and canonical collaboration journals. Changing styles publishes global invalidation so review counts and inherited formatting refresh immediately, including after undo/redo. Story-scoped tree operations and the headless API's documented story revision collections continue to leave shared styles unchanged.
+
+Local Word verification of acceptance includes pixel comparisons of every rendered page; rejection is checked against the recorded property values. Word may still normalize defaults, relationship IDs, and redundant properties when saving, so ZIP-byte equality is not a compatibility criterion.

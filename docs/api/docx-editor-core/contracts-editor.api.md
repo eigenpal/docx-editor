@@ -606,7 +606,9 @@ export interface Editor {
     setCommentResolved(key: string, resolved: boolean): ExecResult;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
+        readonly formattingKinds?: readonly string[];
+    }): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     setZoom(zoom: number): ExecResult;
@@ -1718,6 +1720,7 @@ export interface ReviewRevisionItem {
     readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     readonly text: string;
 }
 

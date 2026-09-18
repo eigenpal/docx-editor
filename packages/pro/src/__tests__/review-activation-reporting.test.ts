@@ -182,3 +182,28 @@ describe('activation takes an alignment', () => {
     editor.destroy();
   });
 });
+
+test('format-kind exclusions leave structural formatting decisions activatable', () => {
+  const editor = mount(
+    FORMAT_AND_INSERT +
+      '<w:tbl><w:tblPr><w:tblPrChange w:id="9" w:author="Ada"><w:tblPr/></w:tblPrChange></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+  );
+  try {
+    editor.setReviewActivationExclusions(['format'], {
+      formattingKinds: ['rPrChange', 'pPrChange'],
+    });
+    const items = editor.getReviewItems();
+    const format = (kind: string) =>
+      items.find((i) => i.item.kind === 'revision' && i.item.formattingKind === kind)!;
+    expect(format('rPrChange').activatable).toBe(false);
+    expect(format('tblPrChange').activatable).toBe(true);
+    expect(editor.setActiveReviewItem(format('tblPrChange').key).ok).toBe(true);
+    expect(editor.surface!.activeReviewKey()).toBe(format('tblPrChange').key);
+    editor.setReviewActivationExclusions(['format']);
+    expect(
+      editor.getReviewItems().find((i) => i.key === format('tblPrChange').key)!.activatable
+    ).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});

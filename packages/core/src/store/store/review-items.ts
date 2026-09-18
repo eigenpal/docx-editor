@@ -86,6 +86,15 @@ export interface ReviewRevisionItem {
   readonly revisionKind: ReviewRevisionKind;
   /** OOXML property-change element, used to resolve independently numbered formatting kinds. */
   readonly formattingKind?: string;
+  /** Distinct structural operations covered by this decision, in document order. */
+  readonly structuralChanges?: readonly (
+    | 'rowInsert'
+    | 'rowDelete'
+    | 'cellInsert'
+    | 'cellDelete'
+    | 'cellMerge'
+    | 'numberingInsert'
+  )[];
   /** Changed direct formatting values, ready for localized review summaries. */
   readonly formattingChanges?: readonly {
     readonly property:
@@ -269,6 +278,8 @@ export interface ReviewModelInput {
    * queue that only walked the body silently hid it from the rail AND from Accept All.
    */
   readonly furnitureParts?: readonly OoxmlPart[] | undefined;
+  /** Shared style definitions. Their revisions have no paragraph range. */
+  readonly stylesPart?: OoxmlPart | undefined;
   /** `word/comments.xml`, absent when the package has none. */
   readonly commentsPart?: OoxmlPart | undefined;
   /** `word/commentsExtended.xml`, absent when the package has none. */

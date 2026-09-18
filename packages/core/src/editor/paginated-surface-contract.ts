@@ -718,7 +718,8 @@ export interface PaginatedSurface {
    * band and the visible cards stay one answer.
    */
   setReviewActivationExclusions(
-    kinds: readonly import('@docx-editor.dev/core/store').ReviewRevisionKind[] | null
+    kinds: readonly import('@docx-editor.dev/core/store').ReviewRevisionKind[] | null,
+    options?: { readonly formattingKinds?: readonly string[] }
   ): void;
   /**
    * `bookmarkName -> position` over the current revision, for resolving an internal link.

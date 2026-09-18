@@ -642,7 +642,7 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('default rail hides structural cards', async () => {
+  test('default rail shows structural cards', async () => {
     const structural = docx(
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
         '<w:tr><w:trPr><w:ins w:id="1" w:author="Ada"/></w:trPr>' +
@@ -652,7 +652,17 @@ describe('DocxEditorReview (Vue)', () => {
     try {
       await flush();
       const cards = [...mounted.container.querySelectorAll('[data-testid="review-card"]')];
-      expect(cards.every((card) => card.getAttribute('data-kind') !== 'structural')).toBe(true);
+      expect(cards.some((card) => card.getAttribute('data-kind') === 'structural')).toBe(true);
+      for (const action of ['accept', 'reject']) {
+        const card = mounted.container.querySelector('[data-kind="structural"]')!;
+        expect(card.textContent).toContain('Inserted table row');
+        (card.querySelector(`[data-testid="review-${action}"]`) as HTMLElement).click();
+        await flush();
+        expect(mounted.container.querySelector('[data-kind="structural"]')).toBeNull();
+        expect(mounted.editor().exec({ type: 'undo' }).ok).toBe(true);
+        await flush();
+        expect(mounted.container.querySelector('[data-kind="structural"]')).not.toBeNull();
+      }
     } finally {
       mounted.unmount();
     }
@@ -666,7 +676,7 @@ describe('DocxEditorReview (Vue)', () => {
         '<w:tr><w:trPr><w:ins w:id="1" w:author="Grace"/></w:trPr>' +
         '<w:tc><w:p><w:r><w:t>second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
     );
-    const mounted = mountReview(structural);
+    const mounted = mountReview(structural, { structural: false });
     try {
       await flush();
       await waitFor(
@@ -696,9 +706,16 @@ describe('DocxEditorReview (Vue)', () => {
       expect(
         mounted.container.querySelector('[data-testid="review-rail"]')?.getAttribute('data-count')
       ).toBe('1');
-      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
-
-      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      // Formatting stays activatable for both balloons and fallback sidebar cards.
+      // Start from the text insertion so navigation is independent of the initial caret.
+      const insertion = mounted
+        .editor()
+        .getReviewItems()
+        .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
+      mounted.editor().setActiveReviewItem(insertion.key);
+      await flush();
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]') === null).toBe(true);
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
       await flush();
       await waitFor(
         () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
@@ -963,4 +980,21 @@ describe('review stable ids', () => {
     app.unmount();
     container.remove();
   });
+});
+
+test('Vue exposes table formatting without a painted balloon', async () => {
+  const bytes = docx(
+    '<w:tbl><w:tblPr><w:jc w:val="right"/><w:tblPrChange w:id="10" w:author="Ada"><w:tblPr><w:jc w:val="left"/></w:tblPr></w:tblPrChange></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+  );
+  const mounted = mountReview(bytes);
+  try {
+    await flush();
+    const card = mounted.container.querySelector('[data-kind="format"]');
+    expect(card?.textContent).toContain('Alignment: Right');
+    (card!.querySelector('[data-testid="review-reject"]') as HTMLElement).click();
+    await flush();
+    expect(mounted.container.querySelector('[data-testid="review-card"]')).toBeNull();
+  } finally {
+    mounted.unmount();
+  }
 });

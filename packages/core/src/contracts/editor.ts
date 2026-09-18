@@ -650,8 +650,13 @@ export interface Editor {
    * A host rail that hides some kinds (structural and format cards, typically) tells the
    * engine here, so a click on tracked text cannot activate a card the rail does not
    * render — the band would light and nothing on screen would answer it.
+   * `formattingKinds` limits a format exclusion to those OOXML property-change names,
+   * allowing other formatting decisions to retain sidebar activation.
    */
-  setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+  setReviewActivationExclusions(
+    kinds: readonly ReviewRevisionKind[] | null,
+    options?: { readonly formattingKinds?: readonly string[] }
+  ): void;
 
   /**
    * Accept or reject the revision behind a card.

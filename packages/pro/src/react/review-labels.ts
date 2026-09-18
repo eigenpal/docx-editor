@@ -73,6 +73,11 @@ export function revisionItemLabel(
   item: ReviewRevisionItem,
   translate: (key: TranslationKey) => string
 ): string {
+  if (item.revisionKind === 'structural' && item.structuralChanges?.length) {
+    return item.structuralChanges
+      .map((kind) => translate(`revisions.structuralDetails.${kind}`))
+      .join(', ');
+  }
   const label = `${translate(revisionItemLabelKey(item))}${revisionItemCountSuffix(item)}`;
   if (item.revisionKind !== 'format') return label;
   const languages = (item.formattingLanguages ?? []).map((code) => {

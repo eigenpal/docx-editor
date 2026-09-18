@@ -3695,6 +3695,7 @@ export function mountPaginatedSurface(
    * mirrored here so the band and the visible cards stay one answer. Null means none.
    */
   let reviewActivationExclusions: ReadonlySet<ReviewRevisionKind> | null = null;
+  let reviewActivationFormattingKinds: ReadonlySet<string> | undefined;
 
   /**
    * The item a host opened BY KEY, with the selection that opening it installed.
@@ -3744,6 +3745,9 @@ export function mountPaginatedSurface(
       found.kind === 'revision' &&
       reviewActivationExclusions !== null &&
       reviewActivationExclusions.has(found.revisionKind) &&
+      (found.revisionKind !== 'format' ||
+        reviewActivationFormattingKinds === undefined ||
+        reviewActivationFormattingKinds.has(found.formattingKind ?? '')) &&
       !allowExcludedReviewPin
     ) {
       return null;
@@ -3776,7 +3780,10 @@ export function mountPaginatedSurface(
         !(
           item.kind === 'revision' &&
           reviewActivationExclusions !== null &&
-          reviewActivationExclusions.has(item.revisionKind)
+          reviewActivationExclusions.has(item.revisionKind) &&
+          (item.revisionKind !== 'format' ||
+            reviewActivationFormattingKinds === undefined ||
+            reviewActivationFormattingKinds.has(item.formattingKind ?? ''))
         )
     );
     const found = covering[0];
@@ -5309,7 +5316,10 @@ export function mountPaginatedSurface(
       renderRemoteSelections();
     },
 
-    setReviewActivationExclusions(kinds) {
+    setReviewActivationExclusions(kinds, exclusionsOptions) {
+      reviewActivationFormattingKinds = exclusionsOptions?.formattingKinds
+        ? new Set(exclusionsOptions.formattingKinds)
+        : undefined;
       reviewActivationExclusions = kinds === null ? null : new Set(kinds);
       // The active answer may have just changed with no caret move: repaint the bands and
       // tell the host, exactly as dismissing does.

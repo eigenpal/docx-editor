@@ -592,6 +592,14 @@
       "start": null,
       "strike": null,
       "underline": null
+    },
+    "structuralDetails": {
+      "cellDelete": null,
+      "cellInsert": null,
+      "cellMerge": null,
+      "numberingInsert": null,
+      "rowDelete": null,
+      "rowInsert": null
     }
   },
   "toc": {

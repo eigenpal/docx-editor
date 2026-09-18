@@ -4,14 +4,10 @@
 // out a ProseMirror projection, accept an edited doc, save — over the canonical tree
 // instead of a semantic model plus a byte-range preservation snapshot.
 //
-// Most of what the legacy session exposes exists to express the SECOND model's limits:
-// `readOnlyBlockIds`, `readOnlyRegions`, `structuralMutationAllowed` and the
-// fully-captured-slice rule are all answers to "can this paragraph's original bytes be
-// patched?". On the tree that question does not arise. A paragraph is editable because it
-// is a paragraph; unknown content survives because it is in the tree; so those fields
-// collapse to a single honest statement of what the part contains.
+// Paragraphs are edited through the canonical tree; unknown content remains preserved there.
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import type { Node as PMNode } from 'prosemirror-model';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
@@ -1095,6 +1091,7 @@ export function openTreeSession(
             items = derive.collectReviewItems({
               storyPart: store.part,
               furnitureParts,
+              stylesPart: stylesPartOf(pkg),
               commentsPart,
               commentsExtendedPart,
               customNodePayloads: customNodePayloadsAcrossStories(),
@@ -1105,6 +1102,7 @@ export function openTreeSession(
           items = derive.collectReviewItems({
             storyPart: store.part,
             furnitureParts,
+            stylesPart: stylesPartOf(pkg),
             commentsPart,
             commentsExtendedPart,
             // Resolved HERE because a payload lives in a customXml data part: the derivation
@@ -1137,7 +1135,12 @@ export function openTreeSession(
         // moved only `packageRevision`, leaving a stale answer cached behind it.
         const revision = packageStore.packageRevision;
         if (!reviewContentCache || reviewContentCache.revision !== revision) {
-          const stories = [bodyStore().part, ...furnitureAndNoteParts()];
+          const styles = stylesPartOf(currentPackage());
+          const stories = [
+            bodyStore().part,
+            ...furnitureAndNoteParts(),
+            ...(styles ? [styles] : []),
+          ];
           reviewContentCache = {
             revision,
             present: stories.some(

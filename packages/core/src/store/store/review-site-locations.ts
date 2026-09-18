@@ -88,12 +88,8 @@ function locateSitesWithPolicy(
       for (const [markerId, location] of entries) located.set(markerId, location);
       return;
     }
-    if (node.kind === 'tableRow') {
-      // Row-local by the same argument as the paragraph memo: the markers and the first
-      // paragraph that anchors them all live inside the row subtree. A nested row's
-      // markers are recorded by the OUTER row's walk too, anchored to the outer row's
-      // first paragraph — and then overwritten when the walk below reaches the nested row
-      // itself, whose own anchor wins. The per-row entries replay in that same order.
+    if (node.kind === 'table' || node.kind === 'tableRow' || node.kind === 'tableCell') {
+      // Anchor each property's decision in its own table, row, or cell subtree.
       let entries = retainAcrossReads ? rowMarkerAnchorsCache.get(node) : undefined;
       if (!entries) {
         entries = computeRowMarkerAnchors(node);
@@ -119,7 +115,7 @@ function collectRowAnchorEntries(
   retainAcrossReads: boolean
 ): void {
   if (node.kind === 'textValue' || depth > 64) return;
-  if (node.kind === 'tableRow') {
+  if (node.kind === 'table' || node.kind === 'tableRow' || node.kind === 'tableCell') {
     let entries = retainAcrossReads ? rowMarkerAnchorsCache.get(node) : undefined;
     if (!entries) {
       entries = computeRowMarkerAnchors(node);
@@ -132,7 +128,7 @@ function collectRowAnchorEntries(
   }
 }
 
-/** Tracked row/cell marker anchors of one row subtree, memoized on the immutable row. */
+/** Structural property anchors of one table, row, or cell, memoized on the immutable row. */
 function computeRowMarkerAnchors(row: OoxmlNode): readonly (readonly [string, SiteLocation])[] {
   let paragraph: OoxmlParagraphNode | null = null;
   const firstParagraph = (candidate: OoxmlNode, nestedDepth: number): void => {
@@ -151,24 +147,27 @@ function computeRowMarkerAnchors(row: OoxmlNode): readonly (readonly [string, Si
     end: 0,
   };
   const entries: (readonly [string, SiteLocation])[] = [];
-  const placeMarkers = (
-    candidate: OoxmlNode,
-    parentName: string | undefined,
-    nestedDepth: number
-  ): void => {
-    if (candidate.kind === 'textValue' || nestedDepth > 64) return;
-    if (candidate.kind === 'paragraph') return;
-    const rowMarker =
-      parentName === 'trPr' && (candidate.localName === 'ins' || candidate.localName === 'del');
-    const cellMarker =
-      parentName === 'tcPr' &&
-      (candidate.localName === 'cellIns' || candidate.localName === 'cellDel');
-    if (rowMarker || cellMarker) entries.push([candidate.id, anchor]);
-    for (const child of candidate.children) {
-      placeMarkers(child, candidate.localName, nestedDepth + 1);
+  // Inspect only this container's properties. Descendant cells/rows receive their own
+  // anchors, so a change to the second cell never selects the first cell by accident.
+  if (row.kind === 'textValue') return entries;
+  for (const properties of row.children) {
+    if (
+      properties.kind === 'textValue' ||
+      !['tblPr', 'tblGrid', 'tblPrEx', 'trPr', 'tcPr'].includes(properties.localName)
+    )
+      continue;
+    for (const marker of properties.children) {
+      if (marker.kind === 'textValue') continue;
+      const expected =
+        marker.localName === `${properties.localName}Change` ||
+        (properties.localName === 'trPr' && ['ins', 'del'].includes(marker.localName)) ||
+        (properties.localName === 'tcPr' &&
+          ['cellIns', 'cellDel', 'cellMerge'].includes(marker.localName));
+      if (expected) {
+        entries.push([marker.id, anchor]);
+      }
     }
-  };
-  placeMarkers(row, undefined, 0);
+  }
   return entries;
 }
 
@@ -186,7 +185,7 @@ const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteL
  */
 const locatedSitesCache = createRecentRootCache<Map<string, SiteLocation>>(8);
 
-/** Marker anchors per immutable table row. */
+/** Marker anchors per immutable table, row, or cell. */
 const rowMarkerAnchorsCache = new WeakMap<
   OoxmlNode,
   readonly (readonly [string, SiteLocation])[]
@@ -214,6 +213,12 @@ function locateInParagraph(
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
     const span = offsets.spanOf(node);
+    if (node.kind === 'fldSimple' && span) {
+      // The field result is one atomic model span. Its nested revision wrappers must
+      // use that same span rather than disappear from sidebar placement/navigation.
+      place(node, span.start, span.end, depth);
+      return;
+    }
     if (node.kind === 'run') {
       if (!span) return;
       located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });

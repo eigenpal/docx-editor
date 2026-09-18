@@ -60,6 +60,8 @@ export type TreeApplyOptions = Pick<
 > & {
   /** Package resources committed in the same transaction as the tree operations. */
   readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+  /** Canonical operations on related package parts, committed in the same undo unit. */
+  readonly partOps?: readonly { readonly partName: string; readonly ops: readonly TreeDocOp[] }[];
 };
 
 /**

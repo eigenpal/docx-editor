@@ -1,3 +1,4 @@
+import { structuralChangeOf } from './review-structural-details.ts';
 import { textUnder } from './review-text.ts';
 export { commentBodyText, commentInitials } from './review-text.ts';
 // The review queue: every pending decision in the document, derived from the TREE.
@@ -7,13 +8,7 @@ export { commentBodyText, commentInitials } from './review-text.ts';
 // by half the moment a reader switches view, and the changes that vanished become unreachable
 // from the surface that is supposed to resolve them. The queue is a property of the document.
 //
-// SO IT IS DERIVED IN THE STORE LANE, where every lane can reach it. The review rail asks this
-// question to draw cards, and an automation host asks it to answer "what comments does this
-// document hold" to a script; a lane that could not import the derivation would have written a
-// second one, and two derivations of a reviewer's queue disagree eventually — a comment listed
-// on screen and missing from the object model, or a change the pane offers to accept and the
-// script cannot find. Layout re-exports what is here and adds only GEOMETRY: where a card sits
-// beside the page, which is the one thing the tree cannot answer.
+// Store derivation keeps the sidebar and automation queue consistent. Layout adds geometry.
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
@@ -165,6 +160,7 @@ function computeRevisionItemsOf(
       author: string;
       date?: string;
       text: string;
+      structuralChanges?: NonNullable<ReviewRevisionItem['structuralChanges']>[number][];
       formattingLanguages?: string[];
       formattingChanges?: ReviewFormattingChange[];
       /** Kept apart from `text`: a replacement needs both halves to word its card. */
@@ -178,8 +174,8 @@ function computeRevisionItemsOf(
   >();
 
   for (const site of sites) {
-    const id = wmlAttribute(site.node, 'id');
-    if (id === undefined) continue;
+    const sourceId = wmlAttribute(site.node, 'id');
+    const id = sourceId ?? `missing-${site.node.id}`;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it
     // anyway. Skipping those made the revision invisible in the pane AND invisible to
     // Accept All, which then reported success over a document that still held tracked
@@ -199,6 +195,7 @@ function computeRevisionItemsOf(
     // survives: `w:pPr/w:rPr` holds the revision as a bare element, not as a wrapper kind.
     const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;
 
+    const structuralChange = kind === 'structural' ? structuralChangeOf(site) : undefined;
     const where = located.get(site.node.id);
     const range: ReviewRange | null = where
       ? {
@@ -230,6 +227,9 @@ function computeRevisionItemsOf(
     const existing = byAddress.get(key);
     if (existing) {
       existing.siteNodeIds.push(site.node.id);
+      if (structuralChange && !existing.structuralChanges?.includes(structuralChange)) {
+        (existing.structuralChanges ??= []).push(structuralChange);
+      }
       if (site.propertyChange) {
         existing.formattingLanguages = [
           ...new Set([...(existing.formattingLanguages ?? []), ...changedLanguages(site)]),
@@ -284,6 +284,7 @@ function computeRevisionItemsOf(
     byAddress.set(key, {
       address,
       localName: site.node.localName,
+      ...(structuralChange ? { structuralChanges: [structuralChange] } : {}),
       ...(site.propertyChange
         ? {
             formattingLanguages: changedLanguages(site),
@@ -302,9 +303,8 @@ function computeRevisionItemsOf(
       ranges: range ? [range] : [],
       siteNodeIds: [site.node.id],
       nesting: site.nesting,
-      // A format or paragraph-mark change is resolvable; the structural kinds are not, and
-      // nor is one with no author to address it by.
-      readOnly: site.refused || authorless,
+      // The resolver decides support; unaddressable records remain visible but read-only.
+      readOnly: site.refused || authorless || sourceId === undefined,
     });
   }
 
@@ -313,16 +313,15 @@ function computeRevisionItemsOf(
       registerRevisionSiteNodeIds(
         {
           kind: 'revision' as const,
-          // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
-          // and a header `w:ins` numbered 1 by the same author on the same date produced one
-          // id for two decisions: the rail's `byId` map kept whichever came last, so one card
-          // was unreachable, its replies were attached to the other, and React saw two
-          // children under one key.
+          // Include the part: body/header revisions can share id, author, and date.
           id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}`,
           address: entry.address,
           addresses: [entry.address],
           revisionKind: entry.revisionKind,
           ...(entry.revisionKind === 'format' ? { formattingKind: entry.localName } : {}),
+          ...(entry.structuralChanges?.length
+            ? { structuralChanges: entry.structuralChanges }
+            : {}),
           ...(entry.formattingChanges?.length
             ? { formattingChanges: entry.formattingChanges }
             : {}),
@@ -804,7 +803,10 @@ export function collectReviewItemsWith(
   // or the same shared header under two sections — cannot double every card in it.
   const parts: OoxmlPart[] = [input.storyPart];
   const seen = new Set<string>([input.storyPart.name]);
-  for (const part of input.furnitureParts ?? []) {
+  for (const part of [
+    ...(input.furnitureParts ?? []),
+    ...(input.stylesPart ? [input.stylesPart] : []),
+  ]) {
     if (seen.has(part.name)) continue;
     seen.add(part.name);
     parts.push(part);
