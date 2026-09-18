@@ -4,6 +4,7 @@ import {
   planRevisionBatch,
   readOoxmlPart,
   revisionItemsOf,
+  reviewItemKey,
   serializeOoxmlPart,
 } from '../index.ts';
 import {
@@ -64,5 +65,51 @@ for (const [name, action] of [
     if (!result.ok) throw Error(result.reason);
     expect(revisionItemsOf(result.part)).toHaveLength(1);
     expect(serializeOoxmlPart(result.part).match(/<w:tbl\b/g)).toHaveLength(2);
+  });
+}
+
+test('custom XML cell wrappers retain an existing nested table', () => {
+  const fixture = reviewTableGroupingCases.find((c) => c.name === 'nested-plain-ins')!;
+  let xml = reviewTableGroupingParts(fixture)['word/document.xml']!;
+  xml = xml.replace('</w:trPr><w:tc>', '</w:trPr><w:customXml w:element="cells"><w:tc>');
+  const end = xml.lastIndexOf('</w:tr>');
+  xml = xml.slice(0, end) + '</w:customXml>' + xml.slice(end);
+  const read = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'application/xml' });
+  if (!read.ok) throw Error(read.reason);
+  let part = read.part;
+  const plan = planRevisionBatch(part, 'reject');
+  expect(plan.result.remaining).toBe(1);
+  expect(plan.result.skipped[0]?.reason).toBe('retained-structure');
+  for (const op of plan.ops) {
+    const next = applyTreeOp(part, op);
+    if (!next.ok) throw Error(next.reason);
+    part = next.part;
+  }
+  expect(serializeOoxmlPart(part).match(/<w:tbl\b/g)).toHaveLength(2);
+});
+
+for (const kind of ['ins', 'del'] as const) {
+  test(`nested ${kind}: a removed ancestor completes its retained inner row decision`, () => {
+    let part = load(`nested-deep-${kind}`);
+    const inner = revisionItemsOf(part).find(
+      (item) => item.revisionKind === 'structural' && item.text.includes('Middle')
+    )!;
+    const first = planRevisionBatch(part, kind === 'ins' ? 'accept' : 'reject', [
+      reviewItemKey(inner),
+    ]);
+    for (const op of first.ops) {
+      const next = applyTreeOp(part, op);
+      if (!next.ok) throw Error(next.reason);
+      part = next.part;
+    }
+    const plan = planRevisionBatch(part, kind === 'ins' ? 'reject' : 'accept');
+    expect(plan.result.skipped).toEqual([]);
+    expect(plan.result.remaining).toBe(0);
+    for (const op of plan.ops) {
+      const next = applyTreeOp(part, op);
+      if (!next.ok) throw Error(next.reason);
+      part = next.part;
+    }
+    expect(revisionItemsOf(part)).toHaveLength(0);
   });
 }

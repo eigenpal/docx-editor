@@ -9,6 +9,8 @@ import { PAINTED_PAGE } from './painted-page.ts';
 for (const name of [
   'nested-two-rows-ins',
   'format-row-and-cells',
+  'format-one-cell',
+  'format-separated-rows',
   'word-created-nested-row-ins',
   'word-created-nested-row-del',
   'format-grid-with-gap',
@@ -41,7 +43,11 @@ for (const name of [
       const count =
         name === 'nested-two-rows-ins'
           ? 5
-          : ['format-grid-with-gap', 'move-range-wrapper-destination'].includes(name)
+          : [
+                'format-grid-with-gap',
+                'format-separated-rows',
+                'move-range-wrapper-destination',
+              ].includes(name)
             ? 2
             : name === 'move-range-pair'
               ? 4
@@ -116,6 +122,12 @@ for (const name of [
       } else if (name === 'format-grid-with-gap') {
         expect(xml).not.toContain('<w:tblGridChange');
         expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');
+      } else if (name === 'format-one-cell') {
+        expect(xml.includes('FFFF00')).toBe(action === 'Accept');
+        expect(xml.includes('w:type="auto"')).toBe(action === 'Reject');
+      } else if (name === 'format-separated-rows') {
+        expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');
+        expect(xml.includes('<w:gridAfter')).toBe(action === 'Reject');
       } else {
         expect(xml.includes('FFFF00')).toBe(action === 'Accept');
         expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');

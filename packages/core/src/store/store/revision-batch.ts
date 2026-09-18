@@ -239,7 +239,8 @@ export function planRevisionBatch(
     (site, index) => selectedSites.has(site.node.id) && !reasons.has(find(index))
   );
   let removedContainer = false;
-  for (const [id, markerIds] of tableRevisionRemovals(part, eligible, action)) {
+  const eligibleRemovals = tableRevisionRemovals(part, eligible, action);
+  for (const [id, markerIds] of eligibleRemovals) {
     if (owners.has(id)) continue;
     const owner = indices.get(markerIds[0]!);
     if (owner !== undefined) {
@@ -257,7 +258,18 @@ export function planRevisionBatch(
   const resolved: RevisionBatchEntry[] = [];
   const skipped: RevisionBatchResult['skipped'][number][] = [];
   const acceptedSites = new Set<string>();
-  const retainedRows = retainedNestedRowSites(part, sites, action);
+  const retainedRows = new Set(retainedNestedRowSites(part, sites, action));
+  // A nested row can remain pending only if no eligible ancestor action removes it.
+  for (const id of retainedRows) {
+    let ancestor = parentNodeOf(part, id);
+    while (ancestor) {
+      if (eligibleRemovals.has(ancestor.id)) {
+        retainedRows.delete(id);
+        break;
+      }
+      ancestor = parentNodeOf(part, ancestor.id);
+    }
+  }
   for (const key of selected) {
     const item = byKey.get(key);
     if (!item) {

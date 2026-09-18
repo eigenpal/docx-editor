@@ -4,6 +4,7 @@ import { implicitTableRowProperties } from './revision-table-implicit-height.ts'
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
   applyCellMerge,
+  restoredCellRows,
   rebuildRevisionTable,
   compactRevisionGrid,
 } from './revision-table-rebuild.ts';
@@ -17,15 +18,11 @@ import {
   tableMergeDependencies,
   revisionAttribute,
 } from './revision-table-plan.ts';
-// Accept and reject over the canonical tree.
-//
 // A revision is identified by the triple `(id, author, date)` WITHIN a part, never by id alone.
 // `@w:id` is `ST_DecimalNumber` on `CT_Markup` with no uniqueness constraint and no author
 // scoping, so two authors' revisions may legally share an id in one part, and one logical
 // revision deliberately spans many elements sharing an id. Addressing by id would merge the
 // first case and could not express the second.
-//
-// Two rules here are load-bearing and easy to get wrong:
 //
 //   - CONTAINMENT governs nesting. Resolving an outer wrapper settles whether its content
 //     exists; an inner revision survives exactly when the content does. Because removal takes
@@ -462,8 +459,10 @@ export function revisionStructuralReach(
     matched
   );
   const reach = new Map<string, boolean>();
-  if (action === 'reject')
+  if (action === 'reject') {
     for (const row of implicitTableRowProperties(part, matched).values()) reach.set(row, false);
+    for (const row of restoredCellRows(part, matched)) reach.set(row, false);
+  }
   const moves = planOrdinaryMoves(
     options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
     collectRevisionSitesIn(part, options?.scopeRootId),

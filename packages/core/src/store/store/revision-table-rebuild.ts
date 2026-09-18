@@ -1,3 +1,7 @@
+import { implicitGridRows, restoreImplicitRowGrid } from './revision-table-implicit-grid.ts';
+import { parentNodeOf } from '../package/ooxml-edit.ts';
+import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type { RevisionSite } from './tree-op-revisions.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { tableChildren, replaceTableChildren } from './revision-table-children.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
@@ -114,6 +118,90 @@ export function applyCellMerge(
   );
 }
 
+export function restoredCellRows(part: OoxmlPart, sites: readonly RevisionSite[]): string[] {
+  const rows = new Set<string>();
+  for (const site of sites) {
+    if (
+      site.refused ||
+      !['trPrChange', 'tblPrExChange', 'tcPrChange'].includes(site.node.localName)
+    )
+      continue;
+    let node = site.parent && parentNodeOf(part, site.parent.id);
+    while (node && node.kind !== 'tableRow' && node.kind !== 'table')
+      node = parentNodeOf(part, node.id);
+    if (node?.kind === 'tableRow') rows.add(node.id);
+  }
+  const selected = new Set(sites.map((s) => s.node.id));
+  for (const id of [...rows]) {
+    let table = parentNodeOf(part, id);
+    while (table && table.kind !== 'table') table = parentNodeOf(part, table.id);
+    if (table && implicitGridRows(table, selected).size) rows.add(table.id);
+  }
+  return [...rows];
+}
+
+/** A rejected row formatting decision restores unrecorded cells to default formatting. */
+export function restoresRowCells(row: OoxmlElement, restored: ReadonlySet<string>): boolean {
+  const containers = [
+    child(row, 'trPr'),
+    child(row, 'tblPrEx'),
+    ...tableChildren(row, 'tableCell').map((cell) => child(cell, 'tcPr')),
+  ];
+  return containers.some((pr) => pr?.children.some((record) => restored.has(record.id)));
+}
+function hasExtensionData(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    (node.namespaceUri !== WML_NAMESPACE_URI ||
+      node.attributes.some((a) => a.namespaceUri !== WML_NAMESPACE_URI) ||
+      node.children.some(hasExtensionData))
+  );
+}
+function unrecordedDefaults(cell: OoxmlElement): Record<string, Record<string, string> | null> {
+  const values: Record<string, Record<string, string> | null> = { tcW: { w: '0', type: 'auto' } };
+  for (const name of [
+    'cnfStyle',
+    'tcBorders',
+    'shd',
+    'noWrap',
+    'tcMar',
+    'textDirection',
+    'tcFitText',
+    'vAlign',
+    'hideMark',
+  ]) {
+    const property = child(child(cell, 'tcPr') ?? cell, name);
+    // Unknown extension payloads do not belong to the recorded formatting decision.
+    if (!property || !hasExtensionData(property)) values[name] = null;
+  }
+  return values;
+}
+function restoreUnrecordedCells(
+  original: OoxmlElement,
+  row: OoxmlElement,
+  restored: ReadonlySet<string>,
+  mint: () => string
+): OoxmlElement {
+  if (!restoresRowCells(original, restored)) return row;
+  const recorded = new Set(
+    tableChildren(original, 'tableCell')
+      .filter((cell) => {
+        const pr = child(cell, 'tcPr');
+        return pr && child(pr, 'tcPrChange');
+      })
+      .map((cell) => cell.id)
+  );
+  return replaceTableChildren(
+    row,
+    new Map(
+      tableChildren(row, 'tableCell').map((cell) => [
+        cell.id,
+        recorded.has(cell.id) ? cell : patch(cell, unrecordedDefaults(cell), mint),
+      ])
+    )
+  );
+}
+
 /** Word gives deleted cell space to the preceding survivor (or the first following cell). */
 export function rebuildRevisionTable(
   original: OoxmlElement,
@@ -128,6 +216,7 @@ export function rebuildRevisionTable(
   rows = rows.map((row) => {
     const prior = originalRows.get(row.id);
     if (!prior) return row;
+    row = restoreUnrecordedCells(prior, row, restoredProperties, mint);
     const priorCells = tableChildren(prior, 'tableCell');
     if (!priorCells.some((c) => removed.has(c.id))) return row;
     const additions = new Map<string, { span: number; width: number; type: string | undefined }>();
@@ -280,7 +369,12 @@ export function rebuildRevisionTable(
     return replaceTableChildren(row, new Map(cells.map((c) => [c.id, c])));
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
-  return replaceTableChildren(rebuilt, byId);
+  return restoreImplicitRowGrid(
+    original,
+    replaceTableChildren(rebuilt, byId),
+    restoredProperties,
+    mint
+  );
 }
 
 /** Remove grid boundaries unused by any surviving cell; keep pending history in its original grid. */

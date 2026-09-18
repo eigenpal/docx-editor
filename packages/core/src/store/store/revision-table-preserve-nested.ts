@@ -1,3 +1,4 @@
+import { tableChildren } from './revision-table-children.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import {
   WML_NAMESPACE_URI,
@@ -51,7 +52,7 @@ function state(node: OoxmlNode, action: 'accept' | 'reject'): NestedState {
  * being removed in this direction. Its independent tracked text can still resolve. */
 export function retainsNestedTable(row: OoxmlElement, action: 'accept' | 'reject'): boolean {
   if (row.kind !== 'tableRow') return false;
-  const content = row.children.filter((n) => n.kind === 'tableCell' || n.kind === 'contentControl');
+  const content = tableChildren(row, 'tableCell');
   return (
     content.some((n) => state(n, action).table) && !content.some((n) => state(n, action).removedRow)
   );
