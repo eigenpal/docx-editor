@@ -31,6 +31,45 @@ const isW = (node: OoxmlNode, name: string): boolean =>
 const attribute = (node: OoxmlElement, name: string) =>
   node.attributes.find((a) => a.namespaceUri === WML_NAMESPACE_URI && a.localName === name)?.value;
 
+// Word-created nested rows include tracked cell paragraph marks. Those marks
+// distinguish a complete row decision from a standalone nested row-end marker.
+function hasTrackedCellParagraphs(
+  row: OoxmlElement,
+  direction: Direction,
+  author: string
+): boolean {
+  const cells = row.children.filter((child) => isW(child, 'tc'));
+  return (
+    cells.length > 0 &&
+    cells.every((cell) => {
+      if (cell.kind === 'textValue') return false;
+      const paragraphs = cell.children.filter((child) => child.kind === 'paragraph');
+      return (
+        paragraphs.length > 0 &&
+        paragraphs.every((paragraph) => {
+          if (paragraph.kind === 'textValue') return false;
+          const properties = paragraph.children.find((child) => isW(child, 'pPr'));
+          const runProperties =
+            properties?.kind !== 'textValue'
+              ? properties?.children.find((child) => isW(child, 'rPr'))
+              : undefined;
+          const marks =
+            runProperties?.kind !== 'textValue'
+              ? runProperties?.children.filter((child) => isW(child, 'ins') || isW(child, 'del'))
+              : undefined;
+          const mark = marks?.length === 1 ? marks[0] : undefined;
+          return (
+            !!mark &&
+            mark.kind !== 'textValue' &&
+            mark.localName === direction &&
+            attribute(mark, 'author') === author
+          );
+        })
+      );
+    })
+  );
+}
+
 /**
  * Word presents consecutive tracked rows by one author as a single table fragment.
  * Their same-direction text and paragraph marks belong to that decision even when
@@ -66,6 +105,7 @@ function groupRowRevisions(
   }
   const groups: RowGroup[] = [];
   const nestedRows = new Map<string, OoxmlElement>();
+  const completeNestedRows = new Set<string>();
   const ownerBySite = new Map<string, RowGroup>();
   const collect = (node: OoxmlNode, group: RowGroup): void => {
     if (node.kind === 'textValue' || isW(node, 'tbl')) return;
@@ -95,7 +135,7 @@ function groupRowRevisions(
         }
       }
     }
-    if (isW(node, 'tbl') && tableDepth === 0) {
+    if (isW(node, 'tbl')) {
       let current: RowGroup | undefined;
       for (const child of node.children) {
         if (child.kind === 'textValue' || !isW(child, 'tr')) {
@@ -120,6 +160,13 @@ function groupRowRevisions(
           continue;
         }
         const direction = marker.localName as Direction;
+        if (tableDepth > 0) {
+          if (!hasTrackedCellParagraphs(child, direction, author)) {
+            current = undefined;
+            continue;
+          }
+          completeNestedRows.add(child.id);
+        }
         if (!current || current.author !== author || current.direction !== direction) {
           current = { markerIds: new Set(), rows: [], author, direction, followingText: [] };
           groups.push(current);
@@ -139,6 +186,7 @@ function groupRowRevisions(
   const trackedOuterRows = new Set(groups.flatMap((group) => group.rows.map((row) => row.id)));
   const nestedFlow = (node: OoxmlNode, tableDepth = 0, inTrackedOuterRow = false): void => {
     if (node.kind === 'textValue') return;
+    if (completeNestedRows.has(node.id)) pending = undefined;
     const depth = tableDepth + (isW(node, 'tbl') ? 1 : 0);
     // A row-end marker cannot jump over unchanged content to claim a later edit.
     // Tracked wrappers consume pending before their runs are visited below.
@@ -178,7 +226,7 @@ function groupRowRevisions(
     if (isW(node, 'tc') || (node.kind === 'paragraph' && !trackedOuterRow)) pending = undefined;
     if (isW(node, 'tr')) {
       pending = undefined;
-      if (depth > 1) {
+      if (depth > 1 && !completeNestedRows.has(node.id)) {
         const properties = node.children.find((child) => isW(child, 'trPr'));
         const markers =
           properties && properties.kind !== 'textValue'

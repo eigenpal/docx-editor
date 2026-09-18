@@ -6,7 +6,12 @@ import {
 } from '../packages/core/src/store/__tests__/fixtures/review-table-grouping-cases.ts';
 import { PAINTED_PAGE } from './painted-page.ts';
 
-for (const name of ['nested-two-rows-ins', 'format-row-and-cells']) {
+for (const name of [
+  'nested-two-rows-ins',
+  'format-row-and-cells',
+  'word-created-nested-row-ins',
+  'word-created-nested-row-del',
+]) {
   for (const action of ['Accept', 'Reject']) {
     test(`${action} ${name}: rendered groups, undo, and save/reopen`, async ({
       page,
@@ -41,6 +46,10 @@ for (const name of ['nested-two-rows-ins', 'format-row-and-cells']) {
         await expect(cards.nth(2)).toContainText('Inserted table row');
         await expect(cards.nth(3)).toContainText('Second B');
         await expect(cards.nth(4)).toContainText('Outer');
+      } else if (name.startsWith('word-created-nested-row-')) {
+        await expect(page.getByTestId('review-card')).toContainText(
+          name.endsWith('-ins') ? 'Inserted table row' : 'Deleted table row'
+        );
       }
       if (action === 'Accept') {
         await page.screenshot({ path: testInfo.outputPath('grouped-review.png'), fullPage: true });
@@ -61,6 +70,17 @@ for (const name of ['nested-two-rows-ins', 'format-row-and-cells']) {
         expect(xml.includes('First A')).toBe(action === 'Accept');
         if (action === 'Accept') await expect(page.locator('.docx-pages')).toContainText('First A');
         else await expect(page.locator('.docx-pages')).not.toContainText('First A');
+      } else if (name.startsWith('word-created-nested-row-')) {
+        const inserted = name.endsWith('-ins');
+        const removed = inserted ? action === 'Reject' : action === 'Accept';
+        expect(xml.match(/<w:tr[\s>]/g) ?? []).toHaveLength(
+          inserted ? (removed ? 3 : 4) : removed ? 2 : 3
+        );
+        if (inserted) expect(xml.includes('Word added cell')).toBe(!removed);
+        else expect(xml.includes('First A')).toBe(!removed);
+        for (const text of ['Second A', 'Second B', 'Outer', 'Neighbour'])
+          expect(xml).toContain(text);
+        await expect(page.locator('.docx-pages')).toContainText('Second A');
       } else {
         expect(xml.includes('FFFF00')).toBe(action === 'Accept');
         expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');

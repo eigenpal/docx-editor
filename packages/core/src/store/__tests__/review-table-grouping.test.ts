@@ -88,6 +88,8 @@ const wordCounts: Record<string, number> = {
   'nested-two-tables-ins': 5,
   'nested-following-gap-ins': 4,
   'nested-following-gap-del': 4,
+  'word-created-nested-row-ins': 1,
+  'word-created-nested-row-del': 1,
 };
 function fixture(name: string) {
   const c = reviewTableGroupingCases.find((c) => c.name === name)!;
@@ -97,6 +99,84 @@ function fixture(name: string) {
   });
   if (!read.ok) throw new Error('Invalid fixture');
   return read.part;
+}
+for (const action of ['accept', 'reject'] as const) {
+  test(`${action} a complete nested row leaves a following independent insertion pending`, () => {
+    const source = reviewTableGroupingCases.find(
+      (entry) => entry.name === 'word-created-nested-row-ins'
+    )!;
+    const body = source.body.replace(
+      '<w:r><w:t>First A</w:t></w:r>',
+      '<w:ins w:id="99" w:author="Ada" w:date="2026-01-02T03:04:05Z"><w:r><w:t>First A</w:t></w:r></w:ins>'
+    );
+    expect(body).not.toBe(source.body);
+    const parsed = readOoxmlPart(
+      reviewTableGroupingParts({ name: 'following-insertion', body })['word/document.xml']!,
+      {
+        name: '/word/document.xml',
+        contentType: 'application/xml',
+      }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    let part = parsed.part;
+    const group = revisionItemsOf(part).find((item) => item.revisionKind === 'structural')!;
+    const plan = planRevisionBatch(part, action, [reviewItemKey(group)]);
+    expect(plan.result.skipped).toEqual([]);
+    for (const op of plan.ops) {
+      const result = applyTreeOp(part, op);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    }
+    expect(revisionItemsOf(part).map((item) => [item.address.id, item.text])).toEqual([
+      ['99', 'First A'],
+    ]);
+  });
+  test(`${action} a Word-created nested row deletion preserves the other rows`, () => {
+    let part = fixture('word-created-nested-row-del');
+    const items = revisionItemsOf(part);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id).sort()).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+    ]);
+    const plan = planRevisionBatch(part, action, [reviewItemKey(items[0]!)]);
+    expect(plan.result.skipped).toEqual([]);
+    for (const op of plan.ops) {
+      const result = applyTreeOp(part, op);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    }
+    const xml = serializeOoxmlPart(part);
+    expect(revisionItemsOf(part)).toEqual([]);
+    expect(xml).not.toMatch(/<w:(?:ins|del)\b/);
+    expect(xml.match(/<w:tr[\s>]/g)).toHaveLength(action === 'accept' ? 2 : 3);
+    expect(xml.includes('First A')).toBe(action === 'reject');
+    expect(xml.includes('First B')).toBe(action === 'reject');
+    for (const text of ['Second A', 'Second B', 'Outer', 'Neighbour']) expect(xml).toContain(text);
+  });
+  test(`${action} a Word-created nested row includes its cell paragraphs and text`, () => {
+    let part = fixture('word-created-nested-row-ins');
+    const items = revisionItemsOf(part);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id).sort()).toEqual(['0', '1', '2', '3']);
+    const plan = planRevisionBatch(part, action, [reviewItemKey(items[0]!)]);
+    expect(plan.result.skipped).toEqual([]);
+    for (const op of plan.ops) {
+      const result = applyTreeOp(part, op);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    }
+    const xml = serializeOoxmlPart(part);
+    expect(revisionItemsOf(part)).toEqual([]);
+    expect(xml).not.toMatch(/<w:(?:ins|del)\b/);
+    expect(xml.match(/<w:tr[\s>]/g)).toHaveLength(action === 'accept' ? 4 : 3);
+    expect(xml.includes('Word added cell')).toBe(action === 'accept');
+    for (const text of ['First A', 'First B', 'Second A', 'Second B', 'Outer', 'Neighbour'])
+      expect(xml).toContain(text);
+  });
 }
 for (const direction of ['ins', 'del']) {
   for (const action of ['accept', 'reject'] as const) {
@@ -124,7 +204,7 @@ test('Word attributes mixed-author cell formatting to the last cell history', ()
   expect(items).toHaveLength(1);
   expect(items[0]!.author).toBe('Bob');
 });
-test('nested row grouping preserves the observed membership, not just the count', () => {
+test('nested row grouping preserves its inferred membership, not just the count', () => {
   const items = revisionItemsOf(fixture('nested-two-rows-ins'));
   expect(items.map((item) => item.revisionKind)).toEqual([
     'insert',

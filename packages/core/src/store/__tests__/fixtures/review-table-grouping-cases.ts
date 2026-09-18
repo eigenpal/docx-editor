@@ -1,5 +1,6 @@
 /** Synthetic inputs for native Word revision-grouping comparisons. */
 import { structuralWordXmlParts } from './structural-word-cases.ts';
+import { wordCreatedNestedRow, wordCreatedNestedRowDeletion } from './word-created-nested-row.ts';
 let id = 0;
 const date = '2026-01-02T03:04:05Z';
 const attr = (author = 'Ada', when = date) =>
@@ -433,6 +434,8 @@ add(
   p(moveRange('From', 'SyntheticMove', text('Moved', 'moveFrom'))) +
     p(moveRange('To', 'SyntheticMove', text('Moved', 'moveTo')))
 );
+add('word-created-nested-row-ins', wordCreatedNestedRow);
+add('word-created-nested-row-del', wordCreatedNestedRowDeletion);
 export const reviewTableGroupingCases = cases;
 export const reviewTableGroupingParts = (entry: { name: string; body: string }) =>
   structuralWordXmlParts([entry]);
