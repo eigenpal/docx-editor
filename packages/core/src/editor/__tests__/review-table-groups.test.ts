@@ -193,34 +193,40 @@ for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
   });
 }
 
-for (const action of ['accept', 'reject'] as const) {
-  test(`${action}: document-wide cleanup preserves unbound table alignment with undo/redo`, () => {
-    const editor = mount('format-table-property');
-    try {
-      const session = editor.surface!.session;
-      const xml = () => serializeOoxmlPart(session.part());
-      const before = xml();
-      expect(editor.getReviewItems()).toHaveLength(0);
-      expect(
-        editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document', keys: [] }).ok
-      ).toBe(false);
-      expect(xml()).toBe(before);
-      expect(
-        editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' })
-      ).toMatchObject({
-        ok: true,
-        changed: true,
-        revisions: { resolved: [], skipped: [], remaining: 0 },
-      });
-      expect(xml()).not.toContain('tblPrChange');
-      expect(xml()).toContain('w:val="center"');
-      const after = xml();
-      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-      expect(xml()).toBe(before);
-      expect(editor.exec({ type: 'redo' }).ok).toBe(true);
-      expect(xml()).toBe(after);
-    } finally {
-      editor.destroy();
-    }
-  });
-}
+for (const name of ['format-table-property', 'format-grid-only'])
+  for (const action of ['accept', 'reject'] as const) {
+    test(`${action}: document-wide cleanup preserves ${name} with undo/redo`, () => {
+      const editor = mount(name);
+      try {
+        const session = editor.surface!.session;
+        const xml = () => serializeOoxmlPart(session.part());
+        const before = xml();
+        expect(editor.getReviewItems()).toHaveLength(0);
+        expect(
+          editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document', keys: [] }).ok
+        ).toBe(false);
+        expect(xml()).toBe(before);
+        expect(
+          editor.exec({ type: 'resolveAllReviewChanges', action, scope: 'document' })
+        ).toMatchObject({
+          ok: true,
+          changed: true,
+          revisions: { resolved: [], skipped: [], remaining: 0 },
+        });
+        expect(xml()).not.toMatch(/<w:(tblPr|tblGrid)Change\b/);
+        if (name === 'format-table-property') expect(xml()).toContain('w:val="center"');
+        else
+          expect([...xml().matchAll(/<w:gridCol[^>]*w:w="(\d+)"/g)].map((m) => m[1])).toEqual([
+            '2000',
+            '2000',
+          ]);
+        const after = xml();
+        expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+        expect(xml()).toBe(before);
+        expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+        expect(xml()).toBe(after);
+      } finally {
+        editor.destroy();
+      }
+    });
+  }

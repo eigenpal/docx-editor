@@ -77,11 +77,11 @@ function mountEditor(body: string): DocxEditorInstance {
 
 describe('shared Review menu commands', () => {
   for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
-    test(`${action} resolves an authorless table-grid record`, () => {
+    test(`${action} resolves an authorless table-grid record attached to a row decision`, () => {
       const editor = mountEditor(
         '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/>' +
           '<w:tblGridChange w:id="1"><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid></w:tblGridChange>' +
-          '</w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+          '</w:tblGrid><w:tr><w:trPr><w:trHeight w:val="400"/><w:trPrChange w:id="2" w:author="Ada"><w:trPr/></w:trPrChange></w:trPr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
       );
       const item = editor.getReviewItems().find((item) => item.kind === 'revision');
       expect(item).toBeDefined();

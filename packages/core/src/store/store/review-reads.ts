@@ -1,4 +1,4 @@
-import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
+import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { ordinaryMoveRanges } from './revision-move-ranges.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
@@ -169,9 +169,9 @@ function computeRevisionItemsOf(
     }
   >();
 
-  const unboundAlignments = unboundTableAlignmentHistories(part, sites);
+  const unboundHistories = unboundTableHistories(part, sites);
   for (const site of sites) {
-    if (unboundAlignments.has(site.node.id)) continue;
+    if (unboundHistories.has(site.node.id)) continue;
     const moveRange = moveRanges.get(site.node.id);
     const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
     const sourceId = wmlAttribute(site.node, 'id');

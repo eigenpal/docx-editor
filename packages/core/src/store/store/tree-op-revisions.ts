@@ -1,4 +1,4 @@
-import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
+import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
@@ -816,7 +816,7 @@ export function resolveRevisions(
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
-  const unboundAlignments = unboundTableAlignmentHistories(part, sites);
+  const unboundHistories = unboundTableHistories(part, sites);
   let matched = matchingRevisionSites(
     sites,
     address,
@@ -918,7 +918,7 @@ export function resolveRevisions(
       continue;
     }
     if (site.propertyChange) {
-      if (action === 'accept' || unboundAlignments.has(site.node.id)) dropMarks.add(site.node.id);
+      if (action === 'accept' || unboundHistories.has(site.node.id)) dropMarks.add(site.node.id);
       else restoreProperties.add(site.node.id);
       continue;
     }

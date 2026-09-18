@@ -71,6 +71,7 @@ const wordCounts: Record<string, number> = {
   'row-multiple-paragraphs-del': 1,
   'format-one-cell': 1,
   'format-table-property': 0,
+  'format-grid-only': 0,
   'format-separate-tables': 2,
   'adjacent-format-authors': 2,
   'adjacent-format-dates': 1,
@@ -364,7 +365,8 @@ for (const entry of reviewTableGroupingCases.filter((c) => c.name.startsWith('fo
   for (const action of ['accept', 'reject'] as const) {
     test(`${action} all formatting histories: ${entry.name}`, () => {
       let part = fixture(entry.name);
-      if (entry.name === 'format-table-property') expect(revisionItemsOf(part)).toHaveLength(0);
+      if (['format-table-property', 'format-grid-only'].includes(entry.name))
+        expect(revisionItemsOf(part)).toHaveLength(0);
       else expect(revisionItemsOf(part).length).toBeGreaterThan(0);
       const plan = planRevisionBatch(part, action);
       expect(plan.result.skipped).toEqual([]);

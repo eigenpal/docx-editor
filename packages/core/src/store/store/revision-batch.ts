@@ -1,4 +1,4 @@
-import { unboundTableAlignmentHistories } from './revision-table-implicit-alignment.ts';
+import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { deferredTableGridSites } from './revision-table-grid-history.ts';
 import { planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
@@ -60,7 +60,7 @@ export function planRevisionBatch(
   const items = revisionItemsOf(scopedPart);
   const auxiliaryIds =
     keys === undefined
-      ? [...unboundTableAlignmentHistories(scopedPart, collectRevisionSites(scopedPart))]
+      ? [...unboundTableHistories(scopedPart, collectRevisionSites(scopedPart))]
       : [];
   const cleanup: TreeDocOp[] = auxiliaryIds.length
     ? [
