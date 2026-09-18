@@ -2,11 +2,12 @@
   "impact": "compatible",
   "fields": [],
   "before": "Enter inserted one paragraph break and omitted established blank separators between list items.",
-  "after": "Enter emits existing fragment-insertion and paragraph-mark revision operations to preserve the separator and its undo caret.",
-  "reason": "The edit uses existing canonical paragraphs, numbering suppression, insertion marks, and caret metadata. Released readers already interpret these structures; no shared schema, conflict repair, or protocol rules change.",
+  "after": "Enter uses existing paragraph, style-resource, and revision operations to preserve list separators, following styles, and undo/redo selection.",
+  "reason": "Styles and any missing styles part are created through journaled package primitives. Existing canonical nodes and protocol rules are unchanged. Regression coverage replays style creation into another package and verifies undo/redo.",
   "tests": [
     "packages/core/src/editor/__tests__/list-separator-enter.test.ts",
-    "packages/core/src/layout/__tests__/list-auto-spacing.test.ts"
+    "packages/core/src/layout/__tests__/list-auto-spacing.test.ts",
+    "packages/core/src/editor/__tests__/next-paragraph-style.test.ts"
   ],
   "changeset": "tidy-list-margins",
   "migration": null

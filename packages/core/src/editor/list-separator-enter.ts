@@ -27,6 +27,7 @@ export function listSeparatorEnter(
   layout: SemanticLayout,
   position: SemanticPosition,
   markProperties: readonly OoxmlProperty[],
+  separatorStyleId: string,
   styles?: StyleCascadeTable,
   revision?: RevisionAttributionInput,
   actorId?: string
@@ -70,7 +71,10 @@ export function listSeparatorEnter(
     ...pPr,
     children: pPr.children.filter((node) => node.localName !== 'sectPr'),
   };
-  const style = pPr?.children.find((node) => node.localName === 'pStyle');
+  const style = propertyElement(
+    { localName: 'pStyle', attributes: { val: separatorStyleId } },
+    'separator-style'
+  );
   const markChildren = markProperties.map((property, at) =>
     propertyElement(property, `separator-format-${at}`)
   );
@@ -89,16 +93,21 @@ export function listSeparatorEnter(
       )
     );
   const mark = element('separator-mark', 'runProperties', 'rPr', markChildren);
-  // Word gives the separator the current style and typing face, not the previous gap's
+  // Word gives the separator List Paragraph and the typing face, not the previous gap's
   // indents, numbering, spacing, bookmarks, or section properties.
   const separatorProperties = element('separator-properties', 'paragraphProperties', 'pPr', [
     ...(style ? [style] : []),
     ...(markChildren.length ? [mark] : []),
   ]);
   const separatorChildren = [...separatorProperties.children];
+  // A newly materialized built-in will inherit the document's default paragraph style.
+  // Resolve that inheritance now, before the style-creation package edit is committed.
+  const numberingProperties = styles?.styles.has(separatorStyleId)
+    ? separatorProperties
+    : element('separator-defaults', 'paragraphProperties', 'pPr', []);
   if (
     styles &&
-    readNumPr(cascadeParagraphFormatting(styles, separatorProperties).paragraphPropertyNodes)
+    readNumPr(cascadeParagraphFormatting(styles, numberingProperties).paragraphPropertyNodes)
   ) {
     separatorChildren.splice(
       style ? 1 : 0,

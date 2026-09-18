@@ -1,3 +1,4 @@
+import { capturePackageSelections, selectionForHistory } from './package-history-selection.ts';
 // Package-aware mutation coordinator for editable story parts (body + headers/footers +
 // notes parts).
 //
@@ -418,6 +419,7 @@ export class TreePackageStore {
     // because comparing whole packages afterwards would blame pre-existing drift on this
     // transaction.
     let packageShellTouched = false;
+    let packageSelections: ReturnType<typeof capturePackageSelections> | undefined;
     // The working package must start at the coordinator's truth. Shell writes made through
     // lifecycle ops, package undo, remote installs, or the comment lanes never reach this
     // story store's own package, so an `applyPackage` edit basing on the stale copy would
@@ -428,6 +430,7 @@ export class TreePackageStore {
     store.graftPackage(() => this.currentPackage());
     const result = store.transact(
       (ctx) => {
+        packageSelections = capturePackageSelections(ctx);
         build({
           // The whole context is forwarded, not a hand-picked three: `applyTo` and
           // `applyPackage` are how a transaction writes the comment or numbering part in the
@@ -493,8 +496,7 @@ export class TreePackageStore {
             }
             return ctx.apply(op);
           },
-          selectionBefore: (selection) => ctx.selectionBefore(selection),
-          selectionAfter: (selection) => ctx.selectionAfter(selection),
+          ...packageSelections.context,
         });
       },
       {
@@ -604,6 +606,7 @@ export class TreePackageStore {
             kind: 'package',
             before: beforePackage,
             after: this.currentPackage(),
+            ...packageSelections?.snapshot(result.change.caret),
           });
         } else {
           this.pushUndoPointer({ kind: 'story', partName: story.partName, story });
@@ -849,19 +852,11 @@ export class TreePackageStore {
   }
 
   selectionForUndo(): SelectionMark | null {
-    const pointer = this.undoOrder[this.undoOrder.length - 1];
-    if (!pointer || pointer.kind === 'package') return null;
-    const store =
-      pointer.partName === this.body.part.name ? this.body : this.stories.get(pointer.partName);
-    return store?.selectionForUndo() ?? null;
+    return selectionForHistory(this.undoOrder.at(-1), this.body, this.stories, 'undo');
   }
 
   selectionForRedo(): SelectionMark | null {
-    const pointer = this.redoOrder[this.redoOrder.length - 1];
-    if (!pointer || pointer.kind === 'package') return null;
-    const store =
-      pointer.partName === this.body.part.name ? this.body : this.stories.get(pointer.partName);
-    return store?.selectionForRedo() ?? null;
+    return selectionForHistory(this.redoOrder.at(-1), this.body, this.stories, 'redo');
   }
 
   /** See {@link openStoryPartsOf}. */

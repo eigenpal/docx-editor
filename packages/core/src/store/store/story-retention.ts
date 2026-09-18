@@ -6,7 +6,7 @@
 // while unreachable entries stop holding `maxEditableStoryParts` forever.
 
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
-import type { TreeStoryRef } from './tree-store.ts';
+import type { SelectionMark, TreeStoryRef } from './tree-store.ts';
 
 export interface StoryHistoryPointer {
   readonly kind: 'story';
@@ -18,6 +18,8 @@ export interface PackageHistoryPointer {
   readonly kind: 'package';
   readonly before: OoxmlPackage;
   readonly after: OoxmlPackage;
+  readonly selectionBefore?: SelectionMark | null;
+  readonly selectionAfter?: SelectionMark | null;
   /** This transaction owns numbering changes; later shell allocations still survive. */
   readonly restoreNumbering?: boolean;
 }

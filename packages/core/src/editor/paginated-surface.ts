@@ -1,5 +1,7 @@
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
+import { listParagraphStyleId } from './surface-list-style.ts';
+import { ensureSeparatorStyle } from './list-separator-style.ts';
 import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
 import { contentControlMenuAnchor } from './content-control-widget-anchor.ts';
 import { contentControlWidgetValue } from './content-control-widget-session.ts';
@@ -713,11 +715,12 @@ export function mountPaginatedSurface(
     withFormat: readonly TreeDocOp[],
     withoutFormat: readonly TreeDocOp[],
     mark: ReturnType<typeof selectionMark>,
-    redoMark?: { paragraphId: string; start: number; end: number }
+    redoMark?: { paragraphId: string; start: number; end: number },
+    packageEdits?: NonNullable<Parameters<TreeDocxSession['applyTreeOps']>[4]>['packageEdits']
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
-    const result = applyOps([...withFormat], mark, redoMark);
+    const result = applyOps([...withFormat], mark, redoMark, storyScope(), true, packageEdits);
     if (withFormat.length === withoutFormat.length || !result.rejected) return result;
-    return applyOps([...withoutFormat], mark, redoMark);
+    return applyOps([...withoutFormat], mark, redoMark, storyScope(), true, packageEdits);
   }
 
   function consumePendingFormatOps(
@@ -4689,13 +4692,27 @@ export function mountPaginatedSurface(
       const separatorRevision = separatorAuthor
         ? { author: separatorAuthor, date: trackedDate() }
         : undefined;
+      const separatorStyles = session.documentStyles();
+      const existingSeparatorStyle = listParagraphStyleId(separatorStyles);
+      let separatorStyleId = existingSeparatorStyle ?? 'ListParagraph';
+      const usedStyleIds = new Set(separatorStyles.map((style) => style.styleId));
+      for (
+        let suffix = 1;
+        !existingSeparatorStyle && usedStyleIds.has(separatorStyleId);
+        suffix++
+      ) {
+        separatorStyleId = `ListParagraph${suffix}`;
+      }
       const separator =
-        editingMode !== 'view' && plan.ops.length === 0 && tailStyleId === undefined
+        editingMode !== 'view' &&
+        plan.ops.every((op) => op.op === 'deleteText' && op.paragraphId === position.paragraphId) &&
+        tailStyleId === undefined
           ? listSeparatorEnter(
               partOfNodeId(session, position.paragraphId) ?? session.part(),
               currentLayout,
               position,
               markProperties,
+              separatorStyleId,
               styleCascade(),
               separatorRevision,
               collaborationSession?.identity.actorId
@@ -4719,7 +4736,16 @@ export function mountPaginatedSurface(
           withoutPendingOnRejection(
             [...plan.ops, ...markOps, ...insertionOps],
             [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
-            selectionMark()
+            selectionMark(),
+            undefined,
+            separator && !existingSeparatorStyle
+              ? [
+                  ensureSeparatorStyle(
+                    styleCascade()?.defaultParagraphStyleId ?? null,
+                    separatorStyleId
+                  ),
+                ]
+              : undefined
           ),
         () => {
           // The tail is the id the store minted that was not there before.

@@ -33,6 +33,19 @@ function authoredStyleId(
   return properties.find((property) => property.localName === 'pStyle')?.attributes?.val;
 }
 
+/** Resolve the built-in by name before id, including localized/custom ids. */
+export function listParagraphStyleId(
+  styles: readonly { type: string; name: string; styleId: string }[]
+): string | null {
+  let byId: string | null = null;
+  for (const style of styles) {
+    if (style.type !== 'paragraph') continue;
+    if (style.name.trim().toLowerCase() === LIST_PARAGRAPH_NAME) return style.styleId;
+    if (byId === null && style.styleId === LIST_PARAGRAPH_STYLE_ID) byId = style.styleId;
+  }
+  return byId;
+}
+
 /** The two writes a list gesture may need, resolved against one document's styles. */
 export interface ListStyleWrites {
   /**
@@ -65,26 +78,6 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
   const { session } = deps;
 
   /**
-   * The document's List Paragraph style, or null when it defines none.
-   *
-   * Matched on the built-in NAME first, then on the built-in styleId. Word identifies its
-   * built-ins by `w:name`, and a converter commonly spells the id its own way
-   * (`ListParagraph1`, `a3`) while keeping the name — while the reverse also happens, an
-   * unrelated style handed the `ListParagraph` id. Name-first lands on the right one in
-   * both files. A document that defines neither gets no `w:pStyle` write at all: writing a
-   * dangling one would render as Normal here and as a missing style everywhere else.
-   */
-  function listParagraphStyleId(): string | null {
-    let byId: string | null = null;
-    for (const style of session.documentStyles()) {
-      if (style.type !== 'paragraph') continue;
-      if (style.name.trim().toLowerCase() === LIST_PARAGRAPH_NAME) return style.styleId;
-      if (byId === null && style.styleId === LIST_PARAGRAPH_STYLE_ID) byId = style.styleId;
-    }
-    return byId;
-  }
-
-  /**
    * The document's `w:default="1"` paragraph style, memoized on the styles root.
    *
    * Read through the layout cascade's own resolver rather than by matching the attribute:
@@ -107,7 +100,7 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
 
   return {
     applyOps(touched) {
-      const styleId = listParagraphStyleId();
+      const styleId = listParagraphStyleId(session.documentStyles());
       if (styleId === null) return [];
       const defaultStyleId = defaultParagraphStyleId();
       const part = deps.storyPart();
@@ -129,7 +122,7 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
     },
 
     clearOp(paragraphId) {
-      const styleId = listParagraphStyleId();
+      const styleId = listParagraphStyleId(session.documentStyles());
       if (styleId === null) return null;
       const properties = directParagraphProperties(deps.storyPart(), paragraphId);
       if (authoredStyleId(properties) !== styleId) return null;

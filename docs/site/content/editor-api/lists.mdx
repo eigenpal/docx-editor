@@ -36,9 +36,15 @@ A new list starts as an independent bullet list and defines all nine levels. `Li
 
 ## Paragraph spacing
 
-List items inherit paragraph spacing from document defaults, paragraph styles, and direct formatting. Enter preserves these settings. When preceding items at the same list level have one blank paragraph between them, Enter also inserts an unnumbered separator before the new item. Undo removes both inserted paragraph breaks together. Tracked editing records both breaks for acceptance or rejection. Automatic spacing stays tight between adjacent items in the same list, including nested levels. The list keeps its outer automatic margins, except before a list at section start.
+Paragraph margins and line height come from document defaults, the paragraph style and its `basedOn` ancestors, and direct formatting. Inside tables, table styles can also supply paragraph formatting. Direct formatting overrides the inherited attributes it specifies; omitted attributes keep their inherited values. Numbering definitions supply the marker and list indentation.
 
-Explicit spacing still applies between items unless the paragraph enables **Don’t add space between paragraphs of the same style**. Blank paragraphs and line breaks add height independently of these spacing settings.
+Enter preserves that inheritance instead of copying resolved spacing into the new paragraph. A style's **Style for following paragraph** setting can start a different style; entering that style drops the old direct numbering. Shift+Enter creates a line break within the existing paragraph.
+
+Word's AutoFormat list continuation is separate from paragraph spacing. When the preceding item belongs to the same list and level, with exactly one unnumbered blank paragraph between them, Enter inserts an unnumbered separator before the new item. Spaces or tabs in the blank paragraph do not change this behavior. It applies to bullets, numbered lists, and Enter replacing text within an item. A different list, different level, or a gap only after the current item does not establish this pattern.
+
+The separator uses the document's **List Paragraph** style and the direct typing format, even when the items use a custom style. If that built-in style is missing, the editor creates it based on the document's default paragraph style. The items keep their own styles. Undo restores the paragraphs and any newly created style together; redo restores the caret on the new item. Tracked editing records both inserted breaks for acceptance or rejection.
+
+Automatic spacing stays tight between adjacent items in the same list, including nested levels. The list keeps its outer automatic margins, except before a list at section start. Explicit spacing still applies between items unless the paragraph enables **Don’t add space between paragraphs of the same style**. Blank paragraphs and line breaks add height independently of these settings.
 
 ## Discover and join existing lists
 

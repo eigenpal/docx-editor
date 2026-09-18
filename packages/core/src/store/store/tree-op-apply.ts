@@ -1,3 +1,4 @@
+import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
 import { applyTableProperties } from './tree-op-table-authoring.ts';
@@ -110,8 +111,6 @@ import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
   mergedPropertyChildren,
-  propertyElement,
-  schemaInsertIndex,
 } from './tree-op-properties.ts';
 import {
   applySetListLevel,
@@ -2519,47 +2518,6 @@ function withChildren(
   nextId: (() => string) | null
 ): OoxmlNode {
   return { ...node, ...(nextId ? { id: nextId() } : {}), children } as OoxmlNode;
-}
-
-/**
- * The tail's `w:pPr`: a clone of the head's, with `w:pStyle` restated when the caller named
- * one.
- *
- * The clone is the default because every other paragraph property survives an Enter in Word
- * — centring, spacing, borders. Only the style is a decision the paragraph mark makes anew.
- * A tail left with nothing in its `w:pPr` drops the container rather than serializing an
- * empty one, so a paragraph whose only property was its style digests like one that never
- * had any.
- */
-function withTailStyle(
-  pPr: OoxmlElement | undefined,
-  tailStyleId: string | null | undefined,
-  nextId: () => string
-): OoxmlNode | undefined {
-  if (tailStyleId === undefined) return pPr ? cloneWithNewIds(pPr, nextId) : undefined;
-  const kept = (pPr?.children ?? []).filter(
-    (child) => child.kind === 'textValue' || child.localName !== 'pStyle'
-  );
-  const children = kept.map((child) => cloneWithNewIds(child, nextId));
-  if (tailStyleId !== null) {
-    children.splice(
-      schemaInsertIndex(children, PARAGRAPH_VOCABULARY.sequence, 'pStyle'),
-      0,
-      propertyElement({ localName: 'pStyle', attributes: { val: tailStyleId } }, nextId())
-    );
-  }
-  if (children.length === 0) return undefined;
-  if (pPr) return { ...pPr, id: nextId(), children } as unknown as OoxmlNode;
-  return {
-    id: nextId(),
-    kind: 'paragraphProperties',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'pPr',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children,
-  } as unknown as OoxmlNode;
 }
 
 function applySplit(

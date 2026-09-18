@@ -3,8 +3,14 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { paragraphTextOf, directParagraphProperties, findNode } from '@docx-editor.dev/core/store';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, zipSync, unzipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { ensureSeparatorStyle } from '../list-separator-style.ts';
+import {
+  openStore,
+  captureOneJournal,
+  replayAndCompare,
+} from '../../store/__tests__/canonical-primitive-journal-coverage-support.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -151,6 +157,7 @@ describe('Enter continues a single blank separator between list items', () => {
       [item('First') + paragraph('Text', STYLE) + item('Second'), 2],
       [item('First') + item('') + item('Second'), 2],
       [paragraph('Lead') + gap + paragraph('Second'), 2],
+      [item('Second') + gap + item('Next'), 0],
     ] as const) {
       const editor = mount(docx(body));
       const count = texts(editor).length;
@@ -159,7 +166,7 @@ describe('Enter continues a single blank separator between list items', () => {
     }
   });
 
-  test('a separator has only the current style and typing face', () => {
+  test('a separator has only List Paragraph and the direct typing face', () => {
     const second = item(
       'Second',
       AUTO + '<w:ind w:left="960"/><w:rPr><w:sz w:val="32"/></w:rPr>'
@@ -174,7 +181,9 @@ describe('Enter continues a single blank separator between list items', () => {
     expect(props.map((p) => p.localName)).toEqual(['pStyle']);
     const separator = findNode(surface.session.part(), surface.session.paragraphIds()[3]!);
     expect(JSON.stringify(separator)).toContain('32');
-    expect(fragments(editor)[3]!.lines[0]!.height).toBe(fragments(editor)[4]!.lines[0]!.height);
+    expect(fragments(editor)[3]!.lines[0]!.box.height).toBe(
+      fragments(editor)[4]!.lines[0]!.box.height
+    );
   });
 
   test('section properties remain on the tail alone', () => {
@@ -221,4 +230,262 @@ describe('Enter continues a single blank separator between list items', () => {
     enter(editor, 2, 6);
     expect(markers(editor)).toEqual(['1.', null, '2.', null, '3.', '4.']);
   });
+
+  test('replacing text in either selection direction continues the separator in edit and suggest modes', async () => {
+    for (const mode of ['edit', 'suggest'] as const)
+      for (const reverse of [false, true]) {
+        const editor = mount(docx(sequence()), 'Test author');
+        const surface = editor.surface!;
+        surface.setEditingMode(mode);
+        const id = surface.session.paragraphIds()[2]!;
+        const a = { paragraphId: id, offset: 3 };
+        const b = { paragraphId: id, offset: 6 };
+        surface.setSelection({ anchor: reverse ? b : a, head: reverse ? a : b });
+        surface.splitParagraph();
+        expect(texts(editor)).toHaveLength(6);
+        surface.type('New');
+        expect(texts(editor)[4]).toBe('New');
+        if (mode === 'suggest') {
+          const reloaded = mount(new Uint8Array(await editor.save()));
+          reloaded.surface!.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+          expect(texts(reloaded)).toEqual(['First', '', 'Second', 'Third']);
+        } else {
+          expect(texts(editor)).toEqual(['First', '', 'Sec', '', 'New', 'Third']);
+        }
+      }
+  });
+
+  test('bullets and whitespace-only separators follow the same continuation rule', () => {
+    const bullets = NUMBERING.replace('decimal', 'bullet').replace('%1.', '•');
+    for (const blank of ['', '   ', '&#160;', '&#9;']) {
+      const editor = mount(
+        docx(item('First') + paragraph(blank) + item('Second'), undefined, bullets)
+      );
+      enter(editor, 2, 6);
+      expect(markers(editor)).toEqual(['•', null, '•', null, '•']);
+      expect(texts(editor).slice(-2)).toEqual(['', '']);
+    }
+  });
+
+  test('list identity and nesting level bound the separator pattern', () => {
+    const numbering = NUMBERING.replace(
+      '</w:abstractNum>',
+      '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%2."/></w:lvl></w:abstractNum>'
+    ).replace(
+      '</w:numbering>',
+      '<w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
+    );
+    for (const second of [
+      item('Second').replace('w:numId w:val="1"', 'w:numId w:val="2"'),
+      item('Second').replace('w:ilvl w:val="0"', 'w:ilvl w:val="1"'),
+    ]) {
+      const editor = mount(docx(item('First') + gap + second, undefined, numbering));
+      enter(editor, 2, 6);
+      expect(texts(editor)).toHaveLength(4);
+    }
+  });
+
+  test('custom item styles do not leak into the separator; built-in name wins over id', async () => {
+    const styles =
+      NORMAL +
+      '<w:style w:type="paragraph" w:styleId="Custom"><w:name w:val="Custom"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="480"/></w:pPr><w:rPr><w:sz w:val="40"/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="LocalList"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="120"/></w:pPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="Unrelated"/></w:style>';
+    const custom = (text: string) => paragraph(text, '<w:pStyle w:val="Custom"/>' + LIST);
+    const editor = mount(docx(custom('First') + paragraph('') + custom('Second'), styles));
+    enter(editor, 2, 6);
+    const surface = editor.surface!;
+    expect(
+      directParagraphProperties(surface.session.part(), surface.session.paragraphIds()[3]!)
+    ).toEqual([{ localName: 'pStyle', attributes: { val: 'LocalList' } }]);
+    expect(fragments(editor)[3]!.lines[0]!.box.height).toBeLessThan(
+      fragments(editor)[2]!.lines[0]!.box.height
+    );
+    const reloaded = mount(new Uint8Array(await editor.save()));
+    expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
+  });
+
+  test('the separator inherits default line spacing while the new item keeps its direct override', () => {
+    const styles =
+      '<w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+      NORMAL +
+      '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:pPr><w:contextualSpacing/></w:pPr></w:style>';
+    const single = '<w:spacing w:line="240" w:lineRule="auto"/>';
+    const editor = mount(docx(item('First', single) + gap + item('Second', single), styles));
+    enter(editor, 2, 6);
+    const rows = fragments(editor);
+    expect(rows[3]!.lines[0]!.box.height / rows[4]!.lines[0]!.box.height).toBeCloseTo(1.15, 5);
+  });
+
+  test('a missing built-in is created with the document default as its base and undone atomically', async () => {
+    const styles =
+      NORMAL.replaceAll('Normal', 'Body') +
+      '<w:style w:type="paragraph" w:styleId="Custom"><w:basedOn w:val="Body"/></w:style>';
+    const custom = (text: string) => paragraph(text, '<w:pStyle w:val="Custom"/>' + LIST);
+    const editor = mount(docx(custom('First') + paragraph('') + custom('Second'), styles));
+    enter(editor, 2, 6);
+    const surface = editor.surface!;
+    expect(
+      surface.session.documentStyles().some((style) => style.styleId === 'ListParagraph')
+    ).toBe(true);
+    expect(JSON.stringify(surface.session.stylesRoot())).toContain('Body');
+    const reloaded = mount(new Uint8Array(await editor.save()));
+    expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
+    surface.undo();
+    expect(texts(editor)).toEqual(['First', '', 'Second']);
+    expect(
+      surface.session.documentStyles().some((style) => style.styleId === 'ListParagraph')
+    ).toBe(false);
+    surface.redo();
+    surface.type('New');
+    expect(texts(editor)[4]).toBe('New');
+    expect(
+      surface.session.documentStyles().filter((style) => style.styleId === 'ListParagraph')
+    ).toHaveLength(1);
+  });
+
+  test('creates a complete styles part when the document has none', async () => {
+    const entries = unzipSync(docx(item('First') + paragraph('') + item('Second')));
+    delete entries['word/styles.xml'];
+    entries['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>`
+    );
+    const editor = mount(zipSync(entries));
+    enter(editor, 2, 6);
+    expect(texts(editor)).toHaveLength(5);
+    expect(
+      editor.surface!.session.documentStyles().some((style) => style.name === 'List Paragraph')
+    ).toBe(true);
+    const reloaded = mount(new Uint8Array(await editor.save()));
+    expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
+    editor.surface!.undo();
+    expect(editor.surface!.session.stylesRoot()).toBeNull();
+  });
+
+  test('does not overwrite a character style using the built-in id', () => {
+    const styles =
+      NORMAL +
+      '<w:style w:type="character" w:styleId="ListParagraph"><w:name w:val="Character Face"/></w:style>';
+    const editor = mount(docx(item('First') + paragraph('') + item('Second'), styles));
+    enter(editor, 2, 6);
+    expect(
+      editor.surface!.session.documentStyles().map((style) => [style.styleId, style.type])
+    ).toContainEqual(['ListParagraph', 'character']);
+    expect(
+      editor.surface!.session.documentStyles().map((style) => [style.styleId, style.type])
+    ).toContainEqual(['ListParagraph1', 'paragraph']);
+  });
+
+  test('a newly created built-in suppresses numbering inherited from the default style', () => {
+    const styles = NORMAL.replace('</w:style>', `<w:pPr>${LIST}</w:pPr></w:style>`);
+    const blank = paragraph('', '<w:numPr><w:numId w:val="0"/></w:numPr>');
+    const editor = mount(docx(paragraph('First') + blank + paragraph('Second'), styles));
+    enter(editor, 2, 6);
+    expect(markers(editor)).toEqual(['1.', null, '2.', null, '3.']);
+  });
+
+  test('style creation preserves documents using an alternate XML prefix', async () => {
+    const entries = unzipSync(docx(item('First') + paragraph('') + item('Second'), NORMAL));
+    entries['word/styles.xml'] = strToU8(
+      new TextDecoder()
+        .decode(entries['word/styles.xml'])
+        .replaceAll('w:', 'x:')
+        .replace('xmlns:w', 'xmlns:x')
+    );
+    entries['word/document.xml'] = strToU8(
+      new TextDecoder()
+        .decode(entries['word/document.xml'])
+        .replaceAll('w:', 'x:')
+        .replace('xmlns:w', 'xmlns:x')
+    );
+    const editor = mount(zipSync(entries));
+    enter(editor, 2, 6);
+    expect(texts(editor)).toHaveLength(5);
+    const reloaded = mount(new Uint8Array(await editor.save()));
+    expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
+  });
+
+  test('style creation journals replay for existing and absent styles parts', () => {
+    for (const hasStyles of [true, false]) {
+      const entries = unzipSync(docx(paragraph('First'), NORMAL));
+      if (!hasStyles) {
+        delete entries['word/styles.xml'];
+        entries['word/_rels/document.xml.rels'] = strToU8(`<Relationships xmlns="${REL}"/>`);
+      }
+      const bytes = zipSync(entries);
+      const source = openStore(bytes);
+      const replica = openStore(bytes);
+      const captured = captureOneJournal(source, () =>
+        source.transact({ kind: 'body' }, (ctx) => {
+          ctx.applyPackage(ensureSeparatorStyle(hasStyles ? 'Normal' : null, 'ListParagraph'));
+        })
+      );
+      expect(captured.result.ok).toBe(true);
+      expect(captured.journal).not.toBeNull();
+      replayAndCompare(replica, source, captured.journal!);
+    }
+  });
+
+  test('a following-paragraph style takes precedence over separator continuation, including selected endings', () => {
+    const styles =
+      NORMAL +
+      '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/></w:style>';
+    for (const selected of [false, true]) {
+      const editor = mount(docx(sequence(), styles));
+      const surface = editor.surface!;
+      const id = surface.session.paragraphIds()[2]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: selected ? 3 : 6 },
+        head: { paragraphId: id, offset: 6 },
+      });
+      surface.splitParagraph();
+      expect(texts(editor)).toHaveLength(5);
+      expect(markers(editor)[3]).toBeNull();
+    }
+  });
+
+  test.each([
+    ['document defaults', '<w:spacing w:after="160" w:line="360"/>', '', '', ''],
+    ['base style', '', '<w:spacing w:before="120" w:after="240"/>', '', ''],
+    ['derived style', '', '<w:spacing w:after="240"/>', '<w:spacing w:before="160"/>', ''],
+    [
+      'direct override',
+      '<w:spacing w:after="80"/>',
+      '<w:spacing w:before="160"/>',
+      '',
+      '<w:spacing w:before="0" w:after="360"/>',
+    ],
+    ['contextual spacing', '<w:spacing w:after="240"/>', '', '<w:contextualSpacing/>', ''],
+    [
+      'explicit contextual off',
+      '<w:spacing w:after="240"/>',
+      '<w:contextualSpacing/>',
+      '',
+      '<w:contextualSpacing w:val="0"/>',
+    ],
+  ])(
+    'Enter retains spacing from %s without flattening inherited values',
+    async (_name, defaults, base, derived, direct) => {
+      const styles =
+        `<w:docDefaults><w:pPrDefault><w:pPr>${defaults}</w:pPr></w:pPrDefault></w:docDefaults>` +
+        NORMAL +
+        `<w:style w:type="paragraph" w:styleId="Base"><w:basedOn w:val="Normal"/><w:pPr>${base}</w:pPr></w:style>` +
+        `<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Base"/><w:pPr>${derived}</w:pPr></w:style>`;
+      const editor = mount(docx(item('First', direct) + item('Second', direct), styles));
+      const before = fragments(editor);
+      const distance = before[1]!.lines[0]!.box.y - before[0]!.lines[0]!.box.y;
+      enter(editor, 1, 6);
+      editor.surface!.type('Third');
+      const after = fragments(editor);
+      expect(after[2]!.lines[0]!.box.y - after[1]!.lines[0]!.box.y).toBeCloseTo(distance, 5);
+      const surface = editor.surface!;
+      expect(
+        directParagraphProperties(surface.session.part(), surface.session.paragraphIds()[2]!)
+      ).toEqual(
+        directParagraphProperties(surface.session.part(), surface.session.paragraphIds()[1]!)
+      );
+      const reloaded = mount(new Uint8Array(await editor.save()));
+      expect(fragments(reloaded)[2]!.lines[0]!.box.y).toBeCloseTo(after[2]!.lines[0]!.box.y, 5);
+    }
+  );
 });
