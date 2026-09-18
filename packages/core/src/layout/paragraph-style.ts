@@ -13,6 +13,17 @@ import {
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { borderStrokeWidthPt } from './border-metrics.ts';
 
+/** Only an explicitly formatted paragraph mark can enlarge a non-empty final line. */
+export function paragraphHasDirectMarkFormatting(paragraph: OoxmlNode): boolean {
+  if (!('children' in paragraph)) return false;
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  return (
+    pPr !== undefined &&
+    'children' in pPr &&
+    pPr.children.some((child) => child.kind === 'runProperties' && child.children.length > 0)
+  );
+}
+
 /**
  * Whether a paragraph must start a new page (`w:pageBreakBefore`).
  *

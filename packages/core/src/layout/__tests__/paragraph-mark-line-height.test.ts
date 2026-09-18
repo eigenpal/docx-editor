@@ -49,6 +49,33 @@ const AUTO_460_EXTRA = RUN_H * (460 / 240) - RUN_H;
 const MARK_EXTRA = MARK_H - RUN_H;
 
 describe('auto line spacing and paragraph-mark height', () => {
+  test('unformatted marks do not inflate smaller text in body or table cells', () => {
+    // Word: 9pt Arial text advances about 10.32pt even with an 11pt Normal
+    // style. The style still sizes an empty paragraph's caret line.
+    const styles = readOoxmlPart(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+        '<w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+      { name: '/word/styles.xml', contentType: 'app/xml' }
+    );
+    if (!styles.ok) throw new Error(styles.reason);
+    const small = '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>Small text</w:t></w:r></w:p>';
+    for (const body of [
+      small,
+      `<w:tbl><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>${small}</w:tc></w:tr></w:tbl>`,
+    ]) {
+      const layout = layoutSemanticDocument(load(body), 1, {
+        measurer,
+        styleCascade: buildStyleCascadeTable(styles.part.root),
+      });
+      expect(linesOf(layout)[0]!.box.height).toBeCloseTo(9 * 1.15, 5);
+    }
+    const empty = layoutSemanticDocument(load('<w:p/>'), 1, {
+      measurer,
+      styleCascade: buildStyleCascadeTable(styles.part.root),
+    });
+    expect(linesOf(empty)[0]!.box.height).toBeCloseTo(11 * 1.15, 5);
+  });
+
   test('auto extras leave the baseline put (space falls below)', () => {
     expect(applyLineSpacing({ rule: 'auto', value: 460 }, RUN_H, RUN_BL)).toEqual({
       height: RUN_H * (460 / 240),

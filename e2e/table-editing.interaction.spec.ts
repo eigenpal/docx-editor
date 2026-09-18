@@ -339,6 +339,9 @@ const BORDER_WIDTH_INDEX: Record<string, number> = {
 
 async function pickToolbarOption(page: Page, slot: string, value: string) {
   const root = page.locator(`[data-slot="${slot}"]`).first();
+  if (!(await root.isVisible())) {
+    await page.locator('[data-slot="toolbar.more"]').click();
+  }
   if (slot === 'table.borderColor' || slot === 'table.cellFill') {
     await root.locator('.docx-toolbar__colorsplit-caret').click();
     await expect(root.locator('[role="dialog"]')).toBeVisible();

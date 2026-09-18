@@ -124,6 +124,13 @@ function rangeRects(
   includeText: boolean,
   measurer?: TextMeasurer
 ): SelectionRect[] {
+  // A caret paints no range or paragraph mark. This is the common typing path;
+  // do not build document-wide terminal/order indexes just to return no rectangles.
+  if (
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset
+  )
+    return [];
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   const orderIndex = indexesOf(order);

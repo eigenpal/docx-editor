@@ -786,6 +786,12 @@ export function createSurfaceTableInteraction(
       clearAllFurniture(false);
       return;
     }
+    // The insert control can overlap another table's hit region. Keep its target
+    // stable while the pointer moves onto it, so it survives through the click.
+    if (event.target instanceof Node && insertButton?.contains(event.target)) {
+      clearTimers();
+      return;
+    }
     const sheet = clientToSheet(host, event.clientX, event.clientY);
     const pageIndex = pageAtY(input.layout, sheet.y);
     if (pageIndex >= 0) {

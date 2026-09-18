@@ -29,7 +29,7 @@ async function waitForEditor(page: Page): Promise<void> {
 
 async function placeStaleModelCaretAtParagraphEnd(page: Page): Promise<void> {
   const paragraph = page.locator('.docx-paragraph-fragment').filter({ hasText: PARAGRAPH_TEXT });
-  const box = await paragraph.boundingBox();
+  const box = await paragraph.locator('.docx-line').last().boundingBox();
   if (!box) throw new Error('FORMTEXT regression paragraph is not painted');
   await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
   await expect
@@ -105,7 +105,7 @@ test.beforeEach(async ({ page }) => {
   await placeStaleModelCaretAtParagraphEnd(page);
 });
 
-test('justified NBSP form fields keep pointer hit-testing aligned with painted text', async ({
+test('clicking a justified NBSP form field selects and deletes the whole result like Word', async ({
   page,
 }) => {
   const field = streetField(page);
@@ -114,18 +114,21 @@ test('justified NBSP form fields keep pointer hit-testing aligned with painted t
 
   const afterClick = await selectionSnapshot(page);
   expect(afterClick.nativeText).toBe('Street');
-  expect(afterClick.nativeOffset).toBe(4);
-  expect(afterClick.modelOffset).toBe(fieldStart + 4);
+  expect(afterClick.selectedText).toBe('Street');
+  expect(afterClick.modelOffset).toBe(fieldStart + 'Street'.length);
 
   await page.keyboard.press('Backspace');
 
-  await expect(fieldAtStart(page, fieldStart)).toHaveText('Stret');
+  await expect(streetField(page)).toHaveCount(0);
   await expect(
     page.locator('.docx-paragraph-fragment').filter({ hasText: 'Post/area code' })
-  ).toContainText('Stret, Post/area code');
+  ).toContainText('at , Post/area code');
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(fieldAtStart(page, fieldStart)).toHaveText('Street');
 });
 
-test('clicking inside a FORMTEXT result makes Backspace delete beside that caret', async ({
+test('a native caret inside a FORMTEXT result overrides the stale model for Backspace', async ({
   page,
 }) => {
   await delayNativeSelectionReport(page);
@@ -134,7 +137,10 @@ test('clicking inside a FORMTEXT result makes Backspace delete beside that caret
   const box = await field.boundingBox();
   if (!box) throw new Error('FORMTEXT result is not painted');
 
-  await page.mouse.click(box.x + box.width * 0.55, box.y + box.height / 2);
+  // Inspect the browser caret after pointerdown, before pointerup/click selects
+  // the whole field. Keep selectionchange delayed until the real Backspace key.
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height / 2);
+  await page.mouse.down();
   const before = await selectionSnapshot(page);
   expect(before.nativeText).toBe('Street');
   expect(before.nativeOffset).toBeGreaterThan(0);
@@ -144,6 +150,7 @@ test('clicking inside a FORMTEXT result makes Backspace delete beside that caret
 
   const expected = 'Street'.slice(0, before.nativeOffset - 1) + 'Street'.slice(before.nativeOffset);
   await page.keyboard.press('Backspace');
+  await page.mouse.up();
 
   await expect(fieldAtStart(page, fieldStart)).toHaveText(expected);
   await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(', Post/area code');

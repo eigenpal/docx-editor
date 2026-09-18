@@ -20,6 +20,9 @@ const SHA256_CONSTANTS = new Uint32Array([
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ]);
 
+// Fixed-size byte encoding avoids eight callback/toString/padStart allocations per digest.
+const HEX_BYTES = Array.from({ length: 256 }, (_, value) => value.toString(16).padStart(2, '0'));
+
 const rotateRight = (value: number, count: number): number =>
   (value >>> count) | (value << (32 - count));
 
@@ -87,7 +90,16 @@ export const sha256FontBytesPure = (bytes: Uint8Array): string => {
     hash[6] = (hash[6]! + g) >>> 0;
     hash[7] = (hash[7]! + h) >>> 0;
   }
-  return `sha256:${Array.from(hash, (word) => word.toString(16).padStart(8, '0')).join('')}`;
+  let result = 'sha256:';
+  for (let index = 0; index < hash.length; index += 1) {
+    const word = hash[index]!;
+    result +=
+      HEX_BYTES[word >>> 24]! +
+      HEX_BYTES[(word >>> 16) & 0xff]! +
+      HEX_BYTES[(word >>> 8) & 0xff]! +
+      HEX_BYTES[word & 0xff]!;
+  }
+  return result;
 };
 
 type NativeSha256 = (bytes: Uint8Array) => string;

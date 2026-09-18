@@ -114,14 +114,16 @@ describe('server-first defaults', () => {
         footers: translated.pages.filter((page) => page.footerMarkdown.length > 0).length,
         markdownHash,
       }).toEqual({
-        pages: 26,
+        // Smaller text no longer inherits an unformatted mark's 11pt line-height
+        // floor. The only Markdown text change is NUMPAGES: 26 -> 25.
+        pages: 25,
         bodyLineCount: 280,
         // Four checkbox controls open their paragraphs with a `w:sym` glyph; the pin moved by
         // exactly those four characters when a leading glyph started laying out.
         markdownLength: 17_199,
-        headers: 25,
-        footers: 25,
-        markdownHash: '5f35722ea5e741e2323f036a6a336d1260265467637f97f5e599f700410d35db',
+        headers: 24,
+        footers: 24,
+        markdownHash: 'cb4189d81e9fb59a2cf9488f88defd8d3de6075116fa485d75d47322712cb994',
       });
       expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');
       expect(translated.markdown).toEndWith(

@@ -123,8 +123,12 @@ const MAX_CACHED_LAYOUT_DIGESTS = 2_048;
 const MAX_CACHED_LAYOUT_DIGEST_BYTES = 2 * 1024 * 1024;
 const cachedLayoutDigests = new Map<string, CachedLayoutDigest>();
 let cachedLayoutDigestBytes = 0;
+// Empty optional drawing/projection/exclusion inputs dominate requests. Their digest is
+// constant; do not repeatedly delete and reinsert the same LRU entry for each paragraph.
+let emptyLayoutDigest: string | undefined;
 
 function reusableLayoutTokenDigest(token: string): string {
+  if (token.length === 0) return (emptyLayoutDigest ??= layoutTokenDigest(token));
   const cached = cachedLayoutDigests.get(token);
   if (cached) {
     cachedLayoutDigests.delete(token);

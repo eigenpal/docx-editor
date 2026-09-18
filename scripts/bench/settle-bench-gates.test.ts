@@ -47,7 +47,9 @@ test('a keystroke on the huge document performs the pinned amount of work', () =
 
   // Fixed measurer under happy-dom: pagination differs from the browser manifest count and
   // that is fine — what matters is that it never MOVES without a deliberate baseline update.
-  expect(report.pages).toBe(561);
+  // Unformatted paragraph marks no longer inflate smaller text to the style's
+  // font size. This changes page boundaries, including the edited page's suffix.
+  expect(report.pages).toBe(542);
   expect(report.paragraphs).toBe(12820);
   expect(report.work).toEqual({
     // The last pass of a one-character keystroke: a handful of re-placed paragraphs against
@@ -56,9 +58,9 @@ test('a keystroke on the huge document performs the pinned amount of work', () =
     // full pass because the document-wide reserve map was folded into every section's
     // context key; the key now folds only the reserve slots a section's own pass can read,
     // so the reflow's second body pass reuses every section and only the first pass is full.
-    placed: 7,
+    placed: 10,
     total: 6540,
-    reusedPages: 555,
+    reusedPages: 537,
     fullPasses: 1,
     staleDiscards: 0,
     cancelledRuns: 0,

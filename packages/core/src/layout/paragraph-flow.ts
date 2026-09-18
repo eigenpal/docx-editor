@@ -55,6 +55,7 @@ import {
 } from './paragraph-tabs.ts';
 import {
   SINGLE_LINE_SPACING,
+  paragraphHasDirectMarkFormatting,
   applyLineSpacing,
   type ParagraphLineSpacing,
 } from './paragraph-style.ts';
@@ -577,6 +578,7 @@ export function breakParagraph(
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
     markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
+  const hasDirectMarkFormatting = paragraphHasDirectMarkFormatting(paragraph);
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -1078,7 +1080,8 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-    } else if (options?.includeParagraphMark) {
+    } else if (options?.includeParagraphMark && hasDirectMarkFormatting) {
+      // An unformatted mark must not inflate smaller text to the paragraph style size.
       // Paragraph mark `w:sz` (CT_PPr/rPr) can be taller than the visible runs. Grow the
       // line box to the mark height but keep the glyph baseline — the spare depth sits
       // below the text, matching Word's cover-page party-name rhythm. Pushing the baseline

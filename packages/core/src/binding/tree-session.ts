@@ -1,3 +1,4 @@
+import { createSessionPackageWriter } from './session-package-writer.ts';
 // Tree-backed editing session (cutover step 2b).
 //
 // The replacement for `openDocxSession`'s `PackageModel` path. Same job — open bytes, hand
@@ -47,7 +48,6 @@ import {
   resolveHeaderFooterParts,
   resolveHeaderFooterResolutionBySection,
   resolveRelationship,
-  writeOoxmlPackage,
   ensureListDefinition,
   ensureNumberingLevel,
   ensureHyperlinkRelationship,
@@ -250,6 +250,7 @@ export function openTreeSession(
 
   const bodyStore = () => packageStore.bodyStore();
   const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
+  const writePackage = createSessionPackageWriter();
   const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
 
   const headerFooterSettingsPart = (
@@ -812,7 +813,7 @@ export function openTreeSession(
       },
 
       save() {
-        return writeOoxmlPackage(currentPackage());
+        return writePackage(currentPackage());
       },
 
       headerFooterParts: () => {

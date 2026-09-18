@@ -1,3 +1,4 @@
+import { selectionMarkRects } from '../selection-rects.ts';
 // Semantic caret stops, hit regions, selection and navigation (task 7.4).
 //
 // Every answer here comes from the layout records: no DOM ranges, no element rectangles.
@@ -241,11 +242,18 @@ describe('selection geometry', () => {
     expect(rects[0]!.width).toBe(12);
   });
 
-  test('an empty selection covers nothing', () => {
+  test('an empty selection covers nothing without visiting layout pages', () => {
     const layout = lay(load(paragraph('abc')));
-    expect(
-      selectionRects(layout, { anchor: at(P0, 1), head: at(P0, 1) }, documentOrder(layout))
-    ).toEqual([]);
+    const order = documentOrder(layout);
+    const withoutPageReads = new Proxy(layout, {
+      get(target, property, receiver) {
+        if (property === 'pages') throw new Error('collapsed range visited layout pages');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const selection = { anchor: at(P0, 1), head: at(P0, 1) };
+    expect(selectionRects(withoutPageReads, selection, order)).toEqual([]);
+    expect(selectionMarkRects(withoutPageReads, selection, order)).toEqual([]);
   });
 
   test('the spans a selection touches are reported, for active formatting', () => {

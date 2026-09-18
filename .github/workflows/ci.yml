@@ -107,6 +107,16 @@ jobs:
       - name: Check dashed and dotted borders paint with gaps
         if: "matrix.check == 'browser'"
         run: bun run check:border-patterns
+      - name: Editor acceptance tests (React and Vue)
+        if: "matrix.check == 'browser'"
+        run: bun run test:e2e:acceptance
+      - name: Save editor browser failure evidence
+        if: "failure() && matrix.check == 'browser'"
+        uses: actions/upload-artifact@v7
+        with:
+          name: editor-browser-failures
+          path: test-results/
+          retention-days: 7
       - name: Build packages
         run: bun run build:packages
         env:

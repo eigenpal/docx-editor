@@ -32,6 +32,7 @@
         "eslint": "^10.0.3",
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.0.1",
+        "fflate": "^0.8.3",
         "husky": "^9.1.7",
         "jszip": "^3.10.1",
         "lint-staged": "^17.0.4",
