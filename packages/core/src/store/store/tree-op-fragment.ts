@@ -371,6 +371,7 @@ export function applyInsertFragment(
     dirty: [host.id, tailId],
     created,
     deleted: [],
+    ...(op.lastMarkCovered === true ? { caret: { paragraphId: tailId } } : {}),
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };

@@ -1,4 +1,5 @@
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
+import { listSeparatorEnter } from './list-separator-enter.ts';
 import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
 import { contentControlMenuAnchor } from './content-control-widget-anchor.ts';
 import { contentControlWidgetValue } from './content-control-widget-session.ts';
@@ -4684,16 +4685,46 @@ export function mountPaginatedSurface(
         offset: position.offset,
         tailStyleId,
       };
+      const separatorAuthor = trackedAuthorOrNone();
+      const separatorRevision = separatorAuthor
+        ? { author: separatorAuthor, date: trackedDate() }
+        : undefined;
+      const separator =
+        editingMode !== 'view' && plan.ops.length === 0 && tailStyleId === undefined
+          ? listSeparatorEnter(
+              partOfNodeId(session, position.paragraphId) ?? session.part(),
+              currentLayout,
+              position,
+              markProperties,
+              styleCascade(),
+              separatorRevision,
+              collaborationSession?.identity.actorId
+            )
+          : null;
+      // Fragment insertion restores the head's properties from its first mark. Reapply
+      // the captured face there; the tail already inherited it from the leading mark op.
+      const separatorMarkOps: TreeDocOp[] = separatorRevision
+        ? [
+            {
+              op: 'setParagraphMarkRevision',
+              paragraphId: position.paragraphId,
+              kind: 'ins',
+              revision: separatorRevision,
+            },
+          ]
+        : [];
+      const insertionOps = separator ? [separator, ...markOps, ...separatorMarkOps] : [splitOp];
       commit(
         () =>
           withoutPendingOnRejection(
-            [...plan.ops, ...markOps, splitOp],
-            [...plan.ops, splitOp],
+            [...plan.ops, ...markOps, ...insertionOps],
+            [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
             selectionMark()
           ),
         () => {
           // The tail is the id the store minted that was not there before.
-          const tail = session.paragraphIdsIn(storyScope()).find((id) => !before.has(id));
+          const created = session.paragraphIdsIn(storyScope()).filter((id) => !before.has(id));
+          const tail = separator ? created.at(-1) : created[0];
           return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
         },
         { rearmPending: armed }

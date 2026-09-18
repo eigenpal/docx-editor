@@ -2,4 +2,4 @@
 "@docx-editor.dev/core": patch
 ---
 
-Preserve automatic spacing around lists while keeping adjacent items in the same list tightly spaced during editing.
+Preserve list spacing when pressing Enter, including existing blank-paragraph separators and automatic margins around lists.

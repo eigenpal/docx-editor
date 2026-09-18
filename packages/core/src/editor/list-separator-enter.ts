@@ -1,0 +1,123 @@
+import {
+  findNode,
+  parentNodeOf,
+  paragraphTextOf,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+  type OoxmlProperty,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
+import {
+  cascadeParagraphFormatting,
+  type StyleCascadeTable,
+  type SemanticLayout,
+  type SemanticPosition,
+} from '@docx-editor.dev/core/layout';
+import { fragmentHolding } from '../layout/line-segments.ts';
+import { readNumPr } from '../layout/list-resolve.ts';
+import { propertyElement } from '../store/store/tree-op-properties.ts';
+import type { RevisionAttributionInput } from '../store/store/tree-op-types.ts';
+import { nextRevisionId } from '../store/store/tree-op-revision-ids.ts';
+
+/** Continue Word's single blank-paragraph separator between items of an existing list. */
+export function listSeparatorEnter(
+  part: OoxmlPart,
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  markProperties: readonly OoxmlProperty[],
+  styles?: StyleCascadeTable,
+  revision?: RevisionAttributionInput,
+  actorId?: string
+): TreeDocOp | null {
+  const paragraph = findNode(part, position.paragraphId);
+  const parent = parentNodeOf(part, position.paragraphId);
+  if (paragraph?.kind !== 'paragraph' || !parent) return null;
+  const index = parent.children.findIndex((node) => node.id === paragraph.id);
+  const gap = parent.children[index - 1];
+  const previous = parent.children[index - 2];
+  if (gap?.kind !== 'paragraph' || previous?.kind !== 'paragraph') return null;
+  const gapText = paragraphTextOf(part, gap.id);
+  if (gapText === null || !/^[ \t\u00a0]*$/.test(gapText)) return null;
+  const gapProperties = gap.children.find((node) => node.kind === 'paragraphProperties');
+  if (gapProperties?.children.some((node) => node.localName === 'sectPr')) return null;
+  const marker = fragmentHolding(layout, paragraph.id)?.marker;
+  const priorMarker = fragmentHolding(layout, previous.id)?.marker;
+  if (!marker || marker.numId !== priorMarker?.numId || marker.level !== priorMarker.level)
+    return null;
+  if (fragmentHolding(layout, gap.id)?.marker) return null;
+
+  const element = (
+    id: string,
+    kind: OoxmlElement['kind'],
+    localName: string,
+    children: readonly OoxmlNode[]
+  ): OoxmlElement =>
+    ({
+      id,
+      kind,
+      localName,
+      namespaceUri: WML_NAMESPACE_URI,
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children,
+    }) as OoxmlElement;
+  const pPr = paragraph.children.find((node) => node.kind === 'paragraphProperties');
+  // The original section mark stays on the tail, just as with an ordinary split.
+  const headProperties = pPr && {
+    ...pPr,
+    children: pPr.children.filter((node) => node.localName !== 'sectPr'),
+  };
+  const style = pPr?.children.find((node) => node.localName === 'pStyle');
+  const markChildren = markProperties.map((property, at) =>
+    propertyElement(property, `separator-format-${at}`)
+  );
+  if (revision)
+    markChildren.push(
+      propertyElement(
+        {
+          localName: 'ins',
+          attributes: {
+            id: nextRevisionId(part, actorId)(),
+            author: revision.author,
+            ...(revision.date ? { date: revision.date } : {}),
+          },
+        },
+        'separator-insertion'
+      )
+    );
+  const mark = element('separator-mark', 'runProperties', 'rPr', markChildren);
+  // Word gives the separator the current style and typing face, not the previous gap's
+  // indents, numbering, spacing, bookmarks, or section properties.
+  const separatorProperties = element('separator-properties', 'paragraphProperties', 'pPr', [
+    ...(style ? [style] : []),
+    ...(markChildren.length ? [mark] : []),
+  ]);
+  const separatorChildren = [...separatorProperties.children];
+  if (
+    styles &&
+    readNumPr(cascadeParagraphFormatting(styles, separatorProperties).paragraphPropertyNodes)
+  ) {
+    separatorChildren.splice(
+      style ? 1 : 0,
+      0,
+      element('separator-numbering', 'generic', 'numPr', [
+        propertyElement({ localName: 'numId', attributes: { val: '0' } }, 'separator-number-id'),
+      ])
+    );
+  }
+  return {
+    op: 'insertFragment',
+    paragraphId: paragraph.id,
+    offset: position.offset,
+    blocks: [
+      element('separator-head', 'paragraph', 'p', headProperties ? [headProperties] : []),
+      element('separator-blank', 'paragraph', 'p', [
+        element('separator-properties-final', 'paragraphProperties', 'pPr', separatorChildren),
+      ]),
+    ],
+    lastMarkCovered: true,
+  };
+}
