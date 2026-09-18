@@ -166,13 +166,14 @@ test('a native range inside a FORMTEXT result is preserved for Backspace', async
   await delayNativeSelectionReport(page);
   const field = streetField(page);
   const fieldStart = Number(await field.getAttribute('data-start'));
-  const box = await field.boundingBox();
-  if (!box) throw new Error('FORMTEXT result is not painted');
-
-  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, { steps: 5 });
-  await page.mouse.up();
+  // Deliberately make native selection newer than the model. Native dragging
+  // with the editor's pointer handler disabled differs across Chromium platforms;
+  // the Selection API establishes the exact race this Backspace test exercises.
+  await field.evaluate((element) => {
+    const text = element.firstChild;
+    if (!text || text.nodeType !== Node.TEXT_NODE) throw new Error('Street text node is missing');
+    document.getSelection()!.setBaseAndExtent(text, 1, text, 5);
+  });
 
   const before = await selectionSnapshot(page);
   expect(before.selectedText).toBe('tree');
