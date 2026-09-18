@@ -13,6 +13,7 @@ for (const name of [
   'word-created-nested-row-del',
   'format-grid-with-gap',
   'move-range-pair',
+  'word-created-table-width',
 ]) {
   for (const action of ['Accept', 'Reject']) {
     test(`${action} ${name}: rendered groups, undo, and save/reopen`, async ({
@@ -93,6 +94,11 @@ for (const name of [
       } else if (name === 'move-range-pair') {
         expect(xml.includes('>Moved<')).toBe(action === 'Accept');
         expect(xml).not.toMatch(/<w:move(?:From|To)Range/);
+      } else if (name === 'word-created-table-width') {
+        expect(xml).not.toMatch(/<w:\w+Change\b/);
+        expect(
+          [...xml.matchAll(/<w:tcW[^>]*w:w="(\d+)"/g)].map((match) => Number(match[1]))
+        ).toEqual([2000, action === 'Accept' ? 1600 : 2000, 2000, 2000, 2000, 2000, 2000, 2000]);
       } else if (name === 'format-grid-with-gap') {
         expect(xml).not.toContain('<w:tblGridChange');
         expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');

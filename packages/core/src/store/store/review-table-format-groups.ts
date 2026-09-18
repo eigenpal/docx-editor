@@ -1,3 +1,4 @@
+import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   registerRevisionSiteNodeIds,
@@ -20,7 +21,13 @@ export function groupTableFormatting(
   items: readonly ReviewRevisionItem[],
   sites: readonly RevisionSite[]
 ): ReviewRevisionItem[] {
-  const supported = new Set(['tcPrChange', 'trPrChange', 'tblPrExChange', 'tblGridChange']);
+  const supported = new Set([
+    'tcPrChange',
+    'trPrChange',
+    'tblPrExChange',
+    'tblGridChange',
+    'tblPrChange',
+  ]);
   const formatting = new Map(
     sites
       .filter((site) => site.propertyChange && supported.has(site.node.localName))
@@ -45,9 +52,11 @@ export function groupTableFormatting(
       let current: FormatGroup | undefined;
       const tableGroups: FormatGroup[] = [];
       const grid: RevisionSite[] = [];
+      const tableProperties: RevisionSite[] = [];
       let refusedRow = false;
       for (const child of node.children) {
         if (isW(child, 'tblGrid')) collect(child, grid);
+        if (isW(child, 'tblPr')) collect(child, tableProperties);
         if (!isW(child, 'tr')) continue;
         const found: RevisionSite[] = [];
         collect(child, found);
@@ -72,6 +81,27 @@ export function groupTableFormatting(
       const last = tableGroups.at(-1);
       if (last && !refusedRow && grid.every((site) => !site.refused)) {
         for (const site of grid) last.ids.add(site.node.id);
+        // Word writes unchanged table snapshots alongside a cell-width edit.
+        // With one unambiguous row group, those snapshots belong to its entry.
+        // Keep meaningful table changes and multi-group lifetimes independent.
+        if (tableGroups.length === 1)
+          for (const site of tableProperties) {
+            const previous = site.node.children.find((child) => isW(child, 'tblPr'));
+            if (
+              !site.refused &&
+              site.parent?.kind === 'tableProperties' &&
+              previous &&
+              authorOf(site) === last.author &&
+              ooxmlTreesEqual(
+                {
+                  ...site.parent,
+                  children: site.parent.children.filter((child) => child.id !== site.node.id),
+                },
+                previous
+              )
+            )
+              last.ids.add(site.node.id);
+          }
       }
     }
     for (const child of node.children) visit(child);
@@ -115,7 +145,9 @@ export function groupTableFormatting(
   for (const group of groups) {
     const membersOfGroup = members.get(group) ?? [];
     const primary =
-      membersOfGroup.find((item) => item.formattingKind !== 'tblGridChange') ?? membersOfGroup[0];
+      membersOfGroup.find(
+        (item) => !['tblGridChange', 'tblPrChange'].includes(item.formattingKind ?? '')
+      ) ?? membersOfGroup[0];
     const entries = primary ? [primary, ...membersOfGroup.filter((item) => item !== primary)] : [];
     const ids = entries.flatMap(revisionSiteNodeIdsOf);
     const included = new Set(ids);
@@ -133,7 +165,7 @@ export function groupTableFormatting(
     const ranges = [
       ...new Map(
         entries
-          .filter((item) => item.formattingKind !== 'tblGridChange')
+          .filter((item) => !['tblGridChange', 'tblPrChange'].includes(item.formattingKind ?? ''))
           .flatMap((item) => item.ranges)
           .map((range) => [JSON.stringify(range), range])
       ).values(),

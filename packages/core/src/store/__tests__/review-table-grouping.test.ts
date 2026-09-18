@@ -98,6 +98,7 @@ const wordCounts: Record<string, number> = {
   'move-range-wrapper-pair': 2,
   'word-created-nested-row-ins': 1,
   'word-created-nested-row-del': 1,
+  'word-created-table-width': 1,
 };
 function fixture(name: string) {
   const c = reviewTableGroupingCases.find((c) => c.name === name)!;
