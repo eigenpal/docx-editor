@@ -5,7 +5,7 @@ category: 'Getting Started'
 order: 55
 ---
 
-Use a [runnable starter](#runnable-starters) for a complete app. Each starter covers one framework or feature. You can also use the [live demo](#live-demo) on this page.
+Use a [runnable starter](#runnable-starters) for a complete app. Each starter covers one framework or feature, and has a page of its own. You can also use the [live demo](#live-demo) on this page.
 
 ## Runnable starters
 
@@ -32,61 +32,24 @@ Follow these steps to run a web starter:
 
 To use published packages, replace the `workspace:*` versions in the starter's `package.json`.
 
-<Cards>
-  <Card
-    title="Packaged editor"
-    href="https://github.com/eigenpal/docx-editor/tree/main/examples/happy-path"
-  >
-    Use the packaged `<DocxEditor>` component in one file. The host adds New, Open, Save, and a
-    minimal review-rail host.
-  </Card>
-  <Card title="Vite + React" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vite">
-    Build a Vite and React single-page app. This starter includes composed controls, the review
-    sidebar, and a custom node.
-  </Card>
-  <Card title="Vite + Vue" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vue">
-    Build a Vue 3 and Vite app with composed controls, navigation, rulers, and package build mode.
-  </Card>
-  <Card title="Nuxt" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt">
-    Use Nuxt 3 or 4 with a client-only editor and server-side rendering.
-  </Card>
-  <Card title="Next.js" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs">
-    Integrate the editor with the App Router. One dynamic() import uses ssr: false. The rest of the
-    page uses server rendering.
-  </Card>
-  <Card title="Remix" href="https://github.com/eigenpal/docx-editor/tree/main/examples/remix">
-    Use Remix with Vite. A mount check and lazy() import prevent server rendering for the editor.
-  </Card>
-  <Card title="Astro" href="https://github.com/eigenpal/docx-editor/tree/main/examples/astro">
-    Render the editor as a React island. The client:only="react" directive disables SSR for the
-    component.
-  </Card>
-  <Card title="Igloo" href="https://igloo.docx-editor.dev/">
-    Build a themed editor. Host markup and hooks replace the packaged controls, and an expedition
-    permit shows every content control with a pop-up of the demo's own. This card opens the deployed
-    demo. Its source is in `examples/igloo`.
-  </Card>
-  <Card
-    title="Custom nodes"
-    href="https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes"
-  >
-    Define, insert, edit, and round-trip a citation node. The document stores it as a Word content
-    control.
-  </Card>
-  <Card
-    title="Headless editing"
-    href="https://github.com/eigenpal/docx-editor/tree/main/examples/automation"
-  >
-    Fill a template without a browser or framework. The browser entry can also edit a mounted
-    editor document.
-  </Card>
-  <Card title="Agent" href="https://github.com/eigenpal/docx-editor/tree/main/examples/agent">
-    Use a large language model (LLM) to read an open document and add anchored comments. Tool calls
-    run in the browser against the open editor. This starter requires an OpenAI key.
-  </Card>
-</Cards>
+Each starter has its own page with the full README, the exact commands, and a live demo where one exists:
 
-Read each starter's README for its exact commands.
+- [Happy path: the packaged DOCX editor](/examples/happy-path)
+- [Vite DOCX editor example](/examples/vite)
+- [Next.js DOCX editor example](/examples/nextjs)
+- [Remix DOCX editor example](/examples/remix)
+- [Astro DOCX editor example](/examples/astro)
+- [Igloo Editor](/examples/igloo)
+- [Custom nodes in Word content controls](/examples/custom-nodes)
+- [Word document automation](/examples/automation)
+- [DOCX to Markdown example](/examples/docx-to-markdown)
+- [Peer-to-peer DOCX collaboration](/examples/collaboration)
+- [Server-backed DOCX collaboration](/examples/collaboration-hocuspocus)
+- [Agent example: Roast My Doc](/examples/agent)
+- [Writer agent example](/examples/write-agent)
+- [Server agent review](/examples/server-agent-review)
+
+The Vue and Nuxt starters use workspace modules that are not published to npm. Read them in the repository: [Vue starter](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) and [Nuxt starter](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt).
 
 ## Live demo
 
