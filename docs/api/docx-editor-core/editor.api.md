@@ -2390,6 +2390,7 @@ export interface SectionProperties {
     readonly breakType: SectionBreakType;
     // (undocumented)
     readonly columns: SectionColumns;
+    readonly gridLinePitchTwips?: number;
     // (undocumented)
     readonly landscape: boolean;
     // (undocumented)

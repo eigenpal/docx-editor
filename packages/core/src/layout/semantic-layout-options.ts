@@ -90,6 +90,8 @@ export interface SemanticLayoutOptions {
   readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
   /** Authored column count/gap for anchored `relativeFrom="column"` frame resolution. */
   readonly sectionColumns?: SectionColumns;
+  /** Section grid pitch used for line-unit paragraph margins. */
+  readonly paragraphLineUnitPt?: number;
   /**
    * This section's resolved `w:pgBorders`, for the frame each of its sheets publishes.
    *

@@ -1,3 +1,4 @@
+import { contextualParagraphSpacing } from './contextual-paragraph-spacing.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
@@ -66,7 +67,6 @@ import {
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
-import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
   composeFlowKeys,
@@ -433,6 +433,7 @@ export function layoutSemanticDocument(
       ...opts,
       geometry,
       furniture,
+      paragraphLineUnitPt: (section?.properties.gridLinePitchTwips ?? 240) / 20,
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(section?.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
@@ -1015,7 +1016,7 @@ function layoutBlocksPass(
           width: availableWidth,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken,
+          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
         }),
       };
     } else {
@@ -1024,7 +1025,10 @@ function layoutBlocksPass(
         block,
         availableWidth,
         styleCascade,
-        listItem
+        listItem,
+        undefined,
+        false,
+        options.paragraphLineUnitPt
       );
       const candidateFrame =
         columns.count === 1 && !options.disabledParagraphFrameIds?.has(block.id)
@@ -1037,7 +1041,10 @@ function layoutBlocksPass(
           block,
           frame.width,
           styleCascade,
-          listItem
+          listItem,
+          undefined,
+          false,
+          options.paragraphLineUnitPt
         );
       const {
         props,
@@ -1053,10 +1060,7 @@ function layoutBlocksPass(
         inheritedRunProperties,
         markRunProperties,
       } = preparedParagraph;
-      const borders = resolveParagraphBorders(
-        block.children.find((child) => child.kind === 'paragraphProperties'),
-        styleCascade
-      );
+      const borders = preparedParagraph.borders;
       const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
         preparedParagraph,
         defaultTabStopPt,
@@ -1097,7 +1101,7 @@ function layoutBlocksPass(
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken,
+          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
         }),
       };
     }
@@ -1133,7 +1137,9 @@ function layoutBlocksPass(
     options.projectionTokenForParagraph !== undefined && options.projectionEpoch === undefined
       ? null
       : (options.projectionEpoch ?? '');
-  const framePolicy = sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds);
+  const framePolicy =
+    sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
+    `|${options.paragraphLineUnitPt ?? 12}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
   const prepassInputsValid =
     prepassMemo != null &&
@@ -1164,7 +1170,8 @@ function layoutBlocksPass(
     const prepared = resolveListAutoSpacing(
       sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
         prepareBlock(block, contentWidth)
-      )
+      ),
+      options.paragraphLineUnitPt
     );
     const keys = prepared.map((entry) => entry.key);
     const terminalTextTables = terminalTables.terminalTextTableGroup(
@@ -1184,7 +1191,9 @@ function layoutBlocksPass(
     const contextualSpacings = prepared.map(
       (entry) => entry.kind === 'paragraph' && entry.contextualSpacing
     );
-    const styleIds = prepared.map((entry) => (entry.kind === 'paragraph' ? entry.styleId : null));
+    const styleIds = prepared.map((entry) =>
+      entry.kind === 'paragraph' ? (entry.styleId ?? '') : null
+    );
     // A paragraph's bottom edge belongs to its border GROUP, which the block after it can
     // join or leave. A table never groups, and neither does a paragraph with no borders.
     const borderGroupKeys = prepared.map((entry) =>
@@ -1591,6 +1600,7 @@ function layoutBlocksPass(
   // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
   // finalize cannot amplify past the shared ceilings.
   const tableDeps: TableFlowDeps = {
+    paragraphLineUnitPt: options.paragraphLineUnitPt,
     measurer,
     cache,
     producer,
@@ -2121,14 +2131,13 @@ function layoutBlocksPass(
     // paragraph gap between its items.
     const previousEntry = index > 0 ? prepared[index - 1] : undefined;
     const nextEntry = prepared[index + 1];
-    const sameStyleAs = (other: PreparedBlock | undefined): boolean =>
-      other?.kind === 'paragraph' && other.styleId === styleId && styleId !== null;
-    const spacing: ParagraphSpacing = contextualSpacing
-      ? {
-          before: sameStyleAs(previousEntry) ? 0 : authoredSpacing.before,
-          after: sameStyleAs(nextEntry) ? 0 : authoredSpacing.after,
-        }
-      : authoredSpacing;
+    const spacing = contextualParagraphSpacing(
+      authoredSpacing,
+      contextualSpacing,
+      styleId,
+      previousEntry?.kind === 'paragraph' ? previousEntry.styleId : undefined,
+      nextEntry?.kind === 'paragraph' ? nextEntry.styleId : undefined
+    );
     const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
     // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
     // The schema treats them as mutually exclusive; where a producer writes both, hanging

@@ -2395,6 +2395,7 @@ export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right",
 export interface ParagraphAutoSpacingContext {
     readonly inList?: boolean;
     readonly inTableCell?: boolean;
+    readonly lineUnitPt?: number;
 }
 
 // @public
@@ -2986,7 +2987,7 @@ export function resolveNumberingLevel(index: NumberingIndex, numId: string, ilvl
 export function resolveOoxmlShadingFill(attributes: Readonly<Record<string, string>> | undefined): string | undefined;
 
 // @public
-export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting, inTableCell?: boolean): ParagraphLayoutInputs;
+export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting, inTableCell?: boolean, lineUnitPt?: number): ParagraphLayoutInputs;
 
 // @public
 export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: ThemeFonts): ResolvedRunStyle;
@@ -3344,6 +3345,7 @@ export interface SectionProperties {
     readonly breakType: SectionBreakType;
     // (undocumented)
     readonly columns: SectionColumns;
+    readonly gridLinePitchTwips?: number;
     // (undocumented)
     readonly landscape: boolean;
     // (undocumented)
@@ -3509,6 +3511,7 @@ export interface SemanticLayoutOptions {
     readonly notes?: NotesLayoutInput;
     readonly numberingIndex?: NumberingIndex;
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
+    readonly paragraphLineUnitPt?: number;
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;
     readonly projectionEpoch?: string;

@@ -1,3 +1,4 @@
+import { bindConflictingPrefixes } from './edit-namespace-scope.ts';
 // Atomic canonical-tree edit primitives (typed-ooxml-paragraph-editor task 4.5).
 //
 // The ONLY sanctioned way to mutate an `OoxmlPart`. Every primitive is pure — it returns a
@@ -464,6 +465,20 @@ function knownIdsIfCapturing(
   return known;
 }
 
+/** In-scope declarations at the destination, nearest ancestor wins. */
+function namespaceScopeAt(part: OoxmlPart, node: OoxmlNode | null): Map<string, string> {
+  const scope = new Map<string, string>();
+  const ancestors: OoxmlElement[] = [];
+  while (node && node.kind !== 'textValue') {
+    ancestors.push(node);
+    node = parentNodeOf(part, node.id);
+  }
+  for (let i = ancestors.length - 1; i >= 0; i -= 1)
+    for (const binding of ancestors[i]!.namespaceBindings)
+      scope.set(binding.prefix, binding.namespaceUri);
+  return scope;
+}
+
 /** Replace one node's children wholesale. */
 export function replaceChildren(
   part: OoxmlPart,
@@ -475,6 +490,8 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  const scope = namespaceScopeAt(part, target);
+  children = children.map((child) => bindConflictingPrefixes(child, scope));
   const knownIds = knownIdsIfCapturing(part, children);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
   if (result.ok) captureReplaceChildren(target, children, knownIds);
@@ -493,6 +510,8 @@ export function insertChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  const scope = namespaceScopeAt(part, target);
+  children = children.map((child) => bindConflictingPrefixes(child, scope));
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
   const knownIds = knownIdsIfCapturing(part, children);
@@ -512,6 +531,10 @@ export function replaceNode(
   if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  replacement = bindConflictingPrefixes(
+    replacement,
+    namespaceScopeAt(part, parentNodeOf(part, nodeId))
+  );
   const knownIds = knownIdsIfCapturing(part, [replacement]);
   const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
   const result = finish(rebuild(part, nodeId, replacement), options);

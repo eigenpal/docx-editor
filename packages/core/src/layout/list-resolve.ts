@@ -1,3 +1,8 @@
+import {
+  numberingParagraphProperties,
+  numberingParagraphToken,
+  withNumberingParagraphProperties,
+} from './numbering-paragraph-properties.ts';
 // Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
 // layout inputs (marker text, effective indent, marker face) for one story walk.
 
@@ -557,6 +562,7 @@ export function resolveStoryListItems(
         advanced.level.lvlJc,
         advanced.level.suff,
         advanced.level.vanish ? 1 : 0,
+        numberingParagraphToken(advanced.level),
         // The MARKER ITSELF, not its length. The first line starts where the marker ends
         // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
         // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
@@ -583,6 +589,7 @@ export function resolveStoryListItems(
       markerStyle,
       cacheToken,
     };
+    withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
     listItemNumberSources.set(item, {
       index: linked,
       numId: advanced.numId,

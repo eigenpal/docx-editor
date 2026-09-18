@@ -112,6 +112,8 @@ export interface SectionPageNumbering {
  * inherited.
  */
 export interface SectionProperties {
+  /** Active document grid line pitch for line-unit paragraph margins. */
+  readonly gridLinePitchTwips?: number;
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
   readonly columns: SectionColumns;
@@ -340,6 +342,9 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   const pgMar = childNamed(sectPr, 'pgMar');
   const cols = childNamed(sectPr, 'cols');
   const defaults = DEFAULT_SECTION_PROPERTIES;
+  const grid = childNamed(sectPr, 'docGrid');
+  const gridType = grid ? attribute(grid, 'type') : undefined;
+  const gridPitch = grid ? nonNegativeTwips(attribute(grid, 'linePitch'), 0) : 0;
 
   const orientation = pgSz ? attribute(pgSz, 'orient') : undefined;
   const width = pgSz
@@ -358,6 +363,9 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   const equalWidth = cols ? onOffAttribute(cols, 'equalWidth', true) : true;
 
   return {
+    ...((gridType === 'lines' || gridType === 'linesAndChars') && gridPitch > 0
+      ? { gridLinePitchTwips: gridPitch }
+      : {}),
     pageSize: { widthTwips: width, heightTwips: height },
     margins: {
       topTwips: pgMar ? marginTwips(attribute(pgMar, 'top'), 1440) : defaults.margins.topTwips,

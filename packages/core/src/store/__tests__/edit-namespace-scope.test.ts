@@ -1,0 +1,90 @@
+import { expect, test } from 'bun:test';
+import { strToU8, unzipSync, zipSync } from 'fflate';
+import { bindConflictingPrefixes } from '../package/edit-namespace-scope.ts';
+import { readOoxmlPart, serializeOoxmlPart, type OoxmlElement } from '../package/ooxml-tree.ts';
+import {
+  plainDoc,
+  openStore,
+  paragraphsOf,
+  transactBody,
+  captureOneJournal,
+  replayAndCompare,
+  W,
+} from './canonical-primitive-journal-coverage-support.ts';
+import { writeOoxmlPackage, readOoxmlPackage } from '../package/ooxml-package.ts';
+
+function conflictingDocument(): Uint8Array {
+  const entries = unzipSync(
+    plainDoc(
+      '<w:p><w:r><w:t>First Second</w:t><f:keep xmlns:f="urn:foreign" f:flag="yes"/></w:r></w:p>'
+    )
+  );
+  entries['word/document.xml'] = strToU8(
+    new TextDecoder()
+      .decode(entries['word/document.xml'])
+      .replaceAll('w:', 'x:')
+      .replace('xmlns:w=', 'xmlns:x=')
+      .replace('<x:document ', '<x:document xmlns:w="urn:foreign" w:flag="yes" ')
+  );
+  return zipSync(entries);
+}
+test('split and formatting bind generated prefixes without altering foreign QNames; journals replay', () => {
+  const bytes = conflictingDocument();
+  const id = paragraphsOf(openStore(bytes).bodyStore().part)[0]!.id;
+  for (const op of [
+    { op: 'splitParagraph', paragraphId: id, offset: 6 } as const,
+    {
+      op: 'setParagraphProperties',
+      paragraphId: id,
+      properties: [{ localName: 'spacing', attributes: { afterLines: '100' } }],
+    } as const,
+  ]) {
+    const source = openStore(bytes);
+    const replica = openStore(bytes);
+    const captured = captureOneJournal(source, () => transactBody(source, op));
+    expect(captured.result.ok).toBe(true);
+    expect(captured.journal).not.toBeNull();
+    replayAndCompare(replica, source, captured.journal!);
+    const xml = serializeOoxmlPart(source.bodyStore().part);
+    expect(source.bodyStore().part.root.namespaceBindings).toContainEqual({
+      prefix: 'w',
+      namespaceUri: 'urn:foreign',
+    });
+    expect(xml).toContain('flag="yes"');
+    expect(xml).toContain('f:keep');
+    const written = writeOoxmlPackage(source.currentPackage());
+    expect(readOoxmlPackage(written).ok).toBe(true);
+  }
+});
+test('local rebinding also preserves reused children with the old prefix meaning', () => {
+  const parsed = readOoxmlPart('<w:foreign xmlns:w="urn:foreign"><w:child/></w:foreign>', {
+    name: '/part.xml',
+    contentType: 'application/xml',
+  });
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const root = {
+    ...parsed.part.root,
+    namespaceUri: W,
+    localName: 'p',
+    kind: 'paragraph',
+    namespaceBindings: [],
+  } as OoxmlElement;
+  const bound = bindConflictingPrefixes(root, new Map([['w', 'urn:foreign']])) as OoxmlElement;
+  expect(bound.namespaceBindings).toEqual([{ prefix: 'w', namespaceUri: W }]);
+  expect((bound.children[0] as OoxmlElement).namespaceBindings).toEqual([
+    { prefix: 'w', namespaceUri: 'urn:foreign' },
+  ]);
+});
+test('does not rewrite explicitly contradictory declarations', () => {
+  const node = {
+    id: 'bad',
+    kind: 'paragraph',
+    localName: 'p',
+    namespaceUri: W,
+    prefix: 'w',
+    namespaceBindings: [{ prefix: 'w', namespaceUri: 'urn:foreign' }],
+    attributes: [],
+    children: [],
+  } as OoxmlElement;
+  expect(bindConflictingPrefixes(node, new Map([['w', W]]))).toBe(node);
+});

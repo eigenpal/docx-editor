@@ -1,7 +1,6 @@
+import { previousListParagraphs, isBlankListSeparator } from './list-separator-context.ts';
 import {
   findNode,
-  parentNodeOf,
-  paragraphTextOf,
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
@@ -33,16 +32,10 @@ export function listSeparatorEnter(
   actorId?: string
 ): TreeDocOp | null {
   const paragraph = findNode(part, position.paragraphId);
-  const parent = parentNodeOf(part, position.paragraphId);
-  if (paragraph?.kind !== 'paragraph' || !parent) return null;
-  const index = parent.children.findIndex((node) => node.id === paragraph.id);
-  const gap = parent.children[index - 1];
-  const previous = parent.children[index - 2];
+  if (paragraph?.kind !== 'paragraph') return null;
+  const [previous, gap] = previousListParagraphs(part, paragraph);
   if (gap?.kind !== 'paragraph' || previous?.kind !== 'paragraph') return null;
-  const gapText = paragraphTextOf(part, gap.id);
-  if (gapText === null || !/^[ \t\u00a0]*$/.test(gapText)) return null;
-  const gapProperties = gap.children.find((node) => node.kind === 'paragraphProperties');
-  if (gapProperties?.children.some((node) => node.localName === 'sectPr')) return null;
+  if (!isBlankListSeparator(gap)) return null;
   const marker = fragmentHolding(layout, paragraph.id)?.marker;
   const priorMarker = fragmentHolding(layout, previous.id)?.marker;
   if (!marker || marker.numId !== priorMarker?.numId || marker.level !== priorMarker.level)

@@ -1,3 +1,4 @@
+import { withNumberingParagraphProperties } from './numbering-paragraph-properties.ts';
 // Bounded projection of `/word/numbering.xml` for semantic list layout.
 //
 // Projection only — never mutation or serialization authority. Hostile values are dropped
@@ -305,19 +306,22 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
   const rPr = child(lvl, 'rPr');
   const runProperties = rPr ? propertiesOfRunContainer(rPr) : [];
 
-  return {
-    ilvl: ilvlRaw,
-    start: startVal,
-    numFmt: numFmtVal.length > 64 ? 'decimal' : numFmtVal,
-    lvlText: lvlText.length > 64 ? lvlText.slice(0, 64) : lvlText,
-    lvlJc,
-    suff,
-    indent: parseIndent(pPr),
-    ...(lvlRestart !== undefined ? { lvlRestart } : {}),
-    isLgl: onOffChild(lvl, 'isLgl'),
-    runProperties,
-    vanish: toggleOn(runProperties, 'vanish'),
-  };
+  return withNumberingParagraphProperties(
+    {
+      ilvl: ilvlRaw,
+      start: startVal,
+      numFmt: numFmtVal.length > 64 ? 'decimal' : numFmtVal,
+      lvlText: lvlText.length > 64 ? lvlText.slice(0, 64) : lvlText,
+      lvlJc,
+      suff,
+      indent: parseIndent(pPr),
+      ...(lvlRestart !== undefined ? { lvlRestart } : {}),
+      isLgl: onOffChild(lvl, 'isLgl'),
+      runProperties,
+      vanish: toggleOn(runProperties, 'vanish'),
+    },
+    pPr
+  );
 }
 
 function parseAbstractNum(node: OoxmlElement): AbstractNumDefinition | null {

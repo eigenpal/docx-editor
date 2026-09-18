@@ -255,6 +255,49 @@ describe('Enter continues a single blank separator between list items', () => {
       }
   });
 
+  test('separators cross content-control boundaries without leaving the current control', async () => {
+    const control = (body: string) =>
+      `<w:sdt><w:sdtPr><w:id w:val="42"/></w:sdtPr><w:sdtContent>${body}</w:sdtContent></w:sdt>`;
+    for (const body of [
+      item('First') + gap + control(item('Second')),
+      control(item('First') + gap) + item('Second'),
+      control(item('First') + gap + item('Second')),
+    ]) {
+      const editor = mount(docx(body));
+      enter(editor, 2, 6);
+      expect(texts(editor)).toEqual(['First', '', 'Second', '', '']);
+      expect(markers(editor)).toEqual(['1.', null, '2.', null, '3.']);
+      expect(markers(mount(new Uint8Array(await editor.save())))).toEqual(markers(editor));
+      editor.surface!.undo();
+      expect(texts(editor)).toEqual(['First', '', 'Second']);
+      editor.surface!.redo();
+      expect(texts(editor)).toHaveLength(5);
+    }
+  });
+
+  test.each([
+    '<w:r><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:12pt;height:12pt"/></w:pict></w:r>',
+    '<w:fldSimple w:instr="DATE"><w:r><w:t/></w:r></w:fldSimple>',
+    '<w:r><w:footnoteReference w:id="1"/></w:r>',
+    '<w:r><w:br/></w:r>',
+  ])('non-text content is not a blank separator: %s', (content) => {
+    const editor = mount(docx(item('First') + `<w:p>${content}</w:p>` + item('Second')));
+    enter(editor, 2, 6);
+    expect(texts(editor)).toHaveLength(4);
+  });
+
+  test('bookmarks inside a blank separator do not prevent continuation', () => {
+    const editor = mount(
+      docx(
+        item('First') +
+          '<w:p><w:bookmarkStart w:id="1" w:name="Blank"/><w:bookmarkEnd w:id="1"/></w:p>' +
+          item('Second')
+      )
+    );
+    enter(editor, 2, 6);
+    expect(texts(editor)).toHaveLength(5);
+  });
+
   test('bullets and whitespace-only separators follow the same continuation rule', () => {
     const bullets = NUMBERING.replace('decimal', 'bullet').replace('%1.', '•');
     for (const blank of ['', '   ', '&#160;', '&#9;']) {
@@ -418,26 +461,34 @@ describe('Enter continues a single blank separator between list items', () => {
     expect(markers(editor)).toEqual(['1.', null, '2.', null, '3.']);
   });
 
-  test('style creation preserves documents using an alternate XML prefix', async () => {
-    const entries = unzipSync(docx(item('First') + paragraph('') + item('Second'), NORMAL));
-    entries['word/styles.xml'] = strToU8(
-      new TextDecoder()
-        .decode(entries['word/styles.xml'])
-        .replaceAll('w:', 'x:')
-        .replace('xmlns:w', 'xmlns:x')
-    );
-    entries['word/document.xml'] = strToU8(
-      new TextDecoder()
-        .decode(entries['word/document.xml'])
-        .replaceAll('w:', 'x:')
-        .replace('xmlns:w', 'xmlns:x')
-    );
-    const editor = mount(zipSync(entries));
-    enter(editor, 2, 6);
-    expect(texts(editor)).toHaveLength(5);
-    const reloaded = mount(new Uint8Array(await editor.save()));
-    expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
-  });
+  test.each(['', ' xmlns:w="urn:foreign" w:flag="keep"'])(
+    'style creation preserves alternate prefixes and conflicts: %s',
+    async (binding) => {
+      const entries = unzipSync(docx(item('First') + paragraph('') + item('Second'), NORMAL));
+      entries['word/styles.xml'] = strToU8(
+        new TextDecoder()
+          .decode(entries['word/styles.xml'])
+          .replaceAll('w:', 'x:')
+          .replace('xmlns:w', 'xmlns:x')
+      );
+      entries['word/document.xml'] = strToU8(
+        new TextDecoder()
+          .decode(entries['word/document.xml'])
+          .replaceAll('w:', 'x:')
+          .replace('xmlns:w', 'xmlns:x')
+          .replace('<x:document ', `<x:document${binding} `)
+      );
+      const editor = mount(zipSync(entries));
+      enter(editor, 2, 6);
+      expect(texts(editor)).toHaveLength(5);
+      const reloaded = mount(new Uint8Array(await editor.save()));
+      expect(markers(reloaded)).toEqual(['1.', null, '2.', null, '3.']);
+      editor.surface!.undo();
+      expect(texts(editor)).toHaveLength(3);
+      editor.surface!.redo();
+      expect(markers(editor)).toEqual(markers(reloaded));
+    }
+  );
 
   test('style creation journals replay for existing and absent styles parts', () => {
     for (const hasStyles of [true, false]) {
@@ -480,6 +531,7 @@ describe('Enter continues a single blank separator between list items', () => {
 
   test.each([
     ['document defaults', '<w:spacing w:after="160" w:line="360"/>', '', '', ''],
+    ['line-unit defaults', '<w:spacing w:afterLines="150" w:beforeLines="50"/>', '', '', ''],
     ['base style', '', '<w:spacing w:before="120" w:after="240"/>', '', ''],
     ['derived style', '', '<w:spacing w:after="240"/>', '<w:spacing w:before="160"/>', ''],
     [

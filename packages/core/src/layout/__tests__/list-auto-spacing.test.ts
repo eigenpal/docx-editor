@@ -227,6 +227,22 @@ describe('automatic list spacing matches Word', () => {
     expect(editor.surface!.layout().pages).toHaveLength(1);
   });
 
+  test('explicit contextual margins do not inflate keep-next groups without a named style', async () => {
+    const props =
+      '<w:contextualSpacing/><w:spacing w:afterLines="200" w:line="240" w:lineRule="exact"/>';
+    const body =
+      Array.from({ length: 5 }, () => paragraph('Lead', props)).join('') +
+      paragraph('One', props + '<w:keepNext/>') +
+      paragraph('After', props) +
+      '<w:sectPr><w:pgSz w:w="10000" w:h="2100"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0"/></w:sectPr>';
+    const editor = mount(docx(body, ''));
+    expect(editor.surface!.layout().pages).toHaveLength(1);
+    enter(editor, 5, 3);
+    expect(geometry(mount(new Uint8Array(await editor.save())))).toEqual(geometry(editor));
+    editor.surface!.undo();
+    expect(editor.surface!.layout().pages).toHaveLength(1);
+  });
+
   test('explicit spacing survives Enter and automatic neighbors do not erase it', () => {
     const editor = mount(
       docx(item('One') + item('Two', '<w:spacing w:after="240"/>') + item('Three'))

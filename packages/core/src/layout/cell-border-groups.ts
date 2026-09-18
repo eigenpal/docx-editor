@@ -120,3 +120,22 @@ export function neighbourBorderGroupKey(
 ): string {
   return block && block.kind === 'paragraph' ? cellBorderGroupKey(block, context) : '';
 }
+
+/** Reuse the current paragraph's resolution when checking its cell neighbours. */
+export function cellBorderContinuation(
+  paragraph: OoxmlElement,
+  key: string,
+  context: CellBorderGroupContext,
+  neighbours?: {
+    readonly previous: OoxmlElement | undefined;
+    readonly next: OoxmlElement | undefined;
+  }
+): { readonly continuesAbove: boolean; readonly continuesBelow: boolean } {
+  rememberCellBorderGroupKey(paragraph, context, key);
+  const matches = (block: OoxmlElement | undefined): boolean =>
+    key !== '' && neighbourBorderGroupKey(block, context) === key;
+  return {
+    continuesAbove: matches(neighbours?.previous),
+    continuesBelow: matches(neighbours?.next),
+  };
+}

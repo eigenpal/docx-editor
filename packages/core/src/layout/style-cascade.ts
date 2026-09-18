@@ -1,3 +1,4 @@
+import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -41,12 +42,7 @@ import {
   type ParagraphSpacing,
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
-import {
-  cascadedTabStops,
-  paragraphTabStops,
-  tabStopsFingerprint,
-  type ResolvedTabStops,
-} from './paragraph-tabs.ts';
+import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import {
@@ -561,23 +557,37 @@ export function cascadeParagraphFormatting(
   directPPr: OoxmlNode | undefined,
   tableCellStyle?: TableCellStyleFormatting
 ): CascadedParagraphFormatting {
+  return cascadeParagraphWithNumbering(table, directPPr, tableCellStyle);
+}
+
+function cascadeParagraphWithNumbering(
+  table: StyleCascadeTable,
+  directPPr: OoxmlNode | undefined,
+  tableCellStyle?: TableCellStyleFormatting,
+  numberingPPr?: OoxmlElement
+): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  const directNumbering = directProps.some((property) => property.localName === 'numPr');
 
   const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
+    ...(!directNumbering ? propertiesOf(numberingPPr) : []),
     ...chain.flatMap((style) => style.paragraphProperties),
+    ...(directNumbering ? propertiesOf(numberingPPr) : []),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
   if (tableCellStyle) paragraphPropertyNodes.push(...tableCellStyle.paragraphPropertyNodes);
+  if (numberingPPr && !directNumbering) paragraphPropertyNodes.push(numberingPPr);
   for (const style of chain) {
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
   }
+  if (numberingPPr && directNumbering) paragraphPropertyNodes.push(numberingPPr);
   if (directPPr) paragraphPropertyNodes.push(directPPr);
 
   const directMarkRun = findRunProperties(
@@ -794,13 +804,20 @@ export function resolveParagraphLayoutInputs(
   styleCascade: StyleCascadeTable | undefined,
   listItem?: import('./list-resolve.ts').ResolvedListItem,
   tableCellStyle?: TableCellStyleFormatting,
-  inTableCell = false
+  inTableCell = false,
+  lineUnitPt = 12
 ): ParagraphLayoutInputs {
   const pPr = findParagraphProperties(paragraph);
+  const numberingPPr = numberingParagraphProperties(listItem);
   const cascaded = styleCascade
-    ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
+    ? cascadeParagraphWithNumbering(styleCascade, pPr, tableCellStyle, numberingPPr)
     : null;
-  const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
+  const nodes =
+    cascaded?.paragraphPropertyNodes ??
+    [numberingPPr, pPr].filter((node): node is OoxmlElement => node !== undefined);
+  const props = cascaded
+    ? [...cascaded.paragraphProperties]
+    : [...propertiesOf(numberingPPr), ...propertiesOf(pPr)];
   // Content vs mark: with a styles table, `cascaded.runProperties` is content-only and
   // `markRunProperties` carries direct `w:pPr/w:rPr`. Without styles, there is no style
   // face to inherit — content stays empty and the mark props size empty lines alone.
@@ -851,9 +868,7 @@ export function resolveParagraphLayoutInputs(
         firstLine,
       }
     : { left: baseIndent.left, right: baseIndent.right, hanging, firstLine };
-  const tabStops = cascaded
-    ? cascadedTabStops(cascaded.paragraphPropertyNodes)
-    : paragraphTabStops(pPr);
+  const tabStops = cascadedTabStops(nodes);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   let outlineLevel: number | null = null;
   let sawOutlineProperty = false;
@@ -885,17 +900,13 @@ export function resolveParagraphLayoutInputs(
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell }),
+    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell, lineUnitPt }),
     lineSpacing: paragraphLineSpacing(props),
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,
-    bottomBorder: cascaded
-      ? cascadedBottomBorder(cascaded.paragraphPropertyNodes)
-      : paragraphBorders(pPr).bottom,
-    borders: cascaded
-      ? cascadedParagraphBorders(cascaded.paragraphPropertyNodes)
-      : paragraphBorders(pPr),
+    bottomBorder: cascadedBottomBorder(nodes),
+    borders: cascadedParagraphBorders(nodes),
     shading: paragraphShading(props),
     inheritedRunProperties,
     markRunProperties,

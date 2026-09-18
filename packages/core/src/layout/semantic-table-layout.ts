@@ -1,3 +1,4 @@
+import { cellContextualSpacing } from './contextual-paragraph-spacing.ts';
 import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
@@ -77,12 +78,7 @@ import {
   type StyleCascadeTable,
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
-import {
-  neighbourBorderGroupKey,
-  paragraphBorderGroupKey,
-  rememberCellBorderGroupKey,
-  type CellBorderGroupContext,
-} from './cell-border-groups.ts';
+import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
   MAX_TABLE_NESTING,
@@ -169,6 +165,7 @@ export interface HostedStoryFlowDeps {
 }
 
 export interface TableFlowDeps {
+  readonly paragraphLineUnitPt?: number;
   readonly measurer: TextMeasurer;
   /** Layout-only insets for one repeated-header/body occurrence. */
   readonly cellContentInsets?: ReadonlyMap<string, CellContentInsets>;
@@ -415,7 +412,8 @@ function placeCellParagraph(
     deps.styleCascade,
     listItem,
     options?.tableCellStyle,
-    true
+    true,
+    deps.paragraphLineUnitPt
   );
   const {
     props,
@@ -424,28 +422,35 @@ function placeCellParagraph(
     alignment,
     styleId,
     outlineLevel,
-    spacing,
+    spacing: authoredSpacing,
     bottomBorder,
     borders,
     shading,
   } = layoutInputs;
+  const spacing = cellContextualSpacing(
+    authoredSpacing,
+    layoutInputs.contextualSpacing,
+    styleId,
+    options?.borderNeighbours,
+    deps.styleCascade,
+    options?.tableCellStyle
+  );
   const rtl = paragraphIsRtl(props);
   // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
   // bordered block — the box opens above the first and closes below the last, and each
   // interior boundary carries `w:between` or nothing. This is the cell twin of the body
   // flow's rule, so one document cannot draw the same callout two ways depending on whether
   // it sits in a `w:tc`.
-  const borderGroupContext: CellBorderGroupContext = {
-    styleCascade: deps.styleCascade,
-    tableCellStyle: options?.tableCellStyle,
-    listItems: deps.listItems,
-  };
-  const borderGroupKey = paragraphBorderGroupKey(layoutInputs);
-  rememberCellBorderGroupKey(paragraph, borderGroupContext, borderGroupKey);
-  const inSameBorderGroup = (block: OoxmlElement | undefined): boolean =>
-    borderGroupKey !== '' && neighbourBorderGroupKey(block, borderGroupContext) === borderGroupKey;
-  const continuesAbove = inSameBorderGroup(options?.borderNeighbours?.previous);
-  const continuesBelow = inSameBorderGroup(options?.borderNeighbours?.next);
+  const { continuesAbove, continuesBelow } = cellBorderContinuation(
+    paragraph,
+    paragraphBorderGroupKey(layoutInputs),
+    {
+      styleCascade: deps.styleCascade,
+      tableCellStyle: options?.tableCellStyle,
+      listItems: deps.listItems,
+    },
+    options?.borderNeighbours
+  );
   const topEdge = continuesAbove ? undefined : borders.top;
   // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
   const closingEdge = continuesBelow ? borders.between : bottomBorder;
@@ -459,8 +464,7 @@ function placeCellParagraph(
     }
   );
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
-  // offset. Contextual spacing is a body-flow question (it compares document neighbours),
-  // so it is not applied per cell.
+  // offset. Contextual spacing compares neighbours within this cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
   // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
   // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at

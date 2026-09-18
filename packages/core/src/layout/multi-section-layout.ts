@@ -71,6 +71,7 @@ export type LayoutSectionFn = (
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
     readonly sectionColumns?: SectionColumns;
+    readonly paragraphLineUnitPt?: number;
     readonly lineCounterStart?: number;
     readonly flowStartY?: number;
     readonly spaceBeforeCarry?: number;
@@ -496,6 +497,7 @@ export function layoutMultiSectionDocument(
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
+      paragraphLineUnitPt: (section.properties.gridLinePitchTwips ?? 240) / 20,
       ...(section.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
         : {}),
@@ -644,6 +646,7 @@ export function layoutMultiSectionDocument(
       ...rest,
       retainKeys,
       geometry,
+      paragraphLineUnitPt: (sections[0]?.properties.gridLinePitchTwips ?? 240) / 20,
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(sections[0]?.properties.pageBorders
         ? { sectionPageBorders: sections[0].properties.pageBorders }
