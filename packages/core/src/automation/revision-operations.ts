@@ -1,3 +1,4 @@
+import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import {
   reviewItemKey,
   revisionSiteNodeIdsOf,
@@ -184,6 +185,7 @@ export function revisionItemOps(
 ): readonly TreeDocOp[] {
   if (
     item.revisionKind === 'structural' ||
+    ordinaryMoveRanges(reads.root).length > 0 ||
     (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
   ) {
     const decision = planRevisionBatch(

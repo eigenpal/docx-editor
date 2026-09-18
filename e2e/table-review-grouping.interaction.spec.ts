@@ -11,6 +11,8 @@ for (const name of [
   'format-row-and-cells',
   'word-created-nested-row-ins',
   'word-created-nested-row-del',
+  'format-grid-with-gap',
+  'move-range-pair',
 ]) {
   for (const action of ['Accept', 'Reject']) {
     test(`${action} ${name}: rendered groups, undo, and save/reopen`, async ({
@@ -32,7 +34,14 @@ for (const name of [
         })
       );
       await page.goto('http://localhost:5273/?bulkReview=1&fixture=table-grouping-e2e.docx');
-      const count = name === 'nested-two-rows-ins' ? 5 : 1;
+      const count =
+        name === 'nested-two-rows-ins'
+          ? 5
+          : name === 'format-grid-with-gap'
+            ? 2
+            : name === 'move-range-pair'
+              ? 4
+              : 1;
       const status = page.getByRole('status', { name: 'Batch result' });
       await expect(status).toHaveText(`${count} changes shown.`);
       await expect(page.locator(PAINTED_PAGE).first()).toBeVisible();
@@ -81,6 +90,12 @@ for (const name of [
         for (const text of ['Second A', 'Second B', 'Outer', 'Neighbour'])
           expect(xml).toContain(text);
         await expect(page.locator('.docx-pages')).toContainText('Second A');
+      } else if (name === 'move-range-pair') {
+        expect(xml.includes('>Moved<')).toBe(action === 'Accept');
+        expect(xml).not.toMatch(/<w:move(?:From|To)Range/);
+      } else if (name === 'format-grid-with-gap') {
+        expect(xml).not.toContain('<w:tblGridChange');
+        expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');
       } else {
         expect(xml.includes('FFFF00')).toBe(action === 'Accept');
         expect(xml.includes('<w:trHeight')).toBe(action === 'Accept');

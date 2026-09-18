@@ -53,6 +53,28 @@ for (const name of ['nested-two-rows-ins', 'nested-following-gap-ins']) {
   });
 }
 for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+  test(`${command} resolves an ordinary move while keeping its independent insertion`, () => {
+    const editor = mount('move-range-pair');
+    try {
+      const before = editor.getReviewItems({ placement: false });
+      expect(before).toHaveLength(4);
+      const move = before.find(
+        (entry) => entry.item.kind === 'revision' && entry.item.revisionKind === 'moveTo'
+      )!;
+      expect(editor[command](move.key).ok).toBe(true);
+      const after = editor.getReviewItems({ placement: false });
+      expect(after).toHaveLength(1);
+      expect(after[0]!.item).toMatchObject({ revisionKind: 'insert', text: 'Moved' });
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(editor.getReviewItems({ placement: false }).map((item) => item.key)).toEqual(
+        before.map((item) => item.key)
+      );
+      expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+      expect(editor.getReviewItems({ placement: false })).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
   test(`${command} preflights single-site row dependencies`, () => {
     const editor = mount(
       command === 'acceptReviewItem' ? 'nested-following-gap-del' : 'nested-following-gap-ins'

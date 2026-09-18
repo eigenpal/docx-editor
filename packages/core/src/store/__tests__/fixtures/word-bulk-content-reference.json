@@ -2640,7 +2640,7 @@
   {
     "name": "move-range-insertion",
     "action": "accept",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "unverified": null,
     "expected": {
       "text": "CASE move-range-insertionDestinationEND move-range-insertion",
       "boldText": "",
@@ -2705,7 +2705,7 @@
   {
     "name": "move-range-pair",
     "action": "reject",
-    "unverified": "Known move-range rejection mismatch",
+    "unverified": null,
     "expected": {
       "text": "CASE move-range-pairEND move-range-pair",
       "boldText": "",
@@ -2718,7 +2718,7 @@
   {
     "name": "move-range-multiple-insertions",
     "action": "accept",
-    "unverified": "Word scripting command leaves revisions unresolved; UI oracle required",
+    "unverified": null,
     "expected": {
       "text": "CASE move-range-multiple-insertionsFirstSecondEND move-range-multiple-insertions",
       "boldText": "",

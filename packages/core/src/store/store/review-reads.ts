@@ -1,15 +1,10 @@
+import { ordinaryMoveRanges } from './revision-move-ranges.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
 import { textUnder } from './review-text.ts';
 export { commentBodyText, commentInitials } from './review-text.ts';
-// The review queue: every pending decision in the document, derived from the TREE.
-//
-// Deliberately not from laid-out spans. Layout is a VIEW — the proposed-result mode drops every
-// deletion and the original mode drops every insertion — so a queue derived from spans empties
-// by half the moment a reader switches view, and the changes that vanished become unreachable
-// from the surface that is supposed to resolve them. The queue is a property of the document.
-//
-// Store derivation keeps the sidebar and automation queue consistent. Layout adds geometry.
+// Derive pending review decisions from the canonical tree, not the visible spans:
+// original/proposed display modes must never hide a decision from review actions.
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
@@ -75,6 +70,8 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
   revisionDelete: 'delete',
   revisionMoveFrom: 'moveFrom',
   revisionMoveTo: 'moveTo',
+  moveFromRangeStart: 'moveFrom',
+  moveToRangeStart: 'moveTo',
 };
 
 /** @internal */
@@ -149,6 +146,7 @@ function computeRevisionItemsOf(
   const sites = dependencies.revisionSites(part);
   if (sites.length === 0) return [];
   const located = dependencies.locations(part);
+  const moveRanges = new Map(ordinaryMoveRanges(part.root).map((range) => [range.start.id, range]));
   const hasParagraphMarks = sites.some((site) => site.paragraphMark);
   const previewByNode = new Map<string, { range: ReviewRange; text: string }>();
   const byAddress = new Map<
@@ -175,6 +173,8 @@ function computeRevisionItemsOf(
   >();
 
   for (const site of sites) {
+    const moveRange = moveRanges.get(site.node.id);
+    const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
     const sourceId = wmlAttribute(site.node, 'id');
     const id = sourceId ?? `missing-${site.node.id}`;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it
@@ -197,7 +197,10 @@ function computeRevisionItemsOf(
     const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;
 
     const structuralChange = kind === 'structural' ? structuralChangeOf(site) : undefined;
-    const where = located.get(site.node.id);
+    const start = located.get(site.node.id);
+    const end = moveRange?.end && located.get(moveRange.end.id);
+    const where =
+      start && end && start.paragraphId === end.paragraphId ? { ...start, end: end.end } : start;
     const range: ReviewRange | null = where
       ? {
           partName: part.name,
@@ -213,7 +216,7 @@ function computeRevisionItemsOf(
     ) {
       previewByNode.set(site.node.id, {
         range,
-        text: kind === 'paragraphMark' ? '\n' : textUnder(site.node),
+        text: kind === 'paragraphMark' ? '\n' : siteText,
       });
     }
 
@@ -260,11 +263,8 @@ function computeRevisionItemsOf(
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }
-      // An address holding BOTH an insertion and a deletion is one edit that replaced text.
-      // Note that the key above carries the ELEMENT NAME, so `w:ins` and `w:del` never reach
-      // this together however they are numbered: a replacement is recognised by ADJACENCY, in
-      // `pairReplacements` below, which is the only thing that works for a file this engine
-      // did not write. This stands for the kinds that do share one element name.
+      // Adjacency pairs insertions and deletions later; a shared ID alone does
+      // not make them a replacement. This branch handles already-combined kinds.
       if (
         (kind === 'insert' && existing.revisionKind === 'delete') ||
         (kind === 'delete' && existing.revisionKind === 'insert') ||
@@ -278,8 +278,8 @@ function computeRevisionItemsOf(
       // The deepest site speaks for the decision. A group's sites can sit at different
       // depths, and the shallowest would make an enclosed change look unenclosed.
       if (site.nesting > existing.nesting) existing.nesting = site.nesting;
-      if (kind === 'delete' || kind === 'moveFrom') existing.deletedText += textUnder(site.node);
-      else if (kind !== 'format' && kind !== 'paragraphMark') existing.text += textUnder(site.node);
+      if (kind === 'delete' || kind === 'moveFrom') existing.deletedText += siteText;
+      else if (kind !== 'format' && kind !== 'paragraphMark') existing.text += siteText;
       continue;
     }
     byAddress.set(key, {
@@ -299,8 +299,8 @@ function computeRevisionItemsOf(
       text:
         kind === 'format' || kind === 'paragraphMark' || kind === 'delete' || kind === 'moveFrom'
           ? ''
-          : textUnder(site.node),
-      deletedText: kind === 'delete' || kind === 'moveFrom' ? textUnder(site.node) : '',
+          : siteText,
+      deletedText: kind === 'delete' || kind === 'moveFrom' ? siteText : '',
       ranges: range ? [range] : [],
       siteNodeIds: [site.node.id],
       nesting: site.nesting,

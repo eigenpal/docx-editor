@@ -1,3 +1,4 @@
+import { planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
   tableRevisionContentTarget,
   tableRevisionRemovals,
@@ -72,6 +73,12 @@ export function planRevisionBatch(
     if (item) for (const id of revisionSiteNodeIdsOf(item)) selectedSites.add(id);
   }
   const sites = collectRevisionSites(scopedPart);
+  const movePlan = planOrdinaryMoves(root, sites, selectedSites, action);
+  for (const id of movePlan.selected) selectedSites.add(id);
+  for (const item of items) {
+    const ids = revisionSiteNodeIdsOf(item);
+    if (ids.length && ids.every((id) => selectedSites.has(id))) selected.add(reviewItemKey(item));
+  }
   const orphanDestinations = orphanMoveDestinationSites(root, sites);
   const indices = new Map(sites.map((site, index) => [site.node.id, index]));
   const parents = sites.map((_, index) => index);
@@ -85,6 +92,10 @@ export function planRevisionBatch(
   const join = (a: number, b: number): void => {
     parents[find(b)] = find(a);
   };
+  for (const dependency of movePlan.dependencies) {
+    const own = dependency.flatMap((id) => (indices.has(id) ? [indices.get(id)!] : []));
+    for (const index of own) join(own[0]!, index);
+  }
   const owners = new Map<string, number>();
   for (const item of items) {
     const own = revisionSiteNodeIdsOf(item).flatMap((id) => {
@@ -259,7 +270,7 @@ export function planRevisionBatch(
       ? [
           {
             op: action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions',
-            siteNodeIds: [...acceptedSites],
+            siteNodeIds: [...acceptedSites].filter((id) => !movePlan.implicit.has(id)),
             ...(scopeRoot ? { scopeRootId: scopeRoot.id } : {}),
           },
         ]

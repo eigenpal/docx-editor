@@ -44,15 +44,15 @@ export function groupTableFormatting(
       let current: FormatGroup | undefined;
       const tableGroups: FormatGroup[] = [];
       const grid: RevisionSite[] = [];
-      let allRowsFormatted = true;
+      let refusedRow = false;
       for (const child of node.children) {
         if (isW(child, 'tblGrid')) collect(child, grid);
         if (!isW(child, 'tr')) continue;
         const found: RevisionSite[] = [];
         collect(child, found);
+        refusedRow ||= found.some((site) => site.refused);
         if (!found.length || found.some((site) => site.refused)) {
           current = undefined;
-          allRowsFormatted = false;
           continue;
         }
         // Cell histories within one row are one entry even across authors.
@@ -65,10 +65,12 @@ export function groupTableFormatting(
         }
         for (const site of found) current.ids.add(site.node.id);
       }
-      // The verified grid+cells case spans the entire table. Preserve separate
-      // grid decisions where a gap or author boundary leaves its owner unclear.
-      if (allRowsFormatted && tableGroups.length === 1 && grid.every((site) => !site.refused)) {
-        for (const site of grid) tableGroups[0]!.ids.add(site.node.id);
+      // The grid is shared history, not another row-formatting decision. Carry
+      // its canonical identity on the last group; resolution retains the history
+      // while another row decision is pending, so either decision order is safe.
+      const last = tableGroups.at(-1);
+      if (last && !refusedRow && grid.every((site) => !site.refused)) {
+        for (const site of grid) last.ids.add(site.node.id);
       }
     }
     for (const child of node.children) visit(child);
@@ -93,8 +95,10 @@ export function groupTableFormatting(
   const replaced = new Map<ReviewRevisionItem, ReviewRevisionItem>();
   const consumed = new Set<ReviewRevisionItem>();
   for (const group of groups) {
-    const entries = members.get(group) ?? [];
-    const primary = entries[0];
+    const membersOfGroup = members.get(group) ?? [];
+    const primary =
+      membersOfGroup.find((item) => item.formattingKind !== 'tblGridChange') ?? membersOfGroup[0];
+    const entries = primary ? [primary, ...membersOfGroup.filter((item) => item !== primary)] : [];
     const ids = entries.flatMap(revisionSiteNodeIdsOf);
     const included = new Set(ids);
     if (!primary || entries.length < 2 || ![...group.ids].every((id) => included.has(id))) continue;
@@ -110,7 +114,10 @@ export function groupTableFormatting(
     ];
     const ranges = [
       ...new Map(
-        entries.flatMap((item) => item.ranges).map((range) => [JSON.stringify(range), range])
+        entries
+          .filter((item) => item.formattingKind !== 'tblGridChange')
+          .flatMap((item) => item.ranges)
+          .map((range) => [JSON.stringify(range), range])
       ).values(),
     ];
     replaced.set(

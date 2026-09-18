@@ -353,9 +353,22 @@ export function groupTableRevisions(
   );
   // Row markers start in property XML but nested decisions belong at row ends.
   // Preserve the existing site-order contract for paragraph-local derivations.
-  return sites.some(
-    (site) => site.parent?.localName === 'trPr' && ['ins', 'del'].includes(site.node.localName)
-  )
-    ? grouped.sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order))
+  const rangeIds = new Set(
+    sites
+      .filter(
+        (site) => site.node.kind === 'moveFromRangeStart' || site.node.kind === 'moveToRangeStart'
+      )
+      .map((site) => site.node.id)
+  );
+  return rangeIds.size > 0 ||
+    sites.some(
+      (site) => site.parent?.localName === 'trPr' && ['ins', 'del'].includes(site.node.localName)
+    )
+    ? grouped.sort(
+        (a, b) =>
+          reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order) ||
+          Number(revisionSiteNodeIdsOf(b).some((id) => rangeIds.has(id))) -
+            Number(revisionSiteNodeIdsOf(a).some((id) => rangeIds.has(id)))
+      )
     : grouped;
 }

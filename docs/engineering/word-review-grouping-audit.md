@@ -11,7 +11,7 @@ Native Microsoft Word Reviewing Pane observations from 2026-09-18. All examples 
 - Cell insertion/deletion markers remain independent, including when a row marker is present.
 - Untracked rows do not group independent insertions across their cells.
 
-The matrix contains 87 synthetic fixtures inspected in Word, including seven move controls and two unchanged-gap controls. The tests record matching Reviewing Pane entry counts for 76 cases. They additionally verify canonical site membership, individual and batch resolution, preservation of independent decisions, undo/redo, live cell edits, activation, automation handles, and reused identities outside a group.
+The matrix contains 87 synthetic fixtures inspected in Word, including seven move controls and two unchanged-gap controls. The tests record matching Reviewing Pane entry counts for 84 cases. They additionally verify canonical site membership, individual and batch resolution, preservation of independent decisions, undo/redo, live cell edits, activation, automation handles, and reused identities outside a group.
 
 ## Nested tables
 
@@ -61,7 +61,9 @@ Move ranges and move wrappers are not interchangeable. Seven additional controls
 
 The paired move-wrapper control was accepted in Word and saved: neither move wrapper nor range marker remained. A first version incorrectly used `delText` inside `moveFrom`; Word rejected that fixture. The corrected control uses `t` and opens normally. Only the corrected result counts as evidence.
 
-These controls expose a separate unresolved gap: the engine derives move decisions from wrappers and does not expose independent move-range decisions over ordinary insertion/deletion wrappers. Reclassifying those insertions as moves would not match Word's observed queue. Resolution and dependency semantics must be verified before adding the missing decisions.
+Paragraph-local ranges over ordinary insertion/deletion wrappers now expose independent move decisions. Sixteen Word-saved individual accept/reject results verify paired, source-only and destination-only controls. Accepting a paired move consumes the source while preserving the destination insertion; rejecting it carries the destination's still-tracked content back to the source. Reject All subsequently rejects that insertion, matching Word's empty result. Resolving text that empties a range also clears the associated move metadata. Batch results include decisions consumed by these dependencies.
+
+Safety regressions cover locked source/destination controls, shared revision identities outside the range, malformed pairs, run-format preservation, card order and anchors. Unsupported range shapes remain visible read-only decisions. Existing move-wrapper behavior remains separate; the orphan destination range around a `moveTo` wrapper still lacks Word's separate insertion/move presentation.
 
 ## Native bulk-content references
 
@@ -69,7 +71,7 @@ Microsoft Word for Mac 16.113 (build 16.113.26091433) was used to save accept-al
 
 The comparison deliberately ignores run splitting: Word can combine adjacent equally formatted runs without changing the result. It does **not** assert table widths, grid widths, all formatting properties, individual group ownership, or universal UI parity. Separate width/grid comparisons still expose differences.
 
-The reference tests confirm 163 outputs for the listed properties and distinguish them from unresolved cases. Six native bulk outputs retain revisions: destructive actions on `nested-plain-*` and `nested-opposite-row-*`, and acceptance of the two orphan destination-range insertion controls. The paired ordinary insertion/deletion move-range rejection produces different text from the engine. These seven outputs are explicit TODOs, not passing parity tests.
+The reference tests confirm 166 outputs for the listed properties. The paired ordinary move rejection now matches Word. The two orphan destination-range insertion controls require a second native Accept All pass before Word clears their remaining move metadata; the engine reaches that completed result in one batch. The four destructive `nested-plain-*` and `nested-opposite-row-*` controls still retain a revision after repeated native bulk actions. Those four remain explicit TODOs, not completed native oracles.
 
 Two native automation paths were tested. AppleScript's `accept all revisions` / `reject all revisions` collection commands are not a sufficient UI oracle: they can leave a section-property history that Word's built-in `AcceptAllChangesInDoc` command resolves. The bulk reference pass therefore uses the built-in `AcceptAllChangesInDoc` and `RejectAllChangesInDoc` commands through `run VB macro`, saves the disposable document, and closes it.
 
@@ -78,7 +80,8 @@ Native revision-object indexing also needs caution for nested tables. In the two
 ## Remaining limits
 
 - Standalone `tblPrChange` and `tblGridChange` fixtures each opened with zero Word entries. Save As copies contained neither history, while retaining current properties. The engine preserves those resolvable histories; removing them for count parity would change import/save behavior.
-- Grid histories are combined only when one formatting group spans every row. The grid-with-gap and grid-with-different-row-authors fixtures each show two Word entries; the engine preserves a third grid decision. These and the two standalone histories account for the four unmatched fixture counts.
+- Shared grid history now accompanies row-formatting decisions without creating a third card. Eight native single-entry probes confirm that resolving either entry retains the shared grid history while the other remains pending. The resolver defers that history until the last row decision; regressions exercise both orders and all accept/reject combinations. This verifies history lifetime and row-height decisions, not numeric width/grid restoration parity.
+- Standalone table/grid histories and the orphan range around a move wrapper account for the three fixture counts still outside the verified count assertions.
 - Native single-entry nested-row action membership remains unresolved. Native object indices do not map reliably to the visible entries. Built-in navigation followed by `AcceptChangesSelected`, `AcceptChangesOrAdvance`, and `AcceptChangesAndAdvance` resolves the first text entry, but leaves the selected third nested entry unchanged in the two-row fixture. Direct acceptance of revision object 3 instead resolves the nested table. These conflicting results are not a verified UI action oracle.
 - Group metadata and arbitrary combinations beyond the synthetic matrix are not claimed to have universal Word parity.
 

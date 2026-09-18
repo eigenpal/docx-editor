@@ -1,3 +1,4 @@
+import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import type {
   EditorModuleRegistry,
   ReviewDisplayMode,
@@ -357,6 +358,7 @@ function resolutionOps(
   // together, with the same dependency preflight as the bulk command.
   if (
     item.revisionKind === 'structural' ||
+    ordinaryMoveRanges(part.root).length > 0 ||
     (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
   ) {
     return [...planRevisionBatch(part, action, [reviewItemKey(item)]).ops];

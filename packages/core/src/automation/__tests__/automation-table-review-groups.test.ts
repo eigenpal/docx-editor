@@ -6,6 +6,36 @@ import {
 } from '../../store/__tests__/fixtures/review-table-grouping-cases.ts';
 import { handlesAt, open, reopen, savedPartBytes } from './support/protocol.ts';
 for (const action of ['acceptRevision', 'rejectRevision'] as const) {
+  test(`automation ${action} resolves an ordinary move and saves the remaining insertion`, () => {
+    const fixture = reviewTableGroupingCases.find((entry) => entry.name === 'move-range-pair')!;
+    const current = reopen(
+      open(
+        zipSync(
+          Object.fromEntries(
+            Object.entries(reviewTableGroupingParts(fixture)).map(([name, xml]) => [
+              name,
+              strToU8(xml),
+            ])
+          )
+        )
+      )
+    );
+    const revisions = handlesAt(
+      current.host.execute({ operations: [{ op: 'getRevisions', body: current.body }] }),
+      0
+    );
+    expect(revisions).toHaveLength(4);
+    expect(
+      current.host.execute({ operations: [{ op: action, revision: revisions[0]! }] })
+    ).toMatchObject({ ok: true });
+    const after = reopen(current.host);
+    expect(
+      handlesAt(after.host.execute({ operations: [{ op: 'getRevisions', body: after.body }] }), 0)
+    ).toHaveLength(1);
+    const xml = savedPartBytes(after.host, 'word/document.xml');
+    expect(xml).toContain('<w:ins');
+    expect(xml).not.toMatch(/<w:move(?:From|To)Range/);
+  });
   test(`automation ${action} preflights single-site row dependencies`, () => {
     const fixture = reviewTableGroupingCases.find(
       (c) =>
@@ -99,3 +129,34 @@ for (const action of ['acceptRevision', 'rejectRevision'] as const) {
     );
   });
 }
+
+test('automation resolves an insertion without answering a move range sharing its address', () => {
+  const attrs = 'w:id="7" w:author="Ada"';
+  const body = `<w:p><w:moveToRangeStart ${attrs} w:name="Alias"/><w:ins ${attrs}><w:r><w:t>Keep</w:t></w:r></w:ins><w:moveToRangeEnd w:id="7"/></w:p>`;
+  const current = reopen(
+    open(
+      zipSync(
+        Object.fromEntries(
+          Object.entries(reviewTableGroupingParts({ name: 'move-address-alias', body })).map(
+            ([name, xml]) => [name, strToU8(xml)]
+          )
+        )
+      )
+    )
+  );
+  const revisions = handlesAt(
+    current.host.execute({ operations: [{ op: 'getRevisions', body: current.body }] }),
+    0
+  );
+  expect(revisions).toHaveLength(2);
+  expect(
+    current.host.execute({ operations: [{ op: 'acceptRevision', revision: revisions[1]! }] })
+  ).toMatchObject({ ok: true });
+  const xml = savedPartBytes(current.host, 'word/document.xml');
+  expect(xml).toContain('<w:moveToRangeStart');
+  expect(xml).not.toContain('<w:ins');
+  const after = reopen(current.host);
+  expect(
+    handlesAt(after.host.execute({ operations: [{ op: 'getRevisions', body: after.body }] }), 0)
+  ).toHaveLength(1);
+});
