@@ -79,26 +79,13 @@ Word limits `w:tag` to 64 characters. The engine refuses an oversized tag, and t
 
 ## Compose the content-control pop-ups
 
-`public/expedition-permit.docx` holds one of every Word content control: plain and
-rich text, a date, a dropdown, a combo box, a building block gallery with its own
-glossary blocks, two checkboxes, and a picture. `IglooForms.tsx` gives the editor
-root a `popups` map for them:
+`public/expedition-permit.docx` holds one of every Word content control: plain and rich text, a date, a dropdown, a combo box, a building block gallery with its own glossary blocks, two checkboxes, and a picture. `IglooForms.tsx` gives the editor root a `popups` map for them:
 
-- `contentControlWidget` renders lists, the combo box, the gallery, and the date
-  picker from `DocxEditorContentControlWidget` parts with the demo's classes and
-  headings. The date opens the operating system's own picker through a native
-  `<input type="date">` whose ISO value goes to `apply`; a switch in the heading
-  brings back the packaged grid, which is the override a host uses for one look
-  on every platform. Both keep the **Freeze today** button. The pop-ups restate
-  the `--doc-*` tokens as deep water, so the packaged parts inside take the
-  palette without any per-class styling.
-- `contentControlPicture` carves three sled photos on a canvas and hands the PNG
-  bytes to `replaceImage`; the packaged `Picture` part stays for a file of your own.
-- `contentControlCheckbox` applies the toggle at once and speaks through the
-  notice strip.
+- `contentControlWidget` renders lists, the combo box, the gallery, and the date picker from `DocxEditorContentControlWidget` parts with the demo's classes and headings. The date opens the operating system's own picker through a native `<input type="date">` whose ISO value goes to `apply`; a switch in the heading brings back the packaged grid, which is the override a host uses for one look on every platform. Both keep the **Freeze today** button. The pop-ups restate the `--doc-*` tokens as deep water, so the packaged parts inside take the palette without any per-class styling.
+- `contentControlPicture` carves three sled photos on a canvas and hands the PNG bytes to `replaceImage`; the packaged `Picture` part stays for a file of your own.
+- `contentControlCheckbox` applies the toggle at once and speaks through the notice strip.
 
-The sessions, the draft state, and the writes are the engine's. The demo owns the
-shapes and the words.
+The sessions, the draft state, and the writes are the engine's. The demo owns the shapes and the words.
 
 ## Reuse the theme patterns
 
