@@ -1,4 +1,4 @@
-# Astro example
+# Astro DOCX editor example
 
 This example loads the React editor as an Astro island.
 

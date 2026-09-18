@@ -1,4 +1,4 @@
-# Vue example
+# Vue DOCX editor example
 
 This Vue 3 and Vite app uses the Vue adapter and the shared editor engine.
 

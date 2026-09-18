@@ -1,4 +1,4 @@
-# Server-backed collaboration
+# Server-backed DOCX collaboration
 
 This example connects a React editor to a [Hocuspocus collaboration server](https://tiptap.dev/docs/hocuspocus). Remote carets show each person's name and avatar.
 

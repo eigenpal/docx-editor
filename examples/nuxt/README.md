@@ -1,4 +1,4 @@
-# Nuxt example
+# Nuxt DOCX editor example
 
 This repository example uses the private `@docx-editor.dev/nuxt` workspace module. The module wraps the Vue adapter for Nuxt 3 and Nuxt 4.
 

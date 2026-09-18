@@ -1,4 +1,4 @@
-# Vite example
+# Vite DOCX editor example
 
 This Vite and React app shows the editor composition API with custom chrome.
 

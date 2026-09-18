@@ -1,4 +1,4 @@
-# Happy path
+# Happy path: the packaged DOCX editor
 
 This example uses the packaged `<DocxEditor>` component without custom composition.
 

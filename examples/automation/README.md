@@ -1,4 +1,4 @@
-# Document automation
+# Word document automation
 
 `@docx-editor.dev/editor-api` drives a document through a batching object model. Nothing here needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and writes them back.
 

@@ -1,4 +1,4 @@
-# Remix example
+# Remix DOCX editor example
 
 This Remix and Vite example loads the React editor after the route mounts.
 

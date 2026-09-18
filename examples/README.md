@@ -80,6 +80,7 @@ The React Vite example and the peer-to-peer collaboration example both use port 
 - `write-agent/` uses an AI agent to create a document and propose tracked changes.
 - [server-agent-review/](server-agent-review/README.md) runs a background agent that proposes tracked changes in a shared Hocuspocus room. Browser peers review the suggestions.
 - `automation/` fills a DOCX template with `@docx-editor.dev/editor-api`.
+- `editor-api-consumers/` runs deterministic agents against the published `@docx-editor.dev/editor-api` surface. No model API key.
 - `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application server.
 - `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable storage.
 - `parity/` assembles the React, Vue, Igloo, and DOCX-to-Markdown builds for the primary Vercel deployment and `bun run preview`.

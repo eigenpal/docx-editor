@@ -1,4 +1,4 @@
-# DOCX to Markdown demo
+# DOCX to Markdown example
 
 Convert a DOCX in your browser and compare the document with its Markdown output.
 

@@ -1,4 +1,4 @@
-# Next.js example
+# Next.js DOCX editor example
 
 This App Router example loads the React editor in the browser.
 

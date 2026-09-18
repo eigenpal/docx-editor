@@ -1,4 +1,4 @@
-# Peer-to-peer collaboration
+# Peer-to-peer DOCX collaboration
 
 This example uses `y-webrtc` to replicate a document between browsers. It has no application server or durable shared storage.
 
