@@ -6,6 +6,7 @@ import {
   reviewItemKey,
   serializeOoxmlPart,
 } from '../index.ts';
+import { createNodeIdAllocator, findNode, nodeIndexTestRecorder } from '../package/ooxml-edit.ts';
 import { planRevisionBatch } from '../store/revision-batch.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
@@ -245,4 +246,31 @@ test('accepting a horizontal merge does not expand an already combined span twic
   expect(xml).not.toContain('6000');
   expect(xml.match(/<w:gridCol/g)).toHaveLength(1);
   expect(xml).toContain('w:w="4000"');
+});
+
+test('partial planning preserves the original node index and allocator state', () => {
+  const body =
+    table(
+      row(cell('top', 2000, '<w:vMerge w:val="restart"/>')) +
+        row(cell('hidden', 2000, marker('cellMerge', 1, 'w:vMerge="cont"'))),
+      [2000]
+    ) + '<w:p><w:ins w:id="8" w:author="Grace"><w:r><w:t>pending</w:t></w:r></w:ins></w:p>';
+  const part = load(body);
+  const original = serializeOoxmlPart(part);
+  findNode(part, part.root.id);
+  const recorder = nodeIndexTestRecorder();
+  const key = reviewItemKey(revisionItemsOf(part).find((item) => item.author === 'Ada')!);
+  const first = planRevisionBatch(part, 'accept', [key]);
+  const second = planRevisionBatch(part, 'accept', [key]);
+  recorder.reset();
+  findNode(part, part.root.id);
+  expect(recorder.completeBuilds).toBe(0);
+  expect(createNodeIdAllocator(part)()).toBe(createNodeIdAllocator(load(body))());
+  const applied = applyTreeOp(part, first.ops[0]!);
+  if (!applied.ok) throw Error(applied.reason);
+  expect(serializeOoxmlPart(applied.part)).not.toContain('hidden');
+  expect(first).toEqual(second);
+  expect(first.result.remaining).toBe(1);
+  expect(first.result.skipped).toEqual([]);
+  expect(serializeOoxmlPart(part)).toBe(original);
 });

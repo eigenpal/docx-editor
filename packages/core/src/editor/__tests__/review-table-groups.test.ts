@@ -164,3 +164,26 @@ test('independent deletion stays selectable beside the table group', () => {
     editor.destroy();
   }
 });
+
+for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+  test(`${command} resolves the last grid-sharing row first across undo and redo`, () => {
+    const editor = mount('format-grid-with-gap');
+    try {
+      const before = editor.getReviewItems({ placement: false });
+      expect(before).toHaveLength(2);
+      expect(editor[command](before[1]!.key).ok).toBe(true);
+      expect(editor.getReviewItems({ placement: false })).toHaveLength(1);
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(editor.getReviewItems({ placement: false }).map((entry) => entry.key)).toEqual(
+        before.map((entry) => entry.key)
+      );
+      expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+      const remaining = editor.getReviewItems({ placement: false });
+      expect(remaining).toHaveLength(1);
+      expect(editor[command](remaining[0]!.key).ok).toBe(true);
+      expect(editor.getReviewItems({ placement: false })).toHaveLength(0);
+    } finally {
+      editor.destroy();
+    }
+  });
+}

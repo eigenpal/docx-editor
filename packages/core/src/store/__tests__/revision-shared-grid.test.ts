@@ -61,3 +61,88 @@ for (const name of ['format-grid-with-gap', 'format-grid-row-authors']) {
     }
   }
 }
+
+function load(body: string) {
+  const parsed = readOoxmlPart(
+    reviewTableGroupingParts({ name: 'grid-safety', body })['word/document.xml']!,
+    { name: '/word/document.xml', contentType: 'application/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  return parsed.part;
+}
+const source = reviewTableGroupingCases.find(
+  (entry) => entry.name === 'format-grid-with-gap'
+)!.body;
+for (const action of ['accept', 'reject'] as const) {
+  test(`${action}: an unsupported row cannot make a standalone grid falsely report resolved`, () => {
+    const index = source.lastIndexOf('<w:trPrChange');
+    const body = source.slice(0, index) + source.slice(index).replace(' w:author="Ada"', '');
+    expect(body).not.toBe(source);
+    let part = load(body);
+    expect(revisionItemsOf(part)).toHaveLength(3);
+    const plan = planRevisionBatch(part, action);
+    expect(plan.result.skipped).toHaveLength(1);
+    for (const op of plan.ops) {
+      const result = applyTreeOp(part, op);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    }
+    expect(revisionItemsOf(part)).toHaveLength(plan.result.remaining);
+    expect(revisionItemsOf(part)).toHaveLength(1);
+    expect(serializeOoxmlPart(part)).not.toContain('<w:tblGridChange');
+  });
+  test(`${action}: a row identity spanning tables keeps grid history independently addressable`, () => {
+    const row = source.match(/<w:tr>.*?<\/w:tr>/)![0];
+    let part = load(source + `<w:tbl>${row}</w:tbl>`);
+    const items = revisionItemsOf(part);
+    expect(items).toHaveLength(3);
+    const singleRow = items.find(
+      (item) => item.formattingKind === 'trPrChange' && item.ranges.length === 1
+    )!;
+    expect(singleRow).toBeDefined();
+    const plan = planRevisionBatch(part, action, [reviewItemKey(singleRow)]);
+    expect(plan.result.skipped).toEqual([]);
+    for (const op of plan.ops) {
+      const result = applyTreeOp(part, op);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    }
+    expect(revisionItemsOf(part)).toHaveLength(2);
+    expect(revisionItemsOf(part)).toHaveLength(plan.result.remaining);
+    expect(serializeOoxmlPart(part)).toContain('<w:tblGridChange');
+  });
+}
+
+test('a rejection with a non-restorable row history keeps the shared grid pending', () => {
+  const body = source.replace(/(<w:trPrChange[^>]*>)[^]*?(<\/w:trPrChange>)/, '$1$2');
+  expect(body).not.toBe(source);
+  let part = load(body);
+  const plan = planRevisionBatch(part, 'reject');
+  expect(plan.result.skipped).toHaveLength(1);
+  expect(plan.result.resolved).toHaveLength(1);
+  for (const op of plan.ops) {
+    const result = applyTreeOp(part, op);
+    if (!result.ok) throw new Error(result.reason);
+    part = result.part;
+  }
+  expect(revisionItemsOf(part)).toHaveLength(plan.result.remaining);
+  expect(serializeOoxmlPart(part)).toContain('<w:tblGridChange');
+});
+test('partial row deletion reports the queue after adjacent formatting groups coalesce', () => {
+  const row = (id: number) =>
+    `<w:tr><w:trPr><w:trHeight w:val="600"/><w:trPrChange w:id="${id}" w:author="Ada"><w:trPr/></w:trPrChange></w:trPr><w:tc><w:p><w:r><w:t>Keep</w:t></w:r></w:p></w:tc></w:tr>`;
+  const middle =
+    '<w:tr><w:trPr><w:del w:id="2" w:author="Bob"/></w:trPr><w:tc><w:p/></w:tc></w:tr>';
+  let part = load(`<w:tbl>${row(1)}${middle}${row(3)}</w:tbl>`);
+  const before = revisionItemsOf(part);
+  expect(before).toHaveLength(3);
+  const rowDecision = before.find((item) => item.revisionKind === 'structural')!;
+  const plan = planRevisionBatch(part, 'accept', [reviewItemKey(rowDecision)]);
+  expect(plan.result.remaining).toBe(1);
+  for (const op of plan.ops) {
+    const result = applyTreeOp(part, op);
+    if (!result.ok) throw new Error(result.reason);
+    part = result.part;
+  }
+  expect(revisionItemsOf(part)).toHaveLength(1);
+});

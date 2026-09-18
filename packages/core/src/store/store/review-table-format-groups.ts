@@ -9,6 +9,7 @@ import type { RevisionSite } from './tree-op-revisions.ts';
 const isW = (node: OoxmlNode, name: string) =>
   node.kind !== 'textValue' && node.namespaceUri === WML_NAMESPACE_URI && node.localName === name;
 interface FormatGroup {
+  tableId: string;
   ids: Set<string>;
   author: string;
 }
@@ -59,7 +60,7 @@ export function groupTableFormatting(
         // Word attributes that entry to the last property history in the row.
         const author = authorOf(found[found.length - 1]!);
         if (!current || current.author !== author) {
-          current = { ids: new Set(), author };
+          current = { ids: new Set(), author, tableId: node.id };
           groups.push(current);
           tableGroups.push(current);
         }
@@ -77,6 +78,23 @@ export function groupTableFormatting(
   };
   visit(part.root);
   for (const group of groups) for (const id of group.ids) owner.set(id, group);
+  // A reused identity can span groups or tables. If a row decision cannot be
+  // represented by one group, keep its table's grid independently addressable.
+  const ambiguousTables = new Set<string>();
+  for (const item of items) {
+    const ids = revisionSiteNodeIdsOf(item);
+    const assigned = ids.map((id) => owner.get(id));
+    if (assigned.some((group) => group !== assigned[0]))
+      for (const group of assigned) if (group) ambiguousTables.add(group.tableId);
+  }
+  for (const group of groups) {
+    if (!ambiguousTables.has(group.tableId)) continue;
+    for (const id of group.ids) {
+      if (formatting.get(id)?.node.localName !== 'tblGridChange') continue;
+      group.ids.delete(id);
+      owner.delete(id);
+    }
+  }
   const members = new Map<FormatGroup, ReviewRevisionItem[]>();
   for (const item of items) {
     const ids = revisionSiteNodeIdsOf(item);

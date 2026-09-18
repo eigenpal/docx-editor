@@ -172,3 +172,15 @@ for (const action of ['accept', 'reject'] as const) {
     expect(xml.match(/>Moved</g)).toHaveLength(1);
   });
 }
+
+test('rejecting destination text cannot bypass a refused move dependency', () => {
+  const deletion = pair.match(/<w:del\b.*?<\/w:del>/)![0];
+  const part = load(pair + `<w:p>${deletion}</w:p>`);
+  const selected = revisionItemsOf(part).filter(
+    (item) => item.revisionKind === 'moveTo' || item.revisionKind === 'insert'
+  );
+  const plan = planRevisionBatch(part, 'reject', selected.map(reviewItemKey));
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.resolved).toEqual([]);
+  expect(plan.result.skipped.some((entry) => entry.reason === 'incomplete-group')).toBe(true);
+});

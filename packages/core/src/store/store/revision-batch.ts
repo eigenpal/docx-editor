@@ -1,3 +1,4 @@
+import { deferredTableGridSites } from './revision-table-grid-history.ts';
 import { planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
   tableRevisionContentTarget,
@@ -14,6 +15,7 @@ import { revisionItemsOf } from './review-reads.ts';
 import { reviewItemKey, revisionSiteNodeIdsOf, type ReviewRevisionItem } from './review-items.ts';
 import {
   collectRevisionSites,
+  resolveRevisions,
   namedMoveRanges,
   orphanMoveDestinationSites,
 } from './tree-op-revisions.ts';
@@ -265,16 +267,47 @@ export function planRevisionBatch(
       for (const id of ids) acceptedSites.add(id);
     }
   }
+  const gridCandidates = deferredTableGridSites(part, sites, acceptedSites);
+  const deferredGrids = new Set<string>();
+  for (const item of items) {
+    const ids = revisionSiteNodeIdsOf(item);
+    // Only a grouped row decision carries deferred grid metadata. A standalone
+    // grid request is explicit and must retain its normal resolution semantics.
+    if (item.formattingKind !== 'tblGridChange' && ids.length > 1)
+      for (const id of ids) if (gridCandidates.has(id)) deferredGrids.add(id);
+  }
+  const siteNodeIds = [...acceptedSites].filter(
+    (id) => !movePlan.implicit.has(id) && !deferredGrids.has(id)
+  );
+  let remaining = items.length - resolved.length;
+  // Removing a row can make two formerly separated formatting groups adjacent.
+  // Partial outcomes must count the resulting queue, not subtract from the old one.
+  if (remaining > 0 && siteNodeIds.length) {
+    // Resolution transfers its mutable node index to the rebuilt root. Keep the
+    // original root's index and allocator state untouched during pure preflight.
+    const previewPart = { ...part, root: { ...part.root } };
+    const preview = resolveRevisions(previewPart, action, undefined, {
+      siteNodeIds,
+      ...(scopeRoot ? { scopeRootId: scopeRoot.id } : {}),
+    });
+    if (preview.ok && preview.part) {
+      const afterRoot = scopeRoot ? findNode(preview.part, scopeRoot.id) : preview.part.root;
+      remaining =
+        afterRoot && afterRoot.kind !== 'textValue'
+          ? revisionItemsOf({ ...preview.part, root: afterRoot }).length
+          : 0;
+    }
+  }
   return {
     ops: acceptedSites.size
       ? [
           {
             op: action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions',
-            siteNodeIds: [...acceptedSites].filter((id) => !movePlan.implicit.has(id)),
+            siteNodeIds,
             ...(scopeRoot ? { scopeRootId: scopeRoot.id } : {}),
           },
         ]
       : [],
-    result: { resolved, skipped, remaining: items.length - resolved.length },
+    result: { resolved, skipped, remaining },
   };
 }

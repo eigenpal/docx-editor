@@ -160,3 +160,45 @@ test('automation resolves an insertion without answering a move range sharing it
     handlesAt(after.host.execute({ operations: [{ op: 'getRevisions', body: after.body }] }), 0)
   ).toHaveLength(1);
 });
+
+for (const action of ['acceptRevision', 'rejectRevision'] as const) {
+  test(`automation ${action} preserves shared grid history through a partial save/reopen`, () => {
+    const fixture = reviewTableGroupingCases.find(
+      (entry) => entry.name === 'format-grid-with-gap'
+    )!;
+    const current = reopen(
+      open(
+        zipSync(
+          Object.fromEntries(
+            Object.entries(reviewTableGroupingParts(fixture)).map(([name, xml]) => [
+              name,
+              strToU8(xml),
+            ])
+          )
+        )
+      )
+    );
+    const revisions = handlesAt(
+      current.host.execute({ operations: [{ op: 'getRevisions', body: current.body }] }),
+      0
+    );
+    expect(revisions).toHaveLength(2);
+    expect(
+      current.host.execute({ operations: [{ op: action, revision: revisions[1]! }] })
+    ).toMatchObject({ ok: true });
+    expect(savedPartBytes(current.host, 'word/document.xml')).toContain('<w:tblGridChange');
+    const after = reopen(current.host);
+    const remaining = handlesAt(
+      after.host.execute({ operations: [{ op: 'getRevisions', body: after.body }] }),
+      0
+    );
+    expect(remaining).toHaveLength(1);
+    expect(
+      after.host.execute({ operations: [{ op: action, revision: remaining[0]! }] })
+    ).toMatchObject({ ok: true });
+    expect(savedPartBytes(after.host, 'word/document.xml')).not.toContain('<w:tblGridChange');
+    expect(
+      handlesAt(after.host.execute({ operations: [{ op: 'getRevisions', body: after.body }] }), 0)
+    ).toHaveLength(0);
+  });
+}

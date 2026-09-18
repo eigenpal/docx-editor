@@ -1,5 +1,4 @@
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
-import { deferredTableGridSites } from './revision-table-grid-history.ts';
 import {
   applyCellMerge,
   rebuildRevisionTable,
@@ -850,7 +849,6 @@ export function resolveRevisions(
   )
     return { ok: false, reason: 'unsupported-revision' };
 
-  const deferredGrids = deferredTableGridSites(part, sites, selected);
   const orphanDestinations = orphanMoveDestinationSites(scopeRoot, sites);
   const actions = new Map<string, Resolution>();
   const dropMarks = new Set(movePlan.markers);
@@ -913,7 +911,6 @@ export function resolveRevisions(
       continue;
     }
     if (site.propertyChange) {
-      if (deferredGrids.has(site.node.id)) continue;
       // Accepting keeps the current properties and drops the record; rejecting puts the
       // recorded properties back.
       if (action === 'accept') dropMarks.add(site.node.id);

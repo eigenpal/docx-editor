@@ -198,9 +198,8 @@ export function planOrdinaryMoves(
     if (!explicit && !pair.some(emptied)) continue;
     const dependencies = pair.map((range) => range.start.id);
     result.dependencies.push(dependencies);
-    if (!explicit)
-      for (const range of pair.filter(emptied))
-        for (const node of range.content) selectDescendants(node, dependencies);
+    for (const range of pair.filter(emptied))
+      for (const node of range.content) selectDescendants(node, dependencies);
     for (const range of pair) {
       selected.add(range.start.id);
       if (!explicit) result.implicit.add(range.start.id);
