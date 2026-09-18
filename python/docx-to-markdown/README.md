@@ -30,6 +30,7 @@ result = convert(
     "contract.docx",
     images=True,
     fonts="fonts/",
+    google_fonts=True,
     display_mode="proposed",
 )
 result.write("out/")  # document.md, document.json, media/
@@ -37,6 +38,7 @@ result.write("out/")  # document.md, document.json, media/
 
 - `images=True` extracts images; `images="html"` also preserves displayed sizes.
 - `fonts` accepts font files or directories. Common Word font substitutes are bundled.
+- `google_fonts=True` fetches missing fonts from a pinned Google Fonts catalog (requires network access). Use `google_font_families()` to list supported families and `result.missing_fonts` to check what still needs local font files.
 - `display_mode` selects tracked changes: `"all-markup"` (default), `"proposed"` (accepted view), or `"original"` (rejected view).
 
 Comments and tracked changes are available in `result.comments` and `result.tracked_changes`. Page breaks can differ from Word; check `result.warnings` for conversion issues.
