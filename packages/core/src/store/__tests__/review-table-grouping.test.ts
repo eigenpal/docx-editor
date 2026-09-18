@@ -126,6 +126,13 @@ test('Word attributes mixed-author cell formatting to the last cell history', ()
 });
 test('nested row grouping preserves the observed membership, not just the count', () => {
   const items = revisionItemsOf(fixture('nested-two-rows-ins'));
+  expect(items.map((item) => item.revisionKind)).toEqual([
+    'insert',
+    'insert',
+    'structural',
+    'insert',
+    'structural',
+  ]);
   expect(items.filter((item) => item.revisionKind === 'insert').map((item) => item.text)).toEqual([
     'First A',
     'First B',

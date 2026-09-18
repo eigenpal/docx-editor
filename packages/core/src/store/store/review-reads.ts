@@ -349,7 +349,7 @@ function computeRevisionItemsOf(
   // Finish inline chains before a paragraph mark connects their endpoints. Otherwise a
   // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
   // an atomic field, leaving those wrappers as separate review decisions.
-  const tableItems = groupTableRevisions(part, items, sites, located);
+  const tableItems = groupTableRevisions(part, items, sites, located, order);
   const inlineItems = mergeAdjacentSameKindEdits(tableItems, order);
   return pairReplacements(mergeParagraphBreakEdits(inlineItems, part, order, previewByNode), order);
 }

@@ -6,6 +6,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import {
   registerRevisionSiteNodeIds,
+  reviewItemPositionRank,
   revisionSiteNodeIdsOf,
   type ReviewRange,
   type ReviewRevisionItem,
@@ -23,6 +24,7 @@ interface RowGroup {
   author: string;
   direction: Direction;
   followingText: string[];
+  rowEndOnly?: boolean;
 }
 const isW = (node: OoxmlNode, name: string): boolean =>
   node.kind !== 'textValue' && node.namespaceUri === WML_NAMESPACE_URI && node.localName === name;
@@ -63,6 +65,7 @@ function groupRowRevisions(
     );
   }
   const groups: RowGroup[] = [];
+  const nestedRows = new Map<string, OoxmlElement>();
   const ownerBySite = new Map<string, RowGroup>();
   const collect = (node: OoxmlNode, group: RowGroup): void => {
     if (node.kind === 'textValue' || isW(node, 'tbl')) return;
@@ -84,6 +87,14 @@ function groupRowRevisions(
   };
   const walk = (node: OoxmlNode, tableDepth = 0): void => {
     if (node.kind === 'textValue') return;
+    if (isW(node, 'tr') && tableDepth > 1) {
+      const properties = node.children.find((child) => isW(child, 'trPr'));
+      if (properties && properties.kind !== 'textValue') {
+        for (const marker of properties.children) {
+          if (rowSites.has(marker.id)) nestedRows.set(marker.id, node);
+        }
+      }
+    }
     if (isW(node, 'tbl') && tableDepth === 0) {
       let current: RowGroup | undefined;
       for (const child of node.children) {
@@ -154,6 +165,7 @@ function groupRowRevisions(
             author,
             direction: previous.marker.localName as Direction,
             followingText: [textUnder(node)],
+            rowEndOnly: true,
           };
           groups.push(group);
           ownerBySite.set(node.id, group);
@@ -217,6 +229,10 @@ function groupRowRevisions(
       for (const child of node.children) addParagraphs(child);
     };
     for (const row of group.rows) addParagraphs(row);
+    if (group.rowEndOnly && ranges.length) {
+      const last = ranges[ranges.length - 1]!;
+      ranges.splice(0, ranges.length, { ...last, start: last.end });
+    }
     const coveredParagraphs = new Set(ranges.map((range) => range.start.paragraphId));
     for (const item of ordered)
       for (const range of item.ranges) {
@@ -243,17 +259,47 @@ function groupRowRevisions(
     replacements.set(primary, grouped);
     for (const item of entries) if (item !== primary) consumed.add(item);
   }
-  return items.filter((item) => !consumed.has(item)).map((item) => replacements.get(item) ?? item);
+  return items
+    .filter((item) => !consumed.has(item))
+    .map((item) => {
+      const replacement = replacements.get(item);
+      if (replacement) return replacement;
+      const ids = revisionSiteNodeIdsOf(item);
+      if (
+        item.revisionKind !== 'structural' ||
+        !ids.length ||
+        !ids.every((id) => nestedRows.has(id))
+      )
+        return item;
+      // Unpaired nested row markers also live at the row boundary. Their text is
+      // context for the table preview, not content owned by the row decision.
+      const ranges: ReviewRange[] = [];
+      for (const id of ids) {
+        let last: OoxmlElement | undefined;
+        const visit = (node: OoxmlNode): void => {
+          if (node.kind === 'textValue' || isW(node, 'tbl')) return;
+          if (node.kind === 'paragraph') last = node;
+          else for (const child of node.children) visit(child);
+        };
+        visit(nestedRows.get(id)!);
+        if (last) {
+          const position = { paragraphId: last.id, offset: paragraphLengths.get(last.id) ?? 0 };
+          ranges.push({ partName: part.name, start: position, end: position });
+        }
+      }
+      return ranges.length ? registerRevisionSiteNodeIds({ ...item, ranges }, ids) : item;
+    });
 }
 
 export function groupTableRevisions(
   part: OoxmlPart,
   items: readonly ReviewRevisionItem[],
   sites: readonly RevisionSite[],
-  locations: ReadonlyMap<string, SiteLocation>
+  locations: ReadonlyMap<string, SiteLocation>,
+  order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
   return groupAdjacentRunFormatting(
     groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
     sites
-  );
+  ).sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order));
 }

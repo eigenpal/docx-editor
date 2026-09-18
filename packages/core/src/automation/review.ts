@@ -8,7 +8,7 @@
 // author had in mind.
 //
 // WHAT IS LEFT OUT OF THE LISTING IS LEFT OUT ON PURPOSE. A structural revision whose exact Word
-// subtype this protocol cannot name — a row, a cell, a section, the table grid — is omitted from
+// subtype this protocol cannot name — such as cell-structure changes — is omitted from
 // `revisionReads`, because an object whose `type` we cannot publish is worse than an absence.
 // Collection membership is therefore not the collection decision set: `acceptAll` / `rejectAll`
 // still resolve every store-resolvable revision, including a complete tracked row

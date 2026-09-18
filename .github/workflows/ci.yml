@@ -99,6 +99,9 @@ jobs:
       - name: Install Chromium for Markdown preview checks
         if: "matrix.check == 'browser'"
         run: bunx playwright install --with-deps chromium
+      - name: Check table revision grouping in the editor
+        if: "matrix.check == 'browser'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"
@@ -205,7 +208,8 @@ jobs:
         id: advisories
       - name: Require a changeset when docs/api changed
         run: 'node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"'
-        if: "matrix.check == 'api-changeset' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !(startsWith(github.head_ref, 'changeset-release/') &&\n  github.event.pull_request.head.repo.full_name == github.repository)"
+        if:
+          "matrix.check == 'api-changeset' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !(startsWith(github.head_ref, 'changeset-release/') &&\n  github.event.pull_request.head.repo.full_name == github.repository)"
       - name: Save advisory report
         if: "${{ !cancelled() && matrix.check == 'shipped-advisories' && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') }}"
         continue-on-error: true

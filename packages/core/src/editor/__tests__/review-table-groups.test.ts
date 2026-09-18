@@ -35,6 +35,23 @@ function mount(name: string) {
     ],
   });
 }
+for (const name of ['nested-two-rows-ins', 'nested-following-gap-ins']) {
+  test(`${name} places nested row boundaries after independent cell text`, () => {
+    const editor = mount(name);
+    try {
+      const items = editor.getReviewItems({ placement: false });
+      expect(
+        items.map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind))
+      ).toEqual(
+        name === 'nested-two-rows-ins'
+          ? ['insert', 'insert', 'structural', 'insert', 'structural']
+          : ['insert', 'insert', 'structural', 'insert']
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+}
 for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
   test(`${command} preflights single-site row dependencies`, () => {
     const editor = mount(
