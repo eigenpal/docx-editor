@@ -142,6 +142,14 @@ test('nested row grouping preserves the observed membership, not just the count'
   expect(groups.map((item) => item.addresses.length).sort()).toEqual([2, 4]);
   const following = groups.find((item) => item.addresses.length === 2)!;
   expect(following.text).toContain('Second A');
+  const firstA = items.find((item) => item.revisionKind === 'insert' && item.text === 'First A')!;
+  expect(
+    groups
+      .flatMap((item) => item.ranges)
+      .some((range) => range.start.paragraphId === firstA.ranges[0]!.start.paragraphId)
+  ).toBe(false);
+  expect(following.ranges).toHaveLength(2);
+  expect(following.ranges[0]!.start).toEqual(following.ranges[0]!.end);
   let part = fixture('nested-two-rows-ins');
   const plan = planRevisionBatch(part, 'accept', [reviewItemKey(following)]);
   expect(plan.result.skipped).toEqual([]);

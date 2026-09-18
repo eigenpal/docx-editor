@@ -191,6 +191,28 @@ function groupRowRevisions(
     }
   };
   nestedFlow(part.root);
+  items = items.map((item) => {
+    const ids = revisionSiteNodeIdsOf(item);
+    if (item.revisionKind !== 'structural' || !ids.length || !ids.every((id) => nestedRows.has(id)))
+      return item;
+    // Nested row markers live at the row boundary. Their text is
+    // context for the table preview, not content owned by the row decision.
+    const ranges: ReviewRange[] = [];
+    for (const id of ids) {
+      let last: OoxmlElement | undefined;
+      const visit = (node: OoxmlNode): void => {
+        if (node.kind === 'textValue' || isW(node, 'tbl')) return;
+        if (node.kind === 'paragraph') last = node;
+        else for (const child of node.children) visit(child);
+      };
+      visit(nestedRows.get(id)!);
+      if (last) {
+        const position = { paragraphId: last.id, offset: paragraphLengths.get(last.id) ?? 0 };
+        ranges.push({ partName: part.name, start: position, end: position });
+      }
+    }
+    return ranges.length ? registerRevisionSiteNodeIds({ ...item, ranges }, ids) : item;
+  });
   const members = new Map<RowGroup, ReviewRevisionItem[]>();
   for (const item of items) {
     const ids = revisionSiteNodeIdsOf(item);
@@ -234,10 +256,18 @@ function groupRowRevisions(
       ranges.splice(0, ranges.length, { ...last, start: last.end });
     }
     const coveredParagraphs = new Set(ranges.map((range) => range.start.paragraphId));
-    for (const item of ordered)
+    for (const item of ordered) {
+      // The direct row paragraphs above replace the marker's broad fallback
+      // range, which can otherwise include independent nested-table text.
+      if (
+        item.revisionKind === 'structural' &&
+        revisionSiteNodeIdsOf(item).some((id) => !nestedRows.has(id))
+      )
+        continue;
       for (const range of item.ranges) {
         if (!coveredParagraphs.has(range.start.paragraphId)) ranges.push(range);
       }
+    }
     preview.push(...group.followingText);
     const grouped = registerRevisionSiteNodeIds(
       {
@@ -259,36 +289,7 @@ function groupRowRevisions(
     replacements.set(primary, grouped);
     for (const item of entries) if (item !== primary) consumed.add(item);
   }
-  return items
-    .filter((item) => !consumed.has(item))
-    .map((item) => {
-      const replacement = replacements.get(item);
-      if (replacement) return replacement;
-      const ids = revisionSiteNodeIdsOf(item);
-      if (
-        item.revisionKind !== 'structural' ||
-        !ids.length ||
-        !ids.every((id) => nestedRows.has(id))
-      )
-        return item;
-      // Unpaired nested row markers also live at the row boundary. Their text is
-      // context for the table preview, not content owned by the row decision.
-      const ranges: ReviewRange[] = [];
-      for (const id of ids) {
-        let last: OoxmlElement | undefined;
-        const visit = (node: OoxmlNode): void => {
-          if (node.kind === 'textValue' || isW(node, 'tbl')) return;
-          if (node.kind === 'paragraph') last = node;
-          else for (const child of node.children) visit(child);
-        };
-        visit(nestedRows.get(id)!);
-        if (last) {
-          const position = { paragraphId: last.id, offset: paragraphLengths.get(last.id) ?? 0 };
-          ranges.push({ partName: part.name, start: position, end: position });
-        }
-      }
-      return ranges.length ? registerRevisionSiteNodeIds({ ...item, ranges }, ids) : item;
-    });
+  return items.filter((item) => !consumed.has(item)).map((item) => replacements.get(item) ?? item);
 }
 
 export function groupTableRevisions(
@@ -298,8 +299,15 @@ export function groupTableRevisions(
   locations: ReadonlyMap<string, SiteLocation>,
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  return groupAdjacentRunFormatting(
+  const grouped = groupAdjacentRunFormatting(
     groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
     sites
-  ).sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order));
+  );
+  // Row markers start in property XML but nested decisions belong at row ends.
+  // Preserve the existing site-order contract for paragraph-local derivations.
+  return sites.some(
+    (site) => site.parent?.localName === 'trPr' && ['ins', 'del'].includes(site.node.localName)
+  )
+    ? grouped.sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order))
+    : grouped;
 }
