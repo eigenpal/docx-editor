@@ -15,7 +15,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p = (text: string, props = '') =>
   `<w:p><w:pPr><w:widowControl w:val="0"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/>${props}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const table = (width = 80, offset = 0, extra = '') =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="0" w:tblpY="${offset * 20}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="${offset * 20 + 1}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
 const part = (body: string) => {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
@@ -99,7 +99,7 @@ test('near-full-width floating tables keep their caption and heading below the t
   for (const rtl of [false, true]) {
     const source = part(
       p('Lead') +
-        table(184).replace('w:tblpX="0"', 'w:tblpXSpec="center"') +
+        table(184).replace('w:tblpX="1"', 'w:tblpXSpec="center"') +
         p('Source caption') +
         p(rtl ? 'ما يقرب من سبعين بالمئة' : 'A complete heading', rtl ? '<w:bidi/>' : '')
     );
@@ -168,7 +168,7 @@ test('moves a floating table with its anchor when its band cannot fit the page r
 
 test('preserves a negative offset beside earlier ink and displaces collisions below it', () => {
   const clear = render(
-    part(p('Lead') + table(80, -6).replace('w:tblpX="0"', 'w:tblpX="2000"') + p('Anchor'))
+    part(p('Lead') + table(80, -6).replace('w:tblpX="1"', 'w:tblpX="2001"') + p('Anchor'))
   );
   expect(tables(clear)[0]!.box.y).toBe(6);
   const colliding = render(part(p('Lead') + table(80, -6) + p('Anchor')));

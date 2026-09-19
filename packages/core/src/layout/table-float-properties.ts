@@ -31,11 +31,13 @@ function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined 
   return undefined;
 }
 
-function readSignedTwipsPt(raw: string | undefined): number | undefined {
+function readSignedTwipsPt(raw: string | undefined, encodedOffset = false): number | undefined {
   if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
   const twips = Number(raw);
   if (!Number.isFinite(twips)) return undefined;
-  const pt = twips / 20;
+  // Numeric table positions carry a one-twip storage bias (MS-OE376 2.1.163e).
+  // Text clearances use ordinary twips, and an absent position has no bias.
+  const pt = (twips - (encodedOffset ? 1 : 0)) / 20;
   return Math.max(-MAX_TABLE_FLOAT_OFFSET_PT, Math.min(MAX_TABLE_FLOAT_OFFSET_PT, pt));
 }
 
@@ -71,9 +73,9 @@ export function readTableFloatPosition(
     horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
     vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
     ...(xSpec ? { xSpec } : {}),
-    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX')) ?? 0,
+    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX'), true) ?? 0,
     ...(ySpec ? { ySpec } : {}),
-    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY')) ?? 0,
+    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY'), true) ?? 0,
     ...(['topFromText', 'rightFromText', 'bottomFromText', 'leftFromText'].some(
       (name) => attributeValue(tblpPr, name) !== undefined
     )

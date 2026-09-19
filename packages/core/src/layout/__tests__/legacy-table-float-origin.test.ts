@@ -45,7 +45,7 @@ test('legacy numeric text anchors align the leading content edge across cell mar
         6
       );
     }
-    expect(positionedTableOriginX(structure(108, '', 'w:tblpX="1440"'), frames, mode)).toBeCloseTo(
+    expect(positionedTableOriginX(structure(108, '', 'w:tblpX="1441"'), frames, mode)).toBeCloseTo(
       144 - 5.4 - 0.5,
       6
     );

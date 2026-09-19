@@ -26,7 +26,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p = (height: number, text = '', props = '') =>
   `<w:p><w:pPr><w:widowControl w:val="0"/><w:spacing w:line="${Math.round(height * 20)}" w:lineRule="exact"/><w:rPr><w:sz w:val="36"/></w:rPr>${props}</w:pPr>${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
 const table = (offset = 230, extra = '', height = 624) =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${offset}" ${extra}/><w:tblW w:type="dxa" w:w="5528"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="5528"/></w:tblGrid>${[1, 2].map((row) => `<w:tr><w:trPr><w:trHeight w:val="${height}" w:hRule="exact"/></w:trPr><w:tc>${p(31.2, `Row ${row}`)}</w:tc></w:tr>`).join('')}</w:tbl>`;
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${offset + 1}" ${extra}/><w:tblW w:type="dxa" w:w="5528"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="5528"/></w:tblGrid>${[1, 2].map((row) => `<w:tr><w:trPr><w:trHeight w:val="${height}" w:hRule="exact"/></w:trPr><w:tc>${p(31.2, `Row ${row}`)}</w:tc></w:tr>`).join('')}</w:tbl>`;
 const section = (type = '') =>
   `<w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:bottom="1440" w:left="1440" w:right="1466"/></w:sectPr>`;
 function part(body: string): OoxmlPart {
@@ -206,7 +206,7 @@ describe('terminal empty text-table anchors', () => {
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr/>')),
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr w:horzAnchor="margin"/>')),
       fixture(table().replace('w:vertAnchor="text"', 'w:vertAnchor="unknown"')),
-      fixture(table().replace('w:tblpY="230"', 'w:tblpY="1.5"')),
+      fixture(table().replace('w:tblpY="231"', 'w:tblpY="1.5"')),
       fixture(table(230, 'w:tblpYSpec="unknown"')),
       fixture(table(230, 'w:topFromText="120"')),
       fixture(table(230, 'w:bottomFromText="720"')),
