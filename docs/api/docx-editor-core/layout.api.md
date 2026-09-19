@@ -4143,6 +4143,7 @@ export function styleForFontSlot(style: ResolvedRunStyle, slot: FontSlot | undef
 
 // @public
 export interface StyleSpanRecord {
+    readonly borderBaselinePt?: number;
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];

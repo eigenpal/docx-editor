@@ -55,6 +55,7 @@ function documentWith(options: {
   readonly cx?: number;
   readonly cy?: number;
   readonly caption?: string;
+  readonly captionRunProperties?: string;
   readonly leadingText?: string;
 }): OoxmlPart {
   const cx = options.cx ?? CONTENT_WIDTH_EMU;
@@ -74,7 +75,7 @@ function documentWith(options: {
     `<pic:spPr><a:xfrm><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>` +
     '</pic:pic></a:graphicData></a:graphic>' +
     '</wp:inline></w:drawing></w:r>' +
-    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${options.caption ?? 'This is a caption'}</w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/>${options.captionRunProperties ?? ''}</w:rPr><w:t>${options.caption ?? 'This is a caption'}</w:t></w:r>` +
     '</w:p></w:body></w:document>';
   const result = readOoxmlPart(xml, {
     name: OWNER,
@@ -241,4 +242,17 @@ test('a tall inline picture clears its entire shared line, including preceding t
   expect(lines[0]!.box.y).toBe(140);
   expect(lines[0]!.spans[0]!.text).toBe('Caption ');
   expect(lines[0]!.drawings![0]!.y).toBeGreaterThanOrEqual(140);
+});
+
+test('automatic spacing includes caption borders when an inline image shares the line', () => {
+  const [line] = linesOfFirstParagraph(
+    documentWith({
+      spacing: 'w:line="480" w:lineRule="auto"',
+      cx: 127000,
+      cy: 25400,
+      captionRunProperties: '<w:bdr w:val="single" w:sz="4" w:space="0"/>',
+    })
+  );
+  expect(line!.box.height).toBe(30);
+  expect(line!.baseline).toBeCloseTo(14 * 0.8 + 0.5, 6);
 });

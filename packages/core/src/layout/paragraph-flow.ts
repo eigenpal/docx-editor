@@ -1,4 +1,4 @@
-import { growRunBorderLineMetrics } from './run-border-strokes.ts';
+import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import { markPendingLineWrapAdvances, growPendingLineDrawingExtent } from './pending-line.ts';
 import { shouldIncludeParagraphMarkHeight } from './paragraph-mark-metrics.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -998,23 +998,6 @@ export function breakParagraph(
     (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
   };
 
-  /**
-   * Height of the line's text band alone — the span an `auto` multiple scales.
-   *
-   * Recomputed from the spans rather than tracked alongside `line.height`, because it is only
-   * read on a line that also carries a drawing or equation with its own physical extent.
-   */
-  const textBandHeight = (fallback: number): number => {
-    const band = { height: 0, baseline: 0 };
-    for (const span of line.spans) {
-      growLineMetrics(
-        band,
-        measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot), span.text)
-      );
-    }
-    return band.height > 0 ? band.height : fallback;
-  };
-
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
@@ -1045,7 +1028,9 @@ export function breakParagraph(
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
-    const spacingBase = scalesTextBandOnly ? textBandHeight(metrics.height) : naturalHeight;
+    const spacingBase = scalesTextBandOnly
+      ? textBandHeightWithBorders(line.spans, measurer, metrics.height)
+      : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.

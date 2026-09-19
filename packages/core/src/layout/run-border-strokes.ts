@@ -58,7 +58,11 @@ export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBor
       flush();
       continue;
     }
-    const box = { ...span.box, y: span.box.y - baselineShiftPtOf(span.style) };
+    const faceTop =
+      span.borderBaselinePt === undefined
+        ? span.box.y + (line.leading ?? 0)
+        : line.box.y + line.baseline - span.borderBaselinePt;
+    const box = { ...span.box, y: faceTop - baselineShiftPtOf(span.style) };
     if (
       group &&
       sameEdge(group.edge, edge) &&
@@ -93,16 +97,39 @@ export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBor
 }
 
 /** Reserve character borders around each face before paragraph spacing and pagination. */
-export function growRunBorderLineMetrics(line: PendingLine, measurer: TextMeasurer): void {
+export function growRunBorderLineMetrics(
+  line: Pick<PendingLine, 'spans' | 'height' | 'baseline'>,
+  measurer: TextMeasurer
+): void {
   // Per-face maxima let a small bordered run fit inside a taller unbordered face.
-  for (const span of line.spans) {
+  for (let index = 0; index < line.spans.length; index++) {
+    const span = line.spans[index]!;
     const edge = span.style.border;
     if (!edge || span.style.hidden || !span.text || /^[\r\n\f]+$/.test(span.text)) continue;
     const metrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot), span.text);
+    if (span.borderBaselinePt !== metrics.baseline)
+      line.spans[index] = { ...span, borderBaselinePt: metrics.baseline };
     const inset = edge.spacePt + borderStrokeWidthPt(edge.val, edge.widthPt);
     growLineMetrics(line, {
       height: metrics.height + 2 * inset,
       baseline: metrics.baseline + inset,
     });
   }
+}
+
+/** Natural text band for automatic spacing when an unscaled image shares the line. */
+export function textBandHeightWithBorders(
+  spans: PendingLine['spans'],
+  measurer: TextMeasurer,
+  fallback: number
+): number {
+  const band = { height: 0, baseline: 0, spans };
+  for (const span of spans) {
+    growLineMetrics(
+      band,
+      measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot), span.text)
+    );
+  }
+  growRunBorderLineMetrics(band, measurer);
+  return band.height > 0 ? band.height : fallback;
 }

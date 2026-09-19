@@ -68,6 +68,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   style: true,
   fontSlot: true,
   glyphOffsetPt: true,
+  borderBaselinePt: true,
   caretEdges: true,
   tabLeader: true,
   tabLeaderAdvancePt: true,

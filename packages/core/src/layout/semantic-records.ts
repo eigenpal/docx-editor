@@ -169,6 +169,8 @@ export interface StyleSpanRecord {
    * ink displacement. Exporters must apply this offset to the ink origin.
    */
   readonly glyphOffsetPt?: number;
+  /** Measured face baseline for character-border geometry; span boxes remain selection bands. */
+  readonly borderBaselinePt?: number;
   readonly range: SourceRange;
   readonly text: string;
   /** The run's authored properties, retained as evidence. */

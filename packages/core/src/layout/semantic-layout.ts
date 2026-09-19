@@ -384,26 +384,12 @@ export function layoutSemanticDocument(
   if (!drawingSourceOrder && options.inlineDrawingLayout) {
     drawingSourceOrder = drawingSourceOrderInPart(part, options.inlineDrawingLayout);
   }
+  const drawingOptions = drawingSourceOrder
+    ? { ...optionsWithControlContext, drawingSourceOrder }
+    : optionsWithControlContext;
   const optionsWithLists = options.session
-    ? withResolvedListItemsForSession(
-        drawingSourceOrder
-          ? {
-              ...optionsWithControlContext,
-              drawingSourceOrder,
-            }
-          : optionsWithControlContext,
-        blocks,
-        options.session
-      )
-    : withResolvedListItems(
-        drawingSourceOrder
-          ? {
-              ...optionsWithControlContext,
-              drawingSourceOrder,
-            }
-          : optionsWithControlContext,
-        blocks
-      );
+    ? withResolvedListItemsForSession(drawingOptions, blocks, options.session)
+    : withResolvedListItems(drawingOptions, blocks);
 
   // REF cross-references resolve against the document's bookmarks and resolved numbering,
   // so the context is built here — the one place that sees both — and rides the options

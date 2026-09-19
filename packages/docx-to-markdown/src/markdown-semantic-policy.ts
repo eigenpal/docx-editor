@@ -70,6 +70,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     noteSeparator: 'layout-only',
     fontSlot: 'layout-only',
     glyphOffsetPt: 'layout-only',
+    borderBaselinePt: 'layout-only',
   } satisfies Record<keyof StyleSpanRecord, MarkdownFieldPolicy>,
   sourceRange: {
     paragraphId: 'represented',

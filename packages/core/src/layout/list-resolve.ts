@@ -3,8 +3,7 @@ import {
   numberingParagraphToken,
   withNumberingParagraphProperties,
 } from './numbering-paragraph-properties.ts';
-// Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
-// layout inputs (marker text, effective indent, marker face) for one story walk.
+// Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { flattenContentControls } from '@docx-editor.dev/core/store';
