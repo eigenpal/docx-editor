@@ -123,6 +123,8 @@ export interface ParagraphLineSpacing {
   readonly rule: LineSpacingRule;
   /** `auto`: the 240ths-of-a-line multiplier numerator. Otherwise points. */
   readonly value: number;
+  /** Legacy noExtraLineSpacing: retain the natural baseline within an exact-height box. */
+  readonly preserveExactBaseline?: true;
 }
 
 /** Single spacing: what a paragraph that says nothing gets. */
@@ -371,9 +373,8 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
  * Word places `auto` / `atLeast` extras BELOW the line (the last line's multiple spacing
  * still separates it from the next paragraph). Putting that delta above inverted cover-page
  * rhythm: `w:line="460"` on "between" opened a large gap above the word and almost none
- * before "MERIDIAN". `exact` taller than the glyphs centers the text (ECMA-376 17.3.1.33).
- * An `exact` box smaller than the glyphs keeps the baseline inside so clipped text still
- * sits on it.
+ * before "MERIDIAN". Exact-height boxes place their baseline at 80% of the height;
+ * the legacy noExtraLineSpacing switch instead preserves the face baseline within the box.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
@@ -386,12 +387,19 @@ export function applyLineSpacing(
       : spacing.rule === 'exact'
         ? spacing.value
         : Math.max(naturalHeight, spacing.value);
+  // Exact-height lines use a fixed 80/20 baseline split, independent of the face.
+  // Legacy noExtraLineSpacing retains the natural baseline (clamped to the box).
+  if (spacing.rule === 'exact') {
+    return {
+      height,
+      baseline: spacing.preserveExactBaseline
+        ? Math.max(0, Math.min(naturalBaseline, height))
+        : height * 0.8,
+    };
+  }
   const delta = height - naturalHeight;
   if (delta < 0) {
     return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
-  }
-  if (spacing.rule === 'exact') {
-    return { height, baseline: naturalBaseline + delta / 2 };
   }
   // auto / atLeast: grow the box downward; baseline stays put.
   return { height, baseline: naturalBaseline };

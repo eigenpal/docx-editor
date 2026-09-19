@@ -108,10 +108,10 @@ describe('applyLineSpacing places auto extras below the text', () => {
     });
   });
 
-  test('exact taller than the glyphs centers the text', () => {
+  test('exact taller than the glyphs uses the fixed baseline fraction', () => {
     expect(applyLineSpacing({ rule: 'exact', value: 20 }, 14, 11)).toEqual({
       height: 20,
-      baseline: 14,
+      baseline: 16,
     });
   });
 

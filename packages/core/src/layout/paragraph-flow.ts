@@ -1033,7 +1033,7 @@ export function breakParagraph(
       : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
-    // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
+    // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
     line.height = scalesTextBandOnly ? Math.max(spaced.height, naturalHeight) : spaced.height;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB

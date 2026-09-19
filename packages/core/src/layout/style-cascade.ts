@@ -1,4 +1,5 @@
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
+import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -76,6 +77,8 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
+  readonly preserveExactLineBaseline?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -433,13 +436,23 @@ export function buildStyleCascadeTable(
 ): StyleCascadeTable {
   const typography = cjkTypographyFromSettings(settingsRoot);
   const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
+  const exactBaseline = preserveExactLineBaseline(settingsRoot)
+    ? { preserveExactLineBaseline: true as const }
+    : {};
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
-      cacheToken: stableHash({ empty: true, theme, typography, strictTableHierarchy }),
+      cacheToken: stableHash({
+        empty: true,
+        theme,
+        typography,
+        strictTableHierarchy,
+        ...exactBaseline,
+      }),
+      ...exactBaseline,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: [],
@@ -481,6 +494,7 @@ export function buildStyleCascadeTable(
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
+    ...exactBaseline,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -510,6 +524,7 @@ export function buildStyleCascadeTable(
 
   return {
     cacheToken,
+    ...exactBaseline,
     strictTableStyleHierarchy: strictTableHierarchy,
     typography,
     docDefaultsRun: defaults.run,
@@ -938,7 +953,10 @@ export function resolveParagraphLayoutInputs(
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
     spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell, lineUnitPt }),
-    lineSpacing: paragraphLineSpacing(props),
+    lineSpacing: {
+      ...paragraphLineSpacing(props),
+      ...(styleCascade?.preserveExactLineBaseline ? { preserveExactBaseline: true as const } : {}),
+    },
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,

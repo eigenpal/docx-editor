@@ -2622,6 +2622,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    readonly preserveExactBaseline?: true;
     // (undocumented)
     readonly rule: LineSpacingRule;
     readonly value: number;
@@ -4103,6 +4104,7 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
