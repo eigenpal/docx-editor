@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from catalog import write_json
-from evidence import digest
+from evidence import comparison_identity, digest
 from pipeline import Worker
 from server import main
 
@@ -66,8 +66,11 @@ class SavedReferenceTests(unittest.TestCase):
             identity = digest(source); destination = root / 'documents' / identity
             destination.mkdir(parents=True); reference = destination / 'reference.pdf'; reference.write_bytes(b'reference')
             write_json(destination / 'document.json', dict(id=identity, status='exported', engineSha256='old-engine',
+                       scorerSha256=comparison_identity(),
                        pdfs={'reference-a': dict(path=reference.relative_to(root).as_posix(), sha256=digest(reference))},
-                       comparisons={'reference-a--ours': dict(errorPercent=10, dpi=96, threshold=28)}))
+                       comparisons={'reference-a--ours': dict(errorPercent=10, dpi=96, threshold=28,
+                           firstDivergence=dict(page=2, topPt=30), sizeMismatch=True,
+                           pages=[dict(number=1, errorPercent=0), dict(number=2, errorPercent=20)])}))
             stages = []
             def stage(command, log, *_args, **_kwargs):
                 stages.append(command)
@@ -88,6 +91,9 @@ class SavedReferenceTests(unittest.TestCase):
             baseline = result['comparisons']['reference-a--ours']['baseline']
             self.assertEqual(baseline['deltaPercentagePoints'], -8)
             self.assertEqual(baseline['engineSha256'], 'old-engine')
+            self.assertEqual(baseline['firstDivergence'], dict(page=2, topPt=30))
+            self.assertEqual(baseline['worstPageError'], 20)
+            self.assertTrue(baseline['sizeMismatch'])
             self.assertEqual(digest(root / result['pdfs']['reference-a']['path']), digest(reference))
 
     def test_missing_saved_reference_cannot_be_scored_as_success(self):

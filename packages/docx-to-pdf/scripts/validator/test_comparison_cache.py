@@ -89,7 +89,7 @@ class ComparisonCacheTests(unittest.TestCase):
                 metrics = dict(left='reference-b', right='ours', leftPages=1, rightPages=1,
                                errorPercent=2, dpi=96, threshold=28, invalidEvidence=changed == 'invalid',
                                baseline=dict(engineSha256='stale', deltaPercentagePoints=-5),
-                               pages=[dict(number=1, images={role: preview.relative_to(root).as_posix()
+                               pages=[dict(number=1, errorPercent=2, images={role: preview.relative_to(root).as_posix()
                                       for role in ('left', 'right', 'diff', 'overlay')})])
                 write_json(destination / 'document.json', dict(status='exported', engineSha256='previous-engine',
                            scorerSha256='old' if changed == 'scorer' else 'scorer', pdfs=pdfs, comparisons={pair: metrics}))
@@ -126,7 +126,7 @@ class ComparisonCacheTests(unittest.TestCase):
                 else:
                     self.assertIn(pair, stages)
                     self.assertEqual(result['comparisons'][pair]['errorPercent'], 3)
-                    if changed == 'reference':
+                    if changed in ('reference', 'scorer', 'invalid'):
                         self.assertNotIn('baseline', result['comparisons'][pair])
 
     def test_bad_cache_falls_back_but_disk_budget_stops_work(self):

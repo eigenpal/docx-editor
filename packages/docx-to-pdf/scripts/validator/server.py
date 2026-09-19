@@ -9,13 +9,14 @@ import mimetypes
 import re
 import os
 import signal
+import time
 import uuid
 import shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from catalog import DEFAULT_DATA, catalog, check_disk_budget, read_json, score, triage
+from catalog import DEFAULT_DATA, catalog, check_disk_budget, read_json, run_summary, score, triage
 
 UI = Path(__file__).resolve().parent
 
@@ -190,6 +191,7 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--font-copy', type=Path, help='Create a separate shared-font diagnostic DOCX and exit')
     parser.add_argument('--reuse-references', action='store_true', help='With --once, rerun native against hash-verified saved PDFs; launch no reference converter')
+    parser.add_argument('--summary', action='store_true', help='With --once, print compact iteration feedback; retain full evidence on disk')
     parser.add_argument('--pair', help='Restrict --report to one comparison, e.g. reference-a--ours')
     parser.add_argument('--include-diagnostics', action='store_true', help='Include modified font copies in --report')
     parser.add_argument('--font-family', help='Family for --font-copy, --enqueue, or --once diagnostic copies')
@@ -199,6 +201,8 @@ def main():
     args = parser.parse_args()
     if args.reuse_references and not args.once:
         parser.error('--reuse-references requires --once')
+    if args.summary and not args.once:
+        parser.error('--summary requires --once')
     if not 0 <= args.port <= 65535:
         parser.error('Port must be between 0 and 65535')
     args.data.mkdir(parents=True, exist_ok=True)
@@ -259,12 +263,14 @@ def main():
             except BlockingIOError:
                 parser.error('A watcher is active; use --enqueue, or stop it before --once')
             settings = read_json(root / 'settings.json') if (root / 'settings.json').exists() else {}
+            started = time.monotonic()
             document = worker.process(args.once.resolve(strict=True), settings, reuse_references=args.reuse_references)
+            elapsed = time.monotonic() - started
             for comparison in document.get('comparisons', {}).values():
                 comparison.update(score(comparison))
                 if document.get('status') != 'exported':
                     comparison.update(verdict='unscored', reasons=['Generation did not complete successfully'])
-            print(json.dumps(document, indent=2))
+            print(json.dumps(run_summary(document, root, elapsed) if args.summary else document, indent=2))
         finally:
             lock.close()
         if document.get('status') != 'exported':

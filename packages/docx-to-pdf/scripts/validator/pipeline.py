@@ -244,13 +244,17 @@ class Worker:
                     old_metrics = previous.get('comparisons', {}).get(pair, {})
                     same_reference = previous.get('pdfs', {}).get(left, {}).get('sha256') == doc['pdfs'][left]['sha256']
                     if (right == 'ours' and same_reference and previous.get('status') == 'exported'
+                            and previous.get('scorerSha256') == doc['scorerSha256']
                             and not old_metrics.get('invalidEvidence')
                             and old_metrics.get('dpi') == metrics['dpi']
                             and old_metrics.get('threshold') == metrics['threshold']):
                         metrics['baseline'] = dict(engineSha256=previous.get('engineSha256'),
                                                   errorPercent=old_metrics['errorPercent'],
                                                   deltaPercentagePoints=metrics['errorPercent'] - old_metrics['errorPercent'],
-                                                  pageCountMismatch=old_metrics.get('pageCountMismatch'))
+                                                  pageCountMismatch=old_metrics.get('pageCountMismatch'),
+                                                  sizeMismatch=old_metrics.get('sizeMismatch'),
+                                                  firstDivergence=old_metrics.get('firstDivergence'),
+                                                  worstPageError=max((page['errorPercent'] for page in old_metrics.get('pages', [])), default=None))
                     doc['comparisons'][pair] = metrics
                     doc['pdfs'][left]['pages'] = metrics['leftPages']
                     doc['pdfs'][right]['pages'] = metrics['rightPages']

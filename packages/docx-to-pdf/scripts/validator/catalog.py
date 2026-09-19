@@ -73,6 +73,52 @@ def summarize(document):
     return result
 
 
+def run_summary(document, root, elapsed_seconds=None):
+    """Compact feedback for one iteration; full evidence remains the source of truth."""
+    result = {key: document.get(key) for key in
+              ('id', 'name', 'status', 'message', 'sourceSha256', 'engineSha256', 'scorerSha256',
+               'referenceMode', 'referenceFailures', 'diagnostic', 'fonts')}
+    result.update(schemaVersion=1, targetErrorPercent=1, firstDivergenceTriggerPercent=0.1,
+                  evidence=str(root / 'documents' / document['id'] / 'document.json'),
+                  source=str(root / document['source']) if document.get('source') else None,
+                  pdfs={key: {**value, 'path': str(root / value['path'])}
+                        for key, value in document.get('pdfs', {}).items()},
+                  resources=document.get('resources', {}), comparisons={})
+    measured = sum(stage.get('elapsedSeconds', 0) for stage in result['resources'].values())
+    result['timing'] = dict(measuredStagesSeconds=round(measured, 3))
+    if elapsed_seconds is not None:
+        result['timing'].update(elapsedSeconds=round(elapsed_seconds, 3),
+                               otherSeconds=round(max(0, elapsed_seconds - measured), 3))
+    for pair, comparison in document.get('comparisons', {}).items():
+        compact = {key: comparison.get(key) for key in
+                   ('errorPercent', 'leftPages', 'rightPages', 'pageCountMismatch', 'sizeMismatch',
+                    'invalidEvidence', 'dpi', 'threshold', 'firstDivergence', 'baseline')}
+        compact.update(score(comparison))  # Always score every page, including omitted previews.
+        if document.get('status') != 'exported':
+            compact.update(verdict='unscored', reasons=['Generation did not complete successfully'])
+        pages = comparison.get('pages', [])
+        worst = max(pages, key=lambda page: page['errorPercent'], default=None)
+        compact['worstPage'] = ({key: worst[key] for key in ('number', 'errorPercent')}
+                                if worst else None)
+        first = comparison.get('firstDivergence')
+        selected = {first['page'], max(1, first['page'] - 1)} if first else set()
+        compact['inspectPages'] = [
+            {**page, 'images': {role: str(root / path) for role, path in page.get('images', {}).items()}}
+            for page in pages if page['number'] in selected]
+        text = comparison.get('text', {})
+        compact['text'] = {key: text.get(key) for key in ('missing', 'extra', 'crossPage', 'medianDistancePt')}
+        compact['text']['earliestMovements'] = text.get('earliestMovements', [])[:6]
+        compact['text']['pageDrift'] = [page for page in text.get('pageDrift', [])
+                                        if page.get('page') in selected]
+        result['comparisons'][pair] = compact
+    result['guidance'] = ('Inspect each first divergent page from top to bottom and its preceding page. '
+                          'Later errors can be accumulated drift; this is not a causal diagnosis. '
+                          'Paths refer to this run and may be replaced by the next successful rerun. '
+                          'otherSeconds includes hashing, evidence copies, and disk checks; '
+                          'cached comparisons have no measured subprocess time.')
+    return result
+
+
 def catalog(root):
     settings = root / 'settings.json'
     result = dict(schemaVersion=1, labels={'ours': 'Our exporter'}, documents=[], warnings=[])

@@ -121,9 +121,16 @@ For repeated Core/exporter edits, avoid launching a reference converter again:
 ```sh
 # Stop the watcher first. The viewer can remain available with --no-watch.
 bun run validation:pdf --once /absolute/input.docx --reuse-references
+
+# Compact feedback for an agent's edit/verify loop; full evidence stays on disk.
+bun run validation:pdf --once /absolute/input.docx --reuse-references --summary
 ```
 
-This reruns only the native exporter and comparisons against hash-verified saved PDFs for the identical source. It needs no reference adapter configuration and uses the same serial lock, timeouts, memory cap, and owned-process cleanup. Missing or invalid references cannot pass. Each comparable native pair includes `baseline.errorPercent`, `baseline.engineSha256`, and `baseline.deltaPercentagePoints`; a negative delta is an improvement. Baselines require the same reference hash, DPI, threshold, and a successful preceding run. Save the JSON output if historical artifacts are needed: successful runs replace the previous generated artifacts.
+This reruns only the native exporter and comparisons against hash-verified saved PDFs for the identical source. It needs no reference adapter configuration and uses the same serial lock, timeouts, memory cap, and owned-process cleanup. Missing or invalid references cannot pass. Each comparable native pair includes `baseline.errorPercent`, `baseline.engineSha256`, and `baseline.deltaPercentagePoints`; a negative delta is an improvement. Baselines require the same reference hash, scorer/runtime identity, DPI, threshold, and a successful preceding run. Save the JSON output if historical artifacts are needed: successful runs replace the previous generated artifacts.
+
+`--summary` retains every comparison's verdict, page counts, dimension mismatch, worst page, and before/after first divergence. Its `inspectPages` contains only the first divergent page and preceding page, with absolute preview paths; later pages still count toward the verdict. It includes source/PDF/engine identities, font flags, stage times and cache reuse, and the full `evidence` path. `timing.otherSeconds` includes hashing, disk checks, and evidence copies rather than converter time. It does not launch extra exports or raster passes. Paths remain valid until the next successful rerun replaces that document's artifacts.
+
+For parallel fixes, assign independent causes to separate worktrees and use focused unit tests first. Have one coordinator run the targeted source with saved references, then nearby regression fixtures, then the full selected corpus after integration. Native exports and comparisons still share the global serial lock; agents should not launch competing watchers or mutate a measured worktree during a run. Use the single pipeline result to publish and review evidence instead of exporting/rasterizing again for the viewer. Full-corpus checks remain necessary before accepting a fix; a targeted result is only early feedback.
 
 Every requested rerun generates a fresh native PDF. Comparisons reuse saved scores and previews only when both PDF hashes and the scorer/runtime identity match. This also skips raster work when an engine fix leaves a document’s PDF byte-for-byte unchanged. Reused stages record `resources[pair].reused: true`; changed PDF bytes, missing previews, or a changed scorer force a fresh comparison. Native baselines still update, with a zero delta for unchanged PDFs. Copies remain subject to the evidence disk budget.
 
