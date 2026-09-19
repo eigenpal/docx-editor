@@ -17,6 +17,27 @@ from server import main
 
 
 class SavedReferenceTests(unittest.TestCase):
+    def test_archived_reruns_keep_names_and_external_uploads_can_rename(self):
+        for managed in (True, False):
+            with self.subTest(managed=managed), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                upload = root / ('upload-' + 'a' * 32 + '--new-name.docx')
+                upload.write_bytes(b'fixture')
+                identity = digest(upload); destination = root / 'documents' / identity
+                archived = destination / 'runs' / 'old-run' / 'source.docx'
+                archived.parent.mkdir(parents=True); archived.write_bytes(upload.read_bytes())
+                write_json(destination / 'document.json', dict(id=identity, name='original-name.docx'))
+                source = archived if managed else upload
+                def stage(_command, log, *_args, **_kwargs):
+                    log.write_text(json.dumps(dict(status='unsupported', error='fixture', fontResolution={})))
+                    return {}
+                with patch('pipeline.run_owned', side_effect=stage), patch('pipeline.engine_identity', return_value='stable'):
+                    result = Worker(root).process(source, {}, reuse_references=True)
+                expected = 'original-name.docx' if managed else 'new-name.docx'
+                self.assertEqual(result['name'], expected)
+                self.assertEqual(json.loads((destination / 'document.json').read_text())['name'], expected)
+                self.assertEqual(digest(root / result['source']), identity)
+
     def test_cli_reports_failure_to_automation_and_releases_lock(self):
         for status in ('error', 'unsupported', 'exported'):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as temp:

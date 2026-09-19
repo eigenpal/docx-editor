@@ -145,6 +145,9 @@ class Worker:
         run = destination / 'runs' / run_id
         run.mkdir(parents=True)
         display_name = re.sub(r'^upload-[a-f0-9]{32}--', '', source.name)
+        # Agent reruns use the archived source.docx; retain its human-facing identity.
+        if source.resolve().is_relative_to(destination.resolve()) and isinstance(previous.get('name'), str) and previous['name']:
+            display_name = previous['name']
         doc = dict(id=identity, name=display_name, sourceSha256=identity, status='running',
                    comparisons={}, pdfs={}, fonts=[], resources={}, run=run_id)
         doc['source'] = copy_asset(source, run / 'source.docx', self.root)
