@@ -124,3 +124,5 @@ bun run validation:pdf --once /absolute/input.docx --reuse-references
 ```
 
 This reruns only the native exporter and comparisons against hash-verified saved PDFs for the identical source. It needs no reference adapter configuration and uses the same serial lock, timeouts, memory cap, and owned-process cleanup. Missing or invalid references cannot pass. Each comparable native pair includes `baseline.errorPercent`, `baseline.engineSha256`, and `baseline.deltaPercentagePoints`; a negative delta is an improvement. Baselines require the same reference hash, DPI, threshold, and a successful preceding run. Save the JSON output if historical artifacts are needed: successful runs replace the previous generated artifacts.
+
+Unchanged reference-to-reference comparisons reuse their saved scores and previews when both PDF hashes and the scorer/runtime identity match. Native comparisons always rerun. Reused stages record `resources["reference-a--reference-b"].reused: true`; missing previews or a changed scorer force a fresh comparison. Copies remain subject to the evidence disk budget.

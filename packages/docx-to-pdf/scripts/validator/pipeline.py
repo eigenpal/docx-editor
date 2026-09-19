@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 
 from catalog import check_disk_budget, read_json, write_json
-from evidence import comparison, copy_asset, digest, font_substitutions
+from evidence import comparison, comparison_identity, copy_comparison, copy_asset, digest, font_substitutions
 from processes import run_owned
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -160,6 +160,7 @@ class Worker:
             doc['name'] = f"[Font diagnostic: {doc['diagnostic']['family']}] {doc['diagnostic'].get('originalName', display_name)}"
         # Keep the last complete result visible while this revision is being generated.
         doc['engineSha256'] = engine_identity()
+        doc['scorerSha256'] = comparison_identity()
         # Preserve captured references even if the new native export fails.
         for key, value in previous.get('pdfs', {}).items():
             if key == 'ours' or (key == reference_id and not reuse_references) or not re.fullmatch(r'reference-[a-z0-9-]+', key):
@@ -217,6 +218,16 @@ class Worker:
                 pairs += [(a, b) for index, a in enumerate(refs) for b in refs[index + 1:]]
                 for left, right in pairs:
                     pair = f'{left}--{right}'
+                    if (right != 'ours' and previous.get('status') == 'exported'
+                            and previous.get('scorerSha256') == doc['scorerSha256']
+                            and all(previous.get('pdfs', {}).get(key, {}).get('sha256') == doc['pdfs'][key]['sha256']
+                                    for key in (left, right))):
+                        cached = copy_comparison(previous.get('comparisons', {}).get(pair, {}),
+                                                 left, right, run / pair, self.root)
+                        if cached is not None:
+                            doc['comparisons'][pair] = cached
+                            doc['resources'][pair] = dict(reused=True)
+                            continue
                     output = Path(temporary) / pair
                     stage(pair, [sys.executable, str(SCRIPTS / 'pdf-visual-diff.py'),
                                  str(self.root / doc['pdfs'][left]['path']),

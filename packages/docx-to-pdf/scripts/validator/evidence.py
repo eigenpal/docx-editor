@@ -4,9 +4,61 @@
 """Normalize existing raster comparisons without inventing fidelity measurements."""
 import hashlib
 import shutil
+import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from catalog import read_json
+from catalog import check_disk_budget, read_json
+
+
+def comparison_identity():
+    """Reference-only evidence survives engine edits, but never a scorer/runtime change."""
+    identity = hashlib.sha256(sys.version.encode())
+    for path in (Path(__file__), Path(__file__).parents[1] / 'pdf-visual-diff.py'):
+        identity.update(path.read_bytes())
+    for package in ('Pillow', 'PyMuPDF'):
+        try:
+            identity.update(f'{package}:{version(package)}'.encode())
+        except PackageNotFoundError:
+            identity.update(f'{package}:missing'.encode())
+    return identity.hexdigest()
+
+
+def copy_comparison(metrics, left, right, destination, root):
+    """Copy complete saved previews into the new run before the old run is removed."""
+    if (not isinstance(metrics, dict) or metrics.get('invalidEvidence') or metrics.get('left') != left or metrics.get('right') != right
+            or metrics.get('dpi') != 96 or metrics.get('threshold') != 28):
+        return None
+    pages = metrics.get('pages')
+    counts = [metrics.get(key) for key in ('leftPages', 'rightPages')]
+    if (any(type(count) is not int or not 0 <= count <= 80 for count in counts)
+            or not isinstance(pages, list) or not 0 < len(pages) == max(counts) <= 80):
+        return None
+    assets = []; total = 0
+    try:
+        for index, page in enumerate(pages, 1):
+            if not isinstance(page, dict) or page.get('number') != index:
+                return None
+            for role in ('left', 'right', 'diff', 'overlay'):
+                source = root / page['images'][role]
+                if source.is_symlink() or not source.resolve().is_relative_to(root.resolve()) or not source.is_file():
+                    return None
+                size = source.stat().st_size
+                if not size:
+                    return None
+                total += size
+                if total > 128 * 1024 * 1024:
+                    return None
+                assets.append((index, role, source))
+        check_disk_budget(root, extra_bytes=total)
+        copied = [{**page, 'images': {}} for page in pages]
+        for index, role, source in assets:
+            copied[index - 1]['images'][role] = copy_asset(
+                source, destination / f'page-{index:04d}' / f'{role}.png', root)
+        return {**metrics, 'pages': copied}
+    except (KeyError, TypeError, OSError):
+        shutil.rmtree(destination, ignore_errors=True)
+        return None
 
 
 def digest(path):
