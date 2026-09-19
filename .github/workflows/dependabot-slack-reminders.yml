@@ -1,0 +1,196 @@
+name: Dependabot Slack reminders
+
+# Posts open Dependabot alerts
+# (https://github.com/eigenpal/docx-editor/security/dependabot) to the Slack
+# channel behind SLACK_WEBHOOK_URL, the same webhook the release workflows use.
+#
+#   - Daily (07:00 UTC): high and critical alerts only. The job stays silent
+#     when there are none, so a message in the channel always means somebody
+#     has to act.
+#   - Weekly (Monday 08:00 UTC): every open alert, at any severity. It posts
+#     even at zero, so the digest doubles as a heartbeat. Without it, a broken
+#     reminder and a clean repository look identical in the channel.
+#
+# Monday 08:00 UTC lands after Dependabot's own weekly run opens the grouped
+# update PRs (.github/dependabot.yml), so the digest reflects them.
+#
+# Auth: the default GITHUB_TOKEN can NEVER read Dependabot alerts. The Actions
+# app it is minted from does not carry that permission, and the `permissions:`
+# block cannot add it — the request fails with "Resource not accessible by
+# integration". This job mints a release-pal App token narrowed to Dependabot
+# alerts read instead. The release-pal GitHub App needs the "Dependabot alerts:
+# Read-only" repository permission, and the org installation has to approve the
+# permission update, or the fetch step fails with 403.
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # daily high/critical reminder
+    - cron: '0 8 * * 1' # weekly full digest
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Which report to post
+        type: choice
+        options: [daily, weekly]
+        default: weekly
+
+# The default token is unused (see the auth note above); grant it nothing.
+permissions: {}
+
+# A dispatched run racing the schedule would post the same digest twice.
+concurrency:
+  group: dependabot-slack-reminders
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    name: Post Dependabot alert summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Resolve report mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+            mode="$DISPATCH_MODE"
+          elif [ "$SCHEDULE" = '0 8 * * 1' ]; then
+            mode=weekly
+          else
+            mode=daily
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Report mode: $mode"
+
+      - name: Mint release-pal App token (Dependabot alerts read)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+          permission-vulnerability-alerts: read
+
+      - name: Fetch open alerts and build the Slack payload
+        id: payload
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --paginate emits one JSON array per page; -s 'add' flattens them.
+          gh api "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+            --paginate | jq -s 'add // []' > alerts.json
+
+          total=$(jq 'length' alerts.json)
+          high_crit=$(jq '[.[] | select(.security_vulnerability.severity == "critical"
+                                     or .security_vulnerability.severity == "high")] | length' alerts.json)
+          echo "Open alerts: $total total, $high_crit high/critical"
+
+          # Daily is signal-only: no high or critical alert, no message.
+          if [ "$MODE" = 'daily' ] && [ "$high_crit" -eq 0 ]; then
+            echo 'should_post=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'should_post=true' >> "$GITHUB_OUTPUT"
+
+          cat > build-payload.jq <<'JQ'
+          def trunc($n): if (length > $n) then .[0:$n - 1] + "…" else . end;
+          def sev_rank: {critical: 0, high: 1, medium: 2, low: 3}[.] // 4;
+          def sev_emoji: {
+            critical: ":rotating_light:", high: ":red_circle:",
+            medium: ":large_orange_circle:", low: ":large_yellow_circle:"
+          }[.] // ":white_circle:";
+
+          # Slack rejects a section whose text exceeds 3000 characters, and an
+          # advisory summary has no length bound this repository controls. Pack
+          # the lines greedily instead of using a fixed lines-per-block count.
+          def pack($limit): reduce .[] as $line ([];
+            if (length == 0) or (((.[-1] + "\n" + $line) | length) > $limit)
+            then . + [$line]
+            else .[0:-1] + [.[-1] + "\n" + $line]
+            end);
+
+          # The alert list arrives by --slurpfile, not --argjson: a hundred
+          # alerts carry their full advisories and would not reliably fit in an
+          # argument vector.
+          ($alerts_file[0]) as $alerts
+          | ($alerts
+            | if $mode == "daily"
+              then map(select(.security_vulnerability.severity == "critical"
+                           or .security_vulnerability.severity == "high"))
+              else . end
+            | sort_by(.security_vulnerability.severity | sev_rank)) as $selected
+          | ($alerts
+              | group_by(.security_vulnerability.severity)
+              | map({(.[0].security_vulnerability.severity): length}) | add // {}) as $counts
+          # An unrecognized severity still has to show up somewhere, or the
+          # count line silently disagrees with the headline total.
+          | ($counts | delpaths([["critical"], ["high"], ["medium"], ["low"]])
+                     | [.[]] | add // 0) as $other
+          | ((["critical", "high", "medium", "low"]
+                | map("\(sev_emoji) \($counts[.] // 0) \(.)"))
+             + (if $other > 0 then [":white_circle: \($other) other"] else [] end)
+             | join("   ")) as $countline
+          | ($selected[:20] | map(
+              "\(.security_vulnerability.severity | sev_emoji) *\(.dependency.package.name | trunc(80))*"
+              + " (\(.security_vulnerability.severity))"
+              + " — <\(.html_url)|\(.security_advisory.cve_id // .security_advisory.ghsa_id)>"
+              + " \(.security_advisory.summary | trunc(160))"
+              + " — `\(.dependency.manifest_path | trunc(80))`"
+            )) as $lines
+          | (if $mode == "daily"
+             then ":rotating_light: docx-editor — \($selected | length) open high/critical Dependabot alert(s)"
+             else ":shield: docx-editor — weekly Dependabot digest, \($alerts | length) open alert(s)"
+             end) as $headline
+          | {
+              text: $headline,
+              blocks: (
+                [{type: "header", text: {type: "plain_text", emoji: true, text: ($headline | trunc(150))}},
+                 {type: "section", text: {type: "mrkdwn", text: $countline}}]
+                + (if ($lines | length) == 0
+                   then [{type: "section", text: {type: "mrkdwn", text: ":white_check_mark: Nothing open."}}]
+                   else ($lines | pack(2800) | map({type: "section", text: {type: "mrkdwn", text: .}}))
+                   end)
+                + (if ($selected | length) > 20
+                   then [{type: "section", text: {type: "mrkdwn", text: "…and \(($selected | length) - 20) more."}}]
+                   else [] end)
+                + [{type: "context", elements: [{type: "mrkdwn", text:
+                     "<https://github.com/\($repo)/security/dependabot|Full list on GitHub>"
+                     + " · fix by bumping the dependency; Dependabot opens the PR"}]}]
+              )
+            }
+          JQ
+
+          jq -n \
+            --slurpfile alerts_file alerts.json \
+            --arg mode "$MODE" \
+            --arg repo "$REPO" \
+            -f build-payload.jq > slack-payload.json
+
+          jq . slack-payload.json
+
+      - name: Post to Slack
+        if: steps.payload.outputs.should_post == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          # Unlike the release notifications, a missing webhook is not a
+          # tolerable no-op here: silence is how this job reports "nothing is
+          # wrong". Fail loudly instead of dropping a security report.
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo '::error::SLACK_WEBHOOK_URL is not set; the alert summary was not delivered.'
+            exit 1
+          fi
+          curl -sSf --connect-timeout 10 --max-time 30 \
+            -X POST -H 'Content-Type: application/json' \
+            -d @slack-payload.json "$SLACK_WEBHOOK_URL" >/dev/null
