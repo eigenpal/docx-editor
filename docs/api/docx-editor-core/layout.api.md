@@ -3770,6 +3770,10 @@ export interface SemanticTableCell {
     readonly legacyContentAlignment?: true;
     readonly logicalGridColumn?: number;
     readonly margins: CellMarginsPt;
+    readonly minimumContentInsets?: {
+        readonly bottom: number;
+        readonly top: number;
+    };
     readonly preferredWidth: PreferredWidth;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;

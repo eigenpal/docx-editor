@@ -11,8 +11,13 @@ export function firstRowContentDeps(
 ): TableFlowDeps {
   if (structure.cellSpacingPt > 0) return deps;
   const insets = new Map(deps.cellContentInsets);
+  const minimumInsets = new Map(deps.cellMinimumContentInsets);
   for (const cell of row.cells) {
     const borders = cell.contentBorders ?? cell.borders;
+    const top = borderContentInset(
+      cell.margins.top,
+      effectiveBorderSide(cell.borders.top, structure.tableBorders.top)
+    );
     insets.set(cell.id, {
       ...(insets.get(cell.id) ??
         contentInsets(
@@ -24,13 +29,16 @@ export function firstRowContentDeps(
           cell.centeredSideRules
         )),
       // There is no cell above a fragment's first row to share this stroke.
-      top: borderContentInset(
-        cell.margins.top,
-        effectiveBorderSide(cell.borders.top, structure.tableBorders.top)
-      ),
+      top,
     });
+    const minimum = minimumInsets.get(cell.id) ?? cell.minimumContentInsets;
+    if (minimum) minimumInsets.set(cell.id, { ...minimum, top });
   }
-  return { ...deps, cellContentInsets: insets };
+  return {
+    ...deps,
+    cellContentInsets: insets,
+    ...(minimumInsets.size ? { cellMinimumContentInsets: minimumInsets } : {}),
+  };
 }
 
 /** The last row uses its own outer edge, without the next page's neighbor. */
@@ -41,6 +49,7 @@ export function lastRowContentDeps(
 ): TableFlowDeps {
   if (structure.cellSpacingPt > 0) return deps;
   const insets = new Map(deps.cellContentInsets);
+  const minimumInsets = new Map(deps.cellMinimumContentInsets);
   let changed = false;
   for (const cell of row.cells) {
     const before =
@@ -59,6 +68,17 @@ export function lastRowContentDeps(
     );
     if (before.bottom !== bottom) changed = true;
     insets.set(cell.id, { ...before, bottom });
+    const minimum = minimumInsets.get(cell.id) ?? cell.minimumContentInsets;
+    if (minimum) {
+      if (minimum.bottom !== bottom) changed = true;
+      minimumInsets.set(cell.id, { ...minimum, bottom });
+    }
   }
-  return changed ? { ...deps, cellContentInsets: insets } : deps;
+  return changed
+    ? {
+        ...deps,
+        cellContentInsets: insets,
+        ...(minimumInsets.size ? { cellMinimumContentInsets: minimumInsets } : {}),
+      }
+    : deps;
 }

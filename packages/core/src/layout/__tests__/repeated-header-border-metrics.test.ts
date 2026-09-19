@@ -167,9 +167,10 @@ describe('repeated-header shared horizontal border measurement', () => {
         ).join('');
         for (const fragment of repeated(layout(fixture({ body })))) {
           const target = fragment.rows[1]!.cells[0]!;
-          const spare = rule === 'auto' ? 0 : 25 - 12 - 1 - 0.25;
+          const rowHeight = rule === 'auto' ? 13.25 : rule === 'atLeast' ? 26.25 : 25;
+          const spare = rowHeight - 12 - 1 - 0.25;
           const offset = align === 'center' ? spare / 2 : align === 'bottom' ? spare : 0;
-          expect(target.box.height).toBeCloseTo(rule === 'auto' ? 13.25 : 25, 6);
+          expect(target.box.height).toBeCloseTo(rowHeight, 6);
           expect(band(target).top).toBeCloseTo(1 + offset, 6);
           expect(band(target).bottom).toBeCloseTo(0.25 + spare - offset, 6);
         }

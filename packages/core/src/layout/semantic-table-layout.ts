@@ -111,6 +111,7 @@ import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import { blockInlineRight } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
@@ -176,6 +177,8 @@ export interface TableFlowDeps {
   readonly measurer: TextMeasurer;
   /** Layout-only insets for one repeated-header/body occurrence. */
   readonly cellContentInsets?: ReadonlyMap<string, CellContentInsets>;
+  /** Occurrence-specific row-minimum clearance, separate from a vMerge content span. */
+  readonly cellMinimumContentInsets?: RowMinimumInsetMap;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]> | undefined;
   readonly producer: string;
   /** Produces a stable id from the paragraph-local line identity. */
@@ -1506,11 +1509,17 @@ export function layoutRowFragmentBounded(
       rowBottom = Math.min(maxBottom, rowBottom);
     }
   } else {
-    // Two floors, same rule: the authored `atLeast` minimum and the height a vMerge span
+    // Two floors: the authored `atLeast` CONTENT minimum and the height a vMerge span
     // assigned this row. Neither applies to a continuation fragment — a mid-row split is
     // content-driven, and flooring both halves counts the span twice — or past the budget.
+    // A span floor already includes the row's insets through its height probe. Pad only
+    // the authored minimum, then take the maximum, or merged rows count the padding twice.
+    const authoredFloorPt =
+      isContinuation || atLeastHeightPt === undefined
+        ? 0
+        : authoredRowMinimumFloorPt(atLeastHeightPt, flowed, deps.cellMinimumContentInsets);
     const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
-    const minBottom = rowTop + Math.max(atLeastHeightPt ?? 0, spanFloorPt);
+    const minBottom = rowTop + Math.max(authoredFloorPt, spanFloorPt);
     const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;
     if (floors && flowed.every((entry) => entry.complete)) rowBottom = minBottom;
   }

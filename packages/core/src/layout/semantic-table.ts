@@ -1,4 +1,5 @@
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
+import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
 // Reads `w:tbl`/`w:tr`/`w:tc` into the bounded structure consumed by table layout. All widths
@@ -204,6 +205,8 @@ export interface SemanticTableCell {
   readonly contentBorders?: CellBorderBox;
   /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
   readonly contentBottomIsOuter?: boolean;
+  /** Row-local clearance in points for authored minima, before vMerge combines content boxes. */
+  readonly minimumContentInsets?: { readonly top: number; readonly bottom: number };
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**
@@ -1031,6 +1034,15 @@ function readTableStructureUncached(
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
+  contentRows = withRowMinimumContentInsets(
+    contentRows,
     visualRows,
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }

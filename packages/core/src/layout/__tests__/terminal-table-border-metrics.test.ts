@@ -62,7 +62,7 @@ for (const rule of [undefined, 'atLeast', 'exact']) {
     const result = run(fixture({ rule }), rule ? 34 : 29);
     expect(result.pages).toHaveLength(2);
     const before = tables(result, 0)[0]!.rows[0]!.cells[0]!;
-    expect(before.box.height).toBeCloseTo(rule ? 20 : 12.5, 6);
+    expect(before.box.height).toBeCloseTo(rule === 'atLeast' ? 20.5 : rule ? 20 : 12.5, 6);
     const block = before.blocks[0]!;
     expect(before.box.y + before.box.height - block.box.y - block.box.height).toBeCloseTo(0.5, 6);
     expect(before.borders!.bottom!.widthPt).toBe(0.5);
