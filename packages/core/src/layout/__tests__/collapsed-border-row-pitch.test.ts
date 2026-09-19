@@ -43,11 +43,17 @@ test('twenty exact-height lines reserve shared border insets', () => {
   );
   expect(rows).toHaveLength(20);
   for (const [index, item] of rows.entries())
-    expect(item.box.height).toBeCloseTo(index === 0 ? 16.35 : 16.1, 7);
+    expect(item.box.height).toBeCloseTo(index === 0 || index === 19 ? 16.35 : 16.1, 7);
   const cell = rows[0]!.cells[0]!;
   expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(0.5, 7);
   const topStroke = cell.borders.strokes!.find((stroke) => stroke.side === 'top')!;
   expect(topStroke.y).toBe(0);
   expect(topStroke.height).toBe(0.5);
+  const last = rows[19]!.cells[0]!;
+  const bottomStroke = last.borders.strokes!.find((stroke) => stroke.side === 'bottom')!;
+  expect(bottomStroke.y + bottomStroke.height).toBeCloseTo(last.box.height, 7);
+  expect(
+    last.box.y + last.box.height - last.blocks[0]!.box.y - last.blocks[0]!.box.height
+  ).toBeCloseTo(0.5, 7);
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
 });

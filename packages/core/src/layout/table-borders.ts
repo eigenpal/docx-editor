@@ -412,7 +412,12 @@ export interface BorderGridGeometry {
    */
   readonly rowBands: readonly { readonly y: number; readonly height: number }[];
   /** Per laid-out cell: width/height after vMerge expansion (cell-local stroke space). */
-  readonly cellBoxes: readonly (readonly { readonly width: number; readonly height: number }[])[];
+  readonly cellBoxes: readonly (readonly {
+    readonly width: number;
+    readonly height: number;
+    /** False when a split occurrence still reserves a shared bottom stroke. */
+    readonly outerBottomInsetReserved?: boolean;
+  }[])[];
 }
 
 function sumRange(values: readonly number[], start: number, end: number): number {
@@ -628,7 +633,8 @@ function publishFromIntervals(
   gridColumn: number,
   rowOffsetsPt: readonly number[],
   rowIndex: number,
-  centered = false
+  centered = false,
+  outerBottom = false
 ): ResolvedCellBorders {
   const toSegments = (
     side: TableBorderSideName,
@@ -707,7 +713,7 @@ function publishFromIntervals(
         expandTripleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
       } else if (!fullSide || (centered && (side === 'top' || side === 'bottom'))) {
         // Multi-interval simple edges cannot use CSS border-*; publish stroke geometry.
-        // Top edges are always outer edges; only bottom edges may be shared.
+        // Only internal bottom edges share a stroke with the following row.
         expandSimpleInterval(
           strokes,
           side,
@@ -716,7 +722,7 @@ function publishFromIntervals(
           endPt,
           cellW,
           cellH,
-          centered && side !== 'top'
+          centered && side !== 'top' && !(side === 'bottom' && outerBottom)
         );
       }
     }
@@ -953,7 +959,8 @@ export function resolveTableCellBorderGrid(
         cell.gridColumn,
         rowOffsets,
         rowIndex,
-        geometry.collapsedHorizontal
+        geometry.collapsedHorizontal,
+        isBottom && cellBox.outerBottomInsetReserved !== false
       );
     }
   }

@@ -53,6 +53,11 @@ for (const style of ['single', 'thick', 'dashed', 'dotted'] as const) {
     expect(
       resolved[1]!.flatMap((cell) => cell.strokes ?? []).filter((s) => s.side === 'top')
     ).toHaveLength(0);
+    for (const cell of resolved[1]!) {
+      const bottom = cell.strokes!.find((stroke) => stroke.side === 'bottom')!;
+      expect(bottom.y).toBe(18);
+      expect(bottom.y + bottom.height).toBe(20);
+    }
     for (const stroke of strokes)
       expect(stroke.cssStyle).toBe(style === 'dashed' || style === 'dotted' ? style : 'solid');
   });

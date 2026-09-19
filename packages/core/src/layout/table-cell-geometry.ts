@@ -40,7 +40,8 @@ export function contentInsets(
   margins: CellMarginsPt,
   borders: SemanticTableCell['borders'],
   legacyCollapsedContentAlignment = false,
-  collapsedBorders = true
+  collapsedBorders = true,
+  bottomIsOuter = false
 ): CellContentInsets {
   const leftExtent = borderExtentPt(borders.left);
   const rightExtent = borderExtentPt(borders.right);
@@ -62,7 +63,7 @@ export function contentInsets(
     right: marginCoversRules
       ? margins.right
       : borderContentInset(margins.right, borders.right, false, collapsedBorders),
-    bottom: borderContentInset(margins.bottom, borders.bottom, collapsedBorders),
+    bottom: borderContentInset(margins.bottom, borders.bottom, collapsedBorders && !bottomIsOuter),
     left: marginCoversRules
       ? margins.left
       : borderContentInset(margins.left, borders.left, false, collapsedBorders),

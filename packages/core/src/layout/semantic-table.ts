@@ -15,7 +15,13 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
-import { readTableFloatPosition } from './table-float-properties.ts';
+import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
+export type {
+  TableFloatAnchor,
+  TableFloatPosition,
+  TableFloatXSpec,
+  TableFloatYSpec,
+} from './table-float-properties.ts';
 import {
   revisionNodeIncluded,
   revisionNodeProjectionMode,
@@ -145,43 +151,6 @@ function readTableAlignment(container: OoxmlElement | undefined): TableAlignment
   return undefined;
 }
 
-/**
- * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
- * table's offsets are measured from. Absent means `text` for both.
- */
-export type TableFloatAnchor = 'text' | 'margin' | 'page';
-
-/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
-export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
-
-/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
-export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
-
-/**
- * `w:tblPr/w:tblpPr` (17.4.57) — a table positioned against an anchor box rather than at
- * the point in the text where it was authored.
- *
- * A spec (`tblpXSpec`/`tblpYSpec`) supersedes the matching offset when both are present:
- * 17.4.57 states the alignment outright, and the offset only answers "how far from the
- * anchor" for the case where no alignment was stated.
- */
-export interface TableFloatPosition {
-  readonly horzAnchor: TableFloatAnchor;
-  readonly vertAnchor: TableFloatAnchor;
-  readonly xSpec?: TableFloatXSpec;
-  /** `w:tblpX` in points; signed, so a table can be pulled into the margin. */
-  readonly xPt: number;
-  readonly ySpec?: TableFloatYSpec;
-  /** `w:tblpY` in points; signed. */
-  readonly yPt: number;
-  readonly distances?: {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  };
-}
-
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
 export interface TableAnchorFrame {
   readonly left: number;
@@ -230,6 +199,8 @@ export interface SemanticTableCell {
   readonly borders: CellBorderBox;
   /** Resolved incident edges used for content clearance, preserving authored border provenance. */
   readonly contentBorders?: CellBorderBox;
+  /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
+  readonly contentBottomIsOuter?: boolean;
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**

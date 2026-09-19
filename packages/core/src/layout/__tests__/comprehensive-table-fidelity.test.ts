@@ -130,9 +130,9 @@ describe('comprehensive fixture table fidelity', () => {
     const afterLine = afterNested.lines[afterNested.lines.length - 1]!;
     const hostPadTop = host.blocks[0]!.box.y - host.box.y;
     const hostPadBottom = host.box.y + host.box.height - (afterLine.box.y + afterLine.box.height);
-    // Outer tcMar top=bottom=80 twips (+ half the shared hairline border) — must stay symmetric and small.
+    // The top rule is shared; the outer bottom reserves its full hairline stroke.
     expect(hostPadTop).toBeCloseTo(4.05, 2);
-    expect(hostPadBottom).toBeCloseTo(4.05, 2);
+    expect(hostPadBottom).toBeCloseTo(4.1, 2);
     // Top pad must not regress when bottom shrinks.
     expect(hostPadTop).toBeGreaterThan(3.5);
 

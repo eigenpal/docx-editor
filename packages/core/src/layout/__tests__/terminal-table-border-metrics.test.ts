@@ -62,9 +62,9 @@ for (const rule of [undefined, 'atLeast', 'exact']) {
     const result = run(fixture({ rule }), rule ? 34 : 29);
     expect(result.pages).toHaveLength(2);
     const before = tables(result, 0)[0]!.rows[0]!.cells[0]!;
-    expect(before.box.height).toBeCloseTo(rule ? 20 : 12.25, 6);
+    expect(before.box.height).toBeCloseTo(rule ? 20 : 12.5, 6);
     const block = before.blocks[0]!;
-    expect(before.box.y + before.box.height - block.box.y - block.box.height).toBeCloseTo(0.25, 6);
+    expect(before.box.y + before.box.height - block.box.y - block.box.height).toBeCloseTo(0.5, 6);
     expect(before.borders!.bottom!.widthPt).toBe(0.5);
     const after = tables(result, 1)[0]!.rows[0]!.cells[0]!;
     expect(after.blocks[0]!.box.y - after.box.y).toBeCloseTo(6, 6);
@@ -90,14 +90,14 @@ test('terminal clearance preserves the incoming repeated-header boundary', () =>
   expect(result.pages).toHaveLength(2);
   const cell = tables(result, 0)[0]!.rows[1]!.cells[0]!;
   expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(1, 6);
-  expect(cell.box.height).toBeCloseTo(13.25, 6);
+  expect(cell.box.height).toBeCloseTo(13.5, 6);
   expect(tables(result, 1)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
 });
 test('a wider own patterned edge can grow the terminal row within the page', () => {
   const result = run(fixture({ ownStyle: 'dotted', ownWidth: 12, nextWidth: 0.5 }), 24);
   expect(result.pages).toHaveLength(2);
   const cell = tables(result, 0)[0]!.rows[0]!.cells[0]!;
-  expect(cell.box.height).toBeCloseTo(18, 6);
+  expect(cell.box.height).toBeCloseTo(24, 6);
   expect(cell.borders!.bottom!.widthPt).toBe(12);
 });
 test('terminal probes neither publish nor spend live identifiers and budgets', () => {
@@ -129,7 +129,7 @@ test('terminal probes neither publish nor spend live identifiers and budgets', (
     },
   };
   expect(prepareTerminalBorderPlan(structure, structure.rows[0]!, 0, 0, 13, deps)!.height).toBe(
-    12.25
+    12.5
   );
   expect(prepareTerminalBorderPlan(structure, structure.rows[0]!, 0, 0, 11, deps)).toBeUndefined();
   expect(spent).toBe(0);

@@ -13,7 +13,12 @@ import {
   publishAnchoredDrawingsForParagraph,
   shiftInlineDrawingRecord,
 } from './drawing-layout.ts';
-import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import {
+  borderContentInset,
+  contentInsets,
+  type CellContentInsets,
+} from './table-cell-geometry.ts';
+import { effectiveBorderSide } from './table-border-cascade.ts';
 import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
@@ -205,7 +210,8 @@ export function finalizeTableRows(
             authored.margins,
             authored.contentBorders ?? authored.borders,
             authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
-            structure.cellSpacingPt === 0
+            structure.cellSpacingPt === 0,
+            authored.contentBottomIsOuter
           );
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
@@ -252,7 +258,8 @@ export function finalizeTableRows(
             authored.margins,
             authored.contentBorders ?? authored.borders,
             authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
-            structure.cellSpacingPt === 0
+            structure.cellSpacingPt === 0,
+            authored.contentBottomIsOuter
           );
         const cellContentBox = {
           ...finalizedCellBox,
@@ -303,8 +310,32 @@ export function finalizeTableRows(
     collapsedHorizontal: structure.cellSpacingPt === 0,
     columnWidthsPt: structure.columnWidthsPt,
     rowBands: expanded.map((row) => ({ y: row.box.y, height: row.box.height })),
-    cellBoxes: expanded.map((row) =>
-      row.cells.map((cell) => ({ width: cell.box.width, height: cell.box.height }))
+    cellBoxes: expanded.map((row, rowIndex) =>
+      row.cells.map((cell) => {
+        const authored = authoredById.get(cell.id);
+        const insets =
+          authored &&
+          (occurrenceInsets?.get(rows[rowIndex]!)?.get(cell.id) ??
+            contentInsets(
+              authored.margins,
+              authored.contentBorders ?? authored.borders,
+              authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
+              structure.cellSpacingPt === 0,
+              authored.contentBottomIsOuter
+            ));
+        // Split/merged occurrences can decline the terminal re-probe. Do not move their
+        // stroke into content until admission has reserved the complete outer inset.
+        const outerBottomInsetReserved =
+          authored && insets
+            ? insets.bottom >=
+              borderContentInset(
+                authored.margins.bottom,
+                effectiveBorderSide(authored.borders.bottom, structure.tableBorders.bottom)
+              ) -
+                0.001
+            : false;
+        return { width: cell.box.width, height: cell.box.height, outerBottomInsetReserved };
+      })
     ),
   };
   const resolved = resolveTableCellBorderGrid(

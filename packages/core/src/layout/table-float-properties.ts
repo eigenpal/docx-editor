@@ -1,11 +1,41 @@
 // Bounded positioning and text-distance properties for top-level floating tables.
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import type {
-  TableFloatAnchor,
-  TableFloatPosition,
-  TableFloatXSpec,
-  TableFloatYSpec,
-} from './semantic-table.ts';
+/**
+ * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
+ * table's offsets are measured from. Absent means `text` for both.
+ */
+export type TableFloatAnchor = 'text' | 'margin' | 'page';
+
+/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
+export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
+
+/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
+export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+
+/**
+ * `w:tblPr/w:tblpPr` (17.4.57) — a table positioned against an anchor box rather than at
+ * the point in the text where it was authored.
+ *
+ * A spec (`tblpXSpec`/`tblpYSpec`) supersedes the matching offset when both are present:
+ * 17.4.57 states the alignment outright, and the offset only answers "how far from the
+ * anchor" for the case where no alignment was stated.
+ */
+export interface TableFloatPosition {
+  readonly horzAnchor: TableFloatAnchor;
+  readonly vertAnchor: TableFloatAnchor;
+  readonly xSpec?: TableFloatXSpec;
+  /** `w:tblpX` in points; signed, so a table can be pulled into the margin. */
+  readonly xPt: number;
+  readonly ySpec?: TableFloatYSpec;
+  /** `w:tblpY` in points; signed. */
+  readonly yPt: number;
+  readonly distances?: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
+}
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {

@@ -38,7 +38,7 @@ test.each([0, 40])(
     const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table')!;
     const [first, second] = table.rows;
     expect(first!.box.height).toBeCloseTo(spacing === 0 ? 12.75 : 13, 6);
-    expect(second!.box.height).toBeCloseTo(spacing === 0 ? 12.5 : 13, 6);
+    expect(second!.box.height).toBeCloseTo(spacing === 0 ? 12.75 : 13, 6);
     expect(first!.cells[0]!.blocks[0]!.box.x - first!.cells[0]!.box.x).toBeCloseTo(0.5, 6);
     expect(first!.cells[0]!.blocks[0]!.box.y - first!.cells[0]!.box.y).toBeCloseTo(0.5, 6);
     expect(layoutSemanticDocument(part, 0, options).pages).toEqual(layout.pages);

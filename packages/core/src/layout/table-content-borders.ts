@@ -118,10 +118,16 @@ export function withTableContentBorders(
       }
     }
   }
-  return rows.map((row) => ({
+  return rows.map((row, index) => ({
     ...row,
     cells: row.cells.map((cell) =>
-      cell.vMergeContinue ? cell : { ...cell, contentBorders: boxes.get(cell.id)! }
+      cell.vMergeContinue
+        ? cell
+        : {
+            ...cell,
+            contentBorders: boxes.get(cell.id)!,
+            contentBottomIsOuter: index + (merged.get(cell.id) ?? 1) === rows.length,
+          }
     ),
   }));
 }
