@@ -1,3 +1,4 @@
+import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
@@ -163,6 +164,8 @@ export interface HostedStoryFlowDeps {
 }
 
 export interface TableFlowDeps {
+  /** The current row already has the full page band (possibly below repeated headers). */
+  readonly rowAtPageStart?: boolean;
   readonly paragraphLineUnitPt?: number;
   /** A sole positioned table cannot collide with another floating table in this story. */
   readonly isolatedFloatingTableId?: string;
@@ -583,6 +586,10 @@ function placeCellParagraph(
   let nextLineIndex = lineStart;
   let fitted = false;
 
+  // Decide the cut before publishing line ids or drawings. A widow retreat must not
+  // leave side effects from a line that will actually be placed on the following page.
+  const lineTops: number[] = [];
+  let probeY = y;
   for (let lineIndex = lineStart; lineIndex < lines.length; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
@@ -593,10 +600,10 @@ function placeCellParagraph(
     const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
     const skipBefore = collapseHeight
       ? 0
-      : pendingLineExclusionSkipAtPlacement(pendingLine, y, pageZones);
+      : pendingLineExclusionSkipAtPlacement(pendingLine, probeY, pageZones);
     const lineBottom = collapseHeight
-      ? y
-      : y + skipBefore + pendingLine.height + borderExtra + afterExtra;
+      ? probeY
+      : probeY + skipBefore + pendingLine.height + borderExtra + afterExtra;
     const requiredBottom =
       isLastLine && !collapseHeight
         ? Math.max(lineBottom, options?.cellEndMarkMinBottom ?? lineBottom)
@@ -604,7 +611,31 @@ function placeCellParagraph(
     if (requiredBottom > maxBottom + 0.001) {
       break;
     }
-    y += skipBefore;
+    lineTops.push(probeY + skipBefore);
+    if (!collapseHeight) probeY += skipBefore + pendingLine.height;
+  }
+  let lineEnd = lineStart + lineTops.length;
+  // Table paragraph widows are a modern compatibility behavior; legacy table flow
+  // ignores this property even when explicitly enabled on the paragraph.
+  if (
+    lineEnd < lines.length &&
+    (deps.compatibilityMode ?? 0) >= 15 &&
+    options?.applyWidowControl !== false
+  ) {
+    lineEnd = adjustedBreakIndex(
+      lineEnd,
+      lineStart,
+      lines.length,
+      // Cross-paragraph keeps remain a row-level decision. This cut only controls
+      // how many lines of this paragraph remain on either side of the page edge.
+      { ...paragraphKeeps(props), keepLines: false },
+      options?.aloneOnPage ?? true
+    );
+  }
+  for (let lineIndex = lineStart; lineIndex < lineEnd; lineIndex += 1) {
+    const pendingLine = lines[lineIndex]!;
+    const isLastLine = lineIndex === lines.length - 1;
+    y = lineTops[lineIndex - lineStart]!;
     const lineIndent = originX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
     const placedSpans = pendingLine.spans.map((span) => ({
@@ -993,7 +1024,8 @@ function flowBlocksInBoxBounded(
   /** True for a `w:tc`: its last block may be the empty terminator a nested table forces. */
   inTableCell = false,
   cellEndMarkMinBottom?: number,
-  hideEndMark = false
+  hideEndMark = false,
+  applyWidowControl = true
 ): {
   readonly blocks: BlockFragmentRecord[];
   readonly bottom: number;
@@ -1086,6 +1118,8 @@ function flowBlocksInBoxBounded(
       {
         lineStart: lineIndex,
         startOffset,
+        applyWidowControl,
+        aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
         maxBottom,
         includeAfter: true,
@@ -1365,7 +1399,9 @@ export function layoutRowFragmentBounded(
           vertical
             ? undefined
             : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
-          cell.hideEndMark
+          cell.hideEndMark,
+          // Fixed cell boxes clip; their bottom is not a paragraph page break.
+          !vertical && (isDetached || exactHeightPt === undefined)
         );
         blocks = flow.blocks;
         contentBottom = flow.bottom;

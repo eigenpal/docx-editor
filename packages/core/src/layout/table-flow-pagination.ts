@@ -449,13 +449,18 @@ export function paginateTableInFlow(
     let isContinuation = false;
     let fragmentsForRow = 0;
     let movedToFreshPage = false;
-    const rowDeps = (): TableFlowDeps =>
-      terminalDeps ??
-      (repeatedPlan?.bodyRowId === row.id
-        ? repeatedPlan.deps
-        : rows.length === 0
-          ? firstRowContentDeps(structure, row, tableDeps)
-          : tableDeps);
+    const rowDeps = (): TableFlowDeps => ({
+      ...(terminalDeps ??
+        (repeatedPlan?.bodyRowId === row.id
+          ? repeatedPlan.deps
+          : rows.length === 0
+            ? firstRowContentDeps(structure, row, tableDeps)
+            : tableDeps)),
+      rowAtPageStart:
+        movedToFreshPage ||
+        flow.cursorY <= 0.001 ||
+        (rows.length > 0 && rows.every((placed) => placed.isHeaderRepeat)),
+    });
     prepareRepeat = () =>
       isContinuation
         ? undefined
@@ -503,7 +508,9 @@ export function paginateTableInFlow(
         pageBottom,
         isContinuation,
         0,
-        tableDeps,
+        // The header is optional: first ask whether the paragraph can honor its
+        // widow rule below it. If not, omit the repeat and offer the full page.
+        { ...tableDeps, rowAtPageStart: false },
         cursors,
         structure.cellSpacingPt,
         { requireEveryCell: !isContinuation && naturalHeight <= pageBottom + 0.001 }

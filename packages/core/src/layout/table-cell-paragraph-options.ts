@@ -12,6 +12,10 @@ export interface CellParagraphPlacementOptions {
   readonly startOffset?: number;
   readonly fragmentIndex?: number;
   readonly maxBottom?: number;
+  /** False for fixed-height or rotated cells, whose bottom is a clip boundary. */
+  readonly applyWidowControl?: boolean;
+  /** Fail open when moving this paragraph would leave an identical fresh page. */
+  readonly aloneOnPage?: boolean;
   /** When false, omit trailing paragraph spacing (more content follows on a later page). */
   readonly includeAfter?: boolean;
   /** When false, omit the bottom border (paragraph continues). */
