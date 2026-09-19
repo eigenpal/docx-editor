@@ -1,3 +1,4 @@
+import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 // Bounded table structure over the typed canonical tree.
 //
 // Reads `w:tbl`/`w:tr`/`w:tc` into the bounded structure consumed by table layout. All widths
@@ -177,6 +178,8 @@ export interface SemanticTableCell {
   readonly id: string;
   /** Derived content-edge geometry for a verified legacy percentage-width parent table. */
   readonly legacyContentAlignment?: true;
+  /** Resolved simple side rules centered on a legacy absolute-width table grid. */
+  readonly centeredSideRules?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
   /** Physical grid column after width/style resolution and the bidiVisual projection. */
@@ -1027,7 +1030,7 @@ function readTableStructureUncached(
   });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
-  const contentRows = withTableContentBorders(
+  let contentRows = withTableContentBorders(
     visualRows,
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
@@ -1035,6 +1038,15 @@ function readTableStructureUncached(
     columnWidthsPt.length,
     cellSpacingPt === 0
   );
+  if (
+    (compatibilityMode === undefined || [11, 12, 14].includes(compatibilityMode)) &&
+    depth === 0 &&
+    !bidiVisual &&
+    !float &&
+    cellSpacingPt === 0 &&
+    tableWidth.type === 'dxa'
+  )
+    contentRows = withLegacyTableSideRules(contentRows);
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,

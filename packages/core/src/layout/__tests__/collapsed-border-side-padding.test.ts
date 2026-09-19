@@ -46,7 +46,7 @@ test('separated cells retain independent full-border padding', () => {
   expect(result.bottom).toBe(0.5);
 });
 
-test('corrected side clearance participates in wrapping and survives cache reuse', () => {
+test('modern side clearance participates in wrapping and survives cache reuse', () => {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
     <w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblW w:w="1200" w:type="dxa"/>
@@ -58,7 +58,11 @@ test('corrected side clearance participates in wrapping and survives cache reuse
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   const before = serializeOoxmlPart(parsed.part);
-  const options = { measurer: createFixedMeasurer(12.16, 12), session: createLayoutSession() };
+  const options = {
+    compatibilityMode: 15,
+    measurer: createFixedMeasurer(12.16, 12),
+    session: createLayoutSession(),
+  };
   const layout = layoutSemanticDocument(parsed.part, 1, options);
   const table = layout.pages[0]!.fragments.find((block) => block.kind === 'table')!;
   const cell = table.rows[0]!.cells[0]!;

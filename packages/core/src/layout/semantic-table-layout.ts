@@ -1347,7 +1347,8 @@ export function layoutRowFragmentBounded(
         cell.contentBorders ?? cell.borders,
         cell.legacyContentAlignment === true && cellSpacingPt === 0,
         cellSpacingPt === 0,
-        cell.contentBottomIsOuter
+        cell.contentBottomIsOuter,
+        cell.centeredSideRules
       );
     // Each page fragment retains the cell padding, even when its paragraph continues.
     const topInset = insets.top;

@@ -41,7 +41,8 @@ export function contentInsets(
   borders: SemanticTableCell['borders'],
   legacyCollapsedContentAlignment = false,
   collapsedBorders = true,
-  bottomIsOuter = false
+  bottomIsOuter = false,
+  centeredSideRules = false
 ): CellContentInsets {
   const leftExtent = borderExtentPt(borders.left);
   const rightExtent = borderExtentPt(borders.right);
@@ -60,12 +61,18 @@ export function contentInsets(
   // the authored thickness; separated cells reserve an independent full border.
   return {
     top: borderContentInset(margins.top, borders.top, collapsedBorders),
-    right: marginCoversRules
-      ? margins.right
-      : borderContentInset(margins.right, borders.right, false, collapsedBorders),
+    right:
+      centeredSideRules && collapsedBorders
+        ? Math.max(margins.right, rightExtent / 2)
+        : marginCoversRules
+          ? margins.right
+          : borderContentInset(margins.right, borders.right, false, collapsedBorders),
     bottom: borderContentInset(margins.bottom, borders.bottom, collapsedBorders && !bottomIsOuter),
-    left: marginCoversRules
-      ? margins.left
-      : borderContentInset(margins.left, borders.left, false, collapsedBorders),
+    left:
+      centeredSideRules && collapsedBorders
+        ? Math.max(margins.left, leftExtent / 2)
+        : marginCoversRules
+          ? margins.left
+          : borderContentInset(margins.left, borders.left, false, collapsedBorders),
   };
 }

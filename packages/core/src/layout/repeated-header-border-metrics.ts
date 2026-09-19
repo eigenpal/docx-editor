@@ -93,7 +93,8 @@ export function prepareRepeatedHeaderBorderPlan(
         cell.contentBorders ?? cell.borders,
         cell.legacyContentAlignment === true,
         true,
-        cell.contentBottomIsOuter
+        cell.contentBottomIsOuter,
+        cell.centeredSideRules
       ),
       bottom: inset,
     });
@@ -120,7 +121,8 @@ export function prepareRepeatedHeaderBorderPlan(
         cell.contentBorders ?? cell.borders,
         cell.legacyContentAlignment === true,
         true,
-        cell.contentBottomIsOuter
+        cell.contentBottomIsOuter,
+        cell.centeredSideRules
       ),
       top: inset,
     });
@@ -133,7 +135,8 @@ export function prepareRepeatedHeaderBorderPlan(
           cell.contentBorders ?? cell.borders,
           cell.legacyContentAlignment === true,
           true,
-          cell.contentBottomIsOuter
+          cell.contentBottomIsOuter,
+          cell.centeredSideRules
         );
         const after = insets.get(cell.id)!;
         return before.top === after.top && before.bottom === after.bottom;

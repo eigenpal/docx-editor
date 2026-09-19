@@ -417,6 +417,8 @@ export interface BorderGridGeometry {
     readonly height: number;
     /** False when a split occurrence still reserves a shared bottom stroke. */
     readonly outerBottomInsetReserved?: boolean;
+    /** Simple vertical strokes share the cell grid line with legacy padding. */
+    readonly centeredSideRules?: boolean;
   }[])[];
 }
 
@@ -598,15 +600,15 @@ function expandSimpleInterval(
 ): void {
   const horizontal = side === 'top' || side === 'bottom';
   const w = edge.widthPt;
-  const inset = centered && horizontal ? w / 2 : w;
-  // Collapsed horizontal rules straddle the row boundary. Separated rules and
-  // vertical rules retain their independent inward stroke geometry.
+  const inset = centered ? w / 2 : w;
+  // Shared horizontal and admitted legacy vertical rules straddle their grid line.
+  // Other edges retain their independent inward stroke geometry.
   pushStroke(strokes, {
     side,
     role: 'edge',
     color: edge.color,
     cssStyle: cssStyleForEdge(edge.style),
-    x: horizontal ? startPt : side === 'right' ? cellW - w : 0,
+    x: horizontal ? startPt : side === 'right' ? cellW - inset : inset - w,
     y: !horizontal ? startPt : side === 'bottom' ? cellH - inset : inset - w,
     width: horizontal ? endPt - startPt : w,
     height: horizontal ? w : endPt - startPt,
@@ -634,7 +636,8 @@ function publishFromIntervals(
   rowOffsetsPt: readonly number[],
   rowIndex: number,
   centered = false,
-  outerBottom = false
+  outerBottom = false,
+  centeredSides = false
 ): ResolvedCellBorders {
   const toSegments = (
     side: TableBorderSideName,
@@ -711,7 +714,11 @@ function publishFromIntervals(
         );
       } else if (edge.style === 'triple') {
         expandTripleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
-      } else if (!fullSide || (centered && (side === 'top' || side === 'bottom'))) {
+      } else if (
+        !fullSide ||
+        (centered && (side === 'top' || side === 'bottom')) ||
+        (centeredSides && (side === 'left' || side === 'right'))
+      ) {
         // Multi-interval simple edges cannot use CSS border-*; publish stroke geometry.
         // Only internal bottom edges share a stroke with the following row.
         expandSimpleInterval(
@@ -722,7 +729,9 @@ function publishFromIntervals(
           endPt,
           cellW,
           cellH,
-          centered && side !== 'top' && !(side === 'bottom' && outerBottom)
+          side === 'left' || side === 'right'
+            ? centeredSides
+            : centered && side !== 'top' && !(side === 'bottom' && outerBottom)
         );
       }
     }
@@ -960,7 +969,8 @@ export function resolveTableCellBorderGrid(
         rowOffsets,
         rowIndex,
         geometry.collapsedHorizontal,
-        isBottom && cellBox.outerBottomInsetReserved !== false
+        isBottom && cellBox.outerBottomInsetReserved !== false,
+        cellBox.centeredSideRules
       );
     }
   }

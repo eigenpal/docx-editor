@@ -211,7 +211,8 @@ export function finalizeTableRows(
             authored.contentBorders ?? authored.borders,
             authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
             structure.cellSpacingPt === 0,
-            authored.contentBottomIsOuter
+            authored.contentBottomIsOuter,
+            authored.centeredSideRules
           );
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
@@ -259,7 +260,8 @@ export function finalizeTableRows(
             authored.contentBorders ?? authored.borders,
             authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
             structure.cellSpacingPt === 0,
-            authored.contentBottomIsOuter
+            authored.contentBottomIsOuter,
+            authored.centeredSideRules
           );
         const cellContentBox = {
           ...finalizedCellBox,
@@ -321,7 +323,8 @@ export function finalizeTableRows(
               authored.contentBorders ?? authored.borders,
               authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
               structure.cellSpacingPt === 0,
-              authored.contentBottomIsOuter
+              authored.contentBottomIsOuter,
+              authored.centeredSideRules
             ));
         // Split/merged occurrences can decline the terminal re-probe. Do not move their
         // stroke into content until admission has reserved the complete outer inset.
@@ -334,7 +337,12 @@ export function finalizeTableRows(
               ) -
                 0.001
             : false;
-        return { width: cell.box.width, height: cell.box.height, outerBottomInsetReserved };
+        return {
+          width: cell.box.width,
+          height: cell.box.height,
+          outerBottomInsetReserved,
+          centeredSideRules: authored?.centeredSideRules === true && structure.cellSpacingPt === 0,
+        };
       })
     ),
   };

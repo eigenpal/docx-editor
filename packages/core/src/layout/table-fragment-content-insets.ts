@@ -20,7 +20,8 @@ export function firstRowContentDeps(
           borders,
           cell.legacyContentAlignment === true,
           true,
-          cell.contentBottomIsOuter
+          cell.contentBottomIsOuter,
+          cell.centeredSideRules
         )),
       // There is no cell above a fragment's first row to share this stroke.
       top: borderContentInset(
@@ -49,7 +50,8 @@ export function lastRowContentDeps(
         cell.contentBorders ?? cell.borders,
         cell.legacyContentAlignment === true,
         true,
-        cell.contentBottomIsOuter
+        cell.contentBottomIsOuter,
+        cell.centeredSideRules
       );
     const bottom = borderContentInset(
       cell.margins.bottom,
