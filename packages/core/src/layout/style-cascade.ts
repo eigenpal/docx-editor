@@ -1,3 +1,4 @@
+import { modernParagraphDefaults } from './modern-paragraph-defaults.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
@@ -466,7 +467,14 @@ export function buildStyleCascadeTable(
     };
   }
 
-  const defaults = readDocDefaults(stylesRoot);
+  const authoredDefaults = readDocDefaults(stylesRoot);
+  const defaults = {
+    ...authoredDefaults,
+    paragraph: [
+      ...modernParagraphDefaults(stylesRoot, settingsRoot),
+      ...authoredDefaults.paragraph,
+    ],
+  };
   let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
   let defaultTableStyleId: string | null = null;
