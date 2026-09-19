@@ -143,7 +143,8 @@ describe('comprehensive fixture table fidelity', () => {
     expect(nested.rows[0]!.box.height).toBeLessThan(18);
     const inner = nested.rows[0]!.cells[0]!;
     const innerPara = inner.blocks[0]!;
-    expect(innerPara.box.y - inner.box.y).toBeCloseTo(2.05, 2);
+    // The first nested row clears its full outer top rule.
+    expect(innerPara.box.y - inner.box.y).toBeCloseTo(2.1, 2);
     expect(inner.box.y + inner.box.height - (innerPara.box.y + innerPara.box.height)).toBeCloseTo(
       2.05,
       2

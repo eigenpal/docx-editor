@@ -142,6 +142,6 @@ test('a new page measures its own top edge after the stronger preceding row stay
   expect(result.pages).toHaveLength(2);
   const second = result.pages[1]!.fragments.find((f) => f.kind === 'table')!.rows[0]!.cells[0]!;
   expect(second.borders!.top!.widthPt).toBe(0.5);
-  expect(second.blocks[0]!.box.y - second.box.y).toBeCloseTo(0.25, 6);
+  expect(second.blocks[0]!.box.y - second.box.y).toBeCloseTo(0.5, 6);
   expect(second.box.y + second.box.height).toBeLessThanOrEqual(29);
 });

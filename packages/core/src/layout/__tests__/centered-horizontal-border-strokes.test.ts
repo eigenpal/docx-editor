@@ -48,7 +48,8 @@ for (const style of ['single', 'thick', 'dashed', 'dotted'] as const) {
       { x: 0, y: 18, width: 30, height: 4 },
       { x: 30, y: 17, width: 50, height: 6 },
     ]);
-    expect(strokes.find((stroke) => stroke.side === 'top')!.y).toBe(-1);
+    // The fragment's outer top rule has no preceding row to share its stroke.
+    expect(strokes.find((stroke) => stroke.side === 'top')!.y).toBe(0);
     expect(
       resolved[1]!.flatMap((cell) => cell.strokes ?? []).filter((s) => s.side === 'top')
     ).toHaveLength(0);

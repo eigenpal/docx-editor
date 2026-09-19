@@ -14,10 +14,12 @@ export function firstRowContentDeps(
   for (const cell of row.cells) {
     const borders = cell.contentBorders ?? cell.borders;
     insets.set(cell.id, {
-      ...contentInsets(
-        cell.margins,
-        { ...borders, top: effectiveBorderSide(cell.borders.top, structure.tableBorders.top) },
-        cell.legacyContentAlignment === true
+      ...(insets.get(cell.id) ??
+        contentInsets(cell.margins, borders, cell.legacyContentAlignment === true)),
+      // There is no cell above a fragment's first row to share this stroke.
+      top: borderContentInset(
+        cell.margins.top,
+        effectiveBorderSide(cell.borders.top, structure.tableBorders.top)
       ),
     });
   }

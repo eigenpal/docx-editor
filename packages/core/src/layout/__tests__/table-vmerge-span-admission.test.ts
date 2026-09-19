@@ -1,3 +1,5 @@
+import { readTableStructure } from '../semantic-table.ts';
+import { vMergePlanFor } from '../semantic-table-layout.ts';
 // When a vertical merge is allowed to size its span, and what happens when it is not.
 //
 // Giving the span its own height is only safe while every row of it lands on one page and
@@ -404,4 +406,35 @@ describe('a merge is only sized as a span where the span can hold it', () => {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
     }
   });
+});
+
+test('merge preflight remeasures the outer top inset after an occurrence changes', () => {
+  const part = loadPart(`<w:tbl>${GRID}<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>
+    <w:tr>${tc(MERGED_CONTENT, RESTART)}</w:tr><w:tr>${tc(p(''), CONTINUE)}</w:tr></w:tbl>`);
+  const body = part.root.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'body'
+  );
+  if (!body || body.kind === 'textValue') throw new Error('body expected');
+  const table = body.children.find((node) => node.kind === 'table')!;
+  const structure = readTableStructure(table, 180, 0)!;
+  let first = false;
+  const plan = vMergePlanFor(
+    structure,
+    0,
+    0,
+    {
+      measurer: createFixedMeasurer(),
+      producer: 'probe',
+      nextLineId: () => 'probe',
+    },
+    undefined,
+    (row) => first && row.id === structure.rows[0]!.id
+  )!;
+  const span = plan.spansAt(0)[0]!;
+  const interior = plan.heightOf(span, 0);
+  first = true;
+  const outer = plan.heightOf(span, 0);
+  expect(outer - interior).toBeCloseTo(0.5, 8);
+  first = false;
+  expect(plan.heightOf(span, 0)).toBe(interior);
 });

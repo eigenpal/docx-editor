@@ -67,7 +67,7 @@ for (const rule of [undefined, 'atLeast', 'exact']) {
     expect(before.box.y + before.box.height - block.box.y - block.box.height).toBeCloseTo(0.25, 6);
     expect(before.borders!.bottom!.widthPt).toBe(0.5);
     const after = tables(result, 1)[0]!.rows[0]!.cells[0]!;
-    expect(after.blocks[0]!.box.y - after.box.y).toBeCloseTo(3, 6);
+    expect(after.blocks[0]!.box.y - after.box.y).toBeCloseTo(6, 6);
   });
 }
 test('terminal-edge admission retains a row after preceding body content', () => {

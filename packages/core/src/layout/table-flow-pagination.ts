@@ -197,8 +197,12 @@ export function paginateTableInFlow(
   // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
   // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
   let headerGroupHeight = 0;
-  for (const headerRow of headerRows)
-    headerGroupHeight += rowHeightOf(headerRow, flow.cursorY + headerGroupHeight);
+  for (const [index, headerRow] of headerRows.entries())
+    headerGroupHeight += rowHeightOf(
+      headerRow,
+      flow.cursorY + headerGroupHeight,
+      index === 0 ? firstRowContentDeps(structure, headerRow, tableDeps) : tableDeps
+    );
   let initialHeaderGroupDegraded =
     headerGroupHeight > (flow.unreservedContentHeight?.() ?? contentHeight()) + 0.001;
   let repeatsEnabled = !initialHeaderGroupDegraded;
@@ -356,7 +360,7 @@ export function paginateTableInFlow(
     if (asRepeat && !candidate && admitsBodyAfter && !admitsBodyAfter(flow.cursorY + groupHeight))
       return;
 
-    const headerDeps = candidate?.deps ?? tableDeps;
+    const headerDeps = firstRowContentDeps(structure, headerRows[0]!, candidate?.deps ?? tableDeps);
 
     for (const headerRow of headerRows) {
       const placed = layoutRowFragment(
@@ -402,15 +406,25 @@ export function paginateTableInFlow(
   // `tableLeft` is read through a getter, not captured: `placeHeaderGroup` and
   // `breakForContinuation` both re-derive it, and a positioned probe localizes wrap bands
   // against it — a stale left measures the head against a band that does not cross it.
-  const vMergePlan = vMergePlanFor(structure, () => tableLeft, 0, tableDeps, bodyRows);
+  const fragmentFirstRows = new Set<string>();
+  const vMergePlan = vMergePlanFor(
+    structure,
+    () => tableLeft,
+    0,
+    tableDeps,
+    bodyRows,
+    (row) => fragmentFirstRows.has(row.id)
+  );
   let vMerge: RowVMergeLayoutOptions | undefined;
   let naturalHeight = 0;
   let baselineBodyHeight = 0;
   const admitSpans = (bodyRowIndex: number, probeRow?: SemanticTableRow): void => {
+    const row = probeRow ?? bodyRows[bodyRowIndex]!;
+    if (rows.length === 0) fragmentFirstRows.add(row.id);
+    else fragmentFirstRows.delete(row.id);
     vMerge = admitVMergeSpansAt(vMergePlan, bodyRowIndex, flow.cursorY, contentHeight());
     // Keep ordinary admission separate from the repeated border override, and
     // remeasure at the current Y after moving through wrapping exclusions.
-    const row = probeRow ?? bodyRows[bodyRowIndex]!;
     baselineBodyHeight =
       vMerge?.heightFloorPt ??
       rowHeightOf(

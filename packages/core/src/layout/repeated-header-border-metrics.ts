@@ -1,3 +1,4 @@
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 // A repeated header and its first complete body row share one measured boundary.
 // These insets belong to one page occurrence. The authored borders never change.
 
@@ -134,6 +135,10 @@ export function prepareRepeatedHeaderBorderPlan(
     )
   )
     return undefined;
+  const occurrenceDeps = firstRowContentDeps(structure, headers[0]!, {
+    ...deps,
+    cellContentInsets: insets,
+  });
   let line = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
@@ -141,7 +146,7 @@ export function prepareRepeatedHeaderBorderPlan(
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,
-    cellContentInsets: insets,
+    cellContentInsets: occurrenceDeps.cellContentInsets,
     nextLineId: () => `probe-header-border-${line++}`,
   };
   let cursor = top;
@@ -173,6 +178,6 @@ export function prepareRepeatedHeaderBorderPlan(
     bodyRowId: body.id,
     headerHeight,
     bodyHeight: placed.bottom - cursor,
-    deps: { ...deps, cellContentInsets: insets },
+    deps: occurrenceDeps,
   };
 }

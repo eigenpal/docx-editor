@@ -1,3 +1,4 @@
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
 import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
@@ -1641,7 +1642,8 @@ export const vMergePlanFor = (
   left: number | (() => number),
   depth: number,
   deps: TableFlowDeps,
-  rows?: readonly SemanticTableRow[]
+  rows?: readonly SemanticTableRow[],
+  isFragmentFirstRow?: (row: SemanticTableRow) => boolean
 ): VMergeRowHeights | null =>
   deps.measuringOnly === true
     ? null
@@ -1650,7 +1652,20 @@ export const vMergePlanFor = (
         left,
         depth,
         deps,
-        measureRowHeight
+        (row, cols, atLeft, atDepth, rowDeps, spacing, merge, top) =>
+          measureRowHeight(
+            row,
+            cols,
+            atLeft,
+            atDepth,
+            isFragmentFirstRow?.(row) ? firstRowContentDeps(structure, row, rowDeps) : rowDeps,
+            spacing,
+            merge,
+            top
+          ),
+        isFragmentFirstRow
+          ? (row) => (isFragmentFirstRow(row) ? 'outer-top' : 'shared-top')
+          : undefined
       );
 
 /** Lay out every row of a structure (no pagination) and finalize merges/borders. */
@@ -1671,8 +1686,13 @@ export function layoutTableFragment(
   // sizes merged heads the way this file did before it planned anything. A caller that wants
   // the planning has to bring a rollback-able sink with it, as `emitNestedTable` does.
   const rawRows: TableRowFragmentRecord[] = [];
+  const occurrenceInsets = new Map<
+    TableRowFragmentRecord,
+    ReadonlyMap<string, CellContentInsets>
+  >();
   let y = top;
-  for (const row of structure.rows) {
+  for (const [index, row] of structure.rows.entries()) {
+    const rowDeps = index === 0 ? firstRowContentDeps(structure, row, deps) : deps;
     const placed = layoutRowFragment(
       row,
       structure.columnWidthsPt,
@@ -1680,10 +1700,11 @@ export function layoutTableFragment(
       y,
       isHeaderRepeat(row),
       depth,
-      deps,
+      rowDeps,
       structure.cellSpacingPt
     );
     rawRows.push(placed.record);
+    if (rowDeps.cellContentInsets) occurrenceInsets.set(placed.record, rowDeps.cellContentInsets);
     y = placed.bottom;
   }
   const rows = finalizeTableRows(
@@ -1691,7 +1712,11 @@ export function layoutTableFragment(
     structure,
     structure.rows,
     deps.borderOwnershipBudget,
-    deps.vMergeResolveBudget
+    deps.vMergeResolveBudget,
+    undefined,
+    undefined,
+    undefined,
+    occurrenceInsets
   );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
   const rowOrdinals = new Map<string, number>();

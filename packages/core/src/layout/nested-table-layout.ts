@@ -1,3 +1,5 @@
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_NESTING, readTableStructure, tableOriginX } from './semantic-table.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
@@ -73,19 +75,36 @@ export function emitNestedTable(
   // A nested table is placed inside its CELL's content box by the same rules a top-level one
   // is placed inside the text column.
   const tableLeft = left + tableOriginX(structure, containerWidth);
-  const vMergePlan = vMergePlanFor(structure, tableLeft, depth, nestedFlowDeps);
+  const vMergePlan = vMergePlanFor(
+    structure,
+    tableLeft,
+    depth,
+    nestedFlowDeps,
+    undefined,
+    (row) => row.id === structure.rows[startRowIndex]?.id
+  );
   const rawRows: TableRowFragmentRecord[] = [];
+  const occurrenceInsets = new Map<
+    TableRowFragmentRecord,
+    ReadonlyMap<string, CellContentInsets>
+  >();
   let y = top;
   let nextRowIndex = startRowIndex;
   for (let rowIndex = startRowIndex; rowIndex < structure.rows.length; rowIndex++) {
     const row = structure.rows[rowIndex]!;
+    const rowDeps =
+      rowIndex === startRowIndex
+        ? firstRowContentDeps(structure, row, nestedFlowDeps)
+        : nestedFlowDeps;
+    const rowProbeDeps =
+      rowIndex === startRowIndex ? firstRowContentDeps(structure, row, probeDeps) : probeDeps;
     if (bounded && !atomic) {
       const height = measureRowHeight(
         row,
         structure.columnWidthsPt,
         tableLeft,
         depth,
-        probeDeps,
+        rowProbeDeps,
         structure.cellSpacingPt,
         undefined,
         y
@@ -101,7 +120,7 @@ export function emitNestedTable(
       tableLeft,
       y,
       depth,
-      nestedFlowDeps,
+      rowDeps,
       false,
       acceptVMergeSpansAt(vMergePlan, rowIndex, y),
       () => {
@@ -110,6 +129,7 @@ export function emitNestedTable(
       }
     );
     rawRows.push(placed.record);
+    if (rowDeps.cellContentInsets) occurrenceInsets.set(placed.record, rowDeps.cellContentInsets);
     y = placed.bottom;
     nextRowIndex = rowIndex + 1;
   }
@@ -122,7 +142,8 @@ export function emitNestedTable(
     deps.vMergeResolveBudget,
     undefined,
     undefined,
-    undefined
+    undefined,
+    occurrenceInsets
   );
   for (const pending of nestedDeferred) {
     for (const row of rows) {

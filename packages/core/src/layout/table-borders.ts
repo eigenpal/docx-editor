@@ -707,7 +707,17 @@ function publishFromIntervals(
         expandTripleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
       } else if (!fullSide || (centered && (side === 'top' || side === 'bottom'))) {
         // Multi-interval simple edges cannot use CSS border-*; publish stroke geometry.
-        expandSimpleInterval(strokes, side, edge, startPt, endPt, cellW, cellH, centered);
+        // Top edges are always outer edges; only bottom edges may be shared.
+        expandSimpleInterval(
+          strokes,
+          side,
+          edge,
+          startPt,
+          endPt,
+          cellW,
+          cellH,
+          centered && side !== 'top'
+        );
       }
     }
   };

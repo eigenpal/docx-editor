@@ -42,6 +42,12 @@ test('twenty exact-height lines reserve shared border insets', () => {
     page.fragments.flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []))
   );
   expect(rows).toHaveLength(20);
-  for (const item of rows) expect(item.box.height).toBeCloseTo(16.1, 7);
+  for (const [index, item] of rows.entries())
+    expect(item.box.height).toBeCloseTo(index === 0 ? 16.35 : 16.1, 7);
+  const cell = rows[0]!.cells[0]!;
+  expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(0.5, 7);
+  const topStroke = cell.borders.strokes!.find((stroke) => stroke.side === 'top')!;
+  expect(topStroke.y).toBe(0);
+  expect(topStroke.height).toBe(0.5);
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
 });
