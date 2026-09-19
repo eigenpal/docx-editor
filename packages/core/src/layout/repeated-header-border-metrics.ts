@@ -112,7 +112,13 @@ export function prepareRepeatedHeaderBorderPlan(
     ) {
       inset = Math.max(
         inset,
-        borderContentInset(cell.margins.top, { state: 'edge', ...intervals[index]!.edge }, true)
+        borderContentInset(
+          cell.margins.top,
+          { state: 'edge', ...intervals[index]!.edge },
+          true,
+          false,
+          true
+        )
       );
     }
     insets.set(cell.id, {

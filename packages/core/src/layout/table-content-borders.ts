@@ -89,8 +89,8 @@ export function withTableContentBorders(
     // whose border has the largest conflict weight (compound rules can extend farther).
     if (
       box[side].state !== 'edge' ||
-      borderContentInset(head.margins[side], candidate, shared, !shared) >
-        borderContentInset(head.margins[side], box[side], shared, !shared)
+      borderContentInset(head.margins[side], candidate, shared, !shared, side === 'top') >
+        borderContentInset(head.margins[side], box[side], shared, !shared, side === 'top')
     ) {
       boxes.set(head.id, { ...box, [side]: candidate });
     }

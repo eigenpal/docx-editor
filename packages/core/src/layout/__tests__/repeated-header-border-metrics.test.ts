@@ -541,3 +541,21 @@ describe('repeated-header shared horizontal border measurement', () => {
     expect(text).toEqual(Array.from({ length: 20 }, (_, index) => `L${index}`));
   });
 });
+
+test('repeated double header border reserves its receiving band only once', () => {
+  const header = row(
+    cell('H', 0.5, 0.75).replace('<w:bottom w:val="single"', '<w:bottom w:val="double"'),
+    '<w:tblHeader/>'
+  );
+  const result = layout(fixture({ header }));
+  expect(repeated(result).length).toBeGreaterThan(0);
+  for (const fragment of repeated(result)) {
+    const previous = fragment.rows[0]!.cells[0]!;
+    const body = fragment.rows[1]!.cells[0]!;
+    const rules = previous.borders.strokes!.filter((stroke) => stroke.side === 'bottom');
+    expect(rules).toHaveLength(2);
+    const bottom = previous.box.y + Math.max(...rules.map((stroke) => stroke.y + stroke.height));
+    expect(body.blocks[0]!.box.y).toBeCloseTo(bottom, 6);
+    expect(band(body).top).toBe(0.75);
+  }
+});

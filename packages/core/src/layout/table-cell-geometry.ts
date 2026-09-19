@@ -16,7 +16,8 @@ export function borderContentInset(
   margin: number,
   edge: CellBorderBox['top'],
   shared = false,
-  collapsedHorizontal = false
+  collapsedHorizontal = false,
+  receivingSharedTop = false
 ): number {
   if (edge.state !== 'edge') return margin;
   // Simple collapsed horizontal strokes extend halfway into each incident cell.
@@ -30,10 +31,14 @@ export function borderContentInset(
   // With little/no padding, content must still clear its full painted extent.
   const halfInset =
     shared || (collapsedHorizontal && (edge.style === 'single' || edge.style === 'thick'));
-  return Math.max(
-    margin + widthPt * (halfInset ? 0.5 : 1),
-    borderExtentPt(edge) * (centered ? 0.5 : 1)
-  );
+  // An internal double rule is painted by the preceding cell's bottom edge.
+  // Its inner stroke extends one authored width below that edge; reserving the
+  // top-owned band's two widths charges the following row an extra stroke.
+  const extent =
+    shared && receivingSharedTop && edge.style === 'double'
+      ? borderExtentPt(edge) - edge.widthPt
+      : borderExtentPt(edge);
+  return Math.max(margin + widthPt * (halfInset ? 0.5 : 1), extent * (centered ? 0.5 : 1));
 }
 
 export function contentInsets(
@@ -60,7 +65,7 @@ export function contentInsets(
   // Collapsed horizontal rules are shared by adjacent rows. Each row reserves half
   // the authored thickness; separated cells reserve an independent full border.
   return {
-    top: borderContentInset(margins.top, borders.top, collapsedBorders),
+    top: borderContentInset(margins.top, borders.top, collapsedBorders, false, true),
     right:
       centeredSideRules && collapsedBorders
         ? Math.max(margins.right, rightExtent / 2)
