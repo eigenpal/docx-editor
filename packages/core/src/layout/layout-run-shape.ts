@@ -1,4 +1,5 @@
 import { isRunKerningEnabled } from './run-kerning.ts';
+import { runLigatureFeatures } from './run-ligatures.ts';
 // Shared HarfBuzz call used by shaped measurement and non-DOM exporters.
 
 import type { ResolvedFont } from './font-resource.ts';
@@ -14,7 +15,10 @@ import {
 export type LayoutShapingEnvironment = Omit<
   ShapingEnvironmentInput,
   'font' | 'direction' | 'fallbackOrder'
->;
+> & {
+  /** Host can apply document optional ligatures consistently to measurement and glyph output. */
+  readonly documentLigatures?: boolean;
+};
 
 /**
  * The alphabet a face is asked the `smcp` question with, once per face.
@@ -73,6 +77,7 @@ export function shapeLayoutStyleRun(
       features: {
         ...environment.features,
         kern: isRunKerningEnabled(style) ? 1 : 0,
+        ...(environment.documentLigatures ? runLigatureFeatures(style) : {}),
         ...(style.smallCaps ? { smcp: 1 } : {}),
       },
       fallbackOrder: [],

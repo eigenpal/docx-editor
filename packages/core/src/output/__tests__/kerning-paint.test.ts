@@ -31,3 +31,10 @@ test('paint honors default, explicit-zero, and size-threshold kerning', () => {
     expect(span.style.fontKerning).toBe(expected);
   }
 });
+
+test('browser paint retains native ligature behavior for its canvas fallback', () => {
+  const span = paint(
+    '<w:p><w:r><w:rPr><w14:ligatures xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:val="none"/></w:rPr><w:t>office</w:t></w:r></w:p>'
+  ).querySelector<HTMLElement>('.layout-run-text')!;
+  expect(span.style.fontFeatureSettings).toBe('');
+});

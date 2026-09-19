@@ -98,6 +98,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     horizontalScalePercent: 'layout-only',
     kerningMinPt: 'layout-only',
     kerningEnabled: 'layout-only',
+    ligatures: 'layout-only',
     border: 'explicitly-omitted',
     hidden: 'layout-only',
     textOutline: 'layout-only',

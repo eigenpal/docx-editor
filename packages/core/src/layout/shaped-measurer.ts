@@ -1,4 +1,5 @@
 import { isRunKerningEnabled } from './run-kerning.ts';
+import { runLigatureFeatureKey } from './run-ligatures.ts';
 import { createShapedLineMetrics } from './shaped-line-metrics.ts';
 import {
   countAsciiSpaces,
@@ -285,7 +286,7 @@ export function createShapedMeasurer(
       const shapingKey = style.shaping
         ? `1:${JSON.stringify([style.shaping.script, style.shaping.direction, text])}`
         : `0:${text}`;
-      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${shapingKey}`;
+      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
       let advance = byText.get(widthKey);
       if (advance === undefined) {
         let total = 0;

@@ -86,6 +86,7 @@ export async function exportPdf(
   try {
     work.check();
     const opened = await openFontBackedDocumentForExport(source, {
+      documentLigatures: true,
       ...core,
       signal: controller.signal,
       displayMode: options.displayMode ?? 'proposed',

@@ -117,6 +117,10 @@ function geometryStyleToken(style: ResolvedRunStyle): string {
     resolved.characterSpacingPt,
     resolved.horizontalScalePercent,
     resolved.kerningMinPt,
+    resolved.ligatures?.standard ? 1 : 0,
+    resolved.ligatures?.contextual ? 1 : 0,
+    resolved.ligatures?.historical ? 1 : 0,
+    resolved.ligatures?.discretionary ? 1 : 0,
   ].join('|');
 }
 

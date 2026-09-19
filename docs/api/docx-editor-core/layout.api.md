@@ -1763,7 +1763,9 @@ export class LayoutShapingConfigurationError extends Error {
 }
 
 // @public
-export type LayoutShapingEnvironment = Omit<ShapingEnvironmentInput, 'font' | 'direction' | 'fallbackOrder'>;
+export type LayoutShapingEnvironment = Omit<ShapingEnvironmentInput, 'font' | 'direction' | 'fallbackOrder'> & {
+    readonly documentLigatures?: boolean;
+};
 
 // @public
 export interface LayoutShapingInstrumentation {
@@ -2932,6 +2934,12 @@ export interface ResolvedRunStyle {
     readonly italic: boolean;
     readonly kerningEnabled?: boolean;
     readonly kerningMinPt: number;
+    readonly ligatures?: {
+        readonly contextual: boolean;
+        readonly discretionary: boolean;
+        readonly historical: boolean;
+        readonly standard: boolean;
+    };
     readonly shading: string | null;
     readonly shaping?: {
         readonly baseLevel: number;
@@ -4102,6 +4110,7 @@ export interface StyleCascadeTable {
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
     readonly defaultTableStyleId: string | null;
+    readonly disableOptionalLigatures?: true;
     // (undocumented)
     readonly docDefaultsParagraph: readonly OoxmlProperty[];
     // (undocumented)

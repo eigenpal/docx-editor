@@ -1,5 +1,6 @@
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
+import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
@@ -79,6 +80,8 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Legacy or explicitly disabled optional OpenType substitutions. */
+  readonly disableOptionalLigatures?: true;
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
@@ -437,6 +440,8 @@ export function buildStyleCascadeTable(
   settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
   const typography = cjkTypographyFromSettings(settingsRoot);
+  const ligaturesEnabled = optionalLigaturesEnabled(settingsRoot);
+  const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
   const exactBaseline = preserveExactLineBaseline(settingsRoot)
     ? { preserveExactLineBaseline: true as const }
@@ -444,19 +449,21 @@ export function buildStyleCascadeTable(
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
-    const runDefaults = applicationRunDefaults(null);
+    const runDefaults = applicationRunDefaults(null, ligaturesEnabled);
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
       cacheToken: stableHash({
         empty: true,
         dR: propertiesFingerprint(runDefaults),
+        ...ligatureCompatibility,
         theme,
         typography,
         strictTableHierarchy,
         ...exactBaseline,
       }),
       ...exactBaseline,
+      ...ligatureCompatibility,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: runDefaults,
@@ -473,7 +480,7 @@ export function buildStyleCascadeTable(
   const authoredDefaults = readDocDefaults(stylesRoot);
   const defaults = {
     ...authoredDefaults,
-    run: [...applicationRunDefaults(stylesRoot), ...authoredDefaults.run],
+    run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],
     paragraph: [...applicationParagraphDefaults(stylesRoot), ...authoredDefaults.paragraph],
   };
   let defaultParagraphStyleId: string | null = null;
@@ -504,6 +511,7 @@ export function buildStyleCascadeTable(
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
     ...exactBaseline,
+    ...ligatureCompatibility,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -534,6 +542,7 @@ export function buildStyleCascadeTable(
   return {
     cacheToken,
     ...exactBaseline,
+    ...ligatureCompatibility,
     strictTableStyleHierarchy: strictTableHierarchy,
     typography,
     docDefaultsRun: defaults.run,
@@ -688,8 +697,11 @@ function cascadeParagraphWithNumbering(
     paragraphProperties,
     inheritedParagraphProperties,
     paragraphPropertyNodes,
-    runProperties,
-    markRunProperties,
+    runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
+    markRunProperties: applyLigatureCompatibility(
+      markRunProperties,
+      table.disableOptionalLigatures
+    ),
     styleId: styleId ?? null,
   };
 }
@@ -740,6 +752,8 @@ export function cascadeRunProperties(
   directRunProperties: readonly OoxmlProperty[],
   table?: StyleCascadeTable
 ): readonly OoxmlProperty[] {
+  const finish = (props: readonly OoxmlProperty[]) =>
+    applyLigatureCompatibility(props, table?.disableOptionalLigatures);
   let characterProps: readonly OoxmlProperty[] = [];
   if (table) {
     const rStyleId = styleIdFromProps(directRunProperties, 'rStyle');
@@ -752,7 +766,7 @@ export function cascadeRunProperties(
   }
 
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
-    return directRunProperties;
+    return finish(directRunProperties);
   }
   // Nothing to combine and nothing to append: hand back the SAME array.
   //
@@ -765,7 +779,7 @@ export function cascadeRunProperties(
   // the result immediately regardless. This line is unchanged from before the toggle cascade;
   // what is new is that it now has to stay.
   if (characterProps.length === 0 && directRunProperties.length === 0) {
-    return inheritedRunProperties;
+    return finish(inheritedRunProperties);
   }
   const styleProperties =
     characterProps.length === 0
@@ -798,8 +812,8 @@ export function cascadeRunProperties(
           { properties: inheritedRunProperties, role: 'carried', emit: true },
           { properties: characterProps, role: 'xor', emit: true },
         ]);
-  if (directRunProperties.length === 0) return styleProperties;
-  return [...styleProperties, ...directRunProperties];
+  if (directRunProperties.length === 0) return finish(styleProperties);
+  return finish([...styleProperties, ...directRunProperties]);
 }
 
 /** Everything the line breaker needs about one paragraph, already cascaded and converted. */

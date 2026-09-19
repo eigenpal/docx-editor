@@ -551,7 +551,8 @@ async function createLayoutShapingInternal(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   instrumentation: LayoutShapingInstrumentation | undefined,
   sharedShaper: LayoutShapingOptions['shaper'] | undefined,
-  shaperPolicy: LayoutHarfBuzzShaperPolicy
+  shaperPolicy: LayoutHarfBuzzShaperPolicy,
+  documentLigatures = false
 ): Promise<LayoutShapingOptions> {
   // Sample every caller-owned value before the asynchronous initialization boundary. A host
   // mutating its configuration while HarfBuzz loads must not create a half-old, half-new
@@ -586,6 +587,7 @@ async function createLayoutShapingInternal(
     normalization: NORMALIZATION_POLICY,
     language,
     features: FEATURES,
+    ...(documentLigatures ? { documentLigatures: true } : {}),
     fixedPointScale: FIXED_POINT_SCALE,
     roundingMode: ROUNDING_MODE,
   });
@@ -623,9 +625,16 @@ export async function createLayoutShapingWithTextShaper(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   shaper: LayoutShapingOptions['shaper'],
   shaperPolicy: LayoutHarfBuzzShaperPolicy,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  documentLigatures = false
 ): Promise<LayoutShapingOptions> {
-  return createLayoutShapingInternal(configuration, instrumentation, shaper, shaperPolicy);
+  return createLayoutShapingInternal(
+    configuration,
+    instrumentation,
+    shaper,
+    shaperPolicy,
+    documentLigatures
+  );
 }
 
 /** Release native resources held by a shaping environment. @public */

@@ -32,6 +32,8 @@ The result contains owned `bytes`, `pageCount`, `layoutRevision`, `displayMode`,
 
 The writer supports static TrueType and CFF fonts, selected collection faces, positioned multilingual glyphs, Unicode extraction, page sizes, headers and footers, list markers, paragraph fills, single/double/dashed/dotted paragraph borders, table text and shading, resolved table borders, PNG/JPEG images, crop and affine transforms, fixed image opacity, links, destinations, and metadata. Notes, equation geometry, tab leaders, page frames, small caps, and underline variants also paint from Core records.
 
+PDF sessions enable Core's `documentLigatures` shaping capability, which applies authored optional ligatures and document compatibility to both layout measurement and emitted glyphs. The capability participates in the shaping fingerprint. Browser shaping and DOM paint retain their native ligature behavior because the canvas fallback cannot select individual OpenType features; adding that browser capability requires a matching measurement port. Required script substitutions remain enabled in either mode.
+
 Comments use native range highlights or text notes. Authors, dates, replies, and resolved state are preserved where PDF viewers support them. Cross-page anchors produce page-local annotations. A comment without a visible anchor becomes a labeled first-page note. Editing a PDF annotation does not update the DOCX.
 
 Strict fidelity means representing Core's accepted layout. It does not certify pixel identity with Microsoft Word. Font substitutions remain possible under Core's default font policy.

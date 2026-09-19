@@ -92,6 +92,8 @@ export interface DocumentExportShaping extends SessionExportShaping {
 
 /** Cancellation and deadline controls for document-specific font resolution. @internal */
 export interface DocumentExportShapingOptions extends DocumentExportFontResolutionOptions {
+  /** Host supports document optional ligatures in measurement and glyph output. */
+  readonly documentLigatures?: boolean;
   readonly glyphFallbacks?: readonly FontRequest[];
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
@@ -127,6 +129,8 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   OpenDocumentForExportOptions,
   'measurer' | 'reuseAcrossRevisions'
 > {
+  /** Apply document optional ligatures to both layout measurement and exported glyphs. */
+  readonly documentLigatures?: boolean;
   /** Immutable font-backed byte sessions reject incremental revision reuse. */
   readonly reuseAcrossRevisions?: false;
   /** Ordered first-wins font origins resolved against this immutable DOCX. */
@@ -232,6 +236,7 @@ export async function openFontBackedDocumentForExport(
     fontPolicy,
     onFontResolution,
     glyphFallbacks,
+    documentLigatures,
     ...sessionOptions
   } = options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
@@ -243,6 +248,7 @@ export async function openFontBackedDocumentForExport(
       timeoutMs: fontResolutionTimeoutMs ?? options.resourceTimeoutMs,
       fontPolicy,
       glyphFallbacks,
+      documentLigatures,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -402,7 +408,8 @@ export async function acquireDocumentExportShaping(
         const shaping = await createSessionExportShaping(
           prepareOwnedLayoutFontConfiguration(configuration),
           undefined,
-          options.glyphFallbacks
+          options.glyphFallbacks,
+          options.documentLigatures
         );
         throwIfAborted(controller.signal);
         const report = fontResolutionReport(

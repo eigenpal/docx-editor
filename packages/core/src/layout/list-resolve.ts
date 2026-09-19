@@ -1,3 +1,4 @@
+import { markerMeasureToken } from './list-marker-measure-key.ts';
 import {
   numberingParagraphProperties,
   numberingParagraphToken,
@@ -95,23 +96,6 @@ function consumeListResolveChangeEvidence(
   const evidence = listResolveEvidenceBySession.get(session);
   listResolveEvidenceBySession.delete(session);
   return evidence;
-}
-
-/** Fields of {@link ResolvedRunStyle} that change a marker's measured width. */
-function markerMeasureToken(style: ResolvedRunStyle): string {
-  return [
-    style.fontFamily ?? '',
-    style.fontSizePt,
-    style.bold ? 1 : 0,
-    style.italic ? 1 : 0,
-    style.characterSpacingPt,
-    style.horizontalScalePercent,
-    style.verticalAlign,
-    style.hidden ? 1 : 0,
-    style.kerningMinPt,
-    style.caps ? 1 : 0,
-    style.smallCaps ? 1 : 0,
-  ].join(',');
 }
 
 /**

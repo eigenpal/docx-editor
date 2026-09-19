@@ -14,6 +14,7 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
+import { resolveRunLigatures } from './run-ligatures.ts';
 import { borderEdgeFromAttributes, type ParagraphBorderEdge } from './paragraph-style.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
@@ -93,6 +94,13 @@ export interface ResolvedRunStyle {
   readonly kerningMinPt: number;
   /** Explicit kerning selection; a zero threshold disables it. Absent uses a positive threshold. */
   readonly kerningEnabled?: boolean;
+  /** Resolved optional OpenType substitutions; required script ligatures are independent. */
+  readonly ligatures?: {
+    readonly standard: boolean;
+    readonly contextual: boolean;
+    readonly historical: boolean;
+    readonly discretionary: boolean;
+  };
   /**
    * `w:vanish` (ECMA-376 §17.3.2.45): the run is hidden text.
    *
@@ -321,6 +329,11 @@ export function resolveRunStyle(
         }
         break;
       }
+      case 'ligatures': {
+        const value = resolveRunLigatures(property.attributes?.val);
+        if (value) style.ligatures = value;
+        break;
+      }
       case 'vanish':
         // A toggle like `w:b`, so a later `w:val="0"` from direct formatting un-hides text a
         // character style hid. `w:specVanish` is deliberately not folded in here.
@@ -424,6 +437,10 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.horizontalScalePercent === b.horizontalScalePercent &&
     a.kerningMinPt === b.kerningMinPt &&
     a.kerningEnabled === b.kerningEnabled &&
+    a.ligatures?.standard === b.ligatures?.standard &&
+    a.ligatures?.contextual === b.ligatures?.contextual &&
+    a.ligatures?.historical === b.ligatures?.historical &&
+    a.ligatures?.discretionary === b.ligatures?.discretionary &&
     a.hidden === b.hidden &&
     a.underline?.variant === b.underline?.variant &&
     a.underline?.color === b.underline?.color

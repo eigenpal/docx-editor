@@ -11,7 +11,10 @@ import {
 } from '../../layout/index.ts';
 import { ExportResourceError, openDocumentForExport } from '../export-session.ts';
 import { openFontBackedDocumentForExport } from '../document-export-shaping.ts';
-import { acquireSharedExportShaping } from '../shared-export-shaping.ts';
+import {
+  acquireSharedExportShaping,
+  createSessionExportShaping,
+} from '../shared-export-shaping.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -42,6 +45,37 @@ function shapedAdvance(glyphs: readonly { readonly advanceX: number }[], scale: 
   for (const glyph of glyphs) total += glyph.advanceX;
   return total / scale;
 }
+
+test('document ligature capability fingerprints and aligns measurement with emitted glyphs', async () => {
+  const request = { family: SHARED_TEST_FAMILY, weight: 400, style: 'normal' } as const;
+  const prepared = prepareLayoutFontConfiguration({
+    epoch: 1,
+    maxFontBytes: 2_000_000,
+    sources: [{ request, id: 'ligatures', bytes: fontBytes, hash: fontHash, faceIndex: 0 }],
+    defaultFont: { family: SHARED_TEST_FAMILY, sizeHalfPoints: 22 },
+  });
+  const browser = await createSessionExportShaping(prepared);
+  const capable = await createSessionExportShaping(prepared, undefined, [], true);
+  expect(capable.producer).not.toBe(browser.producer);
+  const plain = { ...DEFAULT_RUN_STYLE, fontFamily: SHARED_TEST_FAMILY };
+  const standard = {
+    ...plain,
+    ligatures: { standard: true, contextual: false, historical: false, discretionary: false },
+  };
+  for (const style of [plain, standard]) {
+    for (const session of [browser, capable]) {
+      const laidOut = session.shapeLaidOutText(span('office', style))!;
+      expect(shapedAdvance(laidOut.run.glyphs, laidOut.fixedPointScale)).toBeCloseTo(
+        session.createMeasurer().measure('office', style),
+        8
+      );
+      expect(laidOut.run.glyphs.length).toBe(session === capable && style === plain ? 6 : 4);
+    }
+  }
+  expect(browser.createMeasurer().measure('office', plain)).toBe(
+    browser.createMeasurer().measure('office', standard)
+  );
+});
 
 async function sharedShaping(options?: {
   readonly family?: string;

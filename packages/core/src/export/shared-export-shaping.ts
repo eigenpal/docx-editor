@@ -110,7 +110,8 @@ function shapedMeasurer(shaping: LayoutShapingOptions): TextMeasurer {
 export async function createSessionExportShaping(
   prepared: PreparedLayoutFontConfiguration,
   instrumentation?: LayoutShapingInstrumentation,
-  glyphFallbacks: readonly FontRequest[] = []
+  glyphFallbacks: readonly FontRequest[] = [],
+  documentLigatures = false
 ): Promise<SessionExportShaping> {
   if (!isPreparedLayoutFontConfiguration(prepared)) {
     throw new TypeError('Session exporter shaping requires a prepared font handle');
@@ -121,7 +122,8 @@ export async function createSessionExportShaping(
       prepared,
       shaper,
       LAYOUT_HARFBUZZ_SHAPER_POLICY,
-      instrumentation
+      instrumentation,
+      documentLigatures
     ),
     glyphFallbacks
   );
