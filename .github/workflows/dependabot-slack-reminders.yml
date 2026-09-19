@@ -148,7 +148,17 @@ jobs:
           # with it. Escape `&` first, or the later escapes escape each other.
           # Truncate before escaping, so no entity is ever cut in half; `pack`
           # measures the finished lines, so the growth cannot overflow a block.
-          def mrkdwn: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+          # A lone backtick is the other structural break: advisory text quotes
+          # package names often, and truncation at 160 characters can leave an
+          # odd one, which then pairs with the manifest's opening backtick and
+          # swallows the path. Slack offers no escape, so substitute a quote.
+          #
+          # `*` and `_` stay as they are on purpose. They can only italicize or
+          # embolden part of one line, and rewriting them would corrupt real
+          # package names such as `string_decoder` — the one string in the
+          # message a reader copies out to fix the alert.
+          def mrkdwn: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")
+                    | gsub("`"; "'");
 
           def sev_rank: {critical: 0, high: 1, medium: 2, low: 3}[.] // 4;
           def sev_emoji: {
