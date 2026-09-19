@@ -39,6 +39,43 @@ const paragraphs = (layout: ReturnType<typeof render>) =>
     .flatMap((page) => page.fragments)
     .filter((f): f is ParagraphFragmentRecord => f.kind === 'paragraph');
 
+test('an earlier page float does not turn subsequent page floats into inline tables', () => {
+  const source = part(
+    Array.from(
+      { length: 3 },
+      (_, index) =>
+        p(`Page ${index}`, index ? '<w:pageBreakBefore/>' : '') + table(60) + p(`After ${index}`)
+    ).join('')
+  );
+  const config = {
+    ...options,
+    inlineDrawingLayout: {
+      ownerPartName: '/word/document.xml',
+      project: () => null,
+      resourceOf: () => {
+        throw new Error('no picture resources');
+      },
+    },
+  };
+  const session = createLayoutSession();
+  const cold = layoutSemanticDocument(source, 0, config);
+  expect(cold.pages).toHaveLength(3);
+  expect(tables(cold)).toHaveLength(3);
+  expect(tables(cold).every(isOutOfFlowTableFragment)).toBe(true);
+  for (const page of cold.pages) {
+    const floated = page.fragments.find((block) => block.kind === 'table')!;
+    const anchor = page.fragments.find(
+      (block) => block.kind === 'paragraph' && block.paragraphId === floated.floatingWrap?.anchorId
+    ) as ParagraphFragmentRecord;
+    expect(anchor.lines[0]!.box.y).toBe(floated.box.y);
+    expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(
+      floated.box.x + floated.box.width
+    );
+  }
+  expect(layoutSemanticDocument(source, 0, { ...config, session }).pages).toEqual(cold.pages);
+  expect(layoutSemanticDocument(source, 1, { ...config, session }).pages).toEqual(cold.pages);
+});
+
 test('text wraps beside a floating table without an image layout port', () => {
   const layout = render(part(p('Lead') + table() + p('word '.repeat(30)) + p('Tail')));
   expect(layout.pages).toHaveLength(1);

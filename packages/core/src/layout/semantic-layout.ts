@@ -2097,7 +2097,8 @@ function layoutBlocksPass(
         !tableWrap.hasEarlierCellExclusions(
           entry.table,
           options.drawingExclusionZonesByPage,
-          tableDeps
+          tableDeps,
+          pages.length
         ) &&
         tableWrap.floatingTableBand(entry.table, Math.min(...columns.widths), tableDeps) <=
           contentHeight()

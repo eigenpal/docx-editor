@@ -250,7 +250,7 @@ const earliestExclusions = new WeakMap<
   TableFlowDeps,
   {
     readonly zones: ReadonlyMap<number, readonly ExclusionZone[]>;
-    readonly order: number;
+    readonly remainingOrders: readonly (readonly [page: number, order: number])[];
   }
 >();
 
@@ -258,28 +258,50 @@ const earliestExclusions = new WeakMap<
 export function hasEarlierCellExclusions(
   table: OoxmlElement,
   zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  firstPage = 0
 ): boolean {
   if (!deps.pageExclusionZones || !zones?.size) return false;
   let memo = earliestExclusions.get(deps);
   if (memo?.zones !== zones) {
-    let order = Infinity;
-    for (const page of zones.values())
+    const remainingOrders: [number, number][] = [];
+    for (const [pageIndex, page] of zones) {
+      let order = Infinity;
       for (const zone of page)
         order = Math.min(
           order,
           deps.paragraphOrderIndex?.(zone.anchorParagraphId) ?? zone.sourceOrder
         );
-    memo = { zones, order };
+      remainingOrders.push([pageIndex, order]);
+    }
+    remainingOrders.sort((a, b) => a[0] - b[0]);
+    for (let index = remainingOrders.length - 2; index >= 0; index--)
+      remainingOrders[index]![1] = Math.min(
+        remainingOrders[index]![1],
+        remainingOrders[index + 1]![1]
+      );
+    memo = { zones, remainingOrders };
     earliestExclusions.set(deps, memo);
   }
+  // Completed pages cannot wrap this table's cells. Retain later-page exclusions
+  // because an inline table can continue there; query the suffix without rescanning
+  // all pages for every table in a long document.
+  let low = 0;
+  let high = memo.remainingOrders.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (memo.remainingOrders[middle]![0] < firstPage) low = middle + 1;
+    else high = middle;
+  }
+  const earliestOrder = memo.remainingOrders[low]?.[1];
+  if (earliestOrder === undefined || earliestOrder === Infinity) return false;
   const pending = [table];
   let visits = 0;
   while (pending.length) {
     const node = pending.pop()!;
     if (++visits > 10000) return true;
     if (node.kind === 'paragraph') {
-      if (memo.order <= (deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER))
+      if (earliestOrder <= (deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER))
         return true;
       continue;
     }
