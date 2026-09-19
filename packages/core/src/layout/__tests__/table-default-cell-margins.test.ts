@@ -458,14 +458,26 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
   });
 });
 
-test('modern unstyled tables do not synthesize TableNormal cell margins', () => {
+test('modern unstyled tables distinguish omitted margins from TableNormal margins', () => {
   const table = tableOf(ONE_CELL_TABLE());
   const source = part(WORD_STYLES, '/word/styles.xml');
   const cascade = buildStyleCascadeTable(source.root);
   const read = (mode: number, styles?: typeof cascade) =>
     readTableStructure(table, 468, 0, styles, 'all-markup', undefined, mode)!;
-  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
   expect(read(14).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
   expect(read(15, cascade).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
-  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
+});
+
+test('modern omitted margins fall back per side and explicit zero overrides them', () => {
+  const source = tableOf(
+    ONE_CELL_TABLE('<w:tblCellMar><w:left w:w="0" w:type="dxa"/></w:tblCellMar>').replace(
+      '</w:tcPr>',
+      '<w:tcMar><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>'
+    )
+  );
+  const resolved = readTableStructure(source, 468, 0, undefined, 'all-markup', undefined, 15)!;
+  expect(resolved.defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0 });
+  expect(resolved.rows[0]!.cells[0]!.margins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
 });

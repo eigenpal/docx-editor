@@ -718,12 +718,12 @@ function readTableStructureUncached(
   }
   if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
-  // Modern Word supplies TableNormal margins through the authored style cascade.
-  // The saved mode-15 Word table with no table style/margins uses zero padding.
+  // Modern unstyled tables retain a 10-twip horizontal inset when a margin is
+  // omitted. Explicit zero removes it; authored table/cell styles still override it.
   // Keep the historical fallback for legacy and unspecified compatibility modes.
   let styleMargins: CellMarginsPt =
     compatibilityMode !== undefined && compatibilityMode >= 15
-      ? { top: 0, right: 0, bottom: 0, left: 0 }
+      ? { top: 0, right: 0.5, bottom: 0, left: 0.5 }
       : DEFAULT_CELL_MARGINS;
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
