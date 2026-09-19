@@ -2,6 +2,9 @@
 # Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 # Production use requires a commercial agreement: licensing@eigenpal.com
 import json
+import io
+import fcntl
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,9 +13,32 @@ from unittest.mock import patch
 from catalog import write_json
 from evidence import digest
 from pipeline import Worker
+from server import main
 
 
 class SavedReferenceTests(unittest.TestCase):
+    def test_cli_reports_failure_to_automation_and_releases_lock(self):
+        for status in ('error', 'unsupported', 'exported'):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                source = root / 'input.docx'; source.write_bytes(b'fixture')
+                result = dict(status=status, comparisons={})
+                output = io.StringIO()
+                with patch('sys.argv', ['validator', '--data', temp, '--once', str(source), '--reuse-references']), \
+                     patch('pipeline.Worker') as worker, patch('sys.stdout', output), \
+                     patch('tempfile.gettempdir', return_value=temp):
+                    worker.return_value.process.return_value = result
+                    if status == 'exported':
+                        main()
+                    else:
+                        with self.assertRaises(SystemExit) as raised:
+                            main()
+                        self.assertEqual(raised.exception.code, 1)
+                    worker.return_value.process.assert_called_once_with(source, {}, reuse_references=True)
+                self.assertEqual(json.loads(output.getvalue())['status'], status)
+                with (root / f'pdf-validation-{os.getuid()}.lock').open('a') as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_rerun_needs_no_adapter_and_records_comparable_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve(); source = root / 'input.docx'; source.write_bytes(b'fixture')

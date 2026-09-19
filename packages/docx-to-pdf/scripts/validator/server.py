@@ -267,6 +267,8 @@ def main():
             print(json.dumps(document, indent=2))
         finally:
             lock.close()
+        if document.get('status') != 'exported':
+            raise SystemExit(1)
         return
     server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(root, worker))
     print(f'PDF Export Validator: http://127.0.0.1:{server.server_port}', flush=True)

@@ -61,6 +61,8 @@ bun run validation:pdf --no-watch --data /absolute/evidence --port 5191
 
 Read `/api/triage` for failing pairs, first divergent page and vertical position, preceding-page context, errors, font flags, and relative evidence paths. Read `/api/documents/<source-sha256>` for each page's metrics, changed vertical bands, preview paths, source/PDF identities, diagnostics, and stage resource measurements. `/api/state` reports the serial queue and current stage. `/api/catalog` is a compact index. Evidence is reread from disk; the UI refreshes every five seconds.
 
+`--once` exits nonzero if generation or comparison fails, while preserving its JSON failure evidence on stdout. Exit zero means the pipeline completed; inspect each comparison's `verdict` to determine fidelity. A measured difference above the target is a completed benchmark, not a pipeline failure.
+
 Fix the earliest plausible cause, rerun the same source, and compare the changed regions through subsequent pages. Do not treat a high global similarity score as proof of correct pagination, text, or fonts. Re-drop a file (or change its mtime) to retry after an engine fix; completed inbox entries are persisted across restarts.
 
 ## Import existing evidence
