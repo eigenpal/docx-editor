@@ -259,7 +259,7 @@ export function layoutHeaderFooterStory(
   // `w:start` and shows the same number on page 3 as on page 1. That matches Word, which keeps
   // furniture numbering independent of the body's.
   const listItems: ReadonlyMap<string, ResolvedListItem> | undefined = withResolvedListItems(
-    { numberingIndex: inputs?.numberingIndex, styleCascade },
+    { numberingIndex: inputs?.numberingIndex, styleCascade, measurer },
     blocks
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.

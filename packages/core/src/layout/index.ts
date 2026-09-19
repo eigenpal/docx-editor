@@ -17,6 +17,7 @@
 // Resolved caches, dependency closure, shaping, convergent pagination, and the anchored
 // DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
 
+export { mapSymbolPuaText } from './symbol-encoding.ts';
 export {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,

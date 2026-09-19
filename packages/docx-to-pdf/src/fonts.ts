@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { create as openFont, type FontkitFont } from 'fontkit';
 import { PDFDocument, PDFHexString, PDFName, type PDFRef } from 'pdf-lib';
 import type { ExportAdmittedFontFace } from '@docx-editor.dev/core/export';
+import { mapSymbolPuaText } from '@docx-editor.dev/core/layout';
 import { fontEmbeddingDecision } from './pdf-font-embedding.ts';
 import { strikeMetrics } from './font-metrics.ts';
 import { hex, unicodeHex, Work } from './context.ts';
@@ -27,6 +28,8 @@ export class EmbeddedFace {
   readonly name: string;
   readonly font: FontkitFont;
   readonly strike: ReturnType<typeof strikeMetrics>;
+  /** The family this face was admitted under, for legacy symbol-encoding extraction. */
+  private readonly family: string;
   private readonly subset: ReturnType<FontkitFont['createSubset']>;
   private readonly codes = new Map<string, number>();
   private readonly rows: { cid: number; text: string }[] = [];
@@ -46,14 +49,26 @@ export class EmbeddedFace {
     if (Object.keys(font.variationAxes ?? {}).length)
       throw new Error('Variable fonts require an exact static instance');
     this.font = font;
+    this.family = admitted.request.family;
     this.strike = strikeMetrics(admitted);
     this.subset = font.createSubset();
     this.ref = doc.context.nextRef();
     this.name = `F${index}`;
   }
+  /**
+   * One drawn glyph, and the text it should EXTRACT as.
+   *
+   * A legacy symbol face draws Word's own private-use codepoint (U+F0B7 is Symbol's bullet),
+   * which is the right glyph and the wrong character: copied out of the page it is a private
+   * character that means nothing outside that font. `ToUnicode` therefore carries the Unicode
+   * twin, exactly as Word's own PDF export does. Drawing and extraction stay separate — the
+   * glyph id is untouched — and a codepoint with no exact twin keeps what the file had rather
+   * than gaining an approximate character.
+   */
   encode(glyph: number, text: string): string {
     if (!Number.isInteger(glyph) || glyph <= 0 || glyph >= this.font.numGlyphs)
       throw new Error('Core produced a missing or invalid glyph');
+    text = mapSymbolPuaText(text, this.family);
     const key = `${glyph}:${text}`;
     let code = this.codes.get(key);
     if (code === undefined) {

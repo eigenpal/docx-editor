@@ -47,9 +47,16 @@ export function createShapedLineMetrics(
       };
     } else {
       try {
-        // Vertical metrics are a property of the FACE, not of the text, so any string
-        // yields them; a single space is the cheapest to shape.
-        const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, ' ');
+        // Vertical metrics are a property of the FACE, not of the text, so NO text is what
+        // this asks for. It used to shape a single space, which is cheap but not neutral:
+        // a shaper that substitutes a face for text it cannot draw — the exporter's glyph
+        // fallback does exactly that — answers with the SUBSTITUTE's extents. A legacy
+        // symbol face is the case that exposes it, because its cmap need not carry U+0020
+        // at all, so every Symbol and Wingdings line was sized by one shared fallback face
+        // instead of by the two different faces the document actually names. An empty run
+        // shapes to no glyphs, which no fallback can improve on, so the extents that come
+        // back are this face's own.
+        const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, '');
         const ascent = shaped.metrics.ascent / baseEnvironment.fixedPointScale;
         const descent = shaped.metrics.descent / baseEnvironment.fixedPointScale;
         // Word's single-spaced line box is ascent + descent + lineGap. External leading

@@ -1910,6 +1910,9 @@ export interface ListMarkerRecord {
 export type ListSuffix = 'tab' | 'space' | 'nothing';
 
 // @public
+export function mapSymbolPuaText(text: string, fontFamily: string | null | undefined, isFamilyAvailable?: (family: string) => boolean): string;
+
+// @public
 export function markRevisionRemovesMark(revision: RevisionAttribution): boolean;
 
 // @public
@@ -4597,6 +4600,7 @@ export function withNumberingStyleLinks(index: NumberingIndex, styleCascade: Sty
 export function withResolvedListItems<T extends {
     readonly isFontAvailable?: (family: string) => boolean;
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly measurer?: TextMeasurer;
     readonly numberingIndex?: NumberingIndex;
     readonly styleCascade?: StyleCascadeTable;
 }>(options: T, blocks: readonly OoxmlElement[]): T & {

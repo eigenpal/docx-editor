@@ -107,6 +107,16 @@ export function installedWordFontResolver(roots: readonly string[]) {
       'MS Gothic': ['MS Gothic', 'msgothic'],
       'MS PGothic': ['MS PGothic'],
       'MS UI Gothic': ['MS UI Gothic'],
+      // Legacy symbol-encoded faces. A Word bullet is the font's own byte plus 0xF000
+      // (U+F0B7 in Symbol), a private-use codepoint only these faces carry — and the face
+      // also SIZES the line it sits on, because a 12 pt Symbol ascends 12.06 pt where a
+      // 12 pt text face ascends 11.52. Without them the glyph falls to the shared symbol
+      // fallback, which has neither the right outline nor the right ascent.
+      Symbol: ['Symbol', 'symbol'],
+      Wingdings: ['Wingdings', 'wingding'],
+      'Wingdings 2': ['Wingdings 2', 'wingdng2'],
+      'Wingdings 3': ['Wingdings 3', 'wingdng3'],
+      Webdings: ['Webdings', 'webdings'],
     };
     const sources = [];
     for (const family of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {

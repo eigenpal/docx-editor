@@ -281,7 +281,11 @@ export function layoutNoteStory(
     options.projectLink;
 
   const listItems = withResolvedListItems(
-    { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
+    {
+      numberingIndex: options.numberingIndex,
+      styleCascade: options.styleCascade,
+      measurer: options.measurer,
+    },
     blocks
   ).listItems;
 

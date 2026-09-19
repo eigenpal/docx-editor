@@ -89,3 +89,40 @@ test('installed discovery observes cancellation before reading a candidate', asy
     ).rejects.toThrow('stop font lookup');
   });
 });
+
+test('installed discovery admits the legacy symbol faces a Word bullet names', async () => {
+  await directory(async (root) => {
+    const sample = new URL(
+      '../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf',
+      import.meta.url
+    );
+    for (const file of ['symbol.ttf', 'Wingdings.ttf', 'Wingdings 2.ttf', 'webdings.ttf']) {
+      await copyFile(sample, join(root, file));
+    }
+    const result = await installedWordFontResolver([root])({
+      families: ['Symbol', 'Wingdings', 'Wingdings 2', 'Webdings'],
+      defaultFamily: 'Arial',
+    });
+    // One regular face each: a symbol font has no bold or italic file to find.
+    expect(result.sources.map((source) => source.request)).toEqual([
+      { family: 'Symbol', weight: 400, style: 'normal' },
+      { family: 'Wingdings', weight: 400, style: 'normal' },
+      { family: 'Wingdings 2', weight: 400, style: 'normal' },
+      { family: 'Webdings', weight: 400, style: 'normal' },
+    ]);
+  });
+});
+
+test('a symbol face is only read when the document asks for it', async () => {
+  await directory(async (root) => {
+    await copyFile(
+      new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url),
+      join(root, 'symbol.ttf')
+    );
+    const result = await installedWordFontResolver([root])({
+      families: ['Arial'],
+      defaultFamily: 'Arial',
+    });
+    expect(result.sources.length).toBe(0);
+  });
+});

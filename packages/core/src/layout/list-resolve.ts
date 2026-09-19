@@ -34,6 +34,8 @@ import {
   type StyleDefinition,
 } from './style-cascade.ts';
 import { hasSymbolPua, mapSymbolPuaText } from './symbol-encoding.ts';
+import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
@@ -642,10 +644,27 @@ type WithResolvedListItemsOptions = {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   readonly styleCascade?: StyleCascadeTable;
   readonly isFontAvailable?: (family: string) => boolean;
+  /**
+   * The pass's measurer, read ONLY to learn which legacy symbol faces were admitted.
+   *
+   * A caller may still pass {@link isFontAvailable} explicitly and it wins; absent one, the
+   * measurer answers, because it is the only input that already knows the admitted faces and
+   * is already folded into every layout cache key. A caller with no measurer (the REF-refresh
+   * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
+   */
+  readonly measurer?: TextMeasurer;
 };
+
+/** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
+function listFontAvailability(
+  options: WithResolvedListItemsOptions
+): ((family: string) => boolean) | undefined {
+  return options.isFontAvailable ?? markerSymbolFontAvailability(options.measurer);
+}
 
 function resolvedListItemsMemoHit(
   options: WithResolvedListItemsOptions,
+  isFontAvailable: ((family: string) => boolean) | undefined,
   blocks: readonly OoxmlElement[],
   memoOwner: LayoutSession | undefined
 ): ResolvedListItemsMemoEntry | undefined {
@@ -656,7 +675,7 @@ function resolvedListItemsMemoHit(
     memo &&
     memo.rawIndex === options.numberingIndex &&
     memo.styleCascade === options.styleCascade &&
-    memo.isFontAvailable === options.isFontAvailable
+    memo.isFontAvailable === isFontAvailable
   ) {
     return memo;
   }
@@ -680,8 +699,9 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
+  const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined) {
-    const memo = resolvedListItemsMemoHit(options, blocks, memoOwner);
+    const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
     if (memo && memoOwner === undefined) {
       return {
         ...options,
@@ -692,13 +712,13 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   }
   const memoBeforeResolve =
     options.listItems === undefined
-      ? resolvedListItemsMemoHit(options, blocks, memoOwner)
+      ? resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner)
       : undefined;
   const numberingIndex =
     memoBeforeResolve &&
     memoBeforeResolve.rawIndex === options.numberingIndex &&
     memoBeforeResolve.styleCascade === options.styleCascade &&
-    memoBeforeResolve.isFontAvailable === options.isFontAvailable
+    memoBeforeResolve.isFontAvailable === isFontAvailable
       ? memoBeforeResolve.linkedIndex
       : withNumberingStyleLinks(
           options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
@@ -712,7 +732,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
           options.numberingIndex,
           numberingIndex,
           options.styleCascade,
-          options.isFontAvailable,
+          isFontAvailable,
           memoOwner
         )
       : undefined);
@@ -720,7 +740,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
     rememberResolvedListItemsMemo(blocks, memoOwner, {
       rawIndex: options.numberingIndex,
       styleCascade: options.styleCascade,
-      isFontAvailable: options.isFontAvailable,
+      isFontAvailable,
       linkedIndex: numberingIndex,
       listItems,
     });
@@ -744,6 +764,7 @@ export function withResolvedListItems<
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly styleCascade?: StyleCascadeTable;
     readonly isFontAvailable?: (family: string) => boolean;
+    readonly measurer?: TextMeasurer;
   },
 >(
   options: T,

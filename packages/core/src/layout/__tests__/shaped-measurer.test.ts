@@ -854,6 +854,44 @@ test('fallback glyph faces own line metrics without contaminating primary-face c
   expect(m.lineMetrics(style, 'abc')).toEqual({ height: 12, baseline: 10 });
 });
 
+test('a face that cannot draw a space still reports its own vertical metrics', () => {
+  // The exporter's glyph fallback replaces the face for text it cannot draw, so a probe
+  // string is never neutral. A legacy symbol face is the real case: its cmap need not carry
+  // U+0020 at all, and probing with a space made every Symbol and Wingdings line take the
+  // metrics of whichever fallback face drew the space.
+  const primary = resolvedFixture();
+  const substitute = resolvedFixture();
+  const m = createShapedMeasurer({
+    shaper: {
+      shape(input) {
+        const font = input.text.length > 0 ? substitute : input.environment.font;
+        return {
+          text: input.text,
+          direction: 'ltr',
+          bidiLevel: 0,
+          glyphs: [],
+          clusters: [],
+          fontSpans: [{ font, glyphStart: 0, glyphEnd: 0, fallbackIndex: null }],
+          metrics:
+            font === substitute
+              ? { ascent: 13_000, descent: 3_000, lineGap: 0 }
+              : { ascent: 10_000, descent: 2_000, lineGap: 0 },
+        };
+      },
+    },
+    resolveFont: () => primary,
+    fallback: createFixedMeasurer(),
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '15.1',
+    fixedPointScale: 1_000,
+  });
+  const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 12 };
+  expect(m.lineMetrics(style)).toEqual({ height: 12, baseline: 10 });
+  // Text the face really cannot draw still reports the substitute, because that face is the
+  // one paint will use for it.
+  expect(m.lineMetrics(style, 'x')).toEqual({ height: 16, baseline: 13 });
+});
+
 test('kerning follows the run threshold and cannot reuse unkerned width-cache entries', () => {
   const m = measurer();
   const off = style({ fontSizePt: 12 });

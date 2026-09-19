@@ -36,7 +36,7 @@ describe('exact PDF export', () => {
     expect(a.bytes).toEqual(b.bytes);
     await expect(exportPdf(new Uint8Array([1, 2, 3]))).rejects.toBeInstanceOf(PdfDocumentOpenError);
   });
-  test('legacy bullet markers export as extractable Unicode with shared fallback metrics', async () => {
+  test('legacy bullet markers draw their own face and still extract as Unicode', async () => {
     const levels = [
       ['Symbol', '\uF0B7'],
       ['Wingdings', '\uF0A7'],
