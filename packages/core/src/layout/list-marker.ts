@@ -53,23 +53,40 @@ export function directionalListFirstLineShift(
 }
 
 /**
- * Build a marker record for the first fragment of a list paragraph.
+ * What a list marker contributes to its paragraph's FIRST line, as flow options.
  *
- * `originX` shifts cell-relative markers into page/content space (0 for body).
- * Returns undefined when the marker is empty, vanished, or has no geometry.
- */
-/**
- * The first-line baseline floor a picture-bullet marker imposes, as flow options.
+ * The marker is furniture the paragraph flow never sees, yet Word sets it on the first
+ * line's baseline like any other run, so it sizes that line:
  *
- * The marker is furniture the paragraph flow never sees, but its image still sits ON the
- * first line's baseline, so the line has to be at least that tall — the same floor an inline
- * image imposes. The extent is AUTHORED, so this is known before the bytes resolve and a
- * settling image never re-breaks a line.
+ * - A picture bullet sits ON the baseline, so it imposes a baseline floor — the same floor
+ *   an inline image imposes. The extent is AUTHORED, so this is known before the bytes
+ *   resolve and a settling image never re-breaks a line.
+ * - A glyph marker reserves its own face's ASCENT above that baseline, so a level
+ *   `w:rFonts`/`w:sz` with a taller face pushes the whole line down. It does NOT deepen the
+ *   line below the baseline: a captured control sets a 12pt list in a 12pt face whose
+ *   descent is 2.27pt and markers in two faces that descend further (2.53pt and 3.60pt),
+ *   and both of those lines keep the plain line's height to within the reference's paint
+ *   grid, while the one marker face with a taller ascent grows its line by the excess.
+ *
+ * The face is the RESOLVED one. When an unavailable symbol font was translated to its
+ * Unicode equivalent, the line is sized by whatever face actually draws the replacement —
+ * measurement and paint never disagree about which face the marker is in.
+ *
+ * `w:vanish` markers are not measured, so they contribute nothing (§17.3.2.41).
  */
-export function listMarkerBaselineFloor(item: ResolvedListItem | undefined): {
+export function listMarkerFirstLineMetrics(
+  item: ResolvedListItem | undefined,
+  measurer: TextMeasurer
+): {
   readonly firstLineMinimumBaseline?: number;
+  readonly firstLineMarkerAscent?: number;
 } {
-  return item?.picBullet ? { firstLineMinimumBaseline: item.picBullet.height } : {};
+  if (!item) return {};
+  // A picture bullet REPLACES `w:lvlText`, so the glyph metrics never apply beside it.
+  if (item.picBullet) return { firstLineMinimumBaseline: item.picBullet.height };
+  if (item.markerText.length === 0 || item.markerStyle.hidden) return {};
+  const { baseline } = measurer.lineMetrics(item.markerStyle, item.markerText);
+  return baseline > 0 ? { firstLineMarkerAscent: baseline } : {};
 }
 
 /** What the first-line metrics read off one prepared paragraph. */
@@ -100,6 +117,7 @@ export function createListFirstLineMetrics(
   readonly firstLineOffsetOf: (entry: ListFirstLineEntry) => number;
   readonly firstLineFloorOf: (entry: ListFirstLineEntry) => {
     readonly firstLineMinimumBaseline?: number;
+    readonly firstLineMarkerAscent?: number;
   };
 } {
   const itemOf = (entry: ListFirstLineEntry): ResolvedListItem | undefined =>
@@ -114,10 +132,16 @@ export function createListFirstLineMetrics(
         entry.available,
         paragraphIsRtl(entry.props)
       ),
-    firstLineFloorOf: (entry) => listMarkerBaselineFloor(itemOf(entry)),
+    firstLineFloorOf: (entry) => listMarkerFirstLineMetrics(itemOf(entry), measurer),
   };
 }
 
+/**
+ * Build a marker record for the first fragment of a list paragraph.
+ *
+ * `originX` shifts cell-relative markers into page/content space (0 for body).
+ * Returns undefined when the marker is empty, vanished, or has no geometry.
+ */
 export function publishListMarker(
   item: ResolvedListItem | undefined,
   measurer: TextMeasurer,

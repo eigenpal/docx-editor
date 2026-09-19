@@ -103,7 +103,7 @@ import type {
 import { type ResolvedListItem } from './list-resolve.ts';
 import {
   directionalListFirstLineShift,
-  listMarkerBaselineFloor,
+  listMarkerFirstLineMetrics,
   publishListMarker,
 } from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
@@ -505,7 +505,7 @@ function placeCellParagraph(
     flow: {
       paragraphMarkIsCellEnd: options?.cellEndMark,
       firstLineOffset,
-      ...(startOffset === 0 ? listMarkerBaselineFloor(listItem) : {}),
+      ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
       startOffset,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },

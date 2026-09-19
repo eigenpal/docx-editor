@@ -121,6 +121,15 @@ export interface ParagraphFlowOptions {
    * floor lowers the baseline and grows the box alike, so no later line moves. `exact` clips.
    */
   readonly firstLineMinimumBaseline?: number;
+  /**
+   * The list marker face's own ascent, reserved above the FIRST line's baseline.
+   *
+   * Word sets the number or bullet on that baseline, so a level `w:rFonts`/`w:sz` taller
+   * than the paragraph's own font pushes the line down by the excess. It applies BEFORE line
+   * spacing, because the marker grows the natural line that an `auto` multiple then scales.
+   * The marker never deepens the line below its baseline ({@link listMarkerFirstLineMetrics}).
+   */
+  readonly firstLineMarkerAscent?: number;
   /** Re-break only the unplaced suffix when an unequal-width column follows. */
   readonly startOffset?: number;
   /** Text column bounds in indentLeft coordinates. Margin-relative positional tabs use these
@@ -317,6 +326,7 @@ export function breakParagraph(
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
   const markerBaselineFloor = flow?.firstLineMinimumBaseline ?? 0;
+  const markerAscent = Math.max(0, flow?.firstLineMarkerAscent ?? 0);
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -935,6 +945,15 @@ export function breakParagraph(
     ) {
       // Extra mark height stays below the glyph baseline, matching Word's cover-page rhythm.
       line.height = Math.max(line.height, metrics.height);
+    }
+    // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
+    // face reserves space above it like the run the marker is in Word. The descent is the
+    // text's alone. Only the paragraph's first line carries a marker.
+    if (lines.length === 0 && markerAscent > line.baseline) {
+      const raised = markerAscent - line.baseline;
+      line.baseline = markerAscent;
+      line.height += raised;
+      glyphBaseline += raised;
     }
     growRunBorderLineMetrics(line, measurer);
     syncDrawingBaselinesBeforeSpacing();
