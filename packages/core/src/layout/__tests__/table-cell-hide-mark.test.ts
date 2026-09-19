@@ -243,11 +243,15 @@ test('vertical cells exclude hidden markers but retain printable content', () =>
   expect(height(table(row(cell(paragraph('', '<w:jc w:val="center"/>'), properties))))).toBe(0);
 });
 
+// Both cells hide their mark, so nothing is left to size either row. NOT reference-
+// confirmed: a captured control gives a continuation-only row with `w:hideMark` 23.52pt
+// rather than zero, and that number is unexplained. This pins the engine's own meaning for
+// `w:hideMark`, which no corpus document exercises on a continuation.
 test('merged empty cells do not restore a hidden marker through a default row floor', () => {
   const result = run(
     table(
       row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
-        row(cell(paragraph(), '<w:vMerge/>'))
+        row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
   expect(rows(result).map((r) => r.box.height)).toEqual([0, 0]);
@@ -255,10 +259,23 @@ test('merged empty cells do not restore a hidden marker through a default row fl
   const visible = run(
     table(
       row(cell(paragraph(text), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
-        row(cell(paragraph(), '<w:vMerge/>'))
+        row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
   expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(5);
+});
+
+// `w:hideMark` is per cell. A head that hides its own mark says nothing about the cells
+// that continue it, and this row has nothing but continuations, so its end-of-cell
+// paragraph is what is left to size it.
+test('a continuation cell keeps its own visible mark under a hidden head', () => {
+  const result = run(
+    table(
+      row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+        row(cell(paragraph(), '<w:vMerge/>'))
+    )
+  );
+  expect(rows(result).map((r) => r.box.height)).toEqual([0, 20]);
 });
 
 test('review markup keeps an addressable tracked marker, while proposed view excludes it', () => {

@@ -73,7 +73,7 @@ import {
   breakPreparedParagraph,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
-import { cellEndMarkHeight } from './table-cell-end-mark.ts';
+import { cellContinuationHeight, cellEndMarkHeight } from './table-cell-end-mark.ts';
 import { withoutHiddenCellMark } from './table-cell-hide-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
@@ -1317,8 +1317,11 @@ export function layoutRowFragmentBounded(
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Continuation cells own no content: the merged head supplies their span height.
-  // Ordinary empty cells still reserve their paragraph line and authored insets.
+  // Continuation cells paint no content and size no row: an ordinary cell beside one owns
+  // the height on its own. A row where EVERY cell continues a merge has nothing left to
+  // size it, and then its end-of-cell paragraph does — see `cellContinuationHeight`.
+  const continuationOnlyRow =
+    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue);
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
@@ -1376,6 +1379,12 @@ export function layoutRowFragmentBounded(
       !vertical && !cell.vMergeContinue
         ? cellEndMarkHeight(cell, flowRight - flowLeft, flowDeps)
         : 0;
+    // Only where the whole row continues a merge, and never for a `btLr` cell, whose extent
+    // comes from the row's width rather than from a line box this cannot express.
+    const continuationPt =
+      !vertical && continuationOnlyRow && cell.vMergeContinue
+        ? cellContinuationHeight(cell, flowRight - flowLeft, flowDeps)
+        : 0;
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
     let nextCursor = cursor;
@@ -1427,7 +1436,9 @@ export function layoutRowFragmentBounded(
       Math.max(
         rowTop + appliedMarkFloor,
         cell.vMergeContinue
-          ? rowTop
+          ? continuationPt > 0
+            ? rowTop + topInset + continuationPt + insets.bottom
+            : rowTop
           : vertical && fitted
             ? rowTop + topInset + (blockInlineRight(blocks, flowLeft) - flowLeft) + insets.bottom
             : fitted
