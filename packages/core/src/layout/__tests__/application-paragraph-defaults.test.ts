@@ -14,13 +14,13 @@ function part(xml: string, name: string) {
   if (!parsed.ok) throw new Error(parsed.reason);
   return parsed.part;
 }
-function cascade(defaults: string, mode = 15, paragraphStyle = '') {
+function cascade(defaults: string, mode: number | null = 15, paragraphStyle = '') {
   const styles = part(
     `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault>${defaults}</w:docDefaults>${paragraphStyle}</w:styles>`,
     '/word/styles.xml'
   );
   const settings = part(
-    `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${mode}"/></w:compat></w:settings>`,
+    `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${mode ?? ''}"/></w:compat></w:settings>`,
     '/word/settings.xml'
   );
   const before = serializeOoxmlPart(styles);
@@ -34,7 +34,7 @@ const document = part(
   '/word/document.xml'
 );
 
-test('omitted modern defaults match authored spacing in body and cells, including warm reuse', () => {
+test('omitted application defaults match authored spacing in body and cells, including warm reuse', () => {
   const implicit = cascade('');
   const explicit = cascade(
     '<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:pPrDefault>'
@@ -62,8 +62,7 @@ test('omitted modern defaults match authored spacing in body and cells, includin
   );
 });
 
-test('empty authored defaults, legacy modes, and direct or styled zero suppress fallback', () => {
-  for (const mode of [11, 12, 14, 99]) expect(cascade('', mode).docDefaultsParagraph).toEqual([]);
+test('empty authored defaults and direct or styled zero suppress fallback', () => {
   expect(cascade('<w:pPrDefault/>').docDefaultsParagraph).toEqual([]);
   const spacing = '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>';
   const style = `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr>${spacing}</w:pPr></w:style>`;
@@ -82,5 +81,14 @@ test('empty authored defaults, legacy modes, and direct or styled zero suppress 
     if (first.kind !== 'paragraph') throw new Error('paragraph expected');
     expect(first.spacing.after).toBe(0);
     expect(first.lines[0]!.box.height).toBe(12);
+  }
+});
+
+test('application defaults do not depend on document compatibility mode', () => {
+  const expected = cascade('').docDefaultsParagraph;
+  expect(expected).not.toEqual([]);
+  for (const mode of [null, 11, 12, 14, 15, 99]) {
+    expect(cascade('', mode).docDefaultsParagraph).toEqual(expected);
+    expect(cascade('<w:pPrDefault/>', mode).docDefaultsParagraph).toEqual([]);
   }
 });

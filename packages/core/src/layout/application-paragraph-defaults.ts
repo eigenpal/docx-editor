@@ -3,9 +3,8 @@ import {
   type OoxmlElement,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
-import { compatibilityModeFromSettings } from './document-compatibility-mode.ts';
 
-const MODERN_SPACING: readonly OoxmlProperty[] = Object.freeze([
+const APPLICATION_SPACING: readonly OoxmlProperty[] = Object.freeze([
   Object.freeze({
     localName: 'spacing',
     attributes: Object.freeze({ after: '160', line: '278', lineRule: 'auto' }),
@@ -14,17 +13,13 @@ const MODERN_SPACING: readonly OoxmlProperty[] = Object.freeze([
 
 /**
  * An omitted pPrDefault is application-defined (17.7.5.4), unlike an explicitly
- * empty pPrDefault. Use the current reference profile for mode-15 documents that
+ * empty pPrDefault. Use the current application profile for documents that
  * declare docDefaults but omit their paragraph defaults. Authored properties in
  * any later cascade layer override these independently, including explicit zero.
  * This is layout material only; the source styles part remains untouched.
  */
-export function modernParagraphDefaults(
-  styles: OoxmlElement,
-  settings: OoxmlElement | null
-): readonly OoxmlProperty[] {
-  if (styles.namespaceUri !== WML_NAMESPACE_URI || compatibilityModeFromSettings(settings) !== 15)
-    return [];
+export function applicationParagraphDefaults(styles: OoxmlElement): readonly OoxmlProperty[] {
+  if (styles.namespaceUri !== WML_NAMESPACE_URI) return [];
   const defaults = styles.children.find(
     (child): child is OoxmlElement =>
       child.kind !== 'textValue' &&
@@ -42,5 +37,5 @@ export function modernParagraphDefaults(
     )
   )
     return [];
-  return MODERN_SPACING;
+  return APPLICATION_SPACING;
 }

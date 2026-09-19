@@ -54,7 +54,7 @@ describe('auto line spacing and paragraph-mark height', () => {
     // style. The style still sizes an empty paragraph's caret line.
     const styles = readOoxmlPart(
       `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
-        '<w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+        '<w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults></w:styles>',
       { name: '/word/styles.xml', contentType: 'app/xml' }
     );
     if (!styles.ok) throw new Error(styles.reason);
@@ -142,7 +142,7 @@ describe('auto line spacing and paragraph-mark height', () => {
 
     const styles = readOoxmlPart(
       `<w:styles xmlns:w="${W}">` +
-        '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
         '<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/>' +
         '<w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="20"/></w:rPr></w:style>' +
         '<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>' +

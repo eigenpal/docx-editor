@@ -1,3 +1,4 @@
+import { elevenPointDefaults } from '../../layout/__tests__/fixtures/eleven-point-defaults.ts';
 // Painting semantic layout records (task 7.5).
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -7,27 +8,12 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
   buildNumberingIndex,
-  buildStyleCascadeTable,
   createFixedMeasurer,
   layoutSemanticDocument,
 } from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
-// The 6pt/14pt measurer base describes an 11pt run, so these fixtures carry the `w:sz="22"`
-// docDefaults a real document would. Without it every run resolves to the 10pt terminal
-// fallback (see `DEFAULT_RUN_STYLE`) and every painted box scales by 10/11.
-function elevenPointDefaults(): ReturnType<typeof buildStyleCascadeTable> {
-  const styles = readOoxmlPart(
-    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
-      '<w:sz w:val="22"/>' +
-      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
-    { name: '/word/styles.xml', contentType: 'app/xml' }
-  );
-  if (!styles.ok) throw new Error(styles.reason);
-  return buildStyleCascadeTable(styles.part.root);
-}
 
 function layoutOf(body: string, numbering?: string) {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
