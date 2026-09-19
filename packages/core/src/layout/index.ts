@@ -598,6 +598,7 @@ export {
 export {
   DEFAULT_RUN_STYLE,
   baselineShiftPtOf,
+  glyphSizeFactorOf,
   displayText,
   measureDisplayText,
   resolveRunStyle,
@@ -606,6 +607,7 @@ export {
   type ResolvedUnderline,
   type VerticalAlign,
 } from './run-style.ts';
+export { runBorderStrokesForLine } from './run-border-strokes.ts';
 export {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,
@@ -732,3 +734,6 @@ export {
   type TableBorderStyle,
 } from './table-borders.ts';
 export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
+export { tabLeaderPattern, MAX_TAB_LEADER_GLYPHS } from './tab-leader-pattern.ts';
+
+export { noteSeparatorRuleBox } from './note-separator-rule.ts';

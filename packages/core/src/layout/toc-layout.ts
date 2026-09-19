@@ -2,7 +2,7 @@
 
 import { fldCharType, isInstrTextNode } from '../store/package/field-nodes.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import { detectBodyTocs, type DetectedToc } from '../store/package/toc-detect.ts';
+import { detectBodyTocs, tocFieldRange, type DetectedToc } from '../store/package/toc-detect.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   MAX_INLINE_CONTAINER_DEPTH,
@@ -59,13 +59,17 @@ const chromeIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 const placeholderIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 const suppressedIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 
-/** Paragraph ids for TOC field begin/end chrome that must not reserve vertical flow when empty. */
+/** TOC boundary paragraphs whose empty instruction/chrome lines are suppressed. */
 export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string> {
   const cached = chromeIdsByPart.get(part);
   if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
-    ids.add(toc.beginParagraphId);
+    // A separator in the opening paragraph puts that paragraph's mark in the result.
+    // It occupies a blank result line even when no w:t follows it (Word demo TOC).
+    // Suppressing it shifted every cached entry upward and changed the page break.
+    if (tocFieldRange(toc)?.separateParagraphId !== toc.beginParagraphId)
+      ids.add(toc.beginParagraphId);
     ids.add(toc.endParagraphId);
   }
   chromeIdsByPart.set(part, ids);

@@ -93,6 +93,8 @@ export interface ShapeInput {
  */
 export interface ShapedGlyph {
   readonly id: number;
+  /** Optional synthetic glyph-size factor; positions and advances already include it. */
+  readonly drawScale?: number;
   /** UTF-16 text offset identifying the cluster that produced this glyph. */
   readonly cluster: number;
   /** Pen origin before this glyph's shaping offsets, in fixed-point run coordinates. */

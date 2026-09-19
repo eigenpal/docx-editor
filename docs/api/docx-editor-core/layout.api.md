@@ -54,7 +54,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
 export function anchorLineY(anchor: ReviewParagraphAnchor, paragraphId: string, offset: number): number;
 
 // @public
-export function appliedSpaceBefore(before: number, previousAfter: number, atTopOfPage: boolean, firstParagraphOfSection: boolean): number;
+export function appliedSpaceBefore(before: number, previousAfter: number, atTopOfPage: boolean, preserveAtPageStart: boolean): number;
 
 // @public
 export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: number, naturalBaseline: number): {
@@ -113,6 +113,7 @@ export interface BorderGridGeometry {
         readonly height: number;
         readonly width: number;
     }[])[];
+    readonly collapsedHorizontal?: boolean;
     readonly columnWidthsPt: readonly number[];
     readonly rowBands: readonly {
         readonly height: number;
@@ -193,6 +194,7 @@ export interface CanvasTextContext {
     direction?: 'ltr' | 'rtl' | 'inherit';
     // (undocumented)
     font: string;
+    fontKerning?: 'auto' | 'normal' | 'none';
     // (undocumented)
     measureText(text: string): CanvasTextMetrics;
     // (undocumented)
@@ -415,10 +417,10 @@ export function compositionAnchor(layout: SemanticLayout, position: SemanticPosi
 measurer?: TextMeasurer): CaretGeometry | null;
 
 // @public
-export const COMPOUND_BORDER_MIN_GAP_PT = 1;
+export const COMPOUND_BORDER_MIN_GAP_PT = 0.25;
 
 // @public
-export const COMPOUND_BORDER_MIN_STROKE_PT = 1;
+export const COMPOUND_BORDER_MIN_STROKE_PT = 0.25;
 
 // @public
 export interface CompoundBorderMetrics {
@@ -787,6 +789,7 @@ export interface DrawingGeometry {
     readonly effectInsets: DrawingInsets;
     // (undocumented)
     readonly hitBounds: LayoutBox;
+    readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
     // (undocumented)
@@ -806,6 +809,7 @@ export interface DrawingImageEffects {
     readonly contrast: number;
     // (undocumented)
     readonly grayscale: boolean;
+    readonly opacity?: number;
 }
 
 // @public (undocumented)
@@ -1243,6 +1247,9 @@ export interface GlyphOutline {
 }
 
 // @public
+export function glyphSizeFactorOf(style: ResolvedRunStyle): number;
+
+// @public
 export const GRAPHEME_SEGMENTER_LOCALE: "und";
 
 // @public
@@ -1377,6 +1384,7 @@ export interface HarfBuzzTextShaperOptions {
     readonly instrumentation?: HarfBuzzTextShaperInstrumentation;
     // (undocumented)
     readonly maxCachedFaces?: number;
+    readonly maxCachedFontBytes?: number;
     // (undocumented)
     readonly maxCachedOutlineBytes?: number;
     // (undocumented)
@@ -1949,6 +1957,9 @@ export const MAX_STYLE_BASED_ON_DEPTH = 32;
 export const MAX_STYLE_DEFINITIONS = 4096;
 
 // @public
+export const MAX_TAB_LEADER_GLYPHS = 8192;
+
+// @public
 export const MAX_TAB_POSITION_TWIPS = 31680;
 
 // @public
@@ -1992,7 +2003,7 @@ export interface MoveCaretOptions {
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
 
 // @public
-export function nextTabDestination(tabs: ResolvedTabStops, currentX: number, rightEdge: number): TabDestination;
+export function nextTabDestination(tabs: ResolvedTabStops, currentX: number, rightEdge: number, forNumbering?: boolean): TabDestination;
 
 // @public
 export type NormalizationPolicy = 'none' | 'NFC' | 'NFD' | 'NFKC' | 'NFKD';
@@ -2016,6 +2027,7 @@ export interface NoteAreaRecord {
         readonly box: LayoutBox;
         readonly fragments: readonly BlockFragmentRecord[];
         readonly kind: 'separator' | 'continuationSeparator';
+        readonly ruleColor?: string | null;
         readonly ruleStyle?: 'single' | 'double';
         readonly synthetic: boolean;
     };
@@ -2044,6 +2056,7 @@ export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
 export interface NoteMarkContext {
     readonly activeNoteKey?: string;
     readonly marks: ReadonlyMap<string, string | null>;
+    readonly measureSeparatorMarkers?: true;
     readonly reservedMarkText?: string;
 }
 
@@ -2089,9 +2102,14 @@ export interface NoteSeparatorLayout {
     readonly fragments: readonly BlockFragmentRecord[];
     // (undocumented)
     readonly kind: 'separator' | 'continuationSeparator';
+    readonly ruleBox?: LayoutBox;
+    readonly ruleColor?: string | null;
     readonly ruleStyle?: NoteSeparatorRuleStyle;
     readonly synthetic: boolean;
 }
+
+// @public
+export function noteSeparatorRuleBox(span: StyleSpanRecord, line: LineRecord): LayoutBox;
 
 // @public
 export type NoteSeparatorRuleStyle = 'single' | 'double';
@@ -2494,6 +2512,7 @@ export interface ParagraphFragmentRecord {
         readonly anchorId: string;
         readonly box: LayoutBox;
         readonly columnIndex: number;
+        readonly dropCapLines?: number;
         readonly groupId: string;
         readonly hSpace: number;
         readonly sourceOrder: number;
@@ -2892,6 +2911,7 @@ export interface ResolvedRunStyle {
     readonly baselineShiftPt: number;
     // (undocumented)
     readonly bold: boolean;
+    readonly border?: ParagraphBorderEdge;
     // (undocumented)
     readonly caps: boolean;
     readonly characterSpacingPt: number;
@@ -2907,6 +2927,7 @@ export interface ResolvedRunStyle {
     readonly horizontalScalePercent: number;
     // (undocumented)
     readonly italic: boolean;
+    readonly kerningEnabled?: boolean;
     readonly kerningMinPt: number;
     readonly shading: string | null;
     readonly shaping?: {
@@ -3257,6 +3278,9 @@ export function revisionsVisible(revisions: readonly RevisionAttribution[], mode
 
 // @public
 export const roundFontUnitToFixedPoint: (fontUnits: number, denominator: number, numerator: number, mode: FixedPointRoundingMode) => FixedPoint;
+
+// @public
+export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBorderStrokeRecord[];
 
 // @public
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean;
@@ -3683,9 +3707,11 @@ export type SemanticStoryVisit = {
 export interface SemanticTableCell {
     readonly blocks: readonly OoxmlElement[];
     readonly borders: CellBorderBox;
+    readonly contentBorders?: CellBorderBox;
     readonly gridColumn: number;
     readonly gridColumnId?: string;
     readonly gridSpan: number;
+    readonly hideEndMark?: boolean;
     // (undocumented)
     readonly id: string;
     readonly legacyContentAlignment?: true;
@@ -3809,6 +3835,7 @@ export interface ShapedGlyph {
     // (undocumented)
     readonly advanceY: FixedPoint;
     readonly cluster: number;
+    readonly drawScale?: number;
     // (undocumented)
     readonly id: number;
     // (undocumented)
@@ -4076,6 +4103,7 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
     readonly themeFonts: ThemeFonts;
@@ -4100,6 +4128,8 @@ export interface StyleDefinition {
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly styleId: string;
+    // (undocumented)
+    readonly tableCellPropertiesNode?: OoxmlElement;
     // (undocumented)
     readonly tablePropertiesNode: OoxmlElement | undefined;
     // (undocumented)
@@ -4127,6 +4157,7 @@ export interface StyleSpanRecord {
         readonly direction: 'to-note' | 'to-body';
         readonly scopeId: string;
     };
+    readonly noteSeparator?: 'separator' | 'continuationSeparator';
     readonly projected?: boolean;
     readonly props: readonly OoxmlProperty[];
     // (undocumented)
@@ -4141,7 +4172,7 @@ export interface StyleSpanRecord {
 }
 
 // @public
-export function syntheticSeparatorBox(contentWidth: number, flowHeight: number): LayoutBox;
+export function syntheticSeparatorBox(contentWidth: number, flowHeight: number, kind?: 'separator' | 'continuationSeparator'): LayoutBox;
 
 // @public
 export const TAB_LEADER_GLYPH: ReadonlyMap<TabLeader, string>;
@@ -4163,6 +4194,12 @@ export interface TabDestination {
 
 // @public
 export type TabLeader = 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+
+// @public
+export function tabLeaderPattern(startPt: number, widthPt: number, advancePt: number): {
+    readonly count: number;
+    readonly offsetPt: number;
+};
 
 // @public
 export type TableAlignment = 'left' | 'center' | 'right';
@@ -4346,6 +4383,7 @@ export interface TabStop {
     // (undocumented)
     readonly alignment: TabAlignment;
     readonly leader?: TabLeader;
+    readonly numberingOnly?: true;
     readonly positionPt: number;
 }
 
@@ -4380,11 +4418,12 @@ export type TextDirection = 'ltr' | 'rtl';
 // @public
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+    hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;
         right: number;
     } | undefined;
-    lineMetrics(style: ResolvedRunStyle): {
+    lineMetrics(style: ResolvedRunStyle, text?: string): {
         baseline: number;
         height: number;
     };

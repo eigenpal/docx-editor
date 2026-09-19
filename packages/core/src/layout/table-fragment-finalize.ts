@@ -38,6 +38,7 @@ function republishAnchoredParagraphsInBlocks(
   blocks: readonly BlockFragmentRecord[],
   authoredBlocks: readonly OoxmlElement[],
   cellBox: LayoutBox,
+  cellContentBox: LayoutBox,
   deps: TableFlowDeps
 ): void {
   if (
@@ -67,6 +68,7 @@ function republishAnchoredParagraphsInBlocks(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
         cellBox,
+        cellContentBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
@@ -201,8 +203,9 @@ export function finalizeTableRows(
           occurrenceInsets?.get(row)?.get(cell.id) ??
           contentInsets(
             authored.margins,
-            authored.borders,
-            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0
+            authored.contentBorders ?? authored.borders,
+            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
+            structure.cellSpacingPt === 0
           );
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
@@ -243,7 +246,26 @@ export function finalizeTableRows(
         anchorDeps &&
         (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
       ) {
-        republishAnchoredParagraphsInBlocks(blocks, authored.blocks, finalizedCellBox, anchorDeps);
+        const insets =
+          occurrenceInsets?.get(row)?.get(cell.id) ??
+          contentInsets(
+            authored.margins,
+            authored.contentBorders ?? authored.borders,
+            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
+            structure.cellSpacingPt === 0
+          );
+        const cellContentBox = {
+          ...finalizedCellBox,
+          x: finalizedCellBox.x + insets.left,
+          width: Math.max(1, finalizedCellBox.width - insets.left - insets.right),
+        };
+        republishAnchoredParagraphsInBlocks(
+          blocks,
+          authored.blocks,
+          finalizedCellBox,
+          cellContentBox,
+          anchorDeps
+        );
       }
       return {
         ...cell,
@@ -278,6 +300,7 @@ export function finalizeTableRows(
   const columnCount = structure.columnWidthsPt.length;
   const tableBorders: TableBorderBox = structure.tableBorders;
   const geometry: BorderGridGeometry = {
+    collapsedHorizontal: structure.cellSpacingPt === 0,
     columnWidthsPt: structure.columnWidthsPt,
     rowBands: expanded.map((row) => ({ y: row.box.y, height: row.box.height })),
     cellBoxes: expanded.map((row) =>

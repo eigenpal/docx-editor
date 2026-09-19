@@ -1,0 +1,25 @@
+{
+  "name": "docx-editor-example-docx-to-pdf",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "vite build",
+    "start": "node server.mjs --production",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test server.test.mjs"
+  },
+  "dependencies": {
+    "@docx-editor.dev/docx-to-pdf": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@docx-editor.dev/i18n": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.10",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "typescript": "^5.3.3"
+  }
+}

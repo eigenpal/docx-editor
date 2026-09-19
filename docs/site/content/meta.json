@@ -46,6 +46,7 @@
     "guides/dark-mode",
     "---Export formats---",
     "export/markdown",
+    "export/pdf",
     "---Pro---",
     "pro/index",
     "pro/tracked-changes",

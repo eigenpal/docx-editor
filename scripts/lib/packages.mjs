@@ -12,6 +12,12 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
+    name: '@docx-editor.dev/docx-to-pdf',
+    root: 'packages/docx-to-pdf',
+    pkgSlug: 'docx-editor-docx-to-pdf',
+    tsconfigPath: 'packages/docx-to-pdf/tsconfig.api.json',
+  },
+  {
     name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',

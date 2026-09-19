@@ -11,6 +11,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { TableBorderStyle } from '@docx-editor.dev/core/store';
 import {
   COMPOUND_BORDER_MIN_GAP_PT,
+  COMPOUND_BORDER_MIN_STROKE_PT,
   computeDoubleBorderMetricsPt,
   type CompoundBorderMetrics,
 } from './border-metrics.ts';
@@ -44,9 +45,9 @@ export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 /**
  * One border edge in one of three states.
  *
- * `omitted` and `none` are NOT the same: an omitted edge inherits from the table style or the
- * neighbouring cell, while an explicit `none` wins the conflict and draws nothing. Collapsing
- * them would let a style's border reappear where the author removed it.
+ * Omitted edges inherit. Explicit no-border edges suppress inherited rules; a directly
+ * authored opposing edge can still win. This matches the saved Word sample's mixed and
+ * borderless tables, including cells authored with `w:val="none"`.
  */
 export type TableBorderSide =
   | { readonly state: 'omitted' }
@@ -156,7 +157,7 @@ const EMPTY_CELL_BORDERS: CellBorderBox = {
   right: OMITTED,
 };
 
-/** Style rank, used only to break a conflict between two rules of the SAME width. */
+/** Word border number; also the precedence rank when weighted rules tie. */
 const BORDER_NUMBER: Readonly<Record<TableBorderStyle, number>> = {
   single: 1,
   thick: 2,
@@ -276,33 +277,28 @@ export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
   return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
 }
 
-/**
- * Conflict weight: the authored width in eighths of a point, and nothing else.
- *
- * Word-matching, not conformance — §17.4.39 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`)
- * describe the elements and specify no conflict algorithm. Word picks the heavier RULE, so
- * a 6pt dashed rule beats a hairline single. Folding the style rank into the weight (an
- * `sz × border-number` product) made a 0.5pt double outrank a 1pt single and made every
- * dashed or dotted rule weigh 1 regardless of `w:sz`, which erased its width entirely.
+/** Word's weighted border selection (MS-OI29500 §2.1.169, tcBorders).
+ * https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/7c791c5d-44c3-4fe8-abdd-8f136761bb93
  */
 export function borderWeight(side: TableBorderSide): number {
   if (side.state !== 'edge') return 0;
-  return Math.max(1, Math.round(side.widthPt * 8));
+  if (side.style === 'dotted' || side.style === 'dashed') return 1;
+  return Math.max(1, Math.round(side.widthPt * 8)) * BORDER_NUMBER[side.style];
 }
 
-function colorBrightness(color: string | null): number {
-  if (!color) return 0; // auto → black → darkest → wins ties toward black
+function colorBrightness(color: string | null): readonly number[] {
+  if (!color) return [0, 0, 0]; // auto resolves to black.
   const r = Number.parseInt(color.slice(0, 2), 16);
   const g = Number.parseInt(color.slice(2, 4), 16);
   const b = Number.parseInt(color.slice(4, 6), 16);
-  return r + g + b;
+  return [r + b + 2 * g, b + 2 * g, g];
 }
 
 /**
  * Pick the winner between two candidates on a shared grid line (zero cell spacing).
  *
- * `none` loses to any edge; two `none`/omitted yield omitted (no paint). Width decides;
- * equal widths rank by style, then prefer the darker color, then `preferFirst`
+ * `none` loses to any edge; two `none`/omitted do not paint. Weighted widths decide;
+ * equal weights rank by style, then prefer the darker color, then `preferFirst`
  * (reading-order / first candidate).
  */
 export function resolveBorderConflict(
@@ -324,8 +320,10 @@ export function resolveBorderConflict(
   if (s1 !== s2) return s1 > s2 ? first : second;
   const b1 = colorBrightness(first.color);
   const b2 = colorBrightness(second.color);
-  if (b1 < b2) return first;
-  if (b2 < b1) return second;
+  for (let index = 0; index < b1.length; index++) {
+    if (b1[index]! < b2[index]!) return first;
+    if (b2[index]! < b1[index]!) return second;
+  }
   return preferFirst ? first : second;
 }
 
@@ -404,6 +402,8 @@ function convenienceEdge(
  * own and leaving a hairline gap between them.
  */
 export interface BorderGridGeometry {
+  /** Center simple horizontal strokes on collapsed row boundaries. */
+  readonly collapsedHorizontal?: boolean;
   /** Absolute column widths for the whole table (points). */
   readonly columnWidthsPt: readonly number[];
   /**
@@ -545,7 +545,7 @@ function expandTripleInterval(
   cellW: number,
   cellH: number
 ): void {
-  const strokePt = edge.widthPt;
+  const strokePt = Math.max(COMPOUND_BORDER_MIN_STROKE_PT, edge.widthPt);
   const gapPt = Math.max(COMPOUND_BORDER_MIN_GAP_PT, strokePt);
   const extentPt = strokePt * 3 + gapPt * 2;
   if (side === 'top' || side === 'bottom') {
@@ -588,55 +588,24 @@ function expandSimpleInterval(
   startPt: number,
   endPt: number,
   cellW: number,
-  cellH: number
+  cellH: number,
+  centered: boolean
 ): void {
-  // Partial intervals cannot use CSS border-*; publish an axis-aligned stroke instead.
+  const horizontal = side === 'top' || side === 'bottom';
   const w = edge.widthPt;
-  if (side === 'top') {
-    pushStroke(strokes, {
-      side,
-      role: 'edge',
-      color: edge.color,
-      cssStyle: cssStyleForEdge(edge.style),
-      x: startPt,
-      y: 0,
-      width: endPt - startPt,
-      height: w,
-    });
-  } else if (side === 'bottom') {
-    pushStroke(strokes, {
-      side,
-      role: 'edge',
-      color: edge.color,
-      cssStyle: cssStyleForEdge(edge.style),
-      x: startPt,
-      y: cellH - w,
-      width: endPt - startPt,
-      height: w,
-    });
-  } else if (side === 'left') {
-    pushStroke(strokes, {
-      side,
-      role: 'edge',
-      color: edge.color,
-      cssStyle: cssStyleForEdge(edge.style),
-      x: 0,
-      y: startPt,
-      width: w,
-      height: endPt - startPt,
-    });
-  } else {
-    pushStroke(strokes, {
-      side,
-      role: 'edge',
-      color: edge.color,
-      cssStyle: cssStyleForEdge(edge.style),
-      x: cellW - w,
-      y: startPt,
-      width: w,
-      height: endPt - startPt,
-    });
-  }
+  const inset = centered && horizontal ? w / 2 : w;
+  // Collapsed horizontal rules straddle the row boundary. Separated rules and
+  // vertical rules retain their independent inward stroke geometry.
+  pushStroke(strokes, {
+    side,
+    role: 'edge',
+    color: edge.color,
+    cssStyle: cssStyleForEdge(edge.style),
+    x: horizontal ? startPt : side === 'right' ? cellW - w : 0,
+    y: !horizontal ? startPt : side === 'bottom' ? cellH - inset : inset - w,
+    width: horizontal ? endPt - startPt : w,
+    height: horizontal ? w : endPt - startPt,
+  });
 }
 
 function cornerDoubleMetrics(
@@ -658,7 +627,8 @@ function publishFromIntervals(
   columnWidthsPt: readonly number[],
   gridColumn: number,
   rowOffsetsPt: readonly number[],
-  rowIndex: number
+  rowIndex: number,
+  centered = false
 ): ResolvedCellBorders {
   const toSegments = (
     side: TableBorderSideName,
@@ -735,9 +705,9 @@ function publishFromIntervals(
         );
       } else if (edge.style === 'triple') {
         expandTripleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
-      } else if (!fullSide) {
+      } else if (!fullSide || (centered && (side === 'top' || side === 'bottom'))) {
         // Multi-interval simple edges cannot use CSS border-*; publish stroke geometry.
-        expandSimpleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
+        expandSimpleInterval(strokes, side, edge, startPt, endPt, cellW, cellH, centered);
       }
     }
   };
@@ -803,14 +773,8 @@ export function resolveTableCellBorderGrid(
       interior,
     });
 
-  /**
-   * Conflict over a shared interior grid line, honouring where each side came from.
-   *
-   * An explicit `w:val="nil"` is a statement, not an omission — it is what Word writes when
-   * a cell is given "No Border" — so it suppresses the line even though the neighbour, by
-   * omitting its own side, still inherits `insideH`/`insideV`. Only a neighbour that
-   * AUTHORS an edge of its own overrides the nil, and then the ordinary weight fight
-   * decides. Word-matching: §17.4.39 / §17.4.66 specify no algorithm.
+  /** Preserve explicit no-border cells against inherited rules from their neighbours.
+   * An authored opposing edge still participates in the shared-edge conflict.
    */
   const interiorConflict = (
     mine: TableBorderSide,
@@ -978,7 +942,8 @@ export function resolveTableCellBorderGrid(
         geometry.columnWidthsPt,
         cell.gridColumn,
         rowOffsets,
-        rowIndex
+        rowIndex,
+        geometry.collapsedHorizontal
       );
     }
   }
@@ -986,13 +951,18 @@ export function resolveTableCellBorderGrid(
   return result;
 }
 
-/** Width contribution of a resolved edge for content inset / row sizing. */
+/** Painted extent inward from the cell edge; existing padding may already clear it. */
 export function borderExtentPt(
   edge: ResolvedTableBorderEdge | TableBorderSide | undefined
 ): number {
-  if (!edge) return 0;
-  if ('state' in edge) {
-    return edge.state === 'edge' ? edge.widthPt : 0;
+  if (!edge || ('state' in edge && edge.state !== 'edge')) return 0;
+  if (edge.style === 'double') {
+    const metrics = computeDoubleBorderMetricsPt(edge.widthPt);
+    return metrics.insetPt + metrics.extentPt;
+  }
+  if (edge.style === 'triple') {
+    const strokePt = Math.max(COMPOUND_BORDER_MIN_STROKE_PT, edge.widthPt);
+    return strokePt * 3 + Math.max(COMPOUND_BORDER_MIN_GAP_PT, strokePt) * 2;
   }
   return edge.widthPt;
 }

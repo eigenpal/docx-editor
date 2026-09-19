@@ -80,6 +80,7 @@ export interface DrawingGeometry {
     readonly effectInsets: DrawingInsets;
     // (undocumented)
     readonly hitBounds: LayoutBox;
+    readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
     // (undocumented)
@@ -874,11 +875,12 @@ export interface TextboxStoryLayout {
 // @public
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+    hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;
         right: number;
     } | undefined;
-    lineMetrics(style: ResolvedRunStyle): {
+    lineMetrics(style: ResolvedRunStyle, text?: string): {
         baseline: number;
         height: number;
     };

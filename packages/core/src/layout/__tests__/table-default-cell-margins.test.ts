@@ -457,3 +457,15 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     expect(order).toHaveLength(withNone.length + 1);
   });
 });
+
+test('modern unstyled tables do not synthesize TableNormal cell margins', () => {
+  const table = tableOf(ONE_CELL_TABLE());
+  const source = part(WORD_STYLES, '/word/styles.xml');
+  const cascade = buildStyleCascadeTable(source.root);
+  const read = (mode: number, styles?: typeof cascade) =>
+    readTableStructure(table, 468, 0, styles, 'all-markup', undefined, mode)!;
+  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  expect(read(14).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+  expect(read(15, cascade).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+});

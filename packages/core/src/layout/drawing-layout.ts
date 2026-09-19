@@ -125,10 +125,13 @@ export interface InlineDrawingMeasure {
 }
 
 export function measureInlineDrawing(projection: DrawingProjection): InlineDrawingMeasure {
-  const distL = emuToPoints(projection.inlineDistancesEmu.left);
-  const distR = emuToPoints(projection.inlineDistancesEmu.right);
-  const distT = emuToPoints(projection.inlineDistancesEmu.top);
-  const distB = emuToPoints(projection.inlineDistancesEmu.bottom);
+  // ECMA-376 Part 1 §20.4.2.8: inline dist* attributes are retained for a
+  // possible conversion to floating, but do not affect inline placement.
+  // Effect extents still contribute to inline geometry.
+  const distL = 0;
+  const distR = 0;
+  const distT = 0;
+  const distB = 0;
   const effectL = emuToPoints(projection.effectExtentEmu.left);
   const effectR = emuToPoints(projection.effectExtentEmu.right);
   const effectT = emuToPoints(projection.effectExtentEmu.top);
@@ -202,6 +205,9 @@ function shiftGeometry(geometry: DrawingGeometry, dx: number, dy: number): Drawi
     paintBounds: shiftBox(geometry.paintBounds),
     hitBounds: shiftBox(geometry.hitBounds),
     transformedCorners: Object.freeze(geometry.transformedCorners.map(shiftPoint)),
+    ...(geometry.imageTransformCorners
+      ? { imageTransformCorners: Object.freeze(geometry.imageTransformCorners.map(shiftPoint)) }
+      : {}),
     clipPolygon: geometry.clipPolygon ? Object.freeze(geometry.clipPolygon.map(shiftPoint)) : null,
   });
 }
@@ -499,6 +505,8 @@ export interface DrawingAnchorFrameContext {
   readonly anchorCharacterX: number;
   readonly columnBox: LayoutBox;
   readonly cellBox: LayoutBox | null;
+  /** Cell text column, excluding padding; the physical cell still owns clipping. */
+  readonly cellContentBox?: LayoutBox;
   readonly layoutInCell: boolean;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
@@ -573,8 +581,15 @@ function horizontalEdges(
     if (!cellBox) return null;
     const { x, width } = cellBox;
     switch (frame) {
+      case 'column': {
+        const column = ctx.cellContentBox ?? cellBox;
+        return {
+          left: column.x,
+          right: column.x + column.width,
+          center: column.x + column.width / 2,
+        };
+      }
       case 'page':
-      case 'column':
       case 'margin':
       case 'leftMargin':
         return { left: x, right: x + width, center: x + width / 2 };
@@ -1139,6 +1154,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
   >;
   readonly columnBox: LayoutBox;
   readonly cellBox: LayoutBox | null;
+  readonly cellContentBox?: LayoutBox;
   readonly pageClip: LayoutBox;
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
@@ -1190,6 +1206,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
       anchorCharacterX: anchorCharacterXOnLine(anchorLine, characterFrameOffset, options.measurer),
       columnBox: options.columnBox,
       cellBox: options.cellBox,
+      cellContentBox: options.cellContentBox,
       layoutInCell,
     });
     const resolved = resolveAnchoredDrawingPosition(projection, frameContext);

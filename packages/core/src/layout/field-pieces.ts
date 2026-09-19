@@ -145,6 +145,8 @@ export interface FieldAwarePiece {
    * reservation). Paint still uses `text`.
    */
   readonly measureText?: string;
+  /** Inline rule represented by a separator atom inside a note separator story. */
+  readonly noteSeparator?: 'separator' | 'continuationSeparator';
   /** Note citation / mark navigation for paint (body ↔ note). */
   readonly noteNav?: {
     readonly scopeId: string;
@@ -336,6 +338,7 @@ export interface PieceEmitExtras {
   readonly breakKind?: HardBreakKind;
   readonly measureText?: string;
   readonly noteNav?: FieldAwarePiece['noteNav'];
+  readonly noteSeparator?: FieldAwarePiece['noteSeparator'];
   readonly inlineDrawing?: InlineDrawingLayoutInput;
   readonly anchoredAtom?: true;
   readonly equation?: FieldAwarePiece['equation'];

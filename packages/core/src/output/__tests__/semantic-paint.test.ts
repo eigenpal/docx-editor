@@ -506,7 +506,7 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     const superRun = spans.find((span) => span.textContent === '2')!;
     expect(superRun.style.position).toBe('relative');
     expect(Number.parseFloat(superRun.style.top)).toBeLessThan(0);
-    expect(superRun.style.fontSize).toBe('8.25px'); // 11pt * 0.75 at scale 1
+    expect(superRun.style.fontSize).toBe('7.15px'); // 11pt * 0.65 at scale 1
     expect(superRun.style.verticalAlign).toBe('baseline');
   });
 });

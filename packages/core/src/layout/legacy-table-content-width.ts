@@ -2,7 +2,7 @@
 // Older Word layouts can align the CONTENT of an inline table with the text margins:
 // its outer grid edges extend by the first/last cell margins. Only use that reference
 // box when a complete authored grid independently confirms it. Other legacy table
-// placements (implicit/nonzero indent, RTL, floating, nested, separated cells) retain
+// placements (nonzero indent, RTL, floating, nested, separated cells) retain
 // the existing algorithm until their geometry has independent coverage.
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
@@ -71,15 +71,16 @@ export function legacyTableContentWidth(input: {
 }): number | undefined {
   const { compatibilityMode: mode, contentWidthPt, table, rows, columnCount } = input;
   if (
-    (mode !== 11 && mode !== 12 && mode !== 14) ||
+    (mode !== undefined && mode !== 11 && mode !== 12 && mode !== 14) ||
     input.depth !== 0 ||
     input.floating ||
     input.layoutFixed ||
-    input.alignment !== 'left' ||
+    !['left', 'center'].includes(input.alignment) ||
     input.indentPt !== 0 ||
     input.cellSpacingPt !== 0 ||
     input.tableWidth.type !== 'pct' ||
-    input.tableWidth.value !== 100 ||
+    input.tableWidth.value <= 0 ||
+    input.tableWidth.value > 100 ||
     !Number.isFinite(contentWidthPt) ||
     contentWidthPt <= 0 ||
     contentWidthPt > MAX_WIDTH_PT ||
@@ -93,12 +94,16 @@ export function legacyTableContentWidth(input: {
   const width = child(properties, 'tblW');
   const indent = child(properties, 'tblInd');
   const rawWidth = attr(width, 'w');
+  const layout = child(properties, 'tblLayout');
+  const stated = (name: string) =>
+    properties.children.some((node) => node.kind !== 'textValue' && node.localName === name);
   if (
     attr(width, 'type') !== 'pct' ||
-    (rawWidth !== '5000' && rawWidth !== '100%') ||
-    attr(indent, 'type') !== 'dxa' ||
-    attr(indent, 'w') !== '0' ||
-    attr(child(properties, 'tblLayout'), 'type') !== 'autofit'
+    rawWidth === undefined ||
+    ((!/^\d{1,4}$/.test(rawWidth) || Number(rawWidth) > 5000) &&
+      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) || Number(rawWidth.slice(0, -1)) > 100)) ||
+    (stated('tblInd') && (attr(indent, 'type') !== 'dxa' || attr(indent, 'w') !== '0')) ||
+    (stated('tblLayout') && attr(layout, 'type') !== 'autofit')
   )
     return undefined;
 
@@ -112,7 +117,10 @@ export function legacyTableContentWidth(input: {
         return undefined;
       // Reject ambiguous/unsupported placement rather than treating invalid values as left.
       if (item.localName === 'tblpPr' || item.localName === 'bidiVisual') return undefined;
-      if (item.localName === 'jc' && !['left', 'start'].includes(attr(item, 'val') ?? '')) {
+      if (
+        item.localName === 'jc' &&
+        !['left', 'start', 'center'].includes(attr(item, 'val') ?? '')
+      ) {
         return undefined;
       }
       if (
@@ -165,5 +173,8 @@ export function legacyTableContentWidth(input: {
     if (pt < 1 || pt > MAX_WIDTH_PT || ++count > MAX_TABLE_COLUMNS) return undefined;
     total += pt;
   }
-  return count === columnCount && Math.abs(total - target) < EPSILON_PT ? target : undefined;
+  return count === columnCount &&
+    Math.abs(total - (target * input.tableWidth.value) / 100) <= 0.025 + EPSILON_PT
+    ? target
+    : undefined;
 }

@@ -53,8 +53,8 @@ export class DrawingExclusionConvergenceError extends Error {
 }
 
 export interface ExclusionZone {
-  /** Non-drawing objects publish their anchor exclusion directly instead of synthesizing it. */
-  readonly sourceKind?: 'table' | 'frame';
+  /** Objects outside body drawing flow publish their exclusion directly instead of synthesizing it. */
+  readonly sourceKind?: 'table' | 'frame' | 'furniture';
   readonly drawingNodeId: string;
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
@@ -295,6 +295,13 @@ export function shiftAnchoredDrawingY(
       transformedCorners: geometry.transformedCorners.map((point) =>
         Object.freeze({ x: point.x, y: point.y + dy })
       ),
+      ...(geometry.imageTransformCorners
+        ? {
+            imageTransformCorners: geometry.imageTransformCorners.map((point) =>
+              Object.freeze({ x: point.x, y: point.y + dy })
+            ),
+          }
+        : {}),
       clipPolygon: geometry.clipPolygon
         ? geometry.clipPolygon.map((point) => Object.freeze({ x: point.x, y: point.y + dy }))
         : null,
@@ -368,14 +375,20 @@ export function mergeAvailableIntervalsAtY(
   y: number,
   zones: readonly ExclusionZone[],
   contentLeft: number,
-  contentRight: number
+  contentRight: number,
+  lineHeight = 0
 ): readonly ScanlineInterval[] {
   let available: ScanlineInterval[] = [{ start: contentLeft, end: contentRight }];
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    if (y < band.y || y >= band.y + band.height) continue;
-    const atY = availableTextIntervalsOnScanline(y, zone.input);
+    // Rectangular wrapping excludes the whole glyph band, including objects whose top
+    // lies below the line's top scanline. Polygon wrapping retains its contour probe.
+    const rectangular = zone.input.mode === 'square' && lineHeight > 0;
+    if (y >= band.y + band.height || (rectangular ? y + lineHeight <= band.y + 0.001 : y < band.y))
+      continue;
+    const probeY = rectangular ? Math.max(y, band.y) : y;
+    const atY = availableTextIntervalsOnScanline(probeY, zone.input);
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
@@ -506,6 +519,7 @@ export function filterExclusionZonesForParagraphOrder(
 ): readonly ExclusionZone[] {
   return Object.freeze(
     zones.filter((zone) => {
+      if (zone.sourceKind === 'furniture') return true;
       const anchorOrder = orderOfParagraph(zone.anchorParagraphId);
       if (anchorOrder === undefined) return zone.sourceOrder <= paragraphOrder;
       return anchorOrder <= paragraphOrder;

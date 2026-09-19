@@ -55,6 +55,20 @@ const FIXTURE = resolve(
 );
 
 describe('paragraphTabStops sanitises authored stops', () => {
+  test('numbering stops participate in cascade, replacement, and clearing', () => {
+    const properties = (val: string) =>
+      load(`<w:p><w:pPr><w:tabs><w:tab w:val="${val}" w:pos="1080"/></w:tabs></w:pPr></w:p>`).root
+        .children[0]!.children[0]!.children[0]!;
+    const number = properties('num');
+    const left = properties('left');
+    const resolved = cascadedTabStops([left, number]);
+    expect(resolved.stops).toEqual([{ positionPt: 54, alignment: 'left', numberingOnly: true }]);
+    expect(nextTabDestination(resolved, 48, 100, true).positionPt).toBe(54);
+    expect(nextTabDestination(resolved, 48, 100).positionPt).toBe(72);
+    expect(cascadedTabStops([number, left]).stops).toEqual([{ positionPt: 54, alignment: 'left' }]);
+    expect(cascadedTabStops([number, properties('clear')]).stops).toEqual([]);
+  });
+
   test('reads left/center/right/decimal and drops hostile values', () => {
     const part = load(
       `<w:p><w:pPr><w:tabs>` +

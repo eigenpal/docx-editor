@@ -96,7 +96,10 @@ describe('table cell border paint', () => {
     expect(continueCell.children.length).toBe(0);
 
     const topRight = cells[1]!;
-    expect(topRight.style.borderTopStyle).toBe('dotted');
+    expect(topRight.style.borderTopStyle).toBe('none');
+    expect(
+      topRight.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!.style.borderTopStyle
+    ).toBe('dotted');
     expect(topRight.style.borderTopColor).toBe('#339933');
     // Triple uses an inert overlay.
     const bottomRight = cells[3]!;
@@ -213,19 +216,19 @@ describe('table cell border paint', () => {
       expect(outer.color.replace(/^#/, '').toLowerCase()).toBe('2e75b6');
       expect(inner.color.replace(/^#/, '').toLowerCase()).toBe('2e75b6');
       if (side === 'top' || side === 'bottom') {
-        expect(outer.height).toBe(1);
-        expect(inner.height).toBe(1);
-        // 1px authored band → extent 3 centered with inset -1.
+        expect(outer.height).toBe(0.375);
+        expect(inner.height).toBe(0.375);
+        // 0.375pt strokes and gap → 1.125pt band with inset -0.375.
         if (side === 'top') {
-          expect(outer.top).toBe(-1);
-          expect(inner.top).toBe(1);
+          expect(outer.top).toBe(-0.375);
+          expect(inner.top).toBe(0.375);
         }
       } else {
-        expect(outer.width).toBe(1);
-        expect(inner.width).toBe(1);
+        expect(outer.width).toBe(0.375);
+        expect(inner.width).toBe(0.375);
         if (side === 'left') {
-          expect(outer.left).toBe(-1);
-          expect(inner.left).toBe(1);
+          expect(outer.left).toBe(-0.375);
+          expect(inner.left).toBe(0.375);
         }
       }
     }
@@ -240,16 +243,16 @@ describe('table cell border paint', () => {
     const leftInner = seg(segs, 'left', 'inner');
 
     // Horizontal owns the corner; vertical starts after the owned band.
-    expect(topOuter.left).toBe(-1);
-    expect(topOuter.top).toBe(-1);
-    expect(leftOuter.left).toBe(-1);
-    expect(leftOuter.top).toBe(0); // -1 + 1 stroke
+    expect(topOuter.left).toBe(-0.375);
+    expect(topOuter.top).toBe(-0.375);
+    expect(leftOuter.left).toBe(-0.375);
+    expect(leftOuter.top).toBe(0); // -0.375 + 0.375 stroke
     expect(rectsOverlap(topOuter, leftOuter)).toBe(false);
 
-    expect(topInner.left).toBe(1); // left inset + stroke + gap
-    expect(topInner.top).toBe(1);
-    expect(leftInner.left).toBe(1);
-    expect(leftInner.top).toBe(2); // below top's full extent
+    expect(topInner.left).toBe(0.375); // left inset + stroke + gap
+    expect(topInner.top).toBe(0.375);
+    expect(leftInner.left).toBe(0.375);
+    expect(leftInner.top).toBe(0.75); // below top's full extent
     expect(rectsOverlap(topInner, leftInner)).toBe(false);
 
     // No stroke protrudes past the opposite (absent) edge as a cap.
@@ -290,7 +293,7 @@ describe('table cell border paint', () => {
     expect(topInner.left + topInner.width).toBe(cellW);
   });
 
-  test('double+single keeps single CSS and flush double ends', () => {
+  test('double+single paints the centered single stroke and flush double ends', () => {
     const body =
       '<w:tbl>' +
       tr(
@@ -306,7 +309,11 @@ describe('table cell border paint', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layoutOf(body), { scale: 1 });
     const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
-    expect(cell.style.borderBottomStyle).toBe('solid');
+    expect(cell.style.borderBottomStyle).toBe('none');
+    const bottomStroke = cell.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!;
+    expect(bottomStroke.style.backgroundColor).toBe('#000000');
+    expect(bottomStroke.style.height).toBe('1px');
+    expect(parsePx(bottomStroke.style.top)).toBeCloseTo(parsePx(cell.style.height) - 0.5, 6);
     expect(cell.style.borderBottomColor).toBe('#000000');
     const segs = strokeSegs(cell);
     const cellH = parsePx(cell.style.height);
@@ -328,8 +335,8 @@ describe('table cell border paint', () => {
     expect(topOuter.left + topOuter.width).toBe(cellW);
     expect(topInner.left).toBe(0);
     expect(topInner.left + topInner.width).toBe(cellW);
-    // Only extends on the authored axis (inset -1), not laterally.
-    expect(topOuter.top).toBe(-1);
+    // Only extends on the authored axis (inset -0.375), not laterally.
+    expect(topOuter.top).toBe(-0.375);
   });
 
   test('double edges scale stroke thickness at thicker sz', () => {
@@ -337,10 +344,10 @@ describe('table cell border paint', () => {
     const segs = strokeSegs(cell);
     const topOuter = seg(segs, 'top', 'outer');
     const topInner = seg(segs, 'top', 'inner');
-    expect(topOuter.height).toBe(1);
-    expect(topInner.height).toBe(1);
-    expect(topOuter.top).toBe(0);
-    expect(topInner.top).toBe(2); // stroke + gap
+    expect(topOuter.height).toBe(3);
+    expect(topInner.height).toBe(3);
+    expect(topOuter.top).toBe(-3);
+    expect(topInner.top).toBe(3); // stroke + gap
   });
 
   test('double overlays respect scale factor', () => {
@@ -348,10 +355,10 @@ describe('table cell border paint', () => {
     const segs = strokeSegs(cell);
     const leftOuter = seg(segs, 'left', 'outer');
     const leftInner = seg(segs, 'left', 'inner');
-    expect(leftOuter.width).toBe(2);
-    expect(leftInner.width).toBe(2);
-    expect(leftOuter.left).toBe(0);
-    expect(leftInner.left).toBe(4); // 2 stroke + 2 gap
+    expect(leftOuter.width).toBe(6);
+    expect(leftInner.width).toBe(6);
+    expect(leftOuter.left).toBe(-6);
+    expect(leftInner.left).toBe(6); // scaled inset + stroke + gap
   });
 
   test('triple overlay regression after double refactor', () => {

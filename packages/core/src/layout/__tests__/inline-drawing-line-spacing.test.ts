@@ -1,3 +1,4 @@
+import { squareWrapZone } from './float-over-table-harness.ts';
 // `w:lineRule="auto"` on a line carrying an inline drawing (17.3.1.33).
 //
 // The multiple scales the TEXT line. Word grows an image line to contain the image and stops
@@ -54,6 +55,7 @@ function documentWith(options: {
   readonly cx?: number;
   readonly cy?: number;
   readonly caption?: string;
+  readonly leadingText?: string;
 }): OoxmlPart {
   const cx = options.cx ?? CONTENT_WIDTH_EMU;
   const cy = options.cy ?? PICTURE_HEIGHT_EMU;
@@ -61,6 +63,7 @@ function documentWith(options: {
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
     '<w:body><w:p>' +
     (options.spacing ? `<w:pPr><w:spacing ${options.spacing}/></w:pPr>` : '') +
+    (options.leadingText ? `<w:r><w:t>${options.leadingText}</w:t></w:r>` : '') +
     '<w:r><w:drawing>' +
     '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
     `<wp:extent cx="${cx}" cy="${cy}"/>` +
@@ -162,6 +165,80 @@ describe('auto line spacing on a line carrying an inline drawing', () => {
       })
     );
     expect(lines).toHaveLength(1);
-    expect(lines[0]!.box.height).toBeCloseTo(72, 4);
+    // The 72pt image sits above the shared baseline; the caption also needs the
+    // fixed measurer's 2.8pt descent below it. Neither is scaled by auto spacing.
+    expect(lines[0]!.baseline).toBeCloseTo(72, 4);
+    expect(lines[0]!.drawings![0]!.height).toBeCloseTo(72, 4);
+    expect(lines[0]!.box.height).toBeCloseTo(74.8, 4);
   });
+});
+
+for (const width of [468, 540]) {
+  test(`an inline picture ${width} pt wide clears a float crossing its lower edge`, () => {
+    const part = documentWith({ cx: width * 12700, cy: 72 * 12700, caption: '' });
+    const paragraph = part.root.children
+      .flatMap((node) => node.children)
+      .find((node) => node.kind === 'paragraph')!;
+    const layout = layoutSemanticDocument(part, 0, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      drawingExclusionPass: 0,
+      drawingExclusionZonesByPage: new Map([
+        [
+          0,
+          [
+            squareWrapZone({
+              anchorParagraphId: paragraph.id,
+              top: 60,
+              height: 80,
+              left: 0,
+              width: 468,
+              contentWidth: 468,
+            }),
+          ],
+        ],
+      ]),
+    });
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.box.y).toBe(140);
+    expect(line.drawings![0]!.width).toBe(width);
+    expect(line.drawings![0]!.y).toBeGreaterThanOrEqual(140);
+  });
+}
+
+test('a tall inline picture clears its entire shared line, including preceding text', () => {
+  const part = documentWith({
+    cx: 120 * 12700,
+    cy: 72 * 12700,
+    caption: '',
+    leadingText: 'Caption ',
+  });
+  const paragraph = part.root.children
+    .flatMap((node) => node.children)
+    .find((node) => node.kind === 'paragraph')!;
+  const layout = layoutSemanticDocument(part, 0, {
+    measurer,
+    inlineDrawingLayout: layoutContext(part),
+    drawingExclusionPass: 0,
+    drawingExclusionZonesByPage: new Map([
+      [
+        0,
+        [
+          squareWrapZone({
+            anchorParagraphId: paragraph.id,
+            top: 60,
+            height: 80,
+            left: 0,
+            width: 468,
+            contentWidth: 468,
+          }),
+        ],
+      ],
+    ]),
+  });
+  const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+  expect(lines).toHaveLength(1);
+  expect(lines[0]!.box.y).toBe(140);
+  expect(lines[0]!.spans[0]!.text).toBe('Caption ');
+  expect(lines[0]!.drawings![0]!.y).toBeGreaterThanOrEqual(140);
 });

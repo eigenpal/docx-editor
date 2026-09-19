@@ -63,6 +63,7 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
+import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
 import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
@@ -205,7 +206,7 @@ export interface TableAnchorFrames {
  */
 export interface SemanticTableCell {
   readonly id: string;
-  /** Derived content-edge geometry for a verified legacy full-width parent table. */
+  /** Derived content-edge geometry for a verified legacy percentage-width parent table. */
   readonly legacyContentAlignment?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
@@ -217,6 +218,8 @@ export interface SemanticTableCell {
   readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
+  /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
+  readonly hideEndMark?: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
   /** `w:textDirection`; unsupported values keep horizontal layout. */
@@ -225,6 +228,8 @@ export interface SemanticTableCell {
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
   readonly borders: CellBorderBox;
+  /** Resolved incident edges used for content clearance, preserving authored border provenance. */
+  readonly contentBorders?: CellBorderBox;
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**
@@ -285,7 +290,7 @@ export interface SemanticTableStructure {
   readonly bidiVisual?: true;
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
-  /** Verified pre-2013 content-aligned full-width inline table; derived, never serialized. */
+  /** Verified pre-2013 percentage-width inline table; derived, never serialized. */
   readonly legacyContentAlignment?: true;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
@@ -713,7 +718,13 @@ function readTableStructureUncached(
   }
   if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
-  let styleMargins = DEFAULT_CELL_MARGINS;
+  // Modern Word supplies TableNormal margins through the authored style cascade.
+  // The saved mode-15 Word table with no table style/margins uses zero padding.
+  // Keep the historical fallback for legacy and unspecified compatibility modes.
+  let styleMargins: CellMarginsPt =
+    compatibilityMode !== undefined && compatibilityMode >= 15
+      ? { top: 0, right: 0, bottom: 0, left: 0 }
+      : DEFAULT_CELL_MARGINS;
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
     styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
@@ -939,6 +950,7 @@ function readTableStructureUncached(
         gridColumn,
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
+        hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
@@ -1036,33 +1048,31 @@ function readTableStructureUncached(
   const columnWidthsPt = resolveColumnWidthsPt({
     gridCols,
     claims:
-      legacyWidth === undefined ? claims : legacyRoundedCellClaims(claims, gridCols, legacyWidth),
+      legacyWidth === undefined
+        ? claims
+        : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
     columnCount,
     contentWidthPt: legacyWidth ?? contentWidthPt,
     tableWidth,
     layoutFixed,
   });
-  // Resolve widths and conditional styles in stored order, then project the grid only.
-  // Cell arrays keep document order so keyboard traversal and text never reverse.
-  const visualRows = bidiVisual
-    ? rows.map((row) => ({
-        ...row,
-        cells: row.cells.map((cell) => ({
-          ...cell,
-          margins: { ...cell.margins, left: cell.margins.right, right: cell.margins.left },
-          borders: { ...cell.borders, left: cell.borders.right, right: cell.borders.left },
-          logicalGridColumn: cell.gridColumn,
-          gridColumn: Math.max(0, columnWidthsPt.length - cell.gridColumn - cell.gridSpan),
-        })),
-      }))
-    : rows;
+  // Project the grid visually; cell arrays retain document order for keyboard traversal.
+  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
+  const contentRows = withTableContentBorders(
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
     rows:
       legacyWidth === undefined
-        ? visualRows
-        : visualRows.map((row) => ({
+        ? contentRows
+        : contentRows.map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
           })),
@@ -1087,3 +1097,4 @@ function readTableStructureUncached(
       : defaultMargins,
   };
 }
+import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';

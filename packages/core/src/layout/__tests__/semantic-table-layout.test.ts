@@ -837,14 +837,14 @@ describe('table row pagination (tiny page)', () => {
       tc(p('HEAD')),
       '<w:trPr><w:tblHeader/><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
     );
-    const nested = `<w:tbl>${tr(tc(p('nested-0')))}${tr(tc(p('nested-1')))}</w:tbl>`;
+    const nested = `<w:tbl>${tr(tc(p('nested-0') + p('nested-1')), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`;
     const tail = Array.from({ length: 8 }, (_, index) => p(`tail-${index}`)).join('');
     const part = loadPart(`<w:tbl>${header}${tr(tc(nested + tail))}</w:tbl>`);
     const result = layoutTiny(part);
     assertNoContentOverflow(result);
     expect(result.pages.length).toBeGreaterThan(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
-    // Page 2 omits the header because its 15pt remainder cannot hold the nested table. Once
+    // Page 2 omits the header because its 15pt remainder cannot hold the atomic nested row. Once
     // the nested block is consumed, later paragraph continuations can use that remainder.
     expect(tableFragments(result.pages[1]!)[0]!.rows[0]!.isHeaderRepeat).not.toBe(true);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(true);

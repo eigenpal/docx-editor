@@ -29,6 +29,7 @@ export function blockInlineRight(blocks: readonly BlockFragmentRecord[], fallbac
       continue;
     }
     for (const line of block.lines) {
+      if (line.box.height === 0 && line.spans.length === 0 && !line.drawings?.length) continue;
       right = Math.max(right, line.contentX);
       for (const span of line.spans) right = Math.max(right, span.box.x + span.box.width);
       for (const drawing of line.drawings ?? []) right = Math.max(right, drawing.advanceEnd);

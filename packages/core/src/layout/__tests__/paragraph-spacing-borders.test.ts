@@ -351,7 +351,7 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(heading.lines[0]!.box.y).toBe(0);
   });
 
-  test('pageBreakBefore suppresses before at the top of the new page', () => {
+  test('pageBreakBefore retains before at the top of the new page', () => {
     const layout = lay(
       load(
         paragraph('first') + paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
@@ -360,8 +360,8 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(layout.pages.length).toBeGreaterThanOrEqual(2);
     const second = firstParagraphOnPage(layout, 1);
     expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
-    expect(second.spacing.before).toBe(0);
-    expect(second.lines[0]!.box.y).toBe(0);
+    expect(second.spacing.before).toBe(10);
+    expect(second.lines[0]!.box.y).toBe(10);
   });
 
   test('natural pagination suppresses before when a paragraph moves to the next page', () => {

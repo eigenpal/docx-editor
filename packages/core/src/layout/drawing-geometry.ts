@@ -39,6 +39,8 @@ export interface DrawingGeometry {
   readonly paintBounds: LayoutBox;
   readonly hitBounds: LayoutBox;
   readonly transformedCorners: readonly DrawingPoint[];
+  /** Unclipped image corners for affine encoding; clipping must not stretch the image. */
+  readonly imageTransformCorners?: readonly DrawingPoint[];
   readonly clipPolygon: readonly DrawingPoint[] | null;
   readonly clipFallback: DrawingClipFallback;
   readonly effectInsets: DrawingInsets;
@@ -718,6 +720,7 @@ export function computeDrawingGeometry(input: DrawingGeometryInput): DrawingGeom
     paintBounds,
     hitBounds,
     transformedCorners,
+    imageTransformCorners: transformedCorners,
     clipPolygon: clipPolygon.length >= 3 ? clipPolygon : transformedCorners,
     clipFallback,
     effectInsets,

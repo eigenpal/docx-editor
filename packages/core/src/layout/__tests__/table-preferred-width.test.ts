@@ -4,9 +4,9 @@
 // by MAXIMUM. Anything still unstated shares what the content width has left.
 //
 // `w:tblW` (17.4.63) then bounds the total, and `w:tblLayout` (17.4.52 — 17.4.53 is the
-// `w:tblPrEx` variant) decides whether the PAGE also bounds it: 17.18.87 puts "override the
-// preferred table width until the table reaches the page width" in the autofit chain only,
-// so a fixed table with no `w:tblW` renders past the right margin the way Word renders it.
+// `w:tblPrEx` variant) limits unstated autofit widths to the text column. An authored
+// positive preferred width can retain a wider grid; the autofit content-growth limit
+// does not first shrink that authored width. Fixed tables also retain unstated wider grids.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -316,11 +316,11 @@ describe('w:tblW bounds the total', () => {
     expect(total(structure.columnWidthsPt)).toBeCloseTo(144, 6);
   });
 
-  test('a dxa table width wider than the page still cannot exceed the page', () => {
+  test('a positive dxa table width can retain a grid wider than the text column', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblW w:w="20000" w:type="dxa"/></w:tblPr>${wide}</w:tbl>`
     );
-    expect(total(structure.columnWidthsPt)).toBeCloseTo(CONTENT_WIDTH_PT, 6);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(720, 6);
   });
 
   test('a hostile w:tblW cannot crush every column to nothing', () => {

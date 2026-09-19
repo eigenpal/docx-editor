@@ -1,12 +1,13 @@
 // Drawing geometry normalization (typed-drawings-and-images task 8).
 
 import { describe, expect, test } from 'bun:test';
-import type { SourceCrop, DrawingTransform } from '../../store/package/drawing-projection.ts';
+import type { DrawingTransform } from '../../store/package/drawing-projection.ts';
 import {
   CROP_PERCENT_MAX,
   MAX_IMAGE_POLYGON_POINTS,
   ROTATION_UNITS_PER_DEGREE,
   computeDrawingGeometry,
+  clipGeometryToRegion,
   expandBoxByInsets,
   normalizeCropFractions,
   normalizeCropFromRaw,
@@ -268,4 +269,26 @@ describe('computeDrawingGeometry', () => {
     expect(Number.isFinite(geometry.paintBounds.x)).toBe(true);
     expect(geometry.transformedCorners).toHaveLength(4);
   });
+});
+
+test('clipping preserves the original image transform corners for exporters', () => {
+  const geometry = computeDrawingGeometry({
+    extentWidth: 100,
+    extentHeight: 50,
+    anchorX: 0,
+    anchorY: 0,
+    effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+    crop: { top: 0, right: 0, bottom: 0, left: 0 },
+    transform: {
+      rotationDegrees: 0,
+      flipHorizontal: false,
+      flipVertical: false,
+      offsetEmu: { x: 0, y: 0 },
+      extentEmu: { cx: 1270000, cy: 635000 },
+    },
+    presetGeometry: 'rect',
+  });
+  const clipped = clipGeometryToRegion(geometry, { x: 25, y: 0, width: 50, height: 50 });
+  expect(clipped.imageTransformCorners).toEqual(geometry.transformedCorners);
+  expect(clipped.transformedCorners).not.toEqual(geometry.transformedCorners);
 });

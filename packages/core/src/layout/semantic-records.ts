@@ -273,6 +273,8 @@ export interface StyleSpanRecord {
    * and selection mapping refuses them the way it refuses markers.
    */
   readonly projected?: boolean;
+  /** Authored inline separator rule; its advance belongs to one note atom. */
+  readonly noteSeparator?: 'separator' | 'continuationSeparator';
   /** Paint-ready geometry for one atomic Office Math equation. */
   readonly equation?: EquationSpanRecord;
   /**
@@ -419,6 +421,7 @@ export interface ParagraphFragmentRecord {
   readonly outOfFlow?: true;
   /** Placement and wrapping of one authored text-frame group, in page-content coordinates. */
   readonly positionedFrame?: {
+    readonly dropCapLines?: number;
     readonly anchorId: string;
     readonly columnIndex: number;
     readonly groupId: string;
@@ -797,6 +800,8 @@ export interface NoteAreaRecord {
     readonly synthetic: boolean;
     /** Layout-owned single/double rule when marker-only or synthetic; absent for authored stories. */
     readonly ruleStyle?: 'single' | 'double';
+    /** Resolved marker-run color; null/absent uses automatic black. */
+    readonly ruleColor?: string | null;
   };
   readonly notes: readonly NoteStoryRecord[];
   readonly fallbackReason?: string;
@@ -1018,8 +1023,10 @@ export interface TextMeasurer {
    * Undefined keeps layout on the advance-only path.
    */
   inkBounds?(text: string, style: ResolvedRunStyle): { left: number; right: number } | undefined;
-  /** Line height and baseline for the resolved style. */
-  lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
+  /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
+  hasResolvedFont?(style: ResolvedRunStyle): boolean;
+  /** Line metrics for the actual text faces; omitted text measures the primary face. */
+  lineMetrics(style: ResolvedRunStyle, text?: string): { height: number; baseline: number };
 }
 
 export {

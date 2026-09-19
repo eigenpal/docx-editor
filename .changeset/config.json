@@ -15,7 +15,7 @@
     ]
   ],
   "linked": [],
-  "ignore": [],
+  "ignore": ["@docx-editor.dev/docx-to-pdf"],
   "access": "public",
   "privatePackages": {
     "version": false,

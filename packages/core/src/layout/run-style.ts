@@ -14,6 +14,7 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
+import { borderEdgeFromAttributes, type ParagraphBorderEdge } from './paragraph-style.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
 import { styleToggleIsOn as toggle } from './style-toggles.ts';
@@ -64,6 +65,8 @@ export interface ResolvedRunStyle {
   readonly bold: boolean;
   /** Opaque solid `w14:textOutline`, in points; paint only, never a font-weight change. */
   readonly textOutline?: { readonly widthPt: number; readonly color: string };
+  /** Character border; adjacent runs with matching edges share one outline. */
+  readonly border?: ParagraphBorderEdge;
   readonly italic: boolean;
   readonly underline: ResolvedUnderline | null;
   readonly strike: boolean;
@@ -86,8 +89,10 @@ export interface ResolvedRunStyle {
   readonly characterSpacingPt: number;
   /** `w:w`, as a percentage. 100 is unscaled. */
   readonly horizontalScalePercent: number;
-  /** `w:kern`, in points: the size at or above which kerning applies. 0 disables it. */
+  /** `w:kern`, in points: the size at or above which kerning applies. */
   readonly kerningMinPt: number;
+  /** Explicit kerning selection, including an authored zero threshold. Absent uses a positive threshold. */
+  readonly kerningEnabled?: boolean;
   /**
    * `w:vanish` (ECMA-376 §17.3.2.45): the run is hidden text.
    *
@@ -246,6 +251,9 @@ export function resolveRunStyle(
       case 'textOutline':
         style.textOutline = resolveTextOutline(property);
         break;
+      case 'bdr':
+        style.border = borderEdgeFromAttributes(property.attributes);
+        break;
       case 'i':
         style.italic = toggle(property);
         break;
@@ -307,7 +315,10 @@ export function resolveRunStyle(
       }
       case 'kern': {
         const halfPoints = integer(property.attributes?.val);
-        if (halfPoints !== null) style.kerningMinPt = halfPoints / 2;
+        if (halfPoints !== null && halfPoints >= 0) {
+          style.kerningMinPt = halfPoints / 2;
+          style.kerningEnabled = true;
+        }
         break;
       }
       case 'vanish':
@@ -394,6 +405,11 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.color === b.color &&
     a.textOutline?.widthPt === b.textOutline?.widthPt &&
     a.textOutline?.color === b.textOutline?.color &&
+    a.border?.val === b.border?.val &&
+    a.border?.color === b.border?.color &&
+    a.border?.widthPt === b.border?.widthPt &&
+    a.border?.spacePt === b.border?.spacePt &&
+    a.border?.shadow === b.border?.shadow &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.strike === b.strike &&
@@ -407,6 +423,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.characterSpacingPt === b.characterSpacingPt &&
     a.horizontalScalePercent === b.horizontalScalePercent &&
     a.kerningMinPt === b.kerningMinPt &&
+    a.kerningEnabled === b.kerningEnabled &&
     a.hidden === b.hidden &&
     a.underline?.variant === b.underline?.variant &&
     a.underline?.color === b.underline?.color
@@ -424,4 +441,17 @@ export function baselineShiftPtOf(style: ResolvedRunStyle): number {
   if (style.verticalAlign === 'superscript') return style.baselineShiftPt + style.fontSizePt * 0.33;
   if (style.verticalAlign === 'subscript') return style.baselineShiftPt - style.fontSizePt * 0.16;
   return style.baselineShiftPt;
+}
+
+/**
+ * Shared glyph-size factor for baseline, superscript, and subscript text.
+ *
+ * The 65% script scale follows the common Word font metrics (Arial, Calibri, Times New
+ * Roman) and improves the saved Word reference at 10pt and 11pt. It is a uniform policy;
+ * per-face script metrics and Word's output-device rounding are not modeled here.
+ * Layout, surface paint, and exporters must apply the same factor to avoid caret drift.
+ * @public
+ */
+export function glyphSizeFactorOf(style: ResolvedRunStyle): number {
+  return style.verticalAlign === 'baseline' ? 1 : 0.65;
 }

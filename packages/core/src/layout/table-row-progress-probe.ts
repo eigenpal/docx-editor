@@ -35,7 +35,8 @@ export function probeRowFragmentProgress(
   depth: number,
   deps: TableFlowDeps,
   cursors: readonly CellPlaceCursor[],
-  cellSpacingPt = 0
+  cellSpacingPt = 0,
+  options?: { readonly requireEveryCell?: boolean }
 ): boolean {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
@@ -46,7 +47,7 @@ export function probeRowFragmentProgress(
     onCellBreakKey: undefined,
     nextLineId: () => `probe-progress-${lineCounter++}`,
   };
-  return layoutRowFragmentBounded(
+  const placed = layoutRowFragmentBounded(
     row,
     cols,
     left,
@@ -58,5 +59,13 @@ export function probeRowFragmentProgress(
     probeDeps,
     cursors,
     cellSpacingPt
-  ).fitted;
+  );
+  return (
+    placed.fitted &&
+    (!options?.requireEveryCell ||
+      placed.record.cells.every(
+        (cell, index) =>
+          cell.vMergeContinue || row.cells[index]!.blocks.length === 0 || cell.blocks.length > 0
+      ))
+  );
 }

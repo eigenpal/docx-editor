@@ -133,10 +133,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // Two pages rather than three, because Word's cell margins make every row 12.73pt where
-    // it used to be 18.73pt. The shape this test needs is unchanged, and verified: the merge
-    // still does not fit the band it is offered, it still moves to a fresh page, and that
-    // page still re-emits the `w:tblHeader` row above it.
+    // The one-point table grid reserves clearance even when tcBorders omits it.
+    // The shared half-strokes fit on two pages; the repeated header must still
+    // reduce the merge's admission band and every fragment must remain contained.
     expect(layout.pages).toHaveLength(2);
     expect(headerRepeatsOn(layout, 1)).toBe(true);
     expectContentInsideItsTable(layout);
@@ -197,12 +196,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
-  test('a merge over a row that heads another merge is left alone', () => {
-    // Column 0 merges rows 0-1 and column 1 restarts at row 1. Row 1 therefore sizes itself
-    // around the second head whenever that one is not planned, which is a height the first
-    // span never measured, and the row can then take the whole-row move and leave the first
-    // span's content on the page above with no table under it. Nothing revokes a span once
-    // its head content has been placed, so the first span is not taken at all.
+  test('overlapping merges keep their content contained when the second head splits', () => {
+    // Column 0 merges rows 0-1 and column 1 restarts at row 1. The second head can
+    // start in the remaining band; both fragments must still bound their own content.
     const layout = layoutTiny(
       loadPart(
         `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
@@ -213,13 +209,13 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The two-line head sizes its own row, so its content has a cell around it.
+    // The first merge covers the partial second row on this page.
     const first = tablesOf(layout, 0)[0]!;
     const head = first.rows[0]!.cells[0]!;
-    expect(head.rowSpan).toBe(1);
+    expect(head.rowSpan).toBe(2);
     expect(contentBottomOf(head)).toBeGreaterThan(first.box.y + 18);
     expectContentInsideItsTable(layout);
-    // The merge that starts BELOW it is still planned, on the page it moves to.
+    // The second merge continues into the following row on the next page.
     const carried = tablesOf(layout, 1)[0]!;
     expect(carried.rows[0]!.cells[1]!.rowSpan).toBe(2);
     for (const pageIndex of layout.pages.keys()) {
@@ -396,9 +392,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The first row still uses the room left on the page it was reached on.
-    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(1);
-    // The second merge is kept whole on the page it moved to, and its content fits it.
+    // Both the first row and the start of the second use the remaining page band.
+    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(2);
+    // The continued merge covers the remaining rows, with its content inside its box.
     const carried = tablesOf(layout, 1)[0]!;
     const merged = carried.rows[0]!.cells[1]!;
     expect(merged.rowSpan).toBe(2);

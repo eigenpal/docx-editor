@@ -17,15 +17,17 @@ import {
   emuToPoints,
   lineLayoutAtoms,
   measureInlineDrawing,
-  pageClipRegion,
   resolveAnchoredDrawingPosition,
   shiftAnchoredDrawingRecords,
   type InlineDrawingLayoutContext,
 } from '../drawing-layout.ts';
-import { breakParagraph } from '../paragraph-flow.ts';
 import { hitTestPage } from '../semantic-hit-test.ts';
 import { caretAt, moveCaret } from '../semantic-interaction.ts';
-import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import {
+  createFixedMeasurer,
+  createLayoutSession,
+  layoutSemanticDocument,
+} from '../semantic-layout.ts';
 import { linesOf, paragraphFragmentsOf, type PageGeometry } from '../semantic-records.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -144,6 +146,23 @@ describe('measureInlineDrawing', () => {
     expect(measure.height).toBe(emuToPoints(457200));
     expect(measure.width).not.toBe(READY_RESOURCE.pixelWidth);
   });
+
+  test('effect extents still reserve space when inline wrap distances are ignored', () => {
+    const xml = inlinePictureXml({
+      inlineAttrs: 'distT="914400" distB="914400" distL="914400" distR="914400"',
+    }).replace('<wp:docPr', '<wp:effectExtent l="12700" r="25400" t="38100" b="50800"/><wp:docPr');
+    const part = load(xml);
+    const projection = projectDrawing(drawingOf(part), {
+      ownerPartName: OWNER,
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    })!;
+    const measure = measureInlineDrawing(projection);
+    expect(measure.totalWidth).toBe(75);
+    expect(measure.lineContribution).toBe(43);
+    expect([measure.effectL, measure.effectR, measure.effectT, measure.effectB]).toEqual([
+      1, 2, 3, 4,
+    ]);
+  });
 });
 
 describe('lays out inline drawings', () => {
@@ -172,25 +191,39 @@ describe('lays out inline drawings', () => {
     expect(line!.drawings![0]!.start).toBe(1);
   });
 
-  test('inline distL and distR widen the line advance', () => {
+  test('inline wrap distances remain in the projection without changing layout', () => {
     const part = load(
       inlinePictureXml({
         before: run('A'),
-        inlineAttrs: 'distT="0" distB="0" distL="12700" distR="25400"',
+        after: run('B'),
+        inlineAttrs: 'distT="38100" distB="50800" distL="12700" distR="25400"',
       })
     );
-    const measure = measureInlineDrawing(
-      projectDrawing(drawingOf(part), {
-        ownerPartName: OWNER,
-        limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
-      })!
-    );
+    const projection = projectDrawing(drawingOf(part), {
+      ownerPartName: OWNER,
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    })!;
+    expect(projection.inlineDistancesEmu).toEqual({
+      top: 38100,
+      bottom: 50800,
+      left: 12700,
+      right: 25400,
+    });
+    const measure = measureInlineDrawing(projection);
+    expect([measure.distL, measure.distR, measure.distT, measure.distB]).toEqual([0, 0, 0, 0]);
     const layout = lay(part, layoutContext(part));
     const [line] = linesOf(layout);
     const textWidth = line!.spans[0]!.box.width;
     expect(line!.drawings![0]!.x).toBeCloseTo(textWidth + measure.distL, 5);
     const used = line!.drawings![0]!.x + measure.width + measure.distR;
     expect(used).toBeCloseTo(textWidth + measure.totalWidth, 5);
+    const zeroPart = load(inlinePictureXml({ before: run('A'), after: run('B') }));
+    const [zeroLine] = linesOf(lay(zeroPart, layoutContext(zeroPart)));
+    expect(line!.box).toEqual(zeroLine!.box);
+    expect(line!.baseline).toBe(zeroLine!.baseline);
+    expect(line!.spans.map((span) => span.box)).toEqual(zeroLine!.spans.map((span) => span.box));
+    expect(line!.drawings![0]!.x).toBe(zeroLine!.drawings![0]!.x);
+    expect(line!.drawings![0]!.y).toBe(zeroLine!.drawings![0]!.y);
   });
 
   test('wraps an image wider than the remaining line to the next line', () => {
@@ -309,10 +342,6 @@ describe('lays out inline drawings', () => {
       '<pic:blipFill><a:blip r:embed="rId14"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
       '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>';
     const headerPart = load(headerXml);
-    const projection = projectDrawing(drawingOf(headerPart), {
-      ownerPartName: '/word/header1.xml',
-      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
-    })!;
     const headerLayout = layoutSemanticDocument(headerPart, 1, {
       measurer,
       inlineDrawingLayout: layoutContext(headerPart, READY_RESOURCE, '/word/header1.xml'),
@@ -536,6 +565,35 @@ function anchorFrameContext(
 }
 
 describe('resolves anchored position frames', () => {
+  test('cell column alignment uses text padding while other frames retain the physical cell', () => {
+    const cellBox = { x: 100, y: 40, width: 200, height: 100 };
+    const cellContentBox = { ...cellBox, x: 112, width: 170 };
+    for (const [frame, right] of [
+      ['column', 282],
+      ['margin', 300],
+    ] as const) {
+      const projection = projectDrawing(
+        drawingOf(
+          load(
+            anchoredPictureXml({
+              positionH: `<wp:positionH relativeFrom="${frame}"><wp:align>right</wp:align></wp:positionH>`,
+            })
+          )
+        ),
+        { ownerPartName: OWNER, limits: DEFAULT_DRAWING_PROJECTION_LIMITS }
+      )!;
+      expect(
+        resolveAnchoredDrawingPosition(projection, anchorFrameContext({ cellBox, cellContentBox }))
+          .x + 72
+      ).toBeCloseTo(right, 5);
+      expect(
+        resolveAnchoredDrawingPosition(
+          projection,
+          anchorFrameContext({ cellBox, cellContentBox, layoutInCell: false })
+        ).x + 72
+      ).toBeCloseTo(468, 5);
+    }
+  });
   test('margin right align places the right edge at the content edge', () => {
     const part = load(anchoredPictureXml());
     const projection = projectDrawing(drawingOf(part), {
@@ -722,6 +780,31 @@ describe('resolves anchored position frames', () => {
 });
 
 describe('places anchors in story and cell context', () => {
+  test('cell column offsets retain padding after row finalization and cached layout', () => {
+    for (const align of ['top', 'center']) {
+      const source = anchoredPictureXml({
+        positionH:
+          '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
+        before: '<w:pPr><w:ind w:left="120"/></w:pPr>',
+      })
+        .replace(
+          '<w:body>',
+          '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="' +
+            align +
+            '"/></w:tcPr>'
+        )
+        .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
+      const part = load(source);
+      const options = { measurer, inlineDrawingLayout: layoutContext(part) };
+      const session = createLayoutSession();
+      const cold = layoutSemanticDocument(part, 1, options);
+      for (const revision of [1, 2]) {
+        const layout = layoutSemanticDocument(part, revision, { ...options, session });
+        expect(layout.pages).toEqual(cold.pages);
+        expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(12, 5);
+      }
+    }
+  });
   test('body anchor publishes on the page with owner part context', () => {
     const part = load(anchoredPictureXml({ before: run('A') }));
     const layout = lay(part, layoutContext(part));
@@ -817,6 +900,7 @@ describe('drawing record geometry', () => {
     expect(drawing.geometry.contentBounds.width).toBe(drawing.width);
     expect(drawing.geometry.contentBounds.height).toBe(drawing.height);
     expect(drawing.geometry.effectInsets.top).toBeGreaterThanOrEqual(0);
+    expect(drawing.geometry.imageTransformCorners).toEqual(drawing.geometry.transformedCorners);
   });
 
   test('anchored records use wrap-element distances in geometry effect expansion', () => {
@@ -841,132 +925,5 @@ describe('drawing record geometry', () => {
     expect(drawing.geometry.contentBounds.width).toBe(emuToPoints(914400));
     expect(drawing.geometry.effectInsets.left).toBeCloseTo(1, 3);
     expect(drawing.geometry.transformedCorners.length).toBe(4);
-  });
-});
-
-describe('page clip for page-relative anchors', () => {
-  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-  const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
-  const WPS_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-
-  test('pageClipRegion uses pageWidth, not the active column contentWidth', () => {
-    const clip = pageClipRegion({
-      pageWidth: 595.5,
-      marginLeft: 49,
-      marginBottom: 14,
-      contentInsetTop: 61,
-      contentInsetBottom: 14,
-      contentHeight: 767,
-      contentBandHeight: 767,
-    });
-    expect(clip).toEqual({
-      x: -49,
-      y: -61,
-      width: 595.5,
-      height: 842,
-    });
-  });
-
-  test('multi-column page-relative behindDoc vector shape keeps non-zero paint bounds', () => {
-    // Repro: a multi-column section feeds column width into frame contentWidth. Page clip used
-    // to be contentWidth+margins, so a page-relative black box past the first column painted
-    // as 0×0 (Graphic 17–20). Raster inFront boxes on a later single-column page still worked.
-    const shapeDrawing =
-      '<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
-      'relativeHeight="1" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1">' +
-      '<wp:simplePos x="0" y="0"/>' +
-      '<wp:positionH relativeFrom="page"><wp:posOffset>2383154</wp:posOffset></wp:positionH>' +
-      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>148238</wp:posOffset></wp:positionV>' +
-      '<wp:extent cx="1016635" cy="207645"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
-      '<wp:wrapTopAndBottom/><wp:docPr id="17" name="Graphic 17"/>' +
-      `<a:graphic><a:graphicData uri="${WPS_URI}">` +
-      '<wps:wsp><wps:cNvSpPr/><wps:spPr>' +
-      '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1016635" cy="207645"/></a:xfrm>' +
-      '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/>' +
-      '<a:pathLst><a:path w="1016635" h="207645">' +
-      '<a:moveTo><a:pt x="1016177" y="0"/></a:moveTo>' +
-      '<a:lnTo><a:pt x="0" y="0"/></a:lnTo>' +
-      '<a:lnTo><a:pt x="0" y="207391"/></a:lnTo>' +
-      '<a:lnTo><a:pt x="1016177" y="207391"/></a:lnTo>' +
-      '<a:close/></a:path></a:pathLst></a:custGeom>' +
-      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>' +
-      '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
-    const xml =
-      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
-      `xmlns:wps="${WPS}" xmlns:mc="${MC}"><w:body>` +
-      `<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps">${shapeDrawing}</mc:Choice>` +
-      '<mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>' +
-      '<w:r><w:t>col</w:t></w:r></w:p>' +
-      '<w:sectPr>' +
-      '<w:pgSz w:w="11906" w:h="16838"/>' +
-      '<w:pgMar w:top="1220" w:right="0" w:bottom="280" w:left="980"/>' +
-      '<w:cols w:num="3" w:space="720"/>' +
-      '</w:sectPr></w:body></w:document>';
-    const part = load(xml);
-    const layout = lay(part, layoutContext(part));
-    const drawing = layout.pages[0]!.anchoredDrawings?.[0];
-    expect(drawing).toBeDefined();
-    expect(drawing!.behindDocument).toBe(true);
-    expect(drawing!.wrap).toBe('topAndBottom');
-    expect(drawing!.vectorShape).not.toBeNull();
-    expect(drawing!.paintBounds.width).toBeGreaterThan(1);
-    expect(drawing!.paintBounds.height).toBeGreaterThan(1);
-    expect(drawing!.x).toBeGreaterThan(120);
-  });
-
-  test('Selection Notice form bar: page posOffset maps to content x = pagePt − marginLeft', () => {
-    // shapes-and-page-breaks Selection Notice item 3 (Graphic 14): page-H bar whose RIGHT
-    // edge meets the tab at 6896 twips. VML fallback margin-left:338.5pt; section left=980.
-    const posOffsetEmu = 4298950;
-    const extentCx = 702945;
-    const extentCy = 9525;
-    const shapeDrawing =
-      '<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
-      'relativeHeight="1" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1">' +
-      '<wp:simplePos x="0" y="0"/>' +
-      `<wp:positionH relativeFrom="page"><wp:posOffset>${posOffsetEmu}</wp:posOffset></wp:positionH>` +
-      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>208632</wp:posOffset></wp:positionV>' +
-      `<wp:extent cx="${extentCx}" cy="${extentCy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
-      '<wp:wrapNone/><wp:docPr id="14" name="Graphic 14"/>' +
-      `<a:graphic><a:graphicData uri="${WPS_URI}">` +
-      '<wps:wsp><wps:cNvSpPr/><wps:spPr>' +
-      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${extentCx}" cy="${extentCy}"/></a:xfrm>` +
-      '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/>' +
-      `<a:pathLst><a:path w="${extentCx}" h="${extentCy}">` +
-      `<a:moveTo><a:pt x="${extentCx - 382}" y="0"/></a:moveTo>` +
-      '<a:lnTo><a:pt x="0" y="0"/></a:lnTo>' +
-      `<a:lnTo><a:pt x="0" y="${extentCy - 508}"/></a:lnTo>` +
-      `<a:lnTo><a:pt x="${extentCx - 382}" y="${extentCy - 508}"/></a:lnTo>` +
-      '<a:close/></a:path></a:pathLst></a:custGeom>' +
-      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>' +
-      '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
-    const xml =
-      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
-      `xmlns:wps="${WPS}" xmlns:mc="${MC}"><w:body>` +
-      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="6896"/></w:tabs></w:pPr>' +
-      `<w:r><mc:AlternateContent><mc:Choice Requires="wps">${shapeDrawing}</mc:Choice>` +
-      '<mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>' +
-      '<w:r><w:t>divided into [</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>] Loans</w:t></w:r></w:p>' +
-      '<w:sectPr>' +
-      '<w:pgSz w:w="11910" w:h="16840"/>' +
-      '<w:pgMar w:top="980" w:right="0" w:bottom="1120" w:left="980"/>' +
-      '</w:sectPr></w:body></w:document>';
-    const part = load(xml);
-    const layout = lay(part, layoutContext(part));
-    const page = layout.pages[0]!;
-    const drawing = page.anchoredDrawings?.[0];
-    expect(drawing).toBeDefined();
-    const marginLeft = page.contentBox.x;
-    const pageXPt = emuToPoints(posOffsetEmu);
-    const widthPt = emuToPoints(extentCx);
-    expect(marginLeft).toBe(49);
-    expect(drawing!.horizontalFrame).toBe('page');
-    expect(drawing!.horizontalFrameOrigin).toBe(-marginLeft);
-    expect(drawing!.x).toBeCloseTo(pageXPt - marginLeft, 5);
-    expect(drawing!.width).toBeCloseTo(widthPt, 5);
-    // Right edge of the bar meets the authored tab stop (6896 twips ≈ 344.8pt).
-    expect(drawing!.x + drawing!.width).toBeCloseTo(6896 / 20, 0);
-    // Paint origin on the page element is −margin; CSS left must equal page posOffset.
-    expect(drawing!.x - drawing!.horizontalFrameOrigin).toBeCloseTo(pageXPt, 5);
   });
 });

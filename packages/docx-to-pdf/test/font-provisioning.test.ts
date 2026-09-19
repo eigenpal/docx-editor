@@ -1,0 +1,91 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { expect, test } from 'bun:test';
+import { copyFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { installedWordFontResolver } from '../src/font-provisioning.ts';
+
+async function directory(run: (root: string) => Promise<void>) {
+  const root = await mkdtemp(join(tmpdir(), 'pdf-font-provision-'));
+  try {
+    await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test('installed discovery includes the default family when no run names it', async () => {
+  await directory(async (root) => {
+    await copyFile(
+      new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url),
+      join(root, 'Arial.ttf')
+    );
+    const resolve = installedWordFontResolver([root]);
+    const implicit = await resolve({ families: [], defaultFamily: 'Arial' });
+    const explicit = await resolve({ families: ['Arial'], defaultFamily: 'Arial' });
+    expect(implicit.sources).toHaveLength(1);
+    expect(implicit.sources[0]!.request).toEqual({ family: 'Arial', weight: 400, style: 'normal' });
+    expect(explicit.sources).toEqual(implicit.sources);
+  });
+});
+
+test('a collection without the requested family never substitutes its first face', async () => {
+  await directory(async (root) => {
+    await copyFile(
+      new URL('./fixtures/Collection.ttc', import.meta.url),
+      join(root, 'msgothic.ttc')
+    );
+    const result = await installedWordFontResolver([root])({
+      families: ['MS Gothic'],
+      defaultFamily: 'Unavailable Font',
+    });
+    expect(result.sources.length).toBe(0);
+  });
+});
+
+test('installed discovery admits the Word symbol face when requested for glyph fallback', async () => {
+  await directory(async (root) => {
+    await copyFile(
+      new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url),
+      join(root, 'seguisym.ttf')
+    );
+    const result = await installedWordFontResolver([root])({
+      families: ['Segoe UI Symbol'],
+      defaultFamily: 'Arial',
+    });
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]!.request).toEqual({
+      family: 'Segoe UI Symbol',
+      weight: 400,
+      style: 'normal',
+    });
+  });
+});
+
+test('unknown and prototype-property family names do not become file candidates', async () => {
+  await directory(async (root) => {
+    const result = await installedWordFontResolver([root])({
+      families: ['constructor', 'toString', '../../Arial', 'Unavailable Font'],
+      defaultFamily: 'Unavailable Font',
+    });
+    expect(result.sources.length).toBe(0);
+  });
+});
+
+test('installed discovery observes cancellation before reading a candidate', async () => {
+  await directory(async (root) => {
+    const controller = new AbortController();
+    controller.abort(new Error('stop font lookup'));
+    await expect(
+      installedWordFontResolver([root])({
+        families: ['Arial'],
+        defaultFamily: 'Arial',
+        signal: controller.signal,
+      })
+    ).rejects.toThrow('stop font lookup');
+  });
+});

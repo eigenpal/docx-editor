@@ -21,7 +21,8 @@
     "examples/vite",
     "examples/vue",
     "examples/server-agent-review",
-    "python/docx-to-markdown"
+    "python/docx-to-markdown",
+    "examples/docx-to-pdf"
   ],
   "type": "module",
   "scripts": {
@@ -29,7 +30,7 @@
     "api:extract": "node scripts/api-extractor.mjs --local",
     "build": "bun run build:packages:demo && bun run build:react && bun run build:vue && bun run build:igloo:source && bun run build:markdown:source && bun run build:assemble && bun run check:demo-deployment",
     "build:assemble": "rm -rf examples/parity/dist && mkdir -p examples/parity/dist && cp -R examples/vite/dist examples/parity/dist/react && cp -R examples/vue/dist examples/parity/dist/vue && cp -R examples/igloo/dist examples/parity/dist/igloo && cp -R examples/docx-to-markdown/dist examples/parity/dist/docx-to-markdown",
-    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/docx-to-markdown' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
+    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/docx-to-markdown' build && bun run --filter '@docx-editor.dev/docx-to-pdf' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
     "build:packages:vue": "bun run build:packages && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/nuxt' build",
     "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/docx-to-markdown' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/pro' build && bun run --filter '@docx-editor.dev/editor-api' build",
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/react/ vite build",
@@ -139,7 +140,10 @@
     "collaboration:check": "node scripts/collaboration/cli.mjs check",
     "collaboration:catalog": "node scripts/collaboration/cli.mjs catalog",
     "collaboration:test": "node scripts/collaboration/test.mjs",
-    "check:lockfile-workspaces": "node scripts/check-lockfile-workspaces.mjs"
+    "check:lockfile-workspaces": "node scripts/check-lockfile-workspaces.mjs",
+    "build:pdf": "bun run --filter @docx-editor.dev/i18n build && bun run --filter @docx-editor.dev/core build && bun run --filter @docx-editor.dev/fonts build && bun run --filter @docx-editor.dev/docx-to-pdf build",
+    "dev:pdf": "bun run build:pdf && bun run --filter ./examples/docx-to-pdf dev",
+    "validation:pdf": "bun packages/docx-to-pdf/scripts/validator/launch.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

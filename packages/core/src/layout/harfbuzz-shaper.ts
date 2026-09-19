@@ -179,6 +179,8 @@ export interface HarfBuzzTextShaperOptions {
   readonly maxCodepoints?: number;
   readonly maxGlyphs?: number;
   readonly maxCachedFaces?: number;
+  /** Aggregate retained native font bytes; oversized faces are shaped without retention. */
+  readonly maxCachedFontBytes?: number;
   readonly maxCachedShapes?: number;
   readonly maxOutlineBytes?: number;
   readonly maxCachedOutlineBytes?: number;
@@ -420,6 +422,7 @@ interface ActiveHarfBuzzFont {
   readonly face: HarfBuzzFace;
   readonly font: HarfBuzzFont;
   readonly unitsPerEm: number;
+  readonly byteLength: number;
 }
 
 const OBJECT_OVERHEAD_BYTES = 64;
@@ -498,6 +501,8 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   readonly #maxCodepoints: number;
   readonly #maxGlyphs: number;
   readonly #maxCachedFaces: number;
+  readonly #maxCachedFontBytes: number;
+  #fontBytes = 0;
   readonly #maxCachedShapes: number;
   readonly #maxOutlineBytes: number;
   readonly #maxCachedOutlineBytes: number;
@@ -533,6 +538,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       options.maxGlyphs ?? DEFAULT_MAX_GLYPHS,
       'maximum shaped glyphs',
       HARD_MAX_GLYPHS
+    );
+    this.#maxCachedFontBytes = assertPositiveLimit(
+      options.maxCachedFontBytes ?? 64 * 1024 * 1024,
+      'maximum cached font bytes',
+      64 * 1024 * 1024
     );
     this.#maxCachedFaces = assertPositiveLimit(
       options.maxCachedFaces ?? DEFAULT_MAX_CACHED_FACES,
@@ -571,6 +581,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
 
   dispose(): void {
     this.#faces.clear();
+    this.#fontBytes = 0;
     this.#outlines.clear();
     this.#shapeResults.clear();
     this.#outlineBytes = 0;
@@ -617,15 +628,28 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     font.setScale(face.upem, face.upem);
-    if (this.#faces.size >= this.#maxCachedFaces) {
-      const oldest = this.#faces.keys().next().value;
-      if (oldest !== undefined) {
+    const active = {
+      identity: fontResource.identity,
+      blob,
+      face,
+      font,
+      unitsPerEm: face.upem,
+      byteLength: bytes.byteLength,
+    };
+    if (bytes.byteLength <= this.#maxCachedFontBytes) {
+      while (
+        this.#faces.size >= this.#maxCachedFaces ||
+        this.#fontBytes + bytes.byteLength > this.#maxCachedFontBytes
+      ) {
+        const oldest = this.#faces.keys().next().value;
+        if (oldest === undefined) break;
+        this.#fontBytes -= this.#faces.get(oldest)!.byteLength;
         this.#faces.delete(oldest);
         this.#onFaceCacheEvent?.(Object.freeze({ kind: 'evicted', identity: oldest }));
       }
+      this.#faces.set(fontResource.identity, active);
+      this.#fontBytes += bytes.byteLength;
     }
-    const active = { identity: fontResource.identity, blob, face, font, unitsPerEm: face.upem };
-    this.#faces.set(fontResource.identity, active);
     this.#onFaceCacheEvent?.(Object.freeze({ kind: 'created', identity: fontResource.identity }));
     return active;
   }

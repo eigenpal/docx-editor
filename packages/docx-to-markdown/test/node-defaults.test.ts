@@ -114,16 +114,14 @@ describe('server-first defaults', () => {
         footers: translated.pages.filter((page) => page.footerMarkdown.length > 0).length,
         markdownHash,
       }).toEqual({
-        // Smaller text no longer inherits an unformatted mark's 11pt line-height
-        // floor. The only Markdown text change is NUMPAGES: 26 -> 25.
+        // Small table text no longer reserves an inherited, taller cell-end mark.
         pages: 25,
         bodyLineCount: 280,
-        // Four checkbox controls open their paragraphs with a `w:sym` glyph; the pin moved by
-        // exactly those four characters when a leading glyph started laying out.
-        markdownLength: 17_199,
+        // Includes the four checkbox symbols and two authored nonbreaking hyphens.
+        markdownLength: 17_201,
         headers: 24,
         footers: 24,
-        markdownHash: 'cb4189d81e9fb59a2cf9488f88defd8d3de6075116fa485d75d47322712cb994',
+        markdownHash: 'e6da51e7832a8859bedddf028a16d9bc7265871924f2393ea9f2fae06dfda263',
       });
       expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');
       expect(translated.markdown).toEndWith(

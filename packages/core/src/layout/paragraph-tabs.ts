@@ -64,6 +64,8 @@ export interface TabStop {
   /** Position from the paragraph content origin, in points. */
   readonly positionPt: number;
   readonly alignment: TabAlignment;
+  /** Legacy `num` stop: positions a numbering suffix, not a tab in ordinary text. */
+  readonly numberingOnly?: true;
   /** Absent for `none` — the schema default and the overwhelming majority of stops. */
   readonly leader?: TabLeader;
 }
@@ -93,7 +95,7 @@ export const EMPTY_TAB_STOPS: ResolvedTabStops = Object.freeze({
  * discarded the stop ENTIRELY — a right-aligned TOC stop became a default-interval left tab
  * and every page number in the table of contents slid inboard. `w:pPr/w:ind` and `w:jc`
  * already read the Strict spellings (`paragraph-style.ts`, `paragraph-flow.ts`); this makes
- * tabs agree with them. `bar` and `num` are not stops and stay unhandled.
+ * tabs agree with them. `num` is a legacy numbering-only stop; `bar` remains unhandled.
  *
  * This lane is left-to-right, so `start` is `left` and `end` is `right`, exactly as
  * `paragraphAlignment` resolves `w:jc`.
@@ -112,6 +114,7 @@ const TAB_LEADERS = new Set<string>(['dot', 'hyphen', 'underscore', 'heavy', 'mi
 /** A resolved stop before ordering: position is the map key. */
 interface TabStopEntry {
   readonly alignment: TabAlignment;
+  readonly numberingOnly?: true;
   readonly leader?: TabLeader;
 }
 
@@ -147,7 +150,7 @@ function clampPositionTwips(twips: number): number | null {
  * Apply one `w:tabs` element onto a position→stop map.
  *
  * `clear` removes a stop at that position; recognised alignments upsert. Unknown `val` and
- * non-stop kinds (`bar`, `num`, …) are ignored. At most `MAX_TAB_STOPS` survive.
+ * non-stop kinds (`bar`, …) are ignored. At most `MAX_TAB_STOPS` survive.
  */
 function applyTabsElement(
   byTwips: Map<number, TabStopEntry>,
@@ -167,13 +170,14 @@ function applyTabsElement(
       byTwips.delete(twips);
       continue;
     }
-    const alignment = TAB_ALIGNMENTS.get(val);
+    const alignment = val === 'num' ? 'left' : TAB_ALIGNMENTS.get(val);
     if (alignment === undefined) continue;
     if (byTwips.size >= MAX_TAB_STOPS && !byTwips.has(twips)) continue;
     // An unrecognised leader is `none`, not a rejected stop: the geometry is still authored.
     const leader = attributeValue(child, 'leader');
     byTwips.set(twips, {
       alignment,
+      ...(val === 'num' ? { numberingOnly: true as const } : {}),
       ...(leader !== undefined && TAB_LEADERS.has(leader) ? { leader: leader as TabLeader } : {}),
     });
   }
@@ -187,16 +191,12 @@ function mapToResolved(
   const stops: TabStop[] = [];
   for (let index = 0; index < ordered.length && index < MAX_TAB_STOPS; index += 1) {
     const [twips, entry] = ordered[index]!;
-    stops.push({ positionPt: twips / 20, alignment: entry.alignment, ...normalizedLeader(entry) });
+    stops.push({ positionPt: twips / 20, ...entry });
   }
   return {
     stops: Object.freeze(stops),
     defaultIntervalPt,
   };
-}
-
-function normalizedLeader(entry: TabStopEntry): { leader?: TabLeader } {
-  return entry.leader ? { leader: entry.leader } : {};
 }
 
 /**
@@ -276,10 +276,12 @@ export interface TabDestination {
 export function nextTabDestination(
   tabs: ResolvedTabStops,
   currentX: number,
-  rightEdge: number
+  rightEdge: number,
+  forNumbering = false
 ): TabDestination {
   const edge = Math.max(currentX, rightEdge);
   for (const stop of tabs.stops) {
+    if (stop.numberingOnly && !forNumbering) continue;
     if (stop.positionPt > currentX) {
       return {
         positionPt: Math.min(stop.positionPt, edge),
@@ -340,7 +342,7 @@ export function tabStopsFingerprint(tabs: ResolvedTabStops): string {
   const stops = tabs.stops
     .map(
       (stop) =>
-        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.leader ? `/${stop.leader}` : ''}`
+        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.numberingOnly ? '#num' : ''}${stop.leader ? `/${stop.leader}` : ''}`
     )
     .join(',');
   return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)})`;

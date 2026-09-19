@@ -30,6 +30,8 @@ import { ExportResourceError } from './export-session.ts';
 export interface ExportLaidOutText {
   readonly run: ShapedRun;
   readonly font: ExportAdmittedFontIdentity;
+  /** Face descriptors indexed by run.fontSpans when a run needs multiple faces. */
+  readonly fonts?: readonly ExportAdmittedFontIdentity[];
   readonly fixedPointScale: number;
 }
 
@@ -81,7 +83,14 @@ export function bindExportLaidOutText(
       const run = shapeLayoutStyleRun(shaping.shaper, shaping.environment, font, faceStyle, text);
       return Object.freeze({
         run,
-        font: describeAdmittedFontIdentity(font),
+        font: describeAdmittedFontIdentity(run.fontSpans[0]?.font ?? font),
+        ...(run.fontSpans.length > 1
+          ? {
+              fonts: Object.freeze(
+                run.fontSpans.map((span) => describeAdmittedFontIdentity(span.font))
+              ),
+            }
+          : {}),
         fixedPointScale: shaping.environment.fixedPointScale,
       });
     } catch {

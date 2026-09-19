@@ -536,6 +536,9 @@ describe('HarfBuzz production shaper', () => {
       { maxCodepoints: Number.NaN },
       { maxGlyphs: Number.NEGATIVE_INFINITY },
       { maxCachedFaces: 1.5 },
+      { maxCachedFontBytes: 0 },
+      { maxCachedFontBytes: 0.5 },
+      { maxCachedFontBytes: 64 * 1024 * 1024 + 1 },
       { maxCachedShapes: Number.MAX_SAFE_INTEGER },
       { maxGlyphs: Number.MAX_SAFE_INTEGER },
       { maxOutlineBytes: Number.MAX_SAFE_INTEGER },
@@ -615,6 +618,46 @@ describe('HarfBuzz production shaper', () => {
       { kind: 'created', identity: bold.identity },
     ]);
     bounded.dispose();
+  });
+
+  test('font byte budget evicts even below the face-count limit without changing shaping', () => {
+    const events: HarfBuzzFaceCacheEvent[] = [];
+    const bounded = createHarfBuzzTextShaper({
+      maxCachedFaces: 32,
+      maxCachedFontBytes: regular.byteLength + bold.byteLength - 1,
+      instrumentation: { onFaceCacheEvent: (event) => events.push(event) },
+    });
+    const reference = createHarfBuzzTextShaper();
+    try {
+      for (const [text, font] of [
+        ['A', regular],
+        ['B', bold],
+        ['C', regular],
+      ] as const)
+        expect(bounded.shape(input(text, font))).toEqual(reference.shape(input(text, font)));
+      expect(events.filter((e) => e.kind === 'evicted').map((e) => e.identity)).toEqual([
+        regular.identity,
+        bold.identity,
+      ]);
+    } finally {
+      bounded.dispose();
+      reference.dispose();
+    }
+  });
+
+  test('a font larger than retention budget still shapes without being cached', () => {
+    const events: HarfBuzzFaceCacheEvent[] = [];
+    const bounded = createHarfBuzzTextShaper({
+      maxCachedFontBytes: 1,
+      instrumentation: { onFaceCacheEvent: (event) => events.push(event) },
+    });
+    try {
+      expect(bounded.shape(input('A', regular)).glyphs.length).toBeGreaterThan(0);
+      expect(bounded.shape(input('B', regular)).glyphs.length).toBeGreaterThan(0);
+      expect(events.map((e) => e.kind)).toEqual(['created', 'created']);
+    } finally {
+      bounded.dispose();
+    }
   });
 
   test('releases owned HarfBuzz references and rejects use after disposal', () => {

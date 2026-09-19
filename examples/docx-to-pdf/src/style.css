@@ -1,0 +1,147 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #202a35;
+  background: #f1f3f5;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+}
+.controls {
+  padding: 36px 28px;
+  background: white;
+  border-right: 1px solid #d9dfe5;
+}
+.brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #506371;
+}
+h1 {
+  font-size: 32px;
+  letter-spacing: -0.04em;
+  margin: 18px 0;
+}
+p {
+  line-height: 1.6;
+  color: #596574;
+  font-size: 14px;
+}
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 22px 0 12px;
+}
+input[type='file'] {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  font: inherit;
+  font-size: 12px;
+}
+select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #cbd3da;
+  border-radius: 7px;
+  background: white;
+  font: inherit;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 400;
+}
+.check input {
+  accent-color: #253e53;
+}
+button,
+.download {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #253e53;
+  border-radius: 8px;
+  background: #253e53;
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 10px 0;
+  text-align: center;
+  text-decoration: none;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.secondary {
+  background: white;
+  color: #253e53;
+  border-color: #d4dce3;
+}
+.hint {
+  font-size: 12px;
+}
+.filename {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.error {
+  color: #a62c23;
+}
+.preview {
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  min-height: 80vh;
+}
+.preview iframe {
+  width: 100%;
+  height: calc(100vh - 48px);
+  border: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px #17212b12;
+}
+details {
+  font-size: 12px;
+  margin: 20px 0;
+}
+details li {
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #78a6cc;
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    border-right: 0;
+    border-bottom: 1px solid #d9dfe5;
+  }
+  .preview iframe {
+    height: 75vh;
+  }
+}

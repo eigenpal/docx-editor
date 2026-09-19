@@ -1,18 +1,12 @@
+import { load, layoutContext, squareAnchorAtLeft } from './anchored-drawing-test-fixtures.ts';
 // Task 9 integration — wrap reflow, header flow-height rule, incremental differential.
 
 import { describe, expect, test } from 'bun:test';
 import {
   WML_NAMESPACE_URI,
-  readOoxmlPart,
   type OoxmlNode,
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
-import {
-  DEFAULT_DRAWING_PROJECTION_LIMITS,
-  indexInlineDrawingProjectionsInPart,
-  projectDrawing,
-} from '../../store/package/drawing-projection.ts';
-import type { ImageResourceState } from '../../store/package/image-resources.ts';
 import { emuToPoints } from '../drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import {
@@ -46,44 +40,8 @@ const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
 const measurer = createFixedMeasurer(6, 14);
-const OWNER = '/word/document.xml';
 /** Default US-Letter content column these fixtures lay out into. */
 const CONTENT_WIDTH_PT = 468;
-
-const READY: ImageResourceState = Object.freeze({
-  kind: 'ready',
-  partName: '/word/media/image1.png',
-  contentId: 'image1',
-  resourceKey: 'k1',
-  mime: 'image/png',
-  pixelWidth: 100,
-  pixelHeight: 100,
-  dpiX: 96,
-  dpiY: 96,
-});
-
-function load(xml: string, owner = OWNER): OoxmlPart {
-  const result = readOoxmlPart(xml, {
-    name: owner,
-    contentType: owner.includes('header')
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml'
-      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-  });
-  if (!result.ok) throw new Error(result.reason);
-  return result.part;
-}
-
-function layoutContext(part: OoxmlPart, owner = OWNER): InlineDrawingLayoutContext {
-  const atomProjections = indexInlineDrawingProjectionsInPart(part);
-  return {
-    ownerPartName: owner,
-    projectionForAtom: (atomId) => atomProjections.get(atomId) ?? null,
-    project: (node) =>
-      atomProjections.get(node.id) ??
-      projectDrawing(node, { ownerPartName: owner, limits: DEFAULT_DRAWING_PROJECTION_LIMITS }),
-    resourceOf: () => READY,
-  };
-}
 
 /** Transaction-shaped insertion: keeps the anchor paragraph/node ids used by exclusion order. */
 function withLeadingParagraph(part: OoxmlPart, paragraph: OoxmlNode): OoxmlPart {
@@ -106,30 +64,6 @@ function firstParagraph(part: OoxmlPart): OoxmlNode {
     if (node.kind !== 'textValue') queue.push(...node.children);
   }
   throw new Error('missing paragraph');
-}
-
-function squareAnchorAtLeft(options: {
-  readonly text: string;
-  readonly behindDoc?: string;
-}): string {
-  const words = options.text;
-  return (
-    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
-    '<w:body>' +
-    '<w:p><w:r><w:drawing>' +
-    `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="${options.behindDoc ?? '0'}" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">` +
-    '<wp:simplePos x="0" y="0"/>' +
-    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
-    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
-    '<wp:extent cx="1828800" cy="914400"/>' +
-    '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
-    '<wp:docPr id="1" name="pic"/>' +
-    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
-    '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
-    '</wp:anchor></w:drawing></w:r>' +
-    `<w:r><w:t>${words}</w:t></w:r></w:p>` +
-    '</w:body></w:document>'
-  );
 }
 
 function fixedCollisionAnchorParagraph(name: string, docPrId: number, mcWrapped = false): string {
@@ -282,6 +216,30 @@ describe('topAndBottom anchored in the paragraph it displaces', () => {
     // painted the picture over them.
     expect(banded.lines[0]!.box.y).toBeGreaterThanOrEqual(bandBottom - 0.001);
   });
+});
+
+test('a standalone top-and-bottom anchor keeps its image origin while its paragraph mark clears below', () => {
+  const xml = squareAnchorAtLeft({ text: '' })
+    .replace(
+      '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>',
+      '<wp:wrapTopAndBottom/>'
+    )
+    .replace('</w:body>', '<w:p><w:r><w:t>After image</w:t></w:r></w:p></w:body>');
+  const part = load(xml);
+  const options = { measurer, inlineDrawingLayout: layoutContext(part) };
+  const cold = layoutSemanticDocument(part, 0, options);
+  const page = cold.pages[0]!;
+  const [anchor, after] = [...paragraphFragmentsOf(page)];
+  const drawing = page.anchoredDrawings![0]!;
+  expect(drawing.y).toBe(0);
+  expect(anchor!.lines[0]!.box.y).toBe(72);
+  expect(after!.lines[0]!.box.y).toBeCloseTo(72 + anchor!.lines[0]!.box.height, 6);
+  const session = createLayoutSession(),
+    cache = createParagraphLayoutCache<readonly PendingLine[]>();
+  for (let revision = 0; revision < 2; revision++)
+    expect(layoutSemanticDocument(part, revision, { ...options, session, cache }).pages).toEqual(
+      cold.pages
+    );
 });
 
 describe('header page-relative anchor does not size HF box (OpenSpec 4.7)', () => {
@@ -738,5 +696,266 @@ describe('a table clear of a float does not inherit its wrap band', () => {
     // break through a cache keyed on zone geometry alone.
     expect(shape(floated)).toEqual(shape(plain));
     expect(floated.box.height).toBeCloseTo(plain.box.height, 3);
+  });
+});
+
+describe('header and footer drawing exclusions in body flow', () => {
+  const geometry: PageGeometry = {
+    width: 240,
+    height: 220,
+    margin: { top: 50, right: 20, bottom: 50, left: 20 },
+    headerDistance: 10,
+    footerDistance: 10,
+  };
+  function furnitureStory(
+    kind: 'header' | 'footer',
+    width = 200,
+    top = 40,
+    behind = false,
+    height = 60
+  ) {
+    const owner = `/word/${kind}1.xml`;
+    const tag = kind === 'header' ? 'hdr' : 'ftr';
+    const xml = squareAnchorAtLeft({ text: '', behindDoc: behind ? '1' : '0' })
+      .replace('<w:document ', `<w:${tag} `)
+      .replace('<w:body>', '')
+      .replace('</w:body></w:document>', `</w:${tag}>`)
+      .replace('relativeFrom="column"><wp:posOffset>0', 'relativeFrom="page"><wp:posOffset>254000')
+      .replace(
+        'relativeFrom="paragraph"><wp:posOffset>0',
+        `relativeFrom="page"><wp:posOffset>${top * 12700}`
+      )
+      .replaceAll('cx="1828800"', `cx="${width * 12700}"`)
+      .replaceAll('cy="914400"', `cy="${height * 12700}"`);
+    const part = load(xml, owner);
+    return layoutHeaderFooterStory(
+      part,
+      200,
+      measurer,
+      'furniture-wrap-test',
+      undefined,
+      undefined,
+      undefined,
+      128,
+      undefined,
+      undefined,
+      layoutContext(part, owner),
+      undefined,
+      undefined,
+      {
+        pageNumber: 1,
+        pageWidth: 240,
+        pageHeight: 220,
+        marginLeft: 20,
+        marginRight: 20,
+        marginTop: 50,
+        marginBottom: 50,
+      }
+    );
+  }
+  const body = (content: string) =>
+    load(`<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body>${content}</w:body></w:document>`);
+  const paragraph = (text: string, props = '') =>
+    `<w:p><w:pPr><w:spacing w:after="0"/>${props}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  function render(
+    source: OoxmlPart,
+    kind: 'header' | 'footer',
+    story: ReturnType<typeof furnitureStory>,
+    titlePage = false
+  ) {
+    const furniture = {
+      titlePage,
+      evenAndOddHeaders: false,
+      headers: new Map(kind === 'header' ? [['default' as const, story]] : []),
+      footers: new Map(kind === 'footer' ? [['default' as const, story]] : []),
+    };
+    const options = { measurer, geometry, furniture };
+    const session = createLayoutSession(),
+      cache = createParagraphLayoutCache<readonly PendingLine[]>();
+    const cold = layoutSemanticDocument(source, 0, options);
+    for (let revision = 0; revision < 2; revision++)
+      expect(
+        layoutSemanticDocument(source, revision, { ...options, session, cache }).pages
+      ).toEqual(cold.pages);
+    return cold;
+  }
+  test('a wrapping banner clears body text without enlarging the header or content inset', () => {
+    const story = furnitureStory('header');
+    const layout = render(body(paragraph('Body')), 'header', story);
+    const page = layout.pages[0]!;
+    expect(page.contentBox.y).toBe(50);
+    expect(page.header!.box.height).toBeCloseTo(story.flowHeight, 6);
+    expect(paragraphFragmentsOf(page)[0]!.lines[0]!.box.y).toBe(50);
+  });
+  test('a partial-width header float wraps body text horizontally', () => {
+    const layout = render(body(paragraph('Body')), 'header', furnitureStory('header', 80));
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.box.y).toBe(0);
+    expect(line.spans[0]!.box.x).toBe(80);
+  });
+  test('a rectangular float crossing only the lower part of a line still reserves its width', () => {
+    const layout = render(
+      body(paragraph('Body text')),
+      'header',
+      furnitureStory('header', 80, 58, false, 10)
+    );
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.box.y).toBe(0);
+    expect(line.box.height).toBeGreaterThan(8);
+    expect(line.spans[0]!.box.x).toBe(80);
+  });
+  test('a rectangular float starting below the line does not narrow it', () => {
+    const layout = render(
+      body(paragraph('Body text')),
+      'header',
+      furnitureStory('header', 80, 70, false, 10)
+    );
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.box.y + line.box.height).toBeLessThanOrEqual(20);
+    expect(line.spans[0]!.box.x).toBe(0);
+  });
+  test('a rectangle touching the line bottom does not count as a collision', () => {
+    const layout = render(
+      body(
+        '<w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr><w:r><w:t>Body</w:t></w:r></w:p>'
+      ),
+      'header',
+      furnitureStory('header', 80, 64, false, 10)
+    );
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.box.height).toBe(14);
+    expect(line.spans[0]!.box.x).toBe(0);
+  });
+  test('a taller run cannot pull earlier text through a rectangular float', () => {
+    const source = body(
+      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>B</w:t></w:r></w:p>'
+    );
+    const story = furnitureStory('header', 80, 66, false, 10);
+    const layout = layoutSemanticDocument(source, 0, {
+      geometry,
+      measurer: {
+        measure: (text) => text.length * 6,
+        lineMetrics: (style) => ({ height: style.fontSizePt, baseline: style.fontSizePt * 0.8 }),
+      },
+      furniture: {
+        titlePage: false,
+        evenAndOddHeaders: false,
+        headers: new Map([['default', story]]),
+        footers: new Map(),
+      },
+    });
+    const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+    expect(lines).toHaveLength(1);
+    for (const line of lines) {
+      if (line.box.y < 26 && line.box.y + line.box.height > 16)
+        for (const span of line.spans) expect(span.box.x).toBeGreaterThanOrEqual(80);
+    }
+  });
+  test('a taller run that needs a new line leaves earlier text at its original position', () => {
+    const source = body(
+      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>BBBBBBBBBBBBBBBBBBB</w:t></w:r></w:p>'
+    );
+    const story = furnitureStory('header', 80, 66, false, 10);
+    const layout = layoutSemanticDocument(source, 0, {
+      geometry,
+      measurer: {
+        measure: (text) => text.length * 6,
+        lineMetrics: (style) => ({ height: style.fontSizePt, baseline: style.fontSizePt * 0.8 }),
+      },
+      furniture: {
+        titlePage: false,
+        evenAndOddHeaders: false,
+        headers: new Map([['default', story]]),
+        footers: new Map(),
+      },
+    });
+    const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.spans[0]!.box.x).toBe(0);
+    for (const line of lines) {
+      if (line.box.y < 26 && line.box.y + line.box.height > 16)
+        for (const span of line.spans) expect(span.box.x).toBeGreaterThanOrEqual(80);
+    }
+  });
+  test('a behind-text watermark leaves body placement unchanged', () => {
+    const layout = render(
+      body(paragraph('Body')),
+      'header',
+      furnitureStory('header', 200, 40, true)
+    );
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.box.y).toBe(0);
+  });
+  test('a wrapping footer pushes overflowing body lines onto following pages', () => {
+    const text = 'Body text '.repeat(100);
+    const layout = render(
+      body(paragraph(text, '<w:widowControl w:val="0"/>')),
+      'footer',
+      furnitureStory('footer', 200, 150)
+    );
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const lines = layout.pages.flatMap((page) =>
+      [...paragraphFragmentsOf(page)].flatMap((p) => p.lines)
+    );
+    expect(lines.map((l) => l.spans.map((s) => s.text).join('')).join('')).toBe(text);
+    for (const line of lines) expect(line.box.y + line.box.height).toBeLessThanOrEqual(100.001);
+  });
+  test('a partial-width header float also wraps body table cells', () => {
+    const table =
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+      '<w:tcPr><w:tcMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>' +
+      paragraph('Body') +
+      '</w:tc></w:tr></w:tbl>';
+    const layout = render(body(table), 'header', furnitureStory('header', 80));
+    const fragment = layout.pages[0]!.fragments.find((f) => f.kind === 'table')!;
+    const cellParagraph = fragment.rows[0]!.cells[0]!.blocks[0]!;
+    expect(cellParagraph.kind).toBe('paragraph');
+    if (cellParagraph.kind !== 'paragraph') throw new Error('expected paragraph');
+    expect(cellParagraph.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
+  });
+  test('new tail pages receive their footer exclusion immediately in a long document', () => {
+    const text = 'Body text '.repeat(1200);
+    const layout = render(
+      body(paragraph(text, '<w:widowControl w:val="0"/>')),
+      'footer',
+      furnitureStory('footer', 200, 150)
+    );
+    expect(layout.pages.length).toBeGreaterThan(32);
+    for (const page of layout.pages) {
+      const lines = [...paragraphFragmentsOf(page)].flatMap((p) => p.lines);
+      expect(lines[0]!.box.y).toBe(0);
+      for (const line of lines) expect(line.box.y + line.box.height).toBeLessThanOrEqual(100.001);
+    }
+  });
+  test('a wrapping banner applies in both columns after an explicit column break', () => {
+    const source = body(
+      paragraph('First') +
+        '<w:p><w:r><w:br w:type="column"/></w:r></w:p>' +
+        paragraph('Second') +
+        '<w:sectPr><w:cols w:num="2" w:space="200"/></w:sectPr>'
+    );
+    const layout = render(source, 'header', furnitureStory('header'));
+    const lines = layout.pages.flatMap((page) =>
+      [...paragraphFragmentsOf(page)].flatMap((p) => p.lines)
+    );
+    for (const text of ['First', 'Second']) {
+      const line = lines.find((line) => line.spans.some((span) => span.text === text))!;
+      expect(line.box.y).toBeGreaterThanOrEqual(50);
+    }
+    expect(lines.find((line) => line.spans.some((span) => span.text === 'Second'))!.box.x).toBe(
+      105
+    );
+  });
+  test('a wrapping object covering every body page fails with a bounded diagnostic', () => {
+    expect(() =>
+      render(body(paragraph('Body')), 'header', furnitureStory('header', 200, 0, false, 240))
+    ).toThrow('wrapping page furniture leaves no room for body content');
+  });
+  test('an absent first-page variant contributes no body exclusion', () => {
+    const content = paragraph('First') + paragraph('Second', '<w:pageBreakBefore/>');
+    const layout = render(body(content), 'header', furnitureStory('header'), true);
+    expect(layout.pages).toHaveLength(2);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.box.y).toBe(0);
+    expect(paragraphFragmentsOf(layout.pages[1]!)[0]!.lines[0]!.box.y).toBe(50);
   });
 });

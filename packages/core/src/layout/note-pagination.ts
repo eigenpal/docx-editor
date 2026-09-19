@@ -1297,6 +1297,7 @@ function buildFootnoteArea(
       fragments: separator.fragments,
       synthetic: separator.synthetic,
       ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+      ...(separator.ruleColor !== undefined ? { ruleColor: separator.ruleColor } : {}),
     },
     notes: placedNotes,
   };
@@ -1824,6 +1825,7 @@ function buildEndnoteArea(
         fragments: separator.fragments,
         synthetic: separator.synthetic,
         ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+        ...(separator.ruleColor !== undefined ? { ruleColor: separator.ruleColor } : {}),
       },
       notes: placedNotes,
     },

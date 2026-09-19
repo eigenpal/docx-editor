@@ -148,6 +148,7 @@ export interface ExportLaidOutText {
     readonly fixedPointScale: number;
     // (undocumented)
     readonly font: ExportAdmittedFontIdentity;
+    readonly fonts?: readonly ExportAdmittedFontIdentity[];
     // (undocumented)
     readonly run: ShapedRun;
 }
@@ -271,6 +272,7 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumen
     readonly fontPolicy?: 'best-effort' | 'strict';
     readonly fontResolutionTimeoutMs?: number;
     readonly fonts: FontOrigin | readonly FontOrigin[];
+    readonly glyphFallbacks?: readonly FontRequest[];
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
     readonly reuseAcrossRevisions?: false;
 }

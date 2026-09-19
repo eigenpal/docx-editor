@@ -36,23 +36,37 @@ const EMPTY_TOC_FIELD =
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
 
 describe('TOC field chrome layout', () => {
-  test('begin and end chrome paragraphs reserve no vertical flow', () => {
+  test('an opening separator preserves its blank result line while ending chrome stays suppressed', () => {
     const part = load(`<w:sdt><w:sdtPr/><w:sdtContent>${TOC_FIELD}</w:sdtContent></w:sdt>`);
     const toc = detectBodyTocs(part)[0]!;
     const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
     const fragments = layout.pages.flatMap((page) => paragraphFragmentsOf(page));
-    expect(
-      fragments.find((fragment) => fragment.paragraphId === toc.beginParagraphId)
-    ).toBeUndefined();
+    const opening = fragments.find((fragment) => fragment.paragraphId === toc.beginParagraphId)!;
+    expect(opening).toBeDefined();
+    expect(opening.box.height).toBeGreaterThan(0);
     expect(
       fragments.find((fragment) => fragment.paragraphId === toc.endParagraphId)
     ).toBeUndefined();
     const entry = fragments.find((fragment) => fragment.paragraphId === toc.resultParagraphIds[0]);
     expect(entry).toBeDefined();
-    expect(entry!.box.y).toBe(0);
+    expect(entry!.box.y).toBe(opening.box.y + opening.box.height);
     expect(entry!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
       'Introduction'
     );
+  });
+
+  test('instruction-only opening stays suppressed when the separator starts the first entry', () => {
+    const field = TOC_FIELD.replace('<w:fldChar w:fldCharType="separate"/>', '').replace(
+      '<w:t>Introduction</w:t>',
+      '<w:fldChar w:fldCharType="separate"/><w:t>Introduction</w:t>'
+    );
+    const part = load(field);
+    const toc = detectBodyTocs(part)[0]!;
+    const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
+    const fragments = layout.pages.flatMap((page) => paragraphFragmentsOf(page));
+    expect(fragments.some((fragment) => fragment.paragraphId === toc.beginParagraphId)).toBe(false);
+    const entry = fragments.find((fragment) => fragment.paragraphId === toc.resultParagraphIds[0])!;
+    expect(entry.box.y).toBe(0);
   });
 
   test('empty TOC keeps one begin-paragraph placeholder line', () => {
@@ -69,7 +83,7 @@ describe('TOC field chrome layout', () => {
     ).toBeUndefined();
   });
 
-  test('replaceTocResult still leaves the first entry flush with the block top', () => {
+  test('replaceTocResult keeps an entry sharing the opening paragraph flush with the block top', () => {
     const stale =
       '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC </w:instrText><w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
       '<w:p></w:p>' +
@@ -103,6 +117,7 @@ describe('TOC field chrome layout', () => {
     const entry = fragments.find(
       (fragment) => fragment.paragraphId === tocAfter.resultParagraphIds[0]
     );
+    expect(tocAfter.resultParagraphIds[0]).toBe(tocAfter.beginParagraphId);
     expect(entry!.box.y).toBe(0);
     expect(entry!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
       'Fresh entry'

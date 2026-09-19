@@ -1,26 +1,10 @@
 import { tocLinkCascader } from './toc-link-formatting.ts';
 import { displayFieldCodes } from './field-code-display.ts';
-// Safe PAGE / NUMPAGES / SECTIONPAGES field projection for read-only page furniture.
-//
-// Field instructions are attacker-controlled and MUST NEVER execute. Recognition of
-// allowlisted instructions and the shared complex-field scan machine live in
-// `field-instruction.ts`. This module projects those fields into measurable pieces and
-// finalizes furniture once document page counts are known.
-//
-// Well-formed computed fields and `w:fldSimple` each contribute one UTF-16 model unit
-// (aligned with `paragraphTextOf` / `segmentsOf`). FORMTEXT results instead keep their literal
-// character offsets because they are user input. Malformed fields demote so content remains.
-//
-// Simple and complex PAGE-family fields evaluate alike when a page context is supplied
-// (headers/footers): the live value paints from that context. In the BODY there is no page
-// context — the value depends on a pagination that has not happened yet — so a page field with
-// no cached result paints a placeholder digit and records its kind on the span's field-atom
-// marker; `substituteBodyPageFields` fills the real value once the page count is known. A
-// non-page field paints its cached result, with allowlisted page fields nested inside that
-// result (complex or simple) evaluated per sheet rather than concatenated from the saved cache.
-// Other nested field instructions stay inert.
-//
-// Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
+// Project allowlisted field instructions into layout; never execute authored instructions.
+// Computed fields occupy one model unit. FORMTEXT preserves literal offsets; malformed fields demote.
+// Header/footer page fields use their page context. Body page fields publish placeholders for pagination.
+// Cached non-page fields can contain live, allowlisted page fields; other nested instructions stay inert.
+// Projection happens before measurement, never as a paint-time replacement.
 
 import {
   hardBreakKind,
@@ -201,6 +185,7 @@ export function piecesOfParagraphForDisplay(
         projected: true,
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
+        ...(extras?.noteSeparator ? { noteSeparator: extras.noteSeparator } : {}),
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
         ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
         ...(extras?.equation ? { equation: extras.equation } : {}),
@@ -359,8 +344,7 @@ export function piecesOfParagraphForDisplay(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
-    // One branch for both run-level drawing atoms \u2014 `w:drawing` and an MC wrapper carrying
-    // one; the plan itself (visibility, deletion, payload) lives in field-drawing-atom.ts.
+    // Drawing visibility and payload selection live in field-drawing-atom.ts.
     if (isRunDrawingAtom(grand)) {
       const start = offset;
       offset += 1;
@@ -386,8 +370,7 @@ export function piecesOfParagraphForDisplay(
       offset = end;
       if (style.hidden) return;
       if (!projected) return;
-      // Empty display (customMarkFollows / separator / dangling) still advances the model
-      // unit; only non-empty marks emit a measurable projected piece.
+      // Empty projected displays still consume their canonical model unit.
       if (projected.text.length === 0 && !projected.measureText) return;
       const noteNav =
         projected.scopeId && projected.nav
@@ -403,8 +386,16 @@ export function piecesOfParagraphForDisplay(
         {
           ...(projected.measureText !== undefined ? { measureText: projected.measureText } : {}),
           ...(noteNav ? { noteNav } : {}),
+          ...(projected.noteSeparator ? { noteSeparator: projected.noteSeparator } : {}),
         }
       );
+      return;
+    }
+    // The preserved OOXML hyphen has no canonical text offset, like w:sym.
+    // Project its glyph before measurement without inventing an editable model character.
+    if (nonBreakingHyphenOf(grand)) {
+      if (!style.hidden && revisionsVisible(revisions, displayMode, authorFilter))
+        push('\u2011', props, style, true, offset, offset);
       return;
     }
     // A `w:ptab` advances the line but occupies NO model offset, so it is pushed with a
@@ -688,8 +679,9 @@ export function piecesOfParagraphForDisplay(
         // Editable field results can carry positional tabs. Preserve their layout
         // metadata while keeping their zero-width canonical model range.
         const positional = pending.atomic ? null : positionalTabOf(grand);
-        const text = positional ? '\t' : modelTextOfRunChild(grand);
-        const modelWidth = positional ? 0 : text.length;
+        const hyphen = nonBreakingHyphenOf(grand);
+        const text = positional ? '\t' : hyphen ? '\u2011' : modelTextOfRunChild(grand);
+        const modelWidth = positional || hyphen ? 0 : text.length;
         if (text.length === 0) continue;
 
         // A field can be tracked as a whole — Word writes a deleted hyperlink as `w:del`
@@ -782,6 +774,7 @@ export function piecesOfParagraphForDisplay(
           start: offset,
           end: offset + modelWidth,
           ...(positional ? { positionalTab: positional } : {}),
+          ...(hyphen ? { projected: true } : {}),
           ...attribution,
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
@@ -994,5 +987,14 @@ export function piecesOfParagraphForDisplay(
         )
       : pieces,
     themeFonts
+  );
+}
+
+/** Only the WordprocessingML element is a displayed nonbreaking hyphen. */
+function nonBreakingHyphenOf(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.localName === 'noBreakHyphen' &&
+    node.namespaceUri === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
   );
 }

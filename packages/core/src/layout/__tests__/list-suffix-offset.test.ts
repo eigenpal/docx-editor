@@ -3,7 +3,12 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import {
+  createFixedMeasurer,
+  createLayoutSession,
+  layoutSemanticDocument,
+} from '../semantic-layout.ts';
+import { nextTabDestination, paragraphTabStops, tabStopsFingerprint } from '../paragraph-tabs.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import {
   listFirstLineOffset,
@@ -45,6 +50,37 @@ const listParagraph = (text: string, numId: string, ilvl = '0') =>
 // 11pt run, so the level authors `w:sz="22"`; the 10pt terminal fallback (see
 // `DEFAULT_RUN_STYLE`) would make the `1.` marker 10.9pt wide instead of 12.
 const LEVEL_SZ = '<w:rPr><w:sz w:val="22"/></w:rPr>';
+
+test('a legacy list tab positions the first line without becoming an ordinary text tab', () => {
+  const body = listParagraph(Array(10).fill('aaaa').join(' '), '1').replace(
+    '</w:pPr>',
+    '<w:ind w:left="0" w:firstLine="720"/><w:tabs><w:tab w:val="num" w:pos="1080"/></w:tabs></w:pPr>'
+  );
+  const { item, part } = itemOf(body, flat('tab'));
+  const paragraph = part.root.children[0]!.children[0]!;
+  const tabs = paragraphTabStops(paragraph.children[0]);
+  expect(listFirstLineOffset(item, measurer, tabs)).toBe(54);
+  expect(nextTabDestination(tabs, 48, 175).positionPt).toBe(72);
+  expect(tabStopsFingerprint(tabs)).not.toBe(
+    tabStopsFingerprint({
+      ...tabs,
+      stops: [{ positionPt: 54, alignment: 'left' }],
+    })
+  );
+  const options = {
+    measurer,
+    session: createLayoutSession(),
+    listItems: new Map([[paragraph.id, item]]),
+    geometry: { width: 215, height: 400, margin: { top: 20, right: 20, bottom: 20, left: 20 } },
+  };
+  const result = layoutSemanticDocument(part, 1, options);
+  expect(layoutSemanticDocument(part, 1, options).pages).toEqual(result.pages);
+  const fragment = paragraphFragmentsOf(result.pages[0]!)[0]!;
+  expect(fragment.marker!.box.x).toBe(36);
+  expect(fragment.lines).toHaveLength(2);
+  expect(fragment.lines[0]!.spans[0]!.box.x).toBe(54);
+  expect(fragment.lines[1]!.spans[0]!.box.x).toBe(0);
+});
 
 /** One resolved item for the single list paragraph in `body`. */
 function itemOf(body: string, numberingXml: string): ResolvedItemAndPart {
@@ -186,4 +222,34 @@ describe('a marker wider than its hanging slot', () => {
     // 1200tw = 60pt, the first stop past the 54pt marker end.
     expect(fragment.lines[0]!.spans[0]!.box.x).toBe(60);
   });
+});
+
+test('right and centered markers align around the authored first-line position', () => {
+  for (const [indent, anchor, textStart] of [
+    ['w:hanging="360"', 18, 36],
+    ['w:firstLine="-360"', 18, 36],
+    ['w:firstLine="360"', 54, 72],
+  ] as const) {
+    for (const alignment of ['left', 'center', 'right'] as const) {
+      const xml = flat('tab')
+        .replace('<w:lvlJc w:val="left"/>', `<w:lvlJc w:val="${alignment}"/>`)
+        .replace('w:left="720"', `w:left="720" ${indent}`);
+      const { part, index } = itemOf(listParagraph('Aligned list text', '1'), xml);
+      const session = createLayoutSession();
+      const options = { measurer, numberingIndex: index, session };
+      for (let revision = 0; revision < 2; revision++) {
+        const layout = layoutSemanticDocument(part, revision, options);
+        expect(layout.pages).toEqual(
+          layoutSemanticDocument(part, revision, { measurer, numberingIndex: index }).pages
+        );
+        const paragraph = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+        const marker = paragraph.marker!;
+        expect(
+          marker.box.x +
+            marker.box.width * (alignment === 'right' ? 1 : alignment === 'center' ? 0.5 : 0)
+        ).toBe(anchor);
+        expect(paragraph.lines[0]!.spans[0]!.box.x).toBe(textStart);
+      }
+    }
+  }
 });

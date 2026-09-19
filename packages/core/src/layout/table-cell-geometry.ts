@@ -1,8 +1,8 @@
 // Cell-box geometry shared by row layout and fragment finalize: where a cell's content box
-// sits inside its border box, and which rules a mid-row page cut suppresses.
+// sits inside its border box on each page fragment.
 
 import { borderExtentPt, type CellBorderBox } from './table-borders.ts';
-import type { CellMarginsPt, SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
+import type { CellMarginsPt, SemanticTableCell } from './semantic-table.ts';
 
 /** Per-side content inset, including the applicable border clearance. */
 export interface CellContentInsets {
@@ -12,10 +12,30 @@ export interface CellContentInsets {
   readonly left: number;
 }
 
+export function borderContentInset(
+  margin: number,
+  edge: CellBorderBox['top'],
+  shared = false
+): number {
+  if (edge.state !== 'edge') return margin;
+  // Simple collapsed horizontal strokes extend halfway into each incident cell.
+  // Compound strokes can extend beyond the authored edge box into existing padding.
+  // Increase the inset only when that padding cannot clear the painted inner stroke.
+  // Word converts eighth-point border sizes to integral twips before reserving space.
+  // Odd eighths otherwise accumulate half a twip per row across a long table.
+  const widthPt = Math.floor(edge.widthPt * 20 + 1e-8) / 20;
+  const centered = shared && edge.style !== 'double' && edge.style !== 'triple';
+  return Math.max(
+    margin + widthPt * (shared ? 0.5 : 1),
+    borderExtentPt(edge) * (centered ? 0.5 : 1)
+  );
+}
+
 export function contentInsets(
   margins: CellMarginsPt,
   borders: SemanticTableCell['borders'],
-  legacyCollapsedContentAlignment = false
+  legacyCollapsedContentAlignment = false,
+  collapsedBorders = true
 ): CellContentInsets {
   const leftExtent = borderExtentPt(borders.left);
   const rightExtent = borderExtentPt(borders.right);
@@ -30,39 +50,12 @@ export function contentInsets(
     simpleRules &&
     margins.left >= leftExtent &&
     margins.right >= rightExtent;
+  // Collapsed horizontal rules are shared by adjacent rows. Each row reserves half
+  // the authored thickness; separated cells reserve an independent full border.
   return {
-    top: margins.top + borderExtentPt(borders.top),
-    right: margins.right + (marginCoversRules ? 0 : rightExtent),
-    bottom: margins.bottom + borderExtentPt(borders.bottom),
-    left: margins.left + (marginCoversRules ? 0 : leftExtent),
-  };
-}
-
-function suppressSplitBorders(
-  borders: CellBorderBox,
-  omitTop: boolean,
-  omitBottom: boolean
-): CellBorderBox {
-  return {
-    top: omitTop ? { state: 'none' } : borders.top,
-    left: borders.left,
-    bottom: omitBottom ? { state: 'none' } : borders.bottom,
-    right: borders.right,
-  };
-}
-
-/** Clone a structure row with top/bottom borders suppressed for mid-row page cuts. */
-export function rowWithSplitBorders(
-  row: SemanticTableRow,
-  omitTop: boolean,
-  omitBottom: boolean
-): SemanticTableRow {
-  if (!omitTop && !omitBottom) return row;
-  return {
-    ...row,
-    cells: row.cells.map((cell) => ({
-      ...cell,
-      borders: suppressSplitBorders(cell.borders, omitTop, omitBottom),
-    })),
+    top: borderContentInset(margins.top, borders.top, collapsedBorders),
+    right: marginCoversRules ? margins.right : borderContentInset(margins.right, borders.right),
+    bottom: borderContentInset(margins.bottom, borders.bottom, collapsedBorders),
+    left: marginCoversRules ? margins.left : borderContentInset(margins.left, borders.left),
   };
 }

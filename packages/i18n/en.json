@@ -916,5 +916,30 @@
     "lowercase": "Lowercase",
     "firstCapital": "First capital",
     "titleCase": "Title case"
+  },
+  "pdfDemo": {
+    "title": "DOCX to PDF",
+    "description": "Convert with the same layout engine as the editor. Text stays selectable. Comments remain native PDF annotations.",
+    "choose": "Choose a DOCX file",
+    "sample": "Use sample document",
+    "convert": "Convert to PDF",
+    "busy": "Converting…",
+    "cancel": "Cancel",
+    "download": "Download PDF",
+    "view": "Document view",
+    "proposed": "Final text",
+    "original": "Original text",
+    "markup": "All markup",
+    "comments": "Include native PDF comments",
+    "retry": "Export with these limitations",
+    "strict": "Strict export checks every requested feature. An unsupported feature stops conversion.",
+    "upload": "Documents are processed by this local server and are not stored.",
+    "empty": "Your PDF preview appears here.",
+    "preview": "PDF preview",
+    "failed": "Conversion failed.",
+    "limit": "Choose a DOCX smaller than 20 MiB.",
+    "aborted": "Conversion cancelled.",
+    "selected": "Selected file",
+    "diagnostics": "Export details"
   }
 }

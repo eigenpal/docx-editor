@@ -1,0 +1,30 @@
+---
+title: DOCX to PDF
+description: Use the private Node PDF exporter with positioned text and native PDF comments.
+category: Export formats
+---
+
+`@docx-editor.dev/docx-to-pdf` is a private workspace package under the EigenPal Pro License. It is not available from the public npm registry.
+
+The exporter uses Core's pagination, admitted fonts, and positioned glyphs. It does not run a browser or office application.
+
+```ts
+import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+const result = await exportPdf(docxBytes, {
+  displayMode: 'proposed',
+  comments: true,
+});
+```
+
+The default export shows proposed text and preserves comments as native PDF annotations. Set `comments: false` to omit comments. Select `displayMode: 'original'` or `'all-markup'` to change the revision projection without changing the DOCX.
+
+Strict export refuses requested content that the writer cannot reproduce. Use `fidelityPolicy: 'best-effort'` explicitly to receive available output with `result.diagnostics`.
+
+Font substitution follows Core's separate font policy. `result.fontResolution` identifies the admitted faces. Matching Core's layout does not certify identical Microsoft Word output.
+
+Run `bun run dev:pdf` in the repository to open the local upload and download demo. The demo processes uploads in a Node worker and does not retain files. Public hosting is not configured.
+
+See the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf) for supported content, resource limits, errors, and verification commands. The writer supports notes, equation geometry, tab leaders, and multilingual font fallback. Unsupported content includes textboxes, rotated table text, and advanced drawing effects.
+
+The PDF demo uses the same comprehensive sample as the editor. Run `bun run --filter @docx-editor.dev/docx-to-pdf compare:libreoffice` to generate a local comparison report. LibreOffice is a validation dependency, not the conversion engine.

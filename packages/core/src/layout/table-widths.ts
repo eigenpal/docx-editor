@@ -287,14 +287,10 @@ function applyWidthClaims(
  * it (see {@link applyWidthClaims}), and anything still unstated shares what the content
  * width has left. Columns never resolve to zero.
  *
- * Fit is then applied per 17.18.87. The table's total is measured against `w:tblW`, and
- * "if at any stage, the preferred width requested for the cells exceeds the preferred width
- * of the table, then each grid column is proportionally reduced in size to fit" — that
- * reduction belongs to BOTH layout algorithms, so a fixed table is still held to a stated
- * `w:tblW`. What is autofit-only is the PAGE clamp: 17.18.87 ends the autofit override chain
- * with "override the preferred table width until the table reaches the page width", and says
- * nothing of the sort for fixed. A fixed table with no `w:tblW` therefore renders past the
- * right margin, which is what Word does; an autofit table never exceeds the text column.
+ * A stated preferred width bounds the initial grid. The text column bounds an autofit
+ * table only when no positive table width is authored. A requested width may extend into
+ * the margins; clamping it to the text column changes both alignment and cell wrapping.
+ * The AutoFit content-growth limit does not shrink an already-authored wider table.
  *
  * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
  * table narrower than its stated percentage is stretched up to it as well as shrunk down.
@@ -362,7 +358,7 @@ export function resolveColumnWidthsPt(input: {
   const floor = columnCount * MIN_DERIVED_COLUMN_PT;
   const pageCap = input.layoutFixed || !hasPage ? Number.POSITIVE_INFINITY : available;
   const target = Math.max(
-    statedTableWidth > 0 ? Math.min(statedTableWidth, pageCap) : Math.min(total, pageCap),
+    statedTableWidth > 0 ? statedTableWidth : Math.min(total, pageCap),
     floor
   );
 

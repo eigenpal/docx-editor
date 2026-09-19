@@ -116,9 +116,18 @@ export function unplaceableParagraphFrameIds(
   const refused = new Set<string>();
   for (const page of pages) {
     const groups = new Set<string>();
+    const capsByAnchor = new Map<string, string>();
     for (const block of page.fragments) {
       if (block.kind !== 'paragraph' || !block.positionedFrame) continue;
       const frame = block.positionedFrame;
+      if (frame.dropCapLines !== undefined) {
+        const previous = capsByAnchor.get(frame.anchorId);
+        if (previous) {
+          groups.add(previous);
+          groups.add(frame.groupId);
+        }
+        capsByAnchor.set(frame.anchorId, frame.groupId);
+      }
       const blocking =
         frame.wrap !== 'around' ||
         (frame.box.x - frame.hSpace <= 0 &&
@@ -127,6 +136,8 @@ export function unplaceableParagraphFrameIds(
       const bottom = frame.box.y + frame.box.height + frame.vSpace;
       if (
         allFrames ||
+        (frame.dropCapLines !== undefined &&
+          (!frame.anchorId || bottom > page.contentBox.height + 0.001)) ||
         (blocking &&
           bottom > 0 &&
           top < page.contentBox.height &&

@@ -916,5 +916,30 @@
     "lowercase": null,
     "firstCapital": null,
     "titleCase": null
+  },
+  "pdfDemo": {
+    "aborted": null,
+    "busy": null,
+    "cancel": null,
+    "choose": null,
+    "comments": null,
+    "convert": null,
+    "description": null,
+    "diagnostics": null,
+    "download": null,
+    "empty": null,
+    "failed": null,
+    "limit": null,
+    "markup": null,
+    "original": null,
+    "preview": null,
+    "proposed": null,
+    "retry": null,
+    "sample": null,
+    "selected": null,
+    "strict": null,
+    "title": null,
+    "upload": null,
+    "view": null
   }
 }

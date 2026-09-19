@@ -127,3 +127,6 @@ packages/editor-api/compat/reports/
 
 # Scratch bundles the adapter build tests write beside the package
 packages/*/.test-dist-*/
+
+# Local PDF exporter rendering checks.
+.cache/pdf/

@@ -107,6 +107,7 @@ describe('shared paragraph break dependencies', () => {
       { ...placement, columnIndex: 3 },
       { ...placement, exclusionToken: 'other' },
       { ...placement, startOffset: 8 },
+      { ...placement, anchorParagraphStartY: -2 },
     ])
       expect(bodyParagraphBreakKey('base', changed)).not.toBe(
         bodyParagraphBreakKey('base', placement)

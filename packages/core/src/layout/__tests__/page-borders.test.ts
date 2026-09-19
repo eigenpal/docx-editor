@@ -320,8 +320,9 @@ describe('w:pgBorders — paint', () => {
 
     const dbl = painted(docBody(allSides('w:val="double" w:sz="24" w:space="24"')));
     const doubleTop = dbl.querySelector('.docx-page-border-top') as HTMLElement;
-    expect(doubleTop.style.borderTop).not.toBe('');
-    expect(doubleTop.style.borderBottom).not.toBe('');
+    expect(doubleTop.style.borderTop).toBe('');
+    expect(doubleTop.style.borderBottom).toBe('');
+    expect(doubleTop.style.backgroundImage).toContain('linear-gradient(to bottom');
     expect(doubleTop.style.backgroundColor).toBe('transparent');
   });
 

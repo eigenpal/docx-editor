@@ -46,6 +46,10 @@ import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import {
+  strictTableStyleHierarchy,
+  legacyTableDefaultProperties,
+} from './table-style-compatibility.ts';
+import {
   findParagraphProperties,
   findRunProperties,
   isElement,
@@ -72,6 +76,8 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
+  readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
@@ -176,15 +182,19 @@ function conditionalTableFingerprint(
 export interface CascadedTableFormatting {
   readonly tablePropertyNodes: readonly OoxmlElement[];
   readonly tableRowPropertyNodes: readonly OoxmlElement[];
+  readonly tableCellPropertyNodes?: readonly OoxmlElement[];
   readonly paragraphPropertyNodes: readonly OoxmlElement[];
   readonly paragraphProperties: readonly OoxmlProperty[];
   readonly runProperties: readonly OoxmlProperty[];
   readonly conditional: ReadonlyMap<string, OoxmlElement>;
+  /** Base-first source layers preserve inherited conditional properties omitted by derived styles. */
+  readonly conditionalStyleLayers?: ReadonlyMap<string, readonly OoxmlElement[]>;
 }
 
 export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
   tablePropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   tableRowPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  tableCellPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphProperties: Object.freeze([]) as readonly OoxmlProperty[],
   runProperties: Object.freeze([]) as readonly OoxmlProperty[],
@@ -252,18 +262,25 @@ function flattenTableStyleChain(
   if (chain.length === 0) return null;
   const tablePropertyNodes: OoxmlElement[] = [];
   const tableRowPropertyNodes: OoxmlElement[] = [];
+  const tableCellPropertyNodes: OoxmlElement[] = [];
   const paragraphPropertyNodes: OoxmlElement[] = [];
   const paragraphProperties: OoxmlProperty[] = [];
   const runProperties: OoxmlProperty[] = [];
   const conditional = new Map<string, OoxmlElement>();
+  const conditionalStyleLayers = new Map<string, readonly OoxmlElement[]>();
   for (const style of chain) {
     if (style.tablePropertiesNode) tablePropertyNodes.push(style.tablePropertiesNode);
     if (style.tableRowPropertiesNode) tableRowPropertyNodes.push(style.tableRowPropertiesNode);
+    if (style.tableCellPropertiesNode) tableCellPropertyNodes.push(style.tableCellPropertiesNode);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
     paragraphProperties.push(...style.paragraphProperties);
     runProperties.push(...style.runProperties);
     for (const [conditionType, node] of style.conditionalTableFormats) {
       conditional.set(conditionType, node);
+      conditionalStyleLayers.set(
+        conditionType,
+        Object.freeze([...(conditionalStyleLayers.get(conditionType) ?? []), node])
+      );
     }
   }
   // Immutable because it is now SHARED by every table that names this style — and with the
@@ -277,10 +294,12 @@ function flattenTableStyleChain(
   return Object.freeze({
     tablePropertyNodes: Object.freeze(tablePropertyNodes) as readonly OoxmlElement[],
     tableRowPropertyNodes: Object.freeze(tableRowPropertyNodes) as readonly OoxmlElement[],
+    tableCellPropertyNodes: Object.freeze(tableCellPropertyNodes) as readonly OoxmlElement[],
     paragraphPropertyNodes: Object.freeze(paragraphPropertyNodes) as readonly OoxmlElement[],
     paragraphProperties: Object.freeze(paragraphProperties) as readonly OoxmlProperty[],
     runProperties: Object.freeze(runProperties) as readonly OoxmlProperty[],
     conditional: readonlyMapView(conditional),
+    conditionalStyleLayers: readonlyMapView(conditionalStyleLayers),
   });
 }
 
@@ -413,13 +432,15 @@ export function buildStyleCascadeTable(
   settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
   const typography = cjkTypographyFromSettings(settingsRoot);
+  const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
-      cacheToken: stableHash({ empty: true, theme, typography }),
+      cacheToken: stableHash({ empty: true, theme, typography, strictTableHierarchy }),
+      strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: [],
       docDefaultsParagraph: [],
@@ -460,6 +481,7 @@ export function buildStyleCascadeTable(
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
+    strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
     dP: propertiesFingerprint(defaults.paragraph),
@@ -481,12 +503,14 @@ export function buildStyleCascadeTable(
       // the document table node, so all three table-style layers belong in the producer.
       tPr: styleNodeFingerprint(style.tablePropertiesNode),
       trPr: styleNodeFingerprint(style.tableRowPropertiesNode),
+      tcPr: styleNodeFingerprint(style.tableCellPropertiesNode),
       tblStylePr: conditionalTableFingerprint(style),
     })),
   });
 
   return {
     cacheToken,
+    strictTableStyleHierarchy: strictTableHierarchy,
     typography,
     docDefaultsRun: defaults.run,
     docDefaultsParagraph: defaults.paragraph,
@@ -570,12 +594,21 @@ function cascadeParagraphWithNumbering(
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
   const directNumbering = directProps.some((property) => property.localName === 'numPr');
+  const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
+    tableCellStyle &&
+    !table.strictTableStyleHierarchy &&
+    style.styleId === table.defaultParagraphStyleId
+      ? legacyTableDefaultProperties(properties, [
+          ...table.docDefaultsRun,
+          ...tableCellStyle.runProperties,
+        ])
+      : properties;
 
   const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
     ...(!directNumbering ? propertiesOf(numberingPPr) : []),
-    ...chain.flatMap((style) => style.paragraphProperties),
+    ...chain.flatMap((style) => styleProperties(style, style.paragraphProperties)),
     ...(directNumbering ? propertiesOf(numberingPPr) : []),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
@@ -605,7 +638,11 @@ function cascadeParagraphWithNumbering(
   const runProperties = combineStyleToggles([
     { properties: table.docDefaultsRun, role: 'defaults', emit: true },
     { properties: tableCellStyle?.runProperties ?? [], role: 'xor', emit: true },
-    { properties: chain.flatMap((style) => style.runProperties), role: 'xor', emit: true },
+    {
+      properties: chain.flatMap((style) => styleProperties(style, style.runProperties)),
+      role: 'xor',
+      emit: true,
+    },
   ]);
   // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top, and that
   // `w:rPr` is DIRECT formatting for the mark — absolute, either way it is stated.

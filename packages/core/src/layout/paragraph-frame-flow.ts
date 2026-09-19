@@ -1,3 +1,4 @@
+import { alignDropCap } from './paragraph-drop-cap.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
@@ -6,7 +7,7 @@ import {
   type ParagraphFrameOrigins,
 } from './paragraph-frame.ts';
 import { fragmentSignature } from './semantic-fragment-signature.ts';
-import type { ParagraphFragmentRecord } from './semantic-records.ts';
+import type { LineRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 export interface PendingParagraphFrame {
   readonly frame: ParagraphFrame;
@@ -112,10 +113,26 @@ export class ParagraphFrameFlow {
     };
   }
 
+  /** Reserve the cap's full occupied line band before placing its anchor paragraph. */
+  requiredAnchorBand(
+    lines: readonly { readonly height: number; readonly exclusionSkipBefore?: number }[]
+  ): number {
+    let count = 0;
+    for (let node = this.pending; node; node = node.previous)
+      count = Math.max(count, node.item.frame.dropCapLines ?? 0);
+    let height = 0;
+    for (let index = 0; index < count; index++) {
+      const line = lines[Math.min(index, lines.length - 1)];
+      height += (line?.height ?? 0) + (line?.exclusionSkipBefore ?? 0);
+    }
+    return height;
+  }
+
   publish(
     origins: ParagraphFrameOrigins,
     anchorId: string,
-    columnIndex: number
+    columnIndex: number,
+    anchorLines: readonly LineRecord[] = []
   ): ParagraphFragmentRecord[] {
     if (!this.pending) return [];
     const pending = new Array<PendingParagraphFrame>(this.pending.length);
@@ -123,12 +140,15 @@ export class ParagraphFrameFlow {
       pending[node.length - 1] = node.item;
     const groups = new Map<string, { x: number; y: number; width: number; height: number }>();
     const positioned = pending.map((item) => {
-      const fragment = positionParagraphFrame(item.fragment, item.frame, origins);
+      const cap = item.frame.dropCapLines
+        ? alignDropCap(item.fragment, item.frame.dropCapLines, anchorLines, origins.text.y)
+        : undefined;
+      const fragment = positionParagraphFrame(cap?.fragment ?? item.fragment, item.frame, origins);
       const frameBox = {
         x: origins[item.frame.horizontalAnchor].x + item.frame.x,
         y: fragment.box.y,
         width: item.frame.width,
-        height: fragment.box.height,
+        height: cap?.height ?? fragment.box.height,
       };
       const box = groups.get(item.groupId);
       if (box) {
@@ -149,6 +169,7 @@ export class ParagraphFrameFlow {
         columnIndex,
         groupId: item.groupId,
         sourceOrder: item.sourceOrder,
+        ...(item.frame.dropCapLines ? { dropCapLines: item.frame.dropCapLines } : {}),
         wrap: item.frame.wrap,
         hSpace: item.frame.hSpace,
         vSpace: item.frame.vSpace,

@@ -1,0 +1,76 @@
+{
+  "name": "@docx-editor.dev/docx-to-pdf",
+  "version": "2.21.0",
+  "private": true,
+  "description": "Server-first DOCX to PDF conversion powered by the shared docx-editor.dev semantic layout engine.",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "assets",
+    "licenses"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf",
+    "notices:generate": "bun ../../scripts/generate-third-party-notices.mjs --package=@docx-editor.dev/docx-to-pdf",
+    "notices:check": "bun ../../scripts/generate-third-party-notices.mjs --package=@docx-editor.dev/docx-to-pdf --check",
+    "compare:libreoffice": "bun scripts/compare-libreoffice.ts",
+    "validation": "bun scripts/validator/launch.mjs"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "~2.21.0"
+  },
+  "dependencies": {
+    "@docx-editor.dev/fonts": "~2.21.0",
+    "fontkit": "2.0.4",
+    "pdf-lib": "1.17.1"
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "license-check-and-add": "^4.0.5",
+    "pdfjs-dist": "5.4.624",
+    "typescript": "^5.3.3",
+    "fflate": "^0.8.2"
+  },
+  "keywords": [
+    "docx",
+    "pdf",
+    "converter",
+    "headless"
+  ],
+  "author": {
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
+  },
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/docx-to-pdf"
+  }
+}

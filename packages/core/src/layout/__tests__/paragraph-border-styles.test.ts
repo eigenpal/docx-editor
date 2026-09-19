@@ -43,9 +43,9 @@ function paragraphsOf(layout: ReturnType<typeof lay>): ParagraphFragmentRecord[]
   return fragments;
 }
 
-function painted(body: string): HTMLElement {
+function painted(body: string, scale = 1): HTMLElement {
   const container = document.createElement('div');
-  paintSemanticLayout(container, lay(body), { scale: 1 });
+  paintSemanticLayout(container, lay(body), { scale });
   return container;
 }
 
@@ -74,11 +74,11 @@ describe('paragraph ST_Border styles — layout geometry', () => {
 
     expect(dbl.widthPt).toBe(0.375);
     expect(paragraphBorderStrokeWidthPt(dbl)).toBe(computeDoubleBorderMetricsPt(0.375).extentPt);
-    expect(paragraphBorderStrokeWidthPt(dbl)).toBe(3);
-    expect(paragraphBorderExtentPt(dbl)).toBe(11);
+    expect(paragraphBorderStrokeWidthPt(dbl)).toBe(1.125);
+    expect(paragraphBorderExtentPt(dbl)).toBe(9.125);
   });
 
-  test('fixture-shaped thin double top publishes a 3pt stroke box', () => {
+  test('fixture-shaped thin double top publishes the full 1.125pt band', () => {
     // Verbatim from comprehensive-word-element-test.docx end paragraph:
     // <w:top w:val="double" w:color="1B3A5C" w:sz="3" w:space="8"/>
     const body = paragraph(
@@ -90,22 +90,22 @@ describe('paragraph ST_Border styles — layout geometry', () => {
     expect(top).toBeDefined();
     expect(top!.edge.val).toBe('double');
     expect(top!.edge.color).toBe('1B3A5C');
-    expect(top!.box.height).toBe(3);
+    expect(top!.box.height).toBe(1.125);
   });
 
-  test('a thick double splits the authored band into equal thirds without inflation', () => {
+  test('a thick double reserves two authored strokes and their gap', () => {
     const edge = paragraphBorders(
       propertiesNodeOf(
         load(paragraph('x', '<w:pBdr><w:bottom w:val="double" w:sz="24" w:space="2"/></w:pBdr>'))
       )
     ).bottom!;
     expect(edge.widthPt).toBe(3);
-    expect(paragraphBorderStrokeWidthPt(edge)).toBe(3);
+    expect(paragraphBorderStrokeWidthPt(edge)).toBe(9);
     expect(computeDoubleBorderMetricsPt(3)).toEqual({
-      strokePt: 1,
-      gapPt: 1,
-      extentPt: 3,
-      insetPt: 0,
+      strokePt: 3,
+      gapPt: 3,
+      extentPt: 9,
+      insetPt: -3,
     });
   });
 });
@@ -131,11 +131,30 @@ describe('paragraph ST_Border styles — paint', () => {
     const doubleRule = painted(doubleBody).querySelector<HTMLElement>(
       '.docx-paragraph-border-top'
     )!;
-    expect(doubleRule.style.height).toBe('3px');
+    expect(doubleRule.style.height).toBe('1.125px');
     expect(doubleRule.style.backgroundColor).toBe('transparent');
-    expect(doubleRule.style.borderTop).toBe('1px solid #1B3A5C');
-    expect(doubleRule.style.borderBottom).toBe('1px solid #1B3A5C');
-    expect(doubleRule.style.boxSizing).toBe('border-box');
+    expect(doubleRule.style.borderTop).toBe('');
+    expect(doubleRule.style.borderBottom).toBe('');
+    expect(doubleRule.style.backgroundImage).toBe(
+      'linear-gradient(to bottom, #1B3A5C 0px, #1B3A5C 0.375px, transparent 0.375px, transparent 0.75px, #1B3A5C 0.75px)'
+    );
+  });
+
+  test('thin double strokes remain proportional at small zoom on both axes', () => {
+    for (const [side, direction] of [
+      ['top', 'bottom'],
+      ['left', 'right'],
+    ] as const) {
+      const rule = painted(
+        paragraph('x', `<w:pBdr><w:${side} w:val="double" w:sz="3" w:color="112233"/></w:pBdr>`),
+        0.5
+      ).querySelector<HTMLElement>(`.docx-paragraph-border-${side}`)!;
+      expect(rule.style.backgroundImage).toBe(
+        `linear-gradient(to ${direction}, #112233 0px, #112233 0.1875px, transparent 0.1875px, transparent 0.375px, #112233 0.375px)`
+      );
+      expect(rule.style.borderTop).toBe('');
+      expect(rule.style.borderLeft).toBe('');
+    }
   });
 
   test('dashed and dotted rules keep directional patterns', () => {

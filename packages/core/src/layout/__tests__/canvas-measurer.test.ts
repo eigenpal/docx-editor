@@ -134,7 +134,7 @@ describe('tryCreateCanvasMeasurer', () => {
     const fonts: string[] = [];
     const measurer = tryCreateCanvasMeasurer({ context: mockContext(fonts), scale: 1 })!;
     measurer.measure('X', style({ fontSizePt: 20, verticalAlign: 'superscript' }));
-    expect(fonts.at(-1)).toContain('15px');
+    expect(fonts.at(-1)).toContain('13px');
   });
 
   test('line metrics use fontBoundingBox ascent + descent when reported', () => {
@@ -165,8 +165,8 @@ describe('tryCreateCanvasMeasurer', () => {
     const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
     const baseline = measurer.lineMetrics(style({ fontSizePt: 20 }));
     const raised = measurer.lineMetrics(style({ fontSizePt: 20, verticalAlign: 'superscript' }));
-    expect(raised.height).toBeCloseTo(baseline.height * 0.75, 5);
-    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.75, 5);
+    expect(raised.height).toBeCloseTo(baseline.height * 0.65, 5);
+    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.65, 5);
   });
 
   test('mixed sizes reserve the taller run height on a line', () => {
@@ -498,4 +498,20 @@ test('canvas ink bounds normalize and restore the injected text origin', () => {
   expect(measure.inkBounds!('（', DEFAULT_RUN_STYLE)).toEqual({ left: 8, right: 11 });
   expect(context.textAlign).toBe('right');
   expect(context.direction).toBe('rtl');
+});
+
+test('canvas kerning uses authored thresholds and separates width-cache entries', () => {
+  const context: CanvasTextContext = {
+    font: '',
+    fontKerning: 'auto',
+    measureText: () => ({ width: context.fontKerning === 'normal' ? 8 : 10 }),
+  };
+  const m = tryCreateCanvasMeasurer({ context })!;
+  const plain = { ...DEFAULT_RUN_STYLE, fontSizePt: 12 };
+  const kerned = { ...plain, kerningMinPt: 12 };
+  const plainWidth = m.measure('AV', plain);
+  expect(context.fontKerning).toBe('none');
+  expect(m.measure('AV', kerned)).toBeLessThan(plainWidth);
+  expect(context.fontKerning).toBe('normal');
+  expect(m.measure('AV', plain)).toBe(plainWidth);
 });

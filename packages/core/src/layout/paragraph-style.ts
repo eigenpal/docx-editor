@@ -230,10 +230,6 @@ function hexColor(raw: string | undefined): string | null {
   return HEX_COLOR.test(raw) ? raw.toUpperCase() : null;
 }
 
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
-}
-
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
     if (child.kind !== 'textValue' && child.localName === localName) return child;
@@ -425,25 +421,34 @@ export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boo
  */
 export function borderEdgeOf(node: OoxmlElement | undefined): ParagraphBorderEdge | undefined {
   if (!node) return undefined;
-  const val = attributeValue(node, 'val');
+  return borderEdgeFromAttributes(
+    Object.fromEntries(node.attributes.map((attribute) => [attribute.localName, attribute.value]))
+  );
+}
+
+/** Shared CT_Border reader for tree edges and flattened character properties. @internal */
+export function borderEdgeFromAttributes(
+  attributes: Readonly<Record<string, string>> | undefined
+): ParagraphBorderEdge | undefined {
+  const val = attributes?.val;
   if (!val || NO_BORDER.has(val)) return undefined;
 
   // `w:sz` is eighths of a point. Missing size yields a hairline so a border that declares
   // a style but no thickness still paints — matching Word's default of ½pt for bare edges.
-  const eighths = integer(attributeValue(node, 'sz'));
+  const eighths = integer(attributes?.sz);
   const widthPt =
     eighths === null ? 0.5 : clampNonNegative(eighths / 8, MAX_BORDER_WIDTH_PT) || 0.5;
 
-  const spaceRaw = integer(attributeValue(node, 'space'));
+  const spaceRaw = integer(attributes?.space);
   const spacePt = spaceRaw === null ? 0 : clampNonNegative(spaceRaw, MAX_BORDER_SPACE_PT);
 
-  const shadow = attributeValue(node, 'shadow');
+  const shadow = attributes?.shadow;
   const hasShadow =
     shadow !== undefined && shadow !== '0' && shadow !== 'false' && shadow !== 'off';
 
   return {
     val,
-    color: hexColor(attributeValue(node, 'color')),
+    color: hexColor(attributes?.color),
     widthPt,
     spacePt,
     ...(hasShadow ? { shadow: true as const } : {}),
@@ -569,16 +574,17 @@ export function collapsedSpaceBefore(before: number, previousAfter: number): num
  * Applied before-spacing for placement (Word 2013+ / compat mode 15).
  *
  * Adjacent before/after still collapse to the larger gap, but before is dropped entirely when
- * the paragraph begins at the top of a page mid-section. The first paragraph of a document or
- * section retains before. Callers publish this applied value on the fragment so shading, borders,
+ * the paragraph naturally moves to the top of a page mid-section. An explicit page-break-before
+ * paragraph, or the first paragraph of a document/section, retains before. Callers publish this
+ * applied value on the fragment so shading, borders,
  * selection, and paint share one geometry.
  */
 export function appliedSpaceBefore(
   before: number,
   previousAfter: number,
   atTopOfPage: boolean,
-  firstParagraphOfSection: boolean
+  preserveAtPageStart: boolean
 ): number {
-  if (atTopOfPage && !firstParagraphOfSection) return 0;
+  if (atTopOfPage && !preserveAtPageStart) return 0;
   return collapsedSpaceBefore(before, previousAfter);
 }

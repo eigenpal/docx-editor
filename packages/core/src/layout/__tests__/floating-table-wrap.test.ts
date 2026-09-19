@@ -325,3 +325,24 @@ test('tables whose cells wrap around earlier drawings retain safe row pagination
     expect(cellText).toBe(text);
   }
 });
+
+test('a sole no-overlap table still wraps its surrounding paragraph', () => {
+  const source = part(
+    p('Lead') +
+      table().replace('<w:tblPr>', '<w:tblPr><w:tblOverlap w:val="never"/>') +
+      p('word '.repeat(30))
+  );
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+  for (let revision = 0; revision < 2; revision++) {
+    const layout = layoutSemanticDocument(source, revision, { ...options, session, cache });
+    expect(layout.pages).toEqual(render(source).pages);
+    const floating = tables(layout)[0]!;
+    const anchor = paragraphs(layout)[1]!;
+    expect(isOutOfFlowTableFragment(floating)).toBe(true);
+    expect(floating.box.y).toBe(12);
+    expect(anchor.lines[0]!.box.y).toBe(12);
+    expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
+    expect(anchor.lines.find((line) => line.box.y >= 52)!.spans[0]!.box.x).toBe(0);
+  }
+});

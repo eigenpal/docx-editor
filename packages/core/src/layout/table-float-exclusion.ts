@@ -124,7 +124,10 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
   if (structure.float.ySpec) return Infinity;
   const properties = table.children.find((node) => node.kind === 'tableProperties');
+  // No-overlap constrains other tables, not the surrounding paragraph text. Multiple
+  // positioned tables retain row flow until their collision displacement is supported.
   if (
+    deps.isolatedFloatingTableId !== table.id &&
     properties &&
     properties.kind !== 'textValue' &&
     properties.children.some(

@@ -33,7 +33,7 @@ import {
   type StyleDefinition,
 } from './style-cascade.ts';
 import { EMPTY_TAB_STOPS, nextTabDestination, type ResolvedTabStops } from './paragraph-tabs.ts';
-import { mapSymbolPuaText } from './symbol-encoding.ts';
+import { hasSymbolPua, mapSymbolPuaText } from './symbol-encoding.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -536,16 +536,24 @@ export function resolveStoryListItems(
       };
       prelude.perLevel.set(advanced.level, levelDerived);
     }
-    const { indent, markerStyle } = levelDerived;
+    const { indent, markerStyle: authoredMarkerStyle } = levelDerived;
     // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same
     // string; doing it in the painter would size the marker box for a glyph nobody draws.
     const markerText = mapSymbolPuaText(
       advanced.markerText,
-      markerStyle.fontFamily,
+      authoredMarkerStyle.fontFamily,
       isFontAvailable
     );
+    // A translated marker needs a Unicode face, not the unavailable byte-encoded face.
+    // Resolve the substrate's default in both measurement and painting. Preserve the
+    // authored face when any unknown private-use character remains, or when the host
+    // explicitly admits the original font. Never mutate the cached level style.
+    const markerStyle =
+      markerText !== advanced.markerText && !hasSymbolPua(markerText)
+        ? { ...authoredMarkerStyle, fontFamily: null, fontFamilyEastAsia: null }
+        : authoredMarkerStyle;
     // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
     // carry any printable separator, so a separator join lets two different level
     // geometries serialize to one token and share a break-cache entry.
@@ -916,21 +924,17 @@ export function listMarkerBox(
   const hanging = item.indent.hanging;
   // The hanging spelling wins when a hostile file states both (Word's collapse); a
   // NEGATIVE firstLine is the hang spelled the other way and stays on the hanging model.
-  const firstLine = hanging > 0 ? 0 : Math.max(0, item.indent.firstLine);
+  const firstLineOffset = hanging > 0 ? -hanging : item.indent.firstLine;
   // Markers stop at the content origin — except for a paragraph the author pulled INTO the
   // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
   // the number to the RIGHT of the text it numbers.
   const floor = Math.min(0, textLeft);
-  const slotLeft = firstLine > 0 ? textLeft + firstLine : Math.max(floor, textLeft - hanging);
-  const slotWidth = Math.max(hanging, markerWidth);
+  const slotLeft = Math.max(floor, textLeft + firstLineOffset);
+  // lvlJc aligns the marker around the first-line position, not within the gap
+  // between that position and the paragraph's text indent.
   let x = slotLeft;
-  if (item.markerAlign === 'right') {
-    // The alignment anchor is the slot's right edge: the text start for a hanging level,
-    // the shifted slot's end for a first-line level.
-    x = firstLine > 0 ? slotLeft + slotWidth - markerWidth : textLeft - markerWidth;
-  } else if (item.markerAlign === 'center') {
-    x = slotLeft + (slotWidth - markerWidth) / 2;
-  }
+  if (item.markerAlign === 'right') x -= markerWidth;
+  else if (item.markerAlign === 'center') x -= markerWidth / 2;
   if (x < floor) x = floor;
   return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
 }
@@ -949,9 +953,8 @@ export function listMarkerBox(
  *   the marker being painted over its own first word.
  *
  * A positive-firstLine level's marker ends PAST the text start, so its suffix tab always
- * takes the stop lookup. `tabStops` is the PARAGRAPH's resolved stops: a `w:tab` the level
- * itself states (`w:num` at the next grid stop is the shape Word writes) is not folded in,
- * and the default half-inch grid lands on the same destination.
+ * takes the stop lookup. The paragraph's legacy `num` stops participate in this lookup,
+ * even though ordinary text tabs ignore them. Level-only stops are not folded in here.
  */
 export function listFirstLineOffset(
   item: ResolvedListItem,
@@ -972,7 +975,7 @@ export function listFirstLineOffset(
   // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
   // to look further along the paragraph's own stops.
   if (markerEnd <= textLeft) return 0;
-  return nextTabDestination(tabStops, markerEnd, rightEdge).positionPt - textLeft;
+  return nextTabDestination(tabStops, markerEnd, rightEdge, true).positionPt - textLeft;
 }
 
 /**

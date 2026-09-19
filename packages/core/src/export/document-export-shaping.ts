@@ -13,7 +13,7 @@ import {
   type FontOriginFailure,
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
-import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
+import { HARD_MAX_AGGREGATE_FONT_BYTES, type FontRequest } from '../layout/font-resource.ts';
 import {
   complexSymbolFieldFonts,
   usedNumberingFontFamilies,
@@ -92,6 +92,7 @@ export interface DocumentExportShaping extends SessionExportShaping {
 
 /** Cancellation and deadline controls for document-specific font resolution. @internal */
 export interface DocumentExportShapingOptions extends DocumentExportFontResolutionOptions {
+  readonly glyphFallbacks?: readonly FontRequest[];
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
@@ -132,6 +133,8 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   readonly fonts: FontOrigin | readonly FontOrigin[];
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
   readonly fontResolutionTimeoutMs?: number;
+  /** Ordered admitted faces used when a complete text span lacks glyph coverage. Maximum 16. */
+  readonly glyphFallbacks?: readonly FontRequest[];
   /** `strict` refuses incomplete face coverage or any failed origin. Default: `best-effort`. */
   readonly fontPolicy?: 'best-effort' | 'strict';
   /** Fire-and-forget diagnostics; returned promises are observed but do not delay export. */
@@ -223,8 +226,14 @@ export async function openFontBackedDocumentForExport(
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
-  const { fonts, fontResolutionTimeoutMs, fontPolicy, onFontResolution, ...sessionOptions } =
-    options;
+  const {
+    fonts,
+    fontResolutionTimeoutMs,
+    fontPolicy,
+    onFontResolution,
+    glyphFallbacks,
+    ...sessionOptions
+  } = options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
   let fontResolution: ExportFontResolutionReport | undefined;
   let shaping: DocumentExportShaping | undefined;
@@ -233,6 +242,7 @@ export async function openFontBackedDocumentForExport(
       signal: options.signal,
       timeoutMs: fontResolutionTimeoutMs ?? options.resourceTimeoutMs,
       fontPolicy,
+      glyphFallbacks,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -333,6 +343,8 @@ export async function acquireDocumentExportShaping(
   origins: readonly FontOrigin[],
   options: DocumentExportShapingOptions = {}
 ): Promise<DocumentExportShaping | undefined> {
+  if ((options.glyphFallbacks?.length ?? 0) > 16)
+    throw new RangeError('At most 16 glyph fallback faces are supported');
   const timeoutMs = normalizedTimeout(options.timeoutMs);
   const controller = new AbortController();
   const abortFromHost = (): void => controller.abort(options.signal?.reason);
@@ -357,7 +369,14 @@ export async function acquireDocumentExportShaping(
         const resolved = await composePreparedFontOrigins(
           resolvedOrigins,
           {
-            families,
+            // Explicit fallback requests must reach demand-driven resolvers. Reserve their
+            // bounded slots before the body-first document catalog; keep the total cap.
+            families: [
+              ...new Set([
+                ...(options.glyphFallbacks ?? []).map((face) => face.family),
+                ...families,
+              ]),
+            ].slice(0, MAX_RESOLVER_FAMILIES),
             defaultFamily: WORD_DEFAULT_FONT.family,
             signal: controller.signal,
           },
@@ -381,7 +400,9 @@ export async function acquireDocumentExportShaping(
           return undefined;
         }
         const shaping = await createSessionExportShaping(
-          prepareOwnedLayoutFontConfiguration(configuration)
+          prepareOwnedLayoutFontConfiguration(configuration),
+          undefined,
+          options.glyphFallbacks
         );
         throwIfAborted(controller.signal);
         const report = fontResolutionReport(

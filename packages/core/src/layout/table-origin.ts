@@ -12,13 +12,15 @@ import type {
  * the leading cell's content edge with the text column, without changing its indent.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
-  if (structure.legacyContentAlignment) return -(structure.rows[0]?.cells[0]?.margins.left ?? 0);
+  if (structure.legacyContentAlignment && structure.alignment === 'left')
+    return -(structure.rows[0]?.cells[0]?.margins.left ?? 0);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const slack = containerWidthPt - width;
-  if (!Number.isFinite(slack) || slack <= 0) return 0;
+  if (!Number.isFinite(slack)) return 0;
   if (structure.alignment === 'center') return slack / 2;
   if (structure.alignment === 'right')
-    return structure.bidiVisual ? Math.max(0, slack - structure.indentPt) : slack;
+    return structure.bidiVisual && slack > 0 ? Math.max(0, slack - structure.indentPt) : slack;
+  if (slack <= 0) return 0;
   return structure.bidiVisual ? 0 : Math.min(structure.indentPt, slack);
 }
 

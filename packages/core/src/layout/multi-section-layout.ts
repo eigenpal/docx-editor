@@ -506,7 +506,10 @@ export function layoutMultiSectionDocument(
       // A continued section's local page 0 IS the host sheet, so its document page index
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
       pageIndexStart: continues ? startIndex - 1 : startIndex,
-      ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
+      // Paragraph spacing still collapses across a section boundary on a new sheet.
+      // Carry only the after-spacing budget there, never the prior sheet's cursor.
+      spaceBeforeCarry: flowSpaceAfter,
+      ...(continues ? { flowStartY: flowCursorY } : {}),
       ...(continuedPageInsets ? { continuedPageInsets } : {}),
       ...(measuredPageNumberFormat !== undefined
         ? { bodyPageNumberFormat: measuredPageNumberFormat }

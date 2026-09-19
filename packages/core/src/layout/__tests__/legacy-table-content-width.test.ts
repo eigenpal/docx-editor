@@ -79,7 +79,7 @@ describe('explicit legacy full-width content alignment', () => {
       readTableStructure(table, 200, 0, undefined, 'all-markup', undefined, mode)!;
     const legacy = structure(14);
     expect(structure(14)).toBe(legacy);
-    for (const mode of [15, undefined, 0, 13, 99, NaN, Infinity]) {
+    for (const mode of [15, 0, 13, 99, NaN, Infinity]) {
       const modern = structure(mode);
       expect(modern.legacyContentAlignment).toBeUndefined();
       expect(modern.columnWidthsPt.reduce((a, b) => a + b, 0)).toBeCloseTo(200, 8);
@@ -90,17 +90,14 @@ describe('explicit legacy full-width content alignment', () => {
 
   const controls: [string, string][] = [
     ['fixed', fixture(properties.replace('autofit', 'fixed'))],
-    ['absent layout', fixture(properties.replace('<w:tblLayout w:type="autofit"/>', ''))],
     [
       'automatic width',
       fixture(properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"')),
     ],
     ['partial width', fixture(properties.replace('w:w="5000"', 'w:w="4500"'))],
     ['clamped oversized percentage', fixture(properties.replace('w:w="5000"', 'w:w="999999"'))],
-    ['implicit indent', fixture(properties.replace('<w:tblInd w:type="dxa" w:w="0"/>', ''))],
     ['positive indent', fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" w:w="120"'))],
     ['negative indent', fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" w:w="-120"'))],
-    ['center', fixture(properties + '<w:jc w:val="center"/>')],
     ['right', fixture(properties + '<w:jc w:val="right"/>')],
     ['invalid alignment', fixture(properties + '<w:jc w:val="typo"/>')],
     ['RTL', fixture(properties + '<w:bidiVisual/>')],
@@ -256,5 +253,32 @@ test('document-order and float-anchor probes retain the same table memo in expli
     paragraphDocumentOrderOf(blocks, 200, undefined, 'all-markup', undefined, mode);
     positionedTableAnchors(blocks, 200, undefined, 'all-markup', undefined, mode);
     expect(readTableStructure(table, 200, 0, undefined, 'all-markup', undefined, mode)).toBe(first);
+  }
+});
+
+test('implicit legacy defaults and centered percentages use a grid-confirmed margin basis', () => {
+  for (const alignment of ['left', 'center']) {
+    for (const pct of [70, 100]) {
+      const totalTwips = Math.round(((210.8 * pct) / 100) * 20);
+      const xml = fixture(
+        `<w:tblW w:type="pct" w:w="${pct * 50}"/><w:jc w:val="${alignment}"/>`,
+        `<w:tblGrid><w:gridCol w:w="${Math.floor(totalTwips / 2)}"/><w:gridCol w:w="${totalTwips - Math.floor(totalTwips / 2)}"/></w:tblGrid>`,
+        `<w:tr>${cell(2500, 'one')}${cell(2500, 'two')}</w:tr>`
+      );
+      const { table, part } = open(xml);
+      const before = serializeOoxmlPart(part);
+      const legacy = readTableStructure(table, 200, 0)!;
+      const width = legacy.columnWidthsPt.reduce((a, b) => a + b, 0);
+      expect(legacy.legacyContentAlignment).toBe(true);
+      expect(width).toBeCloseTo((210.8 * pct) / 100, 6);
+      expect(tableOriginX(legacy, 200)).toBeCloseTo(
+        alignment === 'left' ? -5.4 : (200 - width) / 2,
+        6
+      );
+      const modern = readTableStructure(table, 200, 0, undefined, 'all-markup', undefined, 15)!;
+      expect(modern.legacyContentAlignment).toBeUndefined();
+      expect(modern.columnWidthsPt.reduce((a, b) => a + b, 0)).toBeCloseTo((200 * pct) / 100, 6);
+      expect(serializeOoxmlPart(part)).toBe(before);
+    }
   }
 });

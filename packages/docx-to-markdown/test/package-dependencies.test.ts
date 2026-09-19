@@ -89,9 +89,10 @@ describe('engine dependency integrity', () => {
     );
     const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
     expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
-    expect(navigation.pages.slice(exportSectionIndex, exportSectionIndex + 3)).toEqual([
+    expect(navigation.pages.slice(exportSectionIndex, exportSectionIndex + 4)).toEqual([
       '---Export formats---',
       'export/markdown',
+      'export/pdf',
       '---Pro---',
     ]);
     expect(navigation.pages).not.toContain('export');

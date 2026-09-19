@@ -100,10 +100,24 @@ describe('symbol-font private-use mapping', () => {
 
   test('resolved list markers carry the mapped glyph', () => {
     expect(items().map((item) => item.markerText)).toEqual(['•', '▪']);
+    expect(items().map((item) => item.markerStyle.fontFamily)).toEqual([null, null]);
     expect(items(() => true).map((item) => item.markerText)).toEqual([
       SYMBOL_BULLET,
       WINGDINGS_SQUARE,
     ]);
+    expect(items(() => true).map((item) => item.markerStyle.fontFamily)).toEqual([
+      'Symbol',
+      'Wingdings',
+    ]);
+  });
+
+  test('partial translations preserve the font needed by unknown private-use glyphs', () => {
+    const part = document(listParagraph('Unknown symbol', '0'));
+    const body = part.root!.children.find((child) => child.localName === 'body')!;
+    const index = numbering(NUMBERING.replace(SYMBOL_BULLET, `${SYMBOL_BULLET}`));
+    const [item] = resolveStoryListItems(body.children, index, undefined).values();
+    expect(item!.markerText).toBe('•');
+    expect(item!.markerStyle.fontFamily).toBe('Symbol');
   });
 
   test('layout paints the mapped glyph, and measures the same string', () => {
@@ -114,7 +128,7 @@ describe('symbol-font private-use mapping', () => {
     });
     const marker = paragraphFragmentsOf(layout.pages[0]!)[0]!.marker!;
     expect(marker.text).toBe('•');
-    expect(marker.style.fontFamily).toBe('Symbol');
+    expect(marker.style.fontFamily).toBeNull();
     expect(marker.box.width).toBe(6);
   });
 });

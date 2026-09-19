@@ -13,6 +13,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 /** Numeric, auto-height text frames. Other frame variants retain ordinary flow. */
 export interface ParagraphFrame {
+  /** Explicit-size drop cap aligned against this many lines of its anchor paragraph. */
+  readonly dropCapLines?: number;
   readonly x: number;
   readonly y: number;
   readonly width: number;

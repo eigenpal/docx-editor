@@ -262,7 +262,7 @@ describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule
   });
 });
 
-describe('B8 — border conflict weighs width first, style only as a tie-break', () => {
+describe('B8 — border conflict uses Word weighted widths, then style precedence', () => {
   // Word-matching, not conformance: §17.4.39 / §17.4.66 specify no conflict algorithm.
   const edge = (
     style: 'single' | 'dashed' | 'dotted' | 'double',
@@ -270,15 +270,15 @@ describe('B8 — border conflict weighs width first, style only as a tie-break',
     color: string | null = null
   ): TableBorderSide => ({ state: 'edge', style, color, widthPt });
 
-  test('a wide dashed rule outweighs a hairline single', () => {
-    expect(borderWeight(edge('dashed', 6))).toBeGreaterThan(borderWeight(edge('single', 0.25)));
+  test('a wide dashed rule retains weight one and loses to a quarter-point single', () => {
+    expect(borderWeight(edge('dashed', 6))).toBeLessThan(borderWeight(edge('single', 0.25)));
     const winner = resolveBorderConflict(edge('dashed', 6, 'CC3333'), edge('single', 0.25));
-    expect(winner).toMatchObject({ style: 'dashed', widthPt: 6 });
+    expect(winner).toMatchObject({ style: 'single', widthPt: 0.25 });
   });
 
-  test('a 1pt single outweighs a half-point double', () => {
+  test('a half-point double outweighs a 1pt single', () => {
     const winner = resolveBorderConflict(edge('double', 0.5), edge('single', 1));
-    expect(winner).toMatchObject({ style: 'single', widthPt: 1 });
+    expect(winner).toMatchObject({ style: 'double', widthPt: 0.5 });
   });
 
   test('style ranks the tie only at equal width', () => {

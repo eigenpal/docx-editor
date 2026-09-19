@@ -627,7 +627,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. PDF export does not apply these adjustments.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. The private PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
   },
   {
     id: 'images.effects',

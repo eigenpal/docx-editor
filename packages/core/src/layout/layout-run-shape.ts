@@ -1,3 +1,4 @@
+import { isRunKerningEnabled } from './run-kerning.ts';
 // Shared HarfBuzz call used by shaped measurement and non-DOM exporters.
 
 import type { ResolvedFont } from './font-resource.ts';
@@ -69,7 +70,11 @@ export function shapeLayoutStyleRun(
           : (style.shaping?.script ?? environment.script),
       // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
       // feature, so shaping must reserve those glyph advances instead of lowercase advances.
-      features: style.smallCaps ? { ...environment.features, smcp: 1 } : environment.features,
+      features: {
+        ...environment.features,
+        kern: isRunKerningEnabled(style) ? 1 : 0,
+        ...(style.smallCaps ? { smcp: 1 } : {}),
+      },
       fallbackOrder: [],
     } satisfies ShapingEnvironmentInput),
   });

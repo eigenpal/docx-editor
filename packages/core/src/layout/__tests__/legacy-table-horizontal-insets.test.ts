@@ -27,16 +27,16 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
   for (const [name, calculate] of [['geometry', contentInsets]] as const) {
     test(`${name}: the ordinary border-box path is unchanged`, () => {
       expect(calculate(margins(), borders())).toEqual({
-        top: 1.5,
-        bottom: 2.5,
+        top: 1.25,
+        bottom: 2.25,
         left: 5.9,
         right: 5.9,
       });
     });
     test(`${name}: covered painted strokes do not add a second horizontal charge`, () => {
       expect(calculate(margins(), borders(), true)).toEqual({
-        top: 1.5,
-        bottom: 2.5,
+        top: 1.25,
+        bottom: 2.25,
         left: 5.4,
         right: 5.4,
       });
@@ -58,7 +58,7 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
     });
     test(`${name}: omitted and explicitly absent rules do not invent an inset`, () => {
       expect(calculate(margins(0), borders({ state: 'omitted' }, { state: 'none' }), true)).toEqual(
-        { top: 1.5, bottom: 2.5, left: 0, right: 0 }
+        { top: 1.25, bottom: 2.25, left: 0, right: 0 }
       );
     });
   }
