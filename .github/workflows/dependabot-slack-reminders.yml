@@ -19,14 +19,9 @@ name: Dependabot Slack reminders
 # that goes wrong above it, and the weekly heartbeat catches a run that never
 # started at all.
 #
-# Auth: the default GITHUB_TOKEN can NEVER read Dependabot alerts. The Actions
-# app it is minted from does not carry that permission, and the `permissions:`
-# block cannot add it. This job mints a release-pal App token narrowed to
-# Dependabot alerts read instead. The release-pal GitHub App needs the
-# "Dependabot alerts: Read-only" repository permission, and the organization
-# installation has to approve the permission update. Until it does, the mint
-# step below fails with 422 ("The permissions requested are not granted to this
-# installation") and the fetch never runs.
+# Auth: the default GITHUB_TOKEN cannot read Dependabot alerts, and the
+# `permissions:` block cannot grant it. The job mints a release-pal App token
+# scoped to that one read instead.
 
 on:
   schedule:
@@ -43,14 +38,11 @@ on:
 # The default token is unused (see the auth note above); grant it nothing.
 permissions: {}
 
-# Serialize runs: a dispatched run racing the schedule would otherwise read the
-# alert list and post at the same moment as the scheduled one. This orders
-# them, it does not deduplicate them. GitHub keeps at most one run pending per
-# group, so queueing a third evicts the one already waiting. An evicted run
-# never reaches a runner, so no step of it runs and nothing reports it — the
-# weekly digest is the backstop. Dispatching this workflow twice while a run is
-# in progress is the only way to reach that, and both schedules are an hour
-# apart.
+# Serialize runs so a dispatched run cannot post at the same moment as a
+# scheduled one. This orders them; it does not deduplicate them. GitHub keeps
+# one run pending per group, so queueing a third evicts the one already
+# waiting. An evicted run never starts, so nothing in this job can report it —
+# the weekly digest is the backstop.
 concurrency:
   group: dependabot-slack-reminders
   cancel-in-progress: false
@@ -118,11 +110,8 @@ jobs:
             --paginate | jq -s 'add // []' > alerts.json
 
           # Nothing below prints an alert. This repository is public, so its
-          # Actions logs are readable by anyone and are kept for 90 days, while
-          # the alert list itself needs write or security access to read. A
-          # dump here would republish every unfixed vulnerability — package,
-          # advisory id, summary, manifest — on a schedule, ahead of the fix.
-          # Log the decision and the payload shape, never the contents.
+          # Actions logs are readable by anyone, while the alert list itself is
+          # not. Log the decision and the payload shape, never the contents.
           # Indexed defensively, like the projection below and for the same
           # reason: one alert whose `security_vulnerability` is not an object
           # would otherwise abort this step, and a malformed alert must cost
