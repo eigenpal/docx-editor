@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
-  "version": "2.21.0",
+  "version": "2.21.1",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -49,7 +49,7 @@
     "@docx-editor.dev/core": "~2.21.0"
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.21.0",
+    "@docx-editor.dev/fonts": "~2.21.1",
     "fflate": "^0.8.2"
   },
   "devDependencies": {
