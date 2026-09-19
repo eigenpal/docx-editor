@@ -5,6 +5,7 @@ import { fragmentOwnsPosition } from './line-segments.ts';
 import {
   bodyFitBottomPt,
   firstBodyContentTopPt,
+  fragmentFlowBottom,
   fragmentFitBottomPt,
   noteReferenceLineBandPt,
 } from './note-fragment-geometry.ts';
@@ -37,6 +38,7 @@ export interface HoldOutRef {
 }
 
 export interface HoldOutArgs {
+  readonly allowOrphanDeferral?: boolean;
   readonly bodyPage: PageRecord;
   readonly nextPage: PageRecord | undefined;
   /** Height of `bodyPage`'s existing note area (0 when it has none). */
@@ -118,6 +120,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     }
   }
   if (!frontier || !frontierRef) return 0;
+
   const refLineHeight = frontier.bottom - frontier.top;
 
   const bodyBottom = bodyFitBottomPt(bodyPage);
@@ -142,6 +145,28 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     }
   }
   if (!owningBlock) return 0;
+  // Release a settled hold only when the preceding body plus this opening pair
+  // actually fits beside its existing notes. The incoming second-line note can
+  // continue, but this policy must never reclaim space occupied by earlier notes.
+  //
+  // DELIBERATELY the painted flow bottom ({@link fragmentFlowBottom}), not the fit-rule
+  // bottom every other budget in this file uses, and DELIBERATELY without
+  // {@link RESERVE_BOUNDARY_BACKOFF_PT}. Both make this test stricter than the body pass
+  // that has to honour it, and this one may only FAIL CLOSED: a release the body then
+  // refuses re-demands the hold on the next round and costs the reflow loop an orbit,
+  // while a release withheld just leaves the pre-existing strict placement in place. Do
+  // not "correct" either to match the neighbours without re-measuring the corpus.
+  if (
+    args.allowOrphanDeferral &&
+    noteReferenceLineBandPt(nextBody, frontierRef).preserveOrphanLine &&
+    fragmentFlowBottom(bodyPage.fragments) +
+      frontier.bottom -
+      firstBodyContentTopPt(nextBody) +
+      args.existingAreaHeight <=
+      contentHeight + 0.001
+  ) {
+    return 0;
+  }
   const pulled = candidates.filter((ref) =>
     fragmentOwnsPosition(owningBlock, ref.paragraphId, ref.atomOffset)
   );
