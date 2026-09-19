@@ -1184,7 +1184,7 @@ function paintHyperlinkAnchor(
  * A line is ONE inline flow, not a row of absolutely positioned words.
  *
  * Layout decides what goes on the line, where the line sits, and where the page breaks —
- * the decisions that make output match Word. Placing glyphs WITHIN the line is left to the
+ * the decisions this engine owns. Placing glyphs WITHIN the line is left to the
  * browser, which is going to rasterise them its own way regardless.
  *
  * Positioning each word independently meant the browser drew the selection highlight once

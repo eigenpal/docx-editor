@@ -57,7 +57,7 @@ export interface DocxEditorProps {
    * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout
    * runs on a fixed monospace approximation: glyphs still paint in their true faces, so the
    * page looks right, but wrap points and pagination are estimated rather than
-   * Word-accurate. Omit it to mount in one line; supply it when breaks must match Word.
+   * measured. Omit it to mount in one line; supply it when break positions matter.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /**

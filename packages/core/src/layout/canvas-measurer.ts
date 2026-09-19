@@ -69,7 +69,7 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
  * `Times New Roman` is measured against `"Times New Roman", ${DEFAULT_CANVAS_FONT_STACK}`,
  * which names no serif substitute, so an installed Liberation Serif never gets used and
  * must not be claimed. Carlito is Calibri's metric twin — identical advance widths — so a
- * Calibri run on a host with Carlito wraps and paginates exactly where Word puts it, in
+ * Calibri run on a host with Carlito wraps and paginates on the same advance widths, in
  * both measurement and paint (the paint sink trails the same stack).
  *
  * The compatibility notice reads this to avoid warning about a substitution that costs no
