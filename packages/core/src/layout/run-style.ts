@@ -91,7 +91,7 @@ export interface ResolvedRunStyle {
   readonly horizontalScalePercent: number;
   /** `w:kern`, in points: the size at or above which kerning applies. */
   readonly kerningMinPt: number;
-  /** Explicit kerning selection, including an authored zero threshold. Absent uses a positive threshold. */
+  /** Explicit kerning selection; a zero threshold disables it. Absent uses a positive threshold. */
   readonly kerningEnabled?: boolean;
   /**
    * `w:vanish` (ECMA-376 §17.3.2.45): the run is hidden text.
@@ -317,7 +317,7 @@ export function resolveRunStyle(
         const halfPoints = integer(property.attributes?.val);
         if (halfPoints !== null && halfPoints >= 0) {
           style.kerningMinPt = halfPoints / 2;
-          style.kerningEnabled = true;
+          style.kerningEnabled = halfPoints > 0;
         }
         break;
       }

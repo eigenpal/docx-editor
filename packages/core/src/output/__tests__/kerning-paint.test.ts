@@ -21,7 +21,7 @@ function paint(body: string): HTMLElement {
 test('paint honors default, explicit-zero, and size-threshold kerning', () => {
   for (const [properties, expected] of [
     ['', 'none'],
-    ['<w:kern w:val="0"/>', 'normal'],
+    ['<w:kern w:val="0"/>', 'none'],
     ['<w:kern w:val="24"/>', 'normal'],
     ['<w:kern w:val="28"/>', 'none'],
   ]) {

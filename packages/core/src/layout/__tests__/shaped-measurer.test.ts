@@ -864,8 +864,6 @@ test('kerning follows the run threshold and cannot reuse unkerned width-cache en
   expect(m.measure('AV', atThreshold)).toBeLessThan(unkerned);
   expect(m.measure('AV', belowThreshold)).toBe(unkerned);
   expect(m.measure('AV', off)).toBe(unkerned);
-  expect(m.measure('AV', style({ fontSizePt: 12, kerningEnabled: true }))).toBe(
-    m.measure('AV', atThreshold)
-  );
+  expect(m.measure('AV', style({ fontSizePt: 12, kerningEnabled: true }))).toBe(unkerned);
   expect(m.caretAdvances!('AV', atThreshold)!.at(-1)).toBeCloseTo(m.measure('AV', atThreshold), 6);
 });

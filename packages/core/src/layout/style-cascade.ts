@@ -1,4 +1,5 @@
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
+import { applicationRunDefaults } from './application-run-defaults.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
@@ -443,11 +444,13 @@ export function buildStyleCascadeTable(
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
+    const runDefaults = applicationRunDefaults(null);
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
       cacheToken: stableHash({
         empty: true,
+        dR: propertiesFingerprint(runDefaults),
         theme,
         typography,
         strictTableHierarchy,
@@ -456,7 +459,7 @@ export function buildStyleCascadeTable(
       ...exactBaseline,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
-      docDefaultsRun: [],
+      docDefaultsRun: runDefaults,
       docDefaultsParagraph: [],
       docDefaultsParagraphNode: undefined,
       defaultParagraphStyleId: null,
@@ -470,6 +473,7 @@ export function buildStyleCascadeTable(
   const authoredDefaults = readDocDefaults(stylesRoot);
   const defaults = {
     ...authoredDefaults,
+    run: [...applicationRunDefaults(stylesRoot), ...authoredDefaults.run],
     paragraph: [...applicationParagraphDefaults(stylesRoot), ...authoredDefaults.paragraph],
   };
   let defaultParagraphStyleId: string | null = null;
