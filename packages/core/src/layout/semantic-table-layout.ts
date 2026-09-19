@@ -73,7 +73,7 @@ import {
   breakPreparedParagraph,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
-import { cellContinuationHeight, cellEndMarkHeight } from './table-cell-end-mark.ts';
+import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
 import { withoutHiddenCellMark } from './table-cell-hide-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
@@ -101,7 +101,11 @@ import type {
   LayoutBox,
 } from './semantic-records.ts';
 import { type ResolvedListItem } from './list-resolve.ts';
-import { directionalListFirstLineShift, publishListMarker } from './list-marker.ts';
+import {
+  directionalListFirstLineShift,
+  listMarkerBaselineFloor,
+  publishListMarker,
+} from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
@@ -498,6 +502,7 @@ function placeCellParagraph(
     flow: {
       paragraphMarkIsCellEnd: options?.cellEndMark,
       firstLineOffset,
+      ...(startOffset === 0 ? listMarkerBaselineFloor(listItem) : {}),
       startOffset,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
@@ -870,9 +875,10 @@ function placeCellParagraph(
     ? publishListMarker(
         listItem,
         deps.measurer,
-        rawRecords[0] ? { y: rawRecords[0].box.y, height: rawRecords[0].box.height } : undefined,
+        rawRecords[0],
         originX,
-        rtl ? indent.left + available + indent.right : undefined
+        rtl ? indent.left + available + indent.right : undefined,
+        deps.inlineDrawingLayout?.pictureBulletResource
       )
     : undefined;
 
@@ -1375,16 +1381,12 @@ export function layoutRowFragmentBounded(
       ? rowTop + cellW - insets.right
       : cellMaxBottom - insets.bottom;
 
-    const markFloor =
-      !vertical && !cell.vMergeContinue
-        ? cellEndMarkHeight(cell, flowRight - flowLeft, flowDeps)
-        : 0;
-    // Only where the whole row continues a merge, and never for a `btLr` cell, whose extent
-    // comes from the row's width rather than from a line box this cannot express.
-    const continuationPt =
-      !vertical && continuationOnlyRow && cell.vMergeContinue
-        ? cellContinuationHeight(cell, flowRight - flowLeft, flowDeps)
-        : 0;
+    const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
+      cell,
+      flowRight - flowLeft,
+      flowDeps,
+      { vertical, continuationOnlyRow }
+    );
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
     let nextCursor = cursor;

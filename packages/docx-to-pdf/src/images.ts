@@ -5,9 +5,41 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { PDFDocument, PDFName, PDFHexString, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
-import type { SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
+import type {
+  LayoutBox,
+  ListMarkerPictureRecord,
+  SemanticDrawingVisit,
+} from '@docx-editor.dev/core/layout';
 import { number as n, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
+
+/**
+ * The raster formats this writer embeds directly.
+ *
+ * PDF has no GIF, BMP or WebP image filter, and its `LZWDecode` is the TIFF flavour
+ * (MSB-first, with EarlyChange) rather than GIF's LSB-first stream, so a GIF cannot be
+ * re-wrapped without decoding it. Core hands exporters validated ENCODED bytes and header
+ * metadata — `ImageDecodePort.decode` answers dimensions and density, never pixels — so
+ * widening this set means writing new decoders over attacker-controlled bytes, not reading
+ * a buffer core already has.
+ */
+const EMBEDDABLE_MIMES: ReadonlySet<string> = new Set(['image/png', 'image/jpeg']);
+
+/**
+ * Why a picture bullet cannot be drawn into the PDF, or null when it can.
+ *
+ * Every value folded into the reason is a CLOSED union minted by core — `ImageResourceState`
+ * kinds, its `reason`, and a `mime` that came from signature sniffing or the content-type
+ * map — so no attacker-controlled string reaches a diagnostic message.
+ */
+function unpaintableBulletReason(picture: ListMarkerPictureRecord, box: LayoutBox): string | null {
+  const resource = picture.resource;
+  if (resource.kind === 'unrenderable') return `image refused: ${resource.reason}`;
+  if (resource.kind !== 'ready') return `image ${resource.kind}`;
+  if (!EMBEDDABLE_MIMES.has(resource.mime)) return `format not embeddable: ${resource.mime}`;
+  if (!(box.width > 0 && box.height > 0)) return 'no visible area';
+  return null;
+}
 
 export class ImageWriter {
   private readonly images = new Map<string, PDFImage>();
@@ -16,6 +48,58 @@ export class ImageWriter {
     readonly session: FontBackedExportCapabilities,
     readonly work: Work
   ) {}
+  /**
+   * Draw a list marker's picture bullet in the box layout published for it.
+   *
+   * Returns '' for anything not drawable — missing, external, still decoding, refused, or a
+   * format this writer cannot embed — and the caller then paints the level's `w:lvlText`.
+   *
+   * That fall back is FOLLOWING the document, not approximating it: the same `w:lvl` authors
+   * `w:lvlText` as this level's marker and `w:lvlPicBulletId` as a picture to use in its
+   * place (ECMA-376 §17.9.12), so the text is the document's own alternative rather than
+   * something this writer invented. It is reported all the same, at `information`: nothing
+   * the document authors is lost from the page, so a strict export is still faithful, while
+   * the reader is still told which of the two markers was drawn. An inline `w:drawing` whose
+   * format cannot be embedded keeps reporting `unsupported`, because there the document
+   * offers no alternative and the page really does lose content.
+   *
+   * No scaling decision is taken here: the box is the extent layout already placed on the
+   * baseline, after the marker font scale.
+   */
+  async paintListMarkerPicture(
+    picture: ListMarkerPictureRecord,
+    box: LayoutBox,
+    page: PDFPage,
+    pageIndex: number
+  ): Promise<string> {
+    await this.work.yield();
+    const unpaintable = unpaintableBulletReason(picture, box);
+    if (unpaintable !== null) {
+      this.work.report(
+        'list-picture-bullet',
+        `Picture bullet drawn as its level text (${unpaintable})`,
+        pageIndex,
+        'information'
+      );
+      return '';
+    }
+    if (picture.resource.kind !== 'ready') return '';
+    const mime = picture.resource.mime;
+    const bytes = this.session.validatedImageBytes(picture);
+    if (!bytes) return '';
+    let image = this.images.get(picture.resource.resourceKey);
+    if (!image) {
+      image =
+        mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+      this.images.set(picture.resource.resourceKey, image);
+    }
+    const key = `Im${image.ref.objectNumber}`;
+    page.node.setXObject(PDFName.of(key), image.ref);
+    const x = box.x;
+    const y = page.getHeight() - box.y - box.height;
+    return `q ${n(box.width)} 0 0 ${n(box.height)} ${n(x)} ${n(y)} cm /${key} Do Q`;
+  }
+
   async paint(visit: SemanticDrawingVisit, page: PDFPage): Promise<string> {
     await this.work.yield();
     const d = visit.drawing;
@@ -30,8 +114,9 @@ export class ImageWriter {
     const bytes = this.session.validatedImageBytes(d);
     if (!bytes || d.resource.kind !== 'ready') return report('Image has no validated raster bytes');
     const mime = d.resource.mime;
-    if (mime !== 'image/png' && mime !== 'image/jpeg')
-      return report(`Unsupported PDF image format: ${mime}`);
+    // An inline drawing has no authored alternative, so an unembeddable format is a real
+    // refusal here — unlike a picture bullet, whose level authors `w:lvlText` beside it.
+    if (!EMBEDDABLE_MIMES.has(mime)) return report(`Unsupported PDF image format: ${mime}`);
     if (
       d.effects.grayscale ||
       d.effects.brightness ||

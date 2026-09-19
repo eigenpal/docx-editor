@@ -265,6 +265,7 @@ export const PACKAGES = [
           'HeaderFooterSectionResolution',
           'HeadlessThemeFonts',
           'ImageResourceLimits',
+          'ListMarkerPictureRecord',
           'NoteAreaRecord',
           'OoxmlElement',
           'OoxmlPackage',

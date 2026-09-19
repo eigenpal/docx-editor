@@ -32,6 +32,7 @@ import { createParagraphLayoutCache } from '../layout/layout-cache.ts';
 import { createLayoutSession } from '../layout/layout-session.ts';
 import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import type { ListMarkerPictureRecord } from '../layout/semantic-records.ts';
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import type { SemanticReviewArtifactRecord } from '../layout/review-artifact-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
@@ -177,8 +178,15 @@ export interface ExportSession {
   layout(): Promise<ExportSemanticLayout>;
   /** Settle resources and cache one explicit revision projection. */
   layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
-  /** Mint a defensive copy only for a ready drawing from this session. */
-  validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+  /**
+   * Mint a defensive copy only for a ready image published by this session.
+   *
+   * Takes any record that carries a validated `resource`: an inline or anchored drawing, or
+   * a list marker's picture bullet. A resource that is not `ready` answers null.
+   */
+  validatedImageBytes(
+    source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord
+  ): Uint8Array | null;
   /**
    * Release per-document caches, pending resource work, and image-byte capabilities. Idempotent.
    * Previously resolved layout snapshots remain immutable and traversable after disposal.
@@ -619,12 +627,12 @@ export function openDocumentForExport(
   const exportSession: ExportSession = {
     layout: () => layoutFor(displayMode),
     layoutFor,
-    validatedImageBytes(drawing) {
+    validatedImageBytes(source) {
       const state = activeState;
-      if (!state || drawing.resource.kind !== 'ready') return null;
+      if (!state || source.resource.kind !== 'ready') return null;
       return (
         state.drawingBundle
-          .mintValidatedBytes(drawing.resource.validatedHandle, drawing.resource.contentId)
+          .mintValidatedBytes(source.resource.validatedHandle, source.resource.contentId)
           ?.slice() ?? null
       );
     },

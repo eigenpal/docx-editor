@@ -404,6 +404,18 @@ export interface InlineDrawingLayoutContext {
     drawing: import('../store/package/ooxml-tree.ts').OoxmlDrawingNode
   ) => DrawingProjection | null;
   readonly resourceOf: (projection: DrawingProjection) => ImageResourceState;
+  /**
+   * Resolve a numbering picture bullet's image by relationship id.
+   *
+   * The owner is the NUMBERING part, not this context's story part: `w:numPicBullet` lives in
+   * `numbering.xml` and its `r:id` names a relationship of that part. The resolver answers the
+   * owner it used so a sink can key the resource without assuming the part name. Absent on a
+   * context whose host resolves no image resources, which degrades a picture bullet to its
+   * level's `w:lvlText`.
+   */
+  readonly pictureBulletResource?: (
+    relationshipId: string
+  ) => { readonly ownerPartName: string; readonly resource: ImageResourceState } | null;
 }
 
 export function clipInlineDrawingRecordVertically(

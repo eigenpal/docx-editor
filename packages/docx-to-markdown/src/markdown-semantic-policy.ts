@@ -169,6 +169,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     numId: 'represented',
     numFmt: 'represented',
     ordinal: 'represented',
+    picture: 'layout-only',
   } satisfies Record<keyof ListMarkerRecord, MarkdownFieldPolicy>,
   table: {
     kind: 'represented',

@@ -181,7 +181,7 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
-    validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+    validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
 // @public

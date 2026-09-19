@@ -116,6 +116,11 @@ export interface ParagraphFlowOptions {
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
+  /**
+   * Baseline floor for the FIRST line, in points: a picture-bullet marker sits on it. The
+   * floor lowers the baseline and grows the box alike, so no later line moves. `exact` clips.
+   */
+  readonly firstLineMinimumBaseline?: number;
   /** Re-break only the unplaced suffix when an unequal-width column follows. */
   readonly startOffset?: number;
   /** Text column bounds in indentLeft coordinates. Margin-relative positional tabs use these
@@ -311,6 +316,7 @@ export function breakParagraph(
   // The first line starts `firstLineOffset` from the paragraph's left indent — right for
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
+  const markerBaselineFloor = flow?.firstLineMinimumBaseline ?? 0;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -945,9 +951,13 @@ export function breakParagraph(
       : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
+    const floored = lines.length === 0 && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
+    const markerFloor = Math.max(0, floored - line.baseline);
+    line.baseline += markerFloor;
     // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
     line.height = scalesTextBandOnly ? Math.max(spaced.height, naturalHeight) : spaced.height;
+    line.height += markerFloor;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.

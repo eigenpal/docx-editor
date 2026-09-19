@@ -1,3 +1,4 @@
+import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts';
 import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
 import { paintRunBorders } from './semantic-paint-run-borders.ts';
 import { isRunKerningEnabled } from '../layout/run-kerning.ts';
@@ -1647,6 +1648,8 @@ function paintListMarker(
 ): HTMLElement {
   const marker = fragment.marker!;
   const scale = ctx.scale;
+  const picture = paintListMarkerPicture(document, fragment, asResolvedPaintContext(ctx));
+  if (picture) return picture;
   // The marker belongs to the paragraph's FIRST line, which is the line it is drawn beside.
   const leading = fragment.lines[0]?.leading ?? 0;
   const element = positioned(document, 'span', marker.box, scale);

@@ -199,7 +199,7 @@ import {
 } from './list-resolve.ts';
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
-import { directionalListFirstLineShift, publishListMarker } from './list-marker.ts';
+import { createListFirstLineMetrics, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
@@ -1697,16 +1697,7 @@ function layoutBlocksPass(
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
-  // Current-pass list map first, so marker ordinals stay fresh when the memo reuses inputs.
-  const firstLineOffsetOf = (entry: PreparedParagraph): number =>
-    directionalListFirstLineShift(
-      listItems?.get(entry.paragraph.id) ?? entry.listItem,
-      entry.indent,
-      measurer,
-      entry.tabStops,
-      entry.available,
-      paragraphIsRtl(entry.props)
-    );
+  const { firstLineOffsetOf, firstLineFloorOf } = createListFirstLineMetrics(listItems, measurer);
 
   const { rememberBreakKey, releasePlacedBreaks } = createParagraphBreakRetention(cache);
 
@@ -1809,6 +1800,7 @@ function layoutBlocksPass(
       tabStops: entry.tabStops,
       flow: {
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
+        ...(startOffset === 0 ? firstLineFloorOf(entry) : {}),
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
@@ -2477,9 +2469,10 @@ function layoutBlocksPass(
           ? publishListMarker(
               listItem,
               measurer,
-              pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined,
+              pending[0],
               0,
-              rtl ? indent.left + available + indent.right : undefined
+              rtl ? indent.left + available + indent.right : undefined,
+              options.inlineDrawingLayout?.pictureBulletResource
             )
           : undefined;
       const marker = rawMarker

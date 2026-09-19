@@ -1884,6 +1884,14 @@ export function listMarkerBox(item: ResolvedListItem, markerWidth: number, lineY
 } | null;
 
 // @public
+export interface ListMarkerPictureRecord {
+    readonly box: LayoutBox;
+    readonly ownerPartName: string;
+    readonly relationshipId: string;
+    readonly resource: ImageResourceState;
+}
+
+// @public
 export interface ListMarkerRecord {
     // (undocumented)
     readonly box: LayoutBox;
@@ -1891,6 +1899,7 @@ export interface ListMarkerRecord {
     readonly numFmt: string;
     readonly numId: string;
     readonly ordinal?: number;
+    readonly picture?: ListMarkerPictureRecord;
     // (undocumented)
     readonly style: ResolvedRunStyle;
     // (undocumented)
@@ -1950,6 +1959,9 @@ export const MAX_NUMBERING_DEFINITIONS = 512;
 
 // @public
 export const MAX_PARAGRAPH_SPACING_PT: number;
+
+// @public
+export const MAX_PICTURE_BULLETS = 64;
 
 // @public
 export const MAX_SDT_NESTING = 32;
@@ -2207,6 +2219,7 @@ export interface NumberingIndex {
     readonly abstractNums: ReadonlyMap<string, AbstractNumDefinition>;
     // (undocumented)
     readonly nums: ReadonlyMap<string, NumDefinition>;
+    readonly pictureBullets?: ReadonlyMap<string, NumberingPictureBullet>;
 }
 
 // @public
@@ -2223,6 +2236,7 @@ export interface NumberingLevel {
     readonly lvlText: string;
     // (undocumented)
     readonly numFmt: string;
+    readonly picBulletId?: string;
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly start: number;
@@ -2252,6 +2266,14 @@ export interface NumberingLevelIndent {
         readonly left: boolean;
         readonly right: boolean;
     };
+}
+
+// @public
+export interface NumberingPictureBullet {
+    readonly height: number;
+    readonly picBulletId: string;
+    readonly relationshipId: string;
+    readonly width: number;
 }
 
 // @public
@@ -2695,6 +2717,9 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null;
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
 
 // @public
+export function pictureBulletFontScale(markerFontSizePt: number): number;
+
+// @public
 export interface PlacedCell {
     // (undocumented)
     readonly cell: TableCellFragmentRecord;
@@ -2751,6 +2776,9 @@ export function readBorderSide(node: OoxmlElement | undefined): TableBorderSide;
 
 // @public
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox;
+
+// @public
+export function readNumberingPictureBullets(root: OoxmlElement | null | undefined): ReadonlyMap<string, NumberingPictureBullet>;
 
 // @public
 export function readNumPr(paragraphPropertyNodes: readonly OoxmlNode[]): {
@@ -2907,8 +2935,17 @@ export interface ResolvedListItem {
     // (undocumented)
     readonly numId: string;
     readonly ordinal?: number;
+    readonly picBullet?: ResolvedPictureBullet;
     // (undocumented)
     readonly suffix: ListSuffix;
+}
+
+// @public
+export interface ResolvedPictureBullet {
+    readonly authored: NumberingPictureBullet;
+    readonly height: number;
+    readonly relationshipId: string;
+    readonly width: number;
 }
 
 // @public
@@ -3020,6 +3057,9 @@ export function resolveOoxmlShadingFill(attributes: Readonly<Record<string, stri
 
 // @public
 export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting, inTableCell?: boolean, lineUnitPt?: number): ParagraphLayoutInputs;
+
+// @public
+export function resolvePictureBullet(authored: NumberingPictureBullet, markerFontSizePt: number): ResolvedPictureBullet | null;
 
 // @public
 export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: ThemeFonts): ResolvedRunStyle;

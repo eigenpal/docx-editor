@@ -300,27 +300,44 @@ export async function paint(
     const marker = visit.paragraph.marker;
     if (marker && !markers.has(visit.paragraph)) {
       markers.add(visit.paragraph);
-      out.push(
-        text.paint(
-          {
-            ...visit,
-            span: {
-              ...visit.span,
-              text: marker.text,
-              style: marker.style,
-              box: marker.box,
-              link: undefined,
-              revisions: undefined,
+      // A picture bullet replaces the marker glyph. Anything undrawable — missing, external,
+      // still decoding, refused, or a format this writer cannot embed — answers '' and the
+      // level's `w:lvlText` is painted instead, which is the same fall back Word shows.
+      const picture = marker.picture
+        ? await images.paintListMarkerPicture(
+            marker.picture,
+            {
+              ...marker.picture.box,
+              x: marker.picture.box.x + visit.storyOrigin.x - visit.page.box.x,
+              y: marker.picture.box.y + visit.storyOrigin.y - visit.page.box.y,
             },
-            absoluteBox: {
-              ...marker.box,
-              x: marker.box.x + visit.storyOrigin.x,
-              y: marker.box.y + visit.storyOrigin.y,
+            page,
+            visit.page.index
+          )
+        : '';
+      if (picture) out.push(picture);
+      else
+        out.push(
+          text.paint(
+            {
+              ...visit,
+              span: {
+                ...visit.span,
+                text: marker.text,
+                style: marker.style,
+                box: marker.box,
+                link: undefined,
+                revisions: undefined,
+              },
+              absoluteBox: {
+                ...marker.box,
+                x: marker.box.x + visit.storyOrigin.x,
+                y: marker.box.y + visit.storyOrigin.y,
+              },
             },
-          },
-          page
-        )
-      );
+            page
+          )
+        );
     }
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)

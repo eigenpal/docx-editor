@@ -176,6 +176,7 @@ export {
   type PageBorderZOrder,
   type PageGeometry,
   type PageRecord,
+  type ListMarkerPictureRecord,
   type ListMarkerRecord,
   type NoteAreaRecord,
   type NoteStoryRecord,
@@ -356,6 +357,14 @@ export {
   type NumberingLevel,
   type NumberingLevelIndent,
 } from './numbering-index.ts';
+export {
+  MAX_PICTURE_BULLETS,
+  pictureBulletFontScale,
+  readNumberingPictureBullets,
+  resolvePictureBullet,
+  type NumberingPictureBullet,
+  type ResolvedPictureBullet,
+} from './numbering-picture-bullet.ts';
 export {
   MAX_LVL_TEXT_LENGTH,
   MAX_MARKER_TEXT_LENGTH,

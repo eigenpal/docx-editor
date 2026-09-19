@@ -22,6 +22,7 @@ import type {
 import type { ResolvedTabStops, TabLeader } from './paragraph-tabs.ts';
 import type { FieldAtomMarker, ModelRange } from './field-pieces.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
+import type { ImageResourceState } from '../store/package/image-resources.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { FontSlot } from './script-itemization.ts';
@@ -590,6 +591,41 @@ export interface ListMarkerRecord {
   readonly numFmt: string;
   /** Resolved counter at this marker's own level; absent for bullets. */
   readonly ordinal?: number;
+  /**
+   * The IMAGE this marker draws instead of {@link ListMarkerRecord.text}, when the resolved
+   * level carries `w:lvlPicBulletId` (§17.9.12) and the referenced `w:numPicBullet` resolved.
+   *
+   * Absent on every ordinary marker, and absent when the picture bullet is missing, external,
+   * malformed or oversized — in which case `text` stands and the marker paints as the level's
+   * `w:lvlText` did before. A sink that cannot draw the resource paints `text` too, which is
+   * why both are published rather than one replacing the other.
+   */
+  readonly picture?: ListMarkerPictureRecord;
+}
+
+/**
+ * The picture a `w:lvlPicBulletId` marker paints, with its geometry already decided.
+ *
+ * Geometry is in the same coordinate space as {@link ListMarkerRecord.box}: paint positions
+ * from `box` and MUST NOT rescale it, neither from the resource's intrinsic pixels nor from
+ * the authored `v:shape` extent, which the marker font size has already scaled. The image
+ * sits with its BOTTOM on the first line's baseline, which is what makes the line tall
+ * enough for it.
+ *
+ * `resource` is the same validated-image projection an inline drawing carries, resolved
+ * through the numbering part's OWN relationships. A `ready` resource is the only one that
+ * can be drawn; every other state is a clean fall back to the marker text.
+ * @public
+ */
+export interface ListMarkerPictureRecord {
+  /** The part whose relationships `relationshipId` belongs to — the numbering part. */
+  readonly ownerPartName: string;
+  /** `v:imagedata/@r:id` of the `w:numPicBullet` shape. */
+  readonly relationshipId: string;
+  /** Where the image paints, authored extent, in the marker's coordinate space. */
+  readonly box: LayoutBox;
+  /** Validated image state, or why there is none. */
+  readonly resource: ImageResourceState;
 }
 
 /**
