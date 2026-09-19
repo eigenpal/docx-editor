@@ -44,8 +44,10 @@ on:
 permissions: {}
 
 # Serialize runs: a dispatched run racing the schedule would otherwise read the
-# alert list and post at the same moment as the scheduled one. Both still run
-# to completion — this orders them, it does not deduplicate them.
+# alert list and post at the same moment as the scheduled one. This orders
+# them, it does not deduplicate them. GitHub keeps at most one run pending per
+# group, so queueing a third cancels the one already waiting — the failure
+# notice below covers that, because it fires on a cancelled job too.
 concurrency:
   group: dependabot-slack-reminders
   cancel-in-progress: false
@@ -82,7 +84,10 @@ jobs:
           app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
           private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: docx-editor
+          # Derived, not hardcoded: a repository rename would otherwise mint a
+          # token for a name the fetch below no longer uses, turning a clear
+          # permission error into a 404.
+          repositories: ${{ github.event.repository.name }}
           permission-vulnerability-alerts: read
 
       - name: Fetch open alerts and build the Slack payload
@@ -112,6 +117,16 @@ jobs:
 
           cat > build-payload.jq <<'JQ'
           def trunc($n): if (length > $n) then .[0:$n - 1] + "…" else . end;
+
+          # Slack reads `<` as the start of a link token in mrkdwn text, and
+          # about one npm advisory summary in fifty carries one ("Unescaped
+          # <template> Content", "denial of service in foo < 2.0"). Left raw,
+          # that `<` swallows the rest of the line, taking the manifest path
+          # with it. Escape `&` first, or the later escapes escape each other.
+          # Truncate before escaping, so no entity is ever cut in half; `pack`
+          # measures the finished lines, so the growth cannot overflow a block.
+          def mrkdwn: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+
           def sev_rank: {critical: 0, high: 1, medium: 2, low: 3}[.] // 4;
           def sev_emoji: {
             critical: ":rotating_light:", high: ":red_circle:",
@@ -136,14 +151,16 @@ jobs:
           # the whole digest: `sev_rank` and `sev_emoji` cannot index on null,
           # and `group_by` cannot use null as an object key. One malformed
           # alert must cost its own line, not the report.
+          # `url` stays raw: it has to sit inside Slack's <url|label> syntax,
+          # which is the one place those characters are structural.
           ($alerts_file[0] | map({
               sev: (.security_vulnerability.severity // "unknown"),
-              name: (.dependency.package.name // "unknown package" | trunc(80)),
-              manifest: (.dependency.manifest_path // "unknown manifest" | trunc(80)),
+              name: (.dependency.package.name // "unknown package" | trunc(80) | mrkdwn),
+              manifest: (.dependency.manifest_path // "unknown manifest" | trunc(80) | mrkdwn),
               url: (.html_url // "https://github.com/\($repo)/security/dependabot"),
               ref: (.security_advisory.cve_id // .security_advisory.ghsa_id
-                    // "no advisory id" | trunc(40)),
-              summary: (.security_advisory.summary // "no summary" | trunc(160))
+                    // "no advisory id" | trunc(40) | mrkdwn),
+              summary: (.security_advisory.summary // "no summary" | trunc(160) | mrkdwn)
             })) as $alerts
           | ($alerts
               | if $mode == "daily"
@@ -163,7 +180,7 @@ jobs:
              + (if $other > 0 then [":white_circle: \($other) other"] else [] end)
              | join("   "))) as $countline
           | ($selected[:20] | map(
-              "\(.sev | sev_emoji) *\(.name)* (\(.sev)) — <\(.url)|\(.ref)>"
+              "\(.sev | sev_emoji) *\(.name)* (\(.sev | mrkdwn)) — <\(.url)|\(.ref)>"
               + " \(.summary) — `\(.manifest)`"
             )) as $lines
           | (if $mode == "daily"
@@ -219,27 +236,38 @@ jobs:
       # alert, a Slack 4xx. On the daily schedule an empty channel means "all
       # clear", so a failure has to say so out loud. Best effort by design — it
       # cannot report a webhook that is itself missing or broken.
+      #
+      # The condition is `always() && job.status != 'success'`, not `failure()`.
+      # A cancelled job skips `failure()` steps, and two ordinary things cancel
+      # this job: the 5-minute timeout above (a hung `gh api` has no per-request
+      # deadline of its own) and the concurrency group evicting a pending run.
+      # Both would otherwise leave the channel silent, which the daily report
+      # means as "nothing to act on".
       - name: Notify Slack — reminder failed
-        if: failure()
+        if: ${{ always() && job.status != 'success' }}
         continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           MODE: ${{ steps.mode.outputs.mode }}
+          JOB_STATUS: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           [ -n "${SLACK_WEBHOOK_URL:-}" ] || exit 0
           payload=$(jq -n \
             --arg mode "${MODE:-unknown}" \
+            --arg status "${JOB_STATUS:-unknown}" \
             --arg run_url "$RUN_URL" \
-            '{
-              text: ":x: docx-editor — the \($mode) Dependabot reminder failed",
+            '({failure: "failed", cancelled: "was cancelled"}[$status]
+              // "did not succeed (\($status))") as $verb
+            | ":x: docx-editor — the \($mode) Dependabot reminder \($verb)" as $title
+            | {
+              text: $title,
               blocks: [
-                { type: "section", text: { type: "mrkdwn",
-                  text: "*:x: docx-editor — the \($mode) Dependabot reminder failed*" } },
+                { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
                 { type: "section", text: { type: "mrkdwn",
                   text: "No alert summary went out, so an empty channel does not mean the repository is clean. Read the run, fix the cause, then re-run the workflow." } },
-                { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Failed run>" } ] }
+                { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run log>" } ] }
               ]
             }')
           curl -sSf --connect-timeout 10 --max-time 30 \
