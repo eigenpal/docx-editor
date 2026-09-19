@@ -123,8 +123,12 @@ jobs:
           # dump here would republish every unfixed vulnerability — package,
           # advisory id, summary, manifest — on a schedule, ahead of the fix.
           # Log the decision and the payload shape, never the contents.
-          high_crit=$(jq '[.[] | select(.security_vulnerability.severity == "critical"
-                                     or .security_vulnerability.severity == "high")] | length' alerts.json)
+          # Indexed defensively, like the projection below and for the same
+          # reason: one alert whose `security_vulnerability` is not an object
+          # would otherwise abort this step, and a malformed alert must cost
+          # its own line, never the whole report.
+          high_crit=$(jq '[.[] | (.security_vulnerability?.severity? // "unknown")
+                               | select(. == "critical" or . == "high")] | length' alerts.json)
 
           # Daily is signal-only: no high or critical alert, no message.
           if [ "$MODE" = 'daily' ] && [ "$high_crit" -eq 0 ]; then
@@ -172,14 +176,22 @@ jobs:
           # alert must cost its own line, not the report.
           # `url` stays raw: it has to sit inside Slack's <url|label> syntax,
           # which is the one place those characters are structural.
+          # `?` and `tostring` make this total. `//` alone only catches null: a
+          # field that arrives as an object is truthy, passes through, and then
+          # throws inside `gsub`. That abort would both lose the report and
+          # print the offending value to a world-readable log, breaking the
+          # "nothing here prints an alert" rule above.
           ($alerts_file[0] | map({
-              sev: (.security_vulnerability.severity // "unknown"),
-              name: (.dependency.package.name // "unknown package" | trunc(80) | mrkdwn),
-              manifest: (.dependency.manifest_path // "unknown manifest" | trunc(80) | mrkdwn),
-              url: (.html_url // "https://github.com/\($repo)/security/dependabot"),
-              ref: (.security_advisory.cve_id // .security_advisory.ghsa_id
-                    // "no advisory id" | trunc(40) | mrkdwn),
-              summary: (.security_advisory.summary // "no summary" | trunc(160) | mrkdwn)
+              sev: (.security_vulnerability?.severity? // "unknown" | tostring),
+              name: (.dependency?.package?.name? // "unknown package"
+                     | tostring | trunc(80) | mrkdwn),
+              manifest: (.dependency?.manifest_path? // "unknown manifest"
+                         | tostring | trunc(80) | mrkdwn),
+              url: (.html_url? // "https://github.com/\($repo)/security/dependabot" | tostring),
+              ref: (.security_advisory?.cve_id? // .security_advisory?.ghsa_id?
+                    // "no advisory id" | tostring | trunc(40) | mrkdwn),
+              summary: (.security_advisory?.summary? // "no summary"
+                        | tostring | trunc(160) | mrkdwn)
             })) as $alerts
           | ($alerts
               | if $mode == "daily"
@@ -248,7 +260,13 @@ jobs:
             echo '::error::SLACK_WEBHOOK_URL is not set; the alert summary was not delivered.'
             exit 1
           fi
+          # Retry transient failures. Without it a one-minute Slack blip drops
+          # that day's security report, and on the daily schedule an empty
+          # channel is defined to mean "nothing to act on". A duplicate digest
+          # from a retried-but-delivered post is visible and harmless; a
+          # missing one is not.
           curl -sSf --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
             -X POST -H 'Content-Type: application/json' \
             -d @slack-payload.json "$SLACK_WEBHOOK_URL" >/dev/null
 
@@ -293,4 +311,5 @@ jobs:
               ]
             }')
           curl -sSf --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
             -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
