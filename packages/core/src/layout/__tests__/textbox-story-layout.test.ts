@@ -882,8 +882,10 @@ describe('list markers inside textbox stories', () => {
 });
 
 test('text-box tables follow compatibility mode with a shared paragraph cache', () => {
+  // Author the traditional side margins so this isolates compatibility-dependent
+  // percentage widths rather than depending on an omitted-margin fallback.
   const table =
-    '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="5000"/><w:tblInd w:type="dxa" w:w="0"/><w:tblLayout w:type="autofit"/></w:tblPr><w:tblGrid><w:gridCol w:w="4216"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="5000"/><w:tblInd w:type="dxa" w:w="0"/><w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4216"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
   const pkg = openPackage(
     footerTextboxDoc(textboxDrawing(table, { cx: 200 * 12700, cy: 100 * 12700 }), 1)
   );
