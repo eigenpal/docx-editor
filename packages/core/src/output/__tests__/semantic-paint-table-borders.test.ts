@@ -293,7 +293,7 @@ describe('table cell border paint', () => {
     expect(topInner.left + topInner.width).toBe(cellW);
   });
 
-  test('double+single paints the centered single stroke and flush double ends', () => {
+  test('double+single paints the outer single stroke inside the cell and flush double ends', () => {
     const body =
       '<w:tbl>' +
       tr(
@@ -313,7 +313,7 @@ describe('table cell border paint', () => {
     const bottomStroke = cell.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!;
     expect(bottomStroke.style.backgroundColor).toBe('#000000');
     expect(bottomStroke.style.height).toBe('1px');
-    expect(parsePx(bottomStroke.style.top)).toBeCloseTo(parsePx(cell.style.height) - 0.5, 6);
+    expect(parsePx(bottomStroke.style.top)).toBeCloseTo(parsePx(cell.style.height) - 1, 6);
     expect(cell.style.borderBottomColor).toBe('#000000');
     const segs = strokeSegs(cell);
     const cellH = parsePx(cell.style.height);
