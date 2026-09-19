@@ -52,6 +52,11 @@ export class DrawingExclusionConvergenceError extends Error {
   }
 }
 
+export {
+  MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS,
+  topAndBottomSkipBeforeLine,
+} from './top-and-bottom-clearance.ts';
+
 export interface ExclusionZone {
   /** Objects outside body drawing flow publish their exclusion directly instead of synthesizing it. */
   readonly sourceKind?: 'table' | 'frame' | 'furniture';
@@ -59,6 +64,16 @@ export interface ExclusionZone {
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
   readonly anchorModelStart: number;
+  /**
+   * The band's vertical position is resolved against the page or a margin, not against the
+   * anchor's own flow position, so it cannot move when the text beside it reflows.
+   *
+   * Such a band excludes every line it crosses on its page, including lines that PRECEDE the
+   * anchor — a picture pinned to the top of the margin wraps the paragraphs above its anchor
+   * exactly as it wraps the ones below. Flow-relative bands (`paragraph`, `line`) stay
+   * forward-only: reaching back would move the anchor that positions them.
+   */
+  readonly pageFramedBand?: boolean;
   readonly sourceOrder: number;
   readonly paintLayer: DrawingPaintLayer;
   readonly relativeHeight: number;
@@ -197,6 +212,11 @@ export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
   });
 }
 
+/** Vertical frames whose resolved origin does not depend on where the anchor flows. */
+function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
+  return frame !== 'paragraph' && frame !== 'line';
+}
+
 export function exclusionZoneFromAnchoredDrawing(options: {
   readonly drawing: AnchoredDrawingRecord;
   readonly projection: DrawingProjection;
@@ -222,6 +242,7 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     drawingNodeId: options.drawing.drawingNodeId,
     anchorParagraphId: options.drawing.anchorParagraphId,
     anchorModelStart: options.drawing.start,
+    ...(pageFramedVertically(options.drawing.verticalFrame) ? { pageFramedBand: true } : {}),
     sourceOrder: options.sourceOrder,
     paintLayer: paintLayerOf(options.drawing),
     relativeHeight: options.drawing.relativeHeight,
@@ -696,56 +717,6 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   }
   zones.sort((left, right) => left.sourceOrder - right.sourceOrder);
   return Object.freeze(zones);
-}
-
-/** Maximum rechecks when clearing a line below overlapping topAndBottom bands. */
-export const MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS = 8;
-
-function lineIntervalIntersectsTopAndBottomBand(
-  lineTop: number,
-  lineBottom: number,
-  bandTop: number,
-  bandBottom: number
-): boolean {
-  return lineTop < bandBottom && lineBottom > bandTop;
-}
-
-/**
- * Vertical skip before placing a line whose [top, bottom] interval intersects a topAndBottom band.
- *
- * Uses the full final line height, unions overlapping band bottoms, and rechecks until clear or
- * {@link MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS} — pre-placement may pass a minimum height; callers
- * must re-run at line close with the styled/drawing final height.
- */
-export function topAndBottomSkipBeforeLine(
-  lineTopY: number,
-  lineHeight: number,
-  zones: readonly ExclusionZone[]
-): number {
-  if (lineHeight <= 0 || zones.length === 0) return 0;
-  let skip = 0;
-  for (let attempt = 0; attempt < MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS; attempt += 1) {
-    const intervalTop = lineTopY + skip;
-    const intervalBottom = intervalTop + lineHeight;
-    let unionBottom = intervalTop;
-    let intersects = false;
-    for (const zone of zones) {
-      if (zone.input.mode !== 'topAndBottom') continue;
-      const bandTop = zone.verticalBand.y;
-      const bandBottom = bandTop + zone.verticalBand.height;
-      if (
-        lineIntervalIntersectsTopAndBottomBand(intervalTop, intervalBottom, bandTop, bandBottom)
-      ) {
-        intersects = true;
-        unionBottom = Math.max(unionBottom, bandBottom);
-      }
-    }
-    if (!intersects) break;
-    const nextSkip = unionBottom - lineTopY;
-    if (nextSkip <= skip + 0.001) break;
-    skip = nextSkip;
-  }
-  return skip;
 }
 
 function intervalToken(intervals: readonly ScanlineInterval[]): string {

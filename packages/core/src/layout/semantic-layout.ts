@@ -53,6 +53,7 @@ import {
 import {
   alignSpans,
   alignDrawings,
+  lineAlignmentMeasure,
   pendingLineFlowExtentAtPlacement,
   type Alignment,
   type PendingLine,
@@ -2794,14 +2795,16 @@ function layoutBlocksPass(
           y: cursorY,
         },
       }));
+      // Word aligns inside the passage a float leaves the line, not the page margins.
+      const measure = lineAlignmentMeasure(pendingLine, columnX, lineIndent, lineAvailableWidth);
       const alignedSpans = alignSpans(
         placedSpans,
         measurer,
-        lineIndent,
-        lineAvailableWidth,
+        measure.indent,
+        measure.available,
         alignment,
         isLastLine,
-        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+        alignment === 'center' || alignment === 'right' ? measure.used : undefined,
         rtl
       );
       // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
@@ -2811,7 +2814,7 @@ function layoutBlocksPass(
           ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
           : alignment !== 'left' && alignment !== 'both'
             ? (() => {
-                const slack = lineAvailableWidth - pendingLine.width;
+                const slack = measure.available - measure.used;
                 if (slack <= 0) return 0;
                 return alignment === 'center' ? slack / 2 : slack;
               })()

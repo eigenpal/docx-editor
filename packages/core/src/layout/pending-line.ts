@@ -42,6 +42,18 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /**
+   * The horizontal passage a float left this line, when that passage is narrower than the
+   * paragraph's measure and holds the whole line.
+   *
+   * `start` is where the line's content begins (after any first-line indent) and `end` is the
+   * passage's right edge, both in paragraph-local coordinates. Centring, right alignment and
+   * justification align INSIDE this passage: Word centres a heading between the two pictures
+   * beside it, not between the page margins, and stretches a justified line to the float's
+   * near edge rather than through it. Absent when no float shortens the line, when the line
+   * steps over a float into a later passage, or when the passage is the whole measure.
+   */
+  wrapSegment?: { readonly start: number; readonly end: number };
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
   /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
@@ -236,6 +248,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.wrapSegment ? { wrapSegment: Object.freeze({ ...line.wrapSegment }) } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
   }) as PendingLine;

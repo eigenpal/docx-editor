@@ -73,12 +73,15 @@ export function createParagraphDrawingWrap(options: {
           if (zone.sourceKind === 'furniture') return true;
           const entryOrder = options.paragraphOrder.get(entry.paragraph.id);
           const anchorOrder = options.paragraphOrder.get(zone.anchorParagraphId);
-          const following = !placement && followingAnchor(zone, index);
+          // A page- or margin-framed band does not move when the text before it reflows, so it
+          // reaches back over the whole page. A flow-framed one would chase its own anchor.
+          const reachesBack =
+            zone.pageFramedBand === true || (!placement && followingAnchor(zone, index));
           if (entryOrder !== undefined && anchorOrder !== undefined) {
-            if (anchorOrder > entryOrder && !following) return false;
+            if (anchorOrder > entryOrder && !reachesBack) return false;
           } else {
             const anchorIndex = options.paragraphIndex(zone.anchorParagraphId);
-            if (anchorIndex < 0 || (anchorIndex > index && !following)) return false;
+            if (anchorIndex < 0 || (anchorIndex > index && !reachesBack)) return false;
           }
           if (options.columnCount > 1 && zone.columnIndex !== columnIndex) return false;
           return !(

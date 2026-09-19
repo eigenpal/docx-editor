@@ -212,3 +212,31 @@ export function alignSpans(
     paragraphRtl
   );
 }
+
+/**
+ * The horizontal box a line aligns inside: the passage a float left it, or the paragraph's
+ * own measure when no float shortens the line.
+ *
+ * `used` is the line's content extent measured from that box's left edge, so the snap advance
+ * a float forced before the first glyph is not mistaken for content and does not push a
+ * centred line off toward the far margin.
+ */
+export function lineAlignmentMeasure(
+  line: {
+    readonly width: number;
+    readonly wrapSegment?: { readonly start: number; readonly end: number };
+  },
+  columnX: number,
+  lineIndent: number,
+  lineAvailableWidth: number
+): { readonly indent: number; readonly available: number; readonly used: number } {
+  const segment = line.wrapSegment;
+  if (!segment) {
+    return { indent: lineIndent, available: lineAvailableWidth, used: line.width };
+  }
+  return {
+    indent: columnX + segment.start,
+    available: Math.max(1, segment.end - segment.start),
+    used: lineIndent - columnX + line.width - segment.start,
+  };
+}

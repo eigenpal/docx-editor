@@ -5,7 +5,12 @@ import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import { fitsWithSpaceShrink } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
-export { paragraphAlignment, alignSpans, type Alignment } from './paragraph-alignment.ts';
+export {
+  paragraphAlignment,
+  alignSpans,
+  lineAlignmentMeasure,
+  type Alignment,
+} from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 
 import {
@@ -21,7 +26,6 @@ import {
   propertiesOfRunContainer,
   type FieldAwarePiece,
   type FieldPageContext,
-  type PositionalTab,
   type FieldLinkProjector,
   type HyperlinkProjector,
   type ModelRange,
@@ -55,7 +59,6 @@ import {
   tabAdvanceWidth,
   TAB_LEADER_GLYPH,
   type ResolvedTabStops,
-  type TabLeader,
 } from './paragraph-tabs.ts';
 import {
   SINGLE_LINE_SPACING,
@@ -93,6 +96,7 @@ import {
   synthesizeParagraphWrapExclusionZones,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import type { ScanlineInterval } from './drawing-wrap.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
@@ -210,154 +214,15 @@ export interface ParagraphFlowOptions {
   readonly paragraphMarkIsCellEnd?: boolean;
 }
 
-/** One measurable piece of a paragraph: text carrying one property set. */
-interface Piece {
-  readonly text: string;
-  readonly props: readonly OoxmlProperty[];
-  /** Resolved once here, so nothing downstream re-derives it. */
-  readonly style: ResolvedRunStyle;
-  readonly start: number;
-  readonly end: number;
-  /** Live PAGE/NUMPAGES projection — model range covers suppressed cached result (or zero-width if empty). */
-  readonly projected?: boolean;
-  /** When set, measure this instead of `text` (note-mark width reservation). */
-  readonly measureText?: string;
-  /** Note citation / mark navigation for paint. */
-  readonly noteNav?: {
-    readonly scopeId: string;
-    readonly direction: 'to-note' | 'to-body';
-  };
-  /** Zero-width `w:ptab` destination metadata. */
-  readonly positionalTab?: PositionalTab;
-  readonly breakKind?: FieldAwarePiece['breakKind'];
-  /** Sanitized hyperlink this piece belongs to. */
-  readonly link?: import('./semantic-records.ts').SpanLinkRecord;
-  /** Typed inline drawing occupying one UTF-16 model unit. */
-  readonly inlineDrawing?: import('./drawing-layout.ts').InlineDrawingLayoutInput;
-  /** Bounded OMML equation occupying one UTF-16 model unit. */
-  readonly equation?: FieldAwarePiece['equation'];
-  /**
-   * The `w:rFonts` slot this piece's text resolves its face through, from
-   * `applyEastAsiaFontSlots`. `style` stays the run's real resolution; every measurement
-   * below resolves the face with `styleForFontSlot`, and the slot is republished on the
-   * span so paint and hit-testing resolve the same one.
-   */
-  readonly fontSlot?: FieldAwarePiece['fontSlot'];
-}
-
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   return propertiesOfRunContainer(container);
 }
 
-/**
- * Whether anything that occupies space still follows this tab on its own line.
- *
- * A TRAILING tab does not wrap in Word — same rule as a trailing space. Header lines are
- * routinely authored as `LEFT<tab><tab><tab>RIGHT<tab><tab>`, and treating the last tabs
- * as wrappable opened a new line per tab: the header grew by several lines, and because a
- * header's flow height sets the body's effective top margin, the body was pushed down the
- * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
- * spaces, which are themselves trimmed at the line end.
- */
-function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array[] {
-  const suffixes = new Array<Uint8Array>(pieces.length);
-  let follows = false;
-  for (let pieceIndex = pieces.length - 1; pieceIndex >= 0; pieceIndex -= 1) {
-    const piece = pieces[pieceIndex]!;
-    const suffix = new Uint8Array(piece.text.length + 1);
-    suffix[piece.text.length] = follows ? 1 : 0;
-    if (piece.inlineDrawing) {
-      suffix.fill(1);
-    } else {
-      for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
-        const ch = piece.text[cursor]!;
-        if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
-        else if (ch !== '\t' && !lineEndSpaces.isCollapsibleLineEndWhitespace(ch))
-          suffix[cursor] = 1;
-        else suffix[cursor] = suffix[cursor + 1]!;
-      }
-    }
-    suffixes[pieceIndex] = suffix;
-    follows = suffix[0] === 1;
-  }
-  return suffixes;
-}
-
-function measureFollowingTabSegment(
-  pieces: readonly Piece[],
-  pieceIndex: number,
-  offsetInPiece: number,
-  measurer: TextMeasurer
-): { width: number; decimalOffset: number } {
-  let width = 0;
-  let decimalOffset = 0;
-  let sawDecimal = false;
-  for (let index = pieceIndex; index < pieces.length; index += 1) {
-    const piece = pieces[index]!;
-    const style = styleForFontSlot(piece.style, piece.fontSlot);
-    const from = index === pieceIndex ? offsetInPiece : 0;
-    for (let cursor = from; cursor < piece.text.length; ) {
-      const ch = piece.text[cursor]!;
-      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) {
-        return { width, decimalOffset: sawDecimal ? decimalOffset : width };
-      }
-      // Walk one code unit; surrogate pairs measure as two units under the fixed measurer
-      // contract (UTF-16), matching how source offsets are counted elsewhere.
-      const next = cursor + 1;
-      const glyph = piece.text.slice(cursor, next);
-      const advance = measurer.measure(displayText(glyph, style), style);
-      if (!sawDecimal && ch === '.') {
-        sawDecimal = true;
-        // Decimal point itself sits ON the stop — offset is the advance before it.
-      } else if (!sawDecimal) {
-        decimalOffset += advance;
-      }
-      width += advance;
-      cursor = next;
-    }
-  }
-  return { width, decimalOffset: sawDecimal ? decimalOffset : width };
-}
-
-/**
- * Where a `w:ptab` sends the caret, in the same shape `nextTabDestination` answers with.
- *
- * ECMA-376 §17.3.3.16: the position is stated by `w:alignment` against the reference
- * `w:relativeTo` names, rather than looked up in `w:tabs`.
- *
- * ONLY `w:alignment` is honoured here; the reference is always the paragraph's own text
- * column (`indentLeft`..`rightEdge`), which is what `w:relativeTo="margin"` — the value
- * every contents field Word generates carries — means. `indent` differs from it only for
- * an indented paragraph and `leftMargin` only for a ptab pointing backwards, both of which
- * the clamp in `tabAdvanceWidth` already resolves to no advance. `positionalTabOf` still
- * validates the attribute so a hostile value cannot reach geometry if that changes.
- */
-function positionalTabDestination(
-  positional: PositionalTab,
-  indentLeft: number,
-  rightEdge: number,
-  marginExtent: { readonly left: number; readonly right: number } | undefined
-): { positionPt: number; alignment: 'left' | 'center' | 'right' | 'decimal'; leader?: TabLeader } {
-  // `indent` measures against the paragraph's own column; `margin` and `leftMargin` against
-  // the containing one. They differ exactly when the paragraph is indented — which is where
-  // reading `w:relativeTo` and then ignoring it put the page number short of the margin by
-  // the width of the indent.
-  const column =
-    positional.relativeTo === 'indent' || !marginExtent
-      ? { left: indentLeft, right: rightEdge }
-      : marginExtent;
-  const positionPt =
-    positional.alignment === 'right'
-      ? column.right
-      : positional.alignment === 'center'
-        ? (column.left + column.right) / 2
-        : column.left;
-  return {
-    positionPt,
-    alignment: positional.alignment,
-    ...(positional.leader ? { leader: positional.leader } : {}),
-  };
-}
+import {
+  measureFollowingTabSegment,
+  placeableContentSuffixes,
+  positionalTabDestination,
+} from './paragraph-piece-metrics.ts';
 
 // The pending-line record and its budget/freeze helpers live in pending-line.ts;
 // re-exported so every existing import through this module stays stable.
@@ -635,6 +500,9 @@ export function breakParagraph(
 
   const zoneApplies = (zone: ExclusionZone): boolean => {
     if (zone.anchorParagraphId !== paragraphId) return true;
+    // A band pinned to the page or a margin sits where it sits whatever this paragraph does,
+    // so the lines BEFORE its anchor character wrap around it like the ones after.
+    if (zone.pageFramedBand) return true;
     const anchorLineStart = anchorLineStartByOffset.get(zone.anchorModelStart);
     if (anchorLineStart !== undefined && line.start >= anchorLineStart) return true;
     if (line.end >= zone.anchorModelStart) return true;
@@ -734,6 +602,25 @@ export function breakParagraph(
   });
   const availableIntervals = exclusionProbe.intervals;
 
+  /**
+   * First usable x at or after the pen, with the first-line indent preserved.
+   *
+   * Word measures a first-line indent from the start of the line's USABLE segment, so an
+   * exclusion that swallows the indent's origin moves the indent along with the edge.
+   * Snapping alone deleted it: the first line then began flush with every other line of the
+   * paragraph, at the float's near edge.
+   */
+  const penTargetAfterExclusion = (
+    currentX: number,
+    intervals: readonly ScanlineInterval[]
+  ): number | null => {
+    const snap = snapXToAvailableInterval(currentX, intervals);
+    if (!snap) return null;
+    if (snap.x <= currentX + 0.001 || line.width > 0.001 || lineOffset() <= 0) return snap.x;
+    const indented = snapXToAvailableInterval(snap.x + lineOffset(), intervals);
+    return indented ? indented.x : snap.x;
+  };
+
   const snapLineToAvailableInterval = (): boolean => {
     const zones = activeExclusionZones();
     if (zones.length === 0) return true;
@@ -743,10 +630,10 @@ export function breakParagraph(
     wordStartWidth += shift;
     const intervals = availableIntervals(zones);
     const currentX = lineOrigin() + line.width;
-    const snap = snapXToAvailableInterval(currentX, intervals);
-    if (!snap) return false;
-    if (snap.x > currentX + 0.001) {
-      line.width = snap.x - lineOrigin();
+    const target = penTargetAfterExclusion(currentX, intervals);
+    if (target === null) return false;
+    if (target > currentX + 0.001) {
+      line.width = target - lineOrigin();
     }
     return true;
   };
@@ -774,6 +661,31 @@ export function breakParagraph(
 
   /** Room left ahead of the pen on the current line. */
   const remainingLineWidth = (): number => Math.max(0, lineAvailable() - line.width);
+
+  /**
+   * Record the float passage this line ended up in, for alignment to work inside it.
+   *
+   * Only a passage that holds the WHOLE line qualifies: a line that steps over a float owns
+   * two disjoint runs of x, and centring either of them would move glyphs onto the picture.
+   */
+  const recordWrapSegment = (): void => {
+    // Placement mirrors an RTL line's spans, so its first span is not its left edge.
+    if (flow?.paragraphRtl) return;
+    const zones = activeExclusionZones();
+    if (zones.length === 0) return;
+    const intervals = availableIntervals(zones);
+    if (intervals.length === 0) return;
+    const contentStart = line.spans[0]?.box.x ?? Math.max(contentLeft, lineOrigin());
+    const contentEnd = lineOrigin() + line.width;
+    const segment = intervals.find(
+      (interval) => contentStart >= interval.start - 0.001 && contentStart <= interval.end + 0.001
+    );
+    if (!segment || contentEnd > segment.end + 0.001) return;
+    // The full measure is what alignment already assumes; recording it would only add a
+    // second spelling of the same geometry to every cache key.
+    if (segment.start <= contentLeft + 0.001 && segment.end >= wrapRight - 0.001) return;
+    line.wrapSegment = { start: contentStart, end: segment.end };
+  };
 
   const tryAdvanceToNextPassage = (): boolean => {
     const zones = activeExclusionZones();
@@ -831,9 +743,9 @@ export function breakParagraph(
     // the picture, so the space beside it took one word per line and the rest piled up on the
     // far side. Filling the near passage first, then advancing on overflow, is what Word does.
     if (containingIndex >= 0) return;
-    const snap = snapXToAvailableInterval(currentX, intervals);
-    if (snap && snap.x > currentX + 0.001) {
-      line.width = snap.x - lineOrigin();
+    const target = penTargetAfterExclusion(currentX, intervals);
+    if (target !== null && target > currentX + 0.001) {
+      line.width = target - lineOrigin();
     }
   };
 
@@ -1053,6 +965,7 @@ export function breakParagraph(
     if (deleted.length > 0) line.deletedRanges = deleted;
     const sites = changeSitesOn(line, line.spans, line.changeSites);
     if (sites.length > 0) line.changeSites = sites;
+    recordWrapSegment();
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
