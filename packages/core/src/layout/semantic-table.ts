@@ -718,13 +718,11 @@ function readTableStructureUncached(
   }
   if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
-  // Modern unstyled tables retain a 10-twip horizontal inset when a margin is
-  // omitted. Explicit zero removes it; authored table/cell styles still override it.
-  // Keep the historical fallback for legacy and unspecified compatibility modes.
-  let styleMargins: CellMarginsPt =
-    compatibilityMode !== undefined && compatibilityMode >= 15
-      ? { top: 0, right: 0.5, bottom: 0, left: 0.5 }
-      : DEFAULT_CELL_MARGINS;
+  // A missing margin resolves to 10 twips, including legacy documents. The
+  // familiar 108-twip inset belongs to the authored default table style, not
+  // this application fallback. Styles, table properties and cells override
+  // each side independently, including explicit zero.
+  let styleMargins: CellMarginsPt = { top: 0, right: 0.5, bottom: 0, left: 0.5 };
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
     styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));

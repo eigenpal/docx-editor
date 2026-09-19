@@ -20,8 +20,12 @@ const cell = (width: number, text: string, extra = '') =>
   `<w:tc><w:tcPr><w:tcW w:type="pct" w:w="${width}"/>${extra}</w:tcPr>` +
   `<w:p><w:r><w:rPr><w:sz w:val="21"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:tc>`;
 const row = `<w:tr>${cell(1000, '2468.13')}${cell(3500, 'x')}</w:tr>`;
+// These grid controls use the traditional authored 108-twip table margins.
+// An omitted margin has a separate, smaller application fallback.
+const traditionalMargins =
+  '<w:tblCellMar><w:left w:type="dxa" w:w="108"/><w:right w:type="dxa" w:w="108"/></w:tblCellMar>';
 const fixture = (pr = properties, columns = grid, rows = row) =>
-  `<w:tbl><w:tblPr>${pr}</w:tblPr>${columns}${rows}</w:tbl>`;
+  `<w:tbl><w:tblPr>${pr}${pr.includes('tblCellMar') ? '' : traditionalMargins}</w:tblPr>${columns}${rows}</w:tbl>`;
 
 function open(body = fixture()) {
   const result = readOoxmlPart(

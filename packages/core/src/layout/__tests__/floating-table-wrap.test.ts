@@ -190,9 +190,9 @@ test('wraps in the anchor column without narrowing another column', () => {
   const anchor = paragraphs(layout).find(
     (fragment) => fragment.paragraphId === floating.floatingWrap?.anchorId
   )!;
-  // The legacy text anchor aligns the cell content; its default 5.4pt inset
+  // The legacy text anchor aligns the cell content; its omitted-margin 0.5pt inset
   // extends the outer table edge into the column gutter.
-  expect(floating.box.x).toBeCloseTo(105 - 5.4, 6);
+  expect(floating.box.x).toBeCloseTo(105 - 0.5, 6);
   expect(floating.floatingWrap?.columnIndex).toBe(1);
   expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(
     floating.box.x + floating.box.width

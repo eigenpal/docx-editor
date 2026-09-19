@@ -123,20 +123,20 @@ describe("a table with no w:tblStyle takes the document's default table style", 
     expect(second.defaultMargins).toEqual({ top: 10, right: 5.4, bottom: 10, left: 5.4 });
   });
 
-  test('a styles part with no default table style falls back to the same numbers', () => {
+  test('a styles part with no default table style uses the omitted-margin fallback', () => {
     const margins = marginsOf(
       tableOf(ONE_CELL_TABLE()),
       part(NO_DEFAULT_STYLES, '/word/styles.xml')
     );
-    expect(margins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+    expect(margins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
   });
 
-  test('no styles part at all falls back to the same numbers', () => {
+  test('no styles part at all uses the omitted-margin fallback', () => {
     expect(marginsOf(tableOf(ONE_CELL_TABLE()))).toEqual({
       top: 0,
-      right: 5.4,
+      right: 0.5,
       bottom: 0,
-      left: 5.4,
+      left: 0.5,
     });
   });
 });
@@ -458,26 +458,29 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
   });
 });
 
-test('modern unstyled tables distinguish omitted margins from TableNormal margins', () => {
+test('omitted margins differ from authored TableNormal margins across compatibility modes', () => {
   const table = tableOf(ONE_CELL_TABLE());
   const source = part(WORD_STYLES, '/word/styles.xml');
   const cascade = buildStyleCascadeTable(source.root);
-  const read = (mode: number, styles?: typeof cascade) =>
-    readTableStructure(table, 468, 0, styles, 'all-markup', undefined, mode)!;
-  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
-  expect(read(14).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
-  expect(read(15, cascade).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
-  expect(read(15).defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
+  for (const mode of [undefined, 11, 12, 14, 15]) {
+    const read = (styles?: typeof cascade) =>
+      readTableStructure(table, 468, 0, styles, 'all-markup', undefined, mode)!;
+    expect(read().defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
+    expect(read(cascade).defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+    expect(read().defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0.5 });
+  }
 });
 
-test('modern omitted margins fall back per side and explicit zero overrides them', () => {
+test('omitted margins fall back per side and explicit zero overrides them across modes', () => {
   const source = tableOf(
     ONE_CELL_TABLE('<w:tblCellMar><w:left w:w="0" w:type="dxa"/></w:tblCellMar>').replace(
       '</w:tcPr>',
       '<w:tcMar><w:right w:w="0" w:type="dxa"/></w:tcMar></w:tcPr>'
     )
   );
-  const resolved = readTableStructure(source, 468, 0, undefined, 'all-markup', undefined, 15)!;
-  expect(resolved.defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0 });
-  expect(resolved.rows[0]!.cells[0]!.margins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  for (const mode of [undefined, 11, 12, 14, 15]) {
+    const resolved = readTableStructure(source, 468, 0, undefined, 'all-markup', undefined, mode)!;
+    expect(resolved.defaultMargins).toEqual({ top: 0, right: 0.5, bottom: 0, left: 0 });
+    expect(resolved.rows[0]!.cells[0]!.margins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  }
 });
