@@ -14,13 +14,19 @@ name: Dependabot Slack reminders
 # Monday 08:00 UTC lands after Dependabot's own weekly run opens the grouped
 # update PRs (.github/dependabot.yml), so the digest reflects them.
 #
+# Because the daily report treats channel silence as the all-clear, a failed
+# run must not be silent too. The last step posts a failure notice for anything
+# that goes wrong above it, and the weekly heartbeat catches a run that never
+# started at all.
+#
 # Auth: the default GITHUB_TOKEN can NEVER read Dependabot alerts. The Actions
 # app it is minted from does not carry that permission, and the `permissions:`
-# block cannot add it — the request fails with "Resource not accessible by
-# integration". This job mints a release-pal App token narrowed to Dependabot
-# alerts read instead. The release-pal GitHub App needs the "Dependabot alerts:
-# Read-only" repository permission, and the org installation has to approve the
-# permission update, or the fetch step fails with 403.
+# block cannot add it. This job mints a release-pal App token narrowed to
+# Dependabot alerts read instead. The release-pal GitHub App needs the
+# "Dependabot alerts: Read-only" repository permission, and the organization
+# installation has to approve the permission update. Until it does, the mint
+# step below fails with 422 ("The permissions requested are not granted to this
+# installation") and the fetch never runs.
 
 on:
   schedule:
@@ -37,7 +43,9 @@ on:
 # The default token is unused (see the auth note above); grant it nothing.
 permissions: {}
 
-# A dispatched run racing the schedule would post the same digest twice.
+# Serialize runs: a dispatched run racing the schedule would otherwise read the
+# alert list and post at the same moment as the scheduled one. Both still run
+# to completion — this orders them, it does not deduplicate them.
 concurrency:
   group: dependabot-slack-reminders
   cancel-in-progress: false
@@ -122,30 +130,41 @@ jobs:
           # The alert list arrives by --slurpfile, not --argjson: a hundred
           # alerts carry their full advisories and would not reliably fit in an
           # argument vector.
-          ($alerts_file[0]) as $alerts
+          #
+          # Project it down to the fields the report uses, and give every one a
+          # fallback. A single alert with no severity would otherwise take down
+          # the whole digest: `sev_rank` and `sev_emoji` cannot index on null,
+          # and `group_by` cannot use null as an object key. One malformed
+          # alert must cost its own line, not the report.
+          ($alerts_file[0] | map({
+              sev: (.security_vulnerability.severity // "unknown"),
+              name: (.dependency.package.name // "unknown package" | trunc(80)),
+              manifest: (.dependency.manifest_path // "unknown manifest" | trunc(80)),
+              url: (.html_url // "https://github.com/\($repo)/security/dependabot"),
+              ref: (.security_advisory.cve_id // .security_advisory.ghsa_id
+                    // "no advisory id" | trunc(40)),
+              summary: (.security_advisory.summary // "no summary" | trunc(160))
+            })) as $alerts
           | ($alerts
-            | if $mode == "daily"
-              then map(select(.security_vulnerability.severity == "critical"
-                           or .security_vulnerability.severity == "high"))
-              else . end
-            | sort_by(.security_vulnerability.severity | sev_rank)) as $selected
-          | ($alerts
-              | group_by(.security_vulnerability.severity)
-              | map({(.[0].security_vulnerability.severity): length}) | add // {}) as $counts
-          # An unrecognized severity still has to show up somewhere, or the
-          # count line silently disagrees with the headline total.
+              | if $mode == "daily"
+                then map(select(.sev == "critical" or .sev == "high"))
+                else . end
+              | sort_by(.sev | sev_rank)) as $selected
+          | ($alerts | group_by(.sev) | map({(.[0].sev): length}) | add // {}) as $counts
+          # A severity outside GitHub's four still has to show up somewhere, or
+          # the count line silently disagrees with the total.
           | ($counts | delpaths([["critical"], ["high"], ["medium"], ["low"]])
                      | [.[]] | add // 0) as $other
-          | ((["critical", "high", "medium", "low"]
+          # The count line always covers every severity, while the daily
+          # headline counts only high and critical. Label it, or the two lines
+          # read as a contradiction.
+          | ("*All open:*  " + ((["critical", "high", "medium", "low"]
                 | map("\(sev_emoji) \($counts[.] // 0) \(.)"))
              + (if $other > 0 then [":white_circle: \($other) other"] else [] end)
-             | join("   ")) as $countline
+             | join("   "))) as $countline
           | ($selected[:20] | map(
-              "\(.security_vulnerability.severity | sev_emoji) *\(.dependency.package.name | trunc(80))*"
-              + " (\(.security_vulnerability.severity))"
-              + " — <\(.html_url)|\(.security_advisory.cve_id // .security_advisory.ghsa_id)>"
-              + " \(.security_advisory.summary | trunc(160))"
-              + " — `\(.dependency.manifest_path | trunc(80))`"
+              "\(.sev | sev_emoji) *\(.name)* (\(.sev)) — <\(.url)|\(.ref)>"
+              + " \(.summary) — `\(.manifest)`"
             )) as $lines
           | (if $mode == "daily"
              then ":rotating_light: docx-editor — \($selected | length) open high/critical Dependabot alert(s)"
@@ -194,3 +213,34 @@ jobs:
           curl -sSf --connect-timeout 10 --max-time 30 \
             -X POST -H 'Content-Type: application/json' \
             -d @slack-payload.json "$SLACK_WEBHOOK_URL" >/dev/null
+
+      # Every step above can fail quietly as far as the channel is concerned:
+      # an unapproved App permission, Dependabot alerts turned off, a malformed
+      # alert, a Slack 4xx. On the daily schedule an empty channel means "all
+      # clear", so a failure has to say so out loud. Best effort by design — it
+      # cannot report a webhook that is itself missing or broken.
+      - name: Notify Slack — reminder failed
+        if: failure()
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [ -n "${SLACK_WEBHOOK_URL:-}" ] || exit 0
+          payload=$(jq -n \
+            --arg mode "${MODE:-unknown}" \
+            --arg run_url "$RUN_URL" \
+            '{
+              text: ":x: docx-editor — the \($mode) Dependabot reminder failed",
+              blocks: [
+                { type: "section", text: { type: "mrkdwn",
+                  text: "*:x: docx-editor — the \($mode) Dependabot reminder failed*" } },
+                { type: "section", text: { type: "mrkdwn",
+                  text: "No alert summary went out, so an empty channel does not mean the repository is clean. Read the run, fix the cause, then re-run the workflow." } },
+                { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Failed run>" } ] }
+              ]
+            }')
+          curl -sSf --connect-timeout 10 --max-time 30 \
+            -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
