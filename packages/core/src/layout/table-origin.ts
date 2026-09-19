@@ -3,6 +3,33 @@ import type {
   TableAnchorFrames,
   TableFloatPosition,
 } from './semantic-table.ts';
+import { contentInsets } from './table-cell-geometry.ts';
+
+/** Legacy numeric text anchors position the first cell's content, not its outer edge. */
+export function positionedTableOriginX(
+  structure: SemanticTableStructure,
+  frames: TableAnchorFrames,
+  compatibilityMode?: number
+): number {
+  const float = structure.float;
+  if (!float) return frames.text.left + tableOriginX(structure, frames.text.width);
+  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  const origin = tableFloatOriginX(float, width, frames);
+  const first = structure.rows[0]?.cells[0];
+  if (
+    (compatibilityMode !== undefined && ![11, 12, 14].includes(compatibilityMode)) ||
+    structure.bidiVisual ||
+    structure.cellSpacingPt !== 0 ||
+    float.horzAnchor !== 'text' ||
+    float.vertAnchor !== 'text' ||
+    float.xSpec !== undefined ||
+    !first ||
+    first.gridColumn !== 0
+  )
+    return origin;
+  const inset = contentInsets(first.margins, first.contentBorders ?? first.borders).left;
+  return Math.max(frames.page.left, origin - inset);
+}
 
 /**
  * Where a table's left edge sits inside the box that contains it.

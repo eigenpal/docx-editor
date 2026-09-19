@@ -10,6 +10,7 @@
 // row publishes into. Everything the paginator needs to mutate is on that object, so the
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
+import { positionedTableOriginX } from './table-origin.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   finalizeTableRows,
@@ -35,7 +36,6 @@ import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import {
   readTableStructure,
-  tableFloatOriginX,
   tableOriginX,
   type SemanticTableRow,
   type TableAnchorFrames,
@@ -158,10 +158,9 @@ export function paginateTableInFlow(
   // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
   // anchor box; every row and the fragment box share the one origin so cell geometry and
   // the reported box cannot drift apart.
-  const tableWidthPt = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const originX = (): number =>
     structure.float
-      ? tableFloatOriginX(structure.float, tableWidthPt, anchorFrames())
+      ? positionedTableOriginX(structure, anchorFrames(), flow.compatibilityMode)
       : columnLeft() + tableOriginX(structure, columnWidth());
   let tableLeft = originX();
   // A text anchor offsets the current body position. Page and margin anchors are sheet

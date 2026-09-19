@@ -10,7 +10,8 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
-import { readTableStructure, tableFloatOriginX, type TableAnchorFrames } from './semantic-table.ts';
+import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
+import { positionedTableOriginX } from './table-origin.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -208,7 +209,7 @@ export function clearEarlierText(
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
-  const left = tableFloatOriginX(float, tableWidth, frames) - distances.left;
+  const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier

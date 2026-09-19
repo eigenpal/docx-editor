@@ -2,7 +2,8 @@
 // Only a terminal, empty anchor is handled here. Other text still needs wrapping.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './layout-cache.ts';
-import { readTableStructure, tableFloatOriginX, type TableAnchorFrames } from './semantic-table.ts';
+import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
+import { positionedTableOriginX } from './table-origin.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -259,7 +260,7 @@ export function placeTerminalTextTables(
     const structure = structures[index];
     if (!structure?.float || !structure.rows.length) return undefined;
     const width = structure.columnWidthsPt.reduce((sum, value) => sum + value, 0);
-    const left = tableFloatOriginX(structure.float, width, input.frames);
+    const left = positionedTableOriginX(structure, input.frames, input.deps.compatibilityMode);
     const top = cursorY + structure.float.yPt;
     if (
       ![left, top, width].every(Number.isFinite) ||
