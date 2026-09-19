@@ -70,12 +70,20 @@ jobs:
           SCHEDULE: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
+          # Match the daily cron and let everything else fall through to
+          # weekly, never the other way round. Both branches compare against a
+          # literal copied from the `schedule:` block above, and an edit there
+          # (`0 8 * * MON` for `0 8 * * 1`, say) breaks the match. Falling
+          # through to daily would then make the Monday run silent whenever
+          # nothing is high or critical, and succeed — so the heartbeat dies
+          # with no failure to notice. Falling through to weekly posts instead,
+          # and a digest on the wrong day is something you can see.
           if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
             mode="$DISPATCH_MODE"
-          elif [ "$SCHEDULE" = '0 8 * * 1' ]; then
-            mode=weekly
-          else
+          elif [ "$SCHEDULE" = '0 7 * * *' ]; then
             mode=daily
+          else
+            mode=weekly
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Report mode: $mode"
@@ -87,10 +95,13 @@ jobs:
           app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
           private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Derived, not hardcoded: a repository rename would otherwise mint a
-          # token for a name the fetch below no longer uses, turning a clear
-          # permission error into a 404.
-          repositories: ${{ github.event.repository.name }}
+          # Hardcoded on purpose, matching every other workflow here. Do not
+          # derive it from `github.event.repository.name`: the schedule event
+          # carries no webhook payload, and an empty `repositories` with `owner`
+          # set does not fail — it widens the token to every repository in the
+          # organization installation. A stale name after a rename is a loud
+          # 404; a token scoped org-wide is silent.
+          repositories: docx-editor
           permission-vulnerability-alerts: read
 
       - name: Fetch open alerts and build the Slack payload
