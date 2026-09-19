@@ -39,14 +39,15 @@ function structure(margin = 108, extra = '', position?: string) {
 
 test('legacy numeric text anchors align the leading content edge across cell margins', () => {
   for (const mode of [undefined, 11, 12, 14]) {
-    for (const margin of [0, 108, 200]) {
-      expect(positionedTableOriginX(structure(margin), frames, mode)).toBeCloseTo(
-        72 - margin / 20 - 0.5,
-        6
-      );
+    for (const [margin, origin] of [
+      [0, 71.5],
+      [108, 66.35],
+      [200, 61.75],
+    ] as const) {
+      expect(positionedTableOriginX(structure(margin), frames, mode)).toBeCloseTo(origin, 6);
     }
     expect(positionedTableOriginX(structure(108, '', 'w:tblpX="1441"'), frames, mode)).toBeCloseTo(
-      144 - 5.4 - 0.5,
+      138.35,
       6
     );
   }
@@ -70,9 +71,9 @@ test('legacy table fragments, rows, and cell text use the same origin in cold an
   const table = cold.pages
     .flatMap((page) => page.fragments)
     .find((block) => block.kind === 'table')!;
-  expect(table.box.x).toBeCloseTo(-5.9, 6);
-  expect(table.rows[0]!.box.x).toBeCloseTo(-5.9, 6);
-  expect(table.rows[0]!.cells[0]!.box.x).toBeCloseTo(-5.9, 6);
+  expect(table.box.x).toBeCloseTo(-5.65, 6);
+  expect(table.rows[0]!.box.x).toBeCloseTo(-5.65, 6);
+  expect(table.rows[0]!.cells[0]!.box.x).toBeCloseTo(-5.65, 6);
   const first = table.rows[0]!.cells[0]!.blocks[0]!;
   if (first.kind !== 'paragraph') throw new Error('Expected cell paragraph');
   expect(first.lines[0]!.spans[0]!.box.x).toBeCloseTo(0, 6);

@@ -15,7 +15,8 @@ export interface CellContentInsets {
 export function borderContentInset(
   margin: number,
   edge: CellBorderBox['top'],
-  shared = false
+  shared = false,
+  collapsedHorizontal = false
 ): number {
   if (edge.state !== 'edge') return margin;
   // Simple collapsed horizontal strokes extend halfway into each incident cell.
@@ -25,8 +26,12 @@ export function borderContentInset(
   // Odd eighths otherwise accumulate half a twip per row across a long table.
   const widthPt = Math.floor(edge.widthPt * 20 + 1e-8) / 20;
   const centered = shared && edge.style !== 'double' && edge.style !== 'triple';
+  // Horizontal padding starts at the middle of a collapsed simple side rule.
+  // With little/no padding, content must still clear its full painted extent.
+  const halfInset =
+    shared || (collapsedHorizontal && (edge.style === 'single' || edge.style === 'thick'));
   return Math.max(
-    margin + widthPt * (shared ? 0.5 : 1),
+    margin + widthPt * (halfInset ? 0.5 : 1),
     borderExtentPt(edge) * (centered ? 0.5 : 1)
   );
 }
@@ -54,8 +59,12 @@ export function contentInsets(
   // the authored thickness; separated cells reserve an independent full border.
   return {
     top: borderContentInset(margins.top, borders.top, collapsedBorders),
-    right: marginCoversRules ? margins.right : borderContentInset(margins.right, borders.right),
+    right: marginCoversRules
+      ? margins.right
+      : borderContentInset(margins.right, borders.right, false, collapsedBorders),
     bottom: borderContentInset(margins.bottom, borders.bottom, collapsedBorders),
-    left: marginCoversRules ? margins.left : borderContentInset(margins.left, borders.left),
+    left: marginCoversRules
+      ? margins.left
+      : borderContentInset(margins.left, borders.left, false, collapsedBorders),
   };
 }
