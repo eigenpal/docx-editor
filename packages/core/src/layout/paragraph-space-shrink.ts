@@ -25,14 +25,25 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   return space - minimum;
 }
 
-/** Only an ordinary word followed by a space can borrow existing inter-word space. */
+/**
+ * Only an ordinary word followed by a space can borrow existing inter-word space.
+ *
+ * A word that straddles a source-run seam — a quoted bold term, a semicolon left in
+ * the next run — overflows on a later piece than the one that opened it. The kept
+ * line still runs to `lineWidth`, but the line the reference would produce instead
+ * ends where the word began, so `wordStart`/`wordStartWidth` describe that
+ * alternative. Their defaults are the values the caller already holds when the
+ * overflowing candidate opens the word, so that path measures exactly as before.
+ */
 export function fitsWithSpaceShrink(
   spans: readonly StyleSpanRecord[],
   candidate: string,
   style: ResolvedRunStyle,
   measurer: TextMeasurer,
   lineWidth: number,
-  available: number
+  available: number,
+  wordStart: number = spans.length,
+  wordStartWidth: number = lineWidth
 ): boolean {
   if (
     !/^[^\s]+ $/u.test(candidate) ||
@@ -44,10 +55,14 @@ export function fitsWithSpaceShrink(
   const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
   if (needed <= 0 || needed > budget + 0.001) return false;
   const spaceWidth = budget * 4;
-  const terminalSpace = capacity(spans[spans.length - 1]!, measurer) * 4;
-  const existingSpaces = spaceWidth - terminalSpace;
+  // The alternative line stops before the overflowing word, so only the spans ahead
+  // of it carry its stretch, and the space in front of it is the one that hangs.
+  const before = spans.slice(0, Math.max(0, Math.min(wordStart, spans.length)));
+  const terminalSpace = before.length ? capacity(before[before.length - 1]!, measurer) * 4 : 0;
+  const existingSpaces =
+    before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
   if (existingSpaces <= 0) return false;
-  const expansion = 1 + Math.max(0, available - lineWidth + terminalSpace) / existingSpaces;
+  const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
   const compression = spaceWidth / (spaceWidth - needed);
   return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
 }

@@ -1479,7 +1479,10 @@ export function breakParagraph(
         line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         !(
           flow?.justifySpaceShrink &&
-          opensWord &&
+          // A word split across source runs overflows on a later piece than the one
+          // that opened it, where the open decision is `continues`. The shrink test
+          // still applies to the whole word: `wordStartSpan` says where it began.
+          (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
           !flow.paragraphRtl &&
           !flow.pageExclusionZones?.length &&
           sameParagraphAnchorStarts.length === 0 &&
@@ -1491,7 +1494,9 @@ export function breakParagraph(
             faceStyle,
             measurer,
             line.width,
-            lineAvailable()
+            lineAvailable(),
+            opensWord ? line.spans.length : wordStartSpan,
+            opensWord ? line.width : wordStartWidth
           )
         ) &&
         (line.spans.length > 0 || line.drawings.length > 0)

@@ -86,3 +86,50 @@ test('space floor and weighted expansion prevent greedy extra words', () => {
   });
   expect(content(result)[0]).toBe(Array(10).fill('aa').join(' '));
 });
+
+// A quoted bold term or a stray closing mark leaves its word split across source runs,
+// so the overflow lands on a piece that continues the word instead of opening one.
+const seamSource = (runs: readonly string[], boldIndex = -1, width = 66) =>
+  loadBody(
+    `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>${runs
+      .map(
+        (text, index) =>
+          `<w:r>${index === boldIndex ? '<w:rPr><w:b/></w:rPr>' : ''}` +
+          `<w:t xml:space="preserve">${text}</w:t></w:r>`
+      )
+      .join('')}</w:p><w:sectPr><w:pgSz w:w="${(width + 50) * 20}" w:h="6000"/>` +
+      `<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
+  );
+
+test('a word split across source runs borrows the same inter-word space', () => {
+  for (const [runs, boldIndex] of [
+    [['aa bb c', 'c dd'], -1],
+    [['aa bb ', 'c', 'c dd'], 1],
+  ] as const) {
+    const result = layoutSemanticDocument(seamSource(runs, boldIndex), 1, {
+      measurer,
+      compatibilityMode: 15,
+    });
+    expect(content(result)).toEqual(['aa bb cc', 'dd']);
+    expect(linesOf(result)[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+  }
+  expect(
+    content(
+      layoutSemanticDocument(seamSource(['aa bb c', 'c dd']), 1, {
+        measurer,
+        compatibilityMode: 14,
+      })
+    )
+  ).toEqual(['aa bb', 'cc dd']);
+});
+
+test('a seam does not lift the space floor for a split word', () => {
+  expect(
+    content(
+      layoutSemanticDocument(seamSource(['aa bb c', 'c dd'], -1, 65), 1, {
+        measurer,
+        compatibilityMode: 15,
+      })
+    )
+  ).toEqual(['aa bb', 'cc dd']);
+});
