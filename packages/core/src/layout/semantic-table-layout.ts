@@ -110,7 +110,7 @@ import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
-import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import { blockInlineRight } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
@@ -1353,15 +1353,7 @@ export function layoutRowFragmentBounded(
     const cellX = slotX + inset;
     const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
     const insets =
-      deps.cellContentInsets?.get(cell.id) ??
-      contentInsets(
-        cell.margins,
-        cell.contentBorders ?? cell.borders,
-        cell.legacyContentAlignment === true && cellSpacingPt === 0,
-        cellSpacingPt === 0,
-        cell.contentBottomIsOuter,
-        cell.centeredSideRules
-      );
+      deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
     // Each page fragment retains the cell padding, even when its paragraph continues.
     const topInset = insets.top;
     // A detached head answers to the page and to its own SPAN, and to nothing about this

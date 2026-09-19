@@ -1,6 +1,6 @@
 // A new fragment has no preceding cell. Do not carry a shared border from the previous page.
 import { effectiveBorderSide } from './table-border-cascade.ts';
-import { borderContentInset, contentInsets } from './table-cell-geometry.ts';
+import { borderContentInset, cellContentInsets } from './table-cell-geometry.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 
@@ -13,21 +13,12 @@ export function firstRowContentDeps(
   const insets = new Map(deps.cellContentInsets);
   const minimumInsets = new Map(deps.cellMinimumContentInsets);
   for (const cell of row.cells) {
-    const borders = cell.contentBorders ?? cell.borders;
     const top = borderContentInset(
       cell.margins.top,
       effectiveBorderSide(cell.borders.top, structure.tableBorders.top)
     );
     insets.set(cell.id, {
-      ...(insets.get(cell.id) ??
-        contentInsets(
-          cell.margins,
-          borders,
-          cell.legacyContentAlignment === true,
-          true,
-          cell.contentBottomIsOuter,
-          cell.centeredSideRules
-        )),
+      ...(insets.get(cell.id) ?? cellContentInsets(cell, true)),
       // There is no cell above a fragment's first row to share this stroke.
       top,
     });
@@ -52,16 +43,7 @@ export function lastRowContentDeps(
   const minimumInsets = new Map(deps.cellMinimumContentInsets);
   let changed = false;
   for (const cell of row.cells) {
-    const before =
-      insets.get(cell.id) ??
-      contentInsets(
-        cell.margins,
-        cell.contentBorders ?? cell.borders,
-        cell.legacyContentAlignment === true,
-        true,
-        cell.contentBottomIsOuter,
-        cell.centeredSideRules
-      );
+    const before = insets.get(cell.id) ?? cellContentInsets(cell, true);
     const bottom = borderContentInset(
       cell.margins.bottom,
       effectiveBorderSide(cell.borders.bottom, structure.tableBorders.bottom)

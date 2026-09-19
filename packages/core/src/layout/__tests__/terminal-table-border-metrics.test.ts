@@ -89,8 +89,10 @@ test('terminal clearance preserves the incoming repeated-header boundary', () =>
   const result = run(fixture({ header: true }), 39);
   expect(result.pages).toHaveLength(2);
   const cell = tables(result, 0)[0]!.rows[1]!.cells[0]!;
-  expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(1, 6);
-  expect(cell.box.height).toBeCloseTo(13.5, 6);
+  // The row under the header authors no top rule of its own, so it inherits the rule the
+  // grid resolves for it — the header's 2pt bottom — and carries the whole band.
+  expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(2, 6);
+  expect(cell.box.height).toBeCloseTo(14.5, 6);
   expect(tables(result, 1)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
 });
 test('a wider own patterned edge can grow the terminal row within the page', () => {

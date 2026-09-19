@@ -78,16 +78,19 @@ for (const own of ['none', 'nil'])
     expect(a.box.x + a.box.width - a.blocks[0]!.box.x - a.blocks[0]!.box.width).toBeCloseTo(6, 6);
   });
 
-test('both rows clear the shared horizontal winner', () => {
+// The receiving row carries the whole band, at its own 6pt top rule, and the row above
+// carries none of it. The stroke starts at the boundary the two rows share and runs down
+// into the receiving row, which is where its content then begins.
+test('the receiving row alone clears the shared horizontal winner', () => {
   const table = layout(
     `<w:tr>${cell(border('bottom', 4) + '<w:gridSpan w:val="2"/>')}</w:tr><w:tr>${cell(border('top', 48) + '<w:gridSpan w:val="2"/>')}</w:tr>`
   );
   const a = table.rows[0]!.cells[0]!,
     b = table.rows[1]!.cells[0]!;
-  expect(a.box.y + a.box.height - a.blocks[0]!.box.y - a.blocks[0]!.box.height).toBeCloseTo(3, 6);
-  expect(b.blocks[0]!.box.y - b.box.y).toBeCloseTo(3, 6);
+  expect(a.box.y + a.box.height - a.blocks[0]!.box.y - a.blocks[0]!.box.height).toBeCloseTo(0, 6);
+  expect(b.blocks[0]!.box.y - b.box.y).toBeCloseTo(6, 6);
   const stroke = a.borders!.strokes!.find((s) => s.side === 'bottom')!;
-  expect(stroke.y).toBeCloseTo(a.box.height - 3, 6);
+  expect(stroke.y).toBeCloseTo(a.box.height, 6);
   expect(stroke.height).toBe(6);
   expect(a.box.y + stroke.y + stroke.height).toBeCloseTo(b.blocks[0]!.box.y, 6);
 });
@@ -124,6 +127,10 @@ test('merged clearance uses painted extent across compound intervals', () => {
   ).toBeCloseTo(extent, 6);
 });
 
+// The 6pt bottom above charges the row below nothing: that row reserves only its own 0.5pt
+// top rule, which the captured control in `.cache/pdf/claude-row-clearance/FINDING.md`
+// measured directly (a 4pt rule above a `none` top keeps the borderless pitch). The two
+// rows therefore need 24.5pt, not the 30pt the half-model asked for.
 test('a new page measures its own top edge after the stronger preceding row stays behind', () => {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr>
@@ -137,11 +144,11 @@ test('a new page measures its own top edge after the stronger preceding row stay
   if (!parsed.ok) throw new Error(parsed.reason);
   const result = layoutSemanticDocument(parsed.part, 0, {
     measurer: createFixedMeasurer(5, 12),
-    geometry: { width: 150, height: 29, margin: { left: 0, right: 0, top: 0, bottom: 0 } },
+    geometry: { width: 150, height: 24, margin: { left: 0, right: 0, top: 0, bottom: 0 } },
   });
   expect(result.pages).toHaveLength(2);
   const second = result.pages[1]!.fragments.find((f) => f.kind === 'table')!.rows[0]!.cells[0]!;
   expect(second.borders!.top!.widthPt).toBe(0.5);
   expect(second.blocks[0]!.box.y - second.box.y).toBeCloseTo(0.5, 6);
-  expect(second.box.y + second.box.height).toBeLessThanOrEqual(29);
+  expect(second.box.y + second.box.height).toBeLessThanOrEqual(24);
 });

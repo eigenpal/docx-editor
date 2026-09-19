@@ -120,6 +120,10 @@ function paintPublishedStrokes(
   const doubleHost = createTableBorderOverlay(document, 'docx-table-border-double');
   const tripleHost = createTableBorderOverlay(document, 'docx-table-border-triple');
   const edgeHost = createTableBorderOverlay(document, 'docx-table-border-edge');
+  // A shared horizontal band runs DOWNWARD out of the cell that owns it, into the row below.
+  // Painted cells are positioned siblings, so without a z-index the next row's `w:shd`
+  // background would cover the rule it is supposed to sit under.
+  for (const host of [doubleHost, tripleHost, edgeHost]) host.style.zIndex = '1';
   let hasDouble = false;
   let hasTriple = false;
   let hasEdge = false;

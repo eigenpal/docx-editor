@@ -46,11 +46,15 @@ const rowsOf = (result: ReturnType<typeof layout>) =>
   );
 
 for (const mode of [undefined, 15]) {
+  // A collapsed horizontal band is charged to the row BELOW it, so every row carries its own
+  // top rule and none carries a bottom until the table's outer edge. Row heights therefore
+  // run minimum + top + 0, and the LAST row alone also carries the outer bottom. The table's
+  // total is what the old half-and-half split produced; only the boundaries moved.
   for (const [border, margin, heights] of [
     [0, 0, [24, 24, 24]],
     [0, 3, [30, 30, 30]],
-    [1, 0, [25.5, 25, 25.5]],
-    [1, 3, [31.5, 31, 31.5]],
+    [1, 0, [25, 25, 26]],
+    [1, 3, [31, 31, 32]],
   ] as const) {
     test(`atLeast reserves content plus insets: mode ${mode}, border ${border}, margin ${margin}`, () => {
       const result = layout(
@@ -98,7 +102,7 @@ for (const mode of [undefined, 15]) {
       .join('');
     const result = layout(table(rows, 1, 0, 2), mode);
     const placed = rowsOf(result);
-    expect(placed.map((entry) => entry.box.height)).toEqual([61.5, 121, 81.5]);
+    expect(placed.map((entry) => entry.box.height)).toEqual([61, 121, 82]);
     expect(placed[0]!.cells[1]!.rowSpan).toBe(3);
     expect(placed[0]!.cells[1]!.box.height).toBe(264);
     expect(placed[1]!.cells[1]!.blocks).toEqual([]);
@@ -114,7 +118,7 @@ test('row minimum adds the largest top and bottom clearance even from different 
   ).toEqual([44, 44]);
   expect(
     rowsOf(layout(table(row(cells) + row(cells), 1, 0, 2))).map((entry) => entry.box.height)
-  ).toEqual([45.5, 45.5]);
+  ).toEqual([45, 46]);
 });
 
 test('a continued row does not reserve the authored minimum again on its final fragment', () => {

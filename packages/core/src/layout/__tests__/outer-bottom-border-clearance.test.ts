@@ -80,7 +80,10 @@ test('a split row keeps its existing boundary until full terminal clearance is r
   const fragment = result.pages[0]!.fragments[0]!;
   if (fragment.kind !== 'table') throw new Error('table');
   const cell = fragment.rows[0]!.cells[0]!;
+  // A split occurrence has not reserved the terminal inset, so its rule is still a band:
+  // it starts at the boundary and runs downward, like every other shared horizontal rule.
+  // NOT reference-confirmed — no captured control paints a table across a page edge.
   const stroke = cell.borders.strokes!.find((stroke) => stroke.side === 'bottom')!;
-  expect(stroke.y).toBeCloseTo(cell.box.height - 0.25, 6);
-  expect(stroke.y + stroke.height).toBeCloseTo(cell.box.height + 0.25, 6);
+  expect(stroke.y).toBeCloseTo(cell.box.height, 6);
+  expect(stroke.y + stroke.height).toBeCloseTo(cell.box.height + 0.5, 6);
 });

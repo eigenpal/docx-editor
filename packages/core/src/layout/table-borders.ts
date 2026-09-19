@@ -600,9 +600,11 @@ function expandSimpleInterval(
 ): void {
   const horizontal = side === 'top' || side === 'bottom';
   const w = edge.widthPt;
-  const inset = centered ? w / 2 : w;
-  // Shared horizontal and admitted legacy vertical rules straddle their grid line.
-  // Other edges retain their independent inward stroke geometry.
+  // A shared horizontal band starts AT the row boundary and runs downward by its own width,
+  // so columns of different widths share one grid line (captured control
+  // `.cache/pdf/claude-band-mixed/`). Admitted legacy vertical rules still straddle theirs.
+  // Every other edge keeps its independent inward stroke geometry.
+  const inset = centered ? (horizontal ? 0 : w / 2) : w;
   pushStroke(strokes, {
     side,
     role: 'edge',

@@ -5,7 +5,9 @@ import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { resolveTableCellBorderGrid, type ResolvedTableBorderEdge } from './table-borders.ts';
 import {
   borderContentInset,
-  contentInsets,
+  cellContentInsets,
+  ownTopBandWidthPt,
+  simpleBandWidthPt,
   type CellContentInsets,
 } from './table-cell-geometry.ts';
 import { canProbeBorderRows, hasTableMerge, physicalCells } from './table-border-probe.ts';
@@ -77,31 +79,54 @@ export function prepareRepeatedHeaderBorderPlan(
   )[0]!;
   const insets = new Map<string, CellContentInsets>();
   const intervals: { start: number; end: number; edge: ResolvedTableBorderEdge }[] = [];
+  // One shared boundary, charged by the captured band rule: the body row reserves its OWN
+  // top rule at full width and the header reserves nothing. Compound strokes keep their own
+  // extent geometry on both sides.
+  for (let index = 0; index < headerCells.length; index += 1) {
+    for (const segment of resolved[index]!.edgeSegments ?? []) {
+      if (segment.side !== 'bottom') continue;
+      intervals.push({ start: segment.gridStart, end: segment.gridEnd, edge: segment.edge });
+    }
+  }
   for (const [index, cell] of headerCells.entries()) {
     let inset = cell.margins.bottom;
     for (const segment of resolved[index]!.edgeSegments ?? []) {
-      if (segment.side !== 'bottom') continue;
+      if (segment.side !== 'bottom' || simpleBandWidthPt(segment.edge) > 0) continue;
       inset = Math.max(
         inset,
         borderContentInset(cell.margins.bottom, { state: 'edge', ...segment.edge }, true)
       );
-      intervals.push({ start: segment.gridStart, end: segment.gridEnd, edge: segment.edge });
     }
-    insets.set(cell.id, {
-      ...contentInsets(
-        cell.margins,
-        cell.contentBorders ?? cell.borders,
-        cell.legacyContentAlignment === true,
-        true,
-        cell.contentBottomIsOuter,
-        cell.centeredSideRules
-      ),
-      bottom: inset,
-    });
+    insets.set(cell.id, { ...cellContentInsets(cell, true), bottom: inset });
   }
+  // `canProbeBorderRows` already refused sparse ownership, so one header cell covers each
+  // body column and an explicit `nil` on either side suppresses the whole band.
   let intervalIndex = 0;
+  // One boundary carries one content band: the widest reserve in the body row sets it.
+  let widestOwnPt = 0;
+  for (const cell of bodyCells)
+    for (const above of headerCells) {
+      if (above.gridColumn + above.gridSpan <= cell.gridColumn) continue;
+      if (above.gridColumn >= cell.gridColumn + cell.gridSpan) continue;
+      let band = 0;
+      for (const interval of intervals) {
+        if (interval.end <= above.gridColumn || interval.start >= above.gridColumn + above.gridSpan)
+          continue;
+        band = Math.max(band, simpleBandWidthPt(interval.edge));
+      }
+      widestOwnPt = Math.max(
+        widestOwnPt,
+        ownTopBandWidthPt(
+          cell.borders.top,
+          above.borders.bottom,
+          structure.tableBorders.insideH,
+          band,
+          cell.suppressesTopBand
+        )
+      );
+    }
   for (const cell of bodyCells) {
-    let inset = cell.margins.top;
+    let inset = cell.margins.top + widestOwnPt;
     const end = cell.gridColumn + cell.gridSpan;
     while (intervalIndex < intervals.length && intervals[intervalIndex]!.end <= cell.gridColumn)
       intervalIndex++;
@@ -110,6 +135,7 @@ export function prepareRepeatedHeaderBorderPlan(
       index < intervals.length && intervals[index]!.start < end;
       index++
     ) {
+      if (simpleBandWidthPt(intervals[index]!.edge) > 0) continue;
       inset = Math.max(
         inset,
         borderContentInset(
@@ -121,29 +147,12 @@ export function prepareRepeatedHeaderBorderPlan(
         )
       );
     }
-    insets.set(cell.id, {
-      ...contentInsets(
-        cell.margins,
-        cell.contentBorders ?? cell.borders,
-        cell.legacyContentAlignment === true,
-        true,
-        cell.contentBottomIsOuter,
-        cell.centeredSideRules
-      ),
-      top: inset,
-    });
+    insets.set(cell.id, { ...cellContentInsets(cell, true), top: inset });
   }
   if (
     [lastHeader, body].every((row) =>
       row.cells.every((cell) => {
-        const before = contentInsets(
-          cell.margins,
-          cell.contentBorders ?? cell.borders,
-          cell.legacyContentAlignment === true,
-          true,
-          cell.contentBottomIsOuter,
-          cell.centeredSideRules
-        );
+        const before = cellContentInsets(cell, true);
         const after = insets.get(cell.id)!;
         return before.top === after.top && before.bottom === after.bottom;
       })

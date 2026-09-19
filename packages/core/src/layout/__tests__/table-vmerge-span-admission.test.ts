@@ -408,8 +408,18 @@ describe('a merge is only sized as a span where the span can hold it', () => {
   });
 });
 
+// Every row reserves the rule its OWN top resolves to, so an interior row only measures
+// differently as a fragment's first row when the table's outer `w:top` differs from its
+// `w:insideH`. Here they are 4pt and 1pt, and the merge starts at the second row.
+const OUTER_TOP_GRID =
+  '<w:tblPr><w:tblBorders>' +
+  ['left', 'bottom', 'right', 'insideH', 'insideV']
+    .map((side) => `<w:${side} w:val="single" w:sz="8" w:color="000000"/>`)
+    .join('') +
+  '<w:top w:val="single" w:sz="32" w:color="000000"/></w:tblBorders></w:tblPr>';
 test('merge preflight remeasures the outer top inset after an occurrence changes', () => {
-  const part = loadPart(`<w:tbl>${GRID}<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>
+  const part = loadPart(`<w:tbl>${OUTER_TOP_GRID}<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>
+    <w:tr>${tc(p('Lead'))}</w:tr>
     <w:tr>${tc(MERGED_CONTENT, RESTART)}</w:tr><w:tr>${tc(p(''), CONTINUE)}</w:tr></w:tbl>`);
   const body = part.root.children.find(
     (node) => node.kind !== 'textValue' && node.localName === 'body'
@@ -428,13 +438,13 @@ test('merge preflight remeasures the outer top inset after an occurrence changes
       nextLineId: () => 'probe',
     },
     undefined,
-    (row) => first && row.id === structure.rows[0]!.id
+    (row) => first && row.id === structure.rows[1]!.id
   )!;
-  const span = plan.spansAt(0)[0]!;
+  const span = plan.spansAt(1)[0]!;
   const interior = plan.heightOf(span, 0);
   first = true;
   const outer = plan.heightOf(span, 0);
-  expect(outer - interior).toBeCloseTo(0.5, 8);
+  expect(outer - interior).toBeCloseTo(3, 8);
   first = false;
   expect(plan.heightOf(span, 0)).toBe(interior);
 });

@@ -18,7 +18,7 @@ export type RowMinimumInsetMap = ReadonlyMap<
   { readonly top: number; readonly bottom: number }
 >;
 import type { TableBorderBox } from './table-borders.ts';
-import { contentInsets } from './table-cell-geometry.ts';
+import { cellContentInsets } from './table-cell-geometry.ts';
 import { withTableContentBorders } from './table-content-borders.ts';
 
 /**
@@ -54,13 +54,7 @@ export function withRowMinimumContentInsets(
           ...row,
           cells: row.cells.map((cell, cellIndex) => {
             const local = minimumRows[rowIndex]!.cells[cellIndex]!;
-            const insets = contentInsets(
-              local.margins,
-              local.contentBorders ?? local.borders,
-              false,
-              collapsed,
-              local.contentBottomIsOuter
-            );
+            const insets = cellContentInsets(local, collapsed);
             return { ...cell, minimumContentInsets: { top: insets.top, bottom: insets.bottom } };
           }),
         }

@@ -3,8 +3,12 @@ import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tre
 import { contentInsets } from '../table-cell-geometry.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 
+// A captured reference charges a collapsed horizontal band ENTIRELY to the row below it:
+// that row reserves its own top rule at full width and the row above reserves nothing.
+// See `.cache/pdf/claude-row-clearance/FINDING.md`, whose 4pt control excludes a half share
+// outright (+4.08 measured against the +2.0 a half model predicts).
 test.each([0.5, 3, 12])(
-  'collapsed horizontal borders reserve half their painted extent (%s pt)',
+  'a collapsed horizontal band is charged to the row below it (%s pt)',
   (widthPt) => {
     const margins = { top: 0, right: 5, bottom: 0, left: 5 };
     const edge = { state: 'edge' as const, style: 'single' as const, widthPt, color: '000000' };
@@ -14,8 +18,9 @@ test.each([0.5, 3, 12])(
       left: { state: 'omitted' as const },
       right: { state: 'omitted' as const },
     };
-    expect(contentInsets(margins, borders).top).toBe(widthPt / 2);
-    expect(contentInsets(margins, borders).bottom).toBe(widthPt / 2);
+    const insets = contentInsets(margins, borders, false, true, false, false, widthPt);
+    expect(insets.top).toBe(widthPt);
+    expect(insets.bottom).toBe(0);
   }
 );
 
@@ -43,7 +48,7 @@ test('twenty exact-height lines reserve shared border insets', () => {
   );
   expect(rows).toHaveLength(20);
   for (const [index, item] of rows.entries())
-    expect(item.box.height).toBeCloseTo(index === 0 || index === 19 ? 16.35 : 16.1, 7);
+    expect(item.box.height).toBeCloseTo(index === 19 ? 16.6 : 16.1, 7);
   const cell = rows[0]!.cells[0]!;
   expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(0.5, 7);
   const topStroke = cell.borders.strokes!.find((stroke) => stroke.side === 'top')!;

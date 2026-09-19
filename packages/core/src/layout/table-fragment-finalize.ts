@@ -15,7 +15,7 @@ import {
 } from './drawing-layout.ts';
 import {
   borderContentInset,
-  contentInsets,
+  cellContentInsets,
   type CellContentInsets,
 } from './table-cell-geometry.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
@@ -206,14 +206,7 @@ export function finalizeTableRows(
       if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
         const insets =
           occurrenceInsets?.get(row)?.get(cell.id) ??
-          contentInsets(
-            authored.margins,
-            authored.contentBorders ?? authored.borders,
-            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
-            structure.cellSpacingPt === 0,
-            authored.contentBottomIsOuter,
-            authored.centeredSideRules
-          );
+          cellContentInsets(authored, structure.cellSpacingPt === 0);
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
         let contentBottom = Number.NEGATIVE_INFINITY;
@@ -255,14 +248,7 @@ export function finalizeTableRows(
       ) {
         const insets =
           occurrenceInsets?.get(row)?.get(cell.id) ??
-          contentInsets(
-            authored.margins,
-            authored.contentBorders ?? authored.borders,
-            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
-            structure.cellSpacingPt === 0,
-            authored.contentBottomIsOuter,
-            authored.centeredSideRules
-          );
+          cellContentInsets(authored, structure.cellSpacingPt === 0);
         const cellContentBox = {
           ...finalizedCellBox,
           x: finalizedCellBox.x + insets.left,
@@ -318,14 +304,7 @@ export function finalizeTableRows(
         const insets =
           authored &&
           (occurrenceInsets?.get(rows[rowIndex]!)?.get(cell.id) ??
-            contentInsets(
-              authored.margins,
-              authored.contentBorders ?? authored.borders,
-              authored.legacyContentAlignment === true && structure.cellSpacingPt === 0,
-              structure.cellSpacingPt === 0,
-              authored.contentBottomIsOuter,
-              authored.centeredSideRules
-            ));
+            cellContentInsets(authored, structure.cellSpacingPt === 0));
         // Split/merged occurrences can decline the terminal re-probe. Do not move their
         // stroke into content until admission has reserved the complete outer inset.
         const outerBottomInsetReserved =

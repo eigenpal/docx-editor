@@ -40,10 +40,9 @@ for (const header of [false, true]) {
           const cell = row.cells[0]!;
           if (row.isHeaderRepeat) continue;
           if (row.isContinuation) continuations++;
-          expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(
-            row === table.rows[0] ? 5 : 4.5,
-            6
-          );
+          // Every row reserves its OWN 1pt top rule in full, a fragment's first row and a
+          // continuation alike, so the 4pt `w:tblCellMar` top pads to 5 throughout.
+          expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(5, 6);
           if (row === table.rows[0]) expect(cell.borders!.top?.widthPt).toBe(1);
           if (row === table.rows.at(-1)) expect(cell.borders!.bottom?.widthPt).toBe(1);
           for (const block of cell.blocks) {

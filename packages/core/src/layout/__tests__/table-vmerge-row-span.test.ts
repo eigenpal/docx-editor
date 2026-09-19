@@ -21,8 +21,10 @@ const FIXTURE = new URL('../../../../../e2e/fixtures/vmerge-row-span.docx', impo
 
 /** `w:trHeight` minimums the fixture authors, in points. */
 const SHORT_MINIMUMS_PT = [60, 120, 80];
-// A 1pt outer stroke and shared half-strokes sit outside the authored content minima.
-const SHORT_ROW_HEIGHTS_PT = [61.5, 121, 81.5];
+// Each row carries its OWN 1pt top rule outside its authored content minimum, and no row
+// carries a bottom until the table's outer edge, which the last row adds. The span still
+// totals 264: the captured rule moved the boundaries, not the table.
+const SHORT_ROW_HEIGHTS_PT = [61, 121, 82];
 const TALL_MINIMUM_PT = 36;
 
 function layoutFixture(): SemanticLayout {
@@ -116,7 +118,7 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     const rows = rowsOf(shortTable(layoutFixture()));
     const labels = rows.map((row) => row.cells[0]!);
     const top = rows[0]!.box.y;
-    expect(labels.map((cell) => cell.box.y - top)).toEqual([0, 61.5, 182.5]);
+    expect(labels.map((cell) => cell.box.y - top)).toEqual([0, 61, 182]);
     expect(labels.map((cell) => cell.box.height)).toEqual(SHORT_ROW_HEIGHTS_PT);
     expect(labels.map((cell) => cell.shading)).toEqual(['355D7E', '7BA79D', 'B4C7DC']);
     expect(labels.map(cellText)).toEqual(['Short row 1', 'Short row 2', 'Short row 3']);
@@ -139,9 +141,9 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     // The rows the merge covers cannot hold the content at their authored minimums.
     expect(contentPt).toBeGreaterThan(TALL_MINIMUM_PT * rows.length);
 
-    expect(rows[0]!.box.height).toBe(TALL_MINIMUM_PT + 1.5);
+    expect(rows[0]!.box.height).toBe(TALL_MINIMUM_PT + 1);
     expect(rows[1]!.box.height).toBe(TALL_MINIMUM_PT + 1);
-    expect(rows[2]!.box.height).toBeGreaterThan(TALL_MINIMUM_PT + 1.5);
+    expect(rows[2]!.box.height).toBeGreaterThan(TALL_MINIMUM_PT + 2);
 
     const spanPt = rows.reduce((sum, row) => sum + row.box.height, 0);
     expect(head.box.height).toBe(spanPt);
@@ -156,8 +158,8 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     const top = rows[0]!.box.y;
     expect(rows.map((row) => row.cells[0]!.box.y - top)).toEqual([
       0,
-      TALL_MINIMUM_PT + 1.5,
-      TALL_MINIMUM_PT * 2 + 2.5,
+      TALL_MINIMUM_PT + 1,
+      TALL_MINIMUM_PT * 2 + 2,
     ]);
     expect(rows.map((row) => row.cells[0]!.shading)).toEqual(['355D7E', '7BA79D', 'B4C7DC']);
   });

@@ -6,11 +6,14 @@ import {
   type TableBorderBox,
   type TableBorderSide,
   type ResolvedTableBorderEdge,
+  type ResolvedCellBorders,
 } from './table-borders.ts';
-import { borderContentInset } from './table-cell-geometry.ts';
+import { borderContentInset, ownTopBandWidthPt, simpleBandWidthPt } from './table-cell-geometry.ts';
 import type { SemanticTableRow, SemanticTableCell } from './semantic-table.ts';
 import { buildColumnOwnershipIndexes, ownerAt } from './table-border-ownership.ts';
 import { resolveVMergeSpans } from './table-vmerge.ts';
+
+const OMITTED: TableBorderSide = { state: 'omitted' };
 
 /** Resolve physical coordinates without reversing the stored cell traversal order. */
 export function physicalTableRows(
@@ -30,6 +33,73 @@ export function physicalTableRows(
         })),
       }))
     : rows;
+}
+
+/**
+ * Clearance each authored ROW reserves above its content, per cell, in points.
+ *
+ * A captured reference charges a collapsed horizontal band entirely to the row BELOW it, at
+ * that row's OWN authored top rule's full width, and charges the row above nothing. Every
+ * column's stroke then starts at the shared boundary and runs DOWNWARD by its own width, so
+ * a wider rule in one column reaches further into the row below without moving the boundary.
+ * Controls: `.cache/pdf/claude-row-clearance/FINDING.md` and `.cache/pdf/claude-band-mixed/`.
+ *
+ * Resolved per authored ROW, including rows made of `w:vMerge` continuation cells, which own
+ * no content and therefore appear nowhere in the span-scoped content border grid.
+ */
+function resolveRowTopBands(
+  rows: readonly SemanticTableRow[],
+  table: TableBorderBox,
+  resolved: readonly (readonly ResolvedCellBorders[])[],
+  merged: ReadonlyMap<string, number>,
+  ownership: ReturnType<typeof buildColumnOwnershipIndexes>,
+  columns: number
+): readonly number[] {
+  // Painted band width feeding each row, per grid column: the rule published by whichever
+  // cell's span ENDS on the boundary above. A suppressed vMerge seam leaves it at zero.
+  const bandPt = rows.map(() => new Float64Array(columns));
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    for (let cellIndex = 0; cellIndex < rows[rowIndex]!.cells.length; cellIndex += 1) {
+      const cell = rows[rowIndex]!.cells[cellIndex]!;
+      if (cell.vMergeContinue) continue;
+      const below = rowIndex + (merged.get(cell.id) ?? 1);
+      const target = bandPt[below];
+      if (!target) continue;
+      for (const segment of resolved[rowIndex]![cellIndex]!.edgeSegments ?? []) {
+        if (segment.side !== 'bottom') continue;
+        const width = simpleBandWidthPt(segment.edge);
+        const end = Math.min(segment.gridEnd, columns);
+        for (let column = Math.max(0, segment.gridStart); column < end; column += 1)
+          target[column] = Math.max(target[column]!, width);
+      }
+    }
+  }
+  // One boundary carries one content band, so the row's widest reserve sets it for every
+  // cell: the captured mixed-width control charges `m3` and `m6` by their single 4pt column.
+  return rows.map((row, rowIndex) => {
+    let widest = 0;
+    for (const cell of row.cells) {
+      const tableSide = rowIndex === 0 ? table.top : table.insideH;
+      const last = Math.min(cell.gridColumn + cell.gridSpan, columns);
+      for (let column = cell.gridColumn; column < last; column += 1) {
+        // An explicit `nil` above suppresses the band for the columns it covers, so read
+        // each column's own owner rather than one representative neighbour.
+        const owner = rowIndex === 0 ? undefined : ownerAt(ownership, rowIndex - 1, column);
+        const above = owner ? rows[rowIndex - 1]?.cells[owner.cellIndex] : undefined;
+        widest = Math.max(
+          widest,
+          ownTopBandWidthPt(
+            cell.borders.top,
+            above?.borders.bottom ?? OMITTED,
+            tableSide,
+            bandPt[rowIndex]?.[column] ?? 0,
+            cell.suppressesTopBand
+          )
+        );
+      }
+    }
+    return widest;
+  });
 }
 
 /** Resolve the same winners as paint before their clearance affects wrapping and row height. */
@@ -118,17 +188,22 @@ export function withTableContentBorders(
       }
     }
   }
+  const topBands = resolveRowTopBands(rows, table, resolved, merged, ownership, columns);
+  // Content borders answer for the merged head's whole SPAN; band clearance answers for the
+  // authored ROW, so a continuation cell carries one and not the other.
   return rows.map((row, index) => ({
     ...row,
-    cells: row.cells.map((cell) =>
-      cell.vMergeContinue
-        ? cell
+    cells: row.cells.map((cell) => {
+      const topBandClearancePt = topBands[index]!;
+      return cell.vMergeContinue
+        ? { ...cell, topBandClearancePt }
         : {
             ...cell,
+            topBandClearancePt,
             contentBorders: boxes.get(cell.id)!,
             contentBottomIsOuter: index + (merged.get(cell.id) ?? 1) === rows.length,
-          }
-    ),
+          };
+    }),
   }));
 }
 

@@ -205,6 +205,10 @@ export interface SemanticTableCell {
   readonly contentBorders?: CellBorderBox;
   /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
   readonly contentBottomIsOuter?: boolean;
+  /** Clearance this AUTHORED ROW reserves above its content for its own top rule, in points. */
+  readonly topBandClearancePt?: number;
+  /** The CELL declares `w:tcBorders/w:top` as `nil`, rather than a table style doing so. */
+  readonly suppressesTopBand?: true;
   /** Row-local clearance in points for authored minima, before vMerge combines content boxes. */
   readonly minimumContentInsets?: { readonly top: number; readonly bottom: number };
   /** Validated 6-hex shading fill, absent for none/auto. */
@@ -919,6 +923,7 @@ function readTableStructureUncached(
       // Through the shared collector: a cell is a story like any other, so a tracked mark
       // merges inside it and a paragraph a revision removed leaves no blank line behind.
       const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter);
+      const ownBorders = cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX;
       cells.push({
         id: cellNode.id,
         gridSpan,
@@ -929,10 +934,8 @@ function readTableStructureUncached(
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
-        borders: mergeCellBorders(
-          conditionalBorders,
-          cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
-        ),
+        borders: mergeCellBorders(conditionalBorders, ownBorders),
+        ...(ownBorders.top.state === 'none' ? { suppressesTopBand: true as const } : {}),
         ...(shading === undefined ? {} : { shading }),
         preferredWidth,
         styleFormatting: styleFormattingFor(conditions),

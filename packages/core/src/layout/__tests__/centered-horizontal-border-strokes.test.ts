@@ -7,7 +7,7 @@ import {
 } from '../table-borders.ts';
 
 for (const style of ['single', 'thick', 'dashed', 'dotted'] as const) {
-  test(`${style} partial horizontal winners share the row boundary`, () => {
+  test(`${style} partial horizontal winners start at the row boundary`, () => {
     const edge = (widthPt: number): TableBorderSide => ({
       state: 'edge',
       style,
@@ -45,8 +45,11 @@ for (const style of ['single', 'thick', 'dashed', 'dotted'] as const) {
         .filter((stroke) => stroke.side === 'bottom')
         .map(({ x, y, width, height }) => ({ x, y, width, height }))
     ).toEqual([
-      { x: 0, y: 18, width: 30, height: 4 },
-      { x: 30, y: 17, width: 50, height: 6 },
+      // Every column's rule starts AT the shared boundary and runs downward by its own
+      // width, so a wider column reaches further into the row below without starting
+      // higher. Captured in `.cache/pdf/claude-band-mixed/` (`m3`, `m4`, `m6`).
+      { x: 0, y: 20, width: 30, height: 4 },
+      { x: 30, y: 20, width: 50, height: 6 },
     ]);
     // The fragment's outer top rule has no preceding row to share its stroke.
     expect(strokes.find((stroke) => stroke.side === 'top')!.y).toBe(0);
