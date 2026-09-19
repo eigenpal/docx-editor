@@ -46,8 +46,11 @@ permissions: {}
 # Serialize runs: a dispatched run racing the schedule would otherwise read the
 # alert list and post at the same moment as the scheduled one. This orders
 # them, it does not deduplicate them. GitHub keeps at most one run pending per
-# group, so queueing a third cancels the one already waiting — the failure
-# notice below covers that, because it fires on a cancelled job too.
+# group, so queueing a third evicts the one already waiting. An evicted run
+# never reaches a runner, so no step of it runs and nothing reports it — the
+# weekly digest is the backstop. Dispatching this workflow twice while a run is
+# in progress is the only way to reach that, and both schedules are an hour
+# apart.
 concurrency:
   group: dependabot-slack-reminders
   cancel-in-progress: false
@@ -103,14 +106,19 @@ jobs:
           gh api "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
             --paginate | jq -s 'add // []' > alerts.json
 
-          total=$(jq 'length' alerts.json)
+          # Nothing below prints an alert. This repository is public, so its
+          # Actions logs are readable by anyone and are kept for 90 days, while
+          # the alert list itself needs write or security access to read. A
+          # dump here would republish every unfixed vulnerability — package,
+          # advisory id, summary, manifest — on a schedule, ahead of the fix.
+          # Log the decision and the payload shape, never the contents.
           high_crit=$(jq '[.[] | select(.security_vulnerability.severity == "critical"
                                      or .security_vulnerability.severity == "high")] | length' alerts.json)
-          echo "Open alerts: $total total, $high_crit high/critical"
 
           # Daily is signal-only: no high or critical alert, no message.
           if [ "$MODE" = 'daily' ] && [ "$high_crit" -eq 0 ]; then
             echo 'should_post=false' >> "$GITHUB_OUTPUT"
+            echo 'Daily report: nothing to act on, staying silent.'
             exit 0
           fi
           echo 'should_post=true' >> "$GITHUB_OUTPUT"
@@ -212,7 +220,9 @@ jobs:
             --arg repo "$REPO" \
             -f build-payload.jq > slack-payload.json
 
-          jq . slack-payload.json
+          # Prove the payload is well formed without printing it (see above).
+          jq -e 'type == "object" and (.blocks | length) > 0' slack-payload.json > /dev/null
+          echo "Built a Slack payload with $(jq '.blocks | length' slack-payload.json) block(s)."
 
       - name: Post to Slack
         if: steps.payload.outputs.should_post == 'true'
@@ -238,11 +248,12 @@ jobs:
       # cannot report a webhook that is itself missing or broken.
       #
       # The condition is `always() && job.status != 'success'`, not `failure()`.
-      # A cancelled job skips `failure()` steps, and two ordinary things cancel
-      # this job: the 5-minute timeout above (a hung `gh api` has no per-request
-      # deadline of its own) and the concurrency group evicting a pending run.
-      # Both would otherwise leave the channel silent, which the daily report
-      # means as "nothing to act on".
+      # A cancelled job skips `failure()` steps, and the 5-minute timeout above
+      # cancels this job — a hung `gh api` has no per-request deadline of its
+      # own. That would otherwise leave the channel silent, which the daily
+      # report means as "nothing to act on". This cannot cover a run evicted
+      # from the concurrency queue, because such a run never starts; see the
+      # note on `concurrency` above.
       - name: Notify Slack — reminder failed
         if: ${{ always() && job.status != 'success' }}
         continue-on-error: true
