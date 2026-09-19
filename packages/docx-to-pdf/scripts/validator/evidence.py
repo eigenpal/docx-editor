@@ -12,7 +12,7 @@ from catalog import check_disk_budget, read_json
 
 
 def comparison_identity():
-    """Reference-only evidence survives engine edits, but never a scorer/runtime change."""
+    """Identical PDF pairs retain evidence across engine edits, never scorer/runtime changes."""
     identity = hashlib.sha256(sys.version.encode())
     for path in (Path(__file__), Path(__file__).parents[1] / 'pdf-visual-diff.py'):
         identity.update(path.read_bytes())

@@ -29,7 +29,11 @@ def engine_identity():
     for package in ('core', 'fonts', 'docx-to-pdf'):
         for name in ('package.json', 'tsconfig.json'):
             identity.update((REPO / 'packages' / package / name).read_bytes())
-        for path in sorted((REPO / 'packages' / package / 'src').rglob('*')):
+        source = REPO / 'packages' / package / 'src'
+        for path in sorted(source.rglob('*')):
+            relative = path.relative_to(source)
+            if '__tests__' in relative.parts or re.search(r'\.(test|spec)\.[cm]?[jt]sx?$', path.name):
+                continue
             if path.is_file():
                 identity.update(path.relative_to(REPO).as_posix().encode())
                 identity.update(path.read_bytes())
@@ -218,23 +222,25 @@ class Worker:
                 pairs += [(a, b) for index, a in enumerate(refs) for b in refs[index + 1:]]
                 for left, right in pairs:
                     pair = f'{left}--{right}'
-                    if (right != 'ours' and previous.get('status') == 'exported'
+                    cached = None
+                    if (previous.get('status') == 'exported'
                             and previous.get('scorerSha256') == doc['scorerSha256']
                             and all(previous.get('pdfs', {}).get(key, {}).get('sha256') == doc['pdfs'][key]['sha256']
                                     for key in (left, right))):
                         cached = copy_comparison(previous.get('comparisons', {}).get(pair, {}),
                                                  left, right, run / pair, self.root)
-                        if cached is not None:
-                            doc['comparisons'][pair] = cached
-                            doc['resources'][pair] = dict(reused=True)
-                            continue
-                    output = Path(temporary) / pair
-                    stage(pair, [sys.executable, str(SCRIPTS / 'pdf-visual-diff.py'),
-                                 str(self.root / doc['pdfs'][left]['path']),
-                                 str(self.root / doc['pdfs'][right]['path']), '--output', str(output),
-                                 '--dpi', '96', '--text-backend', 'mupdf', '--max-pages', '80',
-                                 '--max-total-pixels', '120000000'])
-                    metrics = comparison(output / 'report.json', left, right, run / pair, self.root)
+                    if cached is not None:
+                        metrics = cached
+                        doc['resources'][pair] = dict(reused=True)
+                    else:
+                        output = Path(temporary) / pair
+                        stage(pair, [sys.executable, str(SCRIPTS / 'pdf-visual-diff.py'),
+                                     str(self.root / doc['pdfs'][left]['path']),
+                                     str(self.root / doc['pdfs'][right]['path']), '--output', str(output),
+                                     '--dpi', '96', '--text-backend', 'mupdf', '--max-pages', '80',
+                                     '--max-total-pixels', '120000000'])
+                        metrics = comparison(output / 'report.json', left, right, run / pair, self.root)
+                        shutil.rmtree(output)
                     old_metrics = previous.get('comparisons', {}).get(pair, {})
                     same_reference = previous.get('pdfs', {}).get(left, {}).get('sha256') == doc['pdfs'][left]['sha256']
                     if (right == 'ours' and same_reference and previous.get('status') == 'exported'
@@ -248,7 +254,6 @@ class Worker:
                     doc['comparisons'][pair] = metrics
                     doc['pdfs'][left]['pages'] = metrics['leftPages']
                     doc['pdfs'][right]['pages'] = metrics['rightPages']
-                    shutil.rmtree(output)
                 if digest(run / 'source.docx') != identity:
                     raise ValueError('Source copy was modified during conversion')
                 if engine_identity() != doc['engineSha256']:
