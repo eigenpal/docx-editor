@@ -43,6 +43,35 @@ function reducedHalfPoints(fontSizePt: number, factor: number): number {
   return factor === 1 ? authored : Math.max(1, Math.round(authored * factor));
 }
 
+/**
+ * Where the baseline sits inside its line box, on the device grid.
+ *
+ * The reference grids the NATURAL font box and the font's own descent independently and lets
+ * the baseline fall between them. Times New Roman at 12pt ascends 46.68 units and rounds to
+ * 47, while the reference paints 46: a 57-unit box less an 11-unit descent. A four-line
+ * control with an 18pt letter inside 11pt text lands on 44, 128, 191 and 247 units this way,
+ * all four exact.
+ *
+ * The descent has to come from the FONT, not from the line box. A line-spacing multiple grows
+ * the box below the baseline — at 1.15 an 11pt Calibri line is 64.343 units tall where its
+ * natural box is 55.95 — and measuring the descent off that box moves the baseline a unit,
+ * which cost two corpus documents when it was tried. On such a line the reference keeps the
+ * baseline on the ascent, so a box taller than its natural height falls back to that.
+ */
+function griddedBaselineInLine(
+  line: SemanticSpanVisit['line'],
+  face: EmbeddedFace,
+  fontSizePt: number
+): number {
+  const units = (value: number): number => Math.round(value / PDF_PAINT_GRID_PT);
+  const perEm = face.font.unitsPerEm;
+  const descent = perEm > 0 ? (Math.abs(face.font.descent) / perEm) * fontSizePt : 0;
+  const naturalBox = line.baseline + descent;
+  if (!(descent > 0) || line.box.height > naturalBox + 0.01)
+    return units(line.baseline) * PDF_PAINT_GRID_PT;
+  return (units(naturalBox) - units(descent)) * PDF_PAINT_GRID_PT;
+}
+
 /** Largest `TJ` adjustment the writer's number formatter accepts. */
 const MAX_TJ_ADJUSTMENT = 1_000_000;
 
@@ -212,7 +241,7 @@ export class TextWriter {
       storyOrigin.y -
       visit.page.box.y +
       line.box.y +
-      Math.round(line.baseline / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT -
+      griddedBaselineInLine(line, face, style.fontSizePt) -
       baselineShiftPtOf(style);
     const baseline =
       page.getHeight() - Math.ceil(baselineFromTop / PDF_PAINT_GRID_PT - 0.5) * PDF_PAINT_GRID_PT;

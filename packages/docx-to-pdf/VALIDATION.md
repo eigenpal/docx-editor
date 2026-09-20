@@ -571,37 +571,15 @@ Inside the single-spacing case the ascent is still unfittable, and now visibly s
 
 What this entry changes is the size of the problem, not its nature: multiples are exact, so any future attempt should leave them alone and work only on `w:lineRule="auto"` at `w:line="240"`. Quantising line height in layout was tried before and rejected across every line rule, see `.cache/pdf/claude-lineheight-grid/FINDING.md`.
 
-### A better control fit that the corpus rejects
+### The baseline falls between a gridded natural box and a gridded descent
 
-Correcting the entry above exposed a rule that looks right and is not. The reference does not appear to round the ascent at all: it puts the line box and the descent on the grid independently and lets the baseline fall between them.
+The reference does not round the ascent. It grids the NATURAL font box and the font's own descent independently and lets the baseline fall between them. Times New Roman at 12pt ascends 46.68 units and rounds to 47, while the reference paints 46: a 57-unit box less an 11-unit descent.
 
-`baseline = round(lineHeight) - round(descent)`, both in device units. Times New Roman at 12pt ascends 46.68 units and rounds to 47, while the reference paints 46, which is a 57-unit box less an 11-unit descent. One expression also covers every line rule, which is what made it persuasive: at 18pt Calibri the reference paints 72 under single spacing and 71 under a 1.15 multiple, and a 92-unit box less 20 gives 72 while a 105-unit box less 34 gives 71.
+Sixty-six Word-rendered controls from 8pt to 24pt across Times New Roman and Calibri back it, where rounding the ascent matches 50 of them and this matches 62. Five more controls put two sizes on one line, and a four-line control with an 18pt letter inside 11pt text lands on 44, 128, 191 and 247 units, all exact, including a tie at 191.5 that the existing round-toward-the- top resolves correctly.
 
-Against the sixty-six controls it is much the better rule — 32 of 33 on Times and 30 of 33 on Calibri, against 28 and 22 for rounding the ascent.
+The descent has to come from the FONT, not from the line box, and getting that wrong is what made two earlier attempts fail. A line-spacing multiple grows the box below the baseline: at 1.15 an 11pt Calibri line is 64.343 units tall where its natural box is 55.95, so a descent measured off the box is 20.701 instead of 12.31 and the baseline moves a unit. That cost two corpus documents twice, most sharply `footnote-overlap-regression.docx`, whose two hundred and nine body lines all use that multiple. On a line taller than its natural box the reference keeps the baseline on the ascent, which the implementation falls back to.
 
-The corpus rejects it anyway. Documents fully under 1% against Word fall from eighteen to sixteen. `footnote-overlap-regression.docx` goes from 0.899% to 2.293%, `float-wrap-comprehensive-test.docx` from 0.729% to 1.517%, `header-with-table.docx` from an exact match to 0.034%, and only `issue-740-header-zero-distance.docx` improves, 2.780% to 1.600%. Reverted.
-
-The first guess at why was that a control has one run on a line while a real line mixes them. That was tested and is wrong. Five controls putting two sizes on one line — 11 with 18, 11 with 14, 14 with 18, 11 with 24, 10 with 12 — put the reference's baseline at 72, 55, 72, 95 and 48 units, and `round(box) - round(descent)` from the larger run gives all five while rounding the ascent misses two.
-
-So the formula holds for mixed sizes too, and the corpus failure is not about mixing runs.
-
-A second control isolates what it IS about. Three pages of the same wrapped paragraph, one plain, one with a superscript on the first line, one with a single 18pt letter inside 11pt text:
-
-- plain — baselines identical to the reference, pitch 13.44pt in both
-- superscript — identical as well, so a raised atom does NOT inflate the line box here, and the superscript explanation offered earlier in this entry is wrong
-- one 18pt letter — the baselines diverge. The reference paints pitches of 20.16, 15.12 and 13.44pt; this engine paints 19.92, 15.60 and 13.20. The totals agree, 48.72pt each, so the accumulation is right and only the per-line split differs.
-
-That split has a clean explanation. On the line holding the 18pt letter the ascent is 71.41 units and the descent of the surrounding 11pt text is 12.31. The reference paints 84, which is `round(71.41 + 12.31)`. This engine paints 83, which is `round(71.41) + round(12.31)`. The reference rounds the line box once, as a sum; this engine rounds the ascent and the descent separately and adds them.
-
-That is the same idea as `round(box) - round(descent)` seen from the other side.
-
-Two explanations for the corpus failure have now been tested and both are wrong. Mixing runs is not it: five two-size controls all match. A degenerate box is not it either: guarding the case where a line box is shorter than its own ascent, which `w:lineRule="exact"` produces, changes the corpus result by nothing at all — the same eight documents move by the same amounts.
-
-The evidence is therefore contradictory and should be treated that way. Read straight from this engine's own layout, the four-line control with an 18pt letter has boxes of 55.95, 91.55, 55.95 and 55.95 units and descents of 12.31, 20.14, 12.31 and 12.31; feeding those through the rule and accumulating gives 44, 128, 191 and 247 units, which is the reference exactly, including a tie at 191.5 that the existing round-toward-the-top resolves correctly. The same rule on the same engine loses two documents on the corpus, and `footnote-overlap-regression.docx` moves from 0.899% to 2.293% even though its body text at 11pt and its notes at 10pt compute the SAME value under both rules.
-
-Something on real lines is not what these controls measure. The `leading` field on a line record is the obvious suspect and has not been checked. Until it is, the rule stays out. The documents it hurt most are the ones whose lines carry content that INFLATES the line box without moving the reference's baseline: `footnote-overlap-regression.docx` has ninety superscript note references, and `float-wrap-comprehensive-test.docx` has inline drawings. A raised or oversized atom grows this engine's line box and its recorded baseline, so a formula that reads the box moves with it, while the reference keeps the baseline on the body text.
-
-That makes the next question a layout one rather than a metrics one: what the line box should be when a superscript or an inline drawing sits on the line. The formula itself now has thirty-eight controls behind it and is worth revisiting once that is settled. Whatever the cause, this is the fourth change in this record to fit captured controls and fail the corpus, and the sharpest: a twelve-point gain on controls costing two documents.
+Against Word this improves `issue-740-header-zero-distance.docx` from 2.780% to 1.600%, and its worst page from 5.493% to 2.862%. No Word comparison regresses. Documents fully under 1% stay at eighteen of twenty.
 
 ### Not understood
 
