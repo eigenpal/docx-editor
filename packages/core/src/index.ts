@@ -70,7 +70,7 @@ export type {
 // contract's transitive closure in one line and it cannot drift again.
 export type * from './contracts/editor.ts';
 
-// ─── Fonts: the reason pagination matches Word ───────────────────────────────
+// ─── Fonts: what line and page breaks are measured against ───────────────────
 export {
   WORD_DEFAULT_FONT,
   loadFonts,

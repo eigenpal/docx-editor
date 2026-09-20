@@ -80,7 +80,6 @@ import {
   findNode,
   isContentControl,
   ORIGIN_IDS,
-  paragraphOffsetIndex,
   parentNodeOf,
   parseTocInstruction,
   planTocEntries,
@@ -263,6 +262,8 @@ import {
   partOfNodeId,
   storyScopeOfNodeId,
 } from './surface-scope.ts';
+import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
+import { contentControlSelectionRange } from './surface-content-control-range.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
 import {
@@ -1301,7 +1302,9 @@ export function mountPaginatedSurface(
   const equationInteraction = createEquationInteraction({
     pagesLayer,
     equationById: (equationId) => equations.equationById(equationId),
-    setSelection,
+    // `none`, and wrapped rather than passed by reference: activation is a press on the
+    // equation, so the paper stays put under it.
+    setSelection: (next) => setSelection(next, false, 'none'),
     ...(options.onEquationPopover ? { onPopover: options.onEquationPopover } : {}),
   });
   pagesLayer.addEventListener('contextmenu', onTocContextMenu);
@@ -2069,69 +2072,52 @@ export function mountPaginatedSurface(
     return [];
   }
 
-  /** Select the control's addressable content for form-fill replacement. */
+  /**
+   * Bring a position a lane TRAVELLED to into view, when it is in the reader's own story.
+   *
+   * Furniture scrolling is its own lane, which is why an open header, footer or note sits
+   * this out — the same reason the caret follower does. The second test is the one that is
+   * easy to miss: form-fill Tab enumerates the controls of EVERY story, so a body reader can
+   * land on one in a header, and `revealPosition` resolves with no preferred page. One header
+   * paragraph is laid out on every page that uses its variant, so that resolved the page-1
+   * copy and threw the reader to the top of the document.
+   */
+  function revealTravelledTo(position: SemanticPosition): void {
+    if (hfScope?.getActive() || noteOps?.activeNoteScope()) return;
+    if (storyScopeOfNodeId(session, position.paragraphId, { kind: 'body' }).kind !== 'body') return;
+    surface.revealPosition(position);
+  }
+
+  /**
+   * Select the control's addressable content for form-fill replacement, and reveal it.
+   *
+   * Through `revealPosition` rather than the caret follow, which refuses a range. Tab in
+   * form-fill mode is the caller, and the control it lands on is routinely off screen — the
+   * mirror cannot even paint a selection on a page nothing built, so the field looked
+   * unselected as well as unreachable.
+   */
   function selectControlContent(controlId: string): boolean {
     const control = findControl(controlId);
     if (!control) return false;
-    const content = contentChildrenOf(control);
-    const paragraphs: { id: string; length: number }[] = [];
-    const collectParagraphs = (nodes: readonly OoxmlNode[]): void => {
-      for (const node of nodes) {
-        if (node.kind === 'paragraph') {
-          paragraphs.push({ id: node.id, length: paragraphOffsetIndex(node).length });
-          continue;
-        }
-        if (node.kind === 'textValue') continue;
-        const kind = (node as { kind: string }).kind;
-        if (kind === 'contentControl') {
-          collectParagraphs(contentChildrenOf(node as OoxmlElement));
-          continue;
-        }
-        collectParagraphs(node.children);
-      }
-    };
-    collectParagraphs(content);
-
-    if (paragraphs.length > 0) {
-      const first = paragraphs[0]!;
-      const last = paragraphs[paragraphs.length - 1]!;
-      setSelection({
-        anchor: { paragraphId: first.id, offset: 0 },
-        head: { paragraphId: last.id, offset: last.length },
-      });
-      return true;
-    }
-
-    // Inline control: locate the parent paragraph and UTF-16 range.
-    let hostParagraphId: string | null = null;
-    let start = 0;
-    let end = 0;
-    const scanParagraphs = (nodes: readonly OoxmlNode[]): boolean => {
-      for (const node of nodes) {
-        if (node.kind === 'paragraph') {
-          const span = paragraphOffsetIndex(node).spanOf(control);
-          if (!span) continue;
-          hostParagraphId = node.id;
-          start = span.start;
-          end = span.end;
-          return true;
-        }
-        if (node.kind === 'textValue') {
-          continue;
-        }
-        if (scanParagraphs(node.children)) return true;
-      }
-      return false;
-    };
-    scanParagraphs(
-      (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part()).root
-        .children
-    );
-    if (!hostParagraphId) return false;
-    setSelection({
-      anchor: { paragraphId: hostParagraphId, offset: start },
-      head: { paragraphId: hostParagraphId, offset: end },
+    const range = contentControlSelectionRange(control, {
+      contentChildrenOf,
+      searchRoots: () =>
+        (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part())
+          .root.children,
     });
+    if (!range) return false;
+    const before = selection;
+    // `none`, with the reveal below owning the scroll: an EMPTY control is a collapsed range,
+    // which the ordinary rule follows as a caret — and follows without the story test the
+    // reveal applies, so tabbing onto an empty header control threw the reader to page 1.
+    setSelection(range, false, 'none');
+    // The selection that LANDED, not the one asked for: a text form field inside the control
+    // clamps the range to itself. And only when the write was not REFUSED, which a session
+    // holding an invalid value does outright — asking both ways round so a `setSelection`
+    // that one day short-circuits on an unchanged selection cannot silently stop the reveal.
+    if (selection !== before || selectionsEqual(selection, range)) {
+      revealTravelledTo(selection.anchor);
+    }
     return true;
   }
 
@@ -2527,8 +2513,6 @@ export function mountPaginatedSurface(
   let materializedSet: ReadonlySet<number> | undefined;
   /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
   let materializedExtent: SurfaceExtent | undefined;
-  /** Last body page occupied by the focused collapsed caret. */
-  let lastCaretPageIndex: number | null = null;
   /** An edit may move the caret within the same page without going through `setSelection`. */
   let caretFollowPending = false;
   /**
@@ -2640,6 +2624,9 @@ export function mountPaginatedSurface(
     watchScrollerSize();
     selectionSync.mirrorToDom();
     followCaretIntoView(caretFollowPending);
+    // SPENT either way. Kept alive through a suppressed pass it would only wait for the next
+    // repaint — the reader's own wheel scroll — and yank the view to a caret they had just
+    // scrolled away from, and nothing on the press path consumes it in between.
     caretFollowPending = false;
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
@@ -2674,62 +2661,21 @@ export function mountPaginatedSurface(
     render(false);
   }
 
-  /**
-   * Keep the focused body caret inside the viewport without snapping an already-visible line.
-   *
-   * Geometry comes from layout because the destination page may still be virtualized. A
-   * plain scroll repaint must not pull the reader back to an unchanged caret, so an ordinary
-   * render follows only when layout moved the caret to another page; selection/edit paths can
-   * force the same nearest-edge check for movement within one page.
-   */
-  function followCaretIntoView(force = false): void {
-    if (hfScope?.getActive() || noteOps?.activeNoteScope()) return;
-    if (
-      selection.anchor.paragraphId !== selection.head.paragraphId ||
-      selection.anchor.offset !== selection.head.offset
-    ) {
-      return;
-    }
-    const active = document.activeElement;
-    if (active !== pagesLayer && (!active || !pagesLayer.contains(active))) return;
+  const caretView = createCaretViewFollower({
+    storyScopeOpen: () => Boolean(hfScope?.getActive() || noteOps?.activeNoteScope()),
+    selection: () => selection,
+    layout: () => currentLayout,
+    measurer: () => measurer,
+    preferredPageIndex: () => selectionSync.selectionPageIndex(),
+    pagesLayer,
+    container,
+    scroller: () => surfaceScroller(container),
+    scale: () => scale,
+    scheduleRematerialize: () => scheduleRematerialize(),
+  });
 
-    const geometry = caretAt(currentLayout, selection.head, {
-      measurer,
-      ...(selectionSync.selectionPageIndex() !== undefined
-        ? { preferredPageIndex: selectionSync.selectionPageIndex() }
-        : {}),
-    });
-    if (!geometry) return;
-    const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;
-    lastCaretPageIndex = geometry.pageIndex;
-    if (!force && !changedPage) return;
-
-    const page = currentLayout.pages[geometry.pageIndex];
-    const scroller = surfaceScroller(container);
-    if (!page || !scroller || scroller.clientHeight <= 0) return;
-
-    const padding = 24;
-    const contentTop = page.contentBox.y - page.box.y;
-    const top = (page.box.y + contentTop + geometry.y) * scale + container.offsetTop;
-    const bottom = top + geometry.height * scale;
-    const viewportTop = scroller.scrollTop;
-    const viewportBottom = viewportTop + scroller.clientHeight;
-    let target = viewportTop;
-    if (top < viewportTop + padding) {
-      target = top - padding;
-    } else if (bottom > viewportBottom - padding) {
-      target = bottom + padding - scroller.clientHeight;
-    } else {
-      return;
-    }
-
-    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const next = Math.max(0, Math.min(target, maxScroll));
-    if (Math.abs(next - scroller.scrollTop) < 0.5) return;
-    scroller.scrollTop = next;
-    // The destination may have been only a shell. Build it in the next frame rather than
-    // recursively repainting from inside the paint that detected the movement.
-    scheduleRematerialize();
+  function followCaretIntoView(force = false, mode: CaretFollowMode = 'caret'): void {
+    caretView.follow(force, mode);
   }
 
   let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
@@ -3236,7 +3182,11 @@ export function mountPaginatedSurface(
     collaboration.setLocalSelection(next);
   }
 
-  function setSelection(next: SemanticSelection, keepDesiredX = false): void {
+  function setSelection(
+    next: SemanticSelection,
+    keepDesiredX = false,
+    follow: CaretFollowMode = 'caret'
+  ): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
     // Buffered typing lands at the OLD caret before a MOVE takes effect —
@@ -3278,7 +3228,11 @@ export function mountPaginatedSurface(
       // adopt the DOM selection it is about to replace — which is the very stale value the
       // navigation is trying to leave behind.
       selectionSync.noteModelMoved();
-      render(false);
+      // Held for a `none` caller: this render reaches the follower on its own terms, and a
+      // caret on a page nothing has built reads as a page CHANGE — enough to scroll, which
+      // is exactly what the press asking for `none` refused.
+      if (follow === 'none') caretView.without(() => render(false));
+      else render(false);
     }
     // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
     // any render can read them back — including a move raised earlier that no render has
@@ -3293,7 +3247,7 @@ export function mountPaginatedSurface(
     // the selection, so claiming changes nothing for them. In Chromium this write can
     // also focus the contenteditable; passive remounts must not claim the selection.
     selectionSync.mirrorToDom(true);
-    followCaretIntoView(true);
+    followCaretIntoView(true, follow);
     renderOverlay();
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
     // is how the reader reopens an item — by clicking back into its text.
@@ -4847,7 +4801,21 @@ export function mountPaginatedSurface(
       // A prompt is one unit for the caret, as in Word: arrowing into it selects the whole
       // prompt rather than parking the caret inside text the first keystroke replaces, which
       // left the buffered keystrokes after it aimed past the end of the shortened paragraph.
-      setSelection(extend ? target : absorbPlaceholderControls(currentLayout, target), true);
+      // `head` for EVERY navigation, extending or not. The end the reader is moving has to
+      // stay visible, and the mirror cannot paint a selection whose head sits on a page
+      // virtualization never built — a shift-extended jump showed nothing selected at all
+      // until the view followed it. A plain move is collapsed, where `head` and `caret` mean
+      // the same thing, EXCEPT when it lands on a prompt and ABSORBS it: that is a range the
+      // reader never dragged, so it is revealed by its start, where the next keystroke goes.
+      const next = extend ? target : absorbPlaceholderControls(currentLayout, target);
+      const absorbed = !extend && !selectionsEqual(next, target);
+      const before = selection;
+      setSelection(next, true, absorbed ? 'none' : 'head');
+      // Landed, like every other reveal here: a form field holding an invalid value refuses
+      // the write and pins the caret where the reader has to fix it.
+      if (absorbed && (selection !== before || selectionsEqual(selection, next))) {
+        revealTravelledTo(selection.anchor);
+      }
     },
 
     deleteWordBackward() {
@@ -5887,7 +5855,13 @@ export function mountPaginatedSurface(
         formsProtectionEnabled(session.settingsRoot()) &&
         sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
       selection: () => selection,
-      select: (next) => setSelection(next),
+      // A mix of intents, so the lane states each: a press must not move the paper (an empty
+      // FORMTEXT field is zero-length, so it arrives as a caret the ordinary rule WOULD
+      // follow), while the caret restored after a dialog wants that rule.
+      select: (next, pressed) => setSelection(next, false, pressed ? 'none' : 'caret'),
+      // SEPARATE from `select`, because the FIELD a lane travels to is a range, which the
+      // ordinary rule refuses. Tab and the edit command ask for it here.
+      reveal: revealTravelledTo,
       editable: () => editingMode === 'edit' && !showFieldCodes,
       apply: (op) => applyTextFormOperation(op, commit, applyOps),
       save: (ops, next) =>
@@ -5911,7 +5885,10 @@ export function mountPaginatedSurface(
       formsProtectionEnabled(session.settingsRoot()) &&
       sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
     selection: () => selection,
-    select: (next) => setSelection(next),
+    // `none`: the toggle is a press on the control, so the paper stays put under it. A
+    // range never scrolled anyway; stating it keeps one rule for every pointer lane, and
+    // covers a zero-length field range that would arrive here as a caret.
+    select: (next) => setSelection(next, false, 'none'),
     apply: (op) => applyTextFormOperation(op, commit, applyOps),
   });
   legacyDropdownInteraction = createLegacyDropdownInteraction({
@@ -5920,7 +5897,9 @@ export function mountPaginatedSurface(
     part: (paragraphId) =>
       partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
     editable: () => editingMode === 'edit' && !showFieldCodes,
-    select: setSelection,
+    // Wrapped, not passed by reference: a bare `setSelection` forwards whatever arguments
+    // the caller happens to have. `none` for the same reason as the checkbox above.
+    select: (next) => setSelection(next, false, 'none'),
     canApply: (op) => session.editable && writeRefusal(true, [op], false) === null,
     history: (action) => surface[action](),
     apply: (op) => applyTextFormOperation(op, commit, applyOps),
@@ -6108,13 +6087,24 @@ export function mountPaginatedSurface(
       // a burst then wrote a caret shifted by the inserted length. Only ever a real pass
       // right after a deferring commit; every other call is a cheap no-op check. This is
       // an event-handler-only dep — no render path reads it — so it cannot re-enter paint.
+      //
+      // WITHOUT the caret follow that pass would carry: it would scroll to the TYPING caret
+      // between the reader aiming and this reading the rect, and the press would land on
+      // whatever slid under it. BOTH halves: the pending nudge is spent, because a paint this
+      // flush defers to its own task would otherwise perform that scroll one task later —
+      // between the two presses of a double click — and the flag is the only thing that pass
+      // reads; the suppression covers the synchronous pass, where a page change would scroll
+      // without the flag. The press places the caret itself, so nothing is left to show.
       layout: () => {
-        flushLayout();
+        caretFollowPending = false;
+        caretView.without(flushLayout);
         return currentLayout;
       },
       measurer: () => measurer,
       selection: () => selection,
-      setSelection: (next) => setSelection(next),
+      // `none`: a press lands where the reader LOOKS, and moving the paper under a double
+      // click sent its second press elsewhere — a blank footer band never opened.
+      setSelection: (next) => setSelection(next, false, 'none'),
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
       // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls

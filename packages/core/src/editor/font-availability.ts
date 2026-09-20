@@ -160,7 +160,7 @@ export function detectFontSubstitutions(
  *
  * The redirect half is what keeps the notice honest. `defaultFonts()` deliberately
  * answers "Times New Roman" with metric-compatible Liberation Serif, so the family IS
- * available — a document naming it wraps and paginates exactly as Word does, and
+ * available — a document naming it wraps and paginates on the same advance widths, and
  * reporting it as unavailable told the user the opposite of the truth. A redirect whose
  * TARGET never made it through admission is not coverage, so the target is checked.
  *

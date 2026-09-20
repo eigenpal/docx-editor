@@ -54,6 +54,8 @@ function setup(
   let locale = 'en-US';
   let commits = 0;
   let rejectDelete = false;
+  /** Every position the interaction asked the surface to bring into view. */
+  const reveals: { paragraphId: string; offset: number }[] = [];
   const interaction = createTextFormFieldInteraction({
     onRequest,
     onInvalidRequest,
@@ -66,6 +68,9 @@ function setup(
     select: (value) => {
       const next = interaction.beforeSelect(value);
       if (next) selection = next;
+    },
+    reveal: (position) => {
+      reveals.push(position);
     },
     editable: () => true,
     apply(op) {
@@ -81,6 +86,7 @@ function setup(
     container,
     span,
     interaction,
+    reveals,
     commits: () => commits,
     setProtected: (value: boolean) => {
       protectedForm = value;
@@ -409,6 +415,42 @@ for (const scenario of ['changed type', 'refused deletion'] as const) {
     }
   });
 }
+
+// A lane that TRAVELS to a field asks the surface to bring it into view. A press does not:
+// the reader aimed at a spot on screen, and moving the paper under them breaks the gesture.
+test('the edit command reveals the field it travels to', () => {
+  const host = setup();
+  try {
+    expect(host.interaction.edit()).toBe(true);
+    expect(host.reveals).toEqual([{ paragraphId: host.selection().head.paragraphId, offset: 0 }]);
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('a refused selection reveals nothing, so the pinned field stays on screen', () => {
+  const host = setup(true);
+  try {
+    host.pagesLayer.tabIndex = 0;
+    host.configure({ type: 'number', format: '0.00', maxLength: 0, enabled: true }, '1');
+    const paragraphId = host.selection().head.paragraphId;
+    host.select(0);
+    host.type({ op: 'insertText', paragraphId, offset: 0, text: '--' });
+    // Leaving an invalid value pins the caret in the field the reader has to fix.
+    host.select(20);
+    expect(host.container.querySelector<HTMLDialogElement>('[role="alertdialog"]')?.open).toBe(
+      true
+    );
+    host.reveals.length = 0;
+
+    host.interaction.keydown(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+
+    // The write was refused, so the viewport must not travel to a field holding no caret.
+    expect(host.reveals).toEqual([]);
+  } finally {
+    host.cleanup();
+  }
+});
 
 test('host Field Options session owns accepted and refused writes without native UI', () => {
   const sessions: TextFormFieldDialogSession[] = [];
