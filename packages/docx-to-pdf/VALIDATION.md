@@ -583,7 +583,17 @@ The corpus rejects it anyway. Documents fully under 1% against Word fall from ei
 
 The first guess at why was that a control has one run on a line while a real line mixes them. That was tested and is wrong. Five controls putting two sizes on one line — 11 with 18, 11 with 14, 14 with 18, 11 with 24, 10 with 12 — put the reference's baseline at 72, 55, 72, 95 and 48 units, and `round(box) - round(descent)` from the larger run gives all five while rounding the ascent misses two.
 
-So the formula holds for mixed sizes too, and the corpus failure is not about mixing runs. The documents it hurt most are the ones whose lines carry content that INFLATES the line box without moving the reference's baseline: `footnote-overlap-regression.docx` has ninety superscript note references, and `float-wrap-comprehensive-test.docx` has inline drawings. A raised or oversized atom grows this engine's line box and its recorded baseline, so a formula that reads the box moves with it, while the reference keeps the baseline on the body text.
+So the formula holds for mixed sizes too, and the corpus failure is not about mixing runs.
+
+A second control isolates what it IS about. Three pages of the same wrapped paragraph, one plain, one with a superscript on the first line, one with a single 18pt letter inside 11pt text:
+
+- plain — baselines identical to the reference, pitch 13.44pt in both
+- superscript — identical as well, so a raised atom does NOT inflate the line box here, and the superscript explanation offered earlier in this entry is wrong
+- one 18pt letter — the baselines diverge. The reference paints pitches of 20.16, 15.12 and 13.44pt; this engine paints 19.92, 15.60 and 13.20. The totals agree, 48.72pt each, so the accumulation is right and only the per-line split differs.
+
+That split has a clean explanation. On the line holding the 18pt letter the ascent is 71.41 units and the descent of the surrounding 11pt text is 12.31. The reference paints 84, which is `round(71.41 + 12.31)`. This engine paints 83, which is `round(71.41) + round(12.31)`. The reference rounds the line box once, as a sum; this engine rounds the ascent and the descent separately and adds them.
+
+That is the same idea as `round(box) - round(descent)` seen from the other side, and it is why that formula helped controls and hurt documents: the documents have mixed-size lines whose box this engine already computes one unit differently. The documents it hurt most are the ones whose lines carry content that INFLATES the line box without moving the reference's baseline: `footnote-overlap-regression.docx` has ninety superscript note references, and `float-wrap-comprehensive-test.docx` has inline drawings. A raised or oversized atom grows this engine's line box and its recorded baseline, so a formula that reads the box moves with it, while the reference keeps the baseline on the body text.
 
 That makes the next question a layout one rather than a metrics one: what the line box should be when a superscript or an inline drawing sits on the line. The formula itself now has thirty-eight controls behind it and is worth revisiting once that is settled. Whatever the cause, this is the fourth change in this record to fit captured controls and fail the corpus, and the sharpest: a twelve-point gain on controls costing two documents.
 
