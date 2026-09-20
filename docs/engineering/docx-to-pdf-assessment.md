@@ -1,5 +1,7 @@
 # DOCX-to-PDF exporter assessment
 
+> A point-in-time engineering decision record from the start of the work, kept for the reasoning behind building on the Core export foundation rather than adopting the earlier prototype. It is not current documentation: for what the exporter supports today see [the package README](../../packages/docx-to-pdf/README.md) and its `VALIDATION.md`.
+
 ## Decision
 
 Build the exporter on the shared Core export foundation. Replace the prototype's text encoding path. Do not restart document parsing, layout, or font resolution.
@@ -69,8 +71,8 @@ This is the initial useful subset, not completion of the broader fidelity roadma
 
 ## Fidelity follow-up
 
-The real editor sample now replaces the simplified PDF demo sample. Strict export produces 27 pages with no unsupported-content diagnostics. LibreOffice 26.2.3.2 also produces 27 pages. Added note text/separators, structured equation paint, leaders, underline variants, small caps, page frames, image links, and admitted glyph fallback. Fixed implicit table-cell end-mark inflation; retained explicit mark and superscript behavior covered by Word-derived Core tests.
+The real editor sample replaced the simplified PDF demo sample. Strict export produces 27 pages with no unsupported-content diagnostics. Added note text/separators, structured equation paint, leaders, underline variants, small caps, page frames, image links, and admitted glyph fallback. Fixed implicit table-cell end-mark inflation; retained explicit mark and superscript behavior covered by Word-derived Core tests.
 
 `packages/docx-to-pdf/scripts/compare-libreoffice.ts` creates the repeatable paired page/overlay report. The exporter and comparison development remain under the EigenPal Pro License. Font assets carry their own original OFL notices. Shared Core changes expose the shaping evidence and fix layout before PDF painting.
 
-`packages/docx-to-pdf/VALIDATION.md` records the current supported sample and remaining cross-engine visual differences. Matching page counts and complete content are not a claim of universal Word or LibreOffice pixel parity.
+`packages/docx-to-pdf/VALIDATION.md` records the supported sample and the remaining visual differences worth investigating. A matching page count and complete content are not a claim of pixel fidelity.

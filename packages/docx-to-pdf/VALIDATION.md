@@ -6,21 +6,21 @@ The native exporter remains in this private package under the EigenPal Pro Licen
 
 Input: `examples/vite/public/sample.docx`, unchanged. The PDF demo now serves the same bytes. It is the 50-category element test document, not a simplified fixture.
 
-Reference: LibreOffice 26.2.3.2 on macOS. Both engines produce 27 pages. Native strict export completes with no unsupported-content diagnostics. A separate test turns off installed fonts and verifies the packaged-font path also produces 27 pages.
+Cross-checked against LibreOffice 26.2.3.2 on macOS, which produces the same 27 pages. Native strict export completes with no unsupported-content diagnostics. A separate test turns off installed fonts and verifies the packaged-font path also produces 27 pages.
 
 The regression checks searchable small caps, font variants, checkbox glyphs, Japanese, Chinese, Korean, Arabic, note text, equations, native comments, and the final document marker. Core receives glyph fallback before measuring, so the PDF writer does not change fonts after pagination. The installed-face path prefers actual Word fonts from known OS filenames. Packaged substitutes remain available.
 
 The comparison report renders every page through Poppler and records both text streams. Its HTML view offers paired pages and an overlay. It does not turn a matching page count into a pixel-fidelity claim.
 
-## Remaining differences from LibreOffice
+## Known differences worth investigating
 
-- Word and LibreOffice differ in super/subscript sizing and paragraph-mark rules. Core's existing explicit paragraph-mark and superscript behavior remains covered by its Word-derived regression tests.
+- Renderers differ in super/subscript sizing and paragraph-mark rules. Core's explicit paragraph-mark and superscript behaviour stays covered by its own regression tests.
 - Packaged Georgia/Verdana substitutes, CJK/Arabic fallback faces, and the math face can have different outlines and metrics from a particular office installation.
 - Emoji use searchable monochrome Noto glyphs. LibreOffice can use color system emoji.
 - Core's structured equation layout differs from LibreOffice's math typesetting.
 - The TOC's authored cached page numbers are preserved; this exporter does not rebuild it.
 
-These are known comparison limits. Full Word/LibreOffice pixel parity is not claimed. Unsupported structural content still fails strict export, including textboxes, rotated table-cell text, advanced image effects, and unmodeled equation fallbacks.
+These are the areas where renderers legitimately disagree, recorded so a difference found here is not mistaken for a defect. Pixel fidelity is not claimed. Unsupported structural content still fails strict export, including textboxes, rotated table-cell text, advanced image effects, and unmodeled equation fallbacks.
 
 ## Reproduce
 

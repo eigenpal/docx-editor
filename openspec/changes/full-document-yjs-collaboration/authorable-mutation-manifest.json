@@ -1614,11 +1614,6 @@
       "notes": "Navigation chrome. No new mutation kind."
     },
     {
-      "name": "docx-to-pdf-rebuild",
-      "role": "independent",
-      "notes": "Read-only export. Reads laid-out records; no new mutation kind."
-    },
-    {
       "name": "agent-editing-subset",
       "role": "mutation-extension",
       "notes": "Adds canonical table authoring, direct table properties, and page-field instruction writes; primitive replay convergence is covered."
