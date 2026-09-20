@@ -650,7 +650,7 @@ A second float control varies `wrapText` over `bothSides`, `left` and `right`, w
 
 `right` differs by 0.12pt on every line, and it is the tie already recorded above rather than a new rule. The image's right edge is 246.00pt and `distR` is 9pt, so the text origin is 255.00pt exactly, which is 1062.5 device units. The reference paints 255.00, leaving the half unit alone; this engine rounds it up to 255.12. On page 4 of `float-wrap-comprehensive-test.docx` the reference does the opposite with the same arithmetic, rounding 617.5 units down to 617.
 
-That is the same both-directions behaviour the corpus-wide tie search found, 86 up against 62 down, and it is why the writer keeps a single documented convention instead of chasing it.
+That is the same both-directions behaviour the corpus-wide tie search found, 86 up against 62 down, so the writer keeps a single convention. Which convention is no longer an inference: both were measured. Resolving an exact half unit toward the page left instead of the right takes documents fully under 1% from eighteen to seventeen, `float-wrap-comprehensive-test.docx` from 0.729% to 1.059%, `template-with-hf-rule.docx` from 0.298% to 0.315% and `demo.docx` from 0.639% to 0.643%, with no Word comparison improving. Round half up is correct, and that tally of 86 against 62 came from a pairing loose enough to double-count, so the corpus run is the evidence that matters here.
 
 ### Not understood
 
