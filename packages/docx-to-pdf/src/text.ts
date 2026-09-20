@@ -265,19 +265,41 @@ export class TextWriter {
     out.push('ET');
     if (style.textOutline) out.push('Q');
     const metricScale = size / face.font.unitsPerEm;
+    // Every edge of every thin filled rule in the reference lands on the device grid, so the
+    // ends do too, not just the offset and the thickness. Rounding each end rather than the
+    // width keeps two rules that abut sharing one edge, which is how a single underline split
+    // across runs stays continuous.
+    const onGrid = (value: number): number =>
+      Math.round(value / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
     const lineRule = (
       y: number,
       thickness: number,
       c: string | null = foreground,
       width = absoluteBox.width
     ): void => {
-      out.push(`${color(c)} rg ${n(x)} ${n(y - thickness / 2)} ${n(width)} ${n(thickness)} re f`);
+      const left = onGrid(x);
+      const right = onGrid(x + width);
+      const painted = right > left ? right - left : width > 0 ? PDF_PAINT_GRID_PT : 0;
+      if (painted <= 0) return;
+      out.push(
+        `${color(c)} rg ${n(left)} ${n(y - thickness / 2)} ${n(painted)} ${n(thickness)} re f`
+      );
     };
     if (style.underline || insert) {
       const variant = style.underline?.variant ?? 'single';
-      const thickness = face.font.underlineThickness * metricScale;
-      const position = baseline + face.font.underlinePosition * metricScale;
-      if (!(thickness > 0) || !Number.isFinite(position))
+      // `post.underlinePosition` is the TOP of the stroke, not its centre, and the reference
+      // puts both the offset and the thickness on whole device units. Times New Roman at
+      // 10.5pt suggests 1.1433pt and 0.5127pt; the reference draws every underline in
+      // `issue-483-firstline-marker.docx` at exactly 1.20pt below the baseline and 0.48pt
+      // thick, which are 5 and 2 units. Centring on the suggested position instead put the
+      // stroke 0.31pt high.
+      const rawThickness = face.font.underlineThickness * metricScale;
+      const rawOffset = -face.font.underlinePosition * metricScale;
+      const thickness =
+        Math.max(1, Math.round(rawThickness / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT;
+      const position =
+        baseline - Math.round(rawOffset / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT - thickness / 2;
+      if (!(rawThickness > 0) || !Number.isFinite(rawOffset))
         this.work.report(
           'underline-metrics',
           'Font has no valid underline metrics',
