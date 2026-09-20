@@ -59,7 +59,11 @@ export function shapeExportClusterFallback(
   }
   const glyphs: ShapedGlyph[] = [],
     clusters: ShapedCluster[] = [],
-    fontSpans: ShapedFontSpan[] = [];
+    fontSpans: ShapedFontSpan[] = [],
+    exactAdvancesX: number[] = [];
+  // Advances are per glyph, so composition just concatenates them in glyph order. One group
+  // that cannot state them drops the whole array, and paint falls back to the rounded origins.
+  let exact = true;
   let penX = 0,
     penY = 0,
     ascent = 0,
@@ -77,6 +81,8 @@ export function shapeExportClusterFallback(
         originX: fixedPoint(penX + glyph.originX),
         originY: fixedPoint(penY + glyph.originY),
       });
+    if (run.exactAdvancesX === undefined) exact = false;
+    else for (const advance of run.exactAdvancesX) exactAdvancesX.push(advance);
     for (const cluster of run.clusters)
       clusters.push({
         ...cluster,
@@ -105,6 +111,7 @@ export function shapeExportClusterFallback(
       glyphs,
       clusters,
       fontSpans,
+      exactAdvancesX: exact && exactAdvancesX.length === glyphs.length ? exactAdvancesX : undefined,
       metrics: {
         ascent: fixedPoint(ascent),
         descent: fixedPoint(descent),

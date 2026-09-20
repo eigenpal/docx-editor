@@ -172,6 +172,19 @@ export interface ShapedRun {
   readonly clusters: readonly ShapedCluster[];
   readonly fontSpans: readonly ShapedFontSpan[];
   readonly metrics: ShapedVerticalMetrics;
+  /**
+   * The same horizontal advances as `glyphs[i].advanceX`, in the same fixed-point units, but
+   * BEFORE the per-glyph rounding to the fixed-point grid. Parallel to `glyphs`.
+   *
+   * Measurement and line breaking read `advanceX` and must keep doing so: pagination is decided
+   * on those numbers, and two runs shaped identically have to compare equal. A painter that
+   * gives every glyph its own absolute position sums the advances instead, and a sum of ROUNDED
+   * advances drifts by up to half a fixed-point unit per glyph — an error that only grows along
+   * a line. Summing these and rounding once, at the position actually written, does not.
+   *
+   * Absent on runs an assembly path cannot state exactly; a reader falls back to `originX`.
+   */
+  readonly exactAdvancesX?: readonly number[];
 }
 
 /**
@@ -588,6 +601,17 @@ export const createShapedRun = (
     descent: checkedFixedPoint(input.metrics.descent),
     lineGap: checkedFixedPoint(input.metrics.lineGap),
   });
+  // Refused rather than dropped: an assembly path that reorders or regroups glyphs and forgets
+  // to say so would otherwise paint one glyph's advance under another's.
+  const exact = input.exactAdvancesX;
+  if (exact !== undefined) {
+    if (exact.length !== glyphs.length) {
+      throw new RangeError('Exact advances must be parallel to the shaped glyphs');
+    }
+    if (exact.some((value) => !Number.isFinite(value))) {
+      throw new RangeError('Exact advance must be a finite number');
+    }
+  }
   return Object.freeze({
     text: input.text,
     direction: input.direction,
@@ -596,6 +620,7 @@ export const createShapedRun = (
     clusters: Object.freeze(clusters),
     fontSpans: Object.freeze(fontSpans),
     metrics,
+    ...(exact === undefined ? {} : { exactAdvancesX: Object.freeze([...exact]) }),
   });
 };
 

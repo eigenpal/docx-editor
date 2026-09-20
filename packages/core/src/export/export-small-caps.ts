@@ -35,7 +35,9 @@ export function synthesizeExportSmallCaps(
     offset += char.length;
   }
   const glyphs: ShapedGlyph[] = [],
-    clusters: ShapedCluster[] = [];
+    clusters: ShapedCluster[] = [],
+    exactAdvancesX: number[] = [];
+  let exact = true;
   let pen = 0;
   // Small caps apply to cased scripts. The surrounding bidi direction remains unchanged.
   for (const group of input.environment.direction === 'rtl' ? groups.reverse() : groups) {
@@ -55,7 +57,11 @@ export function synthesizeExportSmallCaps(
     }
     const run = shaper.shape({ ...plainInput, text });
     const first = glyphs.length;
-    for (const glyph of run.glyphs)
+    for (const [index, glyph] of run.glyphs.entries()) {
+      // The synthetic scale multiplies the advance, so it multiplies the unrounded one too.
+      const advance = run.exactAdvancesX?.[index];
+      if (advance === undefined) exact = false;
+      else exactAdvancesX.push(advance * scale);
       glyphs.push({
         ...glyph,
         cluster: starts[glyph.cluster] ?? group.start,
@@ -67,6 +73,7 @@ export function synthesizeExportSmallCaps(
         advanceY: fixedPoint(Math.round(glyph.advanceY * scale)),
         drawScale: scale,
       });
+    }
     for (const cluster of run.clusters) {
       const textStart = starts[cluster.textStart] ?? group.start,
         textEnd = ends[cluster.textEnd - 1] ?? logical;
@@ -98,5 +105,8 @@ export function synthesizeExportSmallCaps(
     glyphs,
     clusters,
     fontSpans: [{ ...featured.fontSpans[0]!, glyphStart: 0, glyphEnd: glyphs.length }],
+    // This does not run through createShapedRun, so the inherited array has to be replaced or
+    // cleared here: `featured` was shaped as one piece and its advances are not these.
+    exactAdvancesX: exact && exactAdvancesX.length === glyphs.length ? exactAdvancesX : undefined,
   };
 }

@@ -379,6 +379,23 @@ const fontUnitsConverter = (
   return (value) => roundFontUnitToFixedPoint(value, denominator, numerator, mode);
 };
 
+/**
+ * The same rational the fixed-point converter applies, with the rounding step left out.
+ *
+ * One IEEE division of two exactly representable integers, so it is deterministic and
+ * reproducible — the same guarantee the fixed-point path gives, at the precision a painter
+ * that sums advances needs.
+ */
+const exactFontUnitsConverter = (
+  unitsPerEm: number,
+  fontSizeHalfPoints: number,
+  fixedPointScale: number
+): ((value: number) => number) => {
+  const numerator = fontSizeHalfPoints * fixedPointScale;
+  const denominator = unitsPerEm * 2;
+  return (value) => (value * numerator) / denominator;
+};
+
 const clustersFromGlyphs = (
   text: string,
   glyphs: readonly ShapedGlyph[]
@@ -473,6 +490,9 @@ const shapedRunStorageBytes = (run: ShapedRun): number => {
     run.clusters.reduce((sum, cluster) => sum + arrayStorageBytes(cluster.caretEdges.length), 0) +
     arrayStorageBytes(run.fontSpans.length) +
     run.fontSpans.length * FONT_SPAN_OBJECT_BYTES +
+    (run.exactAdvancesX === undefined
+      ? 0
+      : ARRAY_OVERHEAD_BYTES + run.exactAdvancesX.length * NUMBER_STORAGE_BYTES) +
     METRICS_OBJECT_BYTES +
     [...uniqueOutlines].reduce((sum, outline) => sum + outlineStorageBytes(outline.path), 0)
   );
@@ -826,6 +846,12 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         environment.fixedPointScale,
         environment.roundingMode
       );
+      const exactAdvance = exactFontUnitsConverter(
+        face.upem,
+        input.fontSizeHalfPoints,
+        environment.fixedPointScale
+      );
+      const exactAdvancesX: number[] = [];
       let originX = fixedPoint(0);
       let originY = fixedPoint(0);
       const runOutlines = new Map<number, GlyphOutline>();
@@ -835,6 +861,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         )
       );
       const glyphs: ShapedGlyph[] = shaped.map((glyph) => {
+        exactAdvancesX.push(exactAdvance(glyph.xAdvance ?? 0));
         const advanceX = convert(glyph.xAdvance ?? 0);
         const advanceY = convert(glyph.yAdvance ?? 0);
         const positioned = {
@@ -865,6 +892,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           direction: environment.direction,
           bidiLevel: input.bidiLevel,
           glyphs,
+          exactAdvancesX,
           clusters: clustersFromGlyphs(text, glyphs),
           fontSpans:
             glyphs.length === 0

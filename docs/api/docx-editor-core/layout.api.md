@@ -3945,6 +3945,7 @@ export interface ShapedRun {
     readonly clusters: readonly ShapedCluster[];
     // (undocumented)
     readonly direction: TextDirection;
+    readonly exactAdvancesX?: readonly number[];
     // (undocumented)
     readonly fontSpans: readonly ShapedFontSpan[];
     // (undocumented)

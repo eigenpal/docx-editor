@@ -7,6 +7,7 @@ import {
   boundedStructuralFontValidator,
   createFontResourceSnapshot,
   createHarfBuzzTextShaper,
+  createShapedRun,
   createShapingEnvironment,
   harfBuzzFontValidator,
   initializeHarfBuzz,
@@ -658,6 +659,34 @@ describe('HarfBuzz production shaper', () => {
     } finally {
       bounded.dispose();
     }
+  });
+
+  test('publishes the unrounded advance beside the rounded one', () => {
+    // 24 half-points at scale 64 over a 2048-unit em converts one font unit to 0.375
+    // fixed-point units, so DejaVu's 1253-unit 'o' is 469.875 and rounds to 470.
+    const run = shaper.shape(input('ooo'));
+    expect(run.glyphs.map((glyph) => glyph.advanceX)).toEqual([470, 470, 470]);
+    expect(run.exactAdvancesX).toEqual([469.875, 469.875, 469.875]);
+  });
+
+  test('the unrounded advances do not accumulate the drift the rounded origins do', () => {
+    const run = shaper.shape(input('o'.repeat(100)));
+    const last = run.glyphs[99]!;
+    const exact = run.exactAdvancesX!.slice(0, 99).reduce((sum, value) => sum + value, 0);
+
+    // The pen position `originX` sums advances already rounded UP by 0.125 each, so by the
+    // hundredth glyph it sits 12.375 fixed-point units — 0.193pt at this scale — past the
+    // position the same advances describe before rounding.
+    expect(last.originX).toBe(99 * 470);
+    expect(exact).toBeCloseTo(99 * 469.875, 9);
+    expect(last.originX - exact).toBeCloseTo(12.375, 9);
+  });
+
+  test('refuses exact advances that are not parallel to the glyphs', () => {
+    const run = shaper.shape(input('office'));
+    expect(() =>
+      createShapedRun({ ...run, exactAdvancesX: [1, 2] }, input('office').environment)
+    ).toThrow(RangeError);
   });
 
   test('releases owned HarfBuzz references and rejects use after disposal', () => {

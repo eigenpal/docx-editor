@@ -16,6 +16,7 @@ import {
   TAB_LEADER_GLYPH,
   tabLeaderPattern,
   type SemanticSpanVisit,
+  type ShapedRun,
 } from '@docx-editor.dev/core/layout';
 import { underlineGap } from './underline-gap.ts';
 import { EmbeddedFace } from './fonts.ts';
@@ -23,6 +24,36 @@ import { color, number as n, rect, Work } from './context.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
+
+/**
+ * Pen positions for a run, summed from the UNROUNDED advances.
+ *
+ * Every glyph here gets its own absolute `Tm`, so the position written is the running sum of
+ * the advances before it. `ShapedGlyph.originX` is that sum over advances already rounded to
+ * the fixed-point grid, which biases every instance of a character the same way: the error
+ * does not cancel, it grows with the glyph count. Summing before rounding and rounding once,
+ * at the absolute position, removes it. Worth 0.0022pt at the end of a 90-glyph 11pt line in
+ * `footnote-overlap-regression.docx` — small, because the layout grid is 1/1000pt. The larger
+ * residual against the reference on that page is the REFERENCE's own quantisation: it shows a
+ * whole run at once and lets the consumer accumulate integer 1/1000-em widths, which is
+ * 0.0055pt of step at 11pt. See `.cache/pdf/claude-advance-exact/`.
+ *
+ * Layout is untouched: line breaking still measures the rounded advances, and this only
+ * decides where a glyph is drawn inside a span whose own origin layout already fixed.
+ *
+ * Indexed by glyph, so it makes no assumption about the order paint walks clusters in.
+ */
+function penOrigins(run: ShapedRun): readonly number[] | undefined {
+  const advances = run.exactAdvancesX;
+  if (!advances || advances.length !== run.glyphs.length) return undefined;
+  const origins: number[] = [];
+  let pen = 0;
+  for (const advance of advances) {
+    origins.push(pen);
+    pen += advance;
+  }
+  return origins;
+}
 
 export class TextWriter {
   readonly faces = new Map<string, EmbeddedFace>();
@@ -92,6 +123,7 @@ export class TextWriter {
     const out = [`${color(foreground)} rg`, 'BT', `/${face.name} ${n(size)} Tf`];
     if (style.textOutline)
       out.unshift(`q ${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
+    const origins = penOrigins(shaped.run);
     let extra = 0;
     let activeSize = size;
     let activeFace = face;
@@ -115,7 +147,8 @@ export class TextWriter {
           activeSize = glyphSize;
         }
         const code = activeFace.encode(glyph.id, i === cluster.glyphStart ? text : '');
-        const gx = x + (glyph.originX + glyph.offsetX) * scale * horizontal + extra;
+        const origin = origins?.[i] ?? glyph.originX;
+        const gx = x + (origin + glyph.offsetX) * scale * horizontal + extra;
         const gy = baseline + (glyph.originY + glyph.offsetY) * scale;
         out.push(`${n(horizontal)} 0 0 1 ${n(gx)} ${n(gy)} Tm <${code}> Tj`);
       }
