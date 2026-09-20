@@ -517,6 +517,16 @@ Word's internal positions are not on the device grid. A stack of page-broken par
 
 The interface exposes no baseline, ascent or font-metric query, so it cannot answer where the ascent comes from. Core Text was checked earlier and returns our values, not Word's.
 
+### The implemented rule is the best available
+
+A brute force over rule families against all thirty-three dense controls settles what to do about this. The families cover the quantity (ascent, ascent plus gap, ascent plus half the gap, ascent plus twice the gap, `winAscent`), the size it is taken at (authored or rounded onto the grid), five rounding modes, and every pairing of two rounding modes applied separately to the ascent and the gap. Forty-plus rules in all.
+
+The best score is 28 of 33, and it belongs to the rule already implemented: round the sum of ascent and line gap, taken at the authored size. Nothing beats it, and taking the quantity at the gridded size scores 25.
+
+The five it misses cannot be separated by a threshold. Their fractional parts are 0.24, 0.414, 0.570, 0.579 and 0.680 units. The reference rounds 0.24 and 0.414 UP, and rounds 0.570, 0.579 and 0.680 DOWN. Any threshold that takes 0.24 upward must also take 0.57 upward, and any that takes 0.68 downward must also take 0.414 downward. No monotone rounding rule on this quantity can produce the observed sequence.
+
+So the residual is irreducible from the published metrics, and the writer already does the best that evidence supports. Closing it needs a metric source this machine does not expose, not a different rounding choice.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
