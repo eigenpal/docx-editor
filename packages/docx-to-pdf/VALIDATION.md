@@ -632,7 +632,11 @@ The document is named for its header geometry and that is where the top comes fr
 
 Rounding the story origin UP to the next whole unit was the obvious reading of that, since `ceil(322.485)` is 323, and it was tried. It is wrong. Documents fully under 1% against Word fall from eighteen to seventeen, `issue-483-firstline-marker.docx` goes from 1.173% to 2.415%, `template-with-hf-rule.docx` from 0.298% to 0.640%, and `issue-740-header-zero-distance.docx` itself gets worse, 1.600% to 1.790%. Reverted.
 
-So the body top is not simply rounded up. The reference reaches 323 units by some other route, and since the header's own painted baselines put its bottom at 321.8 units, the extra is not the header's ink either. This is where the trail currently ends.
+Rounding up is wrong because it is too blunt: story origins across the corpus sit at 147.7083, 300.0000, 322.4875 and 354.1667 units, and footnote and endnote stories sit off the grid too. Pushing 354.1667 up to 355 moves a whole document by five sixths of a unit, which is what cost `template-with-hf-rule.docx` and `demo.docx`.
+
+What the numbers actually say about `issue-740-header-zero-distance.docx` is narrower and more final. Its header is three lines from a `w:before` of 36pt, and by the reference's own painted header baselines — 196, 253 and 311 units — the last line's box ends at 322.5 units exactly. That is a perfect tie. The reference resolves it upward to 323; this engine computes 322.4875, a hundredth of a unit below the tie, and resolves downward to 322.
+
+So this is not a missing rule. It is a knife-edge: the body top of that document lands within 0.0125 of an exact half unit, and which side it falls on is decided by the last decimal places of an accumulated sum rather than by any policy either engine could state. Half a unit at the block origin is exactly what flips fourteen of its fifty-one spans and leaves the rest exact.
 
 ### Not understood
 
