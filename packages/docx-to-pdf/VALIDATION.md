@@ -596,7 +596,27 @@ With the baseline rule in, the worst page of each remaining document breaks down
 
 So the next target is the superscript raise, not the baseline. This engine lifts a script run by 33% of the font size. Eleven Word-rendered controls give raises of 13, 13, 15, 19, 17, 19, 21, 23, 27, 27 and 35 device units at 8, 9, 10, 11, 12, 13, 14, 16, 18, 20 and 24pt, against this engine's 11, 12, 14, 15, 17, 17, 19, 22, 25, 28 and 33. The reference is higher on nine of eleven, by a median of two units.
 
-No rule is established yet. The measured ratio scatters between 0.324 and 0.415 of the font size, and the sequence is not monotone — 19 units at 11pt against 17 at 12pt — so a single constant does not fit. `OS/2 ySuperscriptYOffset` is not it either: Calibri declares 976 units, which is about 1.8 times the observed raise at every size. The control puts several superscripts on one page, so the next step is one superscript per page before drawing any conclusion, and the raise is a Core constant shared with the editor and the caret.
+No rule is established yet, and a clean control was built to make sure the numbers are real. The earlier one put several superscripts on one page; this one puts a single base word and a single superscript on a page of its own, eleven pages, Calibri:
+
+| base | reference raise | device units | this engine |
+| ---- | --------------- | ------------ | ----------- |
+| 8pt  | 2.400pt         | 10           | 11          |
+| 9pt  | 2.400pt         | 10           | 12          |
+| 10pt | 3.600pt         | 15           | 14          |
+| 11pt | 4.080pt         | 17           | 15          |
+| 12pt | 4.080pt         | 17           | 17          |
+| 13pt | 4.080pt         | 17           | 18          |
+| 14pt | 4.560pt         | 19           | 19          |
+| 16pt | 5.520pt         | 23           | 22          |
+| 18pt | 6.000pt         | 25           | 25          |
+| 20pt | 6.960pt         | 29           | 28          |
+| 24pt | 7.920pt         | 33           | 33          |
+
+The clean numbers differ from the confounded ones at six of eleven sizes, so the first control was indeed misleading and its figures should not be used.
+
+At 8pt, the size `footnote-overlap-regression.docx` uses, the reference raises 10 units where this engine raises 11. That is the 0.24pt those 26 note references are high, confirmed independently.
+
+Still no rule. A single factor cannot fit: the reference wants 0.30 of the font size at 8pt, 0.375 at 11pt and 0.33 at 24pt. The sequence is not smooth either — 10 units at both 8 and 9pt, then 15 at 10pt — and aligning the reduced run's ascent or cap height with the base run's reproduces neither. Two independently gridded baselines also carry a unit of noise each, so part of the scatter is measurement. The raise is a Core constant shared with the editor and the caret, so it should not move on a fit this loose.
 
 ### Not understood
 
