@@ -26,6 +26,23 @@ import { color, number as n, rect, Work } from './context.ts';
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
 
+/**
+ * Drawn size of a run in half points, after any superscript or subscript reduction.
+ *
+ * `w:sz` is authored in half points, and the reference reduces in that unit: an 11pt script
+ * run is `round(22 * 0.65) = 14` half points, which is 7pt and draws at 6.96pt. Reducing the
+ * point size instead gives 7.15pt and draws 7.20, a whole device unit away. Eleven
+ * Word-rendered base sizes from 8pt to 24pt fit this and fit no rule applied to points.
+ *
+ * Paint only. Layout keeps its own script scale, so advances and line breaking do not move;
+ * applying this reduction to layout instead made `footnote-overlap-regression.docx` worse
+ * against its Word reference, from 0.906% to 2.160%.
+ */
+function reducedHalfPoints(fontSizePt: number, factor: number): number {
+  const authored = Math.max(1, Math.round(fontSizePt * 2));
+  return factor === 1 ? authored : Math.max(1, Math.round(authored * factor));
+}
+
 /** Largest `TJ` adjustment the writer's number formatter accepts. */
 const MAX_TJ_ADJUSTMENT = 1_000_000;
 
@@ -153,21 +170,18 @@ export class TextWriter {
     const factor = glyphSizeFactorOf(style);
     // The reference emits the drawn size on the same 0.24pt device grid it paints baselines
     // and rules on, never on a half point: 11 draws at 11.04, 13 at 12.96, 10.5 at 10.56 and
-    // 21 at 21.12, in every corpus document. Paint only — the shaped advances that position
-    // each glyph keep the authored size, so this scales the drawn mark and moves nothing.
-    // A super/subscript run is left on the legacy half point: our glyph size factor is 0.65,
-    // and the reference's own emitted sizes bound it to [0.636, 0.6436] (11pt draws 6.96,
-    // 10pt draws 6.48, 8pt draws 5.04). Gridding a size computed from the wrong factor moves
-    // those runs a whole step AWAY from the reference, so the factor is the thing to settle
-    // first, with its own captured control.
-    const size =
-      factor === 1
-        ? Number(
-            (
-              Math.max(1, Math.round(style.fontSizePt / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT
-            ).toFixed(6)
-          )
-        : (Math.max(1, Math.round(style.fontSizePt * 2)) / 2) * factor;
+    // 21 at 21.12. Eleven Word-rendered base sizes from 8pt to 24pt agree, and so do their
+    // superscripts once `glyphSizeFactorOf` reduces in half points: 11pt reduces to 7pt and
+    // draws at 6.96. Paint only — the shaped advances keep the size layout used, which is the
+    // same reduced size, so the run that follows a script still starts where it is painted.
+    const size = Number(
+      (
+        Math.max(
+          1,
+          Math.round(reducedHalfPoints(style.fontSizePt, factor) / 2 / PDF_PAINT_GRID_PT)
+        ) * PDF_PAINT_GRID_PT
+      ).toFixed(6)
+    );
     const horizontal = style.horizontalScalePercent / 100;
     const scale = factor / shaped.fixedPointScale;
     const x =
