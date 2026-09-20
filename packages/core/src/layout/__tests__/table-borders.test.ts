@@ -357,7 +357,7 @@ describe('per-grid-interval conflict + stroke geometry', () => {
     expect(strokes.map((stroke) => stroke.y)).toEqual([28.125, 28.875, 29.625]);
   });
 
-  test('mixed double+dashed publishes double strokes and CSS convenience for dashed', () => {
+  test('mixed double+dashed publishes double strokes and a dashed vertical rule', () => {
     const borders = box({
       top: edge('double', '2E75B6', 0.375),
       right: edge('dashed', 'CC3333', 0.125),
@@ -375,7 +375,15 @@ describe('per-grid-interval conflict + stroke geometry', () => {
     );
     const cell = grid[0]![0]!;
     expect(cell.right).toEqual({ style: 'dashed', color: 'CC3333', widthPt: 0.125 });
-    expect(cell.strokes?.every((s) => s.side === 'top')).toBe(true);
+    // A vertical rule starts at its grid line and runs right. CSS border-box draws a right
+    // border INSIDE its element, so the rule publishes stroke geometry and keeps its style.
+    const right = cell.strokes!.find((stroke) => stroke.side === 'right')!;
+    expect({ x: right.x, width: right.width, cssStyle: right.cssStyle }).toEqual({
+      x: 80,
+      width: 0.125,
+      cssStyle: 'dashed',
+    });
+    expect(cell.strokes?.every((s) => s.side === 'top' || s.side === 'right')).toBe(true);
     const topOuter = cell.strokes!.find((s) => s.role === 'outer')!;
     // No left/right double neighbor → flush to cell width.
     expect(topOuter.x).toBe(0);

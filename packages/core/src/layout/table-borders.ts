@@ -600,18 +600,28 @@ function expandSimpleInterval(
 ): void {
   const horizontal = side === 'top' || side === 'bottom';
   const w = edge.widthPt;
-  // A shared horizontal band starts AT the row boundary and runs downward by its own width,
-  // so columns of different widths share one grid line (captured control
-  // `.cache/pdf/claude-band-mixed/`). Admitted legacy vertical rules still straddle theirs.
-  // Every other edge keeps its independent inward stroke geometry.
-  const inset = centered ? (horizontal ? 0 : w / 2) : w;
+  // A rule starts AT its grid line and runs in the direction of flow: a shared horizontal
+  // band downward into the row below, a vertical rule rightward into the column to its
+  // right. Neither is drawn inward, so columns of different widths share one grid line.
+  // Captured in `.cache/pdf/claude-band-mixed/` and `.cache/pdf/claude-vertical-rules/`.
+  // Admitted legacy vertical rules still straddle their line, and a terminal or outer rule
+  // keeps its inward geometry so it stays inside the table.
+  const x = horizontal
+    ? startPt
+    : centered
+      ? side === 'right'
+        ? cellW - w / 2
+        : -w / 2
+      : side === 'right'
+        ? cellW
+        : 0;
   pushStroke(strokes, {
     side,
     role: 'edge',
     color: edge.color,
     cssStyle: cssStyleForEdge(edge.style),
-    x: horizontal ? startPt : side === 'right' ? cellW - inset : inset - w,
-    y: !horizontal ? startPt : side === 'bottom' ? cellH - inset : inset - w,
+    x,
+    y: !horizontal ? startPt : side === 'bottom' ? cellH - (centered ? 0 : w) : 0,
     width: horizontal ? endPt - startPt : w,
     height: horizontal ? w : endPt - startPt,
   });
@@ -719,10 +729,14 @@ function publishFromIntervals(
       } else if (
         !fullSide ||
         (centered && (side === 'top' || side === 'bottom')) ||
-        (centeredSides && (side === 'left' || side === 'right'))
+        side === 'right' ||
+        (centeredSides && side === 'left')
       ) {
         // Multi-interval simple edges cannot use CSS border-*; publish stroke geometry.
-        // Only internal bottom edges share a stroke with the following row.
+        // A full simple RIGHT edge publishes it too: CSS draws a right border INSIDE its
+        // element, and the reference draws every vertical rule from the grid line
+        // rightward. A left, top or separated bottom edge already starts at its own line,
+        // which is exactly what CSS border-box draws, so those stay on CSS.
         expandSimpleInterval(
           strokes,
           side,

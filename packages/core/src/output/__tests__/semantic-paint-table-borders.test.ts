@@ -29,6 +29,43 @@ describe('table cell border paint', () => {
   const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
   const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
+  // A vertical rule starts at its grid line and runs right, so an interior rule lands
+  // inside the NEXT cell's box and the table's outer right rule lands outside the table.
+  // Painted cells are positioned siblings, so the stroke overlay needs its own z-index or
+  // the next cell's `w:shd` background covers the rule it is supposed to sit under.
+  // Captured in `.cache/pdf/claude-vertical-rules/FINDING.md`.
+  test('a vertical rule paints outside its cell, above the next cell background', () => {
+    const shaded = '<w:tcPr><w:shd w:val="clear" w:fill="FFDD88"/></w:tcPr>';
+    const body =
+      '<w:tbl><w:tblPr><w:tblBorders>' +
+      ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+        .map((side) => `<w:${side} w:val="single" w:sz="8"/>`)
+        .join('') +
+      '</w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+      tr(tc(p('L'), shaded) + tc(p('R'), shaded)) +
+      '</w:tbl>';
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
+    const cells = [...container.querySelectorAll<HTMLElement>('.docx-table-cell')];
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.style.backgroundColor).toBe('#FFDD88');
+      expect(cell.style.borderRightStyle).toBe('none');
+      const right = cell.querySelector<HTMLElement>(
+        '.docx-table-border-edge-stroke[data-edge="right"]'
+      )!;
+      expect(right).not.toBeNull();
+      // Outside the cell box, and lifted over every sibling cell background.
+      expect(parsePx(right.style.left)).toBe(parsePx(cell.style.width));
+      expect((right.parentElement as HTMLElement).style.zIndex).toBe('1');
+    }
+    // Only the first column owns a left rule, and it starts at its own box edge running
+    // right, which is exactly what CSS border-box draws, so it stays on CSS.
+    expect(cells[0]!.style.borderLeftStyle).toBe('solid');
+    expect(cells[0]!.querySelector('[data-edge="left"]')).toBeNull();
+    expect(cells[1]!.style.borderLeftStyle).toBe('none');
+  });
+
   test('does not hardcode a black grid; paints resolved styles and skips continue cells', () => {
     const body =
       '<w:tbl>' +
@@ -85,8 +122,11 @@ describe('table cell border paint', () => {
     expect(restart.style.borderTopStyle).toBe('none');
     expect(restart.style.borderTopColor).toBe('#2E75B6');
     expect(restart.querySelector('.docx-table-border-double')).not.toBeNull();
-    expect(restart.style.borderRightStyle).toBe('dashed');
-    expect(restart.style.borderRightColor).toBe('#CC3333');
+    expect(restart.style.borderRightStyle).toBe('none');
+    const restartRight = rightRule(restart);
+    expect(restartRight.style.borderLeft).toContain('dashed');
+    expect(restartRight.style.borderLeft).toContain('#CC3333');
+    expect(parsePx(restartRight.style.left)).toBe(parsePx(restart.style.width));
     expect(restart.dataset.rowSpan).toBe('2');
 
     const continueCell = cells[2]!;
@@ -178,6 +218,16 @@ describe('table cell border paint', () => {
         color: el.style.backgroundColor,
       })
     );
+  }
+
+  /** A vertical rule starts at its grid line and runs right, which CSS border-box cannot
+   *  draw for a right edge, so it is published as stroke geometry with its authored style. */
+  function rightRule(cell: HTMLElement): HTMLElement {
+    const found = cell.querySelector<HTMLElement>(
+      '.docx-table-border-edge-stroke[data-edge="right"]'
+    );
+    expect(found).not.toBeNull();
+    return found!;
   }
 
   function seg(segs: StrokeSeg[], edge: string, which: 'outer' | 'inner'): StrokeSeg {
@@ -277,8 +327,10 @@ describe('table cell border paint', () => {
     paintSemanticLayout(container, layoutOf(body), { scale: 1 });
     const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
     expect(cell.style.borderTopStyle).toBe('none');
-    expect(cell.style.borderRightStyle).toBe('dashed');
-    expect(cell.style.borderRightColor).toBe('#CC3333');
+    expect(cell.style.borderRightStyle).toBe('none');
+    const dashedRight = rightRule(cell);
+    expect(dashedRight.style.borderLeft).toContain('dashed');
+    expect(parsePx(dashedRight.style.left)).toBe(parsePx(cell.style.width));
     expect(cell.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     expect(cell.querySelector('.docx-table-border-triple')).toBeNull();
     const segs = strokeSegs(cell);
@@ -484,7 +536,8 @@ describe('table cell border paint', () => {
     expect(doubleBlue!.style.borderTopStyle).toBe('none');
     expect(doubleBlue!.style.borderLeftStyle).toBe('none');
     expect(doubleBlue!.style.borderBottomStyle).toBe('none');
-    expect(doubleBlue!.style.borderRightStyle).toBe('dashed');
+    expect(doubleBlue!.style.borderRightStyle).toBe('none');
+    expect(rightRule(doubleBlue!).style.borderLeft).toContain('dashed');
     expect(doubleBlue!.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     const segs = strokeSegs(doubleBlue!);
     expect(segs).toHaveLength(6); // top/left/bottom × outer+inner
