@@ -644,6 +644,14 @@ Checked rather than assumed. A control places a square-wrapped image at six heig
 
 So the rule for when a line clears a square wrap is right. The one line in `float-wrap-comprehensive-test.docx` that sits 69.12pt out of place — the reference clears the float at its bottom and starts at 79.20 while this engine keeps wrapping and starts at 148.32 — is a special case in that document, not a systematic clearance defect. That page has several overlapping anchors with different `wrapText` sides, which the control does not reproduce.
 
+### Wrap sides are correct, and the residual there is the known tie
+
+A second float control varies `wrapText` over `bothSides`, `left` and `right`, with the image at a column offset of 150pt. `bothSides` matches the reference exactly: same line count, same two runs per line, same starts at 36.00 and 255.00. `left` matches on its starts as well.
+
+`right` differs by 0.12pt on every line, and it is the tie already recorded above rather than a new rule. The image's right edge is 246.00pt and `distR` is 9pt, so the text origin is 255.00pt exactly, which is 1062.5 device units. The reference paints 255.00, leaving the half unit alone; this engine rounds it up to 255.12. On page 4 of `float-wrap-comprehensive-test.docx` the reference does the opposite with the same arithmetic, rounding 617.5 units down to 617.
+
+That is the same both-directions behaviour the corpus-wide tie search found, 86 up against 62 down, and it is why the writer keeps a single documented convention instead of chasing it.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
