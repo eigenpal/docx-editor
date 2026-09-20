@@ -773,7 +773,12 @@ export function breakParagraph(
         modelStart >= zone.anchorModelStart
     );
     if (zones.length === 0) return;
-    if (line.spans.length > 0 || line.drawings.length > 0) closeLine();
+    // The band ends the line it is anchored ON, once. A piece that already sits on the line
+    // the anchor opened is ordinary content, so closing again gave every later run in the
+    // paragraph a line of its own: a paragraph-final whitespace run became a phantom blank
+    // line, and an ordinary second run broke mid-sentence at the run seam.
+    const opensAfterAnchor = zones.some((zone) => line.start < zone.anchorModelStart);
+    if (opensAfterAnchor && (line.spans.length > 0 || line.drawings.length > 0)) closeLine();
     applyTopAndBottomSkipIfNeeded();
   };
 
