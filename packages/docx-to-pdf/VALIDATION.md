@@ -501,6 +501,12 @@ Rasteriser choice changes this page but does not rescue the others, so it is not
 
 Only `issue-483` is flattered by a different rasteriser. The other three are worse under MuPDF, so their error is geometry, not rasterisation.
 
+### One trailing space short at a line end
+
+On page 1 of `issue-740-header-zero-distance.docx` the reference ends a line with `'ttttttttttttttttttt  '`, two trailing spaces, and we end it with one. The nineteen glyphs occupy the same width in both, 63.346pt, so nothing visible moves; the line box is 3.0pt narrower, which is one space at 12pt Times. Another line is 9.0pt narrower, three spaces. A trailing space carries no ink, so this does not show in a pixel comparison, but it is a real difference in what the line contains and it is worth fixing on its own terms.
+
+The heavy pixel difference on that page is not this. It is the vertical rule below, a 0.24pt shift on most lines, and the page's text is almost entirely `t`, whose crossbar and serifs are horizontal strokes that a third of a pixel moves visibly. That is why the page reads worse under MuPDF, 8.548%, than under `pdftoppm`, 5.423%: hinting snaps some lines back onto the same pixel row and hides part of it.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
