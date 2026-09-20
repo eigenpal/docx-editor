@@ -112,8 +112,13 @@ test('PDF baseline and glyph origins match the admitted Core shaping run', async
         2
       );
       const v = visits[0]!;
+      // The painted baseline is Core's, taken to the 0.24pt output grid the reference puts
+      // every baseline on. Asserting the snapped value still catches drift — anything the
+      // exporter invents beyond half a grid step fails — while allowing that one step.
+      const grid = 0.24;
+      const fromTop = v.storyOrigin.y - v.page.box.y + v.line.box.y + v.line.baseline;
       expect(first && 'transform' in first ? first.transform[5] : NaN).toBeCloseTo(
-        v.page.box.height - (v.storyOrigin.y - v.page.box.y + v.line.box.y + v.line.baseline),
+        v.page.box.height - Math.round(fromTop / grid) * grid,
         2
       );
     } finally {

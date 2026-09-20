@@ -21,6 +21,9 @@ import { underlineGap } from './underline-gap.ts';
 import { EmbeddedFace } from './fonts.ts';
 import { color, number as n, rect, Work } from './context.ts';
 
+/** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
+const PDF_PAINT_GRID_PT = 0.24;
+
 export class TextWriter {
   readonly faces = new Map<string, EmbeddedFace>();
   private readonly refused = new Map<string, string>();
@@ -55,9 +58,15 @@ export class TextWriter {
     const horizontal = style.horizontalScalePercent / 100;
     const scale = factor / shaped.fixedPointScale;
     const x = absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0);
+    // Reference PDFs put every text baseline on a 0.24pt grid measured from the page top:
+    // 109.44, 126.00, 141.84 and 168.72 are 456, 525, 591 and 703 units exactly. Snap the
+    // PAINTED baseline only. Layout keeps its unrounded metrics, so flow and pagination
+    // cannot move; rounding each line's HEIGHT instead accumulates and is badly wrong
+    // (see .cache/pdf/claude-lineheight-grid/FINDING.md).
+    const baselineFromTop =
+      storyOrigin.y - visit.page.box.y + line.box.y + line.baseline - baselineShiftPtOf(style);
     const baseline =
-      page.getHeight() -
-      (storyOrigin.y - visit.page.box.y + line.box.y + line.baseline - baselineShiftPtOf(style));
+      page.getHeight() - Math.round(baselineFromTop / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
     const revisions = this.showRevisionMarkup ? (span.revisions ?? []) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
