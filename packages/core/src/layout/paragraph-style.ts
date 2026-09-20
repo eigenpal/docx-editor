@@ -403,11 +403,20 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 /**
  * Apply resolved line spacing to a line's natural (glyph-derived) box.
  *
- * Word places `auto` / `atLeast` extras BELOW the line (the last line's multiple spacing
- * still separates it from the next paragraph). Putting that delta above inverted cover-page
- * rhythm: `w:line="460"` on "between" opened a large gap above the word and almost none
- * before "MERIDIAN". Exact-height boxes place their baseline at 80% of the height;
- * the legacy noExtraLineSpacing switch instead preserves the face baseline within the box.
+ * `auto` places its extra BELOW the line — the last line's multiple spacing still separates
+ * it from the next paragraph. Putting that delta above inverted cover-page rhythm:
+ * `w:line="460"` on "between" opened a large gap above the word and almost none before
+ * "MERIDIAN".
+ *
+ * `atLeast` does the OPPOSITE: the box grows upward and the glyphs sit on its floor. A
+ * captured control settles it — Times New Roman 12 pt at `w:line="360" w:lineRule="atLeast"`
+ * puts the reference's baseline at 15.36 pt, which is `18 - descent` snapped to the device
+ * grid, where treating it like `auto` leaves the baseline at 11.28 and the text 4.08 pt too
+ * high. `w:line="240" atLeast` is below the natural line, falls through to the natural
+ * height, and is unaffected. See `.cache/pdf/claude-linerule/`.
+ *
+ * Exact-height boxes place their baseline at 80% of the height; the legacy
+ * noExtraLineSpacing switch instead preserves the face baseline within the box.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
@@ -434,7 +443,9 @@ export function applyLineSpacing(
   if (delta < 0) {
     return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
   }
-  // auto / atLeast: grow the box downward; baseline stays put.
+  // atLeast: grow the box UPWARD, so the glyph band keeps its depth below the baseline.
+  if (spacing.rule === 'atLeast') return { height, baseline: naturalBaseline + delta };
+  // auto: grow the box downward; baseline stays put.
   return { height, baseline: naturalBaseline };
 }
 

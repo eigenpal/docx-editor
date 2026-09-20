@@ -110,10 +110,17 @@ export class TextWriter {
     // PAINTED baseline only. Layout keeps its unrounded metrics, so flow and pagination
     // cannot move; rounding each line's HEIGHT instead accumulates and is badly wrong
     // (see .cache/pdf/claude-lineheight-grid/FINDING.md).
+    //
+    // An exact half-unit rounds toward the page TOP, not away from zero. Ties are not rare:
+    // any exact line spacing that is an odd multiple of 0.12pt hits one on every other line,
+    // and `Math.round` rounds them the wrong way. A captured control of twelve lines at
+    // `w:line="300" w:lineRule="exact"` from a story origin on the grid puts six baselines on
+    // an exact .5, and the reference takes the lower unit for all six; `Math.round` missed
+    // every one of them by 0.24pt. See `.cache/pdf/claude-linerule/`.
     const baselineFromTop =
       storyOrigin.y - visit.page.box.y + line.box.y + line.baseline - baselineShiftPtOf(style);
     const baseline =
-      page.getHeight() - Math.round(baselineFromTop / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
+      page.getHeight() - Math.ceil(baselineFromTop / PDF_PAINT_GRID_PT - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
     const revisions = this.showRevisionMarkup ? (span.revisions ?? []) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
