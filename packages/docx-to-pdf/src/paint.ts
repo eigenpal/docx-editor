@@ -156,6 +156,14 @@ const HIGHLIGHTS: Record<string, string> = {
   black: '000000',
   white: 'FFFFFF',
 };
+/** Device grid the reference paints on: 1/300 inch. */
+const PAGE_GRID_PT = 0.24;
+
+/** Round a page dimension onto the device grid, as the reference writes it. */
+function onDeviceGrid(value: number): number {
+  return Number((Math.round(value / PAGE_GRID_PT) * PAGE_GRID_PT).toFixed(6));
+}
+
 export async function paint(
   doc: PDFDocument,
   session: FontBackedExportCapabilities,
@@ -163,10 +171,15 @@ export async function paint(
   work: Work,
   includeComments: boolean
 ): Promise<void> {
+  // The reference puts the page box on the same 0.24pt device grid it paints on. A4 is
+  // authored as 11906 x 16838 twips, which is 595.30 x 841.90pt, and the reference writes
+  // 595.20 x 841.92 — 2480 and 3508 units. Twenty-three reference documents agree, Letter
+  // included, where the authored size is already on the grid and nothing moves. Leaving the
+  // exact size in shifts every top-down position by the height's own remainder.
   const pages = layout.pages.map((p) => {
     if (p.box.width <= 0 || p.box.height <= 0 || p.box.width > 14400 || p.box.height > 14400)
       throw new RangeError('Invalid PDF page dimensions');
-    return doc.addPage([p.box.width, p.box.height]);
+    return doc.addPage([onDeviceGrid(p.box.width), onDeviceGrid(p.box.height)]);
   });
   for (const artifact of layout.reviewArtifacts) {
     if (
