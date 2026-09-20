@@ -54,7 +54,23 @@ export class TextWriter {
     if (!face) return '';
     const style = styleForFontSlot(span.style, span.fontSlot);
     const factor = glyphSizeFactorOf(style);
-    const size = (Math.max(1, Math.round(style.fontSizePt * 2)) / 2) * factor;
+    // The reference emits the drawn size on the same 0.24pt device grid it paints baselines
+    // and rules on, never on a half point: 11 draws at 11.04, 13 at 12.96, 10.5 at 10.56 and
+    // 21 at 21.12, in every corpus document. Paint only — the shaped advances that position
+    // each glyph keep the authored size, so this scales the drawn mark and moves nothing.
+    // A super/subscript run is left on the legacy half point: our glyph size factor is 0.65,
+    // and the reference's own emitted sizes bound it to [0.636, 0.6436] (11pt draws 6.96,
+    // 10pt draws 6.48, 8pt draws 5.04). Gridding a size computed from the wrong factor moves
+    // those runs a whole step AWAY from the reference, so the factor is the thing to settle
+    // first, with its own captured control.
+    const size =
+      factor === 1
+        ? Number(
+            (
+              Math.max(1, Math.round(style.fontSizePt / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT
+            ).toFixed(6)
+          )
+        : (Math.max(1, Math.round(style.fontSizePt * 2)) / 2) * factor;
     const horizontal = style.horizontalScalePercent / 100;
     const scale = factor / shaped.fixedPointScale;
     const x = absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0);
