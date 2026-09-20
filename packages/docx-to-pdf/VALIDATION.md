@@ -638,6 +638,12 @@ What the numbers actually say about `issue-740-header-zero-distance.docx` is nar
 
 So this is not a missing rule. It is a knife-edge: the body top of that document lands within 0.0125 of an exact half unit, and which side it falls on is decided by the last decimal places of an accumulated sum rather than by any policy either engine could state. Half a unit at the block origin is exactly what flips fourteen of its fifty-one spans and leaves the rest exact.
 
+### Float clearance is correct in the general case
+
+Checked rather than assumed. A control places a square-wrapped image at six heights — 30, 36, 42, 48, 54 and 60pt, each on its own page, with the same wrapped paragraph after it. The reference puts the first full-width line at 86.88, 86.88, 100.32, 100.32, 113.76 and 113.76pt, and this engine matches all six exactly.
+
+So the rule for when a line clears a square wrap is right. The one line in `float-wrap-comprehensive-test.docx` that sits 69.12pt out of place — the reference clears the float at its bottom and starts at 79.20 while this engine keeps wrapping and starts at 148.32 — is a special case in that document, not a systematic clearance defect. That page has several overlapping anchors with different `wrapText` sides, which the control does not reproduce.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
