@@ -533,6 +533,16 @@ A free two-parameter fit settles it in the strongest form. Searching every scale
 
 So the residual is irreducible from the published metrics, and the writer already does the best that evidence supports. Closing it needs a metric source this machine does not expose, not a different rounding choice.
 
+### Hard-coding the measured ascents does not reach the target either
+
+The one remaining path was to stop deriving the ascent and look it up. That was built and measured rather than argued about: a table of the reference's own ascents for Times New Roman and Calibri at every half point from 8 to 24, in device units, with the derived rule kept as the fallback for anything unmeasured.
+
+It does not get there. `issue-740-header-zero-distance.docx` improves from 2.780% to 1.600%, and its worst page from 5.493% to 2.862%, but three documents get worse against their Word references: `float-wrap-comprehensive-test.docx` from 0.729% to 0.947%, `footnote-overlap-regression.docx` from 0.899% to 0.961% and `template-with-hf-rule.docx` from 0.298% to 0.345%. Documents fully under 1% stay at eighteen of twenty, and four pages remain above 1%, two of them higher than before.
+
+The reason is structural. The painted ascent is not an independent quantity: layout snaps it once and then accumulates the line advance from there, so replacing only the first baseline desynchronises the rest of the paragraph. Using the reference's ascents properly would mean changing the accumulation too, and that is the model the corpus has already rejected twice.
+
+So the table buys one document and costs three, for no change in the count under 1%. It was reverted. The remaining gap is not a missing constant.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
