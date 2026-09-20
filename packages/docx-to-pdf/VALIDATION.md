@@ -565,7 +565,11 @@ At 1.15 and at 1.5 the engine matches the reference exactly, at every size, and 
 
 So the ascent model is right. The whole residual lives in the single-spacing path, where the reference's line height is a device unit shorter than the rounded exact height. That is roughly a tenth of the surface the earlier entries in this record were searching, and it explains why no function of the point size fitted: the dense sweeps sampled only the broken case.
 
-Quantising line height in layout was tried before and rejected, see `.cache/pdf/claude-lineheight-grid/FINDING.md`, but that attempt covered every line rule. Doing it only for `w:lineRule="auto"` at `w:line="240"` is a much narrower change and has not been measured. It is the next thing to try, and it needs its own corpus run because line height moves pagination.
+Quantising the single-spacing line height is NOT the fix, and that was checked before writing it down here. The corpus error in these documents is a per-line offset with mixed signs, not a drift that grows down a paragraph, so it is the first baseline rather than the accumulation. And the first baseline does not follow from the height: at 18pt the reference puts it at 72 units under single spacing and 71 under a 1.15 multiple, from the same font at the same size, while the height changes from 91 to 105.
+
+Inside the single-spacing case the ascent is still unfittable, and now visibly so. The exact value is 43.640 units at 11pt, 55.542 at 14pt and 71.411 at 18pt; the reference takes 44, 55 and 72, which is round, then floor, then ceil. No single rounding mode produces that, which is the same wall the dense sweeps hit, now confined to one line rule.
+
+What this entry changes is the size of the problem, not its nature: multiples are exact, so any future attempt should leave them alone and work only on `w:lineRule="auto"` at `w:line="240"`. Quantising line height in layout was tried before and rejected across every line rule, see `.cache/pdf/claude-lineheight-grid/FINDING.md`.
 
 ### Not understood
 
