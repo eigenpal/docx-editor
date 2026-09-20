@@ -25,6 +25,9 @@ import { color, number as n, rect, Work } from './context.ts';
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
 
+/** Largest `TJ` adjustment the writer's number formatter accepts. */
+const MAX_TJ_ADJUSTMENT = 1_000_000;
+
 /**
  * Pen positions for a run, summed from the UNROUNDED advances.
  *
@@ -89,7 +92,12 @@ function createGlyphBatch(out: string[], horizontal: number) {
     flush,
     add(nextFace: EmbeddedFace, nextSize: number, gx: number, gy: number, code: string): void {
       const unit = nextSize * horizontal;
-      if (face !== nextFace || size !== nextSize || baselineY !== gy || unit === 0) {
+      const continues = face === nextFace && size === nextSize && baselineY === gy && unit !== 0;
+      // An adjustment is a multiple of the em, so a tiny size turns an ordinary gap into a
+      // number the writer refuses. Start a new batch instead: the absolute matrix says the
+      // same thing, whatever the size.
+      const adjustment = continues ? (1000 * (penX - gx)) / unit : Number.NaN;
+      if (!Number.isFinite(adjustment) || Math.abs(adjustment) > MAX_TJ_ADJUSTMENT) {
         flush();
         face = nextFace;
         size = nextSize;
@@ -99,7 +107,7 @@ function createGlyphBatch(out: string[], horizontal: number) {
       } else if (gx !== penX) {
         // Positive moves the pen LEFT, so a glyph that must start further right than the
         // previous advance left it takes a negative number.
-        const written = n((1000 * (penX - gx)) / unit);
+        const written = n(adjustment);
         parts.push(written);
         // Follow the pen the VIEWER will have, which is the one the WRITTEN number produces.
         // Tracking the intended position instead lets the rounding in each number accumulate
