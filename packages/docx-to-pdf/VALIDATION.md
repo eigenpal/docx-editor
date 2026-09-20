@@ -525,6 +525,8 @@ The best score is 28 of 33, and it belongs to the rule already implemented: roun
 
 The five it misses cannot be separated by a threshold. Their fractional parts are 0.24, 0.414, 0.570, 0.579 and 0.680 units. The reference rounds 0.24 and 0.414 UP, and rounds 0.570, 0.579 and 0.680 DOWN. Any threshold that takes 0.24 upward must also take 0.57 upward, and any that takes 0.68 downward must also take 0.414 downward. No monotone rounding rule on this quantity can produce the observed sequence.
 
+`gasp` does not explain the misses either. Times New Roman declares three ranges, up to 8ppem, up to 17ppem and beyond, and every control sits between 45 and 100ppem, so the rasteriser is asked for the same behaviour at every size tested.
+
 So the residual is irreducible from the published metrics, and the writer already does the best that evidence supports. Closing it needs a metric source this machine does not expose, not a different rounding choice.
 
 ### Not understood
