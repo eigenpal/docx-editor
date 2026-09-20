@@ -482,25 +482,24 @@ Four corrections landed, each derived from documents rendered in Word on this ma
 
 Rounding the float exclusion band explains every line start on page 5 of `float-wrap-comprehensive-test.docx` — 381.00, 177.00 and 171.00 are exact half units and the reference paints 381.12, 177.12 and 171.12 — and improves that document from 1.017% to 0.729%. It regressed every table document, taking pages above 1% from four to six, because `contentX` carries the indent, the exclusion and the alignment together and a cell origin cannot be separated from a band. Not landed.
 
-### A measurement ceiling on Times New Roman
+### A one-pixel band on `issue-483`, cause not identified
 
-The reference embeds Word's own Times New Roman, fontRevision 0x00070000 with `hhea` lineGap 0, from `Microsoft Word.app/Contents/Resources/DFonts/times.ttf`. We embed the macOS system face, fontRevision 0x0005028f with lineGap 87. The outlines are identical — same glyph ids, same contour counts, same bounding boxes — but the hinting programs differ in every glyph, for example 812 against 872 bytes for `X`. The validator rasterises with `pdftoppm`, which hints, so the two builds produce different pixels at text sizes however exact the geometry is. Word itself lays out with the system face: its line pitch of 13.7988pt at 12pt requires lineGap 87, which its embedded copy does not have.
+The reference embeds Word's own Times New Roman, fontRevision 0x00070000 with `hhea` lineGap 0, from `Microsoft Word.app/Contents/Resources/DFonts/times.ttf`. We embed the macOS system face, fontRevision 0x0005028f with lineGap 87. The outlines are identical — same glyph ids, contour counts and bounding boxes — and the hinting programs differ, 1585 against 2649 bytes of `fpgm`. Word lays out with the system face regardless: its pitch of 13.7988pt at 12pt requires lineGap 87, which its embedded copy does not have.
 
-On page 1 of `issue-483-firstline-marker.docx` this is what remains. Word positions agree to within 0.068pt over 487 paired tokens, no token is off by more than 0.1pt, every rule now matches, and rendering both files with MuPDF instead gives 0.844% with the lines aligned. The same page scores 2.061% under `pdftoppm`.
+That difference was recorded here as a rasteriser ceiling. **It is not.** Embedding each build whole into a page of identical text at 10.56, 11.04, 12 and 13.92pt and rendering both with `pdftoppm` at 96dpi gives zero differing pixels. The hinting programs do not change the raster.
 
-### The float exclusion rounds, but its tie direction is not determinable
+The band remains unexplained. On page 1 four consecutive lines render one pixel lower than the reference under `pdftoppm`, while three of the four have byte-identical baselines: pdfY 313.91998, 301.91998 and 289.91998 in both files, the same 10.56pt size and the same outlines. Three candidate causes are ruled out by measurement. The page boxes now match exactly. The hinting builds render identically. The coordinate form does not matter either: the reference writes text in a 0.24-scaled space, `0.24 0 0 0.24 0 640.08 cm` with `/TT2 1 Tf` and a size of 44, which is Word laying out in whole device units, and writing the same baseline both that way and directly gives an identical raster.
 
-Rounding the line's own text origin landed, and the reference's wrap geometry confirms the rule: a line beside a float starts at a whole number of device units in every case measured on pages 4 and 5 of `float-wrap-comprehensive-test.docx` — 156.000, 148.080, 381.120, 103.440, 177.120 and 171.120 are 650, 617, 1588, 431, 738 and 713 units. The image edges themselves are not all on the grid, and the gap between an image edge and the text is not constant: 9.000, 8.880, 9.120, 8.940 and 15.120pt. Only the sum is rounded.
+Rasteriser choice changes this page but does not rescue the others, so it is not a general excuse. The worst page of each remaining document, compared under both:
 
-A corpus-wide search settles the tie direction negatively. Sweeping every document that has a Word reference for lines whose unrounded text origin is an exact half device unit finds ties in six documents, and the reference resolves them in both directions, roughly 86 up against 62 down. A constant direction would leave one of those buckets empty. Two of those sums are exact half units on identical inputs and the reference rounds them in opposite directions. On page 4 an image right edge of 139.200 plus a `distR` of 114300 EMU, or 9pt, is 148.200, which is 617.5 units, and the reference paints 617. On page 5 an edge of 372.000 plus the same 9pt is 381.000, which is 1587.5 units, and the reference paints 1588. Both inputs are on the grid, both distances are identical, and both are exact ties. Rounding half up matches page 5 and misses eight lines on page 4; rounding half down reverses that. No observable quantity separates them, so the tie is left as round-half-up and both cases are recorded here.
+| document                              | page | pdftoppm | MuPDF  |
+| ------------------------------------- | ---- | -------- | ------ |
+| `float-wrap-comprehensive-test.docx`  | 4    | 1.315%   | 1.586% |
+| `footnote-overlap-regression.docx`    | 4    | 1.222%   | 1.398% |
+| `issue-483-firstline-marker.docx`     | 1    | 2.032%   | 0.844% |
+| `issue-740-header-zero-distance.docx` | 1    | 5.423%   | 8.548% |
 
-A separate defect on page 4 is not a rounding question. The reference clears a left float at its bottom and starts the following line at 79.20; we keep wrapping beside it and start at 148.32, one whole line 69.12pt out of place. The float ends at 624.08, its `distB` is 45720 EMU or 3.6pt, and the line's baseline is 636.0. Whether the reference compares the line's top, its baseline, or an overlap fraction against the exclusion is not established from one instance, and an earlier attempt in this area was reverted.
-
-### The note separator rule disagrees with the height layout reserved
-
-On page 4 of `footnote-overlap-regression.docx` the reference paints the `w:separator` rule 0.72pt thick with its top at 543.36, three and 2264 device units. We paint 0.48pt at 543.60, two and 2265 units, over the same span, 90.0 to 234.0.
-
-Layout already builds this rule from the face's strikeout stroke, through `options.measurer.strikeoutMetrics`, and keeps the result on the note area record as `ruleBox`. The PDF writer recomputes the box from the span alone, which takes `noteSeparatorRuleBox`'s fallback path — a quarter-em offset and a 0.5pt hairline — so paint disagrees with the height layout reserved. Deriving the stroke inside the writer does not work: a separator is a projected atom and `shapeLaidOutText` returns nothing for it, so there is no face to read. The fix is to carry the layout-owned `ruleBox` to the span visit, which is new plumbing from the note area record. It is worth about 0.02% of that page, so it is recorded rather than rushed.
+Only `issue-483` is flattered by a different rasteriser. The other three are worse under MuPDF, so their error is geometry, not rasterisation.
 
 ### Not understood
 
