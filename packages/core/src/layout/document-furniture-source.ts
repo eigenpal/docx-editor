@@ -294,7 +294,9 @@ export function createDocumentFurnitureSource(
         : [...source.keys()];
       for (const variant of variants) {
         const authored = source.get(variant);
-        const part = reserveBackground ? background.partFor(authored, kind, variant) : authored!;
+        const part = reserveBackground
+          ? background.variantPart(authored, kind, variant)
+          : authored!;
         const slot = slots?.get(variant);
         // Relationship ids identify an occurrence, not a part. Several section/variant slots may
         // legally target one shared part through distinct rIds, so keep the expensive baseline

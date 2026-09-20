@@ -54,7 +54,12 @@ export function createBackgroundFurnitureProjection(stylesRoot: () => OoxmlEleme
   const missing = new Map<string, OoxmlPart>();
   let priorStyles: OoxmlElement | null | undefined;
 
-  const partFor = (original: OoxmlPart | undefined, kind: Kind, variant: string): OoxmlPart => {
+  // Deliberately NOT named after the store's scope-keyed part accessor, which opens and
+  // permanently retains a story store and is pinned by
+  // `core/src/__tests__/part-for-call-sites.test.ts`. This only projects a
+  // background-reserving copy of an already-resolved header or footer part, so it takes a
+  // name of its own rather than blunting that guard with a collision.
+  const variantPart = (original: OoxmlPart | undefined, kind: Kind, variant: string): OoxmlPart => {
     if (original && kind === 'footer') return original;
     const cached = original && projected.get(original);
     if (cached) return cached;
@@ -128,7 +133,7 @@ export function createBackgroundFurnitureProjection(stylesRoot: () => OoxmlEleme
     return result;
   };
   return {
-    partFor,
+    variantPart,
     authoredStory,
     isImplicitPart: (part: OoxmlPart) => metadata.has(part) && !metadata.get(part)!.original,
   };

@@ -6,7 +6,10 @@ export function preserveExactLineBaseline(root: OoxmlElement | null): boolean {
   if (!root || root.namespaceUri !== WML_NAMESPACE_URI || root.localName !== 'settings')
     return false;
   const mode = compatibilityModeFromSettings(root);
-  if (mode === 15) return false;
+  // Any mode Word calls modern ignores the switch; an ABSENT mode keeps legacy behaviour.
+  // The parser reports the authored value now, so presence no longer has to be sniffed
+  // separately from the element tree below.
+  if (mode !== undefined && ![11, 12, 14].includes(mode)) return false;
   let enabled = false;
   for (const compat of root.children) {
     if (
@@ -26,7 +29,9 @@ export function preserveExactLineBaseline(root: OoxmlElement | null): boolean {
           property.attributes.find(
             (a) => a.namespaceUri === WML_NAMESPACE_URI && a.localName === name
           )?.value;
-        // A missing mode keeps legacy behavior; an unknown/conflicting declaration does not.
+        // `mode` is undefined here only for a declaration the parser refused: duplicated, so
+        // ambiguous, or malformed. That is not the same as authoring none, and it does not
+        // earn legacy behaviour.
         if (
           attribute('name') === 'compatibilityMode' &&
           attribute('uri') === 'http://schemas.microsoft.com/office/word'
