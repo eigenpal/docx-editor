@@ -465,3 +465,29 @@ The change is fidelity-neutral. A full corpus pass at this revision reproduces e
 Two positions tests were rewritten rather than deleted. They read glyph x positions out of the content stream with a regular expression over per-glyph matrices, which the batch no longer writes. They now walk the pdfjs operator list the way a viewer does — advance by the declared width, apply the adjustment — through one shared helper, so they assert placement without depending on how a run is cut into batches. A new test counts `setTextMatrix` and `showText` operators to hold the batching itself.
 
 The demo server gives its conversion worker `resourceLimits.maxOldGenerationSizeMb`, default 512 and settable with `WORKER_HEAP_MB`. The 521-page document succeeds at 512 MiB and fails at 384 and 320. `ERR_WORKER_OUT_OF_MEMORY` and a non-zero worker exit now answer 507 with a message naming the limit, instead of a generic failure. Verified end to end at a 64 MiB ceiling.
+
+## Device-grid geometry and the font the reference embeds (2026-09-20)
+
+Four corrections landed, each derived from documents rendered in Word on this machine and each measured on the whole corpus before and after.
+
+**The paragraph's left edge rounds onto the 0.24pt grid.** The reference rounds a paragraph's content origin, then advances every glyph from there by exact widths. `issue-483-firstline-marker.docx` is authored with a 63.8pt margin and the reference starts its body text at 63.84pt. Alignment is measured from the rounded edge and is not rounded again: the same page centres its title at 190.733pt, which is off the grid. Against Word this improved twelve of twenty documents and moved one by 0.005%; `header-with-table.docx` became an exact match, and two documents brought every page under 1%.
+
+**A script run reduces in half points.** `w:sz` is authored in half points and the reference reduces in that unit: an 11pt superscript is `round(22 * 0.65) = 14` half points, which is 7pt and draws at 6.96pt. Eleven Word-rendered base sizes from 8pt to 24pt fit this and fit no rule applied to points. The same controls show the reference also advances at 7pt, measured from the pen position of the run that follows, but applying the reduction to layout made `footnote-overlap-regression.docx` worse against its Word reference, from 0.906% to 2.160%, so this is paint only and layout keeps its own script scale.
+
+**An underline hangs from its top, on the grid.** `post.underlinePosition` is the top of the stroke, not its centre. Times New Roman at 10.5pt suggests 1.1433pt and 0.5127pt; the reference draws 1.200pt below the baseline at 0.480pt thick, which are 5 and 2 units, and both ends land on the grid as well. All three underlines in `issue-483-firstline-marker.docx` now match exactly, including the ends of one rule split across runs.
+
+**The page box rounds onto the grid.** A4 is 11906 x 16838 twips, or 595.30 x 841.90pt, and the reference writes 595.20 x 841.92. Twenty-three reference documents agree, Letter included, where the authored size already sits on the grid.
+
+### Rejected after measuring
+
+Rounding the float exclusion band explains every line start on page 5 of `float-wrap-comprehensive-test.docx` — 381.00, 177.00 and 171.00 are exact half units and the reference paints 381.12, 177.12 and 171.12 — and improves that document from 1.017% to 0.729%. It regressed every table document, taking pages above 1% from four to six, because `contentX` carries the indent, the exclusion and the alignment together and a cell origin cannot be separated from a band. Not landed.
+
+### A measurement ceiling on Times New Roman
+
+The reference embeds Word's own Times New Roman, fontRevision 0x00070000 with `hhea` lineGap 0, from `Microsoft Word.app/Contents/Resources/DFonts/times.ttf`. We embed the macOS system face, fontRevision 0x0005028f with lineGap 87. The outlines are identical — same glyph ids, same contour counts, same bounding boxes — but the hinting programs differ in every glyph, for example 812 against 872 bytes for `X`. The validator rasterises with `pdftoppm`, which hints, so the two builds produce different pixels at text sizes however exact the geometry is. Word itself lays out with the system face: its line pitch of 13.7988pt at 12pt requires lineGap 87, which its embedded copy does not have.
+
+On page 1 of `issue-483-firstline-marker.docx` this is what remains. Word positions agree to within 0.068pt over 487 paired tokens, no token is off by more than 0.1pt, every rule now matches, and rendering both files with MuPDF instead gives 0.844% with the lines aligned. The same page scores 2.061% under `pdftoppm`.
+
+### Not understood
+
+`issue-740-header-zero-distance.docx` remains at 5.219% on its first page. Times New Roman at 12pt places its first baseline one device unit low. Twenty Word-rendered controls bound the problem: the line model is exact for Arial at 10, 11, 12, 14, 16 and 20pt and for Times at 8, 9, 10, 11, 14, 18, 20 and 24pt, and one unit out at Times 12, 13, 16 and 22pt. Rounding the sum of ascent and line gap, flooring the ascent, flooring the sum, rounding each separately, and both fonts' VDMX yMax each fit some controls and fail others. No rule is established, so nothing was changed for it.
