@@ -387,3 +387,47 @@ test('a sole no-overlap table still wraps its surrounding paragraph', () => {
     expect(anchor.lines.find((line) => line.box.y >= 52)!.spans[0]!.box.x).toBe(0);
   }
 });
+
+// Word clears text beside a floating table at the GRID edge plus the table's own authored
+// outer border width plus `w:rightFromText`. Captured from a six-case control whose grid
+// runs 72..222pt: a 1pt border with a 9.35pt distance starts text at 232.35 and a 4pt
+// border with the same distance at 235.35, both exact. A zero distance and an unbordered
+// table are NOT explained by that control and stay on the plain grid-plus-distance edge.
+const borderedFloat = (sz: number, rightFromText: number) =>
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="1" w:leftFromText="0" w:rightFromText="${rightFromText}"/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="2000"/>${
+    sz === 0
+      ? ''
+      : `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+          .map((side) => `<w:${side} w:val="single" w:sz="${sz}" w:space="0" w:color="auto"/>`)
+          .join('')}</w:tblBorders>`
+  }<w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+
+const wrapEdgeOf = (sz: number, rightFromText: number) => {
+  const layout = render(part(p('Lead') + borderedFloat(sz, rightFromText) + p('word '.repeat(40))));
+  const floating = tables(layout)[0]!;
+  const anchor = paragraphs(layout)[1]!;
+  expect(isOutOfFlowTableFragment(floating)).toBe(true);
+  return {
+    gridRight: floating.box.x + floating.box.width,
+    textStart: anchor.lines[0]!.spans[0]!.box.x,
+  };
+};
+
+test('text beside a bordered floating table clears the grid, the border and the distance', () => {
+  const thin = wrapEdgeOf(8, 187);
+  expect(thin.textStart).toBeCloseTo(thin.gridRight + 1 + 9.35, 6);
+
+  const thick = wrapEdgeOf(32, 187);
+  expect(thick.textStart).toBeCloseTo(thick.gridRight + 4 + 9.35, 6);
+
+  const far = wrapEdgeOf(8, 720);
+  expect(far.textStart).toBeCloseTo(far.gridRight + 1 + 36, 6);
+});
+
+test('an unbordered float and a zero wrap distance keep the plain grid edge', () => {
+  const unbordered = wrapEdgeOf(0, 187);
+  expect(unbordered.textStart).toBeCloseTo(unbordered.gridRight + 9.35, 6);
+
+  const touching = wrapEdgeOf(8, 0);
+  expect(touching.textStart).toBeCloseTo(touching.gridRight, 6);
+});
