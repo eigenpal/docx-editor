@@ -42,8 +42,21 @@ export const MAX_OVERLAP_DISPLACEMENT_ATTEMPTS = 256;
 /** Maximum page-to-page deferrals before publishing with {@link AnchoredDrawingLayoutFallback}. */
 export const MAX_ANCHOR_PAGE_DEFERRALS = 8;
 
-/** Maximum full-document reflow passes while wrap exclusions converge. */
-export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 8;
+/**
+ * Maximum full-document reflow passes while wrap exclusions converge.
+ *
+ * The loop already ends the moment it revisits a zone state, so this budget bounds a LONG
+ * NON-REPEATING drift, not an oscillation — and exhausting it refuses the document outright.
+ * Eight was too tight to be that guard: `float-wrap-comprehensive-test.docx` with only its
+ * font family changed, so the floats and anchors are identical and only the line metrics
+ * differ, needs TWELVE passes and then settles. At eight it exported nothing at all.
+ *
+ * Measured: that document converges at 12, 16, 24 and 64 and fails at 8. Sixteen keeps the
+ * guard against genuinely pathological input with headroom over the worst case seen. A pass
+ * costs a full layout, but the loop only runs again while the zone map actually changed,
+ * which for ordinary documents is once or twice.
+ */
+export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 16;
 
 /** Raised when wrap-exclusion reflow does not converge within {@link MAX_DRAWING_EXCLUSION_REFLOW_PASSES}. */
 export class DrawingExclusionConvergenceError extends Error {
