@@ -28,6 +28,7 @@ import type { TextMeasurer } from './semantic-records.ts';
 import { shapedClusterInkBounds } from './glyph-ink-bounds.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
+import { sfntStrikeoutStrokeEm, type StrikeoutStrokeEm } from './sfnt-strikeout-metrics.ts';
 import type { OperationSnapshot } from './resolved-cache.ts';
 import {
   layoutFaceHasSmallCaps,
@@ -273,9 +274,27 @@ export function createShapedMeasurer(
     });
   };
 
+  // Static face numbers, so one read per face serves every size: the em fractions scale.
+  const strikeoutByFont = new WeakMap<ResolvedFont, StrikeoutStrokeEm | null>();
+
   return {
     hasResolvedFont(style) {
       return resolveFontCached(style) !== null;
+    },
+    strikeoutMetrics(style) {
+      const font = resolveFontCached(style);
+      if (!font) return undefined;
+      let stroke = strikeoutByFont.get(font);
+      if (stroke === undefined) {
+        stroke = sfntStrikeoutStrokeEm(font.bytes, font.faceIndex);
+        strikeoutByFont.set(font, stroke);
+      }
+      if (!stroke) return undefined;
+      const sizePt = (layoutRunHalfPointsOf(style) / 2) * glyphSizeFactorOf(style);
+      return {
+        offsetPt: stroke.offsetEm * sizePt,
+        thicknessPt: stroke.thicknessEm * sizePt,
+      };
     },
     measure(text, style) {
       if (text.length === 0) return 0;

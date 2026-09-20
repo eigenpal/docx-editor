@@ -747,3 +747,5 @@ export type { DrawingImageEffects } from '../store/package/drawing-image-effects
 export { tabLeaderPattern, MAX_TAB_LEADER_GLYPHS } from './tab-leader-pattern.ts';
 
 export { noteSeparatorRuleBox } from './note-separator-rule.ts';
+export { sfntStrikeoutStrokeEm } from './sfnt-strikeout-metrics.ts';
+export type { StrikeoutStrokeEm, StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';

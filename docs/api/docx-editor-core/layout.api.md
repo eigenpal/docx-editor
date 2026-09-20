@@ -2128,7 +2128,7 @@ export interface NoteSeparatorLayout {
 }
 
 // @public
-export function noteSeparatorRuleBox(span: StyleSpanRecord, line: LineRecord): LayoutBox;
+export function noteSeparatorRuleBox(span: StyleSpanRecord, line: LineRecord, stroke?: StrikeoutStrokePt): LayoutBox;
 
 // @public
 export type NoteSeparatorRuleStyle = 'single' | 'double';
@@ -3860,6 +3860,9 @@ export function setGraphemeBoundary(boundary: GraphemeBoundary): void;
 export function setHarfBuzzWasmUrl(url: string | URL): void;
 
 // @public
+export function sfntStrikeoutStrokeEm(bytes: Uint8Array, faceIndex: number): StrikeoutStrokeEm | null;
+
+// @public
 export const sha256FontBytes: (bytes: Uint8Array) => string;
 
 // @public
@@ -4151,6 +4154,18 @@ export interface StoryProjectionDependencies {
     // (undocumented)
     readonly tokenForParagraphForPart: (partName: string, paragraph: OoxmlNode) => string;
     readonly tokenForTableForPart: (partName: string, table: OoxmlNode) => string;
+}
+
+// @public
+export interface StrikeoutStrokeEm {
+    readonly offsetEm: number;
+    readonly thicknessEm: number;
+}
+
+// @public
+export interface StrikeoutStrokePt {
+    readonly offsetPt: number;
+    readonly thicknessPt: number;
 }
 
 // @public
@@ -4493,6 +4508,7 @@ export interface TextMeasurer {
         height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
+    strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
 }
 
 // @public

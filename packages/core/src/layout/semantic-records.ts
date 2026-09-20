@@ -1063,6 +1063,14 @@ export interface TextMeasurer {
   inkBounds?(text: string, style: ResolvedRunStyle): { left: number; right: number } | undefined;
   /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
   hasResolvedFont?(style: ResolvedRunStyle): boolean;
+  /**
+   * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
+   * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
+   * than assuming one face's numbers. Undefined keeps the caller's own default.
+   */
+  strikeoutMetrics?(
+    style: ResolvedRunStyle
+  ): import('./sfnt-strikeout-metrics.ts').StrikeoutStrokePt | undefined;
   /** Line metrics for the actual text faces; omitted text measures the primary face. */
   lineMetrics(style: ResolvedRunStyle, text?: string): { height: number; baseline: number };
 }

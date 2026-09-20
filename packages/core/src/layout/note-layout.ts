@@ -554,7 +554,11 @@ export function layoutNoteSeparator(
         const marker = markers[0];
         if (marker) {
           ruleColor = marker.span.style.color;
-          ruleBox = noteSeparatorRuleBox(marker.span, marker.line);
+          ruleBox = noteSeparatorRuleBox(
+            marker.span,
+            marker.line,
+            options.measurer.strikeoutMetrics?.(marker.span.style)
+          );
         }
       }
       const cap = maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
@@ -621,11 +625,14 @@ export function noteSeparatorAreaBox(
     const relative =
       separator.ruleBox ??
       syntheticSeparatorBox(contentWidth, separator.flowHeight, separator.kind);
+    // A measured face stroke IS the thickness Word paints, so only a synthetic rule takes the
+    // visibility floor. A `double` rule keeps its two-stroke minimum either way.
+    const floor = separator.ruleStyle === 'double' ? 2.25 : separator.ruleBox ? 0 : 0.5;
     return {
       x: contentX + relative.x,
       y: areaTop + relative.y,
       width: relative.width,
-      height: Math.max(relative.height, separator.ruleStyle === 'double' ? 2.25 : 0.5),
+      height: Math.max(relative.height, floor),
     };
   }
   return {

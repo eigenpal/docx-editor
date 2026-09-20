@@ -3365,7 +3365,7 @@ export const DocxEditorPageSetupDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Title" | "Cancel" | "Apply" | "Header" | "Footer" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop";
     }>;
@@ -3458,7 +3458,7 @@ export const DocxEditorParagraphDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Title" | "Cancel" | "Apply" | "Header" | "Footer" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue";
     }>;
@@ -3798,7 +3798,7 @@ export const DocxEditorTextFormFieldDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     preset: boolean;
     session: TextFormFieldDialogSession | null;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Title" | "Cancel" | "Apply" | "Header" | "Footer" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Error" | "Body", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: keyof TextFormFieldDialogFields;
     }>;

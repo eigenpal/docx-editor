@@ -2829,6 +2829,7 @@ export interface TextMeasurer {
         height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
+    strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
 }
 
 // @public (undocumented)

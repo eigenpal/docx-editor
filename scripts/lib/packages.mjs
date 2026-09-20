@@ -281,6 +281,7 @@ export const PACKAGES = [
           'SemanticStoryKind',
           'SemanticStoryVisit',
           'StoryDrawingContext',
+          'StrikeoutStrokePt',
           'SupportedImageMime',
           'TextboxStoryFallbackReason',
           'ValidatedImageBytesHandle',
