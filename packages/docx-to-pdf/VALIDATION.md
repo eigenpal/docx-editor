@@ -496,6 +496,12 @@ Two of those sums are exact half units on identical inputs and the reference rou
 
 A separate defect on page 4 is not a rounding question. The reference clears a left float at its bottom and starts the following line at 79.20; we keep wrapping beside it and start at 148.32, one whole line 69.12pt out of place. The float ends at 624.08, its `distB` is 45720 EMU or 3.6pt, and the line's baseline is 636.0. Whether the reference compares the line's top, its baseline, or an overlap fraction against the exclusion is not established from one instance, and an earlier attempt in this area was reverted.
 
+### The note separator rule disagrees with the height layout reserved
+
+On page 4 of `footnote-overlap-regression.docx` the reference paints the `w:separator` rule 0.72pt thick with its top at 543.36, three and 2264 device units. We paint 0.48pt at 543.60, two and 2265 units, over the same span, 90.0 to 234.0.
+
+Layout already builds this rule from the face's strikeout stroke, through `options.measurer.strikeoutMetrics`, and keeps the result on the note area record as `ruleBox`. The PDF writer recomputes the box from the span alone, which takes `noteSeparatorRuleBox`'s fallback path — a quarter-em offset and a 0.5pt hairline — so paint disagrees with the height layout reserved. Deriving the stroke inside the writer does not work: a separator is a projected atom and `shapeLaidOutText` returns nothing for it, so there is no face to read. The fix is to carry the layout-owned `ruleBox` to the span visit, which is new plumbing from the note area record. It is worth about 0.02% of that page, so it is recorded rather than rushed.
+
 ### Not understood
 
 `issue-740-header-zero-distance.docx` remains at 5.219% on its first page. Times New Roman at 12pt places its first baseline one device unit low. Twenty Word-rendered controls bound the problem: the line model is exact for Arial at 10, 11, 12, 14, 16 and 20pt and for Times at 8, 9, 10, 11, 14, 18, 20 and 24pt, and one unit out at Times 12, 13, 16 and 22pt. Rounding the sum of ascent and line gap, flooring the ascent, flooring the sum, rounding each separately, and both fonts' VDMX yMax each fit some controls and fail others. No rule is established, so nothing was changed for it.
