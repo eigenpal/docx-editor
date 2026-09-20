@@ -367,11 +367,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Picture bullets (numPicBullet)',
     category: 'lists',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Not rendered and not editable. The numPicBullet definition and its markup are preserved on save.',
+      'A numPicBullet marker renders as its image, scaled by the marker run font size, in the editor and in PDF export. The level bullet text renders instead when the image is missing or is a media type the editor does not decode. You cannot choose or change a picture bullet in the editor. The numPicBullet definition and its markup are preserved on save.',
   },
 
   // --- Tables -------------------------------------------------------------
@@ -417,7 +417,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip.',
+      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them.',
   },
   {
     id: 'tables.merge',
@@ -730,7 +730,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Suggesting mode tracks an inserted reference and requires reference deletion to propose note removal. Notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages, and a note paragraph that splits follows w:widowControl. The w:separator rule takes its thickness and its offset above the baseline from the strikeout metrics of the run font. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Suggesting mode tracks an inserted reference and requires reference deletion to propose note removal. Notes in headers and footers are out of scope.',
     docsLink: '/docs/2.x/guides/footnotes-and-endnotes',
   },
   {
