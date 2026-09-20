@@ -18,7 +18,11 @@ import {
   type TreeDocOp,
   type TextFormFieldRange,
 } from '@docx-editor.dev/core/store';
-import { wordBoundary, type SemanticSelection } from '@docx-editor.dev/core/layout';
+import {
+  wordBoundary,
+  type SemanticPosition,
+  type SemanticSelection,
+} from '@docx-editor.dev/core/layout';
 import { planTextFormSave } from './text-form-save-plan.ts';
 
 /** Input provenance belongs to the open document, including during a font remount. */
@@ -59,7 +63,21 @@ interface Host {
   parts?(): readonly OoxmlPart[];
   protected(paragraphId?: string): boolean;
   selection(): SemanticSelection;
-  select(selection: SemanticSelection): void;
+  /**
+   * `pressed` marks a write a PRESS produced: the reader aimed at a spot on screen, so the
+   * paper must not move under them. An empty FORMTEXT field is a zero-length range, which
+   * arrives as a caret and would otherwise be scrolled into view mid-gesture.
+   */
+  select(selection: SemanticSelection, pressed?: 'pressed' | undefined): void;
+  /**
+   * Bring `position` into view, minimally.
+   *
+   * SEPARATE from `select`, because most of what selects a field here is a press, and a
+   * press must never move the paper: the reader aimed at a spot on screen, and scrolling
+   * under them lands the second half of a double click somewhere else. Only the two lanes
+   * that TRAVEL to a field — Tab, and the toolbar's edit command — ask for this.
+   */
+  reveal?(position: SemanticPosition): void;
   apply(op: TreeDocOp): boolean;
   save?(ops: readonly TreeDocOp[], selection: SemanticSelection): string | null;
   editable(): boolean;
@@ -202,19 +220,35 @@ export function createTextFormFieldInteraction(
     // Native focus can collapse the DOM range at the start of the editable surface.
     host.select(selected);
   };
-  function select(paragraphId: string, field: TextFormFieldRange): void {
+  /**
+   * `press` is a click on the field, `travel` a lane that went to one (Tab, the edit
+   * command), and `plain` a keyboard write beside a caret that is already there.
+   */
+  function select(
+    paragraphId: string,
+    field: TextFormFieldRange,
+    intent: 'press' | 'travel' | 'plain' = 'plain'
+  ): void {
     incoming = { paragraphId, fieldNodeId: field.fieldNodeId };
-    host.select({
-      anchor: { paragraphId, offset: field.start },
-      head: { paragraphId, offset: field.end },
-    });
-    if (
+    host.select(
+      {
+        anchor: { paragraphId, offset: field.start },
+        head: { paragraphId, offset: field.end },
+      },
+      intent === 'press' ? 'pressed' : undefined
+    );
+    const landed =
       host.selection().head.paragraphId === paragraphId &&
       host.selection().head.offset >= field.start &&
-      host.selection().head.offset <= field.end
-    )
-      active = incoming ?? active;
+      host.selection().head.offset <= field.end;
+    if (landed) active = incoming ?? active;
     incoming = undefined;
+    // LAST: after the landed check, because a session holding an invalid value refuses the
+    // write and pins the caret in the field the reader has to fix — revealing anyway
+    // travelled to a field that holds no caret. And after `incoming` is cleared, because
+    // the reveal flushes layout, and a pass that adopts a queued DOM gesture there would
+    // read `incoming` back as the active field for a selection that landed elsewhere.
+    if (landed && intent === 'travel') host.reveal?.({ paragraphId, offset: field.start });
   }
   function open(paragraphId: string, field: TextFormFieldRange): void {
     if (destroyed) return;
@@ -353,7 +387,7 @@ export function createTextFormFieldInteraction(
       return;
     // Pointer capture and repaint can retarget click to the pages layer. Resolve the
     // recorded identity against the current tree instead of requiring the old span.
-    select(started.paragraphId, field);
+    select(started.paragraphId, field, 'press');
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointercancel', cancelPress);
@@ -365,7 +399,7 @@ export function createTextFormFieldInteraction(
     if (!hit) return false;
     const { paragraphId, field } = hit;
     event.preventDefault();
-    select(paragraphId, field);
+    select(paragraphId, field, 'press');
     if (!host.protected(paragraphId)) open(paragraphId, field);
     return true;
   };
@@ -436,7 +470,7 @@ export function createTextFormFieldInteraction(
     edit() {
       if (!canEdit()) return false;
       const hit = targetField()!;
-      select(hit.paragraphId, hit.field);
+      select(hit.paragraphId, hit.field, 'travel');
       open(hit.paragraphId, hit.field);
       return true;
     },
@@ -809,7 +843,7 @@ export function createTextFormFieldInteraction(
           : (index + (event.shiftKey ? -1 : 1) + entries.length) % entries.length;
       const next = entries[nextIndex]!;
       event.preventDefault();
-      select(next.paragraphId, next.field);
+      select(next.paragraphId, next.field, 'travel');
       return true;
     },
     destroy() {
