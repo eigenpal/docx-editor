@@ -624,7 +624,11 @@ Fourteen spans on its first page still differ, all Times New Roman at 12pt and a
 
 Every line in that document is metrically identical — box 57.496 units, baseline 46.679, trailing spacing zero — so nothing inside the line distinguishes them. The difference is where the accumulated top of each line falls against the grid. The first line sits at 88.436pt, which is 368.485 units and rounds to 368, while the reference paints 369. Fifteen thousandths of a unit either way decides it.
 
-So the in-line rule is settled and the open question has moved one level out: how the reference accumulates line tops down a block. Both engines accumulate unrounded heights and round once at the end; the reference evidently does not, or does not round at the same point. That is the next thing to characterise, and it wants its own controls — a single paragraph of many identical lines, measured line by line — rather than another guess.
+Accumulation was the obvious suspect and it has been cleared. A control of one paragraph wrapping to many identical lines, measured line by line from a body top on the grid, shows the reference accumulating UNROUNDED line heights and rounding once: Times New Roman at 12pt matches 23 of 23 lines, Calibri at 11pt 19 of 20. Accumulating rounded heights instead matches 2 of 23 and 9 of 20. That is already what this engine does, and it is equivalent either way, because the in-line baseline is a whole number of units and `round(top + n) == round(top) + n`.
+
+What is left is therefore the body top itself. On `issue-740-header-zero-distance.docx` this engine puts it at 77.396pt, which is 322.485 units — almost exactly halfway between two units. The reference's first body baseline of 369 units implies a top of 323. Half a unit of difference in the block origin is precisely what flips some lines and not others, which is the pattern seen: fourteen of fifty-one wrong, the rest exact.
+
+The document is named for its header geometry and that is where the top comes from: a `w:header` distance of zero, three header lines, and the reference's own header bottom at 77.236pt by its painted baselines. Reconciling the body top with the header is the next thing, and it is a narrower question than any that came before it.
 
 ### Not understood
 
