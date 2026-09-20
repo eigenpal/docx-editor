@@ -581,6 +581,23 @@ The descent has to come from the FONT, not from the line box, and getting that w
 
 Against Word this improves `issue-740-header-zero-distance.docx` from 2.780% to 1.600%, and its worst page from 5.493% to 2.862%. No Word comparison regresses. Documents fully under 1% stay at eighteen of twenty.
 
+### What the baseline rule left behind
+
+With the baseline rule in, the worst page of each remaining document breaks down like this, counting spans whose vertical position differs from the reference:
+
+| document                              | page | spans | wrong before | wrong now |
+| ------------------------------------- | ---- | ----- | ------------ | --------- |
+| `issue-740-header-zero-distance.docx` | 1    | 51    | 38           | 14        |
+| `issue-483-firstline-marker.docx`     | 1    | 99    | 26           | 8         |
+| `float-wrap-comprehensive-test.docx`  | 4    | 40    | —            | 1         |
+| `footnote-overlap-regression.docx`    | 4    | 82    | 29           | 29        |
+
+`footnote-overlap-regression.docx` did not move, and its remaining error is now precisely located: 26 of the 29 are spans at 5.04pt, which are its superscript note references, every one of them 0.24pt high. The body text at 11.04pt and the notes at 10.08pt are exact.
+
+So the next target is the superscript raise, not the baseline. This engine lifts a script run by 33% of the font size. Eleven Word-rendered controls give raises of 13, 13, 15, 19, 17, 19, 21, 23, 27, 27 and 35 device units at 8, 9, 10, 11, 12, 13, 14, 16, 18, 20 and 24pt, against this engine's 11, 12, 14, 15, 17, 17, 19, 22, 25, 28 and 33. The reference is higher on nine of eleven, by a median of two units.
+
+No rule is established yet. The measured ratio scatters between 0.324 and 0.415 of the font size, and the sequence is not monotone — 19 units at 11pt against 17 at 12pt — so a single constant does not fit. `OS/2 ySuperscriptYOffset` is not it either: Calibri declares 976 units, which is about 1.8 times the observed raise at every size. The control puts several superscripts on one page, so the next step is one superscript per page before drawing any conclusion, and the raise is a Core constant shared with the editor and the caret.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
