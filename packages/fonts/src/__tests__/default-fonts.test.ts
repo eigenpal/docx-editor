@@ -134,12 +134,16 @@ describe('loadDefaultFonts', () => {
         fallback: createFixedMeasurer(),
       });
       const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Century Gothic', fontSizePt: 10 };
-      // Pin the released browser geometry now shared by every layout host: 1000-unit,
-      // half-to-even quantization with HarfBuzz's default feature set.
+      // Pin the geometry every layout host shares: 1000-unit, half-to-even quantization,
+      // with kerning OFF. ECMA-376 17.3.2.16 says an omitted `w:kern` means kerning is not
+      // performed for the run, and this style omits it. The numbers were higher while
+      // shaping passed no `kern` feature at all and HarfBuzz applied its own default, which
+      // kerned text Word would not; the canvas host sets `fontKerning: 'none'` for the same
+      // reason, so the two agree again.
       const cases = [
-        ['Document layout', 84.64],
-        ['Precise font metrics', 92.88],
-        ['Reliable page breaks', 102.9],
+        ['Document layout', 84.89],
+        ['Precise font metrics', 93.63],
+        ['Reliable page breaks', 103.2],
       ] as const;
       for (const [text, expectedWidth] of cases) {
         expect(measurer.measure(text, style)).toBeCloseTo(expectedWidth, 6);

@@ -2,7 +2,7 @@
 
 import { fldCharType, isInstrTextNode } from '../store/package/field-nodes.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import { detectBodyTocs, tocFieldRange, type DetectedToc } from '../store/package/toc-detect.ts';
+import { detectBodyTocs, type DetectedToc } from '../store/package/toc-detect.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   MAX_INLINE_CONTAINER_DEPTH,
@@ -65,11 +65,22 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
   if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
-    // A separator in the opening paragraph puts that paragraph's mark in the result.
-    // It occupies a blank result line even when no w:t follows it (Word demo TOC).
-    // Suppressing it shifted every cached entry upward and changed the page break.
-    if (tocFieldRange(toc)?.separateParagraphId !== toc.beginParagraphId)
-      ids.add(toc.beginParagraphId);
+    // Word opens the field inside the FIRST ENTRY's paragraph: begin, the instruction and
+    // the separator are followed by that entry's hyperlink in the same `w:p`. Suppressing
+    // that paragraph deletes a real row, which shifted every cached entry upward and moved
+    // the page break.
+    //
+    // So the question is not where the separator sits, it is whether this paragraph carries
+    // any result of its own. One holding only field chrome contributes no row and is
+    // suppressed; one holding an entry is that entry and is kept. `paragraphHasVisibleText`
+    // already ignores `w:instrText` and `w:fldChar`, so it answers exactly that.
+    const begin = findNode(part, toc.beginParagraphId);
+    const beginCarriesResult =
+      begin !== null &&
+      begin.kind !== 'textValue' &&
+      begin.kind === 'paragraph' &&
+      paragraphHasVisibleText(begin);
+    if (!beginCarriesResult) ids.add(toc.beginParagraphId);
     ids.add(toc.endParagraphId);
   }
   chromeIdsByPart.set(part, ids);
