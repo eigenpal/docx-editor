@@ -67,6 +67,7 @@ import {
   paragraphBorderExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
+import { cellEdgeAutoSpacing } from './table-cell-edge-spacing.ts';
 import {
   prepareParagraphBreakInputs,
   positionedParagraphExclusionToken,
@@ -402,8 +403,14 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
-  const spacing = cellContextualSpacing(
+  const edgeSpacing = cellEdgeAutoSpacing(
     authoredSpacing,
+    props,
+    options?.firstInCell === true,
+    options?.lastInCell === true
+  );
+  const spacing = cellContextualSpacing(
+    edgeSpacing,
     layoutInputs.contextualSpacing,
     styleId,
     options?.borderNeighbours,
@@ -1133,6 +1140,8 @@ function flowBlocksInBoxBounded(
         maxBottom,
         includeAfter: true,
         includeBottomBorder: true,
+        firstInCell: blockIndex === 0,
+        lastInCell: blockIndex === blocks.length - 1,
         cellEndMark:
           (hideEndMark || cellEndMarkMinBottom !== undefined) && blockIndex === blocks.length - 1,
         hideEndMark: hideEndMark && blockIndex === blocks.length - 1,

@@ -18,6 +18,14 @@ export interface CellParagraphPlacementOptions {
   readonly aloneOnPage?: boolean;
   /** When false, omit trailing paragraph spacing (more content follows on a later page). */
   readonly includeAfter?: boolean;
+  /**
+   * This paragraph opens its cell. Auto spacing contributes nothing across a cell boundary:
+   * the reference puts its full auto gap BETWEEN two paragraphs inside a cell and nothing at
+   * all across a row boundary. See `.cache/pdf/claude-autospacing/`.
+   */
+  readonly firstInCell?: boolean;
+  /** This paragraph closes its cell; the mirror of {@link firstInCell}. */
+  readonly lastInCell?: boolean;
   /** When false, omit the bottom border (paragraph continues). */
   readonly includeBottomBorder?: boolean;
   /**

@@ -87,14 +87,24 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
  * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
- * This resolves the interior list-item or table-cell value. Body layout restores each
- * outer list margin in `resolveListAutoSpacing`, where neighboring blocks are available.
- * A caller that says nothing gets the body answer.
+ * This resolves the interior list-item value. Body layout restores each outer list margin
+ * in `resolveListAutoSpacing`, where neighboring blocks are available. A caller that says
+ * nothing gets the body answer.
+ *
+ * A TABLE CELL is not such a context. Measured on a captured control at 10pt, where the
+ * line pitch is 11.52pt: the reference puts 26.16pt between two paragraphs in the body with
+ * auto spacing on, and the SAME 26.16pt between two paragraphs inside a cell. With an empty
+ * paragraph between them it is 52.32, exactly twice. Reading it as 0 in a cell lays every
+ * such paragraph 13.92pt tight, which is enough to pull a signature block back onto the
+ * previous page. See `.cache/pdf/claude-autospacing/`.
  */
 export interface ParagraphAutoSpacingContext {
   /** The paragraph participates in numbering (`w:numPr`), i.e. it is a list item. */
   readonly inList?: boolean;
-  /** The paragraph lives in a table cell. */
+  /**
+   * The paragraph lives in a table cell. Kept because callers describe position with it and
+   * list resolution reads it; it does NOT zero auto spacing.
+   */
   readonly inTableCell?: boolean;
   /** Section grid pitch in points; no grid uses Word's fixed 12pt line unit. */
   readonly lineUnitPt?: number;
@@ -278,6 +288,29 @@ export function cascadedParagraphAttributes(
  * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
  * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
  */
+/**
+ * Which sides of a paragraph's spacing came from `w:beforeAutospacing` / `w:afterAutospacing`
+ * rather than an authored measurement.
+ *
+ * Callers that know a paragraph sits at a container edge need this: the auto value is
+ * suppressed there, an authored one is not.
+ */
+export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+  readonly before: boolean;
+  readonly after: boolean;
+} {
+  let before = false;
+  let after = false;
+  for (const property of props) {
+    if (property.localName !== 'spacing') continue;
+    const authoredBefore = property.attributes?.beforeAutospacing;
+    const authoredAfter = property.attributes?.afterAutospacing;
+    if (authoredBefore !== undefined) before = isOn(authoredBefore);
+    if (authoredAfter !== undefined) after = isOn(authoredAfter);
+  }
+  return { before, after };
+}
+
 export function paragraphSpacing(
   props: readonly OoxmlProperty[],
   context?: ParagraphAutoSpacingContext
@@ -323,7 +356,7 @@ export function paragraphSpacing(
       MAX_PARAGRAPH_SPACING_PT
     );
   if (beforeAuto || afterAuto) {
-    const auto = context?.inList || context?.inTableCell ? 0 : AUTO_PARAGRAPH_SPACING_PT;
+    const auto = context?.inList ? 0 : AUTO_PARAGRAPH_SPACING_PT;
     if (beforeAuto) before = auto;
     if (afterAuto) after = auto;
   }
