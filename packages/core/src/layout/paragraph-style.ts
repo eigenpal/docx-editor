@@ -280,15 +280,6 @@ export function cascadedParagraphAttributes(
 }
 
 /**
- * Resolve `w:spacing` before/after from flat paragraph properties.
- *
- * Line spacing (`w:line` / `w:lineRule`) is a separate concern — it changes measured line
- * height, not the gap between paragraphs — and is not resolved here.
- *
- * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
- * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
- */
-/**
  * Which sides of a paragraph's spacing came from `w:beforeAutospacing` / `w:afterAutospacing`
  * rather than an authored measurement.
  *
@@ -311,6 +302,15 @@ export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
   return { before, after };
 }
 
+/**
+ * Resolve `w:spacing` before/after from flat paragraph properties.
+ *
+ * Line spacing (`w:line` / `w:lineRule`) is a separate concern — it changes measured line
+ * height, not the gap between paragraphs — and is not resolved here.
+ *
+ * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
+ * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
+ */
 export function paragraphSpacing(
   props: readonly OoxmlProperty[],
   context?: ParagraphAutoSpacingContext

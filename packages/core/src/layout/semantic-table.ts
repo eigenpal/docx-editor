@@ -1,4 +1,4 @@
-import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
+import { withCentredSideRulePaint, withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
@@ -181,6 +181,8 @@ export interface SemanticTableCell {
   readonly legacyContentAlignment?: true;
   /** Resolved simple side rules centered on a legacy absolute-width table grid. */
   readonly centeredSideRules?: true;
+  /** Simple side rules painted centered on the grid line, without moving the content edge. */
+  readonly centeredSidePaint?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
   /** Physical grid column after width/style resolution and the bidiVisual projection. */
@@ -1053,14 +1055,14 @@ function readTableStructureUncached(
     columnWidthsPt.length,
     cellSpacingPt === 0
   );
-  if (
+  const sharedGridLineRules =
     (compatibilityMode === undefined || [11, 12, 14].includes(compatibilityMode)) &&
     depth === 0 &&
     !bidiVisual &&
     !float &&
-    cellSpacingPt === 0 &&
-    tableWidth.type === 'dxa'
-  )
+    cellSpacingPt === 0;
+  if (sharedGridLineRules) contentRows = withCentredSideRulePaint(contentRows);
+  if (sharedGridLineRules && tableWidth.type === 'dxa')
     contentRows = withLegacyTableSideRules(contentRows);
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),

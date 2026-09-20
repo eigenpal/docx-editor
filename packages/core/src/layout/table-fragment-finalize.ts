@@ -321,6 +321,7 @@ export function finalizeTableRows(
           height: cell.box.height,
           outerBottomInsetReserved,
           centeredSideRules: authored?.centeredSideRules === true && structure.cellSpacingPt === 0,
+          centeredSidePaint: authored?.centeredSidePaint === true && structure.cellSpacingPt === 0,
         };
       })
     ),

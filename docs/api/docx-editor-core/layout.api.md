@@ -110,6 +110,7 @@ export function borderExtentPt(edge: ResolvedTableBorderEdge | TableBorderSide |
 // @public
 export interface BorderGridGeometry {
     readonly cellBoxes: readonly (readonly {
+        readonly centeredSidePaint?: boolean;
         readonly centeredSideRules?: boolean;
         readonly height: number;
         readonly outerBottomInsetReserved?: boolean;
@@ -3761,6 +3762,7 @@ export type SemanticStoryVisit = {
 export interface SemanticTableCell {
     readonly blocks: readonly OoxmlElement[];
     readonly borders: CellBorderBox;
+    readonly centeredSidePaint?: true;
     readonly centeredSideRules?: true;
     readonly contentBorders?: CellBorderBox;
     readonly contentBottomIsOuter?: boolean;

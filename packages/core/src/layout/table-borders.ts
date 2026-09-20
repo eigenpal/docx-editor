@@ -419,6 +419,8 @@ export interface BorderGridGeometry {
     readonly outerBottomInsetReserved?: boolean;
     /** Simple vertical strokes share the cell grid line with legacy padding. */
     readonly centeredSideRules?: boolean;
+    /** Simple vertical strokes paint centered on the grid line. */
+    readonly centeredSidePaint?: boolean;
   }[])[];
 }
 
@@ -986,7 +988,7 @@ export function resolveTableCellBorderGrid(
         rowIndex,
         geometry.collapsedHorizontal,
         isBottom && cellBox.outerBottomInsetReserved !== false,
-        cellBox.centeredSideRules
+        cellBox.centeredSidePaint ?? cellBox.centeredSideRules
       );
     }
   }

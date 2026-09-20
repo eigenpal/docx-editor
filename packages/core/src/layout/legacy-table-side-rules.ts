@@ -1,9 +1,9 @@
-import type { SemanticTableRow } from './semantic-table.ts';
+import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
 
 /**
- * Legacy simple side rules share the grid line with padding, rather than adding to it.
+ * True when a cell's authored side rules are the shared-grid-line shape.
  *
  * ONE qualifying side is enough. Requiring both made the rule depend on whether the cell
  * happened to own the opposite edge, which `w:insideV` never gives the first or last column:
@@ -15,18 +15,43 @@ const SIMPLE_SIDE_STYLES = ['single', 'thick'];
  * Both sides still have to agree when both are present; a cell whose two edges differ in
  * width is not the shared-line shape this describes.
  */
-export function withLegacyTableSideRules(
-  rows: readonly SemanticTableRow[]
+function sharesSideRuleGridLine(cell: SemanticTableCell): boolean {
+  const { left, right } = cell.contentBorders ?? cell.borders;
+  const leftRule = left.state === 'edge' && SIMPLE_SIDE_STYLES.includes(left.style);
+  const rightRule = right.state === 'edge' && SIMPLE_SIDE_STYLES.includes(right.style);
+  if (!leftRule && !rightRule) return false;
+  if (leftRule && rightRule && left.widthPt !== right.widthPt) return false;
+  return true;
+}
+
+function mapCells(
+  rows: readonly SemanticTableRow[],
+  extend: (cell: SemanticTableCell) => SemanticTableCell
 ): readonly SemanticTableRow[] {
   return rows.map((row) => ({
     ...row,
-    cells: row.cells.map((cell) => {
-      const { left, right } = cell.contentBorders ?? cell.borders;
-      const leftRule = left.state === 'edge' && SIMPLE_SIDE_STYLES.includes(left.style);
-      const rightRule = right.state === 'edge' && SIMPLE_SIDE_STYLES.includes(right.style);
-      if (!leftRule && !rightRule) return cell;
-      if (leftRule && rightRule && left.widthPt !== right.widthPt) return cell;
-      return { ...cell, centeredSideRules: true as const };
-    }),
+    cells: row.cells.map((cell) => (sharesSideRuleGridLine(cell) ? extend(cell) : cell)),
   }));
+}
+
+/**
+ * Centre the painted stroke on the grid line, without moving the content edge.
+ *
+ * The same captured control drawn with `w:tblW w:type="auto"` centres its rules exactly as
+ * the `dxa` one does, so the width type does not decide where the reference paints. It does
+ * decide the content budget: `centeredSideRules` also reclaims half the stroke as padding in
+ * `table-cell-geometry.ts`, which changes line breaking. Paint follows the wider rule;
+ * the content inset keeps the narrow one it was measured against.
+ */
+export function withCentredSideRulePaint(
+  rows: readonly SemanticTableRow[]
+): readonly SemanticTableRow[] {
+  return mapCells(rows, (cell) => ({ ...cell, centeredSidePaint: true as const }));
+}
+
+/** Legacy simple side rules share the grid line with padding, rather than adding to it. */
+export function withLegacyTableSideRules(
+  rows: readonly SemanticTableRow[]
+): readonly SemanticTableRow[] {
+  return mapCells(rows, (cell) => ({ ...cell, centeredSideRules: true as const }));
 }

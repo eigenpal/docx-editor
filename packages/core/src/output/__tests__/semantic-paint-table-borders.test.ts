@@ -29,12 +29,13 @@ describe('table cell border paint', () => {
   const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
   const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
-  // A vertical rule starts at its grid line and runs right, so an interior rule lands
-  // inside the NEXT cell's box and the table's outer right rule lands outside the table.
+  // A vertical rule straddles its grid line, so an interior rule lands half inside the NEXT
+  // cell's box and the outer left rule starts half a width outside the table. Neither fits
+  // CSS border-box, which draws inside its own element, so both leave CSS for a stroke.
   // Painted cells are positioned siblings, so the stroke overlay needs its own z-index or
   // the next cell's `w:shd` background covers the rule it is supposed to sit under.
-  // Captured in `.cache/pdf/claude-vertical-rules/FINDING.md`.
-  test('a vertical rule paints outside its cell, above the next cell background', () => {
+  // Captured in `.cache/pdf/claude-vertical-rules/FINDING.md` and `.cache/pdf/claude-vrule/`.
+  test('a vertical rule straddles its line, above the next cell background', () => {
     const shaded = '<w:tcPr><w:shd w:val="clear" w:fill="FFDD88"/></w:tcPr>';
     const body =
       '<w:tbl><w:tblPr><w:tblBorders>' +
@@ -55,14 +56,16 @@ describe('table cell border paint', () => {
         '.docx-table-border-edge-stroke[data-edge="right"]'
       )!;
       expect(right).not.toBeNull();
-      // Outside the cell box, and lifted over every sibling cell background.
-      expect(parsePx(right.style.left)).toBe(parsePx(cell.style.width));
+      // Half a width left of the boundary, and lifted over every sibling cell background.
+      expect(parsePx(right.style.left)).toBe(parsePx(cell.style.width) - 0.5);
       expect((right.parentElement as HTMLElement).style.zIndex).toBe('1');
     }
-    // Only the first column owns a left rule, and it starts at its own box edge running
-    // right, which is exactly what CSS border-box draws, so it stays on CSS.
-    expect(cells[0]!.style.borderLeftStyle).toBe('solid');
-    expect(cells[0]!.querySelector('[data-edge="left"]')).toBeNull();
+    // Only the first column owns a left rule. It straddles its line too, so it starts half
+    // a width outside the cell and cannot stay on CSS border-box.
+    expect(cells[0]!.style.borderLeftStyle).toBe('none');
+    const left = cells[0]!.querySelector<HTMLElement>('[data-edge="left"]')!;
+    expect(left).not.toBeNull();
+    expect(parsePx(left.style.left)).toBe(-0.5);
     expect(cells[1]!.style.borderLeftStyle).toBe('none');
   });
 
