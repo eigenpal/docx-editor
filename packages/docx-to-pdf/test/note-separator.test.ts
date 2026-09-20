@@ -44,7 +44,8 @@ test('PDF retains both colored rules and surrounding text in a mixed separator s
   ].map((match) => ({ color: match.slice(1, 4).join(' '), box: match.slice(4).map(Number) }));
   const rules = rectangles.filter((rectangle) => ['1 0 0', '0 0 1'].includes(rectangle.color));
   expect(rules.map((rule) => rule.color)).toEqual(['1 0 0', '0 0 1']);
-  for (const rule of rules) expect(rule.box.slice(2)).toEqual([144, 0.5]);
+  // 0.48, not 0.5: painted rule thickness goes down to the 0.24pt device grid.
+  for (const rule of rules) expect(rule.box.slice(2)).toEqual([144, 0.48]);
   expect(rules[1]!.box[0]!).toBeGreaterThan(rules[0]!.box[0]! + 144);
   expect(rules[1]!.box[1]).toBe(rules[0]!.box[1]);
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
@@ -82,7 +83,7 @@ for (const separator of [
       )
       .filter((stream) => stream.includes(' Tm '))
       .join('\n');
-    expect([...commands.matchAll(/144 0\.5 re f/g)]).toHaveLength(separator === null ? 1 : 0);
+    expect([...commands.matchAll(/144 0\.48 re f/g)]).toHaveLength(separator === null ? 1 : 0);
     expect(parsed.getPageCount()).toBe(1);
   });
 }

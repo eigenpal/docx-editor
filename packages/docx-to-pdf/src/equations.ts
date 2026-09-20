@@ -56,7 +56,7 @@ export function paintEquation(
     } else if (g.kind === 'row') for (const child of g.items) node(child, x, y);
     else if (g.kind === 'fraction' || g.kind === 'radical') {
       out.push(
-        `${color(visit.span.style.color)} rg ${rect(g.bar, x - visit.page.box.x, y - visit.page.box.y, page.getHeight())} f`
+        `${color(visit.span.style.color)} rg ${rect(g.bar, x - visit.page.box.x, y - visit.page.box.y, page.getHeight(), true)} f`
       );
       if (g.kind === 'fraction') {
         node(g.numerator, x, y);

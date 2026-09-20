@@ -31,7 +31,9 @@ test('PDF paints one grouped character border after both runs and their highligh
   const red = [...commands.matchAll(/1 0 0 rg ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f/g)];
   expect(red).toHaveLength(4);
   expect(Number(red[0]![3])).toBeGreaterThan(25);
-  expect(Number(red[0]![4])).toBe(0.5);
+  // An authored 0.5pt border paints 0.48: the reference takes a rule's thickness down
+  // to its 0.24pt device grid.
+  expect(Number(red[0]![4])).toBe(0.48);
   expect(red[0]!.index).toBeGreaterThan(commands.lastIndexOf('1 1 0 rg'));
   expect(red[0]!.index).toBeGreaterThan(commands.lastIndexOf(' Tm '));
 });

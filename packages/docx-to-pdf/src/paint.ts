@@ -55,7 +55,7 @@ function rule(
       .join('\n');
   }
   if (style === 'solid' || style === 'single' || style === 'thick')
-    return `${color(colorHex)} rg ${rect(box, x, y, height)} f`;
+    return `${color(colorHex)} rg ${rect(box, x, y, height, true)} f`;
   const horizontal = box.width >= box.height;
   const width = horizontal ? box.height : box.width;
   const sx = box.x + x + (horizontal ? 0 : width / 2),
@@ -75,7 +75,9 @@ function decorations(
     work.tick();
     if (block.kind === 'paragraph') {
       if (block.shading && block.shadingBox)
-        out.push(`${color(block.shading)} rg ${rect(block.shadingBox, x, y, page.getHeight())} f`);
+        out.push(
+          `${color(block.shading)} rg ${rect(block.shadingBox, x, y, page.getHeight(), true)} f`
+        );
       for (const border of block.borders ??
         (block.bottomBorder ? [{ ...block.bottomBorder, side: 'bottom' }] : [])) {
         const style = border.edge.val;
@@ -96,7 +98,7 @@ function decorations(
         for (const cell of row.cells) {
           if (cell.paintInert || cell.vMergeContinue) continue;
           if (cell.shading)
-            out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, page.getHeight())} f`);
+            out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, page.getHeight(), true)} f`);
           out.push(...decorations(cell.blocks, x, y, page, work, pageIndex));
         }
       for (const row of block.rows)
@@ -201,14 +203,14 @@ export async function paint(
     }
     for (const separator of record.columnSeparators ?? [])
       out.push(
-        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, record.box.height)} f`
+        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, record.box.height, true)} f`
       );
     for (const area of [record.footnotes, record.endnotes]) {
       const sep = area?.separator;
       if (!sep || !(sep.ruleStyle || sep.synthetic)) continue;
       for (const offset of sep.ruleStyle === 'double' ? [0, 2] : [0])
         out.push(
-          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, record.box.height)} f`
+          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, record.box.height, true)} f`
         );
     }
   }
@@ -342,7 +344,7 @@ export async function paint(
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)
       out.push(
-        `${color(fill)} rg ${rect(visit.absoluteBox, -visit.page.box.x, -visit.page.box.y, page.getHeight())} f`
+        `${color(fill)} rg ${rect(visit.absoluteBox, -visit.page.box.x, -visit.page.box.y, page.getHeight(), true)} f`
       );
     const clipping = visit.paragraph.clipToBox;
     if (clipping)

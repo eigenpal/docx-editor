@@ -38,7 +38,7 @@ export class TextWriter {
     if (span.style.hidden || !span.text) return '';
     if (span.noteSeparator) {
       const box = noteSeparatorRuleBox(span, line);
-      return `${color(span.style.color)} rg ${rect(box, storyOrigin.x - visit.page.box.x, storyOrigin.y - visit.page.box.y, page.getHeight())} f`;
+      return `${color(span.style.color)} rg ${rect(box, storyOrigin.x - visit.page.box.x, storyOrigin.y - visit.page.box.y, page.getHeight(), true)} f`;
     }
     if (/^[\t\n\r\f]+$/.test(span.text)) return span.tabLeader ? this.leader(visit, page) : '';
     const report = (code: string, message: string): string => {

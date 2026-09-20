@@ -19,8 +19,41 @@ export function number(value: number): string {
     throw new RangeError('Invalid PDF coordinate');
   return String(Number(value.toFixed(6)));
 }
-export function rect(box: LayoutBox, x: number, y: number, height: number): string {
-  return `${number(box.x + x)} ${number(height - box.y - y - box.height)} ${number(box.width)} ${number(box.height)} re`;
+/**
+ * Device grid the reference paints filled rectangles on: 1/300 inch, the same grid
+ * `text.ts` snaps baselines to. Measured, not guessed: every edge of every filled
+ * rectangle in the reference PDFs lands on it — 5348 of 5348 thin-rule edges and 380 of
+ * 384 larger fill edges across seventeen documents.
+ */
+const PAINT_GRID_PT = 0.24;
+
+const onGrid = (value: number): number => Math.round(value / PAINT_GRID_PT) * PAINT_GRID_PT;
+
+/**
+ * A filled rectangle in PDF user space.
+ *
+ * `grid` rounds the ORIGIN to the grid and takes the EXTENT DOWN to it, which is what the
+ * reference does: an authored 0.5pt border paints 0.48, 1pt paints 0.96 and 4pt paints
+ * 3.84. Rounding both edges instead would make a border's painted thickness depend on
+ * where it happens to sit, which the reference's thicknesses show it does not.
+ *
+ * The origin is a finished absolute position, rounded exactly once, so nothing accumulates
+ * and layout cannot move. That is the distinction that matters: the same snap applied to a
+ * quantity later SUMMED (a per-line height) regresses badly, and applied to how a mark is
+ * drawn rather than where it sits it is a wash. See
+ * `.cache/pdf/claude-picbullet/FONT-GRID-FINDING.md`.
+ *
+ * A rectangle that had extent keeps at least one grid unit of it, so a hairline thinner
+ * than the grid cannot collapse to nothing.
+ */
+export function rect(box: LayoutBox, x: number, y: number, height: number, grid = false): string {
+  const left = box.x + x;
+  const bottom = height - box.y - y - box.height;
+  if (!grid)
+    return `${number(left)} ${number(bottom)} ${number(box.width)} ${number(box.height)} re`;
+  const extent = (value: number): number =>
+    value > 0 ? Math.max(PAINT_GRID_PT, Math.floor(value / PAINT_GRID_PT) * PAINT_GRID_PT) : 0;
+  return `${number(onGrid(left))} ${number(onGrid(bottom))} ${number(extent(box.width))} ${number(extent(box.height))} re`;
 }
 export function hex(value: number): string {
   return value.toString(16).padStart(4, '0');
