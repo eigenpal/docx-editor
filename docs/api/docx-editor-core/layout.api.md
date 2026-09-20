@@ -1965,9 +1965,6 @@ export const MAX_NUMBERING_DEFINITIONS = 512;
 export const MAX_PARAGRAPH_SPACING_PT: number;
 
 // @public
-export const MAX_PICTURE_BULLETS = 64;
-
-// @public
 export const MAX_SDT_NESTING = 32;
 
 // @public
@@ -1975,9 +1972,6 @@ export const MAX_STYLE_BASED_ON_DEPTH = 32;
 
 // @public
 export const MAX_STYLE_DEFINITIONS = 4096;
-
-// @public
-export const MAX_TAB_LEADER_GLYPHS = 8192;
 
 // @public
 export const MAX_TAB_POSITION_TWIPS = 31680;
@@ -2721,9 +2715,6 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null;
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
 
 // @public
-export function pictureBulletFontScale(markerFontSizePt: number): number;
-
-// @public
 export interface PlacedCell {
     // (undocumented)
     readonly cell: TableCellFragmentRecord;
@@ -2780,9 +2771,6 @@ export function readBorderSide(node: OoxmlElement | undefined): TableBorderSide;
 
 // @public
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox;
-
-// @public
-export function readNumberingPictureBullets(root: OoxmlElement | null | undefined): ReadonlyMap<string, NumberingPictureBullet>;
 
 // @public
 export function readNumPr(paragraphPropertyNodes: readonly OoxmlNode[]): {
@@ -3061,9 +3049,6 @@ export function resolveOoxmlShadingFill(attributes: Readonly<Record<string, stri
 
 // @public
 export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting, inTableCell?: boolean, lineUnitPt?: number): ParagraphLayoutInputs;
-
-// @public
-export function resolvePictureBullet(authored: NumberingPictureBullet, markerFontSizePt: number): ResolvedPictureBullet | null;
 
 // @public
 export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: ThemeFonts): ResolvedRunStyle;
@@ -3862,9 +3847,6 @@ export function setGraphemeBoundary(boundary: GraphemeBoundary): void;
 export function setHarfBuzzWasmUrl(url: string | URL): void;
 
 // @public
-export function sfntStrikeoutStrokeEm(bytes: Uint8Array, faceIndex: number): StrikeoutStrokeEm | null;
-
-// @public
 export const sha256FontBytes: (bytes: Uint8Array) => string;
 
 // @public
@@ -4157,12 +4139,6 @@ export interface StoryProjectionDependencies {
     // (undocumented)
     readonly tokenForParagraphForPart: (partName: string, paragraph: OoxmlNode) => string;
     readonly tokenForTableForPart: (partName: string, table: OoxmlNode) => string;
-}
-
-// @public
-export interface StrikeoutStrokeEm {
-    readonly offsetEm: number;
-    readonly thicknessEm: number;
 }
 
 // @public

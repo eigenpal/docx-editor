@@ -5,7 +5,7 @@
 // to the run's size, not a fixed hairline at one quarter of the font size. Calibri 11pt
 // gives 0.720pt at 2.75pt; Arial at the same 11pt gives 0.548pt at 2.847pt.
 
-/** A strikeout stroke, as a fraction of the em. `offsetEm` is the stroke TOP. @public */
+/** A strikeout stroke, as a fraction of the em. `offsetEm` is the stroke TOP. */
 export interface StrikeoutStrokeEm {
   /** `yStrikeoutPosition` over `unitsPerEm`. Positive is above the baseline. */
   readonly offsetEm: number;
@@ -72,7 +72,6 @@ function tableOffset(
  *
  * Returns null for a face with no `OS/2` table, a malformed directory, or values outside the
  * em bounds above. The bytes are file-supplied, so every offset is range-checked here.
- * @public
  */
 export function sfntStrikeoutStrokeEm(
   bytes: Uint8Array,

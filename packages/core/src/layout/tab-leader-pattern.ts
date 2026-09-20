@@ -1,4 +1,4 @@
-/** Maximum furniture glyphs per leader; independent of authored tab width. @public */
+/** Maximum furniture glyphs per leader; independent of authored tab width. */
 export const MAX_TAB_LEADER_GLYPHS = 8192;
 
 /**

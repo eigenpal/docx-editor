@@ -358,14 +358,7 @@ export {
   type NumberingLevel,
   type NumberingLevelIndent,
 } from './numbering-index.ts';
-export {
-  MAX_PICTURE_BULLETS,
-  pictureBulletFontScale,
-  readNumberingPictureBullets,
-  resolvePictureBullet,
-  type NumberingPictureBullet,
-  type ResolvedPictureBullet,
-} from './numbering-picture-bullet.ts';
+export type { NumberingPictureBullet, ResolvedPictureBullet } from './numbering-picture-bullet.ts';
 export {
   MAX_LVL_TEXT_LENGTH,
   MAX_MARKER_TEXT_LENGTH,
@@ -744,8 +737,7 @@ export {
   type TableBorderStyle,
 } from './table-borders.ts';
 export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
-export { tabLeaderPattern, MAX_TAB_LEADER_GLYPHS } from './tab-leader-pattern.ts';
+export { tabLeaderPattern } from './tab-leader-pattern.ts';
 
 export { noteSeparatorRuleBox } from './note-separator-rule.ts';
-export { sfntStrikeoutStrokeEm } from './sfnt-strikeout-metrics.ts';
-export type { StrikeoutStrokeEm, StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';
+export type { StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';
