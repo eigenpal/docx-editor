@@ -507,6 +507,16 @@ On page 1 of `issue-740-header-zero-distance.docx` the reference ends a line wit
 
 The heavy pixel difference on that page is not this. It is the vertical rule below, a 0.24pt shift on most lines, and the page's text is almost entirely `t`, whose crossbar and serifs are horizontal strokes that a third of a pixel moves visibly. That is why the page reads worse under MuPDF, 8.548%, than under `pdftoppm`, 5.423%: hinting snaps some lines back onto the same pixel row and hides part of it.
 
+### What Word itself reports
+
+Word's own scripting interface answers `get selection information` with `vertical position relative to page`, which is a second observation channel independent of the PDF. Two things come out of it.
+
+The line top is exactly 36.000000 for every control, at 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22 and 24pt. So the whole per-size variation sits in the ascent, not in where the line starts, which removes the last alternative explanation.
+
+Word's internal positions are not on the device grid. A stack of page-broken paragraphs reports 45.450001, 46.400002, 47.349998 and so on, none of them a multiple of 0.24. Word lays out in continuous points and quantises only when it writes the PDF, which is the same split this engine uses: device-independent layout, grid at paint.
+
+The interface exposes no baseline, ascent or font-metric query, so it cannot answer where the ascent comes from. Core Text was checked earlier and returns our values, not Word's.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
