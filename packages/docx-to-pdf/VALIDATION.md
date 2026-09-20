@@ -543,6 +543,30 @@ The reason is structural. The painted ascent is not an independent quantity: lay
 
 So the table buys one document and costs three, for no change in the count under 1%. It was reverted. The remaining gap is not a missing constant.
 
+### The residual is single line spacing, not the ascent
+
+Every dense control in this record used `w:line="240" w:lineRule="auto"`, so all of it measured one path. Running the same sizes at other multiples changes the picture completely.
+
+Calibri, body top at 36pt, `w:before` zero, first baseline in device units below the top:
+
+| size | `w:line` | reference | this engine |
+| ---- | -------- | --------- | ----------- |
+| 11pt | 240      | 44        | 44          |
+| 14pt | 240      | 55        | **56**      |
+| 18pt | 240      | 72        | **71**      |
+| 11pt | 276      | 44        | 44          |
+| 14pt | 276      | 56        | 56          |
+| 18pt | 276      | 71        | 71          |
+| 11pt | 360      | 44        | 44          |
+| 14pt | 360      | 56        | 56          |
+| 18pt | 360      | 71        | 71          |
+
+At 1.15 and at 1.5 the engine matches the reference exactly, at every size, and so does the line pitch: 25.200pt and 32.880pt at 18pt, in both. Only single spacing diverges, and there the pitch differs too — the reference paints 21.840pt, 91 units, where the exact height is 21.973pt, 91.55 units, and this engine paints 92.
+
+So the ascent model is right. The whole residual lives in the single-spacing path, where the reference's line height is a device unit shorter than the rounded exact height. That is roughly a tenth of the surface the earlier entries in this record were searching, and it explains why no function of the point size fitted: the dense sweeps sampled only the broken case.
+
+Quantising line height in layout was tried before and rejected, see `.cache/pdf/claude-lineheight-grid/FINDING.md`, but that attempt covered every line rule. Doing it only for `w:lineRule="auto"` at `w:line="240"` is a much narrower change and has not been measured. It is the next thing to try, and it needs its own corpus run because line height moves pagination.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
