@@ -618,6 +618,14 @@ At 8pt, the size `footnote-overlap-regression.docx` uses, the reference raises 1
 
 Still no rule. A single factor cannot fit: the reference wants 0.30 of the font size at 8pt, 0.375 at 11pt and 0.33 at 24pt. The sequence is not smooth either — 10 units at both 8 and 9pt, then 15 at 10pt — and aligning the reduced run's ascent or cap height with the base run's reproduces neither. Two independently gridded baselines also carry a unit of noise each, so part of the scatter is measurement. The raise is a Core constant shared with the editor and the caret, so it should not move on a fit this loose.
 
+### What remains on `issue-740` is accumulation, not the line
+
+Fourteen spans on its first page still differ, all Times New Roman at 12pt and all 0.24pt high. They are the lines that MATCHED before the baseline rule landed, so the reference uses 47 device units on those and 46 on the rest of the same page.
+
+Every line in that document is metrically identical — box 57.496 units, baseline 46.679, trailing spacing zero — so nothing inside the line distinguishes them. The difference is where the accumulated top of each line falls against the grid. The first line sits at 88.436pt, which is 368.485 units and rounds to 368, while the reference paints 369. Fifteen thousandths of a unit either way decides it.
+
+So the in-line rule is settled and the open question has moved one level out: how the reference accumulates line tops down a block. Both engines accumulate unrounded heights and round once at the end; the reference evidently does not, or does not round at the same point. That is the next thing to characterise, and it wants its own controls — a single paragraph of many identical lines, measured line by line — rather than another guess.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
