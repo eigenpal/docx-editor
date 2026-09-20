@@ -2,6 +2,7 @@
 // that module stays inside its line budget; the rule and its budget are unchanged.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
+import { emuToPointsSafe } from './drawing-layout.ts';
 
 /** Maximum rechecks when clearing a line below overlapping topAndBottom bands. */
 export const MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS = 8;
@@ -51,4 +52,28 @@ export function topAndBottomSkipBeforeLine(
     skip = nextSkip;
   }
   return skip;
+}
+
+/**
+ * Story y where a `wp:wrapTopAndBottom` band starts: the drawing's own top, not the anchor line's.
+ *
+ * The band clears the drawing, so it begins where the drawing begins. A `wp:positionV` whose frame
+ * is the anchor's own flow position (`paragraph` or `line`) displaces the drawing down by
+ * `wp:posOffset`, and the band with it — the painted geometry already applies that offset. Frames
+ * that resolve against the page or its margins do not start at the anchor, and an alignment needs a
+ * frame box the paragraph does not know while it is breaking; both keep the anchor line top.
+ */
+export function topAndBottomBandAnchorY(
+  anchorLineY: number,
+  vertical: Readonly<{
+    relativeFrom: string;
+    align: string | null;
+    offsetEmu: number | null;
+  }> | null
+): number {
+  if (!vertical || vertical.align !== null) return anchorLineY;
+  if (vertical.relativeFrom !== 'paragraph' && vertical.relativeFrom !== 'line') return anchorLineY;
+  const offset = emuToPointsSafe(vertical.offsetEmu ?? 0);
+  if (offset === null) return anchorLineY;
+  return anchorLineY + offset;
 }

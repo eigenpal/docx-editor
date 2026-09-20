@@ -14,6 +14,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
+import { topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   revisionsVisible,
@@ -678,7 +679,10 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
     if (lineTop === undefined) continue;
-    const anchorY = options.paragraphStartY + lineTop;
+    const anchorY = topAndBottomBandAnchorY(
+      options.paragraphStartY + lineTop,
+      atom.projection.position?.vertical ?? null
+    );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({
       projection: atom.projection,
