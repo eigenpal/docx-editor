@@ -19,6 +19,7 @@ import {
   type ShapedRun,
 } from '@docx-editor.dev/core/layout';
 import { underlineGap } from './underline-gap.ts';
+import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
 import { color, number as n, rect, Work } from './context.ts';
 
@@ -169,7 +170,8 @@ export class TextWriter {
         : (Math.max(1, Math.round(style.fontSizePt * 2)) / 2) * factor;
     const horizontal = style.horizontalScalePercent / 100;
     const scale = factor / shaped.fixedPointScale;
-    const x = absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0);
+    const x =
+      absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0) + paragraphGridOffsetX(visit);
     // Reference PDFs put every text baseline on a 0.24pt grid measured from the page top:
     // 109.44, 126.00, 141.84 and 168.72 are 456, 525, 591 and 703 units exactly.
     //
