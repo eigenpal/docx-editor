@@ -504,4 +504,12 @@ Layout already builds this rule from the face's strikeout stroke, through `optio
 
 ### Not understood
 
+A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
+
+```
+8.0/31 8.5/33 9.0/35 9.5/37 10.0/39 10.5/41 11.0/43 11.5/45 12.0/46 12.5/49 13.0/50 13.5/53 14.0/54 14.5/56 15.0/58 15.5/60 16.0/63 16.5/64 17.0/66 17.5/68 18.0/70 18.5/72 19.0/74 19.5/76 20.0/78 20.5/80 21.0/82 21.5/84 22.0/85 22.5/88 23.0/89 23.5/92 24.0/93
+```
+
+The steps are mostly two units per half point, with the sequence sticking at 11.5/12.0, 12.5/13.0, 13.5/14.0, 16.0/16.5, 21.5/22.0 and 22.5/23.0 and jumping three elsewhere. No function of the point size reproduces it. Rounding the sum of ascent and line gap from the authored size matches 8 of 12 whole sizes; from the drawn size, 9 of 12, and it breaks Arial at 14pt, which the authored size gets right. A fixed fraction of the em is impossible outright: 12pt requires an ascent below 1904.7 font units and 16pt requires above 1920.0, and those ranges are disjoint. Neither font build's VDMX `yMax` reproduces the sequence either, with or without a rounded line gap.
+
 `issue-740-header-zero-distance.docx` remains at 5.219% on its first page. Times New Roman at 12pt places its first baseline one device unit low. Twenty Word-rendered controls bound the problem: the line model is exact for Arial at 10, 11, 12, 14, 16 and 20pt and for Times at 8, 9, 10, 11, 14, 18, 20 and 24pt, and one unit out at Times 12, 13, 16 and 22pt. Rounding the sum of ascent and line gap, flooring the ascent, flooring the sum, rounding each separately, and both fonts' VDMX yMax each fit some controls and fail others. No rule is established, so nothing was changed for it.
