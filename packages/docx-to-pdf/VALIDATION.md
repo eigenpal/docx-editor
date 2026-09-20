@@ -628,7 +628,11 @@ Accumulation was the obvious suspect and it has been cleared. A control of one p
 
 What is left is therefore the body top itself. On `issue-740-header-zero-distance.docx` this engine puts it at 77.396pt, which is 322.485 units — almost exactly halfway between two units. The reference's first body baseline of 369 units implies a top of 323. Half a unit of difference in the block origin is precisely what flips some lines and not others, which is the pattern seen: fourteen of fifty-one wrong, the rest exact.
 
-The document is named for its header geometry and that is where the top comes from: a `w:header` distance of zero, three header lines, and the reference's own header bottom at 77.236pt by its painted baselines. Reconciling the body top with the header is the next thing, and it is a narrower question than any that came before it.
+The document is named for its header geometry and that is where the top comes from: a `w:header` distance of zero, three header lines, and the reference's own header bottom at 77.236pt by its painted baselines.
+
+Rounding the story origin UP to the next whole unit was the obvious reading of that, since `ceil(322.485)` is 323, and it was tried. It is wrong. Documents fully under 1% against Word fall from eighteen to seventeen, `issue-483-firstline-marker.docx` goes from 1.173% to 2.415%, `template-with-hf-rule.docx` from 0.298% to 0.640%, and `issue-740-header-zero-distance.docx` itself gets worse, 1.600% to 1.790%. Reverted.
+
+So the body top is not simply rounded up. The reference reaches 323 units by some other route, and since the header's own painted baselines put its bottom at 321.8 units, the extra is not the header's ink either. This is where the trail currently ends.
 
 ### Not understood
 
