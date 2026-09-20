@@ -571,6 +571,18 @@ Inside the single-spacing case the ascent is still unfittable, and now visibly s
 
 What this entry changes is the size of the problem, not its nature: multiples are exact, so any future attempt should leave them alone and work only on `w:lineRule="auto"` at `w:line="240"`. Quantising line height in layout was tried before and rejected across every line rule, see `.cache/pdf/claude-lineheight-grid/FINDING.md`.
 
+### A better control fit that the corpus rejects
+
+Correcting the entry above exposed a rule that looks right and is not. The reference does not appear to round the ascent at all: it puts the line box and the descent on the grid independently and lets the baseline fall between them.
+
+`baseline = round(lineHeight) - round(descent)`, both in device units. Times New Roman at 12pt ascends 46.68 units and rounds to 47, while the reference paints 46, which is a 57-unit box less an 11-unit descent. One expression also covers every line rule, which is what made it persuasive: at 18pt Calibri the reference paints 72 under single spacing and 71 under a 1.15 multiple, and a 92-unit box less 20 gives 72 while a 105-unit box less 34 gives 71.
+
+Against the sixty-six controls it is much the better rule — 32 of 33 on Times and 30 of 33 on Calibri, against 28 and 22 for rounding the ascent.
+
+The corpus rejects it anyway. Documents fully under 1% against Word fall from eighteen to sixteen. `footnote-overlap-regression.docx` goes from 0.899% to 2.293%, `float-wrap-comprehensive-test.docx` from 0.729% to 1.517%, `header-with-table.docx` from an exact match to 0.034%, and only `issue-740-header-zero-distance.docx` improves, 2.780% to 1.600%. Reverted.
+
+The likely reason is that a control has one run on a line while a real line mixes runs, so the line box height and the line descent are maxima over the runs rather than the properties of the run being painted. Whatever the cause, this is the fourth change in this record to fit captured controls and fail the corpus, and the sharpest: a twelve-point gain on controls costing two documents.
+
 ### Not understood
 
 A dense sweep settles what this is not. Thirty-three Times New Roman controls at half-point steps from 8pt to 24pt, each on its own page with the body top at a whole 150 units, give these first baselines in device units below that top:
