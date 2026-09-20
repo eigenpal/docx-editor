@@ -529,6 +529,8 @@ Calibri removes the last confound and gives the same answer. It exists on this m
 
 `gasp` does not explain the misses either. Times New Roman declares three ranges, up to 8ppem, up to 17ppem and beyond, and every control sits between 45 and 100ppem, so the rasteriser is asked for the same behaviour at every size tested.
 
+A free two-parameter fit settles it in the strongest form. Searching every scale `k` from 3.6 to 4.4 in steps of 0.0002 and every offset `c` from -0.6 to 0.6, under round, floor and ceil, the best any linear rule achieves is 28 of 33 on Times New Roman and 23 of 33 on Calibri — no better than the rule derived from the font's own metrics. So the reference's first baseline is not `round(k * size + c)` for ANY scale, offset and rounding mode. It is not a linear function of the point size at all, which means it comes from a lookup or from per-size state, not from a formula over the published metrics.
+
 So the residual is irreducible from the published metrics, and the writer already does the best that evidence supports. Closing it needs a metric source this machine does not expose, not a different rounding choice.
 
 ### Not understood
