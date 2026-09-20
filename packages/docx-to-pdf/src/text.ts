@@ -106,10 +106,20 @@ export class TextWriter {
     const scale = factor / shaped.fixedPointScale;
     const x = absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0);
     // Reference PDFs put every text baseline on a 0.24pt grid measured from the page top:
-    // 109.44, 126.00, 141.84 and 168.72 are 456, 525, 591 and 703 units exactly. Snap the
-    // PAINTED baseline only. Layout keeps its unrounded metrics, so flow and pagination
-    // cannot move; rounding each line's HEIGHT instead accumulates and is badly wrong
-    // (see .cache/pdf/claude-lineheight-grid/FINDING.md).
+    // 109.44, 126.00, 141.84 and 168.72 are 456, 525, 591 and 703 units exactly.
+    //
+    // TWO snaps, and the order is the whole point. The reference rounds the ascent to a
+    // whole device unit FIRST, then accumulates the exact line advance from there, then
+    // rounds the result. Rounding only at the end is not the same, because the ascent's
+    // own fraction then rides along every line of the paragraph and decides where each one
+    // lands. Calibri 11pt ascends 10.4736pt, which is 43.64 units; the reference lays out
+    // from 44. On `footnote-overlap-regression.docx` that fraction alone moved the third
+    // line of a paragraph a full unit, and snapping the ascent took the corpus from 38 of
+    // 56 pages under 1% to 42. See `.cache/pdf/claude-snapped-ascent/FINDING.md`.
+    //
+    // The line's HEIGHT is still never rounded. Layout keeps its unrounded metrics, so flow
+    // and pagination cannot move, and rounding each line's height instead accumulates and is
+    // badly wrong (see .cache/pdf/claude-lineheight-grid/FINDING.md).
     //
     // An exact half-unit rounds toward the page TOP, not away from zero. Ties are not rare:
     // any exact line spacing that is an odd multiple of 0.12pt hits one on every other line,
@@ -118,7 +128,11 @@ export class TextWriter {
     // an exact .5, and the reference takes the lower unit for all six; `Math.round` missed
     // every one of them by 0.24pt. See `.cache/pdf/claude-linerule/`.
     const baselineFromTop =
-      storyOrigin.y - visit.page.box.y + line.box.y + line.baseline - baselineShiftPtOf(style);
+      storyOrigin.y -
+      visit.page.box.y +
+      line.box.y +
+      Math.round(line.baseline / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT -
+      baselineShiftPtOf(style);
     const baseline =
       page.getHeight() - Math.ceil(baselineFromTop / PDF_PAINT_GRID_PT - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
