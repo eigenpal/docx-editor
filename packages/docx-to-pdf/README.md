@@ -67,7 +67,7 @@ Run `bun run validation:pdf` from the repository root for the local scorer and c
 bun test packages/docx-to-pdf/test
 bun run --filter '@docx-editor.dev/docx-to-pdf' typecheck
 bun run build:pdf
-node --test examples/docx-to-pdf/server.test.mjs
+node --test examples/docx-to-pdf/server.node.test.mjs
 ```
 
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets; they are not runtime font defaults.

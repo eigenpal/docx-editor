@@ -14,4 +14,4 @@ bun run --filter './examples/docx-to-pdf' start
 
 Set `PORT` to change the port. The server binds to loopback. Each conversion runs in a worker with a 60-second deadline and a 512 MiB JavaScript heap limit. Only one conversion can run at a time; excess requests receive 503. Uploads are limited to 20 MiB and remain in memory. The server does not retain uploaded documents or converted PDFs. This example does not configure public deployment.
 
-Run `node --test examples/docx-to-pdf/server.test.mjs` after building the packages to verify conversion, refusal, busy handling, cancellation, and recovery.
+Run `node --test examples/docx-to-pdf/server.node.test.mjs` after building the packages to verify conversion, refusal, busy handling, cancellation, and recovery.

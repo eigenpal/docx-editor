@@ -7,7 +7,7 @@
     "build": "vite build",
     "start": "node server.mjs --production",
     "typecheck": "tsc --noEmit",
-    "test": "node --test server.test.mjs"
+    "test": "node --test server.node.test.mjs"
   },
   "dependencies": {
     "@docx-editor.dev/docx-to-pdf": "workspace:*",
