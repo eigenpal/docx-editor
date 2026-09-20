@@ -7,6 +7,8 @@ import { Worker } from 'node:worker_threads';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const MAX_UPLOAD = 20 * 1024 * 1024;
 const DEADLINE = 60_000;
+/** Old-space ceiling for one conversion. Bounded on purpose; see the worker below. */
+const WORKER_HEAP_MB = Number(process.env.WORKER_HEAP_MB ?? 512);
 /** One worker at a time. No upload, result, or job is retained after its request. */
 export async function createPdfDemo({
   production = false,
@@ -98,7 +100,11 @@ export async function createPdfDemo({
             },
           },
           transferList: [bytes.buffer],
-          resourceLimits: { maxOldGenerationSizeMb: 512 },
+          // A 521-page document converts inside 512 MiB with about 380 MiB of old space in
+          // use, and fails below roughly 448. The cap is deliberate — one request must not
+          // be able to take the host down — so a document past it is refused, not served
+          // slowly. `WORKER_HEAP_MB` raises it for a local experiment.
+          resourceLimits: { maxOldGenerationSizeMb: WORKER_HEAP_MB },
         });
         workers.add(worker);
         worker.once('message', (result) => {
@@ -112,12 +118,28 @@ export async function createPdfDemo({
           else json(result.error === 'PdfFidelityError' ? 422 : 400, result);
           finish();
         });
-        worker.once('error', () => {
-          json(500, { message: 'The conversion worker failed.' });
+        // A heap the worker cannot grow arrives as `ERR_WORKER_OUT_OF_MEMORY`, and as a
+        // bare exit code 1 on some Node versions. Either way the document is too large for
+        // the budget, which is worth saying: a generic failure reads as a bug in the
+        // converter and invites a pointless retry.
+        const tooLarge = () => {
+          json(507, {
+            message: `The document needs more memory than this demo allows (${WORKER_HEAP_MB} MiB). Convert a smaller document, or raise WORKER_HEAP_MB.`,
+          });
           finish();
+        };
+        worker.once('error', (error) => {
+          if (finished) return;
+          if (error?.code === 'ERR_WORKER_OUT_OF_MEMORY') tooLarge();
+          else {
+            json(500, { message: 'The conversion worker failed.' });
+            finish();
+          }
         });
-        worker.once('exit', () => {
-          if (!finished) {
+        worker.once('exit', (code) => {
+          if (finished) return;
+          if (code !== 0) tooLarge();
+          else {
             json(500, { message: 'The conversion worker stopped.' });
             finish();
           }

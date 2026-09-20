@@ -14,7 +14,9 @@ Conversion runs when you ask for it, not on every keystroke: a page of PDF is ex
 
 ## How it is served
 
-The Node server hosts the React UI and `/api/convert`. Conversion runs in a worker with a 60-second deadline and a 512 MiB JavaScript heap limit, one at a time; a request arriving while another is running receives 503. Uploads stay in memory and are limited to 20 MiB. The server retains neither the uploaded document nor the converted PDF, binds to loopback, and is not configured for public deployment. Set `PORT` to change the port.
+The Node server hosts the React UI and `/api/convert`. Conversion runs in a worker with a 60-second deadline and a bounded heap, one at a time; a request arriving while another is running receives 503. Uploads stay in memory and are limited to 20 MiB. The server retains neither the uploaded document nor the converted PDF, binds to loopback, and is not configured for public deployment. Set `PORT` to change the port.
+
+The heap ceiling is 512 MiB, set with `WORKER_HEAP_MB`. A 521-page document converts in about 17 seconds and peaks near 380 MiB of old space; the same document fails below about 448 MiB. A document that needs more than the ceiling receives 507 with a message that names the limit, rather than exhausting the host.
 
 The exporter is Node-only, which is why the browser posts the document to the server rather than converting in the page: `@docx-editor.dev/docx-to-pdf` reads installed font files through `node:fs`.
 

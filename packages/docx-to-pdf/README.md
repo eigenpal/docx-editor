@@ -38,6 +38,12 @@ Comments use native range highlights or text notes. Authors, dates, replies, and
 
 Strict fidelity means representing Core's accepted layout. It does not certify pixel identity with Microsoft Word. Font substitutions remain possible under Core's default font policy.
 
+## Output size and memory
+
+Content streams are Flate-compressed, and fonts are embedded as subsets of the glyphs the document uses. Text is written one positioned run at a time: a run starts with a text matrix, and the glyphs after it advance from their own widths, with an explicit adjustment only where the laid-out position differs from the advance. A 521-page document produces about 4.8 MB, near 9.3 kB per page.
+
+The writer holds the laid-out pages and the admitted font data for the length of the call. The same 521-page document peaks near 380 MiB of old space. Run conversion in a worker with `resourceLimits.maxOldGenerationSizeMb` when you need a hard ceiling; the demo server does this and reports the limit instead of failing the host.
+
 ## Explicit limitations
 
 Textboxes, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. Variable fonts, missing glyphs, prohibited embedding, and font containers the subsetter cannot encode are refused. Fonts that prohibit subsetting are refused because this writer embeds subsets.

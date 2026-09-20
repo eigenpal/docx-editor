@@ -83,6 +83,21 @@ export class EmbeddedFace {
     }
     return hex(code);
   }
+  /**
+   * The advance this PDF declares for a character code, in 1/1000 em.
+   *
+   * What a viewer moves the pen by after drawing the glyph, so it is what a `TJ` adjustment
+   * has to be measured against. Returns 0 for a code that was never encoded, which cannot
+   * happen on the paint path because `encode` always runs first.
+   */
+  declaredWidth(code: string): number {
+    const row = this.rows[parseInt(code, 16) - 1];
+    const width = row === undefined ? 0 : (this.widths.get(row.cid) ?? 0);
+    // As SERIALIZED, to five decimals. A caller predicting the viewer's pen has to advance
+    // by the number this file actually carries; modelling the unrounded float instead lets a
+    // tiny per-glyph difference accumulate across a run with no adjustment to absorb it.
+    return Math.round(width * 1e5) / 1e5;
+  }
   async finish(work: Work): Promise<void> {
     await work.yield();
     const bytes = this.subset.encode();

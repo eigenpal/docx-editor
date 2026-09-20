@@ -5,10 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { PDFDocument, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '../src/index.ts';
 import { docx, paragraph } from './fixture.ts';
+import { glyphPositions } from './glyph-positions.ts';
 
 const FAMILY = 'DejaVu Sans';
 const bytes = new Uint8Array(
@@ -20,11 +20,11 @@ const source = createFontSource(bytes, { family: FAMILY, weight: 400, style: 'no
 if ('failure' in source) throw new Error(JSON.stringify(source.failure));
 
 /**
- * Every glyph carries its own absolute `Tm`, so the x written for glyph i is the sum of the
- * advances before it. Summing advances already rounded to the fixed-point grid biases every
- * instance of a character the same way, and the error grows with the glyph count rather than
- * cancelling. This pins the result of summing before rounding: the pen step the positions
- * describe is NOT a whole number of fixed-point units.
+ * The x a viewer computes for glyph i is the sum of the advances before it. Summing advances
+ * already rounded to the fixed-point grid biases every instance of a character the same way,
+ * and the error grows with the glyph count rather than cancelling. This pins the result of
+ * summing before rounding: the pen step the positions describe is NOT a whole number of
+ * fixed-point units.
  */
 test('a long run steps by the unrounded advance, not a quantised one', async () => {
   const count = 60;
@@ -36,18 +36,7 @@ test('a long run steps by the unrounded advance, not a quantised one', async () 
     }
   );
   expect(result.diagnostics).toEqual([]);
-  const parsed = await PDFDocument.load(result.bytes);
-  const stream = parsed.context
-    .enumerateIndirectObjects()
-    .flatMap(([, object]) =>
-      object instanceof PDFRawStream
-        ? [new TextDecoder().decode(decodePDFRawStream(object).decode())]
-        : []
-    )
-    .find((text) => text.includes(' Tm '));
-  const xs = [...(stream ?? '').matchAll(/[\d.-]+ 0 0 1 ([\d.-]+) [\d.-]+ Tm <[0-9a-f]+> Tj/g)].map(
-    (match) => Number(match[1])
-  );
+  const xs = await glyphPositions(result.bytes);
   expect(xs).toHaveLength(count);
 
   const step = (xs[count - 1]! - xs[0]!) / (count - 1);
