@@ -2,9 +2,18 @@
 
 A local demo of PDF support: edit a Word document on the left, generate a PDF on the right.
 
-Run `bun run dev:pdf` from the repository root, then open `http://127.0.0.1:5180`.
+## Run the example
 
-## Using it
+From the repository root, run:
+
+```bash
+bun install
+bun run dev:pdf
+```
+
+Open `http://127.0.0.1:5180`.
+
+## Use the demo
 
 The demo opens the editor sample. Edit it, then select **Generate PDF** to convert the document as it currently stands. The preview appears beside the editor with a download link.
 

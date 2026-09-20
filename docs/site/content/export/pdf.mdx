@@ -6,7 +6,7 @@ category: Export formats
 
 `@docx-editor.dev/docx-to-pdf` is a private workspace package under the EigenPal Pro License. It is not available from the public npm registry.
 
-The exporter uses Core's pagination, admitted fonts, and positioned glyphs. It does not run a browser or office application.
+The exporter uses Core's pagination, admitted fonts, and positioned glyphs. It does not run a browser or office application. It runs on Node, because it resolves installed font files through `node:fs`, so a browser application converts by posting the document to a server.
 
 ```ts
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
