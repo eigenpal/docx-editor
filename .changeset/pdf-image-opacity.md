@@ -1,6 +1,5 @@
 ---
 '@docx-editor.dev/core': minor
-'@docx-editor.dev/i18n': minor
 ---
 
-Expose shared export geometry and font fallback capabilities, and add localized controls for the private PDF demo. Improve Word-compatible text metrics, kerning, tables, notes, TOCs, image layout, and font-cache memory bounds.
+Expose shared export geometry and font fallback capabilities for PDF support. Refines text metrics, kerning, tables, notes, tables of contents, image layout, and font-cache memory bounds.

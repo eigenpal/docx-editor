@@ -72,7 +72,7 @@ node --test examples/docx-to-pdf/server.node.test.mjs
 
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets; they are not runtime font defaults.
 
-## Compare with LibreOffice
+## Cross-check against another renderer
 
 Install LibreOffice, Poppler, and Python 3, then run from this package:
 
@@ -80,11 +80,11 @@ Install LibreOffice, Poppler, and Python 3, then run from this package:
 bun run compare:libreoffice
 ```
 
-The command converts the unchanged editor demo with both engines. It writes paired page images, an overlay viewer, extracted text, font evidence, and diagnostics to `.cache/pdf/libreoffice-comparison/`. Pass DOCX and an empty output directory for another run. Both engines use the proposed view without revision marks. LibreOffice runs with an isolated temporary profile. It is a validation dependency; the native exporter does not launch or require LibreOffice.
+The command converts the unchanged editor demo with both renderers and writes paired page images, an overlay viewer, extracted text, font evidence, and diagnostics to `.cache/pdf/libreoffice-comparison/`. Pass a DOCX and an empty output directory for another run. Both use the proposed view without revision marks, and the second runs with an isolated temporary profile. It is a development aid for spotting differences worth investigating; it is not a target to match, and the exporter neither launches nor requires it.
 
-The real 50-category editor demo now exports in strict mode with 27 pages and no unsupported-content diagnostics, with installed fonts and with packaged fonts only. This does not imply pixel identity: font substitutions, monochrome emoji, equation layout, and super/subscript sizing can differ from LibreOffice. See `VALIDATION.md`.
+The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics, both with installed fonts and with packaged fonts only. Font substitutions, monochrome emoji, equation layout, and super/subscript sizing are the areas where output differs most between renderers. See `VALIDATION.md`.
 
-For the 100-document corpus benchmark, Word comparison procedure, measured gaps, and stress results, see [VALIDATION.md](./VALIDATION.md). Export success does not certify pixel fidelity.
+For the corpus benchmark, the comparison procedure, measured gaps, and stress results, see [VALIDATION.md](./VALIDATION.md). A successful export is not a statement about pixel fidelity.
 
 Profile memory with `bun packages/docx-to-pdf/scripts/profile-memory.ts input.docx` from the repository root. Add `--collect` for diagnostic garbage collection between phases. Production exports never force garbage collection. The profiler reports both process memory and JavaScript heap statistics; these measure different allocations.
 

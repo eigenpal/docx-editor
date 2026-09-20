@@ -1,0 +1,388 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { BrandLogo } from '../../shared/BrandLogo';
+import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
+import {
+  emptyStateMessage,
+  formatBytes,
+  generateLabel,
+  shouldMarkStale,
+  type PdfConversion,
+  type PdfDiagnostic,
+  type PdfStatus,
+} from './pdf-export-state';
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+const EDITOR_PACKAGED_FONTS = packagedFonts();
+type MobilePane = 'source' | 'pdf';
+
+function PdfIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 3v5h5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 17v-4h1.6a1.2 1.2 0 0 1 0 2.4H9m4.6 1.6V13h1.2a2 2 0 0 1 0 4h-1.2m4.2 0v-4h2.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 16V4m0 0L8 8m4-4 4 4M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolean }) {
+  const editor = useRef<DocxEditorRef>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const workbench = useRef<HTMLElement>(null);
+  const conversion = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
+
+  const [document, setDocument] = useState<Uint8Array | 'blank'>('blank');
+  const [status, setStatus] = useState<PdfStatus>('idle');
+  const [result, setResult] = useState<PdfConversion | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] = useState<MobilePane>('source');
+  const [sourceWidth, setSourceWidth] = useState(50);
+  const [splitBounds, setSplitBounds] = useState<SplitBounds>(() => desktopSplitBounds(0));
+  const [resizing, setResizing] = useState(false);
+  const fonts = useFonts(EDITOR_PACKAGED_FONTS);
+
+  // One object URL at a time: the previous preview is revoked as soon as a new one replaces
+  // it, and the last one when the demo unmounts, so a long editing session does not retain
+  // every PDF it produced.
+  useEffect(() => () => inFlight.current?.abort(), []);
+  useEffect(() => {
+    const url = result?.url;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [result?.url]);
+
+  useLayoutEffect(() => {
+    const element = workbench.current;
+    if (!element) return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      const bounds = desktopSplitBounds(entry?.contentRect.width ?? 0);
+      setSplitBounds(bounds);
+      setSourceWidth((current) => clampSplit(current, bounds));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const loadSample = useCallback(async () => {
+    const response = await fetch('sample.docx');
+    if (!response.ok) return;
+    setDocument(new Uint8Array(await response.arrayBuffer()));
+    setStatus('idle');
+    setResult(null);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    void loadSample();
+  }, [loadSample]);
+
+  const generate = useCallback(async () => {
+    const saved = await editor.current?.save();
+    if (!saved) return;
+    if (saved.byteLength > MAX_DOCUMENT_BYTES) {
+      setStatus('error');
+      setError(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
+      return;
+    }
+    // Only the newest conversion may publish. An earlier one that is still running is
+    // aborted, and its late reply is ignored even if it lands first.
+    const current = ++conversion.current;
+    inFlight.current?.abort();
+    const abort = new AbortController();
+    inFlight.current = abort;
+    setStatus('converting');
+    setError(null);
+    try {
+      const response = await fetch('/api/convert', {
+        method: 'POST',
+        body: saved,
+        signal: abort.signal,
+      });
+      const payload = (await response.json()) as {
+        pdf?: string;
+        pageCount?: number;
+        diagnostics?: readonly PdfDiagnostic[];
+        message?: string;
+      };
+      if (current !== conversion.current) return;
+      if (!response.ok || !payload.pdf) {
+        setStatus('error');
+        setError(payload.message ?? 'The document could not be converted.');
+        return;
+      }
+      const bytes = Uint8Array.from(atob(payload.pdf), (character) => character.charCodeAt(0));
+      setResult({
+        url: URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })),
+        bytes: bytes.byteLength,
+        pageCount: payload.pageCount ?? 0,
+        diagnostics: payload.diagnostics ?? [],
+      });
+      setStatus('ready');
+    } catch (cause) {
+      if (current !== conversion.current || abort.signal.aborted) return;
+      setStatus('error');
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
+  const openFile = useCallback(async (file: File) => {
+    if (file.size > MAX_DOCUMENT_BYTES) return;
+    setDocument(new Uint8Array(await file.arrayBuffer()));
+    setStatus('idle');
+    setResult(null);
+    setError(null);
+  }, []);
+
+  const stale = status === 'stale';
+  const busy = status === 'converting';
+
+  return (
+    <div
+      className={`pdf-demo${embedded ? ' pdf-demo--embedded' : ''}${resizing ? ' pdf-demo--resizing' : ''}`}
+      style={{ ['--pdf-source-width' as string]: `${sourceWidth}%` }}
+      data-mobile-pane={mobilePane}
+    >
+      <input
+        ref={fileInput}
+        type="file"
+        accept={`${DOCX_MIME},.docx`}
+        className="pdf-visually-hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void openFile(file);
+        }}
+      />
+
+      <header className="pdf-topbar">
+        <div className="pdf-topbar-pane pdf-topbar-pane--source">
+          {embedded ? (
+            <div className="pdf-export-identity pdf-source-identity">
+              <strong>Word document</strong>
+            </div>
+          ) : (
+            <div className="pdf-brand-lockup">
+              <BrandLogo />
+              <div className="pdf-product-title">
+                <strong>DOCX to PDF</strong>
+              </div>
+            </div>
+          )}
+          <div className="pdf-mobile-tabs" role="group" aria-label="Demo view">
+            <button
+              type="button"
+              aria-pressed={mobilePane === 'source'}
+              aria-controls="docx-source-panel"
+              onClick={() => setMobilePane('source')}
+            >
+              Source
+            </button>
+            <button
+              type="button"
+              aria-pressed={mobilePane === 'pdf'}
+              aria-controls="pdf-preview-panel"
+              onClick={() => setMobilePane('pdf')}
+            >
+              PDF
+            </button>
+          </div>
+          <div className="pdf-source-actions">
+            {!embedded && (
+              <button
+                type="button"
+                className="pdf-button pdf-button--compact pdf-button--quiet"
+                onClick={() => void loadSample()}
+              >
+                Reset
+              </button>
+            )}
+            <button
+              type="button"
+              className="pdf-button pdf-button--compact pdf-button--primary"
+              onClick={() => fileInput.current?.click()}
+              title="Open a DOCX"
+            >
+              <UploadIcon />
+              <span>Open DOCX</span>
+            </button>
+          </div>
+        </div>
+        <div className="pdf-topbar-divider" aria-hidden="true" />
+        <div className="pdf-topbar-pane pdf-topbar-pane--preview">
+          <div className="pdf-export-identity">
+            <PdfIcon />
+            <strong>PDF</strong>
+          </div>
+          <div className="pdf-preview-actions">
+            <button
+              type="button"
+              className={`pdf-button pdf-button--compact${stale ? ' pdf-button--primary' : ''}`}
+              onClick={() => void generate()}
+              disabled={busy}
+              // The document is converted on request, not on every keystroke: a page of PDF
+              // is expensive to produce and nobody wants one per character.
+              title="Convert the current document to PDF"
+            >
+              {generateLabel(status, result !== null)}
+            </button>
+            <a
+              className="pdf-button pdf-button--compact pdf-button--quiet"
+              href={result?.url ?? '#'}
+              download="document.pdf"
+              aria-disabled={result === null}
+              onClick={(event) => {
+                if (!result) event.preventDefault();
+              }}
+            >
+              Download
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main ref={workbench} className="pdf-workbench">
+        <section
+          id="docx-source-panel"
+          className="pdf-panel pdf-panel--editor"
+          aria-label="Editable DOCX document"
+        >
+          <div className="pdf-editor-frame">
+            <DocxEditor
+              ref={editor}
+              document={document}
+              fonts={fonts}
+              author="PDF demo"
+              title="Document"
+              onOpen={() => fileInput.current?.click()}
+              onChange={(change) => {
+                if (!shouldMarkStale(change)) return;
+                // Never downgrade an in-flight conversion; it will settle on its own.
+                setStatus((current) => (current === 'converting' ? current : 'stale'));
+              }}
+              navigation={false}
+              menu={false}
+              zoomMode="auto"
+              onFontError={(fontError) => console.warn(`[editor-fonts] ${fontError.message}`)}
+            />
+          </div>
+        </section>
+
+        <div
+          className="pdf-resize-handle"
+          role="separator"
+          aria-label="Resize document and PDF panes"
+          aria-orientation="vertical"
+          aria-valuemin={Number(splitBounds.min.toFixed(1))}
+          aria-valuemax={Number(splitBounds.max.toFixed(1))}
+          aria-valuenow={Number(sourceWidth.toFixed(1))}
+          tabIndex={0}
+          onDoubleClick={() => setSourceWidth(clampSplit(50, splitBounds))}
+          onKeyDown={(event) => {
+            const step = event.shiftKey ? 5 : 2;
+            if (event.key === 'ArrowLeft')
+              setSourceWidth((current) => clampSplit(current - step, splitBounds));
+            if (event.key === 'ArrowRight')
+              setSourceWidth((current) => clampSplit(current + step, splitBounds));
+          }}
+          onPointerDown={(event) => {
+            const element = workbench.current;
+            if (!element) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(true);
+            const move = (pointer: PointerEvent) => {
+              const box = element.getBoundingClientRect();
+              if (box.width <= 0) return;
+              const percent = ((pointer.clientX - box.left) / box.width) * 100;
+              setSourceWidth(clampSplit(percent, splitBounds));
+            };
+            const stop = () => {
+              setResizing(false);
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', stop);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', stop);
+          }}
+        />
+
+        <section
+          id="pdf-preview-panel"
+          className="pdf-panel pdf-panel--preview"
+          aria-label="Converted PDF"
+        >
+          {result ? (
+            <>
+              <div className={`pdf-pages${stale ? ' pdf-pages--stale' : ''}`}>
+                <object data={result.url} type="application/pdf" aria-label="Converted PDF preview">
+                  <p className="pdf-empty-state">
+                    This browser cannot display a PDF inline.{' '}
+                    <a href={result.url} download="document.pdf">
+                      Download it instead
+                    </a>
+                    .
+                  </p>
+                </object>
+              </div>
+              <div className="pdf-page-meta" role="status" aria-live="polite">
+                {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}
+                {formatBytes(result.bytes)}
+                {stale ? ' · the document changed since this was generated' : ''}
+                {result.diagnostics.length > 0
+                  ? ` · ${result.diagnostics.length} diagnostic${result.diagnostics.length === 1 ? '' : 's'}`
+                  : ''}
+              </div>
+            </>
+          ) : (
+            <div className="pdf-empty-state" role="status" aria-live="polite">
+              {busy ? <span className="pdf-spinner" aria-hidden="true" /> : null}
+              <p>{emptyStateMessage(status, error)}</p>
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}

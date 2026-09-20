@@ -190,8 +190,11 @@
     "examples/docx-to-pdf": {
       "name": "docx-editor-example-docx-to-pdf",
       "dependencies": {
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/docx-to-pdf": "workspace:*",
+        "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },

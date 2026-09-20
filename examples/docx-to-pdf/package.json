@@ -10,16 +10,19 @@
     "test": "node --test server.node.test.mjs"
   },
   "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/docx-to-pdf": "workspace:*",
+    "@docx-editor.dev/fonts": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@docx-editor.dev/i18n": "workspace:*"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "vite": "^8.0.10",
-    "@vitejs/plugin-react": "^6.0.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
-    "typescript": "^5.3.3"
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.3.3",
+    "vite": "^8.0.10"
   }
 }

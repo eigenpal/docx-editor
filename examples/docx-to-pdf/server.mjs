@@ -152,9 +152,19 @@ export async function createPdfDemo({
       }
       const content = await readFile(target);
       res.writeHead(200, {
+        // `.wasm` needs its own type or `WebAssembly.compileStreaming` refuses the response
+        // and the shaper falls back to a slower ArrayBuffer instantiation. A fixed map, not
+        // a lookup library: these are the only types this demo serves.
         'Content-Type':
-          { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[extname(target)] ??
-          'application/octet-stream',
+          {
+            '.js': 'text/javascript',
+            '.css': 'text/css',
+            '.html': 'text/html',
+            '.svg': 'image/svg+xml',
+            '.wasm': 'application/wasm',
+            '.woff2': 'font/woff2',
+            '.json': 'application/json',
+          }[extname(target)] ?? 'application/octet-stream',
       });
       res.end(content);
     } catch {

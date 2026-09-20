@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Draw a list bullet in the symbol font the document authored, and size its line from that font, so a Symbol or Wingdings marker matches Word. Copied text still reads as Unicode.
+A list bullet is now drawn in the symbol font the document authored, and its line is sized from that font, so a Symbol or Wingdings marker keeps its intended glyph and height. Copied text still reads as Unicode.
