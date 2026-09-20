@@ -488,6 +488,14 @@ The reference embeds Word's own Times New Roman, fontRevision 0x00070000 with `h
 
 On page 1 of `issue-483-firstline-marker.docx` this is what remains. Word positions agree to within 0.068pt over 487 paired tokens, no token is off by more than 0.1pt, every rule now matches, and rendering both files with MuPDF instead gives 0.844% with the lines aligned. The same page scores 2.061% under `pdftoppm`.
 
+### The float exclusion rounds, but its tie direction is not determinable
+
+Rounding the line's own text origin landed, and the reference's wrap geometry confirms the rule: a line beside a float starts at a whole number of device units in every case measured on pages 4 and 5 of `float-wrap-comprehensive-test.docx` — 156.000, 148.080, 381.120, 103.440, 177.120 and 171.120 are 650, 617, 1588, 431, 738 and 713 units. The image edges themselves are not all on the grid, and the gap between an image edge and the text is not constant: 9.000, 8.880, 9.120, 8.940 and 15.120pt. Only the sum is rounded.
+
+Two of those sums are exact half units on identical inputs and the reference rounds them in opposite directions. On page 4 an image right edge of 139.200 plus a `distR` of 114300 EMU, or 9pt, is 148.200, which is 617.5 units, and the reference paints 617. On page 5 an edge of 372.000 plus the same 9pt is 381.000, which is 1587.5 units, and the reference paints 1588. Both inputs are on the grid, both distances are identical, and both are exact ties. Rounding half up matches page 5 and misses eight lines on page 4; rounding half down reverses that. No observable quantity separates them, so the tie is left as round-half-up and both cases are recorded here.
+
+A separate defect on page 4 is not a rounding question. The reference clears a left float at its bottom and starts the following line at 79.20; we keep wrapping beside it and start at 148.32, one whole line 69.12pt out of place. The float ends at 624.08, its `distB` is 45720 EMU or 3.6pt, and the line's baseline is 636.0. Whether the reference compares the line's top, its baseline, or an overlap fraction against the exclusion is not established from one instance, and an earlier attempt in this area was reverted.
+
 ### Not understood
 
 `issue-740-header-zero-distance.docx` remains at 5.219% on its first page. Times New Roman at 12pt places its first baseline one device unit low. Twenty Word-rendered controls bound the problem: the line model is exact for Arial at 10, 11, 12, 14, 16 and 20pt and for Times at 8, 9, 10, 11, 14, 18, 20 and 24pt, and one unit out at Times 12, 13, 16 and 22pt. Rounding the sum of ascent and line gap, flooring the ascent, flooring the sum, rounding each separately, and both fonts' VDMX yMax each fit some controls and fail others. No rule is established, so nothing was changed for it.
