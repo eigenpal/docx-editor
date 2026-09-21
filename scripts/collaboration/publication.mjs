@@ -23,9 +23,13 @@ export function readPublicationCandidate(directory) {
 
 export async function verifyPublication(
   manifest,
-  { lookup = registry, now = Date.now, log = console.log } = {}
+  {
+    lookup = registry,
+    now = Date.now,
+    log = console.log,
+    deadline = now() + PUBLICATION_TIMEOUT_MS,
+  } = {}
 ) {
-  const deadline = now() + PUBLICATION_TIMEOUT_MS;
   const controller = new AbortController();
   try {
     await Promise.all(

@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
-import { git, run } from './common.mjs';
-import { registry } from './registry.mjs';
+import { compareVersions, git, run } from './common.mjs';
+import { registry, PUBLICATION_TIMEOUT_MS } from './registry.mjs';
 import { readPublicationCandidate, verifyPublication } from './publication.mjs';
 
 export function validateRecoverySource(source, jobs, { repository, version, commit }) {
@@ -40,6 +40,46 @@ export function validateRecoveryPackages(manifest, packages, version) {
     throw new Error('Candidate packages do not match the tagged release');
 }
 
+export async function verifyRecoveryPublication(
+  manifest,
+  version,
+  { lookup = registry, now = Date.now, log = console.log } = {}
+) {
+  const deadline = now() + PUBLICATION_TIMEOUT_MS;
+  await verifyPublication(manifest, { lookup, now, log, deadline });
+  // Exact version metadata and dist-tags can propagate independently. Use the
+  // remaining verification budget, not another timeout or a one-shot tag read.
+  const controller = new AbortController();
+  try {
+    await Promise.all(
+      ['@docx-editor.dev/core', '@docx-editor.dev/docx-to-markdown'].map(async (name) => {
+        await lookup(name, '', {
+          waitForPublication: true,
+          deadline,
+          signal: controller.signal,
+          pendingReason(document) {
+            const latest = document['dist-tags']?.latest;
+            if (latest === version) return;
+            if (latest == null) return `latest tag is missing; waiting for ${version}`;
+            if (typeof latest !== 'string' || !/^\d+\.\d+\.\d+$/.test(latest))
+              throw new Error(`Unexpected latest tag for ${name}: ${JSON.stringify(latest)}`);
+            if (compareVersions(latest, version) > 0)
+              throw new Error(
+                `${name}@${version} is superseded by latest ${latest}; recover historical baselines separately`
+              );
+            return `latest is still ${latest}; waiting for ${version}`;
+          },
+        });
+        log(`Verified ${name} latest is ${version}`);
+      })
+    );
+  } catch (error) {
+    controller.abort(error);
+    throw error;
+  }
+  log('Published artifacts and latest tags are ready for downstream updates.');
+}
+
 async function main() {
   const [phase, directory] = process.argv.slice(2);
   const {
@@ -71,15 +111,7 @@ async function main() {
       .filter((path) => /^packages\/[^/]+\/package.json$/.test(path));
     const packages = paths.map((path) => JSON.parse(git('show', `${tag}:${path}`)));
     validateRecoveryPackages(manifest, packages, version);
-    await verifyPublication(manifest);
-    // Prevent a recovery for an older release from downgrading either live site.
-    for (const name of ['@docx-editor.dev/core', '@docx-editor.dev/docx-to-markdown']) {
-      const document = await registry(name);
-      if (document['dist-tags']?.latest !== version)
-        throw new Error(
-          `${name}@${version} is not latest; recover historical baselines separately`
-        );
-    }
+    await verifyRecoveryPublication(manifest, version);
   } else throw new Error('Expected source or verify');
 }
 

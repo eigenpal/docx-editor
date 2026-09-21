@@ -193,6 +193,8 @@ The candidate artifact is retained for 30 days on new Release runs. Earlier runs
 
 ### Registry verification and retries
 
-In the downstream workflow, verification gives all packages a shared 10-minute deadline. This is a maximum: it finishes as soon as all packages pass, with no fixed delay before the first request. Packages are checked concurrently. The verifier retries network errors, HTTP 404, 408, 429, and temporary server errors with increasing delays, respects `Retry-After`, and logs the package, last error, and remaining time.
+In the downstream workflow, artifact verification and the `latest` tag checks share one 10-minute deadline. This is a maximum: verification finishes as soon as all checks pass, with no fixed delay before the first request. Packages are checked concurrently. The verifier retries network errors, HTTP 404, 408, 429, and temporary server errors with increasing delays, respects `Retry-After`, and logs the package, last error, and remaining time.
 
 If the version endpoint is unavailable, the verifier also checks the exact version in npm's package metadata. It never substitutes the `latest` version. Authentication errors and metadata or integrity mismatches fail immediately. A timeout keeps downstream updates blocked; use recovery after npm becomes available. An integrity mismatch requires investigation before any recovery.
+
+The `latest` tags can update after the version metadata becomes available. After verifying the artifacts, recovery waits for the core and converter tags within the remaining deadline. A missing tag or an older stable version triggers a retry. A newer stable version stops recovery to prevent a site downgrade. Unexpected tag values also fail. Logs distinguish a stale tag from a superseded release.

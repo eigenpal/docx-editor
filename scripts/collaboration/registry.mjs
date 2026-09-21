@@ -42,6 +42,7 @@ export function createRegistryClient({
           : [version ? `${base}/${version}` : base];
       for (const url of urls) {
         if (now() >= deadline) break;
+        let value;
         try {
           const timeout = AbortSignal.timeout(Math.max(1, Math.min(30_000, deadline - now())));
           const response = await request(url, {
@@ -51,9 +52,8 @@ export function createRegistryClient({
           });
           if (response.ok) {
             const document = await response.json();
-            const value = version && url === base ? document.versions?.[version] : document;
-            if (value) return value;
-            last = 'requested version absent from package metadata';
+            value = version && url === base ? document.versions?.[version] : document;
+            if (!value) last = 'requested version absent from package metadata';
           } else {
             last = `HTTP ${response.status}`;
             delay = Math.max(delay, retryAfter(response, now()));
@@ -70,6 +70,13 @@ export function createRegistryClient({
           last = error.cause?.code ?? error.message;
           if (!waitForPublication && attempt >= 3)
             throw new Error(`Registry request failed: ${label}: ${last}`);
+        }
+        if (value) {
+          // Metadata can be readable before its dist-tags propagate. Keep semantic
+          // validation outside the transport catch: a rejected release is not a network retry.
+          const pending = options.pendingReason?.(value);
+          if (!pending) return value;
+          last = pending;
         }
         // Respect throttling/service Retry-After before requesting another metadata endpoint.
         if (delay > 0) break;
