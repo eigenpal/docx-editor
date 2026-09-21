@@ -70,7 +70,11 @@ export function snapToGrid(units: number): number {
   return Math.abs(units - snapped) < 1e-9 ? snapped : units;
 }
 
-function griddedBaselineInLine(line: SemanticSpanVisit['line'], face: EmbeddedFace): number {
+function griddedBaselineInLine(
+  line: SemanticSpanVisit['line'],
+  face: EmbeddedFace,
+  paragraph: SemanticSpanVisit['paragraph']
+): number {
   const units = (value: number): number => Math.round(value / PDF_PAINT_GRID_PT);
   // Scale the descent off the LINE's own ascent, through the face's descent-to-ascent ratio,
   // rather than off the painted run's size. A line takes its ascent from its tallest run, so
@@ -80,7 +84,14 @@ function griddedBaselineInLine(line: SemanticSpanVisit['line'], face: EmbeddedFa
   const above = Math.abs(face.font.ascent) + Math.abs(face.font.lineGap);
   const descent = above > 0 ? (Math.abs(face.font.descent) / above) * line.baseline : 0;
   const naturalBox = line.baseline + descent;
-  if (!(descent > 0) || line.box.height > naturalBox + 0.01)
+  // A line that ENDS its paragraph rounds its ascent instead. Controls rendered by Word put
+  // its last line one device unit below what the box rule gives, at every paragraph length
+  // from one line to six, and rounding the ascent reproduces all of them exactly. The line
+  // that carries the paragraph mark is already the one this rule's own fallback catches when
+  // the mark makes the box taller than natural; an equal-sized mark takes the same branch.
+  const endsParagraph =
+    paragraph.paragraphEnd === true && paragraph.lines[paragraph.lines.length - 1] === line;
+  if (endsParagraph || !(descent > 0) || line.box.height > naturalBox + 0.01)
     return units(line.baseline) * PDF_PAINT_GRID_PT;
   return (units(naturalBox) - units(descent)) * PDF_PAINT_GRID_PT;
 }
@@ -254,7 +265,7 @@ export class TextWriter {
       storyOrigin.y -
       visit.page.box.y +
       line.box.y +
-      griddedBaselineInLine(line, face) -
+      griddedBaselineInLine(line, face, visit.paragraph) -
       baselineShiftPtOf(style);
     // The sum above is exact in decimal but not in binary: a baseline that is mathematically
     // 2149.5 units arrives as 2149.5000000000014, and `ceil(x - 0.5)` then takes the unit BELOW
