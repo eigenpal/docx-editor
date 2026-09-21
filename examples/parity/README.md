@@ -33,7 +33,7 @@ The local preview does not apply the root or hostname rewrites in `vercel.json`.
 The build performs these steps:
 
 1. It builds the seven demo workspace packages.
-2. It builds the React and Vue adapters plus the Igloo and DOCX-to-Markdown apps.
+2. It builds the React, Vue, Igloo, and DOCX-to-Markdown example apps.
 3. It assigns `/react/`, `/vue/`, `/igloo/`, and `/docx-to-markdown/` as their base paths.
 4. It assembles all four builds in `examples/parity/dist/`.
 

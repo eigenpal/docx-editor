@@ -89,11 +89,14 @@ describe('engine dependency integrity', () => {
     );
     const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
     expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
-    expect(navigation.pages.slice(exportSectionIndex, exportSectionIndex + 4)).toEqual([
-      '---Export formats---',
-      'export/markdown',
+    const nextSectionIndex = navigation.pages.findIndex(
+      (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
+    );
+    expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
+    // The Markdown pages, then the PDF page, and nothing else before the next section.
+    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
+      ...markdownNavigation.pages.map((page: string) => `export/markdown/${page}`),
       'export/pdf',
-      '---Pro---',
     ]);
     expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');

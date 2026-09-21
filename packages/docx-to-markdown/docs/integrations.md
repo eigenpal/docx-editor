@@ -10,6 +10,8 @@ Install the packages, then create one LangChain document for each exported page:
 npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core @langchain/core
 ```
 
+Convert the file and map its pages to LangChain documents:
+
 ```ts
 import { readFile } from 'node:fs/promises';
 import { Document } from '@langchain/core/documents';
@@ -40,7 +42,7 @@ const records = result.pages.map((page) => ({
 }));
 ```
 
-Map these fields to your pipeline's document schema. For Python applications, expose the Node.js converter through a service that returns JSON.
+Map these fields to your pipeline's document schema. For Python applications, use the [Python package](../../../python/docx-to-markdown/README.md).
 
 ## Next.js
 
@@ -56,6 +58,8 @@ export default {
   ],
 };
 ```
+
+Add a route handler that converts DOCX bytes and returns JSON:
 
 ```ts
 // app/api/convert/route.ts

@@ -1,26 +1,33 @@
-# Migrating to the object model
+# Migrate to the object model
 
-This release replaces everything `@docx-editor.dev/agents` used to export. The package used to be four things at once — a static reviewer, an editor bridge with a flat tool catalog, an MCP server, and a chat UI for React and Vue. The package is now named `@docx-editor.dev/editor-api` and exposes one thing: the Office.js Word-shaped DocxEditor API, which drives a document from a server or from an editor already open in a page.
+`@docx-editor.dev/editor-api` replaces `@docx-editor.dev/agents`. It exposes a supported subset of Word's Office.js object model. Use it on a server or with an open browser editor.
 
-There are no aliases and no deprecation window. Every import below moves or goes away, and the version bump is major to say so.
+The migration removes the reviewer, editor bridge, tool catalog, Model Context Protocol (MCP) server, and framework chat components. Removed exports have no aliases.
 
-## The shape of the change
+## Replace reviewer calls
+
+The former reviewer addresses content by paragraph index:
 
 ```ts
-// Before — a reviewer holding a parsed document, addressed by paragraph index.
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
 reviewer.replace(5, '$50k', '$500k');
 const out = await reviewer.toBuffer();
+```
 
-// After — a runtime, objects you reached and read, one batch at a time.
+The object model uses document proxies and explicit batches. This example permanently replaces one unique match:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+
 const runtime = await DocxEditor.createServer(bytes, { author: 'AI Reviewer' });
 try {
   await runtime.run(async (context) => {
-    const matches = context.document.body.search('$50k');
-    matches.load();
+    const matches = context.document.body.search('$50k', { matchCase: true });
+    matches.load('items');
     await context.sync();
+    if (matches.items.length !== 1) throw new Error('Choose one unique target');
 
-    for (const match of matches.items) match.insertText('$500k', 'Replace');
+    matches.items[0]!.insertText('$500k', 'Replace');
     await context.sync();
   });
   const out = await runtime.save();
@@ -29,69 +36,97 @@ try {
 }
 ```
 
-Three things changed at once, and the third is the one that bites:
+Account for three model differences:
 
-1. **Addressing.** Paragraph indices are gone. You reach an object — by searching, by walking a collection, by asking a collection for an item — and operate on the object.
-2. **Batching.** Nothing reaches the document until `await context.sync()`. Work queued between two syncs is one ordered transaction that applies whole or not at all.
-3. **Reads are declared.** A property you did not `load()` throws rather than answering `undefined`. This is why the example above syncs twice: once to find out what the search found, once to write.
+- Addressing: Find objects through searches and collections instead of paragraph indexes.
+- Batching: Queued writes commit together at `await context.sync()`. A failed batch applies no writes.
+- Loading: Load properties before reading them. Reading an unloaded property throws `PropertyNotLoaded`.
 
-## Entry points
+The example syncs once to read matches and once to commit the replacement. Earlier successful batches remain committed if a later batch fails.
 
-| Before                             | After                                                           |
-| ---------------------------------- | --------------------------------------------------------------- |
-| `@docx-editor.dev/agents`          | `@docx-editor.dev/editor-api` — server/worker, from DOCX bytes  |
-| `@docx-editor.dev/agents/server`   | `@docx-editor.dev/editor-api`                                   |
-| `@docx-editor.dev/agents/bridge`   | `@docx-editor.dev/editor-api/browser`                           |
-| `@docx-editor.dev/agents/react`    | `@docx-editor.dev/editor-api/browser` — no React-specific entry |
-| `@docx-editor.dev/agents/vue`      | `@docx-editor.dev/editor-api/browser` — no Vue-specific entry   |
-| `@docx-editor.dev/agents/mcp`      | removed                                                         |
-| `@docx-editor.dev/agents/ai-sdk/*` | removed                                                         |
+## Change entry points
 
-The browser entry is a separate import on purpose: reaching a live editor means reaching the painted engine, and a server holding bytes should not pay for that. It takes an editor the host already created, from any framework:
+| Former entry                       | Replacement                                            |
+| ---------------------------------- | ------------------------------------------------------ |
+| `@docx-editor.dev/agents`          | `@docx-editor.dev/editor-api` for server or worker use |
+| `@docx-editor.dev/agents/server`   | `@docx-editor.dev/editor-api`                          |
+| `@docx-editor.dev/agents/bridge`   | `@docx-editor.dev/editor-api/browser`                  |
+| `@docx-editor.dev/agents/react`    | `@docx-editor.dev/editor-api/browser`                  |
+| `@docx-editor.dev/agents/vue`      | `@docx-editor.dev/editor-api/browser`                  |
+| `@docx-editor.dev/agents/mcp`      | Removed; define MCP tools in your application          |
+| `@docx-editor.dev/agents/ai-sdk/*` | Removed; define SDK adapters in your application       |
+
+The browser entry accepts an editor instance from core, React, or Vue. Save through the owning editor and dispose the runtime when your integration ends:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
-const runtime = DocxEditor.createBrowser(editor);
+const runtime = DocxEditor.createBrowser(editor, { author: 'AI Reviewer' });
 ```
 
-## Reading and editing
+## Read and edit content
 
-| Before                                         | After                                                                          |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| `DocxReviewer.fromBuffer(buffer, author)`      | `await DocxEditor.createServer(bytes, { author })`                             |
-| `reviewer.toBuffer()`                          | `await runtime.save()`                                                         |
-| `reviewer.toDocument()`                        | removed — the document model is not a public value                             |
-| `reviewer.getContent()` / `getContentAsText()` | `body.load('text')` then `body.text`, or walk `body.paragraphs`                |
-| `reviewer.replace(i, search, with)`            | `body.search(search)` → `range.insertText(with, 'Replace')`                    |
-| `reviewer.proposeReplacement(...)`             | same as `replace` above                                                        |
-| `reviewer.proposeInsertion(...)`               | `range.insertText(text, 'Start' \| 'End')` or `insertParagraph(text, 'After')` |
-| `reviewer.proposeDeletion(...)`                | `paragraph.delete()`, or `range.insertText('', 'Replace')` for part of one     |
-| `reviewer.applyReview(batchOps)`               | a `run` callback: queue the work, one `sync()` makes it one transaction        |
-| `TextNotFoundError` etc.                       | one `DocxEditorError` carrying a `code` — branch on the code, not the class    |
+| Former API | Replacement |
+| --- | --- |
+| `DocxReviewer.fromBuffer(buffer, author)` | `await DocxEditor.createServer(bytes, { author })` |
+| `reviewer.toBuffer()` | `await runtime.save()` |
+| `reviewer.toDocument()` | Removed; obtain proxies inside `runtime.run()` |
+| `reviewer.getContent()` / `getContentAsText()` | Load `body.text`, sync, then read it; or enumerate `body.paragraphs` |
+| `reviewer.replace(i, search, with)` | Search for a target, then call `range.insertText(text, 'Replace')` |
+| `reviewer.applyReview(batchOps)` | Queue independent writes inside `runtime.run()`, then call `context.sync()` |
+| `TextNotFoundError` and related errors | Handle `DocxEditorError.code` |
 
-## Comments and tracked changes
+Ranges retain their original offsets. After editing a paragraph, search again before acting on another target there. See [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges) for same-batch editing limits.
 
-| Before                                   | After                                                                                                                   |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `reviewer.getComments(filter)`           | `document.comments` / `body.getComments()`, then `load()` and read `items`                                              |
-| `reviewer.replyTo(id, text)`             | `comment.reply(text)`                                                                                                   |
-| `reviewer.getChanges(filter)`            | `document.revisions` / `body.revisions`                                                                                 |
-| `reviewer.acceptChange` / `rejectChange` | `revision.accept()` / `revision.reject()`                                                                               |
-| `reviewer.acceptAll` / `rejectAll`       | `revisions.acceptAll()` / `revisions.rejectAll()`                                                                       |
-| `reviewer.addComment(...)`               | Find or obtain a `Range`, then call `range.insertComment(text)`. The runtime's `author` is used.                        |
-| `reviewer.removeComment(id)`             | `comment.delete()` on the loaded `Comment`. On a root this removes the thread and anchors; on a reply, only that reply. |
+## Preserve suggestions as tracked changes
 
-Filters are gone as arguments: load the collection and filter `items` yourself, which is one less vocabulary to learn and the same number of round trips.
+To replace `proposeReplacement`, `proposeInsertion`, or `proposeDeletion`, set `context.document.changeTrackingMode = 'TrackMineOnly'` before editing. Supply an `author` when creating the runtime. Without this setting, the initial `Off` mode makes permanent edits.
 
-## Tools, MCP and chat
+| Former API | Edit after enabling `TrackMineOnly` |
+| --- | --- |
+| `reviewer.proposeReplacement(...)` | `range.insertText(text, 'Replace')` |
+| `reviewer.proposeInsertion(...)` | `range.insertText(text, 'Before')` or `range.insertText(text, 'After')` |
+| `reviewer.proposeDeletion(...)` | `range.delete()` or `range.clear()` |
 
-The flat tool catalog (`agentTools`, `getToolSchemas`, `executeToolCall`, `getToolDisplayName`), the `read_document` / `add_comment` / `suggest_change` / `apply_formatting` / `scroll` tool names, `EditorBridge`, `createEditorBridge`, `createReviewerBridge`, `WordCompatBridge`, `McpServer`, `runStdioServer`, the MCP protocol types, and the AI SDK adapters are **removed with no equivalent in this package**.
+Tracked edits support text in one paragraph, including table-cell text. The runtime rejects structural edits, formatting edits, and targets touching pending revisions while tracking. Browser tracked writes require the Pro review module and an editable editor. `TrackAll` fails with `NotSupported`.
 
-That is a deliberate scope change rather than an oversight. A tool schema is a decision about a model's interface — which operations to expose, how to describe them, what to do with a refusal — and it belongs in the application that owns the model, not in a document library. The object model is the layer underneath: a tool named `add_comment` in your own catalog does its work by calling into a `run` block.
+For a complete tracked-edit example, see [Office.js patterns for server agents](OFFICE_JS_GUIDE.md). Never disable tracking automatically to make a rejected suggestion succeed.
 
-Likewise the React and Vue chat UI (`AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline`, `AIContextMenu`, `AIResponsePreview`, `useAgentChat`, `useDocxAgentTools`, `useAgentBridge`, `toAgentMessages`, the `AgentMessage` / `AgentToolCall` types) is removed, along with the `agentPanel`, `agentPanelOpen` and `onAgentPanelClose` props on `@docx-editor.dev/react`'s editor shell and the `agentPanel.*` locale strings. Chat UI is application chrome; render it where the rest of your chrome lives and drive the document through `createBrowser(editor)`.
+## Migrate comments and revision decisions
 
-## What the compatibility claim means
+| Former API | Replacement |
+| --- | --- |
+| `reviewer.getComments(filter)` | Load `document.comments` or `body.getComments()` with `'items'`, then sync |
+| `reviewer.replyTo(id, text)` | `comment.reply(text)` |
+| `reviewer.getChanges(filter)` | Load `document.revisions` or `body.revisions` with `'items'`, then sync |
+| `reviewer.acceptChange` / `rejectChange` | `revision.accept()` / `revision.reject()` |
+| `reviewer.acceptAll` / `rejectAll` | `revisions.acceptAll()` / `revisions.rejectAll()` for a strict story-wide batch |
+| `reviewer.addComment(...)` | `range.insertComment(text)` with the runtime's configured `author` |
+| `reviewer.removeComment(id)` | `comment.delete()` for the complete thread, or `reply.delete()` for one reply |
 
-The object model's shape is compatible with a documented subset of Word's JavaScript object model, so a call site written against that vocabulary compiles here. It is not Office.js, it does not run in an Office add-in host, and it depends on no Microsoft package — every type in the surface is authored in this repository. The supported subset and its omissions (tables, images, repeating sections, custom XML mapping) are listed on [the Office.js compatibility page](https://www.docx-editor.dev/docs/latest/editor-api/office-js-api).
+Load the properties needed for filtering, sync, then filter `items`. Use `revisions.resolve(action, selectedRevisions)` to resolve selected changes and report skipped decisions. See [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions) for story scope and unsupported groups.
+
+## Replace tools, MCP, and chat components
+
+The package removes these tool and bridge exports:
+
+- `agentTools`, `getToolSchemas`, `executeToolCall`, and `getToolDisplayName`.
+- The `read_document`, `add_comment`, `suggest_change`, `apply_formatting`, and `scroll` tools.
+- `EditorBridge`, `createEditorBridge`, `createReviewerBridge`, and `WordCompatBridge`.
+- `McpServer`, `runStdioServer`, MCP protocol types, and AI SDK adapters.
+
+Define tool schemas and error handling in your application. Implement each document operation through a `runtime.run()` callback.
+
+The package also removes these React and Vue chat exports:
+
+- `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, and `AgentTimeline`.
+- `AIContextMenu`, `AIResponsePreview`, `useAgentChat`, `useDocxAgentTools`, and `useAgentBridge`.
+- `toAgentMessages`, `AgentMessage`, and `AgentToolCall`.
+
+The React editor removes `agentPanel`, `agentPanelOpen`, and `onAgentPanelClose`. The shared locales remove `agentPanel.*` strings. Render chat controls in your application and connect them with `createBrowser(editor)`.
+
+## Check compatibility
+
+The object model implements a documented Office.js subset. It runs independently of Office and does not require a Microsoft package. Matching signatures do not guarantee identical runtime behavior.
+
+Tables and inline pictures have supported editing subsets. Repeating-section objects and custom XML mapping APIs remain unavailable. Check [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for each operation your integration needs.

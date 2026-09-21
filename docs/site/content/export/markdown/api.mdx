@@ -47,7 +47,7 @@ For custom measurement, image decoders, and session controls, see the [complete 
 | `fontResolution` | Resolved and substituted fonts, coverage, and origin failures. `null` when font-origin evidence is unavailable. |
 | `warnings` | Content omissions, image placement fallback, and font problems. |
 
-The following response excerpt shows a one-page agreement. IDs and the layout revision are example values; the table above describes the remaining fields.
+The following response excerpt shows a one-page agreement. IDs and the layout revision are example values; the response fields table describes the remaining fields.
 
 ```json
 {
@@ -86,7 +86,7 @@ Fonts and revision visibility affect page breaks. Use the [font setup and troubl
 
 A page's `comments` and `trackedChanges` contain complete artifacts with at least one occurrence on that page. Their `occurrences` can also reference other pages. Filter by `occurrence.physicalPageNumber === page.number` for page-local occurrences; use `reviewArtifacts` to count document-wide artifacts without duplicates.
 
-Each entry in `reviewBindings` identifies a comment or tracked-change occurrence and the Markdown string and ranges associated with it. Using `result` from the example above, extract the associated text:
+Each entry in `reviewBindings` identifies a comment or tracked-change occurrence and the Markdown string and ranges associated with it. Using the export `result`, extract the associated text:
 
 ```ts
 for (const binding of result.reviewBindings) {
@@ -117,7 +117,7 @@ Use `images: { syntax: 'html' }` to emit `img` tags with displayed `width` and `
 | Local folder | `await writeMarkdownBundle(result, { directory })` from the `/node` entry point. |
 | Object storage | Set `images.resolveUrl` to upload each unique image and return a relative or HTTP(S) URL. Your application owns uploads, cleanup, and URL expiry. |
 
-For example, save the export above with its images as a portable ZIP:
+For example, save the export with its images as a portable ZIP:
 
 ```ts
 import { writeFile } from 'node:fs/promises';

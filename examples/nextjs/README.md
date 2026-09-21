@@ -1,6 +1,6 @@
 # Next.js DOCX editor example
 
-This App Router example loads the React DOCX editor in the browser. It shows where the client boundary goes in an App Router tree, and renders a Word document with the packaged toolbar and a review pane.
+This Next.js App Router example loads the React DOCX editor in the browser. It includes the packaged toolbar and a review pane.
 
 ## Run the example
 
@@ -33,11 +33,9 @@ export default function Page() {
 }
 ```
 
-Two details in that call matter.
-
 `ssr: false` keeps the editor out of the server render. The editor measures layout and reads `window`, so a server render either fails or produces markup that does not match the browser.
 
-The `'use client'` directive is required for this file. The App Router rejects `dynamic()` with `ssr: false` inside a Server Component, and the error names the file rather than the call, which is easy to misread as a problem in the editor.
+The `'use client'` directive makes this file a Client Component. App Router does not allow `dynamic()` with `ssr: false` inside a Server Component.
 
 `app/components/Editor.tsx` also declares `'use client'`, because it holds state.
 
@@ -54,6 +52,8 @@ The `loading` option renders until the editor chunk arrives. Give it the height 
 `app/components/Editor.tsx` renders `<DocxEditor>`, which supplies the title bar, menu, toolbar, and navigation pane. The `modules` prop registers comments, tracked changes, and suggesting mode, and `<DocxEditorReview />` mounts the review pane inside the editor.
 
 ## Add the editor to Next.js
+
+Install the adapter and its required engine peer:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core

@@ -16,13 +16,15 @@
 
 Locale strings, types, and runtime helpers for the [docx-editor.dev](https://docx-editor.dev) editor chrome. Ten languages, with per-key fallback to English.
 
-## Quick Start
+## Quick start
+
+Install the locale package:
 
 ```bash
 npm install @docx-editor.dev/i18n
 ```
 
-Hand the catalog to the editor:
+Pass a locale to the editor. This example requires the React adapter and its engine peer:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -35,9 +37,9 @@ For several editors, or for chrome parts you compose yourself, put it in context
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { de } from '@docx-editor.dev/i18n';
 
 <LocaleProvider i18n={de}>
-  <DocxEditor.Toolbar />
   <DocxEditor document={bytes} />
 </LocaleProvider>;
 ```
@@ -51,7 +53,7 @@ import { de } from '@docx-editor.dev/i18n';
 
 const myLocale = {
   ...de,
-  toolbar: { ...de.toolbar, bold: 'Fettdruck' },
+  formattingBar: { ...de.formattingBar, bold: 'Fettdruck' },
 };
 ```
 
@@ -59,15 +61,15 @@ Keys set to `null` in any locale fall back to English.
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                       |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome.                   |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint.              |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types.                                                                  |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
+| Package | Description |
+| --- | --- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome. |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n) | Shared locale strings and types. |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, and custom nodes. |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of the Word Office.js API for server and browser editing. |
 
-> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+If you fork an adapter, keep `@docx-editor.dev/core` as a peer dependency to receive engine fixes.
 
 ## Available locales
 
@@ -98,19 +100,24 @@ import { locales } from '@docx-editor.dev/i18n';
 
 ## Per-locale subpaths
 
-For apps that pick the locale at runtime, the named exports above don't tree-shake — the bundler can't know which locale wins, so it ships them all. Use the per-locale subpaths instead. Each one bundles a single locale (~30KB) and code-splits cleanly:
+If you choose a locale at runtime, import its subpath to load only that locale. Static imports include it in the bundle. Dynamic imports let the bundler create a separate chunk:
 
 ```ts
-// Static — bundler ships only this locale's strings
+// Static import: include only this locale's strings.
 import pl from '@docx-editor.dev/i18n/pl';
+```
 
-// Dynamic — splits into its own chunk, loaded on demand
+For on-demand loading, use a dynamic import instead:
+
+```ts
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
 Subpaths ship for every locale: `/en`, `/de`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
+
+Import types to describe locale data and translation functions:
 
 ```ts
 import type {
@@ -140,8 +147,8 @@ t('navigation.find.total', { total: 15 }); // ICU plurals
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+To contribute, see [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
 
-## Commercial Support
+## Commercial support
 
-> [!TIP] Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+For commercial support or custom features, [email the support team](mailto:docx-editor@eigenpal.com).

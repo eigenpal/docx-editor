@@ -28,7 +28,7 @@ A supported subset covers only the listed objects and operations. It does not me
 | Sections and page setup | Partial | Section bodies, headers, footers, size, orientation, margins, page breaks, and next-page section breaks | Other break types fail. Missing header/footer stories are created on their first write. |
 | Footnotes and endnotes | Supported subset | Enumerate notes, read note bodies and text, move to the next note, and delete notes | Use `document.footnotes` and `document.endnotes`. These accessors differ from Office.js. |
 | Comments and replies | Partial | Read, create, reply, resolve, delete, and get the comment range | Writes need an explicit author. Browser writes also need the Pro review module and an editable document. Comment body replacement does not work. |
-| Tracked changes | Partial | Read actionable revisions, get their ranges, and accept or reject one revision or all revisions | The collection omits unsupported structural revision types. The entire collection decision fails if unsupported markup remains. |
+| Tracked changes | Partial | Create tracked text edits, read actionable revisions and their ranges, and accept or reject individual revisions or batches | `TrackMineOnly` supports text in one paragraph. `TrackAll` fails. `resolve()` skips unsupported groups; `acceptAll()` and `rejectAll()` fail if unsupported changes remain. |
 | Content controls | Partial | Common properties, nested controls, lookup by ID, tag, or title, text insertion, deletion, ranges, and typed value writes | The API does not expose typed Office.js subtype objects. The runtime rejects writes to custom XML-bound controls. |
 | Hyperlinks | Partial | Read or write `Range.hyperlink` | Standalone `Hyperlink` and `HyperlinkCollection` objects do not exist. |
 | Tables | Partial | Create rectangular tables, read/write values, add/delete rows and columns, set headers/styles/widths, and format cells | The runtime rejects structural edits on merged or unsupported tables. Existing cell content may prevent destructive value replacement. |
@@ -86,6 +86,7 @@ These common members extend the Office.js-compatible subset.
 | --- | --- |
 | `Body.bookmarks` | Enumerates bookmarks in one body story. |
 | `Body.revisions` | Enumerates revisions in one body story. |
+| `RevisionCollection.resolve()` | Resolves a selected batch or supported changes in one story and reports skipped decisions. |
 | `Document.footnotes` and `Document.endnotes` | Enumerate document notes. |
 | `NoteItem.text` | Reads the same plain text as `note.body.text`. |
 | `ContentControlCollection.getByTag()` and `getByTitle()` | Finds controls without a file ID. |

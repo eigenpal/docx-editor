@@ -1,6 +1,6 @@
 # Writer agent example
 
-This app interviews a user, creates a fresh DOCX, and proposes later edits as tracked changes. It keeps `examples/agent` unchanged.
+This app gathers document requirements, creates a DOCX, and proposes later edits as tracked changes.
 
 ## Run the example
 
@@ -56,8 +56,8 @@ The example uses workspace packages through `workspace:*`.
 - Plain-text content-control creation through the core automation protocol.
 - Tracked insertion, deletion, and replacement through browser editor commands.
 
-## Remaining API gaps
+## Implementation boundaries
 
-Editor-api cannot atomically replace all story blocks or create lists, tables, headers, footers, page fields, or content controls. The example uses browser commands for lists, tables, headers, footers, and page fields. It uses the core automation protocol for content-control creation.
+This example uses browser commands for lists, tables, headers, footers, and page fields. It uses the core automation protocol for body replacement and content-control creation. These choices describe the example implementation, not the supported editor API surface.
 
-No current editor-api or browser editor command sets section columns. The app reports this limitation and does not fake columns.
+For supported document operations and limitations, see the [editor API reference](../../docs/site/content/editor-api/reference.mdx). The example reports unsupported requests, including section columns.

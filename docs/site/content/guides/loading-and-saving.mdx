@@ -28,9 +28,9 @@ The editor takes the document through the `document` prop. The most common value
 </Framework>
 </FrameworkTabs>
 
-### Starting empty
+### Start with an empty document
 
-To open the editor on an empty page, pass `'blank'`. It is Word's blank template, with the same Calibri 11pt defaults a new document in Word has. It also carries Word's built-in style gallery: Heading 1 through Heading 9, Title, Subtitle, Quote, No Spacing, and List Paragraph.
+To open the editor on an empty page, pass `'blank'`. It uses Calibri at 11 points. It also carries Word's built-in style gallery: Heading 1 through Heading 9, Title, Subtitle, Quote, No Spacing, and List Paragraph.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -87,6 +87,8 @@ Call `blankDocumentBytes()` inside an event handler or into state, never inline 
 
 ### From a URL
 
+Fetch the document bytes and handle loading failures before mounting the editor:
+
 <FrameworkTabs>
 <Framework value="react">
 
@@ -96,19 +98,29 @@ import { DocxEditor } from '@docx-editor.dev/react';
 
 export function Editor({ url }: { url: string }) {
   const [doc, setDoc] = useState<Uint8Array>();
+  const [error, setError] = useState<string>();
 
   useEffect(() => {
-    let cancelled = false; // ignore stale responses if url changes
-    fetch(url)
-      .then((r) => r.arrayBuffer())
-      .then((buffer) => {
-        if (!cancelled) setDoc(new Uint8Array(buffer));
-      });
-    return () => {
-      cancelled = true;
-    };
+    const controller = new AbortController();
+    setDoc(undefined);
+    setError(undefined);
+
+    async function load() {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Load failed: ${response.status}`);
+        const buffer = await response.arrayBuffer();
+        if (!controller.signal.aborted) setDoc(new Uint8Array(buffer));
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(String(cause));
+      }
+    }
+
+    void load();
+    return () => controller.abort();
   }, [url]);
 
+  if (error) return <p role="alert">{error}</p>;
   return <DocxEditor document={doc} />;
 }
 ```
@@ -199,7 +211,7 @@ async function pick(event: Event) {
 </Framework>
 </FrameworkTabs>
 
-### Swapping documents at runtime
+### Replace a document at runtime
 
 To replace the document without remounting the component, use the ref:
 
@@ -224,12 +236,12 @@ editorRef.value?.load(nextBytes);
 </Framework>
 </FrameworkTabs>
 
-## Saving
+## Save a document
 
 Use one of these save paths:
 
 - `save()` on the ref returns `Promise<ArrayBuffer | null>`
-- The packaged File → Save action, which you override with `onSave` in React and the `@save` emit in Vue
+- The packaged **File > Save** action, which you override with `onSave` in React and the `@save` emit in Vue
 
 <FrameworkTabs>
 <Framework value="react">
@@ -282,26 +294,39 @@ async function downloadDocx(ref: DocxEditorRef, fileName: string) {
 
 ## Autosave
 
-Debounce the save call when the document reports a change:
+Debounce the save call when the document reports a change. These examples use your application's document endpoint.
+
+Render each autosave component with a key based on `docId`. This keeps its timers and pending saves associated with one document.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Array }) {
   const ref = useRef<DocxEditorRef>(null);
   const timer = useRef<number | null>(null);
 
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    []
+  );
+
   const onChange = () => {
-    if (timer.current) window.clearTimeout(timer.current);
+    if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
       try {
         const buf = await ref.current?.save();
         if (!buf) return;
-        await fetch(`/api/documents/${docId}`, { method: 'PUT', body: buf });
+        const response = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
+          method: 'PUT',
+          body: buf,
+        });
+        if (!response.ok) throw new Error(`Save failed: ${response.status}`);
       } catch (error) {
         console.error('Autosave failed', error);
       }
@@ -330,7 +355,11 @@ function onChange() {
     try {
       const buf = await editorRef.value?.save();
       if (!buf) return;
-      await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
+      const response = await fetch(`/api/documents/${encodeURIComponent(props.docId)}`, {
+        method: 'PUT',
+        body: buf,
+      });
+      if (!response.ok) throw new Error(`Save failed: ${response.status}`);
     } catch (error) {
       console.error('Autosave failed', error);
     }
@@ -350,7 +379,7 @@ onBeforeUnmount(() => {
 </Framework>
 </FrameworkTabs>
 
-Pick a debounce window that matches your backend's write tolerance. Use a 1–2 second debounce unless your API requires another interval.
+Choose a debounce interval that matches your API's write limits. For overlapping requests, use server-side revision checks to reject stale writes. Show save failures in your application so users can retry.
 
 ## Next steps
 

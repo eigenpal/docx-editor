@@ -5,7 +5,7 @@ category: 'Pro'
 order: 64
 ---
 
-The API surface of [custom nodes](/docs/2.x/pro/custom-nodes). Start with the guide if you have not built one yet.
+Use this reference to configure, read, write, and export custom nodes. For a complete example, see [Custom nodes](/docs/2.x/pro/custom-nodes).
 
 A node stores data in two places:
 
@@ -46,14 +46,16 @@ The payload is a customXml data part that the control binds to through `w:dataBi
 
 | Parameter | Type | When |
 | --- | --- | --- |
-| `preserveOnExport` | `boolean \| 'text'` | Controls whether export keeps, unwraps or removes the node. See [preserveOnExport](#preserveonexport). |
+| `preserveOnExport` | `boolean \| 'text'` | Controls whether export keeps, unwraps, or removes the node. See [preserveOnExport](#preserveonexport). |
 | `tagAttrs` | `(data) => Record<string, string>` | A reader without the payload store should still identify the node. |
-| `payloadNamespace` | `string` | You need a specific customXml namespace. Defaults to one from `tagPrefix`. It goes into an XPath prefix declaration, so quotes, angle brackets and ampersands are rejected. |
-| `fromDocx` | `({ attrs, text, data }) => attrs \| null` | The node has **no** schema and keeps its data in the tag, or you need to leave a control unrecognized by returning `null`. |
+| `payloadNamespace` | `string` | You need a specific customXml namespace. Defaults to one from `tagPrefix`. It goes into an XPath prefix declaration, so quotes, angle brackets, and ampersands are rejected. |
+| `fromDocx` | `({ attrs, text, data }) => attrs \| null` | The node has no schema and keeps its data in the tag, or you need to leave a control unrecognized by returning `null`. |
 
 The returned `CustomNode` carries [`dataOf`](#dataof) alongside the definition.
 
 ## customNodesModule
+
+Register the definitions and an optional diagnostic listener:
 
 ```ts
 customNodesModule({ nodes: [Citation], onDiagnostic });
@@ -203,9 +205,9 @@ if (!outgoing.ok) throw new Error(outgoing.reason);
 await email.attach(outgoing.bytes);
 ```
 
-List every definition whose nodes might be in the document. **A definition you do not pass is not touched**, and an unmatched node remains unchanged.
+List every definition whose nodes might be in the document. Export preserves nodes whose definitions you omit.
 
-`customNodeXml` and `prepareForExport` run without DOM globals, so a backend can author, store and strip custom nodes in Node.
+`customNodeXml` and `prepareForExport` run without DOM globals, so a backend can author, store, and strip custom nodes in Node.
 
 ## Server-side authoring
 

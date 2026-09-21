@@ -98,26 +98,26 @@ If model generation happens inside a run, commit against the revision that run r
 
 Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identifies the failing public member. Do not parse message strings. A failed sync does not apply its queued document edits or tracking-mode changes. Earlier successful syncs remain committed. Failed batches are discarded and are never automatically replayed.
 
-| Code                 | Next action                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `PropertyNotLoaded`  | Load the named property and await sync before reading it.                                                           |
-| `InvalidObjectPath`  | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run.                                    |
-| `StaleDocument`      | Re-read, re-anchor, and reconsider the model proposal.                                                              |
-| `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits.                                |
-| `NotSupported`       | Check the host, tracking mode, author, and operation against the subset below.                                      |
-| `NotImplemented`     | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
-| `InvalidArgument`    | Validate the argument and consult the member's JSDoc.                                                               |
+| Code | Next action |
+| --- | --- |
+| `PropertyNotLoaded` | Load the named property and await sync before reading it. |
+| `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. |
+| `StaleDocument` | Re-read, re-anchor, and reconsider the model proposal. |
+| `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits. |
+| `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
+| `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
+| `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
 
 ## Tracking subset
 
-| Intent                             | Office.js-compatible API                                               |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| Track this agent's text edits      | `context.document.changeTrackingMode = 'TrackMineOnly'`                |
-| Insert before or after a range     | `range.insertText(text, 'Before')` or `'After'`                        |
-| Replace a range                    | `range.insertText(text, 'Replace')`                                    |
-| Delete range content               | `range.delete()` or `range.clear()`                                    |
-| Read the current mode              | `document.load('changeTrackingMode')`, then sync and read the property |
-| Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'`                            |
+| Intent | Office.js-compatible API |
+| --- | --- |
+| Track this agent's text edits | `context.document.changeTrackingMode = 'TrackMineOnly'` |
+| Insert before or after a range | `range.insertText(text, 'Before')` or `'After'` |
+| Replace a range | `range.insertText(text, 'Replace')` |
+| Delete range content | `range.delete()` or `range.clear()` |
+| Read the current mode | `document.load('changeTrackingMode')`, then sync and read the property |
+| Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'` |
 
 `Off` is the initial runtime mode. Browser tracked writes require the review module; this property does not change the editor UI mode. `TrackMineOnly` needs a configured author and persists for that host session. It does not change peers' editing modes or persist a document-wide policy. `TrackAll` fails with `NotSupported`. Browser UI modes remain controlled by the editor host. Tracked edits support inline text in one paragraph, including table cells. The runtime rejects targets that touch pending revisions. The runtime rejects tracked deletion or replacement of simple fields containing nested fields or other result containers. Direct result runs remain supported. The runtime rejects structural and formatting edits while tracking changes. Comments and revision decisions remain available. Never silently fall back to `Off` when an edit cannot be tracked.
 

@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@docx-editor.dev/i18n": "2.21.1",
+    "@docx-editor.dev/core": "2.21.1",
+    "@docx-editor.dev/editor-api": "2.21.1",
+    "@docx-editor.dev/pro": "2.21.1",
+    "yjs": "13.6.32",
+    "y-protocols": "1.0.7",
+    "fflate": "0.8.3"
+  }
+}

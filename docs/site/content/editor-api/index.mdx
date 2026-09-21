@@ -41,11 +41,11 @@ Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and [Batching, load
 
 Use the root entry for server jobs and `/browser` to edit an open editor. For shared documents, use `DocxEditor.createCollaborative()` with your collaboration session.
 
-| Host          | Save through      | Requirements                                   |
-| ------------- | ----------------- | ---------------------------------------------- | --- | --------- |
-| Server        | `runtime.save()`  | DOCX bytes and Node.js `^20.16.0               |     | >=22.3.0` |
-| Browser       | The owning editor | An attached core, React, or Vue editor         |
-| Collaborative | `runtime.save()`  | DOCX bytes and an `EditorCollaborationSession` |
+| Host          | Save through      | Requirements                                    |
+| ------------- | ----------------- | ----------------------------------------------- |
+| Server        | `runtime.save()`  | DOCX bytes and Node.js `^20.16.0 \|\| >=22.3.0` |
+| Browser       | The owning editor | An attached core, React, or Vue editor          |
+| Collaborative | `runtime.save()`  | DOCX bytes and an `EditorCollaborationSession`  |
 
 Supply an `author` for comments, replies, and tracked edits. Browser review writes also require the Pro review module and an editable document. Capabilities describe host features; handle write errors from the call or `sync()`.
 

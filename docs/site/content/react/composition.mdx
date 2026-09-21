@@ -16,6 +16,9 @@ The packaged toolbar uses the hooks and primitives on this page. Your controls c
 | `DocxEditor.Root` | Every composed editor | Owns and provides the editor instance |
 | `DocxEditor.Viewport` | Every composed editor | Supplies the scroll container and page-layout classes |
 | `DocxEditor.Content` | Every composed editor | Mounts the painted document surface |
+| Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
+| `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
+| Container height | Every composed editor | Gives the viewport room to render |
 | Remount `key` | When you change modules | Loads the new modules |
 | Positioned workspace row | When you use the navigation pane | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
@@ -35,14 +38,17 @@ Compose the three required components in this order:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor({ bytes }: { bytes: Uint8Array }) {
   return (
-    <DocxEditor.Root document={bytes}>
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
+    <div className="docx-editor" style={{ height: '100vh' }}>
+      <DocxEditor.Root document={bytes}>
+        <DocxEditor.Viewport>
+          <DocxEditor.Content />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
   );
 }
 ```
@@ -78,12 +84,17 @@ For exact signatures, see the [React API reference](/docs/2.x/api/react).
 `Root` reads UI translations from `LocaleProvider`; it has no `i18n` prop. Set `locale` separately for regional date input. This example uses Polish for both:
 
 ```tsx
-import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { DocxEditor, LocaleProvider, useChromeTranslate } from '@docx-editor.dev/react';
 import { pl } from '@docx-editor.dev/i18n';
+
+function LocalizedToolbar() {
+  const t = useChromeTranslate();
+  return <DocxEditor.Toolbar t={t} />;
+}
 
 <LocaleProvider i18n={pl}>
   <DocxEditor.Root document={bytes} locale="pl-PL">
-    <DocxEditor.Toolbar />
+    <LocalizedToolbar />
     <DocxEditor.Viewport>
       <DocxEditor.Content />
     </DocxEditor.Viewport>
@@ -92,6 +103,8 @@ import { pl } from '@docx-editor.dev/i18n';
 ```
 
 Without the provider, UI strings remain English unless an ancestor supplies a catalog. See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
+
+For composed chrome, call `useChromeTranslate()` inside the locale provider and pass its result through each part's `t` prop.
 
 ## Customization options
 
@@ -594,6 +607,8 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 Composition lets you mount each part explicitly. Omitted parts do not render an interface. The packaged `<DocxEditor>` mounts the default part set.
 
 ## Layout constraints
+
+Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
 
 The navigation pane requires a positioning context. Place it beside the viewport in a row with `position: relative`. The pane uses absolute positioning over the document gutter. Without that context, it enters normal flow and moves the page.
 

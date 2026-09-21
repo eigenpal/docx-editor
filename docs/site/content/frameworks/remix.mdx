@@ -87,7 +87,7 @@ export function Editor() {
 The pattern solves two problems, one for SSR hydration and one for bundling:
 
 - The `mounted` guard renders the same loading markup on the server and on the first client paint, so hydration never mismatches. Without it, SSR would evaluate the editor and throw when `window` is undefined.
-- `lazy()` keeps the editor bundle out of the server build and out of the route's initial chunk.
+- `lazy()` defers the editor import until the component renders in the browser. It also separates the editor from the initial route chunk.
 
 ## Run the example
 

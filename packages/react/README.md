@@ -14,15 +14,19 @@
 
 # @docx-editor.dev/react
 
-WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the real paginated layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion backend: parsing and serialization both happen client-side.
+A visual `.docx` editor for React. Open a Word document, edit its paginated layout, and save a DOCX file. Parsing and serialization run in the browser.
 
-Saving has a lossless semantic round-trip. Untouched content, unsupported OOXML, and package payloads survive editing and save. Two oracles gate that in CI, so opening a document here cannot quietly destroy it.
+Saving preserves untouched content, unsupported OOXML, and package payloads. Continuous integration (CI) checks document structure and save-and-reopen behavior.
+
+Install the adapter and its required engine peer:
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 ## Quick start
+
+Import the stylesheet once and give the editor a container with a defined height:
 
 ```tsx
 import { useState } from 'react';
@@ -52,7 +56,7 @@ export function App() {
 
 `<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, context menu, and the painted document. It fills its parent, so give it a box with a real height, and import the stylesheet once.
 
-> **Next.js / SSR:** the editor measures text in the DOM at mount, so render it client-side (`dynamic(..., { ssr: false })`).
+For Next.js and server-side rendering (SSR), load the editor in the browser. Use `dynamic(..., { ssr: false })` inside a Client Component.
 
 ## Build your own UI
 
@@ -70,7 +74,7 @@ function BoldButton() {
       disabled={!bold.isEnabled}
       data-active={bold.isActive || undefined}
     >
-      B
+      Bold
     </button>
   );
 }
@@ -93,23 +97,23 @@ The customization ladder, in order: `className` and `data-active` → the `icon`
 
 ## Hooks
 
-| Hook                                           | What it gives you                                    |
-| ---------------------------------------------- | ---------------------------------------------------- |
-| `useEditorCommand(slot)`                       | `execute`, `isActive`, `isEnabled`, `disabledReason` |
-| `useEditorState(selector)`                     | A memoized slice of the editor snapshot              |
-| `useDocxEditor()`                              | The editor instance, or `null` before mount          |
-| `useEditorEvent(event, fn)`                    | `change`, `selectionChange`, `error`                 |
-| `useFontFamily()` / `useParagraphStyle()`      | Value controls: current value, options, setter       |
-| `usePageSetup()`                               | Margins, orientation, paper size                     |
-| `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless                        |
-| `useContentControl()`                          | Word content controls at the caret                   |
+| Hook | What it gives you |
+| --- | --- |
+| `useEditorCommand(slot)` | `execute`, `isActive`, `isEnabled`, `disabledReason` |
+| `useEditorState(selector)` | A memoized slice of the editor snapshot |
+| `useDocxEditor()` | The editor instance, or `null` before mount |
+| `useEditorEvent(event, fn)` | `change`, `selectionChange`, `error` |
+| `useFontFamily()` / `useParagraphStyle()` | Value controls: current value, options, setter |
+| `usePageSetup()` | Margins, orientation, paper size |
+| `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless |
+| `useContentControl()` | Word content controls at the caret |
 
 Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine. Read `isEnabled` and show `disabledReason`.
 
 ## Companion packages
 
 - [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked changes, comments, custom nodes
-- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — Office.js-compatible editing API, on a server or against an open editor
+- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — A supported subset of the Word Office.js API for server and browser editing
 - [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine this adapter renders
 
 ## Documentation

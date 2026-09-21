@@ -7,7 +7,7 @@ seoTitle: 'Content controls (SDTs)'
 
 Word content controls (`w:sdt`, structured document tags) mark regions you can fill from code. Create a template in Word, tag its fillable regions, and use `tag`, `title`, or `id` to find each control.
 
-The editor displays control boundaries and supports the editing operations below. It preserves unsupported properties, including `w:dataBinding` and `w15:repeatingSection`, when you save.
+The editor displays control boundaries and provides typed operations to read and edit controls. It preserves unsupported properties, including `w:dataBinding` and `w15:repeatingSection`, when you save.
 
 <Callout>
   Content controls are addressed by `tag`, `title`, or `id`. They are not `{{ mustache }}` template
@@ -277,7 +277,7 @@ Use `popups.contentControl` for the inspector. To customize value entry, choose:
 
 Omit an entry to keep the engine's default behavior. In React and Vue, `DocxEditorContentControlWidget` provides composable parts and `useContentControlWidget()` exposes their draft state and actions. The root handles placement, keyboard navigation, dismissal, and focus return.
 
-See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up) for React and Vue examples, custom actions, and styling hooks.
+See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-popup) for React and Vue examples, custom actions, and styling hooks.
 
 Picture picks reject files larger than 32 MiB before reading them. A failed pick keeps a file input and an error message available for retry. Canceling the session, closing the editor, or entering suggesting mode during decoding prevents the write. Successful replacement clears placeholder state and removes a temporary control in the same undo step as the image change.
 

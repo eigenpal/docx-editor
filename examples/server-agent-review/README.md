@@ -24,13 +24,16 @@ Open `http://localhost:5180`. This command builds the workspace packages and sta
 
 ## Architecture
 
-```text
-Browser A ─┐
-           ├─ Hocuspocus (Yjs room + persistence) ─ Node worker peer
-Browser B ─┘                                      │
-                                                  ├─ headless editor-api
-Browser instruction panel ─ HTTP start/cancel ────┤
-Browser progress panel ← SSE job snapshots ───────┘
+Browsers and the worker share one room. HTTP requests control jobs; server-sent events (SSE) deliver progress:
+
+```mermaid
+flowchart LR
+  A[Browser A] <--> H[Hocuspocus room and persistence]
+  B[Browser B] <--> H
+  H <--> W[Node.js worker]
+  W --> E[Headless editor API]
+  I[Browser instruction panel] -->|HTTP start or cancel| W
+  W -->|SSE job snapshots| P[Browser progress panel]
 ```
 
 - `server/collaboration.ts` authenticates peers and stores `.ydoc` room state plus `.docx` exports. The Yjs state is the source for rejoining; exported DOCX bytes never replace an active room.
@@ -96,7 +99,7 @@ try {
 }
 ```
 
-For insertions use `range.insertText(text, 'Before' | 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported, as are structural or formatting mutations while tracking. Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
+For insertions, use `range.insertText(text, 'Before')` or `range.insertText(text, 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported, as are structural or formatting mutations while tracking. Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
 
 ## Office.js developer patterns
 
@@ -107,6 +110,8 @@ Each model tool has a focused schema: insertion requires text and an explicit po
 The worker batches paragraph reads, serializes tool calls, and commits one suggestion at a time. Each commit becomes available for review while the job continues.
 
 ## Client integration
+
+Connect the React editor to the room and enable review controls:
 
 ```tsx
 import { reviewModule } from '@docx-editor.dev/pro';

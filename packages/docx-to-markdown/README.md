@@ -77,7 +77,6 @@ The package uses the Apache 2.0 license, including comment and tracked-change ex
 ## Next steps
 
 - [Configure fonts and troubleshoot page layout](docs/fonts.md).
-
 - [Include and deliver images](docs/images.md).
 - [Connect the converter to your application](docs/integrations.md).
 - [Review export options and result fields](docs/api.md).

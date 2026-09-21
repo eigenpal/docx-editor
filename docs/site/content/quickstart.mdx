@@ -1,7 +1,7 @@
 ---
 title: 'Quickstart'
 description: 'Load, edit, and save a .docx in the browser with React or Vue. Minimal setup: a file input, the editor component, and a download button, in one file.'
-category: 'Getting Started'
+category: 'Getting started'
 ---
 
 This page builds a browser editor that opens a local `.docx` and downloads the edited document.
@@ -31,13 +31,13 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 </Framework>
 </FrameworkTabs>
 
-On Next.js, Nuxt, Remix, or other SSR frameworks the editor must render client-side; mounting it during SSR throws `window is not defined`. Use the recipe in [Installation](/docs/2.x/installation). The code below works without further configuration in client-rendered apps such as Vite.
+For server-side rendering (SSR) frameworks such as Next.js, Nuxt, and Remix, render the editor only on the client. Use the client-only setup in [Installation](/docs/2.x/installation). This example works in client-rendered apps such as Vite.
 
 </Step>
 
 <Step>
 
-### Load, edit, save
+### Load, edit, and save
 
 This example puts load, edit, and save in one file. A file input supplies bytes to the editor, the editor supports editing (typing, formatting, undo, tables), and a button serializes the current state back to a `.docx` download.
 
@@ -162,7 +162,7 @@ async function download() {
 Notes for this example:
 
 - `document` takes a `Uint8Array`, an `ArrayBuffer`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
-- `mode` is `'edit'` (default), `'view'`, or `'suggesting'`, and is read at mount. Remount to change it.
+- `mode` is `'edit'` (default), `'view'`, or `'suggesting'`. Changes apply without a remount. Suggesting mode requires a review module and a non-empty `author`.
 - `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document stays in the browser; no server upload occurs.
 - The editor fills its parent, so give the parent a non-zero CSS height. The stylesheet import is required once per app.
 
@@ -178,7 +178,9 @@ Load a template from your own server instead:
 <Framework value="react">
 
 ```ts
-const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBuffer()));
+const response = await fetch('/template.docx');
+if (!response.ok) throw new Error(`Load failed: ${response.status}`);
+const bytes = new Uint8Array(await response.arrayBuffer());
 // <DocxEditor document={bytes} />
 ```
 
@@ -197,7 +199,7 @@ const { document: bytes, isLoading } = useDocxSource('/template.docx');
 </Framework>
 </FrameworkTabs>
 
-To react to the built-in Save action (Cmd+S, or File → Save) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes from the ref:
+To react to the built-in Save action (Command+S or **File > Save**) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes from the ref:
 
 <FrameworkTabs>
 <Framework value="react">

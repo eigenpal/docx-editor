@@ -9,7 +9,7 @@ The example has two parts:
 
 ## Run the example
 
-Use Node 22.18 or later for the server. Hocuspocus v4 targets Node, and Node runs the TypeScript server with type stripping.
+Use Node.js 22.18 or later for the server. Hocuspocus v4 targets Node, and Node runs the TypeScript server with type stripping.
 
 Install and build from the repository root:
 
@@ -66,11 +66,13 @@ Replace `onLoadDocument` and `onStoreDocument` when you need database or object 
 
 Preserve local and offline edits before reloading browser tabs. Upgrade the app, room server, and export workers together. The server rejects incompatible clients before synchronization.
 
-For saved rooms and offline work, follow the [collaboration upgrade guide](https://www.docx-editor.dev/docs/latest/pro/collaboration-versions). Pause editing and preserve pending work before exporting with the compatible previous build. Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
+For saved rooms and offline work, follow the [collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions). Pause editing and preserve pending work before exporting with the compatible previous build. Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
 
 This demo does not automatically migrate or delete incompatible rooms. Its sample app seeds rooms from `DOCUMENT_URL`; change that source to the verified DOCX for the replacement room. Keep the old room and its backups until you accept the migration.
 
 ### Check admission and recovery
+
+Run the example tests from the repository root:
 
 ```bash
 bun run --filter docx-editor-example-collaboration-hocuspocus test
