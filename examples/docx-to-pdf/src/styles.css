@@ -1334,3 +1334,45 @@ button {
     display: none;
   }
 }
+
+/* The converted PDF, one canvas per page, fitted to the pane like the editor's own pages. */
+.pdf-viewer {
+  display: grid;
+  width: min(100%, 816px);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 30px;
+}
+
+.pdf-viewer-page {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--pdf-line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.06),
+    0 8px 24px rgb(15 23 42 / 0.08);
+}
+
+.pdf-viewer-page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pdf-viewer-page--pending {
+  aspect-ratio: 8.5 / 11;
+}
+
+.pdf-viewer-page-number {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--pdf-chip);
+  color: var(--pdf-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}

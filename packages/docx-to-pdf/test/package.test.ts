@@ -21,7 +21,7 @@ test('package stays private and the encoder does not reshape text', () => {
 });
 test('sample exports in strict mode and uses physical page geometry', async () => {
   const source = new Uint8Array(
-    readFileSync(new URL('../../../examples/docx-to-pdf/public/sample.docx', import.meta.url))
+    readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
   );
   const result = await exportPdf(source);
   const pdf = await PDFDocument.load(result.bytes);
@@ -48,6 +48,6 @@ test('fallback font binaries match the recorded inputs and carry their own licen
       );
   }
   expect(
-    readFileSync(new URL('../../../examples/docx-to-pdf/public/sample.docx', import.meta.url))
+    readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
   ).toEqual(readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url)));
 });

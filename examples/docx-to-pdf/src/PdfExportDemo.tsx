@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
+import { PdfViewer } from './PdfViewer';
 import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
 import {
   emptyStateMessage,
@@ -23,29 +24,13 @@ const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const EDITOR_PACKAGED_FONTS = packagedFonts();
 type MobilePane = 'source' | 'pdf';
 
+/** Material Symbols `picture_as_pdf`, inline like every other icon in this repository. */
 function PdfIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <svg width="18" height="18" viewBox="0 -960 960 960" aria-hidden="true" focusable="false">
       <path
-        d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M14 3v5h5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 17v-4h1.6a1.2 1.2 0 0 1 0 2.4H9m4.6 1.6V13h1.2a2 2 0 0 1 0 4h-1.2m4.2 0v-4h2.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
+        fill="currentColor"
+        d="M360-460h40v-80h40q17 0 28.5-11.5T480-580v-40q0-17-11.5-28.5T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.5-11.5T640-500v-120q0-17-11.5-28.5T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.5-23.5T240-320v-480q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.5-23.5T80-160v-560h80v560h560v80H160Zm160-720v480-480Z"
       />
     </svg>
   );
@@ -168,6 +153,7 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
       const bytes = Uint8Array.from(atob(payload.pdf), (character) => character.charCodeAt(0));
       setResult({
         url: URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })),
+        data: bytes,
         bytes: bytes.byteLength,
         pageCount: payload.pageCount ?? 0,
         diagnostics: payload.diagnostics ?? [],
@@ -373,15 +359,7 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
           {result ? (
             <>
               <div className={`pdf-pages${stale ? ' pdf-pages--stale' : ''}`}>
-                <object data={result.url} type="application/pdf" aria-label="Converted PDF preview">
-                  <p className="pdf-empty-state">
-                    This browser cannot display a PDF inline.{' '}
-                    <a href={result.url} download="document.pdf">
-                      Download it instead
-                    </a>
-                    .
-                  </p>
-                </object>
+                <PdfViewer bytes={result.data} pageCount={result.pageCount} />
               </div>
               <div className="pdf-page-meta" role="status" aria-live="polite">
                 {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}

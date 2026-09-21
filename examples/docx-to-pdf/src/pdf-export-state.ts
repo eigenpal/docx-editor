@@ -13,6 +13,8 @@ export interface PdfDiagnostic {
 
 export interface PdfConversion {
   readonly url: string;
+  /** The PDF itself, for the viewer; `url` is the same bytes as a download link. */
+  readonly data: Uint8Array;
   readonly bytes: number;
   readonly pageCount: number;
   readonly diagnostics: readonly PdfDiagnostic[];

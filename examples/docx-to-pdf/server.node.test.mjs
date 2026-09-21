@@ -53,7 +53,7 @@ test('Node worker converts a DOCX, rejects bad input, and recovers', { skip: ski
   await once(app.server, 'listening');
   const base = `http://127.0.0.1:${app.server.address().port}`;
   try {
-    const bytes = await readFile(new URL('./public/sample.docx', import.meta.url));
+    const bytes = await readFile(new URL('../vite/public/sample.docx', import.meta.url));
     const invalid = await send(`${base}/api/convert`, { method: 'POST', body: 'bad docx' });
     assert.equal(invalid.status, 400);
     // A fixed message: the open error's own text names the zip entry that failed, which is

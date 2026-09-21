@@ -178,7 +178,7 @@ export async function createPdfDemo({
         res.writeHead(200, {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         });
-        res.end(await readFile(resolve(root, 'public/sample.docx')));
+        res.end(await readFile(resolve(root, '../vite/public/sample.docx')));
       } catch {
         res.writeHead(404);
         res.end();

@@ -1,15 +1,45 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
-import { defineConfig, type UserConfig } from 'vite';
+import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
+const sampleDocument = path.join(monorepoRoot, 'examples/vite/public/sample.docx');
+
+/** Serve the canonical public sample without checking a second copy into the repository. */
+function sampleDocumentPlugin(): Plugin {
+  return {
+    name: 'docx-to-pdf-sample-document',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (request.url?.split('?')[0] !== '/sample.docx') return next();
+        void readFile(sampleDocument)
+          .then((bytes) => {
+            response.setHeader(
+              'Content-Type',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            );
+            response.end(bytes);
+          })
+          .catch(next);
+      });
+    },
+    async generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sample.docx',
+        source: await readFile(sampleDocument),
+      });
+    },
+  };
+}
 
 export default defineConfig(
   (): UserConfig => ({
     // The combined demo deployment serves this app under `/docx-to-pdf/`, the same way it
     // serves the Markdown demo; `bun run dev:pdf` keeps the root.
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react()],
+    plugins: [react(), sampleDocumentPlugin()],
     root: __dirname,
     resolve: {
       // Build the browser bundle from workspace sources so the preview build needs no
