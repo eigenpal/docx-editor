@@ -767,33 +767,53 @@ describe('the eastAsia font slot cascades from docDefaults to the painted spans'
 });
 
 describe('cache token theme material', () => {
-  test('a theme that leaves optional faces undefined still keys the table', () => {
-    // A theme part with no East Asian, complex-script, or supplemental scheme hands the
-    // cascade `undefined` for those faces. The comparator behind the cache token refuses
-    // `undefined`, which once failed layout for every such document.
-    const sparse = {
-      major: 'Aptos Display',
-      minor: 'Aptos',
-      majorEastAsia: undefined,
-      minorEastAsia: undefined,
-      majorSupplemental: undefined,
-      minorSupplemental: undefined,
-    };
-    const withoutStyles = buildStyleCascadeTable(null, sparse);
-    expect(withoutStyles.cacheToken).toMatch(/^[0-9a-f]{16}$/);
-    // Absent and null mean the same theme, so they must share a token.
-    const explicit = buildStyleCascadeTable(null, {
-      major: 'Aptos Display',
-      minor: 'Aptos',
-      majorEastAsia: null,
-      minorEastAsia: null,
-      majorBidi: null,
-      minorBidi: null,
-    });
-    expect(explicit.cacheToken).toBe(withoutStyles.cacheToken);
-    // A real face still changes the token.
-    expect(
-      buildStyleCascadeTable(null, { ...sparse, minorEastAsia: 'Yu Mincho' }).cacheToken
-    ).not.toBe(withoutStyles.cacheToken);
-  });
+  test.each([true, false])(
+    'undefined theme faces still key the table (styles: %s)',
+    (withStyles) => {
+      // A theme part with no East Asian, complex-script, or supplemental scheme hands the
+      // cascade `undefined` for those faces. The comparator behind the cache token refuses
+      // `undefined`, which once failed layout for every such document.
+      const sparse = {
+        major: 'Aptos Display',
+        minor: 'Aptos',
+        majorEastAsia: undefined,
+        minorEastAsia: undefined,
+        majorBidi: undefined,
+        minorBidi: undefined,
+        majorSupplemental: undefined,
+        minorSupplemental: undefined,
+      };
+      const styles = withStyles ? loadStyles(DOC_DEFAULTS) : null;
+      const table = buildStyleCascadeTable(styles, sparse);
+      expect(table.cacheToken).toMatch(/^[0-9a-f]{16}$/);
+      // Absent and null mean the same theme, so they must share a token.
+      const explicit = buildStyleCascadeTable(styles, {
+        major: 'Aptos Display',
+        minor: 'Aptos',
+        majorEastAsia: null,
+        minorEastAsia: null,
+        majorBidi: null,
+        minorBidi: null,
+      });
+      expect(explicit.cacheToken).toBe(table.cacheToken);
+      // Normalization must keep every real face in the cache key.
+      for (const slot of [
+        'major',
+        'minor',
+        'majorEastAsia',
+        'minorEastAsia',
+        'majorBidi',
+        'minorBidi',
+      ]) {
+        expect(
+          buildStyleCascadeTable(styles, { ...sparse, [slot]: 'Fixture Font' }).cacheToken
+        ).not.toBe(table.cacheToken);
+      }
+      for (const slot of ['majorSupplemental', 'minorSupplemental']) {
+        expect(
+          buildStyleCascadeTable(styles, { ...sparse, [slot]: { Jpan: 'Yu Mincho' } }).cacheToken
+        ).not.toBe(table.cacheToken);
+      }
+    }
+  );
 });
