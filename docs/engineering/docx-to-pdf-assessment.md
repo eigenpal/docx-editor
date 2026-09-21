@@ -17,7 +17,7 @@ This assessment compares `main` at `baae2a5fc` with the locally available `origi
 - Its planner converts a span to text and a rectangle. Its writer calls `doc.widthOfString()` and `doc.text()`, then scales the independently shaped text to the rectangle width. Matching the total width cannot preserve each glyph's position or a shaping cluster's boundaries.
 - The writer reports `shaped-glyph-run` for every painted text span. The strict export test expects even a simple text document to fail.
 - The prototype documents images, table borders, equations, notes, and reusable sessions as deferred. Cell text and shading do not constitute table fidelity.
-- The branch's merge-base diff touches 43 Core files, including wrapping, paragraph borders, list resolution, and page geometry. These changes need independent validation before adoption.
+- The branch's merge-base diff touches 43 Core files, including wrapping, paragraph borders, list resolution, and page geometry. These changes need independent review before adoption.
 
 The original plan is under `openspec/changes/docx-to-pdf-export/` on the PDF branch. Its requirement to encode Core's shaped glyphs remains the right gate.
 
