@@ -7,6 +7,7 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "paths": {
+      "@/*": ["./src/vendor/extend-ui/*"],
       "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
       "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
       "@docx-editor.dev/docx-to-pdf": ["../../packages/docx-to-pdf/src/index.ts"],

@@ -398,10 +398,8 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         >
           {result ? (
             <>
-              <div className="pdf-preview-scroll">
-                <div className={`pdf-pages${stale ? ' pdf-pages--stale' : ''}`}>
-                  <PdfViewer bytes={result.data} pageCount={result.pageCount} />
-                </div>
+              <div className={`pdf-preview-viewer${stale ? ' pdf-preview-viewer--stale' : ''}`}>
+                <PdfViewer src={result.url} />
               </div>
               <div className="pdf-page-meta" role="status" aria-live="polite">
                 {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}

@@ -1,10 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
 const sampleDocument = path.join(monorepoRoot, 'examples/vite/public/sample.docx');
+// The vendored Extend UI PDF viewer (shadcn registry item) imports through shadcn's `@/`
+// alias; it resolves into the vendored tree only, never into first-party demo code.
+const vendoredUi = path.join(__dirname, 'src/vendor/extend-ui');
 
 /** Serve the canonical public sample without checking a second copy into the repository. */
 function sampleDocumentPlugin(): Plugin {
@@ -39,13 +43,16 @@ export default defineConfig(
     // The combined demo deployment serves this app under `/docx-to-pdf/`, the same way it
     // serves the Markdown demo; `bun run dev:pdf` keeps the root.
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react(), sampleDocumentPlugin()],
+    // Tailwind v4 serves only the vendored viewer: `src/pdf-viewer.css` scopes its preflight and
+    // scans just `src/vendor/`, so the demo's own chrome keeps its plain CSS.
+    plugins: [react(), tailwindcss(), sampleDocumentPlugin()],
     root: __dirname,
     resolve: {
       // Build the browser bundle from workspace sources so the preview build needs no
       // package `dist/`. The conversion itself never runs in the browser; the page posts
       // the document to `/api/convert`.
       alias: [
+        { find: /^@\//, replacement: `${vendoredUi}/` },
         {
           find: /^@docx-editor\.dev\/react$/,
           replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),

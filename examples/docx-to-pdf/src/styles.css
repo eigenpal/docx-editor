@@ -593,22 +593,23 @@ button {
   border-top: 1px solid #eceff3;
 }
 
-.pdf-preview-scroll {
-  position: relative;
+.pdf-panel--preview {
+  container-type: inline-size;
+}
+
+/* The Extend viewer fills the pane and scrolls inside its own viewport. */
+.pdf-preview-viewer {
+  display: flex;
   min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow: auto;
-  overscroll-behavior: contain;
-  background:
-    radial-gradient(circle at 50% 0, rgb(255 255 255 / 66%), transparent 28rem),
-    var(--pdf-workspace);
-  scrollbar-color: #bcc2ca transparent;
-  scrollbar-width: thin;
+  flex-direction: column;
+  opacity: 1;
+  transition: opacity 160ms ease;
 }
 
-.pdf-panel--preview {
-  container-type: inline-size;
+.pdf-preview-viewer--stale {
+  opacity: 0.58;
 }
 
 .pdf-diagnostics {
@@ -634,39 +635,6 @@ button {
 
 .pdf-diagnostics li {
   margin: 2px 0;
-}
-
-/* The pages scroll inside the pane, over the same workspace wash as the Markdown preview. */
-.pdf-preview-scroll {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  overscroll-behavior: contain;
-  background:
-    radial-gradient(circle at 50% 0, rgb(255 255 255 / 66%), transparent 28rem),
-    var(--pdf-workspace);
-  scrollbar-color: #bcc2ca transparent;
-  scrollbar-width: thin;
-}
-
-.pdf-pages {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: 30px;
-  padding: 28px clamp(18px, 4vw, 54px) 64px;
-  opacity: 1;
-  transition: opacity 160ms ease;
-}
-
-.pdf-pages--updating {
-  opacity: 0.46;
-}
-
-.pdf-pages--stale {
-  opacity: 0.58;
 }
 
 .pdf-page-wrap {
@@ -928,12 +896,13 @@ button {
   font-style: italic;
 }
 
+/* Centered in the preview pane (a column flexbox) both ways. */
 .pdf-empty-state {
   display: inline-flex;
   width: fit-content;
   align-items: center;
   gap: 7px;
-  margin: 18px;
+  margin: auto;
   padding: 8px 10px;
   border: 1px solid var(--pdf-line);
   border-radius: 8px;
@@ -1186,11 +1155,6 @@ button {
     height: 30px;
   }
 
-  .pdf-pages {
-    gap: 22px;
-    padding: 18px 10px 42px;
-  }
-
   .pdf-page-sheet {
     min-height: calc((100vw - 22px) * 1.294);
     padding: 32px 28px;
@@ -1247,7 +1211,6 @@ button {
   .pdf-button,
   .pdf-icon-button,
   .pdf-segmented button,
-  .pdf-pages,
   .pdf-drop-overlay,
   .pdf-drop-card,
   .pdf-resize-handle::after {
@@ -1373,46 +1336,4 @@ button {
   .pdf-demo--embedded .pdf-source-identity {
     display: none;
   }
-}
-
-/* The converted PDF, one canvas per page, fitted to the pane like the editor's own pages. */
-.pdf-viewer {
-  display: grid;
-  width: min(100%, 816px);
-  grid-template-columns: minmax(0, 1fr);
-  gap: 30px;
-}
-
-.pdf-viewer-page {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--pdf-line);
-  border-radius: 2px;
-  background: #fff;
-  box-shadow:
-    0 1px 2px rgb(15 23 42 / 0.06),
-    0 8px 24px rgb(15 23 42 / 0.08);
-}
-
-.pdf-viewer-page canvas {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.pdf-viewer-page--pending {
-  aspect-ratio: 8.5 / 11;
-}
-
-.pdf-viewer-page-number {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--pdf-chip);
-  color: var(--pdf-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
 }
