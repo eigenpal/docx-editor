@@ -52,24 +52,36 @@ async function baselines(body: string): Promise<number[]> {
 // and the rounded ascent gives 43, so the branch is observable rather than coincident.
 const HALF_POINTS = 22;
 const WORD = 'ttttt ';
-const paragraph = (words: number): string =>
-  `<w:p><w:r><w:rPr><w:sz w:val="${HALF_POINTS}"/></w:rPr>` +
+const paragraph = (words: number, after: number): string =>
+  `<w:p><w:pPr><w:spacing w:after="${after}"/></w:pPr>` +
+  `<w:r><w:rPr><w:sz w:val="${HALF_POINTS}"/></w:rPr>` +
   `<w:t xml:space="preserve">${WORD.repeat(words).trim()}</w:t></w:r></w:p>`;
 
-// A line that ENDS its paragraph rounds its ascent; every other line lets the baseline fall
-// between a gridded natural box and a gridded descent. The two differ by one device unit for
-// this face, so the SAME line moves when text after it turns it into an ordinary line.
-//
-// Controls rendered by Word put a paragraph's last line one unit below the box rule at every
-// length from one line to six. See `VALIDATION.md`.
-test('the line that ends a paragraph rounds its ascent', async () => {
-  const short = await baselines(paragraph(48));
-  const long = await baselines(paragraph(96));
+/** How far the last line of a paragraph moves when text after it makes it an ordinary line. */
+async function lastLineShiftInUnits(after: number): Promise<number> {
+  const short = await baselines(paragraph(48, after));
+  const long = await baselines(paragraph(96, after));
   expect(short.length).toBeGreaterThanOrEqual(3);
   expect(long.length).toBeGreaterThan(short.length);
   // Every line before the last is laid out identically in both documents.
   for (let i = 0; i < short.length - 1; i += 1) expect(long[i]).toBeCloseTo(short[i]!, 6);
-  // The last line of the short paragraph is that same line, and it sits ONE unit lower.
   const last = short.length - 1;
-  expect(Math.round((short[last]! - long[last]!) / GRID)).toBe(1);
+  return Math.round((short[last]! - long[last]!) / GRID);
+}
+
+// A line that ends a paragraph WITH after-spacing rounds its ascent; every other line lets the
+// baseline fall between a gridded natural box and a gridded descent. The two differ by one
+// device unit for this face, so the SAME line moves when text after it makes it ordinary.
+//
+// Controls rendered by Word place such a last line one unit lower at every paragraph length
+// from one line to six. See `VALIDATION.md`.
+test('the line that ends a spaced paragraph rounds its ascent', async () => {
+  expect(await lastLineShiftInUnits(120)).toBe(1);
+});
+
+// The spacing is what decides it, not the paragraph end. Two Word renders identical but for
+// `w:after` place the same line, at the same position, a unit apart. Without this case a rule
+// keyed on the paragraph end alone passes, and it moves every header line in the corpus.
+test('a paragraph with no after-spacing keeps the box rule on its last line', async () => {
+  expect(await lastLineShiftInUnits(0)).toBe(0);
 });

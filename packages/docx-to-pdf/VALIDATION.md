@@ -621,23 +621,36 @@ Snapping the unit count back to the nearest half within a part in 1e9 fixes it. 
 
 The existing tie fixture could not have caught this. Its positions are whole and half points that are exact in binary, so its ties arrive exact. A fixture at `w:line="201"` does catch it: twelve 10.05pt lines from a 72pt margin deliver 836.4999999999999 and twenty deliver 1171.5000000000005, drift in both directions, five ties on one page.
 
-### The line that ends a paragraph rounds its ascent
+### After-spacing decides how a paragraph's last line rounds
 
-The baseline rule has two branches, and which one a line takes depends on whether it ends its paragraph.
+The baseline rule has two branches, and which one the last line of a paragraph takes depends on whether the paragraph carries after-spacing.
 
-`issue-740-header-zero-distance.docx` differed from the reference on a scattered set of lines that no rounding threshold explained: the fractions .870833 and .8625 sit either side of no boundary, yet one agreed and the other did not. The differing lines had a shape instead, so three controls went through Word to test it.
+`issue-740-header-zero-distance.docx` differed on a scattered set of lines that no rounding threshold explained: the fractions .870833 and .8625 sit either side of no boundary, yet one agreed and the other did not. The differing lines had a shape instead, so controls went through Word to test it.
 
-| Control                                       | Shape        | Lines differing before         |
-| --------------------------------------------- | ------------ | ------------------------------ |
-| Four paragraphs of four lines                 | uniform      | the fourth of each, 4 in total |
-| Paragraphs of 1, 2, 3, 5 and 6 lines          | varying      | indices 0, 2, 5, 10, 16        |
-| Three paragraphs, marks at 2pt, 12pt and 24pt | varying mark | 2                              |
+| Control                                               | Shape        | Lines differing at first |
+| ----------------------------------------------------- | ------------ | ------------------------ |
+| Four paragraphs of four lines, `w:after="120"`        | uniform      | the fourth of each, 4    |
+| Paragraphs of 1, 2, 3, 5 and 6 lines, `w:after="120"` | varying      | indices 0, 2, 5, 10, 16  |
+| Three paragraphs, marks at 2pt, 12pt and 24pt         | varying mark | 2                        |
+| A header and a body, `w:after="0"`                    | with header  | 4                        |
+| Four paragraphs, `w:after="0"`                        | uniform      | 4                        |
+| Four paragraphs, `w:after="120"`                      | uniform      | 0                        |
 
-The second control settles it. Its differing indices are exactly the last line of each paragraph, at every length, including a paragraph of one line. Within a paragraph this engine's steps are perfectly uniform, so the reference is displacing that line rather than rounding it differently.
+The second control looks like it settles the rule: its differing indices are exactly the last line of each paragraph, at every length, including a paragraph of one line. That reading is wrong, and the last two controls are why. They are identical but for `w:after`. Word places the SAME line, at the same position, with the same metrics, one device unit apart between them. With `w:after="0"` every line takes the box rule, headers included.
 
-The third control explains why. A 24pt paragraph mark makes the last line's box taller than natural, the existing fallback fires, the ascent is rounded, and the reference already agreed there. The rule generalises that case: the line carrying the paragraph mark rounds its ascent whatever size the mark is. For Times New Roman at 12pt the box rule gives 46 device units and the rounded ascent gives 47, and applying 47 to last lines alone reproduces all nine lines of that control exactly.
+A rule keyed on the paragraph end alone passes the first three controls, because all three carry `w:after="120"`. It also moves every header line in the corpus, since a header paragraph usually has no after-spacing — which is how the mistake showed itself, as a one-unit regression on the header of the very document it was meant to fix.
 
-All three controls go to zero differing lines. Against Word, `issue-740-header-zero-distance.docx` improves from 1.600% to 1.287%, and its worst page from 2.862% to 2.507%. No other Word comparison moves at all, because the two branches agree for most faces and sizes: DejaVu Sans differs at 11pt and agrees at 10, 12, 13, 14 and 15pt.
+The third control shows the mechanism is the paragraph mark. A 24pt mark makes the last line's box taller than natural, the rule's own fallback fires, the ascent is rounded, and Word already agreed there. For Times New Roman at 12pt the box rule gives 46 device units and the rounded ascent gives 47, and applying 47 to spaced last lines alone reproduces all nine lines of that control exactly.
+
+All six controls go to zero differing lines. Every one of the 43 baselines on page 1 of `issue-740-header-zero-distance.docx`, and both on page 2, now match Word exactly. Against Word it improves from 1.600% to 1.284%, and its worst page from 2.862% to 2.505%. What remains on that page is horizontal and smaller than a device unit.
+
+No other Word comparison moves, because the two branches agree for most faces and sizes: DejaVu Sans differs at 11pt and agrees at 10, 12, 13, 14 and 15pt.
+
+#### Gridding the horizontal origin is right, and Word's own x values are not on the grid
+
+Word's raw stream for that document writes exact integer device units for every `Tm` y — 423, 340, 259, 201, 144, 86, 29 — and fractional ones for x: 472.0408 appears eight times, 353.9154 three times, 1972.45 four times. Only the left margin is integral, at 235.9996, which is 236 with Word's own float formatting.
+
+That is not a reason to stop gridding x. Removing the rounding entirely makes 14 corpus documents worse and one better, and drops the documents holding every page under 1% from 16 to 14: `issue-483-firstline-marker.docx` goes from 1.065% to 2.506%, `issue-740` from 1.284% to 2.150%. The gridded origin is closer to Word's true position than this engine's own unrounded one, so the rounding stays.
 
 ### What the baseline rule left behind
 

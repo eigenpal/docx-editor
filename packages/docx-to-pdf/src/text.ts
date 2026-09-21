@@ -84,13 +84,17 @@ function griddedBaselineInLine(
   const above = Math.abs(face.font.ascent) + Math.abs(face.font.lineGap);
   const descent = above > 0 ? (Math.abs(face.font.descent) / above) * line.baseline : 0;
   const naturalBox = line.baseline + descent;
-  // A line that ENDS its paragraph rounds its ascent instead. Controls rendered by Word put
-  // its last line one device unit below what the box rule gives, at every paragraph length
-  // from one line to six, and rounding the ascent reproduces all of them exactly. The line
-  // that carries the paragraph mark is already the one this rule's own fallback catches when
-  // the mark makes the box taller than natural; an equal-sized mark takes the same branch.
+  // A line that ends a paragraph WITH after-spacing rounds its ascent instead. Controls
+  // rendered by Word put such a last line one device unit below what the box rule gives, at
+  // every paragraph length from one line to six. The spacing is what decides it, not the
+  // paragraph end: two controls identical but for `w:after` place the SAME line, at the same
+  // position, a unit apart, and with `w:after="0"` every line takes the box rule, headers
+  // included. The line that carries the paragraph mark is already the one this rule's own
+  // fallback catches when the mark makes the box taller than natural.
   const endsParagraph =
-    paragraph.paragraphEnd === true && paragraph.lines[paragraph.lines.length - 1] === line;
+    paragraph.paragraphEnd === true &&
+    paragraph.spacing.after > 0 &&
+    paragraph.lines[paragraph.lines.length - 1] === line;
   if (endsParagraph || !(descent > 0) || line.box.height > naturalBox + 0.01)
     return units(line.baseline) * PDF_PAINT_GRID_PT;
   return (units(naturalBox) - units(descent)) * PDF_PAINT_GRID_PT;
