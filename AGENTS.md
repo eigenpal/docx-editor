@@ -2,6 +2,12 @@
 
 WYSIWYG editor and rendering engine for DOCX. Output must match MS Word: fonts, theme colors, styles, tables, headers/footers, section layout.
 
+## Local instructions
+
+Before starting work, read `local/AGENTS.md` if it exists. Follow its additional instructions throughout this checkout.
+
+The `local/` directory is gitignored. Keep its contents private and do not copy them into committed files or pull requests. If the file is absent, continue with these shared instructions.
+
 ## Communication
 
 Write all replies in ASD-STE100 Simplified Technical English.

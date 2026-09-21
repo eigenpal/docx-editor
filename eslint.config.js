@@ -48,7 +48,7 @@ const restrictStatic = (banned, message) => ({
   'no-restricted-imports': ['error', { patterns: [{ group: banned, message }] }],
 });
 
-// Security sinks (CLAUDE.md, "No HTML from strings"): every value from a DOCX, pasted HTML
+// Security sinks (AGENTS.md, "No HTML from strings"): every value from a DOCX, pasted HTML
 // or embedded part is attacker-controlled, so file-derived strings must never reach an HTML
 // parser. Use createElement(NS) + setAttribute/textContent instead. These selectors ride in
 // EVERY `no-restricted-syntax` value this config emits, because in flat config a later
@@ -56,7 +56,7 @@ const restrictStatic = (banned, message) => ({
 // spreading SECURITY_SINK_SELECTORS silently drops the sink ban for its files.
 const NO_HTML_SINK_MSG =
   'No HTML from strings: file-derived values must not reach an HTML parser. ' +
-  'Use createElement(NS) + setAttribute/textContent. See CLAUDE.md "Security".';
+  'Use createElement(NS) + setAttribute/textContent. See AGENTS.md "Security".';
 const SECURITY_SINK_SELECTORS = [
   {
     selector: "AssignmentExpression[left.property.name='innerHTML']",
@@ -211,7 +211,7 @@ export default [
   // editor-api blocks below re-state the same selectors through restrictDynamic when they
   // take over `no-restricted-syntax` for their files. Tests are exempt — the ban guards
   // the render path from file-derived strings, and test fixtures/cleanup (`innerHTML = ''`)
-  // never see one; the CLAUDE.md audit grep draws the same line.
+  // never see one; the AGENTS.md audit grep draws the same line.
   {
     files: ['packages/*/src/**/*.{ts,tsx,vue}'],
     ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx'],

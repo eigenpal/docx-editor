@@ -5,7 +5,7 @@
  * `docs/api/*.api.md` are the API Extractor snapshots: a diff there means a `@public`
  * symbol moved. The snapshots themselves gate nothing about VERSIONING — regenerating and
  * committing them is green — so without this check a PR can delete a public export and
- * ship it as an unversioned change. CLAUDE.md's rule is "every code PR gets a changeset";
+ * ship it as an unversioned change. AGENTS.md's rule is "every code PR gets a changeset";
  * an API-surface change is never a test/docs/CI-only PR, so here the rule is enforceable.
  *
  * Usage: node scripts/check-api-changeset.mjs --base origin/main
