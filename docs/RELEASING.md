@@ -131,6 +131,14 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 | GitHub perms | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
 | GitHub secrets | `SLACK_WEBHOOK_URL` (optional — release notifications) |
 
+### Configure Dependabot notifications
+
+Set the repository secret `DOCX_EDITOR_SLACK_WEBHOOK_URL` to an incoming webhook for the channel that receives Dependabot notifications. Both alert summaries and reminder failure notices use this destination. Release notifications continue to use `SLACK_WEBHOOK_URL`.
+
+Create the webhook for the intended channel in Slack, then save its URL in the repository's Actions secrets. Incoming webhooks have a fixed destination; a channel name or ID cannot override it. See [Sending messages using incoming webhooks](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/).
+
+Configure the secret before enabling the reminder workflow. A weekly run posts a summary even when no alerts are open. Daily runs post only for high or critical alerts. If the secret is missing, a run that needs to post fails without sending to the release channel.
+
 ## Run a local release
 
 Prefer the CI workflow. It uses OpenID Connect (OIDC) for npm Trusted Publishing and produces npm provenance.

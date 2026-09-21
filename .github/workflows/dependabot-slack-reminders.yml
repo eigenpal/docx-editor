@@ -2,7 +2,9 @@ name: Dependabot Slack reminders
 
 # Posts open Dependabot alerts
 # (https://github.com/eigenpal/docx-editor/security/dependabot) to the Slack
-# channel behind SLACK_WEBHOOK_URL, the same webhook the release workflows use.
+# channel configured by the DOCX_EDITOR_SLACK_WEBHOOK_URL repository secret.
+# This incoming webhook is separate from the release notification webhook.
+# Create it for the destination channel; a channel name cannot override a webhook.
 #
 #   - Daily (07:00 UTC): high and critical alerts only. The job stays silent
 #     when there are none, so a message in the channel always means somebody
@@ -230,8 +232,8 @@ jobs:
                    then [{type: "section", text: {type: "mrkdwn", text: "…and \(($selected | length) - 20) more."}}]
                    else [] end)
                 + [{type: "context", elements: [{type: "mrkdwn", text:
-                     "<https://github.com/\($repo)/security/dependabot|Full list on GitHub>"
-                     + " · fix by bumping the dependency; Dependabot opens the PR"}]}]
+                     ("<https://github.com/\($repo)/security/dependabot|Full list on GitHub>"
+                     + " · fix by bumping the dependency; Dependabot opens the PR")}]}]
               )
             }
           JQ
@@ -249,14 +251,14 @@ jobs:
       - name: Post to Slack
         if: steps.payload.outputs.should_post == 'true'
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCX_EDITOR_SLACK_WEBHOOK_URL }}
         run: |
           set -euo pipefail
           # Unlike the release notifications, a missing webhook is not a
           # tolerable no-op here: silence is how this job reports "nothing is
           # wrong". Fail loudly instead of dropping a security report.
           if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
-            echo '::error::SLACK_WEBHOOK_URL is not set; the alert summary was not delivered.'
+            echo '::error::DOCX_EDITOR_SLACK_WEBHOOK_URL is not set; configure the dedicated Slack incoming webhook secret.'
             exit 1
           fi
           # Retry transient failures. Without it a one-minute Slack blip drops
@@ -286,7 +288,7 @@ jobs:
         if: ${{ always() && job.status != 'success' }}
         continue-on-error: true
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCX_EDITOR_SLACK_WEBHOOK_URL }}
           MODE: ${{ steps.mode.outputs.mode }}
           JOB_STATUS: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

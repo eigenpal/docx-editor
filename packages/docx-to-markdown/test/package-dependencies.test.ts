@@ -89,11 +89,13 @@ describe('engine dependency integrity', () => {
     );
     const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
     expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
-    expect(navigation.pages.slice(exportSectionIndex, exportSectionIndex + 3)).toEqual([
-      '---Export formats---',
-      'export/markdown',
-      '---Pro---',
-    ]);
+    const nextSectionIndex = navigation.pages.findIndex(
+      (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
+    );
+    expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
+    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual(
+      markdownNavigation.pages.map((page: string) => `export/markdown/${page}`)
+    );
     expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');
     expect(exportNavigation.pages).toContain('markdown');
