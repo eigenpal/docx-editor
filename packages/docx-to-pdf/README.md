@@ -73,7 +73,7 @@ bun install
 bun run dev:pdf
 ```
 
-Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The demo is not configured for public hosting.
+Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The local server binds to loopback. The hosted demo converts through a server function with the same limits, and accepts requests only from its own page.
 
 ## Verification
 
