@@ -56,5 +56,14 @@
       "wdth": 100
     },
     "installedSha256": "97ad7c9db540d795730cda54885e1e5741a0494ef13681d78a73f8a0fbc60b9f"
+  },
+  "TwemojiMozilla.ttf": {
+    "url": "https://github.com/mozilla/twemoji-colr/releases/download/v0.7.0/Twemoji.Mozilla.ttf",
+    "sha256": "6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e",
+    "installedSha256": "6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e"
+  },
+  "TwemojiMozilla-LICENSE.md": {
+    "url": "https://raw.githubusercontent.com/mozilla/twemoji-colr/master/LICENSE.md",
+    "sha256": "64419edc28e9163204c3be73f835a8dfc34cd6c9b8f7d067bb685f119f839a99"
   }
 }

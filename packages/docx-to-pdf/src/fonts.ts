@@ -28,6 +28,12 @@ export class EmbeddedFace {
   readonly name: string;
   readonly font: FontkitFont;
   readonly strike: ReturnType<typeof strikeMetrics>;
+  /**
+   * A COLR/CPAL face. Its glyphs are painted as filled palette layers by the text writer and
+   * never written as text, so the face is not embedded: the subsetter cannot encode a color
+   * glyph, and the page carries the text in its line's `ActualText` instead.
+   */
+  readonly colorLayers: boolean;
   /** The family this face was admitted under, for legacy symbol-encoding extraction. */
   private readonly family: string;
   private readonly subset: ReturnType<FontkitFont['createSubset']>;
@@ -49,6 +55,7 @@ export class EmbeddedFace {
     if (Object.keys(font.variationAxes ?? {}).length)
       throw new Error('Variable fonts require an exact static instance');
     this.font = font;
+    this.colorLayers = Boolean(font.COLR && font.CPAL);
     this.family = admitted.request.family;
     this.strike = strikeMetrics(admitted);
     this.subset = font.createSubset();
@@ -84,6 +91,17 @@ export class EmbeddedFace {
     return hex(code);
   }
   /**
+   * A code that draws this face's space and extracts as `text`: the carrier for characters
+   * painted some other way, such as the palette layers of a color emoji. Drawn invisibly, it
+   * gives a reader that ignores `ActualText` the characters all the same. Null when the face
+   * has no space glyph to lend.
+   */
+  carrier(text: string): string | null {
+    const space = this.font.glyphForCodePoint(0x20)?.id;
+    if (!Number.isInteger(space) || space <= 0) return null;
+    return this.encode(space, text);
+  }
+  /**
    * The advance this PDF declares for a character code, in 1/1000 em.
    *
    * What a viewer moves the pen by after drawing the glyph, so it is what a `TJ` adjustment
@@ -99,6 +117,7 @@ export class EmbeddedFace {
     return Math.round(width * 1e5) / 1e5;
   }
   async finish(work: Work): Promise<void> {
+    if (this.colorLayers) return;
     await work.yield();
     const bytes = this.subset.encode();
     work.check();

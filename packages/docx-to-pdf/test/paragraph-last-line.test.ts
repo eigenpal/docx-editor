@@ -32,10 +32,7 @@ async function baselines(body: string): Promise<number[]> {
   return baselinesWith(body, {});
 }
 
-async function baselinesWith(
-  body: string,
-  extras: Record<string, string>
-): Promise<number[]> {
+async function baselinesWith(body: string, extras: Record<string, string>): Promise<number[]> {
   const result = await exportPdf(docx(`${body}${SECTION}`, extras), {
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },

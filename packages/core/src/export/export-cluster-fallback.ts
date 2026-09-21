@@ -12,6 +12,7 @@ import {
   type TextShaper,
 } from '../layout/shaped-run.ts';
 import { synthesizeExportSmallCaps } from './export-small-caps.ts';
+import { orderFallbackFacesForCluster } from './export-color-font.ts';
 
 /** Keep fragmented fallback work bounded independently of the original shaping limit. */
 const MAX_FALLBACK_CLUSTERS = 2048;
@@ -35,13 +36,23 @@ export function shapeExportClusterFallback(
   const selected = new Map<string, ResolvedFont>();
   for (const cluster of [...primary.clusters].sort((a, b) => a.textStart - b.textStart)) {
     let font = input.environment.font;
+    const text = input.text.slice(cluster.textStart, cluster.textEnd);
+    // A variation selector belongs to the character before it. The primary shaping puts it
+    // in a cluster of its own, so it is folded into the previous group, whose face then
+    // shapes the pair together and can honour the emoji or text presentation it asks for.
+    const previousGroup = groups.at(-1);
+    if (/^[\uFE0E\uFE0F]$/.test(text) && previousGroup && previousGroup.end === cluster.textStart) {
+      previousGroup.end = cluster.textEnd;
+      continue;
+    }
     if (
       primary.glyphs.slice(cluster.glyphStart, cluster.glyphEnd).some((glyph) => glyph.id === 0)
     ) {
-      const text = input.text.slice(cluster.textStart, cluster.textEnd);
+      // The selector that follows decides the presentation, so it takes part in the order.
+      const presentation = input.text.slice(cluster.textStart, cluster.textEnd + 1);
       const found =
         selected.get(text) ??
-        fonts.find((candidate) => {
+        orderFallbackFacesForCluster(fonts, presentation).find((candidate) => {
           try {
             return !shape(candidate, text).glyphs.some((glyph) => glyph.id === 0);
           } catch {

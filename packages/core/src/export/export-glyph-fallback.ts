@@ -1,4 +1,5 @@
 import { shapeExportClusterFallback } from './export-cluster-fallback.ts';
+import { orderFallbackFacesForCluster } from './export-color-font.ts';
 import { shapeExportHyphenFallback } from './export-hyphen-fallback.ts';
 import { synthesizeExportSmallCaps } from './export-small-caps.ts';
 // Optional export fallback over admitted faces. Measurement and PDF glyph publication
@@ -38,7 +39,9 @@ export function withExportGlyphFallbacks(
         const mixed = shapeExportClusterFallback(compatible, input, primary, fonts);
         if (mixed) return mixed;
       }
-      for (const font of fonts) {
+      // Color faces go first for emoji presentation and last otherwise, so a dingbat stays a
+      // symbol glyph and an emoji-default pictograph gets its color face.
+      for (const font of orderFallbackFacesForCluster(fonts, input.text)) {
         if (
           font.hash === input.environment.font.hash &&
           font.faceIndex === input.environment.font.faceIndex

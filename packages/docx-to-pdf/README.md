@@ -23,7 +23,7 @@ await writeFile('document.pdf', result.bytes);
 - `comments: true` preserves native PDF comments. To omit annotations, set it to `false`.
 - `useSystemFonts` defaults to `true`. It reads known Word font filenames from standard OS font directories. For portable packaged fonts, set it to `false`.
 - A family written as a face name, such as `Times New Roman Bold`, and a localized East Asian name, such as `宋体`, resolve to the faces Word uses for them. When Helvetica or a common East Asian family is absent, a packaged face stands in for it.
-- `glyphFallbacks` lists ordered admitted faces for a span that is missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and monochrome emoji.
+- `glyphFallbacks` lists ordered admitted faces for a span that is missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. An emoji from a COLR face paints its palette layers in color and stays extractable as text.
 - `fonts` places caller font origins before installed Word fonts and packaged substitutes. `fallbackFonts` follow the packaged origins. Core's separate `fontPolicy` controls substitution. To see the faces the export used, inspect `result.fontResolution`.
 - `timeoutMs: 60000`, `maxOutputBytes: 67108864`, and an optional `signal` bound the work. You can lower the byte limit, but you cannot raise it. Core resource limits still apply.
 
@@ -89,7 +89,7 @@ node --test examples/docx-to-pdf/server.node.test.mjs
 
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets. They are not runtime font defaults.
 
-The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitution, monochrome emoji, equation layout, and super/subscript sizing are the areas where output differs most between PDF renderers. A successful export is not a statement about pixel fidelity.
+The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitution, emoji art, equation layout, and super/subscript sizing are the areas where output differs most between PDF renderers. A successful export is not a statement about pixel fidelity.
 
 ## Memory
 

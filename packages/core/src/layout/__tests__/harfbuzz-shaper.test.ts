@@ -297,9 +297,20 @@ describe('HarfBuzz production shaper', () => {
     );
   });
 
-  test('rejects color-font tables with a typed capability error', () => {
+  test('rejects a color font without outlines with a typed capability error', () => {
+    // Relabel the outline table as a bitmap strike table: color glyphs and nothing to draw
+    // them from.
     const colorBytes = regularBytes.slice();
-    colorBytes.set([0x43, 0x4f, 0x4c, 0x52], 12);
+    const count = (colorBytes[4]! << 8) | colorBytes[5]!;
+    let relabeled = false;
+    for (let index = 0; index < count; index++) {
+      const at = 12 + index * 16;
+      if (String.fromCharCode(...colorBytes.slice(at, at + 4)) === 'glyf') {
+        colorBytes.set([0x43, 0x42, 0x44, 0x54], at);
+        relabeled = true;
+      }
+    }
+    expect(relabeled).toBe(true);
     const colorFont = resolvedFixture(
       { family: 'Color Fixture', weight: 400, style: 'normal' },
       colorBytes
@@ -311,6 +322,23 @@ describe('HarfBuzz production shaper', () => {
         code: 'unsupportedColorFont',
       })
     );
+  });
+
+  test('a color font that also carries outlines shapes like any other', () => {
+    // A COLR-tagged copy of a face that keeps its glyf table: layers for a painter that has
+    // them, outlines for everyone else.
+    const colorBytes = regularBytes.slice();
+    const count = (colorBytes[4]! << 8) | colorBytes[5]!;
+    for (let index = 0; index < count; index++) {
+      const at = 12 + index * 16;
+      if (String.fromCharCode(...colorBytes.slice(at, at + 4)) === 'gasp')
+        colorBytes.set([0x43, 0x4f, 0x4c, 0x52], at);
+    }
+    const colorFont = resolvedFixture(
+      { family: 'Color Fixture', weight: 400, style: 'normal' },
+      colorBytes
+    );
+    expect(shaper.shape(input('A', colorFont)).glyphs.length).toBeGreaterThan(0);
   });
 
   test('rejects malformed and over-ceiling font bytes before shaping', () => {

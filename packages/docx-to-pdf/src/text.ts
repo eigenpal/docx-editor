@@ -22,6 +22,7 @@ import {
 import { underlineGap } from './underline-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
+import { colorGlyphLayers, type ColorGlyphLayer } from './color-glyphs.ts';
 import { color, number as n, rect, Work } from './context.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
@@ -290,11 +291,22 @@ export class TextWriter {
     const deleted = revisions.some((r) => r.kind === 'delete' || r.kind === 'moveFrom');
     if (insert) foreground = '008000';
     if (deleted) foreground = 'C00000';
-    const out = [`${color(foreground)} rg`, 'BT', `/${face.name} ${n(size)} Tf`];
+    // A color face is never selected as a text font: its glyphs are painted as layers below.
+    const out = [`${color(foreground)} rg`, 'BT'];
+    if (!face.colorLayers) out.push(`/${face.name} ${n(size)} Tf`);
     if (style.textOutline)
       out.unshift(`q ${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
     const origins = penOrigins(shaped.run);
     const batch = createGlyphBatch(out, horizontal);
+    // Glyphs of a COLR face are not written as text: the face cannot be subset, and the
+    // line's `ActualText` already carries the characters. Their palette layers are filled
+    // after the text object, in place.
+    const colorGlyphs: {
+      layers: readonly ColorGlyphLayer[];
+      x: number;
+      y: number;
+      scale: number;
+    }[] = [];
     let extra = 0;
     let activeSize = size;
     let activeFace = face;
@@ -307,7 +319,7 @@ export class TextWriter {
         activeFace = clusterFace;
         activeIdentity = identity.identity;
         batch.flush();
-        out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
+        if (!activeFace.colorLayers) out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
       }
       const text = shaped.run.text.slice(cluster.textStart, cluster.textEnd);
       for (let i = cluster.glyphStart; i < cluster.glyphEnd; i++) {
@@ -316,13 +328,45 @@ export class TextWriter {
         const glyphSize = size * (glyph.drawScale ?? 1);
         if (glyphSize !== activeSize) {
           batch.flush();
-          out.push(`/${activeFace.name} ${n(glyphSize)} Tf`);
+          if (!activeFace.colorLayers) out.push(`/${activeFace.name} ${n(glyphSize)} Tf`);
           activeSize = glyphSize;
         }
-        const code = activeFace.encode(glyph.id, i === cluster.glyphStart ? text : '');
         const origin = origins?.[i] ?? glyph.originX;
         const gx = x + (origin + glyph.offsetX) * scale * horizontal + extra;
         const gy = baseline + (glyph.originY + glyph.offsetY) * scale;
+        if (activeFace.colorLayers) {
+          const layers = colorGlyphLayers(activeFace.font, glyph.id, this.work);
+          if (layers)
+            colorGlyphs.push({
+              layers,
+              x: gx,
+              y: gy,
+              scale: glyphSize / activeFace.font.unitsPerEm,
+            });
+          // The cluster's characters ride an invisible space of an embedded text face, so
+          // extraction and search find the emoji even in a reader that ignores ActualText.
+          const host = i === cluster.glyphStart && text ? this.textHost(face, page) : null;
+          const carrier = host?.carrier(text) ?? null;
+          if (host && carrier) {
+            // Stretched to the cluster's own advance, so an extractor that reads the pen
+            // sees one word, not the emoji, a gap, and the next word.
+            let advance = 0;
+            for (let j = cluster.glyphStart; j < cluster.glyphEnd; j++)
+              advance += shaped.run.glyphs[j]!.advanceX * scale;
+            const spaceWidth = (host.declaredWidth(carrier) / 1000) * activeSize;
+            const stretch =
+              spaceWidth > 0 && advance > 0
+                ? Math.min(10_000, Math.max(1, (100 * advance) / spaceWidth))
+                : 100;
+            batch.flush();
+            out.push(`/${host.name} ${n(activeSize)} Tf 3 Tr ${n(stretch)} Tz`);
+            batch.add(host, activeSize, gx, gy, carrier);
+            batch.flush();
+            out.push('0 Tr 100 Tz');
+          }
+          continue;
+        }
+        const code = activeFace.encode(glyph.id, i === cluster.glyphStart ? text : '');
         batch.add(activeFace, activeSize, gx, gy, code);
       }
       extra +=
@@ -332,6 +376,11 @@ export class TextWriter {
     batch.flush();
     out.push('ET');
     if (style.textOutline) out.push('Q');
+    for (const { layers, x: gx, y: gy, scale: glyphScale } of colorGlyphs) {
+      out.push(`q ${n(glyphScale * horizontal)} 0 0 ${n(glyphScale)} ${n(gx)} ${n(gy)} cm`);
+      for (const layer of layers) out.push(`${layer.fill} ${layer.path} f`);
+      out.push('Q');
+    }
     const metricScale = size / face.font.unitsPerEm;
     // Every edge of every thin filled rule in the reference lands on the device grid, so the
     // ends do too, not just the offset and the thickness. Rounding each end rather than the
@@ -522,13 +571,21 @@ export class TextWriter {
       baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
     return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
   }
+  /** An embedded text face on this page to carry extractable characters: the run's own, or any. */
+  private textHost(face: EmbeddedFace, page: PDFPage): EmbeddedFace | null {
+    const host = face.colorLayers
+      ? ([...this.faces.values()].find((candidate) => !candidate.colorLayers) ?? null)
+      : face;
+    if (host) page.node.setFontDictionary(PDFName.of(host.name), host.ref);
+    return host;
+  }
   private embeddedFace(
     font: ExportAdmittedFontIdentity,
     visit: SemanticSpanVisit,
     page: PDFPage
   ): EmbeddedFace | undefined {
     const face = this.admittedFace(font, visit);
-    if (face) page.node.setFontDictionary(PDFName.of(face.name), face.ref);
+    if (face && !face.colorLayers) page.node.setFontDictionary(PDFName.of(face.name), face.ref);
     return face;
   }
   /** The embedded face for a shaped font, without registering it on a page. */

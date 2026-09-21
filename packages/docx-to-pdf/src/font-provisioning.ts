@@ -42,6 +42,7 @@ const supplemental: readonly PackagedFace[] = [
   ['Noto Sans Math', new NodeURL('NotoSansMath-Regular.ttf', assetRoot), 400, 'normal'],
   ['Noto Sans Arabic', new NodeURL('NotoSansArabic-Regular.ttf', assetRoot), 400, 'normal'],
   ['Noto Sans CJK JP', new NodeURL('NotoSansCJKjp-Regular.otf', assetRoot), 400, 'normal'],
+  ['Twemoji Mozilla', new NodeURL('TwemojiMozilla.ttf', assetRoot), 400, 'normal'],
   ['Noto Emoji', new NodeURL('NotoEmoji-Regular.ttf', assetRoot), 400, 'normal'],
   ...latinSubstitute('Liberation Sans', 'LiberationSans'),
   ...latinSubstitute('Liberation Serif', 'LiberationSerif'),
@@ -65,6 +66,9 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'SimSun',
   'Batang',
   'Noto Sans CJK JP',
+  // Color first: a COLR face paints its layers in the writer. The monochrome face stays
+  // behind it for the few symbols the color set leaves out.
+  'Twemoji Mozilla',
   'Noto Emoji',
 ].map((family) => ({ family, weight: 400, style: 'normal' }));
 const face = (

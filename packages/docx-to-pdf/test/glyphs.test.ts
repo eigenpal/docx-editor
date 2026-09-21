@@ -55,9 +55,12 @@ test('a single span can embed distinct fallback faces without losing text or gly
     const content = await (await pdf.getPage(1)).getTextContent({ disableNormalization: true });
     const items = content.items.filter((item) => 'str' in item);
     expect(items.map((item) => item.str).join('')).toBe(text);
+    // Two embedded text faces: the Fraktur letter's mathematics face beside DejaVu Sans. The
+    // emoji is a color face, painted as palette layers and carried on an invisible glyph of
+    // the text face rather than embedded.
     expect(
       new Set(items.filter((item) => item.str).map((item) => item.fontName)).size
-    ).toBeGreaterThanOrEqual(3);
+    ).toBeGreaterThanOrEqual(2);
     // Origins advance on the AUTHORED size while glyphs are drawn on the 0.24pt device
     // grid, so a drawn mark may run up to half a grid step past its own advance. The
     // reference does the same: it emits 11.04 for an 11pt run and still advances on 11pt

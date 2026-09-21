@@ -16,10 +16,29 @@ declare module 'fontkit' {
     readonly bbox: { minX: number; minY: number; maxX: number; maxY: number };
     readonly variationAxes: Record<string, unknown>;
     readonly numGlyphs: number;
-    getGlyph(id: number): { advanceWidth: number };
+    getGlyph(id: number): FontkitGlyph;
+    glyphForCodePoint(codePoint: number): FontkitGlyph & { readonly id: number };
+    /** Present on a COLR/CPAL color font; its glyphs then carry {@link FontkitGlyph.layers}. */
+    readonly COLR?: unknown;
+    readonly CPAL?: unknown;
     createSubset(): { includeGlyph(id: number): number; encode(): Uint8Array };
     hasGlyphForCodePoint(codePoint: number): boolean;
     readonly postscriptName?: string | Uint8Array;
+  }
+
+  export interface FontkitPathCommand {
+    readonly command: 'moveTo' | 'lineTo' | 'quadraticCurveTo' | 'bezierCurveTo' | 'closePath';
+    readonly args: readonly number[];
+  }
+
+  export interface FontkitGlyph {
+    readonly advanceWidth: number;
+    readonly path: { readonly commands: readonly FontkitPathCommand[] };
+    /** COLR v0 layers, bottom first, each with its CPAL palette color; only on a color font. */
+    readonly layers?: readonly {
+      readonly glyph: FontkitGlyph;
+      readonly color: { red: number; green: number; blue: number; alpha: number };
+    }[];
   }
 
   export interface FontkitCollection {

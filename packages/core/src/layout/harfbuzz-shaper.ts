@@ -806,7 +806,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
     }
     const bytes = trustedFontBytes(environment.font);
     const tags = trustedFontTableTags(environment.font);
-    if ([...COLOR_TABLES].some((tag) => tags.has(tag))) {
+    // A color face shapes like any other when it also carries outlines: the export writer
+    // paints its COLR layers itself, and a browser draws them from the same face. A face
+    // whose color glyphs are bitmaps or SVG alone, with no outline table, has no ink this
+    // engine can measure or embed, and stays refused.
+    if ([...COLOR_TABLES].some((tag) => tags.has(tag)) && !tags.has('glyf') && !tags.has('CFF ')) {
       throw new HarfBuzzShapingError('unsupportedColorFont');
     }
 
