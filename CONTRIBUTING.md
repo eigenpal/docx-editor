@@ -4,12 +4,14 @@ This guide covers setup, tests, and pull requests for the monorepo.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.0 or later
-- [Node.js](https://nodejs.org/) `^20.16.0 || >=22.3.0`
+- [Bun](https://bun.sh/) 1.3.11, the release workflow version.
+- [Node.js](https://nodejs.org/) 24, the CI and release workflow version.
 
-The Hocuspocus example server needs Node.js 22.18 or later.
+These versions apply to repository development. Published packages declare their supported Node.js versions in their `engines` fields.
 
 ## Development setup
+
+Clone the repository, install dependencies, and start the development server:
 
 ```bash
 # Clone the repo
@@ -24,7 +26,7 @@ bun run dev
 # Open http://localhost:5173
 ```
 
-Working on the parser, serializer, or layout engine? `bun run reference:fetch` pulls the gitignored ECMA-376 PDFs and supplementary ZIPs (~58 MB). The handwritten quick-refs and XSD schemas under `reference/` stay committed.
+If you work on parsing, serialization, or layout, run `bun run reference:fetch` to download the ECMA-376 reference files. The download includes about 58 MB of PDFs and ZIP archives. Git ignores these files. The repository includes reference summaries and XML schemas under `reference/`.
 
 ## Demo deployment builds
 
@@ -56,7 +58,7 @@ The pre-commit hook formats and lints staged files, then runs the full typecheck
 
 ESLint and Prettier caches live under the root `node_modules/.cache/precommit/`. TypeScript writes build information under each workspace's `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
 
-## Contributor License Agreement
+## Contributor license agreement
 
 You must sign the [Contributor License Agreement](CLA.md). The CLA assistant adds signing instructions to your first pull request.
 
@@ -70,12 +72,14 @@ You must sign the [Contributor License Agreement](CLA.md). The CLA assistant add
    ```bash
    bun run typecheck
    bun run lint
+   bun run format:check
    bun run test
    bun run check:parity
    bun run api:check
    bun run i18n:validate
    ```
-6. Submit a pull request against `main`.
+6. Add a changeset for code changes with `bun changeset`. Documentation, test, and CI-only changes do not need one.
+7. Submit a pull request against `main`.
 
 ## Architecture overview
 
@@ -89,7 +93,7 @@ See the [engine architecture](docs/architecture/production-engine-packages.md) a
 
 ## Write documentation
 
-Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights) for READMEs, guides, developer docs, feature descriptions, and release notes. Lead with the task or behavior. Use active voice, sentence-case headings, and short paragraphs. Name the operation that fails and explain how to recover. Keep prerequisites, defaults, units, and limits close to their examples. Link to detailed guides instead of repeating them in overviews. Keep implementation history in design and review records.
+Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights) for READMEs, guides, developer docs, feature descriptions, and release notes. Lead with the task or behavior. Use active voice, sentence-case headings, and short paragraphs. Keep identifiers exact and format them as code. Use descriptive link text that names the destination. Name the operation that fails and explain how to recover. Keep prerequisites, defaults, units, and limits close to their examples. Link to detailed guides instead of repeating them in overviews. Keep implementation history in design and review records.
 
 Before submitting, check examples against the public API, review links, and remove repeated explanations. For MDX, follow [Site documentation source](docs/site/README.md) and run the documentation checks:
 
@@ -98,6 +102,7 @@ bun run check:docs-mdx
 bun run check:docs-chrome-slots
 bun run check:docs-vue-refs
 bun run check:public-docs-surface
+bun run check:example-readmes
 ```
 
 ## Public API surface
@@ -112,17 +117,19 @@ bun run api:extract
 git add docs/api/<pkg-slug>/
 ```
 
-The CI error message points at the source file for each drifted entry, so the fix is mechanical. Full details live in [CLAUDE.md](CLAUDE.md) under "Public API surface".
+The CI error names the source file for each changed entry. For more information, see [Public API](CLAUDE.md#public-api).
 
-**Adding a `DocxEditorProps` field or `DocxEditorRef` method to either adapter** also requires updating `scripts/parity/parity.contract.json` — the cross-adapter parity contract that tracks which fields are shared, deliberately Vue-deferred, or Vue-exclusive. `bun run check:parity-contract` (also run in CI) fails until the contract acknowledges the new symbol. The error message names the symbol and tells you which bucket to add it to.
+If you add a `DocxEditorProps` field or `DocxEditorRef` method, update `scripts/parity/parity.contract.json`. The contract records shared, Vue-deferred, and Vue-exclusive members. Run `bun run check:parity-contract` to check the change.
 
-**Adding a new Vue composable**: declare a `Use<Name>Return` interface and annotate the function's return type with it. Without the annotation the snapshot recursively inlines core's internal types into Vue's public surface.
+If you add a Vue composable, declare a `Use<Name>Return` interface and annotate its return type. This prevents internal engine types from expanding into the public snapshot.
 
-**Adding a new published package**: edit `scripts/lib/packages.mjs` (one entry — name, root, slug, tsconfig, build hint). Add matching `api:extract` / `api:check` scripts in the new package's `package.json` delegating to `../../scripts/api-extractor.mjs --package <name>`. Then run `bun run api:extract && bun run docs:json` to generate snapshots.
+If you add a published package, register it in `scripts/lib/packages.mjs`. Include its name, root, slug, TypeScript configuration, and build hint. Add `api:extract` and `api:check` scripts to the package. Delegate them to `../../scripts/api-extractor.mjs --package <name>`, with `--local` for extraction. Run `bun run api:extract` and `bun run docs:json` to generate the outputs.
 
-### Consumer-facing JSON docs (`docs/json/`)
+### Generate JSON documentation
 
-The same `@public` surface is also emitted as structured JSON for downstream docs sites: `bun run docs:json` writes `docs/json/<pkg-slug>/<subpath>.json` per published subpath, plus a root `docs/json/index.json`. **The JSON is gitignored** — downstream sites (e.g. `docx-editor-page`) clone the repo and run the script themselves. CI runs `bun run docs:json` as a smoke test so generator breakage surfaces in this repo, not in the consumer's build.
+Run `bun run docs:json` to generate JSON from the public API. It writes one `docs/json/<pkg-slug>/<subpath>.json` file per published subpath and a root index.
+
+Git ignores these files. Documentation sites clone the repository and run the generator during their builds. CI runs the same command to detect generation failures.
 
 ## Adapter parity
 
@@ -130,7 +137,7 @@ The editor ships React and Vue adapters. Both use `@docx-editor.dev/core` for do
 
 Put platform-neutral logic in core. Keep adapters limited to framework components, hooks, composables, and lifecycle integration.
 
-Use `bun run check:parity` for adapter contract and surface parity. Browser parity coverage returns with the public `EditorDriver` boundary.
+Use `bun run check:parity` for adapter contract and surface parity. These checks do not establish browser behavior parity.
 
 ## Report bugs
 

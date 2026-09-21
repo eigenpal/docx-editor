@@ -115,7 +115,7 @@ const chunks = await splitter.splitDocuments(documents);
 console.log(`Created ${chunks.length} chunks from ${result.pages.length} pages`);
 ```
 
-Pass `chunks` to your vector store and retain the snapshot in your document storage. Record your package versions and font configuration with it if you need to reproduce the export. `splitDocuments` copies metadata to the resulting chunks and splits each page separately, keeping overlap within page boundaries. The sizes above are example character counts; see LangChain's [recursive splitter guide](https://docs.langchain.com/oss/javascript/integrations/splitters/recursive_text_splitter).
+Pass `chunks` to your vector store and retain the snapshot in your document storage. Record your package versions and font configuration with it if you need to reproduce the export. `splitDocuments` copies metadata to the resulting chunks and splits each page separately, keeping overlap within page boundaries. The `chunkSize` and `chunkOverlap` values are example character counts; see LangChain's [recursive splitter guide](https://docs.langchain.com/oss/javascript/integrations/splitters/recursive_text_splitter).
 
 Build citations from retrieved chunk metadata, rather than asking the model to infer page numbers. If a clause continues across pages, retrieve neighboring pages from the stored snapshot and retain each contributing page reference. Store warnings with that snapshot and account for the [pagination limits](/docs/2.x/export/markdown/api#pages-and-citations).
 

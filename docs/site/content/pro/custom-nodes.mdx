@@ -356,7 +356,9 @@ Store the saved bytes, not the exported ones. What the export stripped is gone: 
 
 ## Common configurations
 
-**A mention, no payload.** Everything fits in the tag, so there is no schema and no customXml part. `fromDocx` clamps the untrusted strings a `.docx` supplies, or returns `null` to leave the control literal:
+### Store a mention without a payload
+
+This definition stores attributes in the tag without a schema or custom XML part. `fromDocx` recognizes controls with a `userId` attribute. Validate untrusted attributes before using them in your application:
 
 ```ts
 const Mention = defineCustomNode({
@@ -366,7 +368,9 @@ const Mention = defineCustomNode({
 });
 ```
 
-**An internal note that must not leave.** Kept on save, removed on export:
+### Remove an internal note on export
+
+Set `preserveOnExport: false` to keep the node on save and remove it on export:
 
 ```ts
 const InternalNote = defineCustomNode({
@@ -378,7 +382,9 @@ const InternalNote = defineCustomNode({
 });
 ```
 
-**A node written on a server.** `customNodeXml` builds the same control as XML without an editor or DOM. For a payload-bearing node, server authoring must also add the payload package parts, their relationships and the properties part's content-type override. When the document opens in this editor, the node is recognized:
+### Create a node on a server
+
+`customNodeXml` builds a control as XML without an editor or DOM. For nodes with payloads, also add the payload parts, relationships, and the properties part's content-type override. The editor recognizes the node when you open the document:
 
 ```ts
 import { customNodeXml } from '@docx-editor.dev/pro';
@@ -389,9 +395,11 @@ const built = customNodeXml(Citation, { sourceId: 'smith-2024' }, '(Smith 2024)'
 if (built.ok) template.replace('{{citation}}', built.xml);
 ```
 
-`built.store` returns two parts, two relationships and one content-type override. Add all five items or Word offers to repair the file. See [server-side authoring](/docs/2.x/pro/custom-nodes-reference#server-side-authoring).
+`built.store` returns two parts, two relationships, and one content-type override. Add all five items or Word offers to repair the file. See [server-side authoring](/docs/2.x/pro/custom-nodes-reference#server-side-authoring).
 
-**A card in the review sidebar.** `reviewCard` contributes one card per node, anchored at its range. `useReviewItem()` scopes your content to the card it renders inside:
+### Add a review sidebar card
+
+`reviewCard` contributes one card per node, anchored at its range. `useReviewItem()` supplies the item for the card containing your component:
 
 <FrameworkTabs>
 <Framework value="react">

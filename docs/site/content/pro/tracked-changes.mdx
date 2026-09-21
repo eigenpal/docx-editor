@@ -15,7 +15,7 @@ This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/
 
 Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
 
-Use **Review > Accept All Changes** or **Reject All Changes** to resolve the whole document, including hidden authors, headers, footers, and notes. The operation keeps comments and creates one undo step. If a change cannot be resolved, the editor refuses the operation without partially applying it.
+Use **Review > Accept all changes shown** or **Reject all changes shown** to resolve changes selected by your active filters. These controls include offscreen changes in supported stories and leave hidden or unsupported changes pending. A successful operation preserves comments and creates one undo step. To resolve all authors or require every selected change to resolve, configure the [bulk review command](/docs/2.x/editor-api/revisions#resolve-changes-shown-in-the-editor).
 
 Formatting cards describe changed language, bold, italic, underline, strike, font, size, color, alignment, indentation, and paragraph spacing values. Separate formatting decisions remain independently reviewable even when their OOXML revision IDs match.
 
@@ -464,7 +464,7 @@ const mode: TrackedChangeFilterMode = 'reject';
 editor.setTrackedChangesFilter((revision) => revision.author === 'Jess', mode);
 ```
 
-The mode applies only to revisions excluded by the predicate. Authors unchecked in **Review → Markup Options → Reviewers** continue to use Word's accepted projection, even when the predicate uses `reject`. Formatting revisions and structural property-change records do not carry a separate layout projection today; in either mode their card and markup hide while their current values remain painted. Use the normal reject action to restore supported formatting revisions. Read-only structural property records cannot currently be restored by the engine.
+The mode applies only to revisions excluded by the predicate. Authors unchecked in **Review → Markup Options → Reviewers** continue to use Word's accepted projection, even when the predicate uses `reject`. Formatting revisions and structural property-change records do not carry a separate layout projection; in either mode their card and markup hide while their current values remain painted. Use the normal reject action to restore supported formatting revisions. Read-only structural property records cannot be restored by the engine.
 
 The predicate filter and the reviewer menu compose. A revision stays tracked only when its author is checked under **Review → Markup Options → Reviewers** and the predicate returns `true`. The predicate runs for revisions, not comments. Comments remain visible unless the reviewer menu hides their author.
 
@@ -488,7 +488,7 @@ If evaluation throws, the editor preserves the last complete projection and surf
 
 ### Saving and review actions
 
-Filtering changes layout, painted markup, review cards, and bulk actions over the currently visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
+Filtering changes layout, painted markup, review cards, and bulk actions over the visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
 
 If `preset={false}`, use `useStackedReviewPositions(items, heights, { gap, scale })`. Pass `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use document points.
 

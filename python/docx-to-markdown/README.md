@@ -4,11 +4,15 @@ Convert Word documents to Markdown, with individual pages, headers, footers, com
 
 ## Install
 
+Use Python 3.11 or later. Install the package with pip:
+
 ```sh
 pip install docx-to-markdown
 ```
 
 ## Usage
+
+Convert a file and read its document and page output:
 
 ```python
 from docx_to_markdown import convert
@@ -24,6 +28,8 @@ for page in result.pages:
 `result.markdown` contains the document body; headers and footers stay in `result.pages`. Input can be a file path, bytes, or a binary file object.
 
 ## Options
+
+Enable images, supply font files, and choose a tracked-change view:
 
 ```python
 result = convert(
@@ -58,6 +64,8 @@ with Converter() as converter:
 ```
 
 ## Command line
+
+Write Markdown to standard output, save a file, or export a bundle:
 
 ```sh
 docx-to-markdown contract.docx                 # Markdown to stdout

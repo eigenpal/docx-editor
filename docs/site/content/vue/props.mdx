@@ -116,9 +116,9 @@ See [Dark mode](/docs/2.x/guides/dark-mode) for canvas behavior.
 
 Embedded fonts load from the document. Configured fonts extend that set.
 
-Use `packagedFonts()` for the Word default substitutes. It resolves per document, loading a family when that document names it, or when that family is the document's default face. So a document pays for what it declares instead of all 20 eager faces, and nothing is fetched from a third party.
+Use `packagedFonts()` for the Word default substitutes. It resolves per document, loading a family when that document names it, or when that family is the document's default face. It loads only requested families and the default font. It makes no third-party requests.
 
-The default face counts because a run that names no font still has to be measured in one. That face is Calibri, so Carlito loads for every document.
+The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
 
 `useFonts()` keeps one resolver identity, which the `fonts` prop needs.
 
@@ -147,7 +147,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
-`packagedFonts()` resolves after the document is parsed, so the first layout uses fixed measurement and the editor re-paginates when the faces arrive. Edits made in between survive that; the undo history behind them does not. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 
 See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and on-demand loading.
 

@@ -43,36 +43,41 @@ The `docx-to-markdown` Python distribution uses the same Changesets version and 
 
 The private `python/docx-to-markdown/package.json` is a build workspace; its `0.0.0` version is not the PyPI version. Keep it private so Changesets does not publish it to npm. The Python README links to the converter's generated changelog, which includes release notes for both the shared engine and Python wrapper.
 
-Configure a PyPI Trusted Publisher for `docx-to-markdown` with repository `eigenpal/docx-editor`, workflow `python-wheels.yml`, and environment `pypi`. The workflow can also be dispatched manually at the release tag with `publish=true` to retry a failed upload or add missing platform wheels; existing wheels are skipped. Currently, successful platform builds can publish even if another platform fails. Check the Python wheels run separately from the npm release to confirm platform coverage.
+Configure a PyPI Trusted Publisher for `docx-to-markdown` with repository `eigenpal/docx-editor`, workflow `python-wheels.yml`, and environment `pypi`. The workflow can also be dispatched manually at the release tag with `publish=true` to retry a failed upload or add missing platform wheels; existing wheels are skipped. Successful platform builds can publish even if another platform fails. Check the Python wheels run separately from the npm release to confirm platform coverage.
 
 ## Add a changeset
 
+Run Changesets from the repository root, then stage the generated release note:
+
 ```bash
-bun changeset       # interactive — pick bump + write a one-line summary
+bun changeset
 git add .changeset/*.md
-# ... commit with the rest of your PR
 ```
 
 Skip a changeset for test-only, documentation-only, and CI-only pull requests.
 
-### Bump levels (semver)
+### Version increments
 
-- **patch**: Bug fix or internal change without a public API change. Use this by default.
-- **minor**: Additive public API change.
-- **major**: Breaking public API change.
+- `patch`: Bug fix or internal change without a public API change. Use this by default.
+- `minor`: Additive public API change.
+- `major`: Breaking public API change.
 
-`changeset version` resolves to the **highest bump** across all pending changesets, so a single `minor` from another PR will correctly bump everything. You don't need to coordinate bumps with other authors.
+`changeset version` uses the highest increment across pending changesets for the fixed group. A pending `minor` change therefore increments every published package to the next minor version.
 
-The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGELOG.md`, so write it for the **consumer** of the package — not for the team. Avoid PR/issue numbers in the body; the changelog tooling backlinks them automatically when needed.
+Write one or two sentences that describe the behavior consumers receive. Changesets copies this summary into `CHANGELOG.md`. Use active voice and omit implementation details, marketing language, and emojis. If the change resolves an issue, put `Fixes #N` at the end.
+
+Changes to collaboration formats also require a compatibility decision. Format changes require at least a minor release and migration instructions. See [Collaboration compatibility](architecture/collaboration-compatibility.md).
 
 ## Publish a release
 
-1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
-2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Confirm that it includes the latest intended commits and that CI passes for those commits on `main`. Bot-created release updates may not start the pull-request CI workflow; successful preview or CodeQL checks alone do not establish release readiness.
-3. **Before a package's first release, configure its npm Trusted Publisher.** This includes `@docx-editor.dev/docx-to-markdown`. It must authorize repo `eigenpal/docx-editor` and workflow `release.yml`; the release workflow has no `NPM_TOKEN` fallback.
-4. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-5. **Wait for the Release workflow.** With an empty changeset queue, it runs independent checks and builds in parallel. After all jobs pass, it publishes the validated artifacts through npm Trusted Publishing, creates package tags, and creates a GitHub Release with the changelog entries. The release-success notification runs after publication and tagging. Check the separate Post-release updates workflow for registry verification and downstream updates.
-6. **After the renamed package is available, deprecate `@docx-editor.dev/agents` on npm.** Point consumers to `@docx-editor.dev/editor-api`; this is a one-time maintainer action outside the release workflow.
+1. Find the open `chore: release` PR on `main`. The bot opens it when a changeset lands. Later changesets update the same PR.
+2. Review the versions, generated changelog entries, and consumed changeset files. Confirm that the PR includes the intended commits and that CI passes for those commits. Bot-created release updates might not start pull-request CI. Preview and CodeQL checks alone do not establish release readiness.
+3. Before a package's first release, configure its npm Trusted Publisher. It must authorize repository `eigenpal/docx-editor` and workflow `release.yml`. The workflow has no `NPM_TOKEN` fallback.
+4. Merge the PR through the normal review process. The merge starts the Release workflow.
+5. Wait for all Release jobs to pass. With an empty changeset queue, the workflow checks, builds, and tests the release candidate. It then publishes the validated artifacts, creates tags, and creates GitHub Releases with the changelog entries.
+6. Check the separate Post-release updates workflow for registry verification and downstream updates. Also check the Python wheels workflow for PyPI publication.
+
+If the former `@docx-editor.dev/agents` package is not yet deprecated, deprecate it after `@docx-editor.dev/editor-api` is available. Direct consumers to the replacement package. This is a one-time maintainer action outside the release workflow.
 
 While changesets are pending, the workflow updates the release PR without running prepublish checks or builds. Contributor PRs run their own CI checks.
 
@@ -89,14 +94,18 @@ bun run check:docs-mdx
 bun run check:docs-chrome-slots
 bun run check:docs-vue-refs
 bun run check:public-docs-surface
-bun run build:packages
+bun run check:example-readmes
+bun run format:check
+NODE_OPTIONS=--max-old-space-size=8192 bun run build:packages
 bun run api:check
 bun run docs:json
 ```
 
-Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
+Use the same 8 GiB Node.js heap limit as CI when building declarations. Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
 
 Review the generated release plan with `bun changeset status`. Keep all eight published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
+
+These checks cover documentation and public declarations. Before publication, also require the [Release workflow](../.github/workflows/release.yml) checks on the release commit. These include lint, type checks, unit tests, parity, licenses, translations, consumer installation, and collaboration candidate tests.
 
 For Python changes, check all five platform jobs in **Python wheels**. A passing npm release does not establish Python wheel availability. After publication, check the separate Python publish job and the documentation deployment.
 
@@ -108,8 +117,8 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 | Several PRs, ship together | All landed PRs aggregated into one release PR. Merge once, one coordinated release. |
 | Forgot a changeset on a merged PR | Open a follow-up PR against `main` with `.changeset/foo.md`; let the bot regenerate the release PR. |
 | Not ready to release yet | Don't merge the release PR. It keeps updating as new PRs land. |
-| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). Check npm for partial publication before retrying. For failures after successful publication, use recovery below. |
-| Need to force a major bump for marketing | Edit a pending changeset's frontmatter from `minor` → `major` before merging. |
+| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). Check npm for partial publication before retrying. For failures after successful publication, see [Recover post-release updates without publishing](#recover-post-release-updates-without-publishing). |
+| Breaking public API change | Add a `major` changeset and document the migration before merging. |
 | No pending changesets | The workflow takes the publish path. It publishes package versions that are not on npm yet. |
 
 ## Configure release automation
@@ -124,12 +133,16 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 
 ## Run a local release
 
+Prefer the CI workflow. It uses OpenID Connect (OIDC) for npm Trusted Publishing and produces npm provenance.
+
+For a local release, first complete the same validation as CI and configure npm authentication. Then run:
+
 ```bash
-bun run version-packages   # consume .changeset/*.md → bump versions + write CHANGELOGs
-bun run release            # build + changeset publish (needs NPM_TOKEN locally)
+bun run version-packages
+bun run release
 ```
 
-The CI flow is preferred because it uses OIDC (no long-lived npm token needed) and produces npm provenance.
+`version-packages` updates versions, changelogs, the lockfile, and the generated Office.js compatibility fixture. `release` builds packages, generates notices, checks collaboration decisions, tests and verifies the packed candidate, and publishes to npm. It does not run every CI check or the post-release workflows.
 
 ## Anti-patterns to avoid
 

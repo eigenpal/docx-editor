@@ -1,6 +1,6 @@
 # Remix DOCX editor example
 
-This Remix and Vite example loads the React DOCX editor after the route mounts. It shows the two separate problems server rendering causes, and renders a Word document with the packaged toolbar and a review pane.
+This Remix and Vite example loads the React DOCX editor after the route mounts in the browser. It includes the packaged toolbar and a review pane.
 
 ## Run the example
 
@@ -36,7 +36,7 @@ export default function Index() {
 }
 ```
 
-The two work on different problems, and Remix needs both.
+Use both the mount check and the lazy import.
 
 The mount check is about hydration. Remix renders the route on the server, and React compares that markup with the first client render. The editor produces different markup in the browser because it measures layout, so rendering it on both sides gives a hydration mismatch. Returning the same placeholder until `mounted` is true keeps the two renders identical.
 
@@ -53,6 +53,8 @@ React swaps the fallback for the editor in one frame. Give the fallback the heig
 `app/components/Editor.tsx` renders `<DocxEditor>`, which supplies the title bar, menu, toolbar, and navigation pane. The `modules` prop registers comments, tracked changes, and suggesting mode, and `<DocxEditorReview />` mounts the review pane inside the editor.
 
 ## Add the editor to Remix
+
+Install the adapter and its required engine peer:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core

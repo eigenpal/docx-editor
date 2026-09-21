@@ -8,60 +8,77 @@
 
 Vue 3 adapter for the docx-editor.dev editor.
 
-It is a thin renderer over the editor contract in `@docx-editor.dev/core`. It supplies the DOM host, constructs the editor with `createEditor`, and paints the engine's positioned display list. All editing, querying, and geometry go through the `Editor` facade. The adapter holds no editing-engine state of its own.
+The adapter supplies Vue components and composables. The shared engine handles document state, editing, layout, and rendering.
 
 ## Install
+
+Install the adapter and its required engine peer:
 
 ```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core
 ```
 
-## Quickstart
+## Quick start
+
+Import the stylesheet once and give the editor a container with a defined height:
 
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
 </script>
 
 <template>
-  <DocxEditor :document="docxBytes" />
+  <div style="height: 100vh">
+    <DocxEditor document="blank" />
+  </div>
 </template>
 ```
 
-`<DocxEditor>` is the full packaged editor. When you need your own chrome, compose `DocxEditorRoot`, `DocxEditorViewport`, and `DocxEditorContent`, then add toolbar, menu, and navigation parts from the same package root.
+To open a file, pass its `ArrayBuffer` or `Uint8Array` as `:document`.
 
 ## Composition API
 
+Compose the editor root, viewport, and content when you need your own interface. Put custom controls inside the root:
+
 ```vue
 <script setup lang="ts">
-import {
-  DocxEditorRoot,
-  DocxEditorViewport,
-  DocxEditorContent,
-  DocxEditorToolbar,
-  useEditorCommand,
-} from '@docx-editor.dev/vue';
-
-const bold = useEditorCommand('text.bold');
+import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+import BoldButton from './BoldButton.vue';
 </script>
 
 <template>
-  <DocxEditorRoot :document="docxBytes">
-    <DocxEditorToolbar>
-      <button @mousedown.prevent :disabled="!bold.isEnabled" @click="bold.execute()">Bold</button>
-    </DocxEditorToolbar>
-    <DocxEditorViewport>
+  <DocxEditorRoot document="blank">
+    <BoldButton />
+    <DocxEditorViewport style="height: 80vh">
       <DocxEditorContent />
     </DocxEditorViewport>
   </DocxEditorRoot>
 </template>
 ```
 
-Every composable the packaged chrome uses is public: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `useFontFamily`, and the rest on the package root.
+Define the button in `BoldButton.vue`. Composables must run in a descendant of `DocxEditorRoot` to access its editor. Destructure computed refs so Vue unwraps them in the template:
+
+```vue
+<script setup lang="ts">
+import { useEditorCommand } from '@docx-editor.dev/vue';
+
+const { execute, isEnabled, isActive } = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <button @mousedown.prevent :disabled="!isEnabled" :aria-pressed="isActive" @click="execute()">
+    Bold
+  </button>
+</template>
+```
+
+The package also exports `useDocxEditor`, `useEditorState`, `useEditorEvent`, and `useFontFamily`.
 
 ## SSR and Nuxt
 
-The editor is client-only. On the server, `DocxEditorRoot` skips instance creation. Mount the editor inside `<ClientOnly>` or load it with `defineAsyncComponent`.
+The editor requires browser APIs. For Nuxt, mount it inside `<ClientOnly>` and use a `.client.vue` component for its imports. For other server-rendered applications, defer both importing and mounting the editor until the browser runs.
 
 The Nuxt module remains a private workspace package. External applications should follow the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
 

@@ -129,7 +129,7 @@ For custom value controls, call `usePageSetupDialog()`, `useParagraphDialog()`, 
 
 A `Field` represents the labeled row; `asChild` does not adapt input value events. Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state. See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 
-## Compose the value pop-up
+## Compose the value popup
 
 Use `DocxEditorContentControlWidget` to customize content-control popups. Omit children to keep the default UI, or pass parts to replace its contents. The root handles placement, Escape, outside clicks, focus return, and Tab wrapping.
 
@@ -252,7 +252,7 @@ function UseDepartureDate() {
 }
 ```
 
-Place `<UseDepartureDate />` inside the date arrangement above. In Vue, import the composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates unwrap automatically.
+Place `<UseDepartureDate />` inside the date arrangement in [Arrange parts](#arrange-parts). In Vue, import the composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates unwrap automatically.
 
 - `setValue(value)` updates the draft. `apply()` commits it; `apply(value)` commits an explicit value. A refused write returns `false`, keeps the popup open, and sets `refused`. `cancel()` closes without applying the draft.
 - Dates use `YYYY-MM-DD`. `dateText`, `setDateText`, and `applyDateText` handle regional numeric entry using `session.locale`.
@@ -387,7 +387,7 @@ There are two ways to change how a part looks:
   padding-inline: 1.25rem;
 }
 
-/* asChild with <button class="app-apply">, as in the example above */
+/* asChild with <button class="app-apply">, as in the custom button example */
 .app-apply {
   border: 0;
   border-radius: 999px;

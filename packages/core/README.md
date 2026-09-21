@@ -15,15 +15,17 @@
 
 The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. No framework dependency and no UI.
 
-Most apps never install this directly — [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) carries it. Reach for it when you are writing your own adapter, or when you need the contract types to write a function signature.
+Install this package alongside the React or Vue adapter. Both adapters require it as a peer dependency. You can also use its public contracts to build your own adapter.
 
 ```bash
 npm install @docx-editor.dev/core
 ```
 
-Node use requires `^20.16.0 || >=22.3.0`.
+Node.js requires `^20.16.0 || >=22.3.0`.
 
 ## Entry points
+
+Import editor creation, font helpers, and contract types from the package root:
 
 ```ts
 import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
@@ -32,39 +34,39 @@ import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 
 The root covers most uses: creating an editor, the `Editor` contract it implements, fonts, the chrome registry, and the document model types. Subpaths expose the canonical tree, the layout pass, and the paint step directly.
 
-| Subpath                       | What's there                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `.`                           | Create an editor, the contract, fonts, the chrome registry, the document model.              |
-| `./editor`                    | Everything the root re-exports, plus the paginated surface and ruler geometry.               |
-| `./contracts/editor`          | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.                     |
-| `./contracts/document`        | The document-level edit and query vocabulary.                                                |
-| `./contracts/interaction`     | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
-| `./contracts/types`           | Document model types.                                                                        |
-| `./contracts/modules`         | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                                |
-| `./store`                     | The canonical tree and its transactional store.                                              |
-| `./layout`                    | The DOM-free layout pass.                                                                    |
-| `./output`                    | Serialization.                                                                               |
-| `./export`                    | Document layout sessions for exporters. No DOM required.                                     |
-| `./automation`                | The object model behind `@docx-editor.dev/editor-api`.                                       |
-| `./collaboration`             | Provider-neutral collaboration session contracts.                                            |
-| `./collaboration/replication` | Replication helpers for collaboration providers.                                             |
-| `./styles/editor.css`         | The one editor stylesheet, shared by packaged and custom chrome.                             |
+| Subpath | What's there |
+| --- | --- |
+| `.` | Create an editor, the contract, fonts, the chrome registry, the document model. |
+| `./editor` | Everything the root re-exports, plus the paginated surface and ruler geometry. |
+| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`. |
+| `./contracts/document` | The document-level edit and query vocabulary. |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
+| `./contracts/types` | Document model types. |
+| `./contracts/modules` | `EditorModule` — the shape `@docx-editor.dev/pro` implements. |
+| `./store` | The canonical tree and its transactional store. |
+| `./layout` | The DOM-free layout pass. |
+| `./output` | Paint layouts and selection overlays into the DOM. |
+| `./export` | Document layout sessions for exporters. No DOM required. |
+| `./automation` | The object model behind `@docx-editor.dev/editor-api`. |
+| `./collaboration` | Provider-neutral collaboration session contracts. |
+| `./collaboration/replication` | Replication helpers for collaboration providers. |
+| `./styles/editor.css` | The one editor stylesheet, shared by packaged and custom chrome. |
 
 ## Architecture
 
-```
-bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
-```
+The engine reads DOCX bytes into a canonical OOXML tree. Layout reads the tree and produces painted pages. Saving serializes the tree back into a DOCX package.
 
 There is one document model. The painted pages are the editable surface: they are `contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed as tree operations, so the browser never invents markup inside your document.
 
-Nodes are typed where layout needs them and generic everywhere else, preserving the element verbatim. Content the engine does not model is carried rather than dropped, so a document full of unknown extensions still opens, edits, and saves.
+Nodes are typed where layout needs them and generic everywhere else, preserving the element structure. Content the engine does not model is carried rather than dropped, so a document full of unknown extensions still opens, edits, and saves.
 
 Export sessions default to `all-markup`, which shows inserted and deleted text. Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
 
 ### Build a paginated exporter
 
-For exports that need accurate page breaks, use `openFontBackedDocumentForExport`. It resolves the fonts used throughout the document before layout. Without a measurer, `openDocumentForExport(bytes)` uses a fixed-width approximation.
+For exports that need font-based page breaks, use `openFontBackedDocumentForExport`. It resolves the fonts used throughout the document before layout. Without a measurer, `openDocumentForExport(bytes)` uses a fixed-width approximation.
+
+Install `@docx-editor.dev/fonts` to use packaged substitutes in this example:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -73,23 +75,21 @@ import { packagedFonts } from '@docx-editor.dev/fonts';
 
 const bytes = new Uint8Array(await readFile('contract.docx'));
 const opened = await openFontBackedDocumentForExport(bytes, {
-  // First wins: put caller-supplied licensed fonts first, bundled metric substitutes next,
-  // and an optional network resolver last.
-  fonts: [callerFonts, packagedFonts(), optionalNetworkFonts],
+  fonts: packagedFonts(),
   fontPolicy: 'strict',
-  onFontResolution: (report) => auditLogger.info(report),
+  onFontResolution: (report) => console.info(report),
 });
 
 if (!opened.ok) throw new Error(`DOCX rejected: ${opened.reason}`);
 try {
   const layout = await opened.session.layout();
-  await writeExporterOutput(layout);
+  console.log(layout); // Replace this with your exporter.
 } finally {
   opened.session.dispose(); // releases document-owned shaping bytes
 }
 ```
 
-Let Core manage fonts, resources, and layout. Build your output from the returned pages. For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
+Let the engine manage fonts, resources, and layout. Build your output from the returned pages. For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
 
 ## Fidelity
 
@@ -97,7 +97,7 @@ Untouched content, unsupported OOXML, and package payloads survive editing and s
 
 ## Untrusted input
 
-A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary: URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out.
+Treat DOCX files as untrusted input. The engine validates URLs and limits XML entities, archive expansion, nesting, and element counts. It does not automatically fetch external document relationships. Serialization escapes document text.
 
 Anything you render from document data (a font name, a hyperlink target, a comment body) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 

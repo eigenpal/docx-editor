@@ -1,6 +1,6 @@
 # Astro DOCX editor example
 
-This example loads the React DOCX editor as an Astro island. It shows why the editor runs in the browser only, and renders a Word document with the packaged toolbar and a review pane.
+This example loads the React DOCX editor as an Astro island in the browser. It includes the packaged toolbar and a review pane.
 
 ## Run the example
 
@@ -41,6 +41,8 @@ Astro sends no HTML for a `client:only` island, so the page has an empty gap unt
 `src/components/Editor.tsx` renders `<DocxEditor>`, which supplies the title bar, menu, toolbar, and navigation pane. Two props turn it into a review editor: `modules` registers comments, tracked changes, and suggesting mode, and `<DocxEditorReview />` mounts the review pane inside the editor. Remove both and the same document still opens, with revisions in their final state.
 
 ## Add the editor to an Astro site
+
+Install the adapter, its required engine peer, and the Astro React integration:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core

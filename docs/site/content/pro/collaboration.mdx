@@ -617,7 +617,7 @@ When the job finishes, call `runtime.dispose()` and then `room.destroy()` to rel
 
 ## Let a server agent propose redlines
 
-A background worker can join the same Hocuspocus room as the browser peers with `role: 'agent'`, then attach `DocxEditor.createCollaborative` as above. The worker owns its connection, so closing the initiating browser does not stop its job.
+A background worker can join the same Hocuspocus room as the browser peers with `role: 'agent'`, then attach `DocxEditor.createCollaborative` as described in [Create a headless replica](#create-a-headless-replica). The worker owns its connection, so closing the initiating browser does not stop its job.
 
 Set the tracking mode before editing to create Word tracked changes:
 
@@ -638,7 +638,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-`range.insertText(text, 'Before' | 'After')`, `range.delete()`, and `range.clear()` use the same transaction path. Configure an `author` on the runtime. `TrackMineOnly` persists across runs and applies only to that server host. Peers retain their own editing mode. `Off` makes ordinary edits. `TrackAll` and browser-host mode control refuse with `NotSupported`. The local mode is not saved as a document-wide policy. Tracked edits currently support inline text within one paragraph, including table cells. Targets touching pending revisions, structural changes, and formatting changes under tracking refuse atomically.
+`range.insertText(text, 'Before' | 'After')`, `range.delete()`, and `range.clear()` use the same transaction path. Configure an `author` on the runtime. `TrackMineOnly` persists across runs on that runtime. Peers retain their own editing mode. `Off` makes ordinary edits. `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode. The local mode is not saved as a document-wide policy. Tracked edits support inline text within one paragraph, including table cells. Targets touching pending revisions, structural changes, and formatting changes under tracking refuse atomically.
 
 Commit one logical suggestion per sync. Send progress through a separate job/event channel, while the collaboration session publishes committed redlines to peers. On a stale snapshot, reread and reconsider the edit. A local revision check cannot see remote changes that have not reached the worker yet.
 

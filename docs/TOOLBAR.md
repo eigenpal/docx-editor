@@ -1,42 +1,30 @@
 # Toolbar
 
-## Overview
+Use root props to customize the packaged React editor. For a custom layout, compose the provider and toolbar components from `@docx-editor.dev/react`.
 
-The current React package exposes its toolbar and surrounding chrome from the package root. The packaged host is `<DocxEditor />`, and the lower-level provider/hooks/compound API is also rooted there.
+## Layout
 
-### Layout Structure
+The packaged editor places the title and menus above the formatting toolbar. Use title-bar slots for your logo and application actions.
 
-```
-┌──────────┬────────────────────────────────┬──────────────────────┐
-│          │ Document Name                  │                      │
-│  Logo    │                                │  Right Actions       │
-│          │ File  Format  Insert           │                      │
-├──────────┴────────────────────────────────┴──────────────────────┤
-│ ╭─ Formatting Bar (rounded pill) ─────────────────────────────╮ │
-│ │ ↩ ↪  100% ▾  Normal ▾  Inter ▾  — 32 +  B I U  A▾ 🖌▾ ... │ │
-│ ╰─────────────────────────────────────────────────────────────╯ │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  title[Title bar: logo, document title, and actions]
+  menu[Menu row]
+  toolbar[Formatting toolbar]
+  viewport[Document viewport]
+  title --> menu --> toolbar --> viewport
 ```
 
-- **Title Bar**: 3-column layout — Logo and Right Actions span full height, Document Name + Menus stack vertically in the center
-- **Formatting Bar**: Rendered inside a rounded pill with a subtle gray background
-- Every slot is customizable — pass your own logo, action buttons, or extra toolbar items
+## Customize the packaged editor
 
-There are **two current ways** to customize the toolbar:
-
-1. **React root props** for the packaged host
-2. **Provider primitives + compounds** from `@docx-editor.dev/react`
-
----
-
-## Quick setup (React root props)
-
-The simplest way to customize the toolbar:
+Pass title state and application actions through root props:
 
 ```tsx
+import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
-function App() {
+function App({ bytes }: { bytes: Uint8Array }) {
   const [title, setTitle] = useState('Untitled.docx');
 
   return (
@@ -44,58 +32,77 @@ function App() {
       document={bytes}
       title={title}
       onTitleChange={setTitle}
-      renderTitleBarRight={() => (
-        <div>
-          <button onClick={handleSave}>Save</button>
-        </div>
-      )}
+      renderTitleBarRight={() => <span>Draft</span>}
     />
   );
 }
 ```
 
-### React root toolbar props
+### Root toolbar props
 
-| Prop                  | Type                             | Default | Description                                       |
-| --------------------- | -------------------------------- | ------- | ------------------------------------------------- |
-| `title`               | `string`                         | —       | Document title displayed in the title bar         |
-| `onTitleChange`       | `(name: string) => void`         | —       | Called when the user edits the document title     |
-| `renderTitleBarLeft`  | `() => ReactNode`                | —       | Custom left title-bar slot                        |
-| `renderTitleBarRight` | `() => ReactNode`                | —       | Custom actions on the right side of the title bar |
-| `menu`                | `boolean \| DocxEditorMenuProps` | —       | Toggle or customize the packaged menu row         |
-| `chrome`              | `boolean`                        | `true`  | Toggle the packaged frame                         |
+| Prop | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document title in the title bar. |
+| `onTitleChange` | `(name: string) => void` | Receives document title edits. |
+| `renderTitleBarLeft` | `() => ReactNode` | Custom content before the document title. |
+| `renderTitleBarRight` | `() => ReactNode` | Custom actions after the document title. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Shows, hides, or customizes the menu row. |
+| `chrome` | `boolean` | Shows or hides the packaged frame. Defaults to `true`. |
 
-## Provider primitives and compounds
+## Compose the toolbar
 
-For full control, compose the same root exports the packaged host uses internally:
+Place components under `DocxEditor.Root` to share the editor instance. Packaged compounds apply their own style scope. Use a `docx-editor` wrapper to scope custom controls and share theme tokens. Use `useChromeTranslate()` to supply labels for composed controls.
+
+The custom button prevents a mouse press from moving focus away from the document:
 
 ```tsx
-import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate, useEditorCommand } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 function BoldButton() {
   const bold = useEditorCommand('text.bold');
+  const t = useChromeTranslate();
   return (
-    <button onClick={() => bold.execute()} disabled={!bold.isEnabled}>
-      Bold
+    <button
+      type="button"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => bold.execute()}
+      disabled={!bold.isEnabled}
+      aria-pressed={bold.isActive}
+    >
+      {t('formattingBar.bold')}
     </button>
+  );
+}
+
+function EditorChrome() {
+  const t = useChromeTranslate();
+  return (
+    <>
+      <DocxEditor.Toolbar t={t} preset={false}>
+        <BoldButton />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport>
+        <DocxEditor.Navigation t={t} />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu t={t} />
+      </DocxEditor.Viewport>
+    </>
   );
 }
 
 function MyEditor({ bytes }: { bytes: Uint8Array }) {
   return (
-    <DocxEditor.Root document={bytes}>
-      <DocxEditor.Toolbar>
-        <BoldButton />
-      </DocxEditor.Toolbar>
-      <DocxEditor.Viewport>
-        <DocxEditor.Navigation />
-        <DocxEditor.Content />
-        <DocxEditor.HyperLink />
-        <DocxEditor.ContextMenu />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
+    <div className="docx-editor">
+      <DocxEditor.Root document={bytes}>
+        <EditorChrome />
+      </DocxEditor.Root>
+    </div>
   );
 }
 ```
 
-`DocxEditor.Root` owns the editor instance, `DocxEditor.Viewport` is the scroll container, and `DocxEditor.Content` is the painted page surface. The other compounds (`DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, `DocxEditor.ContextMenu`) layer on top of that same provider.
+`DocxEditor.Root` owns the editor instance. `DocxEditor.Viewport` provides the scroll container, and `DocxEditor.Content` renders the document pages.
+
+For more information, see [Customize the toolbar](site/content/guides/toolbar.mdx) and [React composition](site/content/react/composition.mdx).

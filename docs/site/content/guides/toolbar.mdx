@@ -69,20 +69,20 @@ Use these root props to configure the packaged frame:
 
 ## Use the provider primitives
 
-When you want your own frame, use the same provider primitives the packaged host uses internally:
+Use the provider primitives to build your own frame. Import the editor stylesheet once and give the container a height. Packaged controls and the viewport apply their own `.docx-editor` scope. Add that class to a wrapper if custom controls need editor styles and tokens. For a complete wrapper, see [React composition](/docs/2.x/react/composition#primitives) or [Vue composition](/docs/2.x/vue/composition#primitives).
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
 
 function MyChrome({ bytes }: { bytes: Uint8Array }) {
+  const t = useChromeTranslate();
   return (
     <DocxEditor.Root document={bytes}>
-      <DocxEditor.Toolbar />
+      <DocxEditor.Toolbar t={t} />
       <DocxEditor.Viewport>
-        <DocxEditor.Navigation />
         <DocxEditor.Content />
         <DocxEditor.HyperLink />
         <DocxEditor.ContextMenu />
@@ -101,20 +101,20 @@ import {
   DocxEditorContent,
   DocxEditorContextMenu,
   DocxEditorHyperLink,
-  DocxEditorNavigation,
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
+  useChromeTranslate,
 } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
+const t = useChromeTranslate();
 </script>
 
 <template>
   <DocxEditorRoot :document="bytes">
-    <DocxEditorToolbar />
+    <DocxEditorToolbar :t="t" />
     <DocxEditorViewport>
-      <DocxEditorNavigation />
       <DocxEditorContent />
       <DocxEditorHyperLink />
       <DocxEditorContextMenu />
@@ -125,6 +125,8 @@ defineProps<{ bytes: Uint8Array }>();
 
 </Framework>
 </FrameworkTabs>
+
+If you use a locale provider, mount this component inside it so `useChromeTranslate()` reads its catalog.
 
 The root owns the editor instance, the viewport is the scroll container, and the content part is the painted page surface. The other compounds layer on top of that same provider.
 

@@ -1,19 +1,19 @@
 ---
 title: '@docx-editor.dev/pro'
-description: 'Add tracked changes and comments to Vue or React. Register the review module, then use the packaged rail or review composables.'
+description: 'Add tracked changes, comments, collaboration, and custom nodes to React or Vue through editor modules.'
 category: 'Pro'
 order: 60
 ---
 
 <PackageStats name="@docx-editor.dev/pro" />
 
-`@docx-editor.dev/pro` adds these review capabilities to the Vue and React editors:
+`@docx-editor.dev/pro` adds these capabilities to the Vue and React editors:
 
-- [**Tracked changes**](/docs/2.x/pro/tracked-changes): Use suggesting mode, render markup, and accept or reject changes.
-- [**Comments**](/docs/2.x/pro/comments): Add threads and replies to a text range.
-- [**Review colors and styling**](/docs/2.x/pro/review-styling): Color review content by author or by change type.
-- [**Custom nodes**](/docs/2.x/pro/custom-nodes): Store your inline node types as Word content controls.
-- [**DOCX collaboration reference**](/docs/2.x/pro/collaboration): Configure rooms, providers, presence, and recovery.
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Use suggesting mode, render markup, and accept or reject changes.
+- [Comments](/docs/2.x/pro/comments): Add threads and replies to a text range.
+- [Review colors and styling](/docs/2.x/pro/review-styling): Color review content by author or by change type.
+- [Custom nodes](/docs/2.x/pro/custom-nodes): Store your inline node types as Word content controls.
+- [DOCX collaboration reference](/docs/2.x/pro/collaboration): Configure rooms, providers, presence, and recovery.
 
 Both adapter entries export custom-node chip and context-menu chrome.
 
@@ -192,9 +192,9 @@ To arrange editor parts, see [Vue composition](/docs/2.x/vue/composition) or [Re
 
 ## Licensing
 
-This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
-Both module factories accept an optional `licenseKey`.
+`reviewModule`, `customNodesModule`, and `collaborationModule` accept an optional `licenseKey`.
 
 Module construction does not validate the key or access the network. This example passes a key to `reviewModule`:
 

@@ -1,6 +1,6 @@
 # Word document automation
 
-`@docx-editor.dev/editor-api` drives a document through a batching object model. Nothing here needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and writes them back.
+`@docx-editor.dev/editor-api` opens DOCX bytes, queues edits, and saves the edited document. This example fills template placeholders without a browser.
 
 ## Run the example
 
@@ -21,22 +21,18 @@ The following example shows the server API directly. It is not the complete `fil
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
 
+const bytes = await Bun.file('template.docx').bytes();
 const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
 try {
   await runtime.run(async (context) => {
-    const paragraphs = context.document.body.paragraphs;
-    paragraphs.load('items'); // 1. ask for the collection's items
-    await context.sync(); //      2. receive those items
+    const matches = context.document.body.search('{{name}}', { matchCase: true });
+    matches.load('items');
+    await context.sync();
 
-    for (const paragraph of paragraphs.items) {
-      paragraph.load('text'); // 3. ask for each item's text
+    for (const match of matches.items) {
+      match.insertText('Ada Lovelace', 'Replace');
     }
-    await context.sync(); //      4. receive the text
-
-    for (const paragraph of paragraphs.items) {
-      if (paragraph.text.includes('{{name}}')) paragraph.insertText('Ada Lovelace', 'Replace');
-    }
-    await context.sync(); //      5. apply the edits all-or-nothing
+    await context.sync();
   });
   await Bun.write('out.docx', await runtime.save());
 } finally {
@@ -44,7 +40,7 @@ try {
 }
 ```
 
-The first sync retrieves the collection's items. Only then are the individual paragraphs available to ask for their text, so the second sync retrieves those property values.
+The first sync retrieves the matching ranges. The second sync replaces only the placeholders and preserves surrounding text.
 
 Bookmarks are discoverable from the story that owns them, without searching for target text first:
 
@@ -62,14 +58,14 @@ await runtime.run(async (context) => {
 
 That collection covers the main body story only. Header and footer bodies have separate bookmark collections; there is no document-wide aggregation.
 
-Four rules carry most of the API:
+Follow these rules when you use the API:
 
-- **Read what you asked for.** A property you did not `load()` throws instead of answering `undefined`, so a typo is a failure at the read and not a wrong document three steps later. Navigation-property `expand` is not supported yet: non-empty values fail with `InvalidArgument`, so load the navigation object or collection explicitly.
-- **`sync()` is the only round trip.** Everything between two syncs is one ordered batch that either applies whole or not at all.
-- **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one past the callback, or past `dispose()`, is an error rather than a stale read. To keep a proxy across syncs deliberately, use `context.trackedObjects`.
-- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` instead of throwing, which is the difference between "no such heading" and a crash.
+- Load properties before reading them. Unsupported navigation-property `expand` values fail with `InvalidArgument`; load each navigation object or collection explicitly.
+- Use `context.sync()` to execute queued commands. Batch independent edits before a sync.
+- Keep proxies inside their `run()` callback. Return plain data when another part of your application needs the result.
+- Use `getFirstOrNullObject()` or `getLastOrNullObject()` when an item might not exist. Check `isNullObject` after synchronization.
 
-## In a page, on a document already open
+## Edit an open browser document
 
 The browser subpath takes an editor that the host created with `@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page. It drives that editor in place. Edits land in the open document, with the reader's undo stack intact, so there is no `save()` here: the host saves the way it already did.
 
@@ -89,16 +85,16 @@ await runtime.run(async (context) => {
 
 Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine, and a server holding bytes should not pay for that.
 
-## Authorship, and asking what the host can do
+## Set the author and check host capabilities
 
 `createServer(bytes, { author })` names who comments are written as. It is required to write one at all: the file format makes the author mandatory, a server has no signed-in user, and a runtime opened without a name refuses the write rather than putting a placeholder into someone else's document.
 
-Deletion needs no author. `Comment.delete()` removes the root thread and anchors; `CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make them one atomic edit and one Undo unit in a browser. Browser comment writes require the EigenPal Pro License review module and a writable, attached editor. Editor-api cannot create a new root comment.
+Deletion needs no author. `Comment.delete()` removes the root thread and anchors; `CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make them one atomic edit and one Undo unit in a browser. Browser comment writes require the EigenPal Pro License review module and a writable, attached editor. Use `Range.insertComment()` to create a root comment.
 
-`runtime.capabilities` reports the available host features. `save` is false for a browser runtime. `selection`, `scrolling`, and `layout` are false for a server runtime. Branch on these values instead of the imported entry. The values do not change during the runtime.
+`runtime.capabilities` reports the available host features. `save` is false for a browser runtime. `selection` and `scrolling` are false for a server runtime. Server layout requires an explicitly configured text measurer. Branch on these values instead of the imported entry. The values do not change during the runtime.
 
-## What this is, and is not
+## Office.js compatibility
 
-The Office.js Word-shaped DocxEditor API is compatible with a documented subset of Word's JavaScript object model, so a call site written against that vocabulary compiles here. It is not Office.js, does not run in an Office add-in host, and depends on no Microsoft package. Every type in the surface is authored in this repository.
+The API implements a documented subset of the Word Office.js object model. It runs outside Office and requires no Microsoft package. Matching signatures do not guarantee full runtime compatibility.
 
-The supported subset, and the omissions that matter (tables, images, repeating sections and custom XML mapping), are listed in [`docs/site/content/editor-api/office-js-api.mdx`](../../docs/site/content/editor-api/office-js-api.mdx).
+For supported members and runtime differences, see [Office.js compatibility](../../docs/site/content/editor-api/office-js-api.mdx).

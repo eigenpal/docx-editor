@@ -270,7 +270,7 @@ The result also includes these pairs:
 - `matchCase` and `setMatchCase`
 - `wholeWord` and `setWholeWord`
 
-## useHistoryGroup
+## `useHistoryGroup`
 
 Use `useHistoryGroup` when your app applies formatting continuously, such as a font-size slider or color picker. The document updates on every input event, and one undo action restores the state before the gesture. A redo action restores the final value.
 
@@ -394,7 +394,7 @@ For optional development feedback, subscribe with `useEditorEvent('historyDiagno
 | `useParagraphIndent()` | Provides current indents and an `apply` action. |
 | `useHyperlinkPopup()` | Provides state for a custom hyperlink panel. |
 | `useContentControl()` | Provides content-control locks, value writes, and form-fill state. |
-| `useContentControlWidget()` | Provides the draft value and calendar state of the enclosing value pop-up. See [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up). |
+| `useContentControlWidget()` | Provides the draft value and calendar state of the enclosing value pop-up. See [Customize popups](/docs/2.x/guides/customize-dialogs#compose-the-value-popup). |
 | `useHeaderFooterState()` | Returns the active header or footer scope, or `null`. |
 | `useNoteScopeState()` | Returns the active footnote or endnote scope. |
 | `useContextMenuTarget()` | Returns the element that received the last context-menu action. |
@@ -451,7 +451,7 @@ Inside `DocxEditorContentControlWidget`, `useContentControlWidget()` exposes the
 | `listId`, `listNavigation` | Combo relationship and shared list keyboard behavior |
 | `accept`, `replaceImage` | Picture file types and image replacement |
 
-`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999. For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first. Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior. For composition and CSS hooks, see [Compose the value pop-up](/docs/2.x/guides/customize-dialogs#compose-the-value-pop-up).
+`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999. For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first. Use `Calendar`, `Navigation`, `Month`, and `Year` to retain packaged behavior. For composition and CSS hooks, see [Compose the value popup](/docs/2.x/guides/customize-dialogs#compose-the-value-popup).
 
 ## Next steps
 

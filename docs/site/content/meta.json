@@ -2,7 +2,7 @@
   "title": "v2.x (latest)",
   "root": true,
   "pages": [
-    "---Getting Started---",
+    "---Getting started---",
     "index",
     "quickstart",
     "installation",
@@ -45,7 +45,11 @@
     "guides/fonts",
     "guides/dark-mode",
     "---Export formats---",
-    "export/markdown",
+    "export/markdown/index",
+    "export/markdown/fonts",
+    "export/markdown/images",
+    "export/markdown/api",
+    "export/markdown/integrations",
     "---Pro---",
     "pro/index",
     "pro/tracked-changes",
@@ -73,7 +77,9 @@
     "editor-api/reference",
     "editor-api/office-js-api",
     "---Reference---",
-    "core",
-    "i18n"
+    "core/index",
+    "core/architecture",
+    "i18n/index",
+    "i18n/contributing"
   ]
 }

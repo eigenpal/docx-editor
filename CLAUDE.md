@@ -43,16 +43,16 @@ Use `packages/editor-api/OFFICE_JS_GUIDE.md` as the reference for agent-facing e
 
 One engine. Thin chrome on top.
 
-| Package      | What                                                                                                                                                                                           | Status                         |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `core`       | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
-| `react`      | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
-| `i18n`       | Shared strings                                                                                                                                                                                 | published                      |
-| `editor-api` | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
-| `pro`        | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
-| `fonts`      | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
-| `vue`        | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
-| `nuxt`       | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
+| Package | What | Status |
+| --- | --- | --- |
+| `core` | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
+| `react` | The adapter: provider + hooks, holds no editing state | published |
+| `i18n` | Shared strings | published |
+| `editor-api` | `DocxEditor` automation object model, headless/server | published, Pro license |
+| `pro` | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s | published, Pro license |
+| `fonts` | Metric-compatible substitutes for Word's defaults | published |
+| `vue` | The Vue 3 adapter twin, parity-gated against `react` | published |
+| `nuxt` | Nuxt module over the Vue adapter | WIP, private |
 
 React and Vue both ship; the parity gates below keep them from drifting.
 
@@ -87,16 +87,13 @@ bytes → readOoxmlPackage (bounded OPC/XML) → canonical OoxmlNode tree per pa
 
 `DocxEditor.Root` (owns the instance, created in an effect, StrictMode-safe, container-less) → `.Viewport` (the engine's load-bearing scroll classes) → `.Content` (attach/detach in a layout effect). All chrome is a hook consumer.
 
-- `useDocxEditor()`, `useEditorState(selector, isEqual?)` (one multiplexed
-  subscription + slice memoization — a page selector must NOT re-render on a bold
-  toggle), `useEditorCommand(slotId)` → `{execute, isActive, isEnabled,
-disabledReason}`, `useEditorEvent`, `useFontFamily`.
+- `useDocxEditor()`, `useEditorState(selector, isEqual?)` (one multiplexed subscription + slice memoization — a page selector must NOT re-render on a bold toggle), `useEditorCommand(slotId)` → `{execute, isActive, isEnabled, disabledReason}`, `useEditorEvent`, `useFontFamily`.
 - `DocxEditor.Toolbar` arrangement derives FROM `CHROME_GROUPS`, never hand-listed. Customization ladder: `className`/`data-active` → `icon` prop → `asChild` → in-place slot override (`hidden` removes, `preset={false}` opts out) → raw hooks. Complex parts are compounds (`FontFamily.Trigger/Content/Item`) over a part-level context.
 - `<DocxEditor>` (props + the 7-member `DocxEditorRef`) is sugar over the same primitives. Parity-contract gated; do not widen the ref.
 - Chrome mousedown must `preventDefault()` (skip INPUT/SELECT/TEXTAREA) or it steals the caret.
 - Exported names describe capabilities, never engine internals (no "tree").
 
-Not built yet: structural table ops (insert row/column, merge), comments/tracked-changes derivation, caret scroll-into-view, zoom-without-remount, the Vue twin of provider/hooks.
+Check current feature support in `docs/site/data/word-features.ts` and the public API snapshots in `docs/api/`. React and Vue expose provider composition, shared editing commands, and live zoom updates. Keep capability claims aligned with those sources.
 
 ## Verify
 
@@ -120,21 +117,13 @@ openspec validate typed-ooxml-paragraph-editor --strict
 
 ## Parity and styling
 
-Platform-neutral logic goes in the engine; adapter-only glue may diverge.
-`scripts/parity/parity.contract.json` enumerates paired
-`DocxEditorProps`/`DocxEditorRef` members. Adding an adapter prop or ref method:
-edit the adapter, `bun run api:extract`, add it to the right bucket (`paired`,
-`deferredInVue`, `pairedViaInheritance`, `vueExclusive`), rerun `bun run
-check:parity-contract`.
+Platform-neutral logic goes in the engine; adapter-only glue may diverge. `scripts/parity/parity.contract.json` enumerates paired `DocxEditorProps`/`DocxEditorRef` members. Adding an adapter prop or ref method: edit the adapter, `bun run api:extract`, add it to the right bucket (`paired`, `deferredInVue`, `pairedViaInheritance`, `vueExclusive`), rerun `bun run check:parity-contract`.
 
 All editor chrome CSS and color tokens live in the core stylesheet; adapters only `@import` it (enforced by `bun run check:adapter-css-thin`). Never hardcode hex/rgba — use `--doc-*` tokens or shadcn utilities. The document canvas is not themed; it stays Word-faithful.
 
 ## Public API
 
-API Extractor snapshots live in `docs/api/<pkg-slug>/<entry>.api.md`; CI runs
-`bun run api:check`. On drift: `bun run api:extract`, commit. Changing a
-`@public` symbol: tag it in TSDoc, rebuild, re-extract, commit. `bun run
-docs:json` generates consumer JSON (gitignored, CI smoke test).
+API Extractor snapshots live in `docs/api/<pkg-slug>/<entry>.api.md`; CI runs `bun run api:check`. On drift: `bun run api:extract`, commit. Changing a `@public` symbol: tag it in TSDoc, rebuild, re-extract, commit. `bun run docs:json` generates consumer JSON (gitignored, CI smoke test).
 
 Vue composables must declare a named `Use<Name>Return` interface and annotate the return type, or core's internal types leak into the snapshot.
 
@@ -195,9 +184,7 @@ READMEs, guides, developer docs, feature descriptions, and release notes follow 
 
 **Diagrams are mermaid**, in a ` ```mermaid ` fence — not ASCII box drawing. ASCII renders at whatever the code block's font does, wraps on a phone, and is unreadable to a screen reader; mermaid scales and picks up the site theme. Keep it to the shape being explained (a flow, a sequence, a state machine); a diagram that just restates the prose earns nothing.
 
-OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`;
-schemas in `reference/ecma-376/part1/schemas/`. PDFs are gitignored — run `bun
-run reference:fetch` once when needed.
+OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`. PDFs are gitignored — run `bun run reference:fetch` once when needed.
 
 ## Releasing
 
@@ -213,34 +200,12 @@ Collaboration format compatibility has a separate policy after 2.18. Relevant PR
 
 Never push the `chore: release` commit by hand, delete `.changeset/*.md` outside `changeset version`, or hand-edit `CHANGELOG.md` / `package.json#version`.
 
-**Third-party notices.** Every publishable package ships a
-`THIRD_PARTY_NOTICES.md` reproducing the license of each package esbuild inlines
-into its bundles, because MIT/Apache-2.0 both require the notice to travel with
-the copy. Only genuinely inlined code counts: core declares fast-xml-parser,
-fflate and prosemirror-\* as real `dependencies` with no `noExternal`, so esbuild
-leaves them external and npm installs them with their own licenses. The one
-exception is harfbuzzjs, which core's ESM build inlines (`noExternal`) so browser
-bundlers never see its Node-only `module` import — core's notice reproduces its
-MIT text, and every other package generates an empty notice. Both results are
-correct, not a broken generator — what would be wrong is a bundled dependency
-missing its text, which fails the run outright. The Release
-workflow generates it from `dist/metafile-*.json` just before publishing; the
-file is gitignored, so regenerate with `bun run build:packages && bun run
-notices:generate`. `notices:check` compares against the CURRENT `dist/`, so it
-only means anything right after a build and reports "missing" on a clean tree by
-design. The run is all-or-nothing: a tsup config that stops emitting `metafile:
-true`, a bundled dependency with no license text, or a `files` array that forgets
-the notice fails it — and a failure deletes the notices rather than shipping a
-stale one. A publishable package that is not a tsup bundle has no metafile and
-fails until it gets an attribution path; `packages/fonts` carries OFL text in
-`licenses/`, which no metafile can see.
+**Third-party notices.** Every publishable package ships a `THIRD_PARTY_NOTICES.md` reproducing the license of each package esbuild inlines into its bundles, because MIT/Apache-2.0 both require the notice to travel with the copy. Only genuinely inlined code counts: core declares fast-xml-parser, fflate and prosemirror-\* as real `dependencies` with no `noExternal`, so esbuild leaves them external and npm installs them with their own licenses. The one exception is harfbuzzjs, which core's ESM build inlines (`noExternal`) so browser bundlers never see its Node-only `module` import — core's notice reproduces its MIT text, and every other package generates an empty notice. Both results are correct, not a broken generator — what would be wrong is a bundled dependency missing its text, which fails the run outright. The Release workflow generates it from `dist/metafile-*.json` just before publishing; the file is gitignored, so regenerate with `bun run build:packages && bun run notices:generate`. `notices:check` compares against the CURRENT `dist/`, so it only means anything right after a build and reports "missing" on a clean tree by design. The run is all-or-nothing: a tsup config that stops emitting `metafile: true`, a bundled dependency with no license text, or a `files` array that forgets the notice fails it — and a failure deletes the notices rather than shipping a stale one. A publishable package that is not a tsup bundle has no metafile and fails until it gets an attribution path; `packages/fonts` carries OFL text in `licenses/`, which no metafile can see.
 
 ## Conventions
 
 - **PRs** — short factual title (conventional-commit prefix); body is the minimum the diff doesn't show, often one sentence. A PR that resolves an issue MUST end its BODY with `Fixes #N` — GitHub links and auto-closes only from closing keywords in the body or in commits, never from the title, so a title-only `(fixes #N)` leaves the issue open after merge. No `@`-mentions, unrelated issue numbers, file lists, tooling footers or emojis. Write the body in the [Google developer documentation style](https://developers.google.com/style), the same guide the docs site follows: second person, active voice, present tense, sentence-case headings, American spelling, short sentences, one idea each. Code font for identifiers and filenames; bold for UI elements only.
-- **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run
-dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
-  Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
+- **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`. Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
 - **Issue labels** — every issue gets exactly ONE `area:*` and ONE `priority:*` label; the taxonomy table lives in `README.md` under "Issue conventions". Optional `component:*` names the package. The labels are the source of truth for the public roadmap board (org project 2): `.github/workflows/sync-labels-to-project.yml` mirrors them into the board's Area/Priority single-select fields. An option name must keep matching its label slug (lowercase, spaces→dashes) or the sync warns and skips; an issue with no `area:*` label is removed from the board; two labels of one prefix clear the field. ALWAYS file an issue with both labels AND a native issue type: `gh issue create --type Bug|Feature|Task --label "area:...,priority:..."` (`gh issue edit <N> --type ...` to fix one). Never leave an issue without a type or an area.
 - **ESM only** — no `require()`.
 - **Tailwind** — scoped to `.docx-editor`; the scoping is baked into `dist/editor.css` at core build time (`scripts/build-core-styles.mjs` + `packages/core/tailwind.dist.config.cjs`), so the shipped file carries no raw `@tailwind` directive. Rendered output isn't always protected, so use inline styles on painted elements. Never put Tailwind utilities on the element that carries `docx-editor` itself — scoped utilities only match descendants.

@@ -14,6 +14,9 @@ order: 37
 | `DocxEditorRoot` | Every composed editor | Owns and provides the editor instance |
 | `DocxEditorViewport` | Every composed editor | Supplies the scroll container and page-layout classes |
 | `DocxEditorContent` | Every composed editor | Mounts the painted document surface |
+| Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
+| `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
+| Container height | Every composed editor | Gives the viewport room to render |
 | Remount `:key` | When you change modules | Loads the new modules |
 | Positioned workspace row | When you use the navigation pane | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
@@ -27,14 +30,19 @@ Every editor needs these three components in this order:
 ```vue
 <script setup lang="ts">
 import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+
+defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>
-  <DocxEditorRoot :document="bytes">
-    <DocxEditorViewport>
-      <DocxEditorContent />
-    </DocxEditorViewport>
-  </DocxEditorRoot>
+  <div class="docx-editor" style="height: 100vh">
+    <DocxEditorRoot :document="bytes">
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  </div>
 </template>
 ```
 
@@ -63,20 +71,30 @@ For full prop types, see the [Vue API reference](/docs/2.x/api/vue).
 
 ```vue
 <script setup lang="ts">
+import { defineComponent, h } from 'vue';
 import {
   DocxEditorContent,
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
   LocaleProvider,
+  useChromeTranslate,
 } from '@docx-editor.dev/vue';
 import { pl } from '@docx-editor.dev/i18n';
+
+defineProps<{ bytes: Uint8Array }>();
+const LocalizedToolbar = defineComponent({
+  setup() {
+    const t = useChromeTranslate();
+    return () => h(DocxEditorToolbar, { t: t.value });
+  },
+});
 </script>
 
 <template>
   <LocaleProvider :i18n="pl">
     <DocxEditorRoot :document="bytes" locale="pl-PL">
-      <DocxEditorToolbar />
+      <LocalizedToolbar />
       <DocxEditorViewport>
         <DocxEditorContent />
       </DocxEditorViewport>
@@ -109,6 +127,8 @@ const { DocxEditorRoot, rootProps, rootListeners, editorRef } = provideDocxEdito
 ```
 
 `editorRef` tracks the same instance that `useDocxEditor()` returns in descendants.
+
+For composed chrome, call `useChromeTranslate()` inside the locale provider and pass its result through each part's `t` prop.
 
 ## Customization options
 
@@ -574,6 +594,8 @@ import {
 An omitted part has no interface.
 
 ## Layout constraints
+
+Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
 
 Place the navigation pane and viewport in a row with `position: relative`. The pane uses that row as its positioning context.
 

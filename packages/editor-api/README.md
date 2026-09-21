@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@docx-editor.dev/editor-api"><img src="https://img.shields.io/npm/v/@docx-editor.dev/editor-api.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@docx-editor.dev/editor-api"><img src="https://img.shields.io/npm/dm/@docx-editor.dev/editor-api.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
-  <a href="https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md"><img src="https://img.shields.io/badge/license-EigenPal_Pro_Evaluation_1.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md"><img src="https://img.shields.io/badge/license-EigenPal_Pro_License-blue.svg?style=flat-square&color=3B5BDB" alt="EigenPal Pro License" /></a>
   <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-3B5BDB?style=flat-square&logo=vercel&logoColor=white" alt="Demo" /></a>
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
@@ -28,20 +28,20 @@ Server use requires Node.js `^20.16.0 || >=22.3.0`.
 
 Start with [Runtime and setup](https://www.docx-editor.dev/docs/2.x/editor-api/runtime) and [Batching, loading, and errors](https://www.docx-editor.dev/docs/2.x/editor-api/batching-and-errors).
 
-| Task                                                      | Guide                                                                                              |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Read, insert, replace, or remove text                     | [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges)                 |
-| Find matches, split paragraphs, or use bookmarks          | [Search and navigation](https://www.docx-editor.dev/docs/2.x/editor-api/search-and-navigation)     |
-| Set fonts, paragraph properties, styles, or links         | [Formatting and styles](https://www.docx-editor.dev/docs/2.x/editor-api/formatting)                |
-| Create and configure lists                                | [Lists and numbering](https://www.docx-editor.dev/docs/2.x/editor-api/lists)                       |
-| Work with table values, rows, columns, and cells          | [Tables and cells](https://www.docx-editor.dev/docs/2.x/editor-api/tables)                         |
-| Insert and resize images                                  | [Inline pictures](https://www.docx-editor.dev/docs/2.x/editor-api/pictures)                        |
-| Calculate PAGE and NUMPAGES                               | [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields)                    |
-| Set page geometry and edit headers, footers, or notes     | [Page layout and stories](https://www.docx-editor.dev/docs/2.x/editor-api/page-layout-and-stories) |
-| Fill template controls and edit their metadata            | [Content controls](https://www.docx-editor.dev/docs/2.x/editor-api/content-controls)               |
-| Discuss content and manage threads                        | [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments)                               |
-| Create, inspect, accept, or reject tracked changes        | [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions)                       |
-| Find any public object, method, property, or support type | [API member directory](https://www.docx-editor.dev/docs/2.x/editor-api/reference)                  |
+| Task | Guide |
+| --- | --- |
+| Read, insert, replace, or remove text | [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges) |
+| Find matches, split paragraphs, or use bookmarks | [Search and navigation](https://www.docx-editor.dev/docs/2.x/editor-api/search-and-navigation) |
+| Set fonts, paragraph properties, styles, or links | [Formatting and styles](https://www.docx-editor.dev/docs/2.x/editor-api/formatting) |
+| Create and configure lists | [Lists and numbering](https://www.docx-editor.dev/docs/2.x/editor-api/lists) |
+| Work with table values, rows, columns, and cells | [Tables and cells](https://www.docx-editor.dev/docs/2.x/editor-api/tables) |
+| Insert and resize images | [Inline pictures](https://www.docx-editor.dev/docs/2.x/editor-api/pictures) |
+| Calculate PAGE and NUMPAGES | [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields) |
+| Set page geometry and edit headers, footers, or notes | [Page layout and stories](https://www.docx-editor.dev/docs/2.x/editor-api/page-layout-and-stories) |
+| Fill template controls and edit their metadata | [Content controls](https://www.docx-editor.dev/docs/2.x/editor-api/content-controls) |
+| Discuss content and manage threads | [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments) |
+| Create, inspect, accept, or reject tracked changes | [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions) |
+| Find any public object, method, property, or support type | [API member directory](https://www.docx-editor.dev/docs/2.x/editor-api/reference) |
 
 ## On a server
 
@@ -61,7 +61,7 @@ try {
     await context.sync(); // Read the matching ranges.
 
     for (const match of matches.items) match.insertText('$500k', 'Replace');
-    await context.sync(); //  one atomic batch: all of the writes, or none
+    await context.sync(); // Commit all writes in one atomic batch.
     return matches.items.length;
   });
   console.log(`replaced ${filled}`);
@@ -157,13 +157,13 @@ To upgrade from the former reviewer, bridge, MCP, or chat APIs, see [Migration](
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                       |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome.                   |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint.              |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types.                                                                  |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
+| Package | Description |
+| --- | --- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome. |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n) | Shared locale strings and types. |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, and custom nodes. |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Supported Office.js subset for document editing on a server or in an open editor. |
 
 ## License
 

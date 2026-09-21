@@ -1,7 +1,7 @@
 ---
 title: 'Installation'
 description: 'Install the DOCX editor in React or Vue. Add the stylesheet and set a client-only boundary for server-rendered apps.'
-category: 'Getting Started'
+category: 'Getting started'
 order: 2
 ---
 
@@ -18,7 +18,7 @@ Anything that measures text needs the text shaper. The shaper reaches Node built
 
 This applies to server-side rendering, headless automation with `@docx-editor.dev/editor-api`, and build-time rendering. A browser-only app is unaffected.
 
-The floor matters more than it looks. Measurement decides where lines wrap and pages break, so a shaper that cannot start is not a degraded mode. It changes your page count.
+Text measurement determines line wraps and page breaks. If the shaper cannot start, the resulting layout can differ from Word.
 
 ## Pick a package
 
@@ -159,9 +159,9 @@ Use the guide for your framework:
 
 The editor uses font bytes to measure line wraps and page breaks. It loads embedded document fonts without configuration. Some documents reference Word default fonts without embedding them. For these documents, `@docx-editor.dev/fonts` supplies open-licensed substitutes. Five families match advance widths. The Century Gothic substitute stays within 1% in the package fidelity check.
 
-`packagedFonts()` supplies them per document: the editor calls it after parsing with the families that file declares. It loads a family when the document names it, or when that family is the document's default face, so a document pays for what it declares instead of all 20 eager faces. No request leaves your origin.
+`packagedFonts()` supplies them per document: the editor calls it after parsing with the families that file declares. It loads only requested families and the default font. No request leaves your origin.
 
-The default face counts because a run that names no font still has to be measured in one. That face is Calibri, so Carlito loads for every document.
+The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -184,6 +184,7 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 
+defineProps<{ bytes: Uint8Array }>();
 const fonts = useFonts(packagedFonts());
 </script>
 
@@ -195,7 +196,7 @@ const fonts = useFonts(packagedFonts());
 </Framework>
 </FrameworkTabs>
 
-`packagedFonts()` resolves after the document is parsed, so the first layout uses fixed measurement and the editor re-paginates when the faces arrive. Edits made in between survive that; the undo history behind them does not. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 
 ## Edit documents without a browser
 
