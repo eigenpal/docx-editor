@@ -358,7 +358,7 @@ export async function paint(
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)
       out.push(
-        `${color(fill)} rg ${rect(visit.absoluteBox, -visit.page.box.x, -visit.page.box.y, page.getHeight(), true)} f`
+        `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, page.getHeight(), true)} f`
       );
     const clipping = visit.paragraph.clipToBox;
     if (clipping)

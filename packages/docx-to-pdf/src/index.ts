@@ -9,18 +9,12 @@ import {
   createPackagedFileFetch,
   ExportResourceError,
   openFontBackedDocumentForExport,
-  type FontRequest,
 } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import { MAX_OUTPUT_BYTES, positiveLimit, Work, PdfWorkLimitError } from './context.ts';
 import { paint } from './paint.ts';
-import {
-  installedWordFonts,
-  supplementalFonts,
-  PDF_GLYPH_FALLBACKS,
-  PDF_GLYPH_FALLBACKS_COMPACT,
-} from './font-provisioning.ts';
+import { installedWordFonts, supplementalFonts, PDF_GLYPH_FALLBACKS } from './font-provisioning.ts';
 import {
   PdfDocumentOpenError,
   PdfEncodingError,
@@ -89,20 +83,12 @@ export async function exportPdf(
     maxOutputBytes: _max,
     ...core
   } = options;
-  // The packaged fallback faces weigh about 20 MB, and 16 MB of that is one CJK face most
-  // documents never touch. A document is laid out with the small faces first; only one that
-  // still has a glyph no admitted face covers is opened again with the whole set. A caller who
-  // names `glyphFallbacks` has decided already and gets exactly one attempt with that list.
-  const attempts = options.glyphFallbacks
-    ? [options.glyphFallbacks]
-    : [PDF_GLYPH_FALLBACKS_COMPACT, PDF_GLYPH_FALLBACKS];
-  const attempt = async (
-    glyphFallbacks: readonly FontRequest[],
-    last: boolean
-  ): Promise<PdfExportResult | null> => {
-    // Each attempt is a full pass over the document with its own operation and content
-    // budgets. Only the wall-clock deadline is shared, because that is the caller's promise.
-    work.beginAttempt();
+  // One pass over the document with every packaged fallback face on offer. The faces are
+  // read lazily, only when a family the document uses needs one, so offering the whole list
+  // costs a plain Latin document nothing; laying the document out twice to find that out
+  // cost every document a second layout and paint.
+  const glyphFallbacks = options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS;
+  try {
     work.check();
     const opened = await openFontBackedDocumentForExport(source, {
       documentLigatures: true,
@@ -137,13 +123,6 @@ export async function exportPdf(
       if (metadata?.keywords) doc.setKeywords([metadata.keywords]);
       await paint(doc, opened.session, layout, work, comments);
       const diagnostics = Object.freeze([...work.diagnostics]);
-      // Uncovered text is the one thing a larger fallback set can still answer: a glyph no
-      // admitted face has, or a span Core could not shape exactly for want of one.
-      if (
-        !last &&
-        diagnostics.some((d) => d.code === 'missing-glyph' || d.code === 'unshaped-text')
-      )
-        return null;
       if (fidelityPolicy === 'strict' && diagnostics.some((d) => d.severity !== 'information'))
         throw new PdfFidelityError(diagnostics);
       work.check();
@@ -162,13 +141,6 @@ export async function exportPdf(
     } finally {
       opened.session.dispose();
     }
-  };
-  try {
-    for (const [index, glyphFallbacks] of attempts.entries()) {
-      const result = await attempt(glyphFallbacks, index === attempts.length - 1);
-      if (result) return result;
-    }
-    throw new PdfEncodingError('PDF export produced no result');
   } catch (error) {
     // A typed export error is the answer, whatever the clock says now: a fidelity refusal
     // that lands after the deadline is still a fidelity refusal, not a timeout. The one

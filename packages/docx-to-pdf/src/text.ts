@@ -15,6 +15,7 @@ import {
   styleForFontSlot,
   TAB_LEADER_GLYPH,
   tabLeaderPattern,
+  type LayoutBox,
   type SemanticSpanVisit,
   type ShapedRun,
 } from '@docx-editor.dev/core/layout';
@@ -217,10 +218,16 @@ export class TextWriter {
       return '';
     };
     const shaped = this.session.shapeLaidOutText(span);
+    // Name the font. Nearly every unshaped span is text in a family the document neither
+    // embeds nor the bundle carries, and the reader's fix is to supply that family.
+    const family = styleForFontSlot(span.style, span.fontSlot).fontFamily ?? 'the default font';
     if (!shaped)
-      return report('unshaped-text', 'Core could not provide exact shaping for a visible span');
+      return report(
+        'unshaped-text',
+        `Core could not provide exact shaping for a visible span in ${family}`
+      );
     if (shaped.run.glyphs.some((g) => g.id === 0))
-      return report('missing-glyph', 'A visible span contains missing glyphs');
+      return report('missing-glyph', `A visible span in ${family} contains missing glyphs`);
     const face = this.embeddedFace(shaped.font, visit, page);
     if (!face) return '';
     const style = styleForFontSlot(span.style, span.fontSlot);
@@ -354,19 +361,28 @@ export class TextWriter {
       // `issue-483-firstline-marker.docx` at exactly 1.20pt below the baseline and 0.48pt
       // thick, which are 5 and 2 units. Centring on the suggested position instead put the
       // stroke 0.31pt high.
-      const rawThickness = face.font.underlineThickness * metricScale;
-      const rawOffset = -face.font.underlinePosition * metricScale;
+      //
+      // A face with no usable `post` metrics (a subset embedded by a PDF-to-DOCX converter
+      // leaves them zero) gets a stroke of 1/20 em set 1/10 em under the baseline, which is
+      // where Arial, Times New Roman and Calibri all put theirs to within a device unit.
+      // Reported at information level: the line is drawn, its exact placement is not the
+      // font's own.
+      const metricsUsable =
+        face.font.underlineThickness > 0 && Number.isFinite(face.font.underlinePosition);
+      if (!metricsUsable)
+        this.work.report(
+          'underline-metrics',
+          'Font has no valid underline metrics; the underline uses a default position and thickness',
+          visit.page.index,
+          'information'
+        );
+      const rawThickness = metricsUsable ? face.font.underlineThickness * metricScale : size / 20;
+      const rawOffset = metricsUsable ? -face.font.underlinePosition * metricScale : size / 10;
       const thickness =
         Math.max(1, Math.round(rawThickness / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT;
       const position =
         baseline - Math.round(rawOffset / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT - thickness / 2;
-      if (!(rawThickness > 0) || !Number.isFinite(rawOffset))
-        this.work.report(
-          'underline-metrics',
-          'Font has no valid underline metrics',
-          visit.page.index
-        );
-      else {
+      {
         const c = style.underline?.color ?? foreground;
         const supported = [
           'single',
@@ -471,10 +487,54 @@ export class TextWriter {
     }
     return out.join('\n');
   }
+  /**
+   * The band a highlight or character shading fills: the span's own face box, seated on the
+   * line's baseline.
+   *
+   * Layout publishes every span box at the LINE top with the span's own face height. That is
+   * the selection band, and the screen painter seats it on the baseline with
+   * `vertical-align`. Filling the box where it is published puts a small highlighted run at
+   * the top of a line a larger run made tall, with its glyphs hanging out under the band.
+   * Word draws the band around the run's own face, ascent and external leading above the
+   * baseline and descent below, so a mixed-size line highlights stepped: each run at its own
+   * height, all seated on one baseline. A raised or lowered script carries its band with it.
+   *
+   * The split above and below the baseline comes from the face when it is admitted, and from
+   * the line's own glyph band otherwise, so a span this writer cannot shape (a tab, a face it
+   * refused) still lands on the baseline instead of at the line top.
+   */
+  bandBox(visit: SemanticSpanVisit): LayoutBox {
+    const { span, line, absoluteBox } = visit;
+    const shaped = this.session.shapeLaidOutText(span);
+    const face = shaped ? this.admittedFace(shaped.font, visit) : undefined;
+    const leading = line.leading ?? 0;
+    const above = face
+      ? Math.abs(face.font.ascent) + Math.max(0, face.font.lineGap)
+      : line.baseline - leading;
+    const total = face
+      ? above + Math.abs(face.font.descent)
+      : line.box.height - leading - (line.trailingSpacing ?? 0);
+    const faceBaseline = total > 0 ? (span.box.height * above) / total : span.box.height;
+    const top =
+      line.box.y +
+      line.baseline -
+      faceBaseline -
+      baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
+    return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
+  }
   private embeddedFace(
     font: ExportAdmittedFontIdentity,
     visit: SemanticSpanVisit,
     page: PDFPage
+  ): EmbeddedFace | undefined {
+    const face = this.admittedFace(font, visit);
+    if (face) page.node.setFontDictionary(PDFName.of(face.name), face.ref);
+    return face;
+  }
+  /** The embedded face for a shaped font, without registering it on a page. */
+  private admittedFace(
+    font: ExportAdmittedFontIdentity,
+    visit: SemanticSpanVisit
   ): EmbeddedFace | undefined {
     const report = (code: string, message: string): undefined => {
       this.work.report(code, message, visit.page.index);
@@ -496,7 +556,6 @@ export class TextWriter {
       this.refused.set(font.identity, reason);
       return report('font-embedding', reason);
     }
-    page.node.setFontDictionary(PDFName.of(face.name), face.ref);
     return face;
   }
   private leader(visit: SemanticSpanVisit, page: PDFPage): string {

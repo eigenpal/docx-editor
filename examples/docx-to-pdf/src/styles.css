@@ -611,6 +611,46 @@ button {
   container-type: inline-size;
 }
 
+.pdf-diagnostics {
+  display: inline;
+}
+
+.pdf-diagnostics summary {
+  display: inline;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.pdf-diagnostics summary::before {
+  content: ' · ';
+  text-decoration: none;
+}
+
+.pdf-diagnostics ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  text-align: left;
+}
+
+.pdf-diagnostics li {
+  margin: 2px 0;
+}
+
+/* The pages scroll inside the pane, over the same workspace wash as the Markdown preview. */
+.pdf-preview-scroll {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(circle at 50% 0, rgb(255 255 255 / 66%), transparent 28rem),
+    var(--pdf-workspace);
+  scrollbar-color: #bcc2ca transparent;
+  scrollbar-width: thin;
+}
+
 .pdf-pages {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

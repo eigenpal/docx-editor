@@ -10,23 +10,51 @@ import { join } from 'node:path';
 import { pathToFileURL, URL as NodeURL } from 'node:url';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
+import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 
 const assetRoot = new NodeURL(
   '../assets/',
   typeof __dirname === 'string' ? pathToFileURL(__dirname + '/').href : import.meta.url
 );
-const supplemental = [
-  ['Noto Sans Symbols 2', 'NotoSansSymbols2-Regular.ttf'],
-  ['Noto Sans Math', 'NotoSansMath-Regular.ttf'],
-  ['Noto Sans Arabic', 'NotoSansArabic-Regular.ttf'],
-  ['Noto Sans CJK JP', 'NotoSansCJKjp-Regular.otf'],
-  ['Noto Emoji', 'NotoEmoji-Regular.ttf'],
-] as const;
+type FaceStyle = 'normal' | 'italic';
+type PackagedFace = readonly [family: string, file: NodeURL, weight: number, style: FaceStyle];
+const latinSubstitute = (family: string, prefix: string): readonly PackagedFace[] =>
+  (
+    [
+      ['Regular', 400, 'normal'],
+      ['Bold', 700, 'normal'],
+      ['Italic', 400, 'italic'],
+      ['BoldItalic', 700, 'italic'],
+    ] as const
+  ).map(([suffix, weight, style]) => [
+    family,
+    new NodeURL(`${prefix}-${suffix}.ttf`, FONT_ASSET_ROOT),
+    weight,
+    style,
+  ]);
 /**
- * The whole fallback set, small faces first.
+ * Every face this resolver can read: the symbol, mathematics, Arabic, CJK and emoji faces
+ * this package carries, and the metric-compatible Latin substitutes from
+ * `@docx-editor.dev/fonts`, which stand in here for families that package has no plan for.
+ */
+const supplemental: readonly PackagedFace[] = [
+  ['Noto Sans Symbols 2', new NodeURL('NotoSansSymbols2-Regular.ttf', assetRoot), 400, 'normal'],
+  ['Noto Sans Math', new NodeURL('NotoSansMath-Regular.ttf', assetRoot), 400, 'normal'],
+  ['Noto Sans Arabic', new NodeURL('NotoSansArabic-Regular.ttf', assetRoot), 400, 'normal'],
+  ['Noto Sans CJK JP', new NodeURL('NotoSansCJKjp-Regular.otf', assetRoot), 400, 'normal'],
+  ['Noto Emoji', new NodeURL('NotoEmoji-Regular.ttf', assetRoot), 400, 'normal'],
+  ...latinSubstitute('Liberation Sans', 'LiberationSans'),
+  ...latinSubstitute('Liberation Serif', 'LiberationSerif'),
+  ...latinSubstitute('Liberation Mono', 'LiberationMono'),
+  ...latinSubstitute('Carlito', 'Carlito'),
+  ...latinSubstitute('Caladea', 'Caladea'),
+];
+/**
+ * The fallback faces offered to every export, small faces first.
  *
- * The exporter asks for {@link PDF_GLYPH_FALLBACKS_COMPACT} first and reaches for this list only
- * when a glyph is still uncovered, because the CJK face alone is 16 MB.
+ * Offering a face costs nothing until a family the document uses needs it: the resolver
+ * below reads a packaged file only for a family it is asked about, so the 16 MB CJK face is
+ * read by a document with CJK text and by no other.
  */
 export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Segoe UI Symbol',
@@ -39,21 +67,120 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Noto Sans CJK JP',
   'Noto Emoji',
 ].map((family) => ({ family, weight: 400, style: 'normal' }));
-/** The faces under 1.3 MB each: symbols, mathematics, Arabic. */
-export const PDF_GLYPH_FALLBACKS_COMPACT: readonly FontRequest[] = PDF_GLYPH_FALLBACKS.filter(
-  (request) => !['SimSun', 'Batang', 'Noto Sans CJK JP', 'Noto Emoji'].includes(request.family)
-);
 const face = (
   family: string,
   weight = 400,
   style: 'normal' | 'italic' = 'normal'
 ): FontRequest => ({ family, weight, style });
 
+/**
+ * Word families whose text a packaged face can carry when the family itself is absent.
+ *
+ * Helvetica is the one metric match here (Arial was drawn to its widths, and Liberation Sans
+ * to Arial's). The CJK entries are coverage, not metrics: a document set in SimSun or
+ * MS Mincho renders in Noto Sans CJK rather than refusing every ideograph, the same fall
+ * back Word shows when the face is missing.
+ */
 const substitutes: Record<string, string> = {
   'Cambria Math': 'Noto Sans Math',
-  'MS Gothic': 'Noto Sans CJK JP',
   Georgia: 'Liberation Serif',
   Verdana: 'Liberation Sans',
+  Helvetica: 'Liberation Sans',
+  ...Object.fromEntries(
+    [
+      'MS Gothic',
+      'MS PGothic',
+      'MS UI Gothic',
+      'MS Mincho',
+      'MS PMincho',
+      'Meiryo',
+      'Yu Gothic',
+      'Yu Mincho',
+      'SimSun',
+      'NSimSun',
+      'SimHei',
+      'FangSong',
+      'KaiTi',
+      'DengXian',
+      'Microsoft YaHei',
+      'Microsoft JhengHei',
+      'MingLiU',
+      'PMingLiU',
+      'Batang',
+      'Gulim',
+      'Dotum',
+      'Malgun Gothic',
+    ].map((family) => [family, 'Noto Sans CJK JP'])
+  ),
+};
+/**
+ * The localized names Word writes for its East Asian faces, in the language of the Word
+ * that saved the document. Word treats each as the same font; so does this resolver.
+ */
+const localizedFamilies: Record<string, string> = {
+  宋体: 'SimSun',
+  新宋体: 'NSimSun',
+  黑体: 'SimHei',
+  仿宋: 'FangSong',
+  楷体: 'KaiTi',
+  等线: 'DengXian',
+  微软雅黑: 'Microsoft YaHei',
+  微軟正黑體: 'Microsoft JhengHei',
+  新細明體: 'PMingLiU',
+  細明體: 'MingLiU',
+  'ＭＳ 明朝': 'MS Mincho',
+  'ＭＳ Ｐ明朝': 'MS PMincho',
+  'ＭＳ ゴシック': 'MS Gothic',
+  'ＭＳ Ｐゴシック': 'MS PGothic',
+  'ＭＳ ＵＩ Ｇｏｔｈｉｃ': 'MS UI Gothic',
+  メイリオ: 'Meiryo',
+  游ゴシック: 'Yu Gothic',
+  游明朝: 'Yu Mincho',
+  '맑은 고딕': 'Malgun Gothic',
+  바탕: 'Batang',
+  굴림: 'Gulim',
+  돋움: 'Dotum',
+};
+/**
+ * The family a document names, read as Word reads it.
+ *
+ * A converter that writes face names for family names produces `Times New Roman Bold`, and a
+ * Chinese Word writes `宋体` for SimSun. Both name a face this resolver knows; neither is a
+ * key in its tables. The style words fold into the request's weight and style, and a
+ * localized name resolves to the English one the tables use. The face is still registered
+ * under the name the document wrote, which is the name layout asks for.
+ */
+export function canonicalFamily(family: string): {
+  readonly family: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+} {
+  const styled = /^(.+?)\s+(Bold Italic|BoldItalic|Bold|Italic)$/i.exec(family);
+  const base = styled ? styled[1]! : family;
+  const words = styled ? styled[2]!.toLowerCase() : '';
+  return {
+    family: Object.hasOwn(localizedFamilies, base) ? localizedFamilies[base]! : base,
+    bold: words.includes('bold'),
+    italic: words.includes('italic'),
+  };
+}
+/**
+ * The families `@docx-editor.dev/fonts` substitutes when the document names them exactly.
+ * Named through a style word or a localized name, they reach this resolver instead.
+ */
+const packagedSubstitutes: Record<string, string> = {
+  Calibri: 'Carlito',
+  Cambria: 'Caladea',
+  'Times New Roman': 'Liberation Serif',
+  Arial: 'Liberation Sans',
+  'Courier New': 'Liberation Mono',
+};
+const substituteFor = (family: string): string | undefined => {
+  const canonical = canonicalFamily(family).family;
+  if (Object.hasOwn(substitutes, canonical)) return substitutes[canonical];
+  if (canonical !== family && Object.hasOwn(packagedSubstitutes, canonical))
+    return packagedSubstitutes[canonical];
+  return undefined;
 };
 
 /**
@@ -68,35 +195,38 @@ export const supplementalFonts = defineFontResolver(async ({ families, signal })
   const wanted = new Set<string>();
   for (const family of families) {
     wanted.add(family);
-    const target = Object.hasOwn(substitutes, family) ? substitutes[family] : undefined;
+    const target = substituteFor(family);
     if (target) wanted.add(target);
   }
   const sources = await Promise.all(
     supplemental
       .filter(([family]) => wanted.has(family))
-      .map(async ([family, file]) => {
-        const bytes = new Uint8Array(await readFontFile(new NodeURL(file, assetRoot), signal));
-        const result = createFontSource(bytes, face(family));
-        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file}`);
+      .map(async ([family, file, weight, style]) => {
+        const bytes = new Uint8Array(await readFontFile(file, signal));
+        const result = createFontSource(bytes, face(family, weight, style));
+        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file.pathname}`);
         return result.source;
       })
   );
   return {
     sources,
     substitutions: families.flatMap((family) => {
-      const target = Object.hasOwn(substitutes, family) ? substitutes[family] : undefined;
-      return target
-        ? [400, 700].flatMap((weight) =>
-            (['normal', 'italic'] as const).map((style) => ({
-              from: face(family, weight, style),
-              to: face(
+      const target = substituteFor(family);
+      if (!target) return [];
+      const { bold, italic } = canonicalFamily(family);
+      return [400, 700].flatMap((weight) =>
+        (['normal', 'italic'] as const).map((style) => ({
+          from: face(family, weight, style),
+          // The packaged CJK, symbol and mathematics faces come in one weight and one style.
+          to: target.startsWith('Noto')
+            ? face(target)
+            : face(
                 target,
-                target.startsWith('Noto') ? 400 : weight,
-                target.startsWith('Noto') ? 'normal' : style
+                bold || weight === 700 ? 700 : 400,
+                italic || style === 'italic' ? 'italic' : 'normal'
               ),
-            }))
-          )
-        : [];
+        }))
+      );
     }),
   };
 });
@@ -119,6 +249,7 @@ const wordFontRoots =
 /** Internal factory: tests supply isolated trusted directories without mocking global fs. */
 export function installedWordFontResolver(roots: readonly string[]) {
   return defineFontResolver(async ({ families, defaultFamily, signal }) => {
+    // Filename stems that take Word's ` Bold` / `bd` style suffixes.
     const names: Record<string, readonly string[]> = {
       Arial: ['Arial', 'arial'],
       'Times New Roman': ['Times New Roman', 'times'],
@@ -134,6 +265,8 @@ export function installedWordFontResolver(roots: readonly string[]) {
       'MS Gothic': ['MS Gothic', 'msgothic'],
       'MS PGothic': ['MS PGothic'],
       'MS UI Gothic': ['MS UI Gothic'],
+      'Arial Narrow': ['Arial Narrow', 'ArialNarrow'],
+      'Malgun Gothic': ['malgun'],
       // Legacy symbol-encoded faces. A Word bullet is the font's own byte plus 0xF000
       // (U+F0B7 in Symbol), a private-use codepoint only these faces carry — and the face
       // also SIZES the line it sits on, because a 12 pt Symbol ascends 12.06 pt where a
@@ -145,33 +278,65 @@ export function installedWordFontResolver(roots: readonly string[]) {
       'Wingdings 3': ['Wingdings 3', 'wingdng3'],
       Webdings: ['Webdings', 'webdings'],
     };
+    // Files named by face rather than by suffix rule, in the order regular, bold, italic,
+    // bold italic. A collection lists one file for every face; the face is picked by name.
+    const files: Record<string, readonly [string[], string[], string[], string[]]> = {
+      Aptos: [['Aptos.ttf'], ['Aptos-Bold.ttf'], ['Aptos-Italic.ttf'], ['Aptos-Bold-Italic.ttf']],
+      'Aptos Narrow': [
+        ['Aptos-Narrow.ttf'],
+        ['Aptos-Narrow-Bold.ttf'],
+        ['Aptos-Narrow-Italic.ttf'],
+        ['Aptos-Narrow-Bold-Italic.ttf'],
+      ],
+      Helvetica: [['Helvetica.ttc'], ['Helvetica.ttc'], ['Helvetica.ttc'], ['Helvetica.ttc']],
+      SimHei: [['SimHei.ttf', 'simhei.ttf'], [], [], []],
+      FangSong: [['Fangsong.ttf', 'simfang.ttf'], [], [], []],
+      KaiTi: [['Kaiti.ttf', 'simkai.ttf'], [], [], []],
+      DengXian: [['Deng.ttf'], ['Dengb.ttf'], [], []],
+      'MS Mincho': [['msmincho.ttc'], [], [], []],
+      'MS PMincho': [['msmincho.ttc'], [], [], []],
+      'Microsoft YaHei': [['msyh.ttc'], ['msyhbd.ttc'], [], []],
+      Meiryo: [['meiryo.ttc'], ['meiryob.ttc'], [], []],
+      MingLiU: [['mingliu.ttc'], [], [], []],
+      PMingLiU: [['mingliu.ttc'], [], [], []],
+      Gulim: [['gulim.ttc'], [], [], []],
+      Dotum: [['gulim.ttc'], [], [], []],
+    };
     const sources = [];
-    for (const family of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {
-      if (!Object.hasOwn(names, family)) continue;
-      for (const [weight, style, suffix, short] of [
-        [400, 'normal', '', ''],
-        [700, 'normal', ' Bold', 'bd'],
-        [400, 'italic', ' Italic', 'i'],
-        [700, 'italic', ' Bold Italic', 'bi'],
+    for (const requested of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {
+      const { family, bold, italic } = canonicalFamily(requested);
+      if (!Object.hasOwn(names, family) && !Object.hasOwn(files, family)) continue;
+      for (const [weight, style] of [
+        [400, 'normal'],
+        [700, 'normal'],
+        [400, 'italic'],
+        [700, 'italic'],
       ] as const) {
+        // `Times New Roman Bold` at weight 400 is the bold file; at 700 it is the same file.
+        const faceBold = bold || weight === 700;
+        const faceItalic = italic || style === 'italic';
+        const slot = (faceBold ? 1 : 0) + (faceItalic ? 2 : 0);
+        const [suffix, short] = [
+          ['', ''],
+          [' Bold', 'bd'],
+          [' Italic', 'i'],
+          [' Bold Italic', 'bi'],
+        ][slot]!;
         let found = false;
         for (const root of roots) {
           const shortSuffix = ['Georgia', 'Verdana', 'Calibri', 'Cambria'].includes(family)
             ? (({ bd: 'b', bi: 'z' } as Record<string, string>)[short] ?? short)
             : short;
-          const candidates = names[family]!.flatMap((name) => [
+          const candidates = (names[family] ?? []).flatMap((name) => [
             name + suffix + '.ttf',
             name + shortSuffix + '.ttf',
           ]);
-          if (weight === 400 && style === 'normal' && ['Cambria', 'Cambria Math'].includes(family))
+          candidates.push(...(files[family]?.[slot] ?? []));
+          if (slot === 0 && ['Cambria', 'Cambria Math'].includes(family))
             candidates.push('Cambria.ttc', 'cambria.ttc');
-          if (
-            weight === 400 &&
-            style === 'normal' &&
-            ['MS Gothic', 'MS PGothic', 'MS UI Gothic'].includes(family)
-          )
+          if (slot === 0 && ['MS Gothic', 'MS PGothic', 'MS UI Gothic'].includes(family))
             candidates.push('msgothic.ttc', 'MSGOTHIC.TTC');
-          if (weight === 400 && style === 'normal') {
+          if (slot === 0) {
             if (family === 'SimSun') candidates.push('Simsun.ttc', 'simsun.ttc');
             if (family === 'Batang') candidates.push('batang.ttc', 'Batang.ttc');
           }
@@ -183,14 +348,15 @@ export function installedWordFontResolver(roots: readonly string[]) {
               if (filename.toLowerCase().endsWith('.ttc')) {
                 const collection = openFont(Buffer.from(bytes));
                 if (!('fonts' in collection)) continue;
-                faceIndex = collection.fonts.findIndex(
-                  (font) =>
-                    typeof font.postscriptName === 'string' &&
-                    font.postscriptName.replace(/[- ]/g, '') === family.replace(/[- ]/g, '')
+                faceIndex = collection.fonts.findIndex((font) =>
+                  collectionFaceMatches(font.postscriptName, family, faceBold, faceItalic)
                 );
                 if (faceIndex < 0) continue;
               }
-              const source = createFontSource(bytes, { ...face(family, weight, style), faceIndex });
+              const source = createFontSource(bytes, {
+                ...face(requested, weight, style),
+                faceIndex,
+              });
               if ('failure' in source) continue;
               sources.push(source.source);
               found = true;
@@ -206,6 +372,26 @@ export function installedWordFontResolver(roots: readonly string[]) {
     }
     return { sources };
   });
+}
+
+/**
+ * Whether a collection member is the requested face: its PostScript name is the family
+ * with the style words appended, spaces and hyphens aside (`Helvetica-BoldOblique`,
+ * `MicrosoftYaHei-Bold`, `MS-Mincho`). Oblique is a face's own word for italic.
+ */
+function collectionFaceMatches(
+  postscriptName: unknown,
+  family: string,
+  bold: boolean,
+  italic: boolean
+): boolean {
+  if (typeof postscriptName !== 'string') return false;
+  const actual = postscriptName
+    .replace(/[- ]/g, '')
+    .replace(/Oblique$/, 'Italic')
+    .toLowerCase();
+  const expected = `${family.replace(/[- ]/g, '')}${bold ? 'Bold' : ''}${italic ? 'Italic' : ''}`;
+  return actual === expected.toLowerCase();
 }
 
 /** Read only fixed, known Word font filenames from trusted OS font locations. */

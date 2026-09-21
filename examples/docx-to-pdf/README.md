@@ -17,6 +17,8 @@ Open `http://127.0.0.1:5180`.
 
 The demo opens the editor sample. Edit it, then select **Generate PDF** to convert the document as it stands. The preview appears beside the editor with a download link.
 
+The demo converts in best-effort mode, so a document that names a font this host does not have, or draws a shape the writer does not support, still produces pages. The line under the pages counts the diagnostics. Select it to read each one with the pages it applies to.
+
 Conversion runs when you ask for it, not on every keystroke, because a page of PDF is expensive to produce. After an edit, the demo marks the preview stale. The page count line says so, and the control becomes **Regenerate PDF**.
 
 **Open DOCX** loads a document of your own, up to 20 MiB. **Reset** returns to the sample.

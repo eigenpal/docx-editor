@@ -7,7 +7,11 @@ import { expect, test } from 'bun:test';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { installedWordFontResolver, supplementalFonts } from '../src/font-provisioning.ts';
+import {
+  canonicalFamily,
+  installedWordFontResolver,
+  supplementalFonts,
+} from '../src/font-provisioning.ts';
 
 async function directory(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'pdf-font-provision-'));
@@ -139,4 +143,74 @@ test('packaged faces are read only for the families that ask for them', async ()
   const cambria = await supplementalFonts({ families: ['Cambria Math'], defaultFamily: 'Arial' });
   expect(cambria.sources.map((source) => source.request.family)).toEqual(['Noto Sans Math']);
   expect(cambria.substitutions.every((s) => s.to.family === 'Noto Sans Math')).toBe(true);
+});
+
+test('a styled or localized family name resolves to the face Word would use', () => {
+  expect(canonicalFamily('Times New Roman Bold')).toEqual({
+    family: 'Times New Roman',
+    bold: true,
+    italic: false,
+  });
+  expect(canonicalFamily('Arial Bold Italic')).toEqual({
+    family: 'Arial',
+    bold: true,
+    italic: true,
+  });
+  expect(canonicalFamily('宋体')).toEqual({ family: 'SimSun', bold: false, italic: false });
+  expect(canonicalFamily('ＭＳ 明朝')).toEqual({ family: 'MS Mincho', bold: false, italic: false });
+  // Only the four style words fold; a family that happens to end in another word does not.
+  expect(canonicalFamily('Segoe UI Light')).toEqual({
+    family: 'Segoe UI Light',
+    bold: false,
+    italic: false,
+  });
+});
+
+test('installed discovery reads a face-named family and a styled family name', async () => {
+  await directory(async (root) => {
+    const sample = new URL(
+      '../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf',
+      import.meta.url
+    );
+    for (const file of ['Aptos.ttf', 'Aptos-Bold.ttf', 'timesbd.ttf', 'SimHei.ttf']) {
+      await copyFile(sample, join(root, file));
+    }
+    const result = await installedWordFontResolver([root])({
+      families: ['Aptos', 'Times New Roman Bold', '黑体'],
+      defaultFamily: 'Aptos',
+    });
+    expect(result.sources.map((source) => source.request)).toEqual([
+      { family: 'Aptos', weight: 400, style: 'normal' },
+      { family: 'Aptos', weight: 700, style: 'normal' },
+      // The bold file answers the styled name at both weights, under the name layout asks for.
+      { family: 'Times New Roman Bold', weight: 400, style: 'normal' },
+      { family: 'Times New Roman Bold', weight: 700, style: 'normal' },
+      { family: '黑体', weight: 400, style: 'normal' },
+    ]);
+  });
+});
+
+test('packaged Latin substitutes stand in for Helvetica and for a styled Word family', async () => {
+  const helvetica = await supplementalFonts({ families: ['Helvetica'], defaultFamily: 'Arial' });
+  expect(helvetica.sources.map((source) => source.request)).toEqual([
+    { family: 'Liberation Sans', weight: 400, style: 'normal' },
+    { family: 'Liberation Sans', weight: 700, style: 'normal' },
+    { family: 'Liberation Sans', weight: 400, style: 'italic' },
+    { family: 'Liberation Sans', weight: 700, style: 'italic' },
+  ]);
+  expect(helvetica.substitutions).toContainEqual({
+    from: { family: 'Helvetica', weight: 700, style: 'italic' },
+    to: { family: 'Liberation Sans', weight: 700, style: 'italic' },
+  });
+  const styled = await supplementalFonts({
+    families: ['Times New Roman Bold'],
+    defaultFamily: 'Arial',
+  });
+  expect(styled.sources.map((source) => source.request.family)).toEqual(
+    Array(4).fill('Liberation Serif')
+  );
+  // Bold is in the name, so every weight of the request is the bold face.
+  expect(styled.substitutions.map((s) => s.to.weight)).toEqual([700, 700, 700, 700]);
+  const cjk = await supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' });
+  expect(cjk.sources.map((source) => source.request.family)).toEqual(['Noto Sans CJK JP']);
 });

@@ -22,6 +22,7 @@ await writeFile('document.pdf', result.bytes);
 - `displayMode: 'proposed'` shows the final text. `'original'` and `'all-markup'` use Core's corresponding revision projections. Conversion never changes the DOCX.
 - `comments: true` preserves native PDF comments. To omit annotations, set it to `false`.
 - `useSystemFonts` defaults to `true`. It reads known Word font filenames from standard OS font directories. For portable packaged fonts, set it to `false`.
+- A family written as a face name, such as `Times New Roman Bold`, and a localized East Asian name, such as `宋体`, resolve to the faces Word uses for them. When Helvetica or a common East Asian family is absent, a packaged face stands in for it.
 - `glyphFallbacks` lists ordered admitted faces for a span that is missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and monochrome emoji.
 - `fonts` places caller font origins before installed Word fonts and packaged substitutes. `fallbackFonts` follow the packaged origins. Core's separate `fontPolicy` controls substitution. To see the faces the export used, inspect `result.fontResolution`.
 - `timeoutMs: 60000`, `maxOutputBytes: 67108864`, and an optional `signal` bound the work. You can lower the byte limit, but you cannot raise it. Core resource limits still apply.

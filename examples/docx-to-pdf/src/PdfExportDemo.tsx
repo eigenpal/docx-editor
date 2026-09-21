@@ -10,6 +10,7 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { PdfViewer } from './PdfViewer';
 import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
 import {
+  diagnosticSummary,
   emptyStateMessage,
   formatBytes,
   generateLabel,
@@ -24,14 +25,48 @@ const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const EDITOR_PACKAGED_FONTS = packagedFonts();
 type MobilePane = 'source' | 'pdf';
 
-/** Material Symbols `picture_as_pdf`, inline like every other icon in this repository. */
+/** The `.DOCX` mark from the site header, wearing a PDF band. */
 function PdfIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 -960 960 960" aria-hidden="true" focusable="false">
+    <svg
+      viewBox="0 0 70 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      style={{ width: '14px', height: 'auto', flexShrink: 0 }}
+    >
       <path
-        fill="currentColor"
-        d="M360-460h40v-80h40q17 0 28.5-11.5T480-580v-40q0-17-11.5-28.5T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.5-11.5T640-500v-120q0-17-11.5-28.5T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.5-23.5T240-320v-480q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.5-23.5T80-160v-560h80v560h560v80H160Zm160-720v480-480Z"
+        d="M2 2H48L68 22V78H2V2Z"
+        fill="#FAF9F8"
+        stroke="#201F1E"
+        strokeWidth="4"
+        strokeLinejoin="round"
       />
+      <path
+        d="M48 2V22H68"
+        fill="#FBE4E1"
+        stroke="#201F1E"
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
+      <path d="M48 2V22H68L48 2Z" fill="#FBE4E1" />
+      <rect x="13" y="32" width="28" height="4" fill="#201F1E" opacity="0.25" />
+      <rect x="13" y="42" width="38" height="4" fill="#201F1E" opacity="0.15" />
+      <rect x="13" y="52" width="33" height="4" fill="#201F1E" opacity="0.15" />
+      <rect x="13" y="62" width="36" height="4" fill="#201F1E" opacity="0.15" />
+      <rect x="13" y="82" width="44" height="16" fill="#B3261E" stroke="#201F1E" strokeWidth="3" />
+      <text
+        x="35"
+        y="94"
+        textAnchor="middle"
+        fill="#FAF9F8"
+        fontSize="11"
+        fontWeight="900"
+        fontFamily="system-ui, sans-serif"
+      >
+        .PDF
+      </text>
     </svg>
   );
 }
@@ -123,7 +158,12 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
     setStatus('converting');
     setError(null);
     try {
-      const response = await fetch('/api/convert', {
+      // Best effort, with the diagnostics shown: a document that names a font this host does
+      // not have, or draws a shape the writer does not, still comes back as pages, and the
+      // meta line under them says what was approximated. A strict conversion refuses the
+      // whole document over one such span, which is the right default for an automated
+      // pipeline and the wrong one for a page whose point is to show the document.
+      const response = await fetch('/api/convert?fidelityPolicy=best-effort', {
         method: 'POST',
         body: saved,
         signal: abort.signal,
@@ -358,16 +398,28 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         >
           {result ? (
             <>
-              <div className={`pdf-pages${stale ? ' pdf-pages--stale' : ''}`}>
-                <PdfViewer bytes={result.data} pageCount={result.pageCount} />
+              <div className="pdf-preview-scroll">
+                <div className={`pdf-pages${stale ? ' pdf-pages--stale' : ''}`}>
+                  <PdfViewer bytes={result.data} pageCount={result.pageCount} />
+                </div>
               </div>
               <div className="pdf-page-meta" role="status" aria-live="polite">
                 {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}
                 {formatBytes(result.bytes)}
                 {stale ? ' · the document changed since this was generated' : ''}
-                {result.diagnostics.length > 0
-                  ? ` · ${result.diagnostics.length} diagnostic${result.diagnostics.length === 1 ? '' : 's'}`
-                  : ''}
+                {result.diagnostics.length > 0 ? (
+                  <details className="pdf-diagnostics">
+                    <summary>
+                      {result.diagnostics.length} diagnostic
+                      {result.diagnostics.length === 1 ? '' : 's'}
+                    </summary>
+                    <ul>
+                      {diagnosticSummary(result.diagnostics).map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </div>
             </>
           ) : (

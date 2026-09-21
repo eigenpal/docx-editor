@@ -62,3 +62,24 @@ export function formatBytes(bytes: number): string {
   }
   return `${unit === 0 ? value : value.toFixed(1)} ${UNITS[unit]}`;
 }
+
+/**
+ * One line per distinct diagnostic, with the pages it applies to.
+ *
+ * The writer reports a diagnostic once per page and message, so a font missing from a
+ * 40-page document arrives as 40 entries. The reader wants the one sentence and the pages.
+ */
+export function diagnosticSummary(diagnostics: readonly PdfDiagnostic[]): string[] {
+  const pages = new Map<string, Set<number>>();
+  for (const diagnostic of diagnostics) {
+    const set = pages.get(diagnostic.message) ?? new Set<number>();
+    if (diagnostic.pageIndex !== undefined) set.add(diagnostic.pageIndex + 1);
+    pages.set(diagnostic.message, set);
+  }
+  return [...pages].map(([message, set]) => {
+    const list = [...set].sort((a, b) => a - b);
+    if (list.length === 0) return message;
+    const shown = list.slice(0, 6).join(', ') + (list.length > 6 ? ', …' : '');
+    return `${message} (page${list.length === 1 ? '' : 's'} ${shown})`;
+  });
+}

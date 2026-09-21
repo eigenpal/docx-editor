@@ -118,19 +118,6 @@ export class Work {
     await new Promise<void>((resolve) => setImmediate(resolve));
     this.check();
   }
-  /**
-   * Start over for a fresh attempt at the same document.
-   *
-   * Diagnostics, the operation count and the content budget belong to one pass over the
-   * document and are cleared; an abandoned pass must not use up the budget of the pass that
-   * replaces it. The deadline is the caller's promise about wall-clock time and stays.
-   */
-  beginAttempt(): void {
-    this.diagnostics.length = 0;
-    this.seen.clear();
-    this.operations = 0;
-    this.contentBytes = 0;
-  }
   report(
     code: string,
     message: string,
