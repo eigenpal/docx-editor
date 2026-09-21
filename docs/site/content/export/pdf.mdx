@@ -6,7 +6,9 @@ category: Export formats
 
 `@docx-editor.dev/docx-to-pdf` is a private workspace package under the EigenPal Pro License. It is not available from the public npm registry.
 
-The exporter uses Core's pagination, admitted fonts, and positioned glyphs. It does not run a browser or office application. It runs on Node, because it resolves installed font files through `node:fs`, so a browser application converts by posting the document to a server.
+The exporter uses Core's pagination, admitted fonts, and positioned glyphs. It does not run a browser or an office application. It runs on Node, because it resolves installed font files through `node:fs`. A browser application therefore converts by posting the document to a server.
+
+The following example converts a document:
 
 ```ts
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
@@ -17,14 +19,14 @@ const result = await exportPdf(docxBytes, {
 });
 ```
 
-The default export shows proposed text and preserves comments as native PDF annotations. Set `comments: false` to omit comments. Select `displayMode: 'original'` or `'all-markup'` to change the revision projection without changing the DOCX.
+The default export shows proposed text, and preserves comments as native PDF annotations. To omit comments, set `comments: false`. To change the revision projection without changing the DOCX, select `displayMode: 'original'` or `'all-markup'`.
 
-Strict export refuses requested content that the writer cannot reproduce. Use `fidelityPolicy: 'best-effort'` explicitly to receive available output with `result.diagnostics`.
+Strict export refuses requested content that the writer cannot reproduce. To receive available output with `result.diagnostics`, use `fidelityPolicy: 'best-effort'` explicitly.
 
-Font substitution follows Core's separate font policy. `result.fontResolution` identifies the admitted faces, so you can see which face stood in for one the document asked for.
+Font substitution follows Core's separate font policy. `result.fontResolution` identifies the admitted faces. You can therefore see which face stood in for one the document asked for.
 
-Run `bun run dev:pdf` in the repository to open the local demo. Edit the document on the left, select **Generate PDF**, and the preview appears on the right with a download link. Editing the document marks the preview stale and the control becomes **Regenerate PDF**, so conversion runs when you ask for it rather than on every keystroke. The demo converts in a Node worker and does not retain files. Public hosting is not configured.
+To open the local demo, run `bun run dev:pdf` in the repository. Edit the document on the left, then select **Generate PDF**. The preview appears on the right with a download link. An edit marks the preview stale, and the control becomes **Regenerate PDF**. Conversion therefore runs when you ask for it, rather than on every keystroke. The demo converts in a Node worker and does not retain files. It is not configured for public hosting.
 
-See the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf) for supported content, resource limits, errors, and verification commands. The writer supports notes, equation geometry, tab leaders, and multilingual font fallback. Unsupported content includes textboxes, rotated table text, and advanced drawing effects.
+The writer supports notes, equation geometry, tab leaders, and multilingual font fallback. Unsupported content includes textboxes, rotated table text, and advanced drawing effects. For more information about supported content, resource limits, errors, and verification commands, see the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf).
 
-The demo opens the same sample the editor uses. For how the output is checked while the exporter is developed, see the package's validation notes.
+The demo opens the same sample the editor uses. For how the project measures the output, see the package's `VALIDATION.md` record.

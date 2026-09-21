@@ -948,7 +948,7 @@ export function breakParagraph(
       measurer.hasResolvedFont?.(emptyStyle) !== false &&
       shouldIncludeParagraphMarkHeight(markProps, inheritedRunProperties, line.spans)
     ) {
-      // Extra mark height stays below the glyph baseline, matching Word's cover-page rhythm.
+      // Extra mark height stays below the glyph baseline, so a cover page keeps its rhythm.
       line.height = Math.max(line.height, metrics.height);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its

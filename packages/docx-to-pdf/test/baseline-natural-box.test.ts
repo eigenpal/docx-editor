@@ -10,6 +10,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '../src/index.ts';
 import { docx, paragraph } from './fixture.ts';
+import { baselineYPositions } from './glyph-positions.ts';
 
 const GRID = 0.24;
 const FAMILY = 'DejaVu Sans';
@@ -60,4 +61,22 @@ test('a line-spacing multiple does not move the baseline off the grid', async ()
     '<w:r><w:t xml:space="preserve">Multiple</w:t></w:r></w:p>';
   const top = await firstBaselineFromTop(spaced);
   expect(Math.abs(top / GRID - Math.round(top / GRID))).toBeLessThan(1e-6);
+});
+
+// A line takes its ascent from its tallest run. Deriving the descent from the painted run's own
+// size instead of that shared ascent gave a short run on a mixed-size line a baseline a device
+// unit away from its neighbours, which a reader sees as one word sitting low.
+test('every run on one line shares a baseline whatever size it is drawn at', async () => {
+  const mixed =
+    '<w:p><w:r><w:rPr><w:sz w:val="36"/></w:rPr><w:t xml:space="preserve">Big </w:t></w:r>' +
+    '<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">and small </w:t></w:r>' +
+    '<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>and smaller</w:t></w:r></w:p>';
+  const result = await exportPdf(docx(`${mixed}${SECTION}`), {
+    useSystemFonts: false,
+    fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
+  });
+  expect(result.diagnostics).toEqual([]);
+  const baselines = await baselineYPositions(result.bytes);
+  expect(baselines.length).toBeGreaterThan(1);
+  expect(new Set(baselines.map((y) => y.toFixed(4))).size).toBe(1);
 });

@@ -10,6 +10,7 @@ declare module 'fontkit' {
     readonly unitsPerEm: number;
     readonly ascent: number;
     readonly descent: number;
+    readonly lineGap: number;
     readonly capHeight: number;
     readonly italicAngle: number;
     readonly bbox: { minX: number; minY: number; maxX: number; maxY: number };

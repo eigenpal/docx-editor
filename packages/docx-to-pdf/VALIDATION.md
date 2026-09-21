@@ -248,7 +248,7 @@ Two shared-engine defects contributed to the demo's TOC mismatch:
 - A TOC field separator in the opening paragraph makes its paragraph mark part of the cached result. Core previously suppressed that empty result line along with instruction-only field chrome. It now preserves the line. Instruction-only opening paragraphs remain suppressed. A refreshed TOC that places its first entry in the opening paragraph still starts flush, with no extra line.
 - A new-page section reset the paragraph spacing-collapse budget. Core now carries the previous paragraph's after-spacing across the boundary, while resetting the vertical cursor. In the demo, 18pt before-spacing correctly collapses against the prior 8pt after-spacing to leave 10pt. Continuous sections retain their existing behavior.
 
-Against the saved Word PDF, the TOC heading baseline changes from 106.295pt to 98.295pt (Word: 98.880pt). Its first entry changes from 130.656pt to 143.305pt (Word: 143.760pt). The continuation entry `10.1 Inline Images` now starts on page 3, matching Word, at 81.958pt versus Word's 82.320pt. The unmodified source and overall 27-page count are preserved.
+Against the saved Word PDF, the TOC heading baseline changes from 106.295pt to 98.295pt (Word: 98.880pt). Its first entry changes from 130.656pt to 143.305pt (Word: 143.760pt). The continuation entry `10.1 Inline Images` now starts on page 3, matching the reference, at 81.958pt versus the reference's 82.320pt. The unmodified source and overall 27-page count are preserved.
 
 The combined Word comparison improves from **3.025923% to 2.519373%** strong changed pixels at 144 DPI, threshold 28. The opening-line fix alone measured 3.062606%; both independent spacing defects needed correction. Evidence: `.cache/pdf/word-toc-opening-diff/`, `.cache/pdf/word-toc-carry-diff/`, and `.cache/pdf/native-toc-carry.pdf`.
 
@@ -571,6 +571,32 @@ Inside the single-spacing case the ascent is still unfittable, and now visibly s
 
 What this entry changes is the size of the problem, not its nature: multiples are exact, so any future attempt should leave them alone and work only on `w:lineRule="auto"` at `w:line="240"`. Quantising line height in layout was tried before and rejected across every line rule, see `.cache/pdf/claude-lineheight-grid/FINDING.md`.
 
+## Coverage: what converts, and what does not
+
+A strict export of the 99 `e2e/fixtures` documents plus the editor sample, 100 inputs and 1,722 pages, splits as follows.
+
+| Result                           | Inputs |
+| -------------------------------- | ------ |
+| Exported under the strict policy | 73     |
+| Refused as unsupported           | 26     |
+| Could not be opened              | 1      |
+
+Every one of the 26 refusals produces a PDF under `fidelityPolicy: 'best-effort'`, with the dropped content named in `result.diagnostics`. None of them fails a second time. The refusal is therefore a policy, not a limit: strict export declines to approximate, and best-effort reports what it approximated.
+
+Five kinds of content block a strict export. A document can carry more than one.
+
+| Blocking content                                     | Inputs | Only blocker |
+| ---------------------------------------------------- | ------ | ------------ |
+| `drawing`, a shape the writer cannot paint           | 18     | 3            |
+| `textbox`, whose paint order is not reproduced       | 13     | 0            |
+| `unshaped-text`, a span Core could not shape exactly | 8      | 5            |
+| `core-legacy-drawing`, VML                           | 2      | 2            |
+| `image-effects`                                      | 1      | 1            |
+
+Textboxes never block alone; every textbox document also carries a drawing the writer refuses. The exported 73 raise one non-blocking note between them, an `information` diagnostic for a picture bullet.
+
+The single input that does not open is `textbox-test.docx`. Its `/word/document.xml` is well-formed, and `xmllint` accepts it, but its `mc:Ignorable="w14 wp14"` names two prefixes the file never declares, which Part 3 requires to resolve. Word refuses the same file: driven through the same automation that opens `with-tables.docx` and reads its text, Word opens no document for it. The reader's refusal matches Word, so this is a malformed fixture rather than a defect.
+
 ### The baseline falls between a gridded natural box and a gridded descent
 
 The reference does not round the ascent. It grids the NATURAL font box and the font's own descent independently and lets the baseline fall between them. Times New Roman at 12pt ascends 46.68 units and rounds to 47, while the reference paints 46: a 57-unit box less an 11-unit descent.
@@ -580,6 +606,8 @@ Sixty-six Word-rendered controls from 8pt to 24pt across Times New Roman and Cal
 The descent has to come from the FONT, not from the line box, and getting that wrong is what made two earlier attempts fail. A line-spacing multiple grows the box below the baseline: at 1.15 an 11pt Calibri line is 64.343 units tall where its natural box is 55.95, so a descent measured off the box is 20.701 instead of 12.31 and the baseline moves a unit. That cost two corpus documents twice, most sharply `footnote-overlap-regression.docx`, whose two hundred and nine body lines all use that multiple. On a line taller than its natural box the reference keeps the baseline on the ascent, which the implementation falls back to.
 
 Against Word this improves `issue-740-header-zero-distance.docx` from 2.780% to 1.600%, and its worst page from 5.493% to 2.862%. No Word comparison regresses. Documents fully under 1% stay at eighteen of twenty.
+
+The descent also has to scale off the LINE's ascent rather than the painted run's size. A line takes its ascent from its tallest run, so deriving the descent from a shorter run on the same line can push that run's glyphs a whole unit away from its neighbours. Keying every line of the corpus by identity, the first form of the rule split one line of 1977 into two baselines; scaling the descent through the face's descent-to-ascent ratio, which is a property of the face and not of the size it is drawn at, splits none. The fix improves three Word comparisons and regresses none: `float-wrap-comprehensive-test.docx` 1.059% to 0.729%, `demo.docx` 0.643% to 0.639%, and `template-with-hf-rule.docx` 0.315% to 0.298%. Sixteen of the twenty documents now hold every page under 1%; the four that do not are `issue-740-header-zero-distance` at 2.862%, `issue-483-firstline-marker` at 2.061%, `float-wrap-comprehensive-test` at 1.331% and `footnote-overlap-regression` at 1.246%.
 
 ### What the baseline rule left behind
 

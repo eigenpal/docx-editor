@@ -58,14 +58,15 @@ function reducedHalfPoints(fontSizePt: number, factor: number): number {
  * which cost two corpus documents when it was tried. On such a line the reference keeps the
  * baseline on the ascent, so a box taller than its natural height falls back to that.
  */
-function griddedBaselineInLine(
-  line: SemanticSpanVisit['line'],
-  face: EmbeddedFace,
-  fontSizePt: number
-): number {
+function griddedBaselineInLine(line: SemanticSpanVisit['line'], face: EmbeddedFace): number {
   const units = (value: number): number => Math.round(value / PDF_PAINT_GRID_PT);
-  const perEm = face.font.unitsPerEm;
-  const descent = perEm > 0 ? (Math.abs(face.font.descent) / perEm) * fontSizePt : 0;
+  // Scale the descent off the LINE's own ascent, through the face's descent-to-ascent ratio,
+  // rather than off the painted run's size. A line takes its ascent from its tallest run, so
+  // deriving the descent from a shorter run on the same line can land its glyphs a unit away
+  // from the rest. The ratio is a property of the face, so every run in a family agrees
+  // whatever size it is drawn at, and one line keeps one baseline.
+  const above = Math.abs(face.font.ascent) + Math.abs(face.font.lineGap);
+  const descent = above > 0 ? (Math.abs(face.font.descent) / above) * line.baseline : 0;
   const naturalBox = line.baseline + descent;
   if (!(descent > 0) || line.box.height > naturalBox + 0.01)
     return units(line.baseline) * PDF_PAINT_GRID_PT;
@@ -241,7 +242,7 @@ export class TextWriter {
       storyOrigin.y -
       visit.page.box.y +
       line.box.y +
-      griddedBaselineInLine(line, face, style.fontSizePt) -
+      griddedBaselineInLine(line, face) -
       baselineShiftPtOf(style);
     const baseline =
       page.getHeight() - Math.ceil(baselineFromTop / PDF_PAINT_GRID_PT - 0.5) * PDF_PAINT_GRID_PT;

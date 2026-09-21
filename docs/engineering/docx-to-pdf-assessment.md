@@ -48,7 +48,7 @@ The original plan is under `openspec/changes/docx-to-pdf-export/` on the PDF bra
 - A supported text-only document passes strict export without a reshaping approximation. Unsupported text fails explicitly.
 - Latin ligatures, combining marks, Arabic, Indic, CJK, bidirectional text, font fallback, and collection faces have focused fixtures.
 - Parsed PDF glyph positions match Core geometry. Extracted text preserves cluster Unicode, including supplementary characters and ligatures.
-- Rendered pages pass visual inspection, with selected Word output used as a separate comparison. Core parity and Word parity are distinct claims.
+- Rendered pages pass visual inspection, with selected Word output used as a separate reference. Matching Core geometry and matching that reference are distinct claims.
 - Page count, page boxes, links, destinations, and metadata have parser checks.
 - Cancellation, deadlines, malformed input, output limits, and session cleanup have tests that exercise failure during encoding as well as startup.
 - The package passes build, types, lint, API, dependency-boundary, license, and notice checks. Markdown and browser imports do not acquire PDF dependencies.
