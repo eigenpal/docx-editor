@@ -37,101 +37,20 @@ Create `.local-validation/settings.json` (local paths only):
 ## Review order and scoring
 
 - **Worst first** sorts documents by strong pixel difference for the selected pair. Filter failing documents, page-count mismatches, missing comparisons, or known font substitutions. Switch to **Earliest drift** to prioritize early divergence.
-- Pages stay in reading order. **First divergence** opens the earliest page with at least 0.1% changed pixels, different dimensions, or a missing counterpart. Inspect its changed regions from top to bottom and the end of the preceding page. Later errors can be accumulated drift; this is a heuristic, not a causal diagnosis.
-- Paired previews share one scroll area. The amplified black/white difference and red overlay are optional and off by default. PDF and evidence links retain the original artifacts. Document, pair, and page selection are shareable in the URL.
-- Similarity is `100 − strong changed pixel percent`. It includes blank margins. Passing requires **both document and every page below 1%**, matching page counts and dimensions, and valid evidence. Unmeasured and failed exports never pass.
-- Text movement and unmatched tokens are heuristics, especially for repeated text. New runs include the earliest moved tokens in reading order and signed vertical drift for each page's first/last third of matched tokens. An increasing top-to-bottom delta helps locate accumulated spacing errors; it does not establish causation. Known font substitutions are reported and never silently removed from scores. Captures at different DPI or thresholds must not be treated as interchangeable.
-
-## Agent workflow
-
-```sh
-# Machine-readable top-to-bottom triage, without launching converters:
-bun run validation:pdf --report > /tmp/pdf-triage.json
-
-# Queue a DOCX while the viewer is running; returns its source ID for polling:
-bun run validation:pdf --enqueue /absolute/input.docx
-
-# One DOCX through the same resource-managed pipeline; JSON evidence to stdout:
-# Stop the watcher first, or run the viewer with --no-watch.
-bun run validation:pdf --once /absolute/input.docx > /tmp/pdf-document.json
-
-# Serve an alternate evidence folder without automation:
-bun run validation:pdf --no-watch --data /absolute/evidence --port 5191
-```
-
-Read `/api/triage` for failing pairs, first divergent page and vertical position, preceding-page context, errors, font flags, and relative evidence paths. Read `/api/documents/<source-sha256>` for each page's metrics, changed vertical bands, preview paths, source/PDF identities, diagnostics, and stage resource measurements. `/api/state` reports the serial queue and current stage. `/api/catalog` is a compact index. Evidence is reread from disk; the UI refreshes every five seconds.
-
-`--once` exits nonzero if generation or comparison fails, while preserving its JSON failure evidence on stdout. Exit zero means the pipeline completed; inspect each comparison's `verdict` to determine fidelity. A measured difference above the target is a completed benchmark, not a pipeline failure.
-
-Fix the earliest plausible cause, rerun the same source, and compare the changed regions through subsequent pages. Do not treat a high global similarity score as proof of correct pagination, text, or fonts. Re-drop a file (or change its mtime) to retry after an engine fix; completed inbox entries are persisted across restarts.
-
-## Import existing evidence
-
-Use the local runtime's Python to run `scripts/validator/import_data.py` from this package:
-
-```sh
-.local-validation/runtime/bin/python scripts/validator/import_data.py \
-  --benchmark /absolute/benchmark/report.json --reference-id reference-b --label 'Reference B'
-.local-validation/runtime/bin/python scripts/validator/import_data.py \
-  --references /absolute/captured/manifest.json --reference-id reference-a --label 'Reference A' \
-  --compare-references
-```
-
-Captured manifests use the existing benchmark schema: `documents` keyed by DOCX SHA-256, with `pdf`, `pdfSha256`, and optional `source` and `provenance`. PDF paths resolve beside the manifest. Source and reference identities are verified before copying. The second command rasterizes saved PDFs; it launches no reference editor. Imports take the same exclusive automation lock; stop the watcher first or use a `--no-watch` viewer. Large artifact trees are copied into immutable snapshots, never served via external symlinks. Data is local to this worktree and not part of the package distribution.
+- Pages stay in reading order. **First divergence** opens the earliest page with at least 0.1% changed pixels, different dimensions, or a missing counterpart. Later differences can be accumulated drift; this is a heuristic, not a causal diagnosis.
+- Paired previews share one scroll area. The amplified black/white difference and red overlay are optional and off by default. Document, pair, and page selection are shareable in the URL.
+- Similarity is `100 - strong changed pixel percent`. It includes blank margins. Unmeasured and failed exports never pass.
+- Text movement and unmatched tokens are heuristics, especially for repeated text. Known font substitutions are reported and never silently removed from scores. Captures at different DPI or thresholds must not be treated as interchangeable.
 
 ## Resource and lifecycle limits
 
-One worker across worktrees (OS advisory lock), one stage at a time. Defaults: 20 MiB input, 64 MiB reference PDF, 80 comparison pages, 120 million total rendered pixels, 90 seconds and 2 GiB summed descendant RSS per stage. RSS is sampled every 100 ms; the native worker also reports its OS high-water mark. At least 1 GiB free disk is required; inbox admission and running stages enforce the local evidence budget. Raster pages are processed sequentially. Only the currently reviewed page images are loaded by the UI. The server streams assets in 64 KiB chunks.
+One worker across worktrees (OS advisory lock), one stage at a time. Defaults: 20 MiB input, 64 MiB reference PDF, 80 comparison pages, 120 million total rendered pixels, 90 seconds and 2 GiB summed descendant RSS per stage. RSS is sampled every 100 ms; the worker also reports its OS high-water mark. At least 1 GiB free disk is required; inbox admission and running stages enforce the local evidence budget. Raster pages are processed sequentially. Only the currently reviewed page images are loaded by the UI. The server streams assets in 64 KiB chunks.
 
-Timeout, cancellation, memory overflow, and shutdown interrupt owned children, allow cleanup, then kill remaining owned process identities/groups. Never terminate processes by application name. Private temporary directories are removed on exit. Successful reruns replace old generated runs for that source; failures retain logs. The inbox preserves originals. Ctrl-C stops the worker and server; receipts prevent automatic duplicate work on restart. A hard OS kill cannot run cleanup handlers.
+Timeout, cancellation, memory overflow, and shutdown interrupt owned children, allow cleanup, then kill remaining owned process identities and groups. Never terminate processes by application name. Private temporary directories are removed on exit. Successful reruns replace old generated runs for that source; failures retain logs. The inbox preserves originals. Ctrl-C stops the worker and server; receipts prevent automatic duplicate work on restart. A hard OS kill cannot run cleanup handlers.
 
-Run the validator tests with the local Python:
+Run the tool's tests with the local Python:
 
 ```sh
 packages/docx-to-pdf/.local-validation/runtime/bin/python -m unittest discover \
   -s packages/docx-to-pdf/scripts/validator -p 'test_*.py' -v
 ```
-
-## Shared-font diagnostic copies
-
-Use this experiment when a mismatch may come from unavailable or different fonts. Choose a family installed in **every** renderer, including its bold and italic faces. The following example uses Arial; availability is machine-specific.
-
-```sh
-# While the watcher is running: make a separate copy and queue both exports.
-bun run validation:pdf --enqueue /absolute/input.docx --font-family Arial
-
-# Prepare a copy for an independently captured reference, without converters.
-bun run validation:pdf --font-copy /absolute/input.docx --font-family Arial
-
-# With the watcher stopped: generate the diagnostic and JSON evidence once.
-bun run validation:pdf --once /absolute/input.docx --font-family Arial
-
-# Keep agent triage focused on the chosen reference and original documents.
-bun run validation:pdf --report --pair reference-a--ours
-# Explicitly include diagnostic copies when investigating font sensitivity.
-bun run validation:pdf --report --pair reference-b--ours --include-diagnostics
-```
-
-Copies live under the ignored `diagnostics/` data directory. Their embedded provenance records the original SHA-256 and selected family and survives copying into the inbox. The original bytes are untouched. Run fonts, paragraph marks, styles, numbering, headers/footers, and theme fonts are replaced; theme overrides and embedded-font mappings are removed. Font sizes, emphasis, text, and artwork are preserved. Reference captures must be generated from **this exact copy**, not the original. The distinct source hash prevents reusing original reference PDFs for a modified copy.
-
-Select **Shared-font diagnostics** in the viewer to inspect these experiments. They are excluded from original-document pass counts and default agent triage. A diagnostic passing does **not** satisfy the original-document fidelity goal. Check native `fontResolution`, reference PDF font information, and glyph coverage: family-name equality alone does not prove equal font files or eliminate shaping and metrics differences. Symbol encodings, equations, and artwork may still use specialized fonts. A changed font can change wrapping and page counts, so compare renderers within the same experiment; never subtract the diagnostic score from an original score and call the difference a measured font-only error.
-
-For repeated Core/exporter edits, avoid launching a reference converter again:
-
-```sh
-# Stop the watcher first. The viewer can remain available with --no-watch.
-bun run validation:pdf --once /absolute/input.docx --reuse-references
-
-# Compact feedback for an agent's edit/verify loop; full evidence stays on disk.
-bun run validation:pdf --once /absolute/input.docx --reuse-references --summary
-```
-
-This reruns only the native exporter and comparisons against hash-verified saved PDFs for the identical source. It needs no reference adapter configuration and uses the same serial lock, timeouts, memory cap, and owned-process cleanup. Missing or invalid references cannot pass. Each comparable native pair includes `baseline.errorPercent`, `baseline.engineSha256`, and `baseline.deltaPercentagePoints`; a negative delta is an improvement. Baselines require the same reference hash, scorer/runtime identity, DPI, threshold, and a successful preceding run. Save the JSON output if historical artifacts are needed: successful runs replace the previous generated artifacts.
-
-`--summary` retains every comparison's verdict, page counts, dimension mismatch, worst page, and before/after first divergence. Its `inspectPages` contains only the first divergent page and preceding page, with absolute preview paths; later pages still count toward the verdict. It includes source/PDF/engine identities, font flags, stage times and cache reuse, and the full `evidence` path. `timing.otherSeconds` includes hashing, disk checks, and evidence copies rather than converter time. It does not launch extra exports or raster passes. Paths remain valid until the next successful rerun replaces that document's artifacts.
-
-For parallel fixes, assign independent causes to separate worktrees and use focused unit tests first. Have one coordinator run the targeted source with saved references, then nearby regression fixtures, then the full selected corpus after integration. Native exports and comparisons still share the global serial lock; agents should not launch competing watchers or mutate a measured worktree during a run. Use the single pipeline result to publish and review evidence instead of exporting/rasterizing again for the viewer. Full-corpus checks remain necessary before accepting a fix; a targeted result is only early feedback.
-
-Every requested rerun generates a fresh native PDF. Comparisons reuse saved scores and previews only when both PDF hashes and the scorer/runtime identity match. This also skips raster work when an engine fix leaves a document’s PDF byte-for-byte unchanged. Reused stages record `resources[pair].reused: true`; changed PDF bytes, missing previews, or a changed scorer force a fresh comparison. Native baselines still update, with a zero delta for unchanged PDFs. Copies remain subject to the evidence disk budget.
-
-Export identities cover runtime sources and dependencies; edits under `src/**/__tests__/` or to `*.test.*` / `*.spec.*` files do not make existing results stale. Changes to Core, fonts, the exporter, or the comparison pipeline still invalidate them.

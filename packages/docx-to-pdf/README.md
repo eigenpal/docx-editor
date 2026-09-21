@@ -75,10 +75,6 @@ bun run dev:pdf
 
 Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The demo is not configured for public hosting.
 
-## Local PDF validation
-
-To open the local scorer and comparison viewer at `http://127.0.0.1:5190`, run `bun run validation:pdf` from the repository root. Its gitignored inbox generates candidate and configured reference PDFs in sequence, with bounded resources. Review the first divergent page from top to bottom, filter the worst offenders, and optionally show pixel differences. Agents can enqueue inputs or read JSON triage. For more information, see the [validator workflow](scripts/validator/README.md).
-
 ## Verification
 
 Run the following commands to verify the package:
@@ -92,20 +88,8 @@ node --test examples/docx-to-pdf/server.node.test.mjs
 
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets. They are not runtime font defaults.
 
-## Cross-check against another renderer
+The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitution, monochrome emoji, equation layout, and super/subscript sizing are the areas where output differs most between PDF renderers. A successful export is not a statement about pixel fidelity.
 
-Install LibreOffice, Poppler, and Python 3, then run the following command from this package:
-
-```sh
-bun run compare:libreoffice
-```
-
-The command converts the unchanged editor demo with both renderers. It writes paired page images, an overlay viewer, extracted text, font evidence, and diagnostics to `.cache/pdf/libreoffice-comparison/`. To cross-check another document, pass a DOCX and an empty output directory. Both renderers use the proposed view without revision marks, and the second runs with an isolated temporary profile. The cross-check is a development aid for spotting differences worth investigating. It is not a target, and the exporter neither launches nor requires it.
-
-The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitutions, monochrome emoji, equation layout, and super/subscript sizing are the areas where output differs most between renderers.
-
-For the corpus benchmark, the comparison procedure, measured gaps, and stress results, see [PDF validation](./VALIDATION.md). A successful export is not a statement about pixel fidelity.
+## Memory
 
 Profile memory with `bun packages/docx-to-pdf/scripts/profile-memory.ts input.docx` from the repository root. Add `--collect` for diagnostic garbage collection between phases. Production exports never force garbage collection. The profiler reports both process memory and JavaScript heap statistics. These measure different allocations.
-
-To reuse captured references without opening another application, pass `--reference-manifest manifest.json` to `scripts/benchmark.py`. The manifest declares `engine`, `displayMode: "proposed-no-markup"`, and a `documents` object keyed by each source DOCX's SHA-256. Each entry provides `pdf`, `pdfSha256`, and an optional `provenance`. Relative PDF paths resolve beside the manifest. The benchmark verifies both identities, and records missing references without launching an application. For native export and memory measurements alone, use `--export-only`.

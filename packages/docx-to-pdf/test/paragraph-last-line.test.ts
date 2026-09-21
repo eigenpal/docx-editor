@@ -74,7 +74,7 @@ async function lastLineShiftInUnits(after: number): Promise<number> {
 // device unit for this face, so the SAME line moves when text after it makes it ordinary.
 //
 // Controls rendered by Word place such a last line one unit lower at every paragraph length
-// from one line to six. See `VALIDATION.md`.
+// from one line to six.
 test('the line that ends a spaced paragraph rounds its ascent', async () => {
   expect(await lastLineShiftInUnits(120)).toBe(1);
 });

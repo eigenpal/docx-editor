@@ -1,7 +1,7 @@
 // Space compression adapted from PR #707's paragraph-justify.ts (2ce89f6e7).
 // Publish spacing in Core so PDF, browser paint, and caret measurement agree.
-// Modern Word uses a 75% space floor and prefers expansion near natural spacing.
-// Verified against Word 16.113 and LibreOffice's interoperability implementation:
+// The format's producers use a 75% space floor and prefer expansion near natural spacing.
+// An open reference implementation of the same rule:
 // https://github.com/LibreOffice/core/commit/529755f0919217a84a12daad0fddfddd1124f0e9
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';

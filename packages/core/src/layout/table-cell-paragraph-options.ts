@@ -31,7 +31,7 @@ export interface CellParagraphPlacementOptions {
   /**
    * The empty `w:p` a cell must end with when its content ends with a `w:tbl`: placed at
    * `top` so it stays addressable, but charged nothing — no spacing, no rules, no line
-   * box. Word and LibreOffice both draw it that way.
+   * box. That is how the format's producers draw it.
    */
   readonly collapseHeight?: boolean;
   /**
