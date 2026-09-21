@@ -8,10 +8,12 @@ const apps = [
   ['vue', '/vue/', ['sample.docx']],
   ['igloo', '/igloo/', ['sample.docx', 'sample-igloo.docx']],
   ['docx-to-markdown', '/docx-to-markdown/', ['sample.docx']],
+  ['docx-to-pdf', '/docx-to-pdf/', ['sample.docx']],
 ];
 const hosts = [
   ['igloo.docx-editor.dev', '/igloo/index.html'],
   ['docx-to-markdown.docx-editor.dev', '/docx-to-markdown/index.html'],
+  ['docx-to-pdf.docx-editor.dev', '/docx-to-pdf/index.html'],
 ];
 
 function invariant(condition, message) {

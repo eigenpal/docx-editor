@@ -141,6 +141,16 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         body: saved,
         signal: abort.signal,
       });
+      // A host with no conversion service answers with its own 404 or 405 page, not JSON.
+      // Say what is missing instead of surfacing a parse error.
+      if (response.status === 404 || response.status === 405) {
+        if (current !== conversion.current) return;
+        setStatus('error');
+        setError(
+          'No conversion service is available on this host. Run `bun run dev:pdf` locally to convert.'
+        );
+        return;
+      }
       const payload = (await response.json()) as {
         pdf?: string;
         pageCount?: number;

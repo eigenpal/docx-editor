@@ -267,18 +267,21 @@ test('a real 500-page shaped export holds a bounded live set on a default heap',
   expect(measurement.peakRssBytes).toBeLessThan(RESIDENT_BACKSTOP);
 }, 120_000);
 
-// Keep the one-shot export's 364 MiB cap: it releases the layout before measurement. A caller
-// retaining the layout needs more execution headroom. In CI, the shared session retained about
-// 340 MiB and intermittently aborted during forced GC under the same 364 MiB cap. Its 512 MiB
-// old-space cap leaves room above the existing 448 MiB live-heap budget, which we assert below.
-// The caps bound transient growth; the live-heap assertions catch retained-memory regressions.
-const ONE_SHOT_NODE_ARGUMENTS = ['--max-old-space-size=364', '--max-semi-space-size=8'] as const;
+// The one-shot export releases the layout before measurement, so its live heap settles far
+// below the retained-layout case: 224 MiB on `main` and 230 MiB with the PDF export work, on
+// the same machine, against the 256 MiB ceiling asserted below. Its old-space cap only bounds
+// transient growth during the forced collections, and 364 MiB proved marginal for that on the
+// Linux runners, which aborted with SIGABRT on two consecutive runs while macOS passed. 400 MiB
+// keeps a hard bound well under the 512 MiB the retained case needs, for the same reason that
+// case was widened: in CI the shared session intermittently aborted during forced GC under
+// 364 MiB. The caps bound transients; the live-heap assertions catch retained-memory regressions.
+const ONE_SHOT_NODE_ARGUMENTS = ['--max-old-space-size=400', '--max-semi-space-size=8'] as const;
 const RETAINED_LAYOUT_NODE_ARGUMENTS = [
   '--max-old-space-size=512',
   '--max-semi-space-size=8',
 ] as const;
 
-test('the one-shot 500-page export fits a constrained 364 MiB heap', () => {
+test('the one-shot 500-page export fits a constrained 400 MiB heap', () => {
   const measurement = performanceMeasurement(ONE_SHOT_NODE_ARGUMENTS, 'one-shot-performance');
   expectProductionFixture(measurement, { inspectLayout: false });
   // The one-shot entry point returns markdown and drops the layout, so it settles well below the
