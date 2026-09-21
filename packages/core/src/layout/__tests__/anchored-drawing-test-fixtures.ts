@@ -74,3 +74,35 @@ export function squareAnchorAtLeft(options: {
     '</w:body></w:document>'
   );
 }
+
+/**
+ * The same square anchor, inside a one-cell table, with `w:layoutInCell` under the caller's
+ * control. `"0"` positions the object against the page rather than the cell, so it is not part
+ * of that cell's flow.
+ */
+export function squareAnchorInCell(options: {
+  readonly text: string;
+  readonly layoutInCell: '0' | '1';
+}): string {
+  return (
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    '<w:body><w:tbl>' +
+    '<w:tblPr><w:tblW w:w="8800" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="8800"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+    '<w:p><w:r><w:drawing>' +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0"' +
+    ` allowOverlap="1" layoutInCell="${options.layoutInCell}" relativeHeight="1">` +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="1828800" cy="914400"/>' +
+    '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+    '<wp:docPr id="1" name="pic"/>' +
+    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+    '</wp:anchor></w:drawing></w:r>' +
+    `<w:r><w:t>${options.text}</w:t></w:r></w:p>` +
+    '</w:tc></w:tr></w:tbl></w:body></w:document>'
+  );
+}

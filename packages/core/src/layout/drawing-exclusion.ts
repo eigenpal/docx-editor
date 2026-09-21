@@ -588,6 +588,11 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     // hole either: the original view must not wrap text around an insertion it hides.
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
+    // `w:layoutInCell="0"` positions the object against the page rather than the cell that
+    // encloses its anchor, so it is not part of that cell's flow and carves no hole in it.
+    // A Word control of two identical rows, one flag each, runs the cell's text straight
+    // through the object in the `0` row and wraps around it in the `1` row.
+    if (options.anchorCellBox != null && atom.projection.anchor?.layoutInCell === false) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
     const modelStart = offsets.get(atom.atomId);
