@@ -469,15 +469,6 @@ export async function paint(
       if (visit.paragraph.clipToBox) out.push('Q');
     }
   }
-  for (const { cell, x, y, page, commands } of rotatedBuffers.values()) {
-    if (commands.length === 0) continue;
-    streams[page]!.push(
-      'q',
-      rotatedCellMatrix(cell.box, x, y, pages[page]!.getHeight()),
-      ...commands,
-      'Q'
-    );
-  }
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;
     const d = visit.drawing;
@@ -505,12 +496,27 @@ export async function paint(
     if (visit.paintLayer === 'behind-text') buffer.unshift(commands);
     else buffer.push(commands);
   }
-  // Behind-text drawings belong below the owner's text and decoration.
+  // Behind-text drawings belong below the owner's text and decoration. A drawing laid out
+  // inside a `btLr` cell sits in that cell's upright plane, so it joins the cell's buffer
+  // and turns with the text; painted at its published origin it would land beside the cell.
   for (const visit of drawings) {
     if (visit.story === 'textbox' && visit.textboxOwner) continue;
     const commands = await paintDrawing(visit);
+    if (visit.paragraph && rotatedCellOf.has(visit.paragraph)) {
+      outFor(visit).push(commands);
+      continue;
+    }
     (visit.paintLayer === 'behind-text' ? behindStreams : streams)[visit.page.index]!.push(
       commands
+    );
+  }
+  for (const { cell, x, y, page, commands } of rotatedBuffers.values()) {
+    if (commands.length === 0) continue;
+    streams[page]!.push(
+      'q',
+      rotatedCellMatrix(cell.box, x, y, pages[page]!.getHeight()),
+      ...commands,
+      'Q'
     );
   }
   // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings

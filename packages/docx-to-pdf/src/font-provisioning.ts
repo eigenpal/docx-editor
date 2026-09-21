@@ -155,13 +155,30 @@ export function canonicalFamily(family: string): {
   readonly bold: boolean;
   readonly italic: boolean;
 } {
-  const styled = /^(.+?)\s+(Bold Italic|BoldItalic|Bold|Italic)$/i.exec(family);
-  const base = styled ? styled[1]! : family;
-  const words = styled ? styled[2]!.toLowerCase() : '';
+  // No regular expression: the name is file-derived and unbounded, and a lazy prefix against
+  // a greedy run of spaces is quadratic in the spaces. A real face name is short; anything
+  // longer than Word's 31-character family limit by a wide margin is left as it is.
+  let base = family;
+  let bold = false;
+  let italic = false;
+  if (family.length <= 128) {
+    const lower = family.toLowerCase();
+    for (const [suffix, flags] of [
+      [' bold italic', [true, true]],
+      [' bolditalic', [true, true]],
+      [' bold', [true, false]],
+      [' italic', [false, true]],
+    ] as const) {
+      if (!lower.endsWith(suffix) || lower.length === suffix.length) continue;
+      base = family.slice(0, family.length - suffix.length).trimEnd();
+      [bold, italic] = flags;
+      break;
+    }
+  }
   return {
     family: Object.hasOwn(localizedFamilies, base) ? localizedFamilies[base]! : base,
-    bold: words.includes('bold'),
-    italic: words.includes('italic'),
+    bold,
+    italic,
   };
 }
 /**

@@ -214,3 +214,12 @@ test('packaged Latin substitutes stand in for Helvetica and for a styled Word fa
   const cjk = await supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' });
   expect(cjk.sources.map((source) => source.request.family)).toEqual(['Noto Sans CJK JP']);
 });
+
+test('a hostile family name of a million spaces resolves in constant time', () => {
+  const hostile = 'a' + ' '.repeat(1_000_000) + 'x';
+  const started = performance.now();
+  expect(canonicalFamily(hostile)).toEqual({ family: hostile, bold: false, italic: false });
+  expect(performance.now() - started).toBeLessThan(50);
+  // A bare style word is a family name, not a style.
+  expect(canonicalFamily('Bold')).toEqual({ family: 'Bold', bold: false, italic: false });
+});

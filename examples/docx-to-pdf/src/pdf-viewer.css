@@ -161,3 +161,12 @@
   flex: 1;
   flex-direction: column;
 }
+
+/* The pages scroll over the same workspace wash as the Markdown preview, not the viewer's
+   own muted grey: one surface behind both previews. Scoped to the scroll viewport so the
+   toolbar and popovers keep their theme. */
+.pdf-extend-viewer [data-slot='scroll-area-viewport'] {
+  background:
+    radial-gradient(circle at 50% 0, rgb(255 255 255 / 66%), transparent 28rem),
+    var(--pdf-workspace, #eef0f3);
+}
