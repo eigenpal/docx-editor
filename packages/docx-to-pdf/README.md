@@ -87,6 +87,14 @@ bun run build:pdf
 node --test examples/docx-to-pdf/server.node.test.mjs
 ```
 
+To find out why a folder of documents does not convert strictly, run the triage script:
+
+```sh
+bun packages/docx-to-pdf/scripts/triage.ts <dir> --out report.json --pdf out/
+```
+
+It converts each document strictly, then in best-effort mode when strict export refuses. For each document it prints the diagnostics grouped by code with their pages and messages, the font families no admitted face covers, and a hint at the usual cause, followed by a tally of causes across the folder. `--baseline previous.json` lists the documents that got worse or better since an earlier report. The script prints file names, codes, and font family names, never document text.
+
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets. They are not runtime font defaults.
 
 The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitution, emoji art, equation layout, and super/subscript sizing are the areas where output differs most between PDF renderers. A successful export is not a statement about pixel fidelity.
