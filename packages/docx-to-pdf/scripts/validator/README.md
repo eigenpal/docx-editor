@@ -44,7 +44,7 @@ Create `.local-validation/settings.json` (local paths only):
 
 ## Resource and lifecycle limits
 
-One worker across worktrees (OS advisory lock), one stage at a time. Defaults: 20 MiB input, 64 MiB reference PDF, 80 comparison pages, 120 million total rendered pixels, 90 seconds and 2 GiB summed descendant RSS per stage. RSS is sampled every 100 ms; the worker also reports its OS high-water mark. At least 1 GiB free disk is required; inbox admission and running stages enforce the local evidence budget. Raster pages are processed sequentially. Only the currently reviewed page images are loaded by the UI. The server streams assets in 64 KiB chunks.
+One worker across worktrees (OS advisory lock), one stage at a time. Defaults: 20 MiB input, 64 MiB reference PDF, 80 comparison pages, 120 million total rendered pixels, 90 seconds and 2 GiB summed descendant RSS per stage. RSS is sampled every 100 ms; the worker also reports its OS high-water mark. At least 1 GiB free disk is required; inbox admission and running stages enforce the local evidence budget. Raster pages are processed sequentially. Only the page images under review are loaded by the UI. The server streams assets in 64 KiB chunks.
 
 Timeout, cancellation, memory overflow, and shutdown interrupt owned children, allow cleanup, then kill remaining owned process identities and groups. Never terminate processes by application name. Private temporary directories are removed on exit. Successful reruns replace old generated runs for that source; failures retain logs. The inbox preserves originals. Ctrl-C stops the worker and server; receipts prevent automatic duplicate work on restart. A hard OS kill cannot run cleanup handlers.
 
