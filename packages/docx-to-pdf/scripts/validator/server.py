@@ -21,6 +21,11 @@ from catalog import DEFAULT_DATA, catalog, check_disk_budget, read_json, run_sum
 UI = Path(__file__).resolve().parent
 
 
+
+def _header_value(value):
+    """A header value with every line break removed; the values here are formatted integers."""
+    return value.replace('\r', '').replace('\n', '')
+
 def contained(root, relative):
     path = (root / relative).resolve()
     if not path.is_relative_to(root.resolve()) or not path.is_file():
@@ -166,15 +171,16 @@ def handler_for(root, worker=None):
                     status = 206
                 # Header values are rebuilt from clamped integers, never from request text: the
                 # digits-only pattern above already forbids anything but a number, and the clamp
-                # keeps every value inside the file, so no client byte can reach a header line.
+                # keeps every value inside the file. The line-break strip is belt and braces for
+                # the same property, stated in the form a scanner can follow.
                 start = max(0, min(int(start), size - 1))
                 end = max(start, min(int(end), size - 1))
                 self.send_response(status)
                 self.send_header('Content-Type', mimetypes.guess_type(path)[0] or 'application/octet-stream')
                 self.send_header('Accept-Ranges', 'bytes')
-                self.send_header('Content-Length', str(int(end - start + 1)))
+                self.send_header('Content-Length', _header_value(str(int(end - start + 1))))
                 if status == 206:
-                    self.send_header('Content-Range', 'bytes %d-%d/%d' % (start, end, size))
+                    self.send_header('Content-Range', _header_value('bytes %d-%d/%d' % (start, end, size)))
                 self.end_headers()
                 if not head:
                     stream.seek(start)
