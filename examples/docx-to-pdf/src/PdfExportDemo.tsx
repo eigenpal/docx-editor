@@ -107,7 +107,9 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
   }, []);
 
   const loadSample = useCallback(async () => {
-    const response = await fetch('sample.docx');
+    // Resolve against the app base, not the page URL: on the dedicated host the page is `/`
+    // and a relative `sample.docx` would ask the SPA catch-all for HTML.
+    const response = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
     if (!response.ok) return;
     setDocument(new Uint8Array(await response.arrayBuffer()));
     setStatus('idle');

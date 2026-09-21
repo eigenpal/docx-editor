@@ -55,6 +55,24 @@ export function rect(box: LayoutBox, x: number, y: number, height: number, grid 
     value > 0 ? Math.max(PAINT_GRID_PT, Math.floor(value / PAINT_GRID_PT) * PAINT_GRID_PT) : 0;
   return `${number(onGrid(left))} ${number(onGrid(bottom))} ${number(extent(box.width))} ${number(extent(box.height))} re`;
 }
+/**
+ * A hyperlink target as the content of a PDF literal string, or `null` to write no link.
+ *
+ * `PDFString.of` writes `(value)` with no escaping at all, so a `)` inside a file-supplied
+ * href closes the string and everything after it is raw PDF inside the action dictionary:
+ * `https://x/) /S /JavaScript /JS (...` would do exactly that. The scheme allowlist does not
+ * stop it. The three bytes a literal string cannot carry bare — `\`, `(`, `)` — are escaped
+ * as PDF defines, and a target with anything outside printable ASCII is refused rather than
+ * approximated: a URI is ASCII by definition, and the alternatives are not links.
+ */
+export function pdfLiteralUri(href: string): string | null {
+  if (href.length === 0 || href.length > 2048) return null;
+  for (let index = 0; index < href.length; index += 1) {
+    const code = href.charCodeAt(index);
+    if (code < 0x20 || code > 0x7e) return null;
+  }
+  return href.replace(/[\\()]/g, (character) => `\\${character}`);
+}
 export function hex(value: number): string {
   return value.toString(16).padStart(4, '0');
 }
@@ -100,10 +118,18 @@ export class Work {
     await new Promise<void>((resolve) => setImmediate(resolve));
     this.check();
   }
-  /** Forget what an abandoned attempt reported; budgets and the deadline carry over. */
-  resetDiagnostics(): void {
+  /**
+   * Start over for a fresh attempt at the same document.
+   *
+   * Diagnostics, the operation count and the content budget belong to one pass over the
+   * document and are cleared; an abandoned pass must not use up the budget of the pass that
+   * replaces it. The deadline is the caller's promise about wall-clock time and stays.
+   */
+  beginAttempt(): void {
     this.diagnostics.length = 0;
     this.seen.clear();
+    this.operations = 0;
+    this.contentBytes = 0;
   }
   report(
     code: string,

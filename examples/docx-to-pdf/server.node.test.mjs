@@ -56,7 +56,9 @@ test('Node worker converts a DOCX, rejects bad input, and recovers', { skip: ski
     const bytes = await readFile(new URL('./public/sample.docx', import.meta.url));
     const invalid = await send(`${base}/api/convert`, { method: 'POST', body: 'bad docx' });
     assert.equal(invalid.status, 400);
-    await invalid.arrayBuffer();
+    // A fixed message: the open error's own text names the zip entry that failed, which is
+    // the upload's to choose, so it stays on the server.
+    assert.equal((await invalid.json()).message, 'The file is not a DOCX this converter can open.');
     const result = await send(`${base}/api/convert`, { method: 'POST', body: bytes });
     assert.equal(result.status, 200);
     const json = await result.json();

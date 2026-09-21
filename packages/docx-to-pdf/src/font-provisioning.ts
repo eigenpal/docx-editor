@@ -213,10 +213,20 @@ export const installedWordFonts = installedWordFontResolver(wordFontRoots);
 
 async function readFontFile(path: string | NodeURL, signal?: AbortSignal): Promise<Uint8Array> {
   if (signal?.aborted) throw signal.reason;
-  // Check the local size before allocation. Signals can come from another JS realm;
-  // Node fs rejects those, so observe them before and after this bounded file read.
+  // Check the local size before allocation.
   if ((await stat(path)).size > 32 * 1024 * 1024) throw new RangeError('Local font exceeds 32 MiB');
-  const bytes = await readFile(path);
+  // Let the read itself observe the signal, so a cancelled export does not finish mapping a
+  // 16 MB face first. Node's fs accepts only its own realm's `AbortSignal`, and `instanceof`
+  // cannot tell: a DOM shim can install an `AbortSignal` global that passes the check and is
+  // still refused with `ERR_INVALID_ARG_TYPE`. So the read is asked, and a refused signal
+  // falls back to the bounded read with the signal checked around it, as before.
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path, signal ? { signal } : undefined);
+  } catch (error) {
+    if (!signal || (error as { code?: string }).code !== 'ERR_INVALID_ARG_TYPE') throw error;
+    bytes = await readFile(path);
+  }
   if (signal?.aborted) throw signal.reason;
   return bytes;
 }

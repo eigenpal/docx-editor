@@ -6,6 +6,7 @@
   "functions": {
     "api/convert.ts": {
       "maxDuration": 90,
+      "memory": 3008,
       "includeFiles": "packages/{docx-to-pdf,fonts}/assets/**"
     }
   },

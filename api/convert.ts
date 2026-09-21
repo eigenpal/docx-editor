@@ -8,9 +8,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * The DOCX to PDF demo at `/docx-to-pdf/` posts its document here, exactly as it posts to the
  * local demo server in `examples/docx-to-pdf/server.mjs`. The conversion runs in Node because
- * the exporter resolves font files through `node:fs`; this function is that Node. It keeps the
- * same contract and the same limits as the local server: a 20 MiB upload, a 60 second
- * deadline, and no retention of the upload or the result after the response.
+ * the exporter resolves font files through `node:fs`; this function is that Node.
+ *
+ * It keeps the local server's contract and its limits: a 20 MiB upload, a 60 second deadline,
+ * one conversion at a time, and no retention of the upload or the result. Two things differ
+ * because a function has no worker to hand the work to. The conversion runs in this process,
+ * so its memory ceiling is the function's own, set in `vercel.json`; and "one at a time" is
+ * per instance, a second request arriving while one runs is refused with 503 as the local
+ * server does, so one instance never lays out two documents at once. The request must carry
+ * an `Origin` that matches the host: this endpoint exists for the demo page, and a browser
+ * always sends `Origin` on a `POST`, so a request without one is not the page.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
@@ -22,6 +29,9 @@ const DEADLINE_MS = 60_000;
 export const maxDuration = 90;
 /** The body is the DOCX bytes; the platform must not parse it. */
 export const config = { api: { bodyParser: false } };
+
+/** One conversion per instance. Fluid Compute reuses an instance, so this is real. */
+let active = false;
 
 function json(res: ServerResponse, status: number, value: unknown): void {
   if (res.destroyed || res.writableEnded) return;
@@ -45,7 +55,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method !== 'POST') return json(res, 405, { message: 'Use POST.' });
   const host = req.headers.host ?? '';
   const origin = req.headers.origin;
-  if (origin && origin !== `https://${host}` && origin !== `http://${host}`)
+  // Required, not merely checked when present: the demo page is the only client, and a
+  // browser sends `Origin` on every `POST`. A request without it is not the page.
+  if (!origin || (origin !== `https://${host}` && origin !== `http://${host}`))
     return json(res, 403, { message: 'Use the same-origin demo.' });
   const url = new URL(req.url ?? '/', `https://${host || 'localhost'}`);
   const displayMode = url.searchParams.get('displayMode') ?? 'proposed';
@@ -59,10 +71,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return json(res, 400, { message: 'Invalid conversion option.' });
   if (Number(req.headers['content-length']) > MAX_UPLOAD)
     return json(res, 413, { message: 'Upload limit is 20 MiB.' });
-  const bytes = await readBody(req);
-  if (bytes === null) return json(res, 413, { message: 'Upload limit is 20 MiB.' });
-  if (bytes.byteLength === 0) return json(res, 400, { message: 'Choose a DOCX file.' });
+  if (active)
+    return json(res, 503, { message: 'A conversion is already running. Retry when it finishes.' });
+  active = true;
   try {
+    const bytes = await readBody(req);
+    if (bytes === null) return json(res, 413, { message: 'Upload limit is 20 MiB.' });
+    if (bytes.byteLength === 0) return json(res, 400, { message: 'Choose a DOCX file.' });
     const result = await exportPdf(bytes, {
       displayMode: displayMode as 'proposed' | 'original' | 'all-markup',
       comments: comments === 'true',
@@ -79,19 +94,33 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
   } catch (error) {
     const name = error instanceof Error ? error.name : 'Error';
-    const message = error instanceof Error ? error.message : String(error);
-    // The same shape the local demo server sends: a document the writer refuses is 422, a
-    // document it cannot open is 400, a deadline is 408, and anything else is a 500.
+    const message = error instanceof Error ? error.message : '';
+    // The same shape the local demo server sends. Every message here is fixed text: an open
+    // failure's own message names the zip entry that failed, which is the upload's to choose,
+    // and the diagnostics are the writer's own codes and wording.
     if (name === 'PdfFidelityError')
       return json(res, 422, {
         ok: false,
         error: name,
-        message,
+        message: 'The document has content this converter cannot reproduce exactly.',
         diagnostics: (error as { diagnostics?: unknown }).diagnostics ?? [],
       });
-    if (name === 'PdfDocumentOpenError') return json(res, 400, { ok: false, error: name, message });
+    if (name === 'PdfDocumentOpenError')
+      return json(res, 400, {
+        ok: false,
+        error: name,
+        message: 'The file is not a DOCX this converter can open.',
+      });
     if (name === 'ExportResourceError' && /timed out/i.test(message))
-      return json(res, 408, { ok: false, error: name, message });
+      return json(res, 408, { ok: false, error: name, message: 'Conversion exceeded 60 seconds.' });
+    if (name === 'RangeError' || name === 'PdfWorkLimitError')
+      return json(res, 507, {
+        ok: false,
+        error: name,
+        message: 'The document is larger than this demo converts. Convert a smaller document.',
+      });
     return json(res, 500, { ok: false, error: name, message: 'The conversion failed.' });
+  } finally {
+    active = false;
   }
 }

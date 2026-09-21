@@ -126,7 +126,15 @@ export async function createPdfDemo({
               bytes: undefined,
               pdf: Buffer.from(result.bytes).toString('base64'),
             });
-          else json(result.error === 'PdfFidelityError' ? 422 : 400, result);
+          else if (result.error === 'PdfFidelityError') json(422, result);
+          // An open failure's own message names the zip entry that failed, which is the
+          // upload's to choose. Keep that detail on the server side.
+          else
+            json(400, {
+              ok: false,
+              error: result.error,
+              message: 'The file is not a DOCX this converter can open.',
+            });
           finish();
         });
         // A heap the worker cannot grow arrives as `ERR_WORKER_OUT_OF_MEMORY`. That, and only

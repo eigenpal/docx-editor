@@ -10,7 +10,7 @@ import type {
   ListMarkerPictureRecord,
   SemanticDrawingVisit,
 } from '@docx-editor.dev/core/layout';
-import { number as n, Work } from './context.ts';
+import { number as n, pdfLiteralUri, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
 
 /**
@@ -173,7 +173,13 @@ export class ImageWriter {
           y: page.getHeight() - v.y - offsetY,
         }))
       : p;
-    if (d.hyperlinkHref && /^(https?:|mailto:|tel:|ftp:)/i.test(d.hyperlinkHref)) {
+    // A byte string, escaped: `PDFString.of` writes its value verbatim, and a `)` in the href
+    // would end the string and leave raw PDF inside the action dictionary.
+    const uri =
+      d.hyperlinkHref && /^(https?:|mailto:|tel:|ftp:)/i.test(d.hyperlinkHref)
+        ? pdfLiteralUri(d.hyperlinkHref)
+        : null;
+    if (uri !== null) {
       // A loop, not `Math.min(...xs)`: the clip polygon is file-derived, and spreading a long
       // one into a call is the one place a large but otherwise valid shape could blow the stack.
       const bounds = [Infinity, Infinity, -Infinity, -Infinity];
@@ -190,8 +196,7 @@ export class ImageWriter {
             Subtype: 'Link',
             Rect: bounds,
             Border: [0, 0, 0],
-            // A byte string: a UTF-16BE text string here fails to open in byte-comparing viewers.
-            A: { S: 'URI', URI: PDFString.of(d.hyperlinkHref) },
+            A: { S: 'URI', URI: PDFString.of(uri) },
           })
         )
       );

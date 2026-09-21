@@ -29,7 +29,14 @@ const SECTION =
   ' w:header="0" w:footer="720" w:gutter="0"/></w:sectPr>';
 
 async function baselines(body: string): Promise<number[]> {
-  const result = await exportPdf(docx(`${body}${SECTION}`), {
+  return baselinesWith(body, {});
+}
+
+async function baselinesWith(
+  body: string,
+  extras: Record<string, string>
+): Promise<number[]> {
+  const result = await exportPdf(docx(`${body}${SECTION}`, extras), {
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
   });
@@ -84,4 +91,44 @@ test('the line that ends a spaced paragraph rounds its ascent', async () => {
 // keyed on the paragraph end alone passes, and it moves every header line in the corpus.
 test('a paragraph with no after-spacing keeps the box rule on its last line', async () => {
   expect(await lastLineShiftInUnits(0)).toBe(0);
+});
+
+// The rule keys on the after-spacing Core APPLIED, which `w:contextualSpacing` collapses to
+// zero between paragraphs of one style, not on what was authored. A Word render of two
+// same-style paragraphs with `w:after="120"` and contextual spacing, then a third of another
+// style, places the first paragraph's last line by the box rule and the second's by the
+// rounded ascent — all nine baselines exact. So a collapsed last line stays put.
+async function shiftWithFollower(
+  styles: string,
+  first: (words: number) => string,
+  follower: string
+): Promise<number> {
+  const stylesPart = { 'word/styles.xml': styles };
+  const short = await baselinesWith(`${first(48)}${follower}`, stylesPart);
+  const long = await baselinesWith(`${first(96)}${follower}`, stylesPart);
+  const last = 2; // the first paragraph's third line, its last in the short document
+  for (let i = 0; i < last; i += 1) expect(long[i]).toBeCloseTo(short[i]!, 6);
+  return Math.round((short[last]! - long[last]!) / GRID);
+}
+
+const CONTEXTUAL_STYLES =
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/>' +
+  '<w:pPr><w:spacing w:after="120"/><w:contextualSpacing/></w:pPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Plain"><w:name w:val="Plain"/>' +
+  '<w:pPr><w:spacing w:after="120"/></w:pPr></w:style></w:styles>';
+
+const styled = (style: string) => (words: number) =>
+  `<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr>` +
+  `<w:r><w:rPr><w:sz w:val="${HALF_POINTS}"/></w:rPr>` +
+  `<w:t xml:space="preserve">${WORD.repeat(words).trim()}</w:t></w:r></w:p>`;
+
+test('after-spacing collapsed by contextual spacing keeps the box rule on the last line', async () => {
+  // Same style follows: the 120 after collapses to zero, and the last line does not move.
+  expect(await shiftWithFollower(CONTEXTUAL_STYLES, styled('Body'), styled('Body')(48))).toBe(0);
+});
+
+test('after-spacing that survives the collapse still rounds the ascent', async () => {
+  // A different style follows: the after applies, and the last line takes the ascent rule.
+  expect(await shiftWithFollower(CONTEXTUAL_STYLES, styled('Body'), styled('Plain')(48))).toBe(1);
 });

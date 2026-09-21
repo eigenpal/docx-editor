@@ -100,6 +100,9 @@ export async function exportPdf(
     glyphFallbacks: readonly FontRequest[],
     last: boolean
   ): Promise<PdfExportResult | null> => {
+    // Each attempt is a full pass over the document with its own operation and content
+    // budgets. Only the wall-clock deadline is shared, because that is the caller's promise.
+    work.beginAttempt();
     work.check();
     const opened = await openFontBackedDocumentForExport(source, {
       documentLigatures: true,
@@ -139,10 +142,8 @@ export async function exportPdf(
       if (
         !last &&
         diagnostics.some((d) => d.code === 'missing-glyph' || d.code === 'unshaped-text')
-      ) {
-        work.resetDiagnostics();
+      )
         return null;
-      }
       if (fidelityPolicy === 'strict' && diagnostics.some((d) => d.severity !== 'information'))
         throw new PdfFidelityError(diagnostics);
       work.check();
@@ -169,7 +170,12 @@ export async function exportPdf(
     }
     throw new PdfEncodingError('PDF export produced no result');
   } catch (error) {
-    work.check();
+    // A typed export error is the answer, whatever the clock says now: a fidelity refusal
+    // that lands after the deadline is still a fidelity refusal, not a timeout. The one
+    // exception is an open that failed BECAUSE the signal fired mid-open; that failure is the
+    // deadline or the abort wearing another name, and `check` throws the right one.
+    if (error instanceof PdfDocumentOpenError && error.reason === 'aborted') work.check();
+    // Only an untyped failure asks the budget whether a deadline or an abort is the story.
     if (
       error instanceof PdfFidelityError ||
       error instanceof PdfDocumentOpenError ||
@@ -180,6 +186,7 @@ export async function exportPdf(
       error instanceof PdfWorkLimitError
     )
       throw error;
+    work.check();
     throw new PdfEncodingError('PDF encoding failed', { cause: error });
   } finally {
     clearTimeout(timer);

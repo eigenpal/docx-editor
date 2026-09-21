@@ -16,7 +16,7 @@ import {
 } from 'pdf-lib';
 import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
 import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
-import { Work } from './context.ts';
+import { pdfLiteralUri, Work } from './context.ts';
 
 type Literal =
   | string
@@ -57,8 +57,12 @@ export function linkAnnotation(
   // `URI` is a PDF byte string. Written as a UTF-16BE text string it decodes in pdf.js and
   // fails to open in a viewer that reads the bytes as they are. The scheme allowlist stays:
   // Core already sanitised the href, and this is the last check before it leaves the process.
-  else if (link.kind === 'external' && /^(https?:|mailto:|tel:|ftp:)/i.test(link.href))
-    add(doc, page, { ...base, A: { S: 'URI', URI: PDFString.of(link.href) } });
+  // `pdfLiteralUri` then escapes the bytes a literal string cannot carry bare, because
+  // `PDFString.of` writes its value verbatim and a `)` in the href would end the string early.
+  else if (link.kind === 'external' && /^(https?:|mailto:|tel:|ftp:)/i.test(link.href)) {
+    const uri = pdfLiteralUri(link.href);
+    if (uri !== null) add(doc, page, { ...base, A: { S: 'URI', URI: PDFString.of(uri) } });
+  }
 }
 export function destinations(
   doc: PDFDocument,

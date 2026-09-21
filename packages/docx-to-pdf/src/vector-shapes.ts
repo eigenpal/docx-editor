@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
 import type { SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
-import { color, number as n, rect, Commands, Work } from './context.ts';
+import { color, number as n, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 
 /** Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic. */
 export function paintVectorShape(
@@ -84,7 +84,13 @@ export function paintVectorShape(
     out.push('Q');
   }
   out.push('Q');
-  if (d.hyperlinkHref && /^(https?:|mailto:|tel:|ftp:)/i.test(d.hyperlinkHref)) {
+  // A byte string, escaped: `PDFString.of` writes its value verbatim, and a `)` in the href
+  // would end the string and leave raw PDF inside the action dictionary.
+  const uri =
+    d.hyperlinkHref && /^(https?:|mailto:|tel:|ftp:)/i.test(d.hyperlinkHref)
+      ? pdfLiteralUri(d.hyperlinkHref)
+      : null;
+  if (uri !== null) {
     const left = bounds.x - visit.page.box.x;
     const bottom = page.getHeight() - bounds.y + visit.page.box.y - bounds.height;
     page.node.addAnnot(
@@ -94,8 +100,7 @@ export function paintVectorShape(
           Subtype: 'Link',
           Rect: [left, bottom, left + bounds.width, bottom + bounds.height],
           Border: [0, 0, 0],
-          // A byte string: a UTF-16BE text string fails to open in byte-comparing viewers.
-          A: { S: 'URI', URI: PDFString.of(d.hyperlinkHref) },
+          A: { S: 'URI', URI: PDFString.of(uri) },
         })
       )
     );
