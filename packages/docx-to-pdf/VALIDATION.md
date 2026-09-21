@@ -609,6 +609,18 @@ Against Word this improves `issue-740-header-zero-distance.docx` from 2.780% to 
 
 The descent also has to scale off the LINE's ascent rather than the painted run's size. A line takes its ascent from its tallest run, so deriving the descent from a shorter run on the same line can push that run's glyphs a whole unit away from its neighbours. Keying every line of the corpus by identity, the first form of the rule split one line of 1977 into two baselines; scaling the descent through the face's descent-to-ascent ratio, which is a property of the face and not of the size it is drawn at, splits none. The fix improves three Word comparisons and regresses none: `float-wrap-comprehensive-test.docx` 1.059% to 0.729%, `demo.docx` 0.643% to 0.639%, and `template-with-hf-rule.docx` 0.315% to 0.298%. Sixteen of the twenty documents now hold every page under 1%; the four that do not are `issue-740-header-zero-distance` at 2.862%, `issue-483-firstline-marker` at 2.061%, `float-wrap-comprehensive-test` at 1.331% and `footnote-overlap-regression` at 1.246%.
 
+### A tie the layout reaches, not one it computes
+
+The half-unit tie rule was already right, and a part in 1e15 defeated it.
+
+A painted position arrives as a sum of points that are exact in decimal and not in binary. In `issue-483-firstline-marker.docx` the thirty-sixth body baseline is mathematically 2149.5 device units. The sum delivers 515.88000000000033651pt, so the quotient is 2149.5000000000014, and `ceil(x - 1/2)` takes 2150 rather than the 2149 the rule asks for. That line paints 0.24pt low. Its neighbours above and below are correct, so the page shows one line out of place and then recovers, and a crop of ours against the reference shows every glyph of that line differing while the lines around it differ in a few anti-aliased edges.
+
+The reference resolves the tie the other way, which is what the rule already said. Word's own stream confirms the shape: from the line above, it steps 50 device units where this engine stepped 51, then 51 where this engine stepped 50. The multiset of steps is identical, so the line height agrees exactly; only the phase moved, for one line.
+
+Snapping the unit count back to the nearest half within a part in 1e9 fixes it. The tolerance is far below any real geometry, 2.4e-10pt, and far above the accumulated error. Against Word `issue-483-firstline-marker.docx` improves from 1.173% to 1.065%, and its worst page from 2.061% to 1.736%. No other Word comparison moves at all.
+
+The existing tie fixture could not have caught this. Its positions are whole and half points that are exact in binary, so its ties arrive exact. A fixture at `w:line="201"` does catch it: twelve 10.05pt lines from a 72pt margin deliver 836.4999999999999 and twenty deliver 1171.5000000000005, drift in both directions, five ties on one page.
+
 ### What the baseline rule left behind
 
 With the baseline rule in, the worst page of each remaining document breaks down like this, counting spans whose vertical position differs from the reference:

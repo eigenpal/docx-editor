@@ -58,6 +58,18 @@ function reducedHalfPoints(fontSizePt: number, factor: number): number {
  * which cost two corpus documents when it was tried. On such a line the reference keeps the
  * baseline on the ascent, so a box taller than its natural height falls back to that.
  */
+/**
+ * A device-unit count with its accumulated representation error removed.
+ *
+ * Positions reach here as a sum of points that are exact in decimal and not in binary, so a
+ * count that is mathematically a whole or half unit can arrive a part in 1e12 away from it.
+ * That is invisible everywhere except at a tie, where it silently reverses the tie rule.
+ */
+export function snapToGrid(units: number): number {
+  const snapped = Math.round(units * 2) / 2;
+  return Math.abs(units - snapped) < 1e-9 ? snapped : units;
+}
+
 function griddedBaselineInLine(line: SemanticSpanVisit['line'], face: EmbeddedFace): number {
   const units = (value: number): number => Math.round(value / PDF_PAINT_GRID_PT);
   // Scale the descent off the LINE's own ascent, through the face's descent-to-ascent ratio,
@@ -244,8 +256,12 @@ export class TextWriter {
       line.box.y +
       griddedBaselineInLine(line, face) -
       baselineShiftPtOf(style);
-    const baseline =
-      page.getHeight() - Math.ceil(baselineFromTop / PDF_PAINT_GRID_PT - 0.5) * PDF_PAINT_GRID_PT;
+    // The sum above is exact in decimal but not in binary: a baseline that is mathematically
+    // 2149.5 units arrives as 2149.5000000000014, and `ceil(x - 0.5)` then takes the unit BELOW
+    // the one the tie rule asks for, painting the whole line 0.24pt low. Snap the quotient back
+    // to the grid first. The tolerance is far under any real geometry and far over the error.
+    const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
+    const baseline = page.getHeight() - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
     const revisions = this.showRevisionMarkup ? (span.revisions ?? []) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
