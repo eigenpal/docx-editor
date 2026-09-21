@@ -10,7 +10,7 @@ import type {
   ListMarkerPictureRecord,
   SemanticDrawingVisit,
 } from '@docx-editor.dev/core/layout';
-import { number as n, pdfLiteralUri, Work } from './context.ts';
+import { color, number as n, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
 
 /**
@@ -100,6 +100,64 @@ export class ImageWriter {
     return `q ${n(box.width)} 0 0 ${n(box.height)} ${n(x)} ${n(y)} cm /${key} Do Q`;
   }
 
+  /**
+   * A textbox: its fill and outline at the extent, then `body` (the story's decorations and
+   * the text its owner collected) clipped to the content box, all clipped to the published
+   * paint bounds — the same three boxes the screen painter draws, in the same order.
+   *
+   * The outline is stroked inside the extent, as a CSS border inside a `border-box` is, so a
+   * bordered textbox is exactly as wide as Word laid it out. Word clips overflowing content
+   * to the box as well, so a height clip is information: the page shows what Word shows.
+   */
+  paintTextbox(visit: SemanticDrawingVisit, page: PDFPage, body: readonly string[]): string {
+    const d = visit.drawing;
+    if (d.kind !== 'anchoredDrawing' || !d.textboxStory) return '';
+    const story = d.textboxStory;
+    const bounds = visit.absolutePaintBounds;
+    if (bounds.width <= 0 || bounds.height <= 0 || d.accessibility.hidden) return '';
+    if (story.fallbackReason === 'textbox-height-clip')
+      this.work.report(
+        'textbox-clip',
+        'Textbox content taller than its box is clipped',
+        visit.page.index,
+        'information'
+      );
+    else if (story.fallbackReason) {
+      this.work.report(
+        'textbox',
+        `Textbox story not laid out: ${story.fallbackReason}`,
+        visit.page.index
+      );
+      return '';
+    }
+    const height = page.getHeight();
+    const x = visit.drawingOrigin.x - visit.page.box.x;
+    const y = visit.drawingOrigin.y - visit.page.box.y;
+    const extent = { x, y, width: d.width, height: d.height };
+    const out = new Commands(this.work);
+    out.push(`q ${rect(bounds, -visit.page.box.x, -visit.page.box.y, height)} W n`);
+    if (story.fillHex !== null)
+      out.push(`${color(story.fillHex)} rg ${rect(extent, 0, 0, height)} f`);
+    if (story.strokeHex !== null) {
+      const width = Math.max(0.5, story.strokeWidthPt);
+      const inner = {
+        x: x + width / 2,
+        y: y + width / 2,
+        width: Math.max(0, d.width - width),
+        height: Math.max(0, d.height - width),
+      };
+      out.push(`${color(story.strokeHex)} RG ${n(width)} w ${rect(inner, 0, 0, height)} S`);
+    }
+    const content = {
+      x: x + story.contentOffset.x,
+      y: y + story.contentOffset.y,
+      width: story.contentWidth,
+      height: Math.max(0, story.contentHeight),
+    };
+    out.push(`q ${rect(content, 0, 0, height)} W n`, ...body, 'Q', 'Q');
+    return out.join('\n');
+  }
+
   async paint(visit: SemanticDrawingVisit, page: PDFPage): Promise<string> {
     await this.work.yield();
     const d = visit.drawing;
@@ -107,10 +165,10 @@ export class ImageWriter {
       this.work.report('drawing', message, visit.page.index);
       return '';
     };
-    if (visit.story !== 'textbox' && d.vectorShape)
-      return paintVectorShape(this.doc, page, visit, this.work);
-    if (visit.story === 'textbox' || d.placeholderGraphicKind)
-      return report('Vector drawings and textboxes are not supported');
+    if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
+    if (d.kind === 'anchoredDrawing' && d.textboxStory)
+      return report('Textbox story not routed through paintTextbox');
+    if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
     const bytes = this.session.validatedImageBytes(d);
     if (!bytes || d.resource.kind !== 'ready') return report('Image has no validated raster bytes');
     const mime = d.resource.mime;

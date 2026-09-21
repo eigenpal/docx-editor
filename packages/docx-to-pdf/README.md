@@ -59,7 +59,7 @@ The writer holds the laid-out pages and the admitted font data for the length of
 
 ## Explicit limitations
 
-Textboxes, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. The writer refuses variable fonts, missing glyphs, prohibited embedding, and font containers the subsetter cannot encode. It also refuses fonts that prohibit subsetting, because it embeds subsets.
+Charts and other non-picture graphics, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. A textbox paints its fill, outline, and clipped text at its place in the drawing order. The writer refuses variable fonts, missing glyphs, prohibited embedding, and font containers the subsetter cannot encode. It also refuses fonts that prohibit subsetting, because it embeds subsets.
 
 The writer does not apply color adjustments such as brightness and grayscale. It does support bitmap alpha and fixed picture opacity. Tagged PDF, PDF/A, encryption, forms, DOCX comment round trips, and reusable export sessions are outside this package's scope.
 

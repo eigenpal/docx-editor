@@ -27,6 +27,6 @@ Font substitution follows Core's separate font policy. `result.fontResolution` i
 
 To open the local demo, run `bun run dev:pdf` in the repository. Edit the document on the left, then select **Generate PDF**. The preview appears on the right with a download link. An edit marks the preview stale, and the control becomes **Regenerate PDF**. Conversion therefore runs when you ask for it, rather than on every keystroke. The local demo converts in a Node worker and does not retain files. The hosted demo converts through a server function with the same limits, and accepts requests only from its own page.
 
-The writer supports notes, equation geometry, tab leaders, and multilingual font fallback. Unsupported content includes textboxes, rotated table text, and advanced drawing effects. For more information about supported content, resource limits, errors, and verification commands, see the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf).
+The writer supports notes, textboxes, equation geometry, tab leaders, and multilingual font fallback. Unsupported content includes charts, rotated table text, and advanced drawing effects. For more information about supported content, resource limits, errors, and verification commands, see the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf).
 
 The demo opens the same sample the editor uses.
