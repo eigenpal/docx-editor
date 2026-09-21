@@ -53,7 +53,7 @@ jobs:
       publishing: ${{ steps.pending.outputs.publishing }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
 
       - name: Detect pending changesets
         id: pending
@@ -96,7 +96,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -126,7 +126,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -216,7 +216,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -266,7 +266,7 @@ jobs:
       actions: write # dispatch the Python wheels workflow after npm publishes
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}

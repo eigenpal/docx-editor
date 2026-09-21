@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           fetch-depth: "${{ (matrix.check == 'api-changeset' || matrix.check == 'build') && '0' || '1' }}"
       - name: Setup Node.js
@@ -243,7 +243,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -273,7 +273,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -320,7 +320,7 @@ jobs:
       pull-requests: write # sticky size comment
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -393,7 +393,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
       - name: Download advisory report
         uses: actions/download-artifact@v8
         with:

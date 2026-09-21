@@ -40,7 +40,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: docx-editor
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -118,7 +118,7 @@ jobs:
       PR_NUMBER: ${{ needs.capture.outputs.pr }}
       RELEASE_VERSION: ${{ needs.capture.outputs.version }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
