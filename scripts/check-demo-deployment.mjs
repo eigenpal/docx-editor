@@ -141,7 +141,7 @@ async function checkCombinedDeployment() {
   );
   assertRoutingContract(rewrites);
 
-  console.log('✓ combined demo deployment: 4 apps, base-safe assets, fixtures, and host fallbacks');
+  console.log(`✓ combined demo deployment: ${apps.length} apps, base-safe assets, fixtures, and host fallbacks`);
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
