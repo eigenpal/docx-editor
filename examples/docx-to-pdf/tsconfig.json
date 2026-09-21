@@ -1,13 +1,27 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "strict": true,
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/docx-to-pdf": ["../../packages/docx-to-pdf/src/index.ts"],
+      "@docx-editor.dev/fonts": ["../../packages/fonts/src/index.ts"],
+      "@docx-editor.dev/fonts/google": ["../../packages/fonts/src/google-fonts.ts"],
+      "@docx-editor.dev/fonts/*": ["../../packages/fonts/src/*"],
+      "@docx-editor.dev/i18n": ["../../packages/i18n/src/index.ts"],
+      "@docx-editor.dev/react": ["../../packages/react/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "skipLibCheck": true
+    "strict": true,
+    "types": ["vite/client"]
   },
   "include": ["src", "vite.config.ts"]
 }
