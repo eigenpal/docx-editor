@@ -1,5 +1,34 @@
 # @docx-editor.dev/core
 
+## 2.21.1
+
+### Patch Changes
+
+- 0b06827: Update the wording of public documentation comments.
+- 9c7ac7c: Prevent unformatted paragraph marks from inflating smaller text and adding extra pages. Preserve nested-table insertion controls while moving the pointer onto them.
+
+  Reduce mount-time hash overhead, skip selection geometry for collapsed ranges, and reuse bounded serialization results when saving an unchanged document.
+
+- 377882e: Keep the viewport still when a click places the caret, so a double-click in the blank header or footer margin creates and opens that story. Shift-extended keyboard moves and form-fill Tab now scroll to keep their target in view.
+- 6a7b93a: Include tracked formatting in shared styles in document-wide review decisions, counts, and individual review commands. Commit style and story decisions atomically with protection, undo/redo, collaboration replay, and formatting-cache invalidation. Keep malformed authorless revisions visible instead of silently omitting them.
+- 6a7b93a: Support accepting and rejecting table rows, independent cells, merge states, table grids, and structural property history. Preserve dependent and protected changes, restore cell geometry consistently, and keep historical markers out of the pending review queue.
+- 6a7b93a: Match Word when resolving paragraph breaks before tables, numbering-reference insertion history, and partial section-property history. Preserve protection and selected-decision boundaries, and expose structural operation details and accurate table/cell review anchors.
+
+  Show structural decisions in the React and Vue review sidebars by default, with descriptive row, cell, merge, and numbering labels. Keep run/paragraph formatting in balloons while showing formatting without a painted anchor in the sidebar.
+
+- fc755da: Preserve list spacing when pressing Enter, including inherited styles, blank-paragraph separators, following styles, and automatic list margins.
+
+  Resolve relocated style definitions through the document relationship when editing and creating list styles.
+
+  Resolve line-unit paragraph margins, numbering-level formatting, and contextual spacing in body text and table cells. Preserve separator behavior across content controls and distinguish blank paragraphs from non-text content. Keep edits valid when XML namespace prefixes conflict.
+
+- a023045: Fix grouping and resolution of tracked table changes, including nested rows, cell formatting, shared grid histories, widths, alignment, and row heights. Related changes resolve together while preserving independent revisions, protected content, and unknown metadata.
+
+  Fix move-revision handling and partial-resolution reporting. Preserve existing nested tables when a row cannot be removed, and report `retained-structure` when its structural change remains pending.
+
+- Updated dependencies [6a7b93a]
+  - @docx-editor.dev/i18n@2.21.1
+
 ## 2.21.0
 
 ### Minor Changes
