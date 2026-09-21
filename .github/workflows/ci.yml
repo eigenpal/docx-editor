@@ -134,6 +134,11 @@ jobs:
       - name: Server agent lifecycle integration
         run: "bun run --filter './examples/server-agent-review' test:lifecycle"
         if: "matrix.check == 'build'"
+      # The PDF demo worker imports the built package, so its integration test can only run
+      # where `dist/` exists. In the unit shards it skips itself with a message.
+      - name: PDF demo worker integration
+        run: node --test examples/docx-to-pdf/server.node.test.mjs
+        if: "matrix.check == 'build'"
       - name: Editor API public consumer workflows
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
         if: "matrix.check == 'build'"

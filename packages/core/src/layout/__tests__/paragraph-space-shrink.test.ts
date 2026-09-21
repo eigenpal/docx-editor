@@ -133,3 +133,14 @@ test('a seam does not lift the space floor for a split word', () => {
     )
   ).toEqual(['aa bb', 'cc dd']);
 });
+
+// Word 2019 and Microsoft 365 author `compatibilityMode` 16. Modern justification is mode 15
+// and everything after it; gating on `=== 15` left every current Word document on the legacy
+// path the moment the parser started returning 16 instead of `undefined`.
+test('modes 16 and 17 justify exactly as mode 15 does', () => {
+  const modern = content(layoutSemanticDocument(source(), 1, { measurer, compatibilityMode: 15 }));
+  for (const compatibilityMode of [16, 17])
+    expect(content(layoutSemanticDocument(source(), 1, { measurer, compatibilityMode }))).toEqual(
+      modern
+    );
+});

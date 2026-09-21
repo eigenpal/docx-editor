@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Expose shared export geometry and font fallback capabilities for PDF support. Refines text metrics, kerning, tables, notes, tables of contents, image layout, and font-cache memory bounds.
+Adds the export geometry traversal and glyph fallback capabilities that a PDF writer reads from the layout: per-span visits with absolute boxes, laid-out text shaping, picture bullet records, and fixed picture opacity from `a:alphaModFix`.

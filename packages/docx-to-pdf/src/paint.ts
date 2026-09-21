@@ -197,6 +197,9 @@ export async function paint(
   const frontBorders = pages.map(() => new Commands(work));
   for (const record of layout.pages) {
     const out = streams[record.index]!;
+    // Chrome flips y from the same gridded page height the text uses. `record.box.height` is
+    // the ungridded layout value, and the two differ by up to half a device unit on A4.
+    const pageHeight = pages[record.index]!.getHeight();
     if (record.pageBorders) {
       const borderOut = record.pageBorders.zOrder === 'front' ? frontBorders[record.index]! : out;
       for (const border of record.pageBorders.strokes) {
@@ -209,21 +212,19 @@ export async function paint(
             `Unsupported page border: ${border.edge.val}`,
             record.index
           );
-        borderOut.push(
-          rule(border.box, border.edge.color, border.edge.val, 0, 0, record.box.height)
-        );
+        borderOut.push(rule(border.box, border.edge.color, border.edge.val, 0, 0, pageHeight));
       }
     }
     for (const separator of record.columnSeparators ?? [])
       out.push(
-        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, record.box.height, true)} f`
+        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, pageHeight, true)} f`
       );
     for (const area of [record.footnotes, record.endnotes]) {
       const sep = area?.separator;
       if (!sep || !(sep.ruleStyle || sep.synthetic)) continue;
       for (const offset of sep.ruleStyle === 'double' ? [0, 2] : [0])
         out.push(
-          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, record.box.height, true)} f`
+          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, pageHeight, true)} f`
         );
     }
   }
@@ -396,9 +397,11 @@ export async function paint(
       if (visit.paragraph.clipToBox) out.push('Q');
     }
   }
-  for (let i = 0; i < streams.length; i++) streams[i]!.push(...frontBorders[i]!);
   for (const visit of drawings.filter((v) => v.paintLayer !== 'behind-text'))
     streams[visit.page.index]!.push(await images.paint(visit, pages[visit.page.index]!));
+  // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings
+  // included, so it goes into the stream after them, not before.
+  for (let i = 0; i < streams.length; i++) streams[i]!.push(...frontBorders[i]!);
   for (let i = 0; i < pages.length; i++) {
     work.check();
     pages[i]!.node.addContentStream(

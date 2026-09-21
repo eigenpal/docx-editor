@@ -73,3 +73,14 @@ test('compound, unequal, separated, positioned and percentage tables retain thei
     expect(read(table, 12).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   expect(read(source().table, 12, 1).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
 });
+
+// Mode 16 is Word 2019 and Microsoft 365. A bordered one-cell table rendered by Word at mode
+// 14 starts its text at 72.24pt and at mode 16 at 72.48pt, one device unit further in, and
+// this engine reproduces both. So 16 is NOT a legacy mode for side rules: it must not take
+// the centred path that modes 11, 12 and 14 do.
+test('mode 16 keeps the modern side-rule inset, as the rendered controls show', () => {
+  const { table } = source(0);
+  expect(read(table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(read(table, 15).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(read(table, 14).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
+});

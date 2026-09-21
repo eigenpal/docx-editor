@@ -100,6 +100,11 @@ export class Work {
     await new Promise<void>((resolve) => setImmediate(resolve));
     this.check();
   }
+  /** Forget what an abandoned attempt reported; budgets and the deadline carry over. */
+  resetDiagnostics(): void {
+    this.diagnostics.length = 0;
+    this.seen.clear();
+  }
   report(
     code: string,
     message: string,
@@ -113,7 +118,7 @@ export class Work {
     this.diagnostics.push(Object.freeze({ code, message, pageIndex, severity }));
   }
 }
-class PdfWorkLimitError extends Error {
+export class PdfWorkLimitError extends Error {
   constructor() {
     super('PDF operation or diagnostic limit exceeded');
     this.name = 'PdfWorkLimitError';

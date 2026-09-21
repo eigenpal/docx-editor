@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { create as openFont, type FontkitFont } from 'fontkit';
-import { PDFDocument, PDFHexString, PDFName, type PDFRef } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFString, type PDFRef } from 'pdf-lib';
 import type { ExportAdmittedFontFace } from '@docx-editor.dev/core/export';
 import { mapSymbolPuaText } from '@docx-editor.dev/core/layout';
 import { fontEmbeddingDecision } from './pdf-font-embedding.ts';
@@ -138,9 +138,13 @@ export class EmbeddedFace {
         Type: 'Font',
         Subtype: cff ? 'CIDFontType0' : 'CIDFontType2',
         BaseFont: base,
+        // Registry and Ordering are PDF byte strings, `(Adobe)` and `(Identity)`, not text
+        // strings. `PDFHexString.fromText` writes UTF-16BE behind a BOM, and a consumer that
+        // compares these as bytes, which Acrobat and PDF/A checkers do, cannot match the
+        // CIDFont to its CMap and drops it.
         CIDSystemInfo: {
-          Registry: PDFHexString.fromText('Adobe'),
-          Ordering: PDFHexString.fromText('Identity'),
+          Registry: PDFString.of('Adobe'),
+          Ordering: PDFString.of('Identity'),
           Supplement: 0,
         },
         FontDescriptor: descriptor,

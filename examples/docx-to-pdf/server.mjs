@@ -6,14 +6,25 @@ import { Worker } from 'node:worker_threads';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const MAX_UPLOAD = 20 * 1024 * 1024;
-const DEADLINE = 60_000;
-/** Old-space ceiling for one conversion. Bounded on purpose; see the worker below. */
-const WORKER_HEAP_MB = Number(process.env.WORKER_HEAP_MB ?? 512);
+const DEFAULT_DEADLINE = 60_000;
+/**
+ * Old-space ceiling for one conversion, in MiB. Bounded on purpose; see the worker below.
+ * The environment value is clamped: `NaN`, zero and absurd sizes would otherwise pass straight
+ * into `resourceLimits` and either refuse every document or remove the ceiling entirely.
+ */
+const WORKER_HEAP_MB = clampHeapMb(process.env.WORKER_HEAP_MB);
+function clampHeapMb(value) {
+  const parsed = Number(value ?? 512);
+  if (!Number.isFinite(parsed)) return 512;
+  return Math.min(4096, Math.max(64, Math.round(parsed)));
+}
 /** One worker at a time. No upload, result, or job is retained after its request. */
 export async function createPdfDemo({
   production = false,
   workerUrl = new URL('./worker.mjs', import.meta.url),
+  deadlineMs = DEFAULT_DEADLINE,
 } = {}) {
+  const DEADLINE = deadlineMs;
   const vite = production
     ? null
     : await (
@@ -64,7 +75,7 @@ export async function createPdfDemo({
         }
       };
       const timer = setTimeout(() => {
-        json(408, { message: 'Conversion exceeded 60 seconds.' });
+        json(408, { message: `Conversion exceeded ${Math.round(DEADLINE / 1000)} seconds.` });
         finish();
         req.destroy();
       }, DEADLINE);
@@ -118,10 +129,12 @@ export async function createPdfDemo({
           else json(result.error === 'PdfFidelityError' ? 422 : 400, result);
           finish();
         });
-        // A heap the worker cannot grow arrives as `ERR_WORKER_OUT_OF_MEMORY`, and as a
-        // bare exit code 1 on some Node versions. Either way the document is too large for
-        // the budget, which is worth saying: a generic failure reads as a bug in the
-        // converter and invites a pointless retry.
+        // A heap the worker cannot grow arrives as `ERR_WORKER_OUT_OF_MEMORY`. That, and only
+        // that, is "the document is too large for the budget", which is worth saying because
+        // a generic failure reads as a converter bug and invites a pointless retry. Every
+        // other failure — an import that did not resolve, a thrown bug, a bare non-zero exit —
+        // is a 500: calling those "needs more memory" would send the operator to raise a
+        // limit that has nothing to do with it.
         const tooLarge = () => {
           json(507, {
             message: `The document needs more memory than this demo allows (${WORKER_HEAP_MB} MiB). Convert a smaller document, or raise WORKER_HEAP_MB.`,
@@ -138,11 +151,13 @@ export async function createPdfDemo({
         });
         worker.once('exit', (code) => {
           if (finished) return;
-          if (code !== 0) tooLarge();
-          else {
-            json(500, { message: 'The conversion worker stopped.' });
-            finish();
-          }
+          json(500, {
+            message:
+              code === 0
+                ? 'The conversion worker stopped without a result.'
+                : `The conversion worker failed (exit ${code}).`,
+          });
+          finish();
         });
       } catch {
         json(400, { message: 'The upload could not be read.' });

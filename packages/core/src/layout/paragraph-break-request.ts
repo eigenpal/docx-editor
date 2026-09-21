@@ -162,8 +162,12 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),
+      // Modern justification is mode 15 and everything after it: Word 2019 and Microsoft 365
+      // author `compatibilityMode` 16. An absent mode stays legacy, as the table lane treats it.
       justifySpaceShrink:
-        request.compatibilityMode === 15 && paragraphAlignment(formatting.props) === 'both',
+        request.compatibilityMode !== undefined &&
+        request.compatibilityMode >= 15 &&
+        paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
       equationCacheToken: request.producer,

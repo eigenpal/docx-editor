@@ -204,3 +204,23 @@ describe('drawingFilterStyle', () => {
     );
   });
 });
+
+describe('picture opacity', () => {
+  // `a:alphaModFix` is published as a fixed alpha and the PDF writer applies it; the browser
+  // sink must paint the same picture at the same alpha, or one record means two pictures.
+  test('a fixed alpha becomes an opacity() filter beside the colour functions', () => {
+    expect(drawingFilterStyle({ opacity: 0.5, grayscale: false, brightness: 0, contrast: 0 })).toBe(
+      'opacity(0.5)'
+    );
+    expect(drawingFilterStyle({ opacity: 0.25, grayscale: true, brightness: 0, contrast: 0 })).toBe(
+      'grayscale(1) opacity(0.25)'
+    );
+  });
+
+  test('an opaque or absent alpha adds nothing', () => {
+    expect(drawingFilterStyle({ opacity: 1, grayscale: false, brightness: 0, contrast: 0 })).toBe(
+      undefined
+    );
+    expect(drawingFilterStyle({ grayscale: false, brightness: 0, contrast: 0 })).toBe(undefined);
+  });
+});

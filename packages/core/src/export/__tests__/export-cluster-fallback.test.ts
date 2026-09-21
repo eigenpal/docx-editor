@@ -10,6 +10,7 @@ import {
   HARFBUZZ_SHAPING_LIBRARY,
 } from '../../layout/index.ts';
 import {
+  createShapedRun,
   createShapingEnvironment,
   type ShapeInput,
   type TextShaper,
@@ -149,4 +150,18 @@ test('missing nonbreaking hyphens use the primary hyphen without losing source U
   ]);
   expect(run.fontSpans[0]!.font).toBe(primary);
   expect(shapeExportHyphenFallback(actual, value, shaped)).toBe(shaped);
+});
+
+// Cluster fallback rebuilds the run through `createShapedRun`. A synthesized small-caps glyph
+// carries `drawScale: 0.8` with its advance already scaled; dropping the scale on the rebuild
+// painted full-size letters on short advances. The frozen glyph must keep it.
+test('createShapedRun keeps drawScale on the glyphs it freezes', () => {
+  const base = actual.shape(input('Ab'));
+  const scaled = {
+    ...base,
+    glyphs: base.glyphs.map((glyph, index) => (index === 1 ? { ...glyph, drawScale: 0.8 } : glyph)),
+  };
+  const rebuilt = createShapedRun(scaled, input('Ab').environment);
+  expect(rebuilt.glyphs[0]!.drawScale).toBeUndefined();
+  expect(rebuilt.glyphs[1]!.drawScale).toBe(0.8);
 });

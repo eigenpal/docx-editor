@@ -151,7 +151,7 @@ def handler_for(root, worker=None):
                 start, end, status = 0, size - 1, 200
                 range_header = self.headers.get('Range')
                 if range_header:
-                    match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_header)
+                    match = re.fullmatch(r'bytes=(\d{0,15})-(\d{0,15})', range_header)
                     if not match or not any(match.groups()):
                         self.send_error(416)
                         return
@@ -164,12 +164,17 @@ def handler_for(root, worker=None):
                         self.end_headers()
                         return
                     status = 206
+                # Header values are rebuilt from clamped integers, never from request text: the
+                # digits-only pattern above already forbids anything but a number, and the clamp
+                # keeps every value inside the file, so no client byte can reach a header line.
+                start = max(0, min(int(start), size - 1))
+                end = max(start, min(int(end), size - 1))
                 self.send_response(status)
                 self.send_header('Content-Type', mimetypes.guess_type(path)[0] or 'application/octet-stream')
                 self.send_header('Accept-Ranges', 'bytes')
-                self.send_header('Content-Length', str(end - start + 1))
+                self.send_header('Content-Length', str(int(end - start + 1)))
                 if status == 206:
-                    self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+                    self.send_header('Content-Range', 'bytes %d-%d/%d' % (start, end, size))
                 self.end_headers()
                 if not head:
                     stream.seek(start)

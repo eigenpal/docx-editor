@@ -43,6 +43,15 @@ export function shiftParagraphFragment(
           marker: {
             ...fragment.marker,
             box: { ...fragment.marker.box, y: fragment.marker.box.y + dy },
+            // The picture bullet shares the marker's coordinate space and moves with it.
+            ...(fragment.marker.picture
+              ? {
+                  picture: {
+                    ...fragment.marker.picture,
+                    box: { ...fragment.marker.picture.box, y: fragment.marker.picture.box.y + dy },
+                  },
+                }
+              : {}),
           },
         }
       : {}),

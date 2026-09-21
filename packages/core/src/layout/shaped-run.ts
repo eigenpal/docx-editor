@@ -533,6 +533,10 @@ export const createShapedRun = (
       offsetX: checkedFixedPoint(glyph.offsetX),
       offsetY: checkedFixedPoint(glyph.offsetY),
       outline,
+      // A synthesized small-caps glyph already has its advance scaled; the painter scales the
+      // outline by this. Dropping it here painted full-size letters on 0.8 advances after a
+      // mixed-face fallback rebuilt the run.
+      ...(glyph.drawScale !== undefined ? { drawScale: glyph.drawScale } : {}),
     });
   });
   const fontSpans = input.fontSpans.map((span) => {

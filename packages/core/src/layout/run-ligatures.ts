@@ -58,11 +58,14 @@ export function runLigatureFeatureKey(style: ResolvedRunStyle): string {
   return `${style.ligatures?.standard ? 1 : 0}${style.ligatures?.contextual ? 1 : 0}${style.ligatures?.historical ? 1 : 0}${style.ligatures?.discretionary ? 1 : 0}`;
 }
 
-/** Mode 15 opts in by default; an explicit enableOpenTypeFeatures flag overrides it. */
+/** Mode 15 and later opt in by default; an explicit enableOpenTypeFeatures flag overrides it. */
 export function optionalLigaturesEnabled(settings: OoxmlElement | null): boolean {
   if (!settings || settings.namespaceUri !== WML_NAMESPACE_URI || settings.localName !== 'settings')
     return false;
-  let result = compatibilityModeFromSettings(settings) === 15;
+  // Word 2019 and Microsoft 365 author mode 16 and keep the modern default; an absent mode is
+  // a legacy document.
+  const mode = compatibilityModeFromSettings(settings);
+  let result = mode !== undefined && mode >= 15;
   let found = false;
   for (const compat of settings?.children ?? []) {
     if (

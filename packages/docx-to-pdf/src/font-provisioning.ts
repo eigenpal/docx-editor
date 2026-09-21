@@ -22,6 +22,12 @@ const supplemental = [
   ['Noto Sans CJK JP', 'NotoSansCJKjp-Regular.otf'],
   ['Noto Emoji', 'NotoEmoji-Regular.ttf'],
 ] as const;
+/**
+ * The whole fallback set, small faces first.
+ *
+ * The exporter asks for {@link PDF_GLYPH_FALLBACKS_COMPACT} first and reaches for this list only
+ * when a glyph is still uncovered, because the CJK face alone is 16 MB.
+ */
 export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Segoe UI Symbol',
   'Noto Sans Symbols 2',
@@ -33,27 +39,48 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Noto Sans CJK JP',
   'Noto Emoji',
 ].map((family) => ({ family, weight: 400, style: 'normal' }));
+/** The faces under 1.3 MB each: symbols, mathematics, Arabic. */
+export const PDF_GLYPH_FALLBACKS_COMPACT: readonly FontRequest[] = PDF_GLYPH_FALLBACKS.filter(
+  (request) => !['SimSun', 'Batang', 'Noto Sans CJK JP', 'Noto Emoji'].includes(request.family)
+);
 const face = (
   family: string,
   weight = 400,
   style: 'normal' | 'italic' = 'normal'
 ): FontRequest => ({ family, weight, style });
 
+const substitutes: Record<string, string> = {
+  'Cambria Math': 'Noto Sans Math',
+  'MS Gothic': 'Noto Sans CJK JP',
+  Georgia: 'Liberation Serif',
+  Verdana: 'Liberation Sans',
+};
+
+/**
+ * Packaged faces, read on demand.
+ *
+ * `families` is every family the document names plus every fallback the caller requested, so a
+ * packaged face is opened only when something asked for it, by its own name or as the
+ * substitute for a family the document uses. Reading all five up front mapped about 20 MB of
+ * font data into every export, 16 MB of it a CJK face a Latin document never touches.
+ */
 export const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
+  const wanted = new Set<string>();
+  for (const family of families) {
+    wanted.add(family);
+    const target = Object.hasOwn(substitutes, family) ? substitutes[family] : undefined;
+    if (target) wanted.add(target);
+  }
   const sources = await Promise.all(
-    supplemental.map(async ([family, file]) => {
-      const bytes = new Uint8Array(await readFontFile(new NodeURL(file, assetRoot), signal));
-      const result = createFontSource(bytes, face(family));
-      if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file}`);
-      return result.source;
-    })
+    supplemental
+      .filter(([family]) => wanted.has(family))
+      .map(async ([family, file]) => {
+        const bytes = new Uint8Array(await readFontFile(new NodeURL(file, assetRoot), signal));
+        const result = createFontSource(bytes, face(family));
+        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file}`);
+        return result.source;
+      })
   );
-  const substitutes: Record<string, string> = {
-    'Cambria Math': 'Noto Sans Math',
-    'MS Gothic': 'Noto Sans CJK JP',
-    Georgia: 'Liberation Serif',
-    Verdana: 'Liberation Sans',
-  };
   return {
     sources,
     substitutions: families.flatMap((family) => {

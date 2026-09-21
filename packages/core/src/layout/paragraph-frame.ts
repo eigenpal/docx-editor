@@ -155,7 +155,18 @@ export function positionParagraphFrame(
     ...(fragment.borders
       ? { borders: fragment.borders.map((border) => ({ ...border, box: move(border.box) })) }
       : {}),
-    ...(fragment.marker ? { marker: { ...fragment.marker, box: move(fragment.marker.box) } } : {}),
+    // The picture bullet shares the marker's coordinate space, so it moves with the marker.
+    ...(fragment.marker
+      ? {
+          marker: {
+            ...fragment.marker,
+            box: move(fragment.marker.box),
+            ...(fragment.marker.picture
+              ? { picture: { ...fragment.marker.picture, box: move(fragment.marker.picture.box) } }
+              : {}),
+          },
+        }
+      : {}),
     lines: fragment.lines.map((line) => ({
       ...line,
       box: move(line.box),

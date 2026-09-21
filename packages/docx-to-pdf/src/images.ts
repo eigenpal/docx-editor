@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { PDFDocument, PDFName, PDFHexString, type PDFImage, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import type {
   LayoutBox,
@@ -174,9 +174,15 @@ export class ImageWriter {
         }))
       : p;
     if (d.hyperlinkHref && /^(https?:|mailto:|tel:|ftp:)/i.test(d.hyperlinkHref)) {
-      const xs = clip.map((point) => point.x),
-        ys = clip.map((point) => point.y);
-      const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      // A loop, not `Math.min(...xs)`: the clip polygon is file-derived, and spreading a long
+      // one into a call is the one place a large but otherwise valid shape could blow the stack.
+      const bounds = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const point of clip) {
+        bounds[0] = Math.min(bounds[0]!, point.x);
+        bounds[1] = Math.min(bounds[1]!, point.y);
+        bounds[2] = Math.max(bounds[2]!, point.x);
+        bounds[3] = Math.max(bounds[3]!, point.y);
+      }
       page.node.addAnnot(
         this.doc.context.register(
           this.doc.context.obj({
@@ -184,7 +190,8 @@ export class ImageWriter {
             Subtype: 'Link',
             Rect: bounds,
             Border: [0, 0, 0],
-            A: { S: 'URI', URI: PDFHexString.fromText(d.hyperlinkHref) },
+            // A byte string: a UTF-16BE text string here fails to open in byte-comparing viewers.
+            A: { S: 'URI', URI: PDFString.of(d.hyperlinkHref) },
           })
         )
       );

@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { PDFDocument, PDFName, PDFHexString, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
 import type { SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
 import { color, number as n, rect, Commands, Work } from './context.ts';
 
@@ -94,7 +94,8 @@ export function paintVectorShape(
           Subtype: 'Link',
           Rect: [left, bottom, left + bounds.width, bottom + bounds.height],
           Border: [0, 0, 0],
-          A: { S: 'URI', URI: PDFHexString.fromText(d.hyperlinkHref) },
+          // A byte string: a UTF-16BE text string fails to open in byte-comparing viewers.
+          A: { S: 'URI', URI: PDFString.of(d.hyperlinkHref) },
         })
       )
     );

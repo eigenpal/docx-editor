@@ -9,6 +9,7 @@ import {
   PDFDocument,
   PDFHexString,
   PDFName,
+  PDFString,
   type PDFPage,
   type PDFObject,
   type PDFRef,
@@ -53,8 +54,11 @@ export function linkAnnotation(
   };
   if (link.kind === 'internal' && link.anchor && destinations.has(link.anchor))
     add(doc, page, { ...base, Dest: PDFHexString.fromText(link.anchor) });
+  // `URI` is a PDF byte string. Written as a UTF-16BE text string it decodes in pdf.js and
+  // fails to open in a viewer that reads the bytes as they are. The scheme allowlist stays:
+  // Core already sanitised the href, and this is the last check before it leaves the process.
   else if (link.kind === 'external' && /^(https?:|mailto:|tel:|ftp:)/i.test(link.href))
-    add(doc, page, { ...base, A: { S: 'URI', URI: PDFHexString.fromText(link.href) } });
+    add(doc, page, { ...base, A: { S: 'URI', URI: PDFString.of(link.href) } });
 }
 export function destinations(
   doc: PDFDocument,

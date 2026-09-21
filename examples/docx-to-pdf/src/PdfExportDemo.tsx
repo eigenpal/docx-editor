@@ -169,7 +169,12 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
   }, []);
 
   const openFile = useCallback(async (file: File) => {
-    if (file.size > MAX_DOCUMENT_BYTES) return;
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      // Say so. Returning silently left the previous document in place with no explanation.
+      setStatus('error');
+      setError(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
+      return;
+    }
     setDocument(new Uint8Array(await file.arrayBuffer()));
     setStatus('idle');
     setResult(null);

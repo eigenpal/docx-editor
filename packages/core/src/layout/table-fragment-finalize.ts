@@ -133,6 +133,16 @@ export function shiftBlocks(
             marker: {
               ...block.marker,
               box: { ...block.marker.box, y: block.marker.box.y + dy },
+              // The picture bullet shares the marker's coordinate space and moves with it, or
+              // a bullet in a bottom-aligned cell paints at the pre-shift origin.
+              ...(block.marker.picture
+                ? {
+                    picture: {
+                      ...block.marker.picture,
+                      box: { ...block.marker.picture.box, y: block.marker.picture.box.y + dy },
+                    },
+                  }
+                : {}),
             },
           }
         : {}),

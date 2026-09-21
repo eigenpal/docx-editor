@@ -9,12 +9,18 @@ import {
   createPackagedFileFetch,
   ExportResourceError,
   openFontBackedDocumentForExport,
+  type FontRequest,
 } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
-import { MAX_OUTPUT_BYTES, positiveLimit, Work } from './context.ts';
+import { MAX_OUTPUT_BYTES, positiveLimit, Work, PdfWorkLimitError } from './context.ts';
 import { paint } from './paint.ts';
-import { installedWordFonts, supplementalFonts, PDF_GLYPH_FALLBACKS } from './font-provisioning.ts';
+import {
+  installedWordFonts,
+  supplementalFonts,
+  PDF_GLYPH_FALLBACKS,
+  PDF_GLYPH_FALLBACKS_COMPACT,
+} from './font-provisioning.ts';
 import {
   PdfDocumentOpenError,
   PdfEncodingError,
@@ -83,7 +89,17 @@ export async function exportPdf(
     maxOutputBytes: _max,
     ...core
   } = options;
-  try {
+  // The packaged fallback faces weigh about 20 MB, and 16 MB of that is one CJK face most
+  // documents never touch. A document is laid out with the small faces first; only one that
+  // still has a glyph no admitted face covers is opened again with the whole set. A caller who
+  // names `glyphFallbacks` has decided already and gets exactly one attempt with that list.
+  const attempts = options.glyphFallbacks
+    ? [options.glyphFallbacks]
+    : [PDF_GLYPH_FALLBACKS_COMPACT, PDF_GLYPH_FALLBACKS];
+  const attempt = async (
+    glyphFallbacks: readonly FontRequest[],
+    last: boolean
+  ): Promise<PdfExportResult | null> => {
     work.check();
     const opened = await openFontBackedDocumentForExport(source, {
       documentLigatures: true,
@@ -91,7 +107,7 @@ export async function exportPdf(
       signal: controller.signal,
       displayMode: options.displayMode ?? 'proposed',
       reuseAcrossRevisions: false,
-      glyphFallbacks: options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS,
+      glyphFallbacks,
       fonts: [
         ...(fonts ? (Array.isArray(fonts) ? fonts : [fonts]) : []),
         ...(useSystemFonts ? [installedWordFonts] : []),
@@ -118,6 +134,15 @@ export async function exportPdf(
       if (metadata?.keywords) doc.setKeywords([metadata.keywords]);
       await paint(doc, opened.session, layout, work, comments);
       const diagnostics = Object.freeze([...work.diagnostics]);
+      // Uncovered text is the one thing a larger fallback set can still answer: a glyph no
+      // admitted face has, or a span Core could not shape exactly for want of one.
+      if (
+        !last &&
+        diagnostics.some((d) => d.code === 'missing-glyph' || d.code === 'unshaped-text')
+      ) {
+        work.resetDiagnostics();
+        return null;
+      }
       if (fidelityPolicy === 'strict' && diagnostics.some((d) => d.severity !== 'information'))
         throw new PdfFidelityError(diagnostics);
       work.check();
@@ -136,6 +161,13 @@ export async function exportPdf(
     } finally {
       opened.session.dispose();
     }
+  };
+  try {
+    for (const [index, glyphFallbacks] of attempts.entries()) {
+      const result = await attempt(glyphFallbacks, index === attempts.length - 1);
+      if (result) return result;
+    }
+    throw new PdfEncodingError('PDF export produced no result');
   } catch (error) {
     work.check();
     if (
@@ -143,7 +175,9 @@ export async function exportPdf(
       error instanceof PdfDocumentOpenError ||
       error instanceof ExportResourceError ||
       error instanceof RangeError ||
-      error instanceof PdfEncodingError
+      error instanceof PdfEncodingError ||
+      // A blown operation or diagnostic budget is its own answer, not an encoding failure.
+      error instanceof PdfWorkLimitError
     )
       throw error;
     throw new PdfEncodingError('PDF encoding failed', { cause: error });

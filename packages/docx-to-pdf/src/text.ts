@@ -445,14 +445,29 @@ export class TextWriter {
       }
     }
     if (style.strike || style.doubleStrike || deleted) {
-      if (!face.strike || face.strike.thickness <= 0)
-        this.work.report('strike-metrics', 'Font has no valid strike metrics', visit.page.index);
-      else {
-        const thickness = face.strike.thickness * metricScale;
-        const position = baseline + face.strike.position * metricScale;
-        lineRule(position, thickness);
-        if (style.doubleStrike) lineRule(position + thickness * 2, thickness);
-      }
+      // On the device grid like the underline: a whole number of units thick, at a whole
+      // number of units above the baseline. A face with no OS/2 strike metrics still draws.
+      // Its stroke borrows the underline weight, and it sits at three tenths of the ascent,
+      // which is where the faces that do declare a position put it (Times New Roman 0.259em,
+      // Arial 0.251em against 0.27em). That is an approximation, so it is reported as one,
+      // not as a refusal: a strict export of a struck word must not fail on a font table.
+      const declared = face.strike && face.strike.thickness > 0 ? face.strike : null;
+      if (!declared)
+        this.work.report(
+          'strike-metrics',
+          'Font has no strike metrics; the strike is placed from the ascent',
+          visit.page.index,
+          'information'
+        );
+      const rawThickness = (declared?.thickness ?? face.font.underlineThickness) * metricScale;
+      const rawOffset = declared
+        ? declared.position * metricScale
+        : Math.abs(face.font.ascent) * 0.3 * metricScale;
+      const thickness =
+        Math.max(1, Math.round(rawThickness / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT;
+      const position = baseline + Math.round(rawOffset / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
+      lineRule(position, thickness);
+      if (style.doubleStrike) lineRule(position + thickness * 2, thickness);
     }
     return out.join('\n');
   }

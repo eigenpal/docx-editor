@@ -293,3 +293,39 @@ describe('picture bullet markers in layout', () => {
     expect(fragment.marker?.text).toBe('•');
   });
 });
+
+describe('picture bullet geometry follows the marker when a block is moved', () => {
+  // A bottom-aligned cell taller than its content moves the paragraph down inside it. The
+  // marker box moved with the lines; the nested picture box did not, so the image painted at
+  // the pre-shift origin while its own text sat lower. Both share the marker's space and move.
+  test('a bottom-aligned tall cell moves the picture with its first line', () => {
+    const declared =
+      picBullet('0', 'width:24pt;height:24pt') + listDefinition('<w:lvlPicBulletId w:val="0"/>');
+    const numberingIndex = buildNumberingIndex(numberingPart(declared).root);
+    const part = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/></w:tblPr>` +
+        `<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="4000" w:hRule="exact"/></w:trPr>` +
+        `<w:tc><w:tcPr><w:vAlign w:val="bottom"/></w:tcPr><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>` +
+        `<w:r><w:t>Item</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!part.ok) throw new Error(part.reason);
+    const layout = layoutSemanticDocument(part.part, 1, {
+      measurer,
+      numberingIndex,
+      inlineDrawingLayout: drawingContext(PENDING),
+    });
+    const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    if (!table || table.kind !== 'table') throw new Error('Expected a table');
+    const block = table.rows[0]!.cells[0]!.blocks[0]!;
+    if (block.kind !== 'paragraph') throw new Error('Expected a paragraph');
+    const picture = block.marker?.picture;
+    expect(picture).toBeDefined();
+    const line = block.lines[0]!;
+    // The cell is 200pt tall and the content much shorter, so bottom alignment moved it down.
+    expect(line.box.y).toBeGreaterThan(50);
+    // The record's invariant: the image sits with its bottom on the first line's baseline.
+    expect(picture!.box.y + picture!.box.height).toBeCloseTo(line.box.y + line.baseline, 6);
+    expect(picture!.box.x).toBeCloseTo(block.marker!.box.x, 6);
+  });
+});

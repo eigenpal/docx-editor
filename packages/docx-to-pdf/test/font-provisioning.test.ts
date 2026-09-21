@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { installedWordFontResolver } from '../src/font-provisioning.ts';
+import { installedWordFontResolver, supplementalFonts } from '../src/font-provisioning.ts';
 
 async function directory(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'pdf-font-provision-'));
@@ -125,4 +125,18 @@ test('a symbol face is only read when the document asks for it', async () => {
     });
     expect(result.sources.length).toBe(0);
   });
+});
+
+// Every export used to open all five packaged faces, 16 MB of them one CJK face, before layout
+// had asked for anything. A face is read only when something names it: the document, a
+// requested fallback, or the substitution that stands in for a family the document uses.
+test('packaged faces are read only for the families that ask for them', async () => {
+  const latin = await supplementalFonts({ families: ['Arial'], defaultFamily: 'Arial' });
+  expect(latin.sources).toHaveLength(0);
+  const math = await supplementalFonts({ families: ['Noto Sans Math'], defaultFamily: 'Arial' });
+  expect(math.sources.map((source) => source.request.family)).toEqual(['Noto Sans Math']);
+  // A substituted family pulls in its stand-in and nothing else.
+  const cambria = await supplementalFonts({ families: ['Cambria Math'], defaultFamily: 'Arial' });
+  expect(cambria.sources.map((source) => source.request.family)).toEqual(['Noto Sans Math']);
+  expect(cambria.substitutions.every((s) => s.to.family === 'Noto Sans Math')).toBe(true);
 });
