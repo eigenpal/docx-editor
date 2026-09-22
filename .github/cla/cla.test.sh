@@ -215,5 +215,70 @@ assert_eq "existing signatures file is preserved" \
   "x" "$(jq -r '.signedContributors[0].name' "$NEW")"
 
 echo
+echo "cla_main signature recording (mocked GitHub and git):"
+# Run the real workflow logic in an isolated directory. Capture writes without
+# contacting GitHub or changing the checkout.
+cla_main_scenario() (
+  local scenario_dir="$1" event="$2" comment="$3" signed="$4"
+  mkdir -p "$scenario_dir"
+  cd "$scenario_dir"
+  local REPO='example/project' PR_NUMBER=5 EVENT_NAME="$event"
+  local COMMENT_USER_LOGIN='bob' COMMENT_USER_ID=222 COMMENT_BODY="$comment"
+  local ALLOWLIST='' CLA_ORG='' CLA_URL='https://example.test/CLA.md'
+  local SIGN_PHRASE='I have read the CLA Document and I hereby sign the CLA'
+  local GIT_AUTHOR_NAME='test-bot' GIT_AUTHOR_EMAIL='test@example.test'
+  cla_init_signatures signatures/version1/cla.json
+  if [ "$signed" = true ]; then
+    cla_add_signature bob 222 '2026-05-09T10:00:00Z' 1 signatures/version1/cla.json
+  fi
+  : > git-calls
+  git() { printf '%s\n' "$*" >> git-calls; }
+  gh() {
+    case "$*" in
+      'api graphql '*)
+        printf '%s\n' '{"data":{"repository":{"pullRequest":{"headRefOid":"abc123","author":{"__typename":"User","login":"bob","databaseId":222}}}}}'
+        ;;
+      'api repos/example/project/issues/5/comments --paginate')
+        printf '[]\n'
+        ;;
+      'api -X POST repos/example/project/issues/5/comments '*)
+        printf '%s\n' "$@" > comment-write
+        ;;
+      'api -X POST repos/example/project/statuses/abc123 '*)
+        printf '%s\n' "$@" > status-write
+        ;;
+      *) printf 'Unexpected gh call: %s\n' "$*" >&2; return 1 ;;
+    esac
+  }
+  cla_main
+)
+
+check_cla_scenario() {
+  local name="$1" event="$2" comment="$3" signed="$4" count="$5" writes="$6" status="$7"
+  local scenario_dir="$TMPDIR/main-$PASS-$FAIL"
+  cla_main_scenario "$scenario_dir" "$event" "$comment" "$signed"
+  assert_eq "$name: signature count" "$count" \
+    "$(jq '.signedContributors | length' "$scenario_dir/signatures/version1/cla.json")"
+  assert_eq "$name: git write count" "$writes" \
+    "$(awk 'END { print NR }' "$scenario_dir/git-calls")"
+  assert_true "$name: status is $status" \
+    grep -qx "state=$status" "$scenario_dir/status-write"
+  if [ "$status" = failure ]; then
+    assert_false "$name: no signed confirmation" \
+      grep -q 'All contributors have signed' "$scenario_dir/comment-write"
+  fi
+}
+
+phrase='I have read the CLA Document and I hereby sign the CLA'
+check_cla_scenario 'unsigned recheck' issue_comment '!cla-check' false 0 0 failure
+check_cla_scenario 'empty comment' issue_comment '' false 0 0 failure
+check_cla_scenario 'unrelated comment' issue_comment 'Thanks for checking' false 0 0 failure
+check_cla_scenario 'explicit signature' issue_comment "$phrase" false 1 5 success
+check_cla_scenario 'signature with recheck' issue_comment "$phrase"$'\n!cla-check' false 1 5 success
+check_cla_scenario 'signed recheck' issue_comment '!cla-check' true 1 0 success
+check_cla_scenario 'duplicate signature' issue_comment "$phrase" true 1 0 success
+check_cla_scenario 'PR event cannot sign' pull_request_target "$phrase" false 0 0 failure
+
+echo
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
