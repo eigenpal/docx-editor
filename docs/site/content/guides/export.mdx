@@ -4,7 +4,7 @@ description: Connect conversion packages to the File menu in React and Vue.
 category: Guides
 ---
 
-The File menu includes **Export > Markdown (.md)** and **Export > PDF (.pdf)**. Each export uses the editor's saved document bytes. Export does not change the document or its undo history.
+Select **File > Export > Markdown (.md)** or **File > Export > PDF (.pdf)**. Each export uses the editor's saved document bytes. Export does not change the document or its undo history.
 
 ## Install the converters
 
@@ -28,14 +28,13 @@ Pass conversion handlers through `menu.exporters` on the packaged editor. For a 
 
 The Markdown handler returns `result.markdown`. The menu downloads that continuous text, without page separators, page headers, or page footers. It does not join `result.pages`.
 
-The following React example uses browser Markdown conversion and a PDF endpoint:
+Create `exporters.ts` with browser Markdown conversion and a PDF endpoint:
 
-```tsx
-import { DocxEditor, type ChromeExportHandlers } from '@docx-editor.dev/react';
+```ts
+import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
-import '@docx-editor.dev/core/styles/editor.css';
 
-const exporters: ChromeExportHandlers = {
+export const exporters: ChromeExportHandlers = {
   markdown: (source) => exportMarkdown(source, { displayMode: 'proposed' }),
   pdf: async (source) => {
     const response = await fetch('/api/export/pdf', {
@@ -47,6 +46,14 @@ const exporters: ChromeExportHandlers = {
     return { bytes: new Uint8Array(await response.arrayBuffer()) };
   },
 };
+```
+
+Pass the handlers to the React editor:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { exporters } from './exporters';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor({ source }: { source: Uint8Array }) {
   return <DocxEditor document={source} menu={{ exporters }} />;
@@ -56,12 +63,20 @@ export function Editor({ source }: { source: Uint8Array }) {
 Use the same handlers in Vue:
 
 ```vue
-<DocxEditor :document="source" :menu="{ exporters }" />
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { exporters } from './exporters';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ source: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="source" :menu="{ exporters }" />
+</template>
 ```
 
-Define `source` and `exporters` in your component. Import `DocxEditor` and the `ChromeExportHandlers` type from `@docx-editor.dev/vue`.
-
-If a converter handler is missing, the menu shows an error that names the required package and configuration. The menu also shows conversion failures and disables export actions while conversion runs. A missing converter never falls back to another format.
+If a converter handler is missing, the menu shows an error that names the required package and configuration. The menu shows conversion failures and disables export actions while conversion runs. After a failure, select the format again to retry. A missing converter never falls back to another format.
 
 ## Convert PDF on the server
 
@@ -92,11 +107,29 @@ Configure authentication, upload limits, and conversion error responses for your
 
 The shared slots are `file.exportMarkdown` and `file.exportPdf`. React and Vue expose `DocxEditor.Menu.ExportMarkdown` and `DocxEditor.Menu.ExportPdf`.
 
-If you replace the File menu with `preset={false}`, include these parts inside `DocxEditor.Menu.Submenu`. Set its `labelKey` to `toolbar.export`. Export controls use menu handlers rather than document editing commands.
+Slot overrides also apply inside the **Export** submenu. Use `className` to style a row or `hidden` to remove it.
+
+Inside `DocxEditor.Root`, hide PDF export while you configure its server:
+
+```tsx
+<DocxEditor.Menu exporters={exporters}>
+  <DocxEditor.Menu.File>
+    <DocxEditor.Menu.ExportPdf hidden />
+  </DocxEditor.Menu.File>
+</DocxEditor.Menu>
+```
+
+For Vue, use `DocxEditorMenu` with the same `File` and `ExportPdf` parts.
+
+Use the named export parts to connect menu handlers. `Menu.Item` dispatches editing commands and does not call converters.
+
+If you replace the **File** menu with `preset={false}`, include these parts inside `DocxEditor.Menu.Submenu`. In Vue, use `:preset="false"`. Set the submenu's `labelKey` to `toolbar.export`. Export controls use menu handlers rather than document editing commands.
 
 For a custom download interface, call `runChromeExport(editor, format, exporters)` from `@docx-editor.dev/core/editor`. It returns bytes, a filename extension, and a media type. It rejects missing handlers with `ChromeExportError`, whose `code` is `missing-exporter`.
 
 ## Demo behavior
+
+The demos use `displayMode: 'proposed'` for both formats. Exports include tracked insertions and omit tracked deletions.
 
 The React and Vue demos convert Markdown in the browser. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
 

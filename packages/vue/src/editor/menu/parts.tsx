@@ -27,11 +27,7 @@ import { useImageInsertOptional } from '../images/ImageInsert';
 // (icon, label, right-aligned shortcut, submenu caret) and the fact that selecting a row
 // closes the menu.
 //
-// THREE ROWS DO NOT DISPATCH A COMMAND. Open and save move BYTES across the host
-// boundary, and page setup needs a dialog's values; the engine has no command for any of
-// them (`toolbarCommandState` says so in those words). Those rows read their handler from
-// the menu context, which the root resolves once — host override, else the packaged
-// default — so the row itself holds no policy.
+// Host actions read their handlers from the menu context. Editing rows use engine commands.
 
 /** Vue reserves `slot` for vnode slots; MenuRow accepts `rowSlot` and paints `data-slot`. */
 export function menuRowSlot(id: string): { rowSlot: string } {
@@ -373,12 +369,14 @@ export const MenuSave = defineActionRow(
   (context) => context.onSave
 );
 
+/** Exports continuous Markdown through the menu handler. @public */
 export const MenuExportMarkdown = defineActionRow(
   'file.exportMarkdown',
   undefined,
   undefined,
   (context) => (context.onExport ? () => context.onExport?.('markdown') : undefined)
 );
+/** Exports PDF through the menu handler. @public */
 export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
   context.onExport ? () => context.onExport?.('pdf') : undefined
 );
@@ -568,16 +566,15 @@ export const MenuEntry = defineComponent({
   props: {
     entry: { type: Object as PropType<ChromeMenuEntry>, required: true },
   },
-  setup(props) {
+  setup(props, { slots }) {
     return () => {
       const entry = props.entry;
       if (entry.kind === 'separator') return <MenuSeparator />;
       if (entry.kind === 'submenu') {
         return (
           <MenuSubmenu labelKey={entry.labelKey} paths={entry.paths}>
-            {entry.items.map((item, index) => (
-              <MenuEntry key={index} entry={item} />
-            ))}
+            {slots.default?.() ??
+              entry.items.map((item, index) => <MenuEntry key={index} entry={item} />)}
           </MenuSubmenu>
         );
       }
@@ -644,7 +641,9 @@ function mergePanel(
     preset,
     keyOfEntry: rowKeyOfEntry,
     keyOfChild: rowKeyOfChild,
-    renderEntry: (entry) => <MenuEntry entry={entry} />,
+    childrenOfEntry: (entry) => (entry.kind === 'submenu' ? entry.items : undefined),
+    renderEntry: (entry, _index, nested) =>
+      h(MenuEntry, { entry }, nested ? { default: () => nested } : undefined),
   }) as VNode[];
 }
 

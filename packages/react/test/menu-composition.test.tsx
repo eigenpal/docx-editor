@@ -813,3 +813,21 @@ test('File > Export reports missing converters after the menu closes', async () 
     expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
   }
 });
+
+test('File row overrides reach export submenu slots without duplicate rows', () => {
+  const { view } = mountMenu(
+    <DocxEditorMenu>
+      <DocxEditorMenu.File>
+        <DocxEditorMenu.ExportPdf hidden />
+        <DocxEditorMenu.ExportMarkdown className="custom-export" />
+      </DocxEditorMenu.File>
+    </DocxEditorMenu>
+  );
+  openMenu(view, 'toolbar.file');
+  openSubmenu(view, 'toolbar.export');
+  expect(view.container.querySelectorAll('[data-slot="file.exportPdf"]')).toHaveLength(0);
+  const rows = view.container.querySelectorAll('[data-slot="file.exportMarkdown"]');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.classList.contains('custom-export')).toBe(true);
+  expect(rows[0]?.closest('.docx-menubar__submenu')).not.toBeNull();
+});
