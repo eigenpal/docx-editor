@@ -13,6 +13,7 @@ import {
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
+import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 // The Editor facade owns the document session, semantic layout, and painted pages.
 // - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
@@ -104,7 +105,6 @@ import { snapshotTextFormInput, type PendingTextFormInput } from './surface-text
 import { saveEditorDocument } from './docx-editor-save.ts';
 import {
   enterStoryPosition,
-  leaveScopeForBodyParagraph,
   searchStoriesForSurface,
   selectDocumentSearchMatch,
 } from './docx-editor-story-navigation.ts';
@@ -2589,24 +2589,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getTotalPages: () => totalPagesOf(surface),
     getCurrentPage: (mode) => currentPageOf(surface, mode),
 
-    // Page NUMBERS are 1-based in this contract; the layout indexes from 0.
-    scrollToPage: (pageNumber: number) => {
-      if (!Number.isInteger(pageNumber) || pageNumber < 1) return false;
-      // A scroll aimed into the open's yield window addresses the just-loaded document:
-      // mount it now, or the call would silently report "no such page".
-      openScheduler.flush();
-      return surface?.revealPage(pageNumber - 1) ?? false;
-    },
-    scrollToBlock: (blockId: string) => {
-      if (typeof blockId !== 'string' || blockId.length === 0) return false;
-      // Same yield-window rule as `scrollToPage`.
-      openScheduler.flush();
-      // Revealing a body block is a move OUT of an open header or note: the outline and the
-      // search pane both drive this, and leaving the scope on the furniture left the reader
-      // looking at the body with every keystroke going to a story off screen.
-      if (surface) leaveScopeForBodyParagraph(surface, blockId);
-      return surface?.revealParagraph(blockId) ?? false;
-    },
+    ...createEditorScrolling(
+      () => surface,
+      () => openScheduler.flush()
+    ),
 
     ...zoomFacadeMembers(zoomLane, () => surface),
 

@@ -10,6 +10,7 @@ import {
   selectedDrawingOverlayTargetOf,
 } from '../docx-editor-images.ts';
 import { FOOTNOTE_SCOPE_ID, HEADER_R_ID, storyParityDocx } from './story-parity-fixture.ts';
+import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -112,6 +113,25 @@ function storyParityDocxWithBodyTable(): Uint8Array {
 }
 
 describe('document search facade', () => {
+  test('anchor scrolling refuses text-box content without selecting its drawing', () => {
+    const mounted = mountAnchorEditor(textboxDocx());
+    const { editor } = mounted;
+    try {
+      const surface = editor.surface!;
+      const match = editor.findMatches('needle')[0]!;
+      expect(match.scope?.kind).toBe('frame');
+      const paraId = surface.session.paraIdOf(match.blockId);
+      expect(paraId).toBeTruthy();
+      const selection = surface.state().selection;
+      expect(editor.scrollToAnchor({ paraId: paraId!, search: 'needle' })).toBe(false);
+      expect(mounted.scrollCalls()).toBe(0);
+      expect(surface.state().selection).toEqual(selection);
+      expect(surface.drawingSelectionIntent()).toEqual({ kind: 'none' });
+    } finally {
+      mounted.destroy();
+    }
+  });
+
   test('selects a wrapped body text-box drawing without selecting its story text', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
