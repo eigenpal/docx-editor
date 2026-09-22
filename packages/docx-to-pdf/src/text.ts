@@ -67,14 +67,31 @@ function reducedHalfPoints(fontSizePt: number, factor: number): number {
  * count that is mathematically a whole or half unit can arrive a part in 1e12 away from it.
  * That is invisible everywhere except at a tie, where it silently reverses the tie rule.
  */
+/**
+ * The baseline the writer paints for a line, in points from the page top, given the line's
+ * top from the page, its face and paragraph, and the run's baseline shift. This is the same
+ * arithmetic `TextWriter.paint` performs; development tools call it to report what the PDF
+ * carries rather than what layout published before the grid.
+ */
+export function paintedBaselineFromTop(
+  lineTop: number,
+  line: SemanticSpanVisit['line'],
+  face: Pick<EmbeddedFace, 'font'>,
+  paragraph: SemanticSpanVisit['paragraph'],
+  baselineShiftPt = 0
+): number {
+  const fromTop = lineTop + griddedBaselineInLine(line, face, paragraph) - baselineShiftPt;
+  return Math.ceil(snapToGrid(fromTop / PDF_PAINT_GRID_PT) - 0.5) * PDF_PAINT_GRID_PT;
+}
+
 export function snapToGrid(units: number): number {
   const snapped = Math.round(units * 2) / 2;
   return Math.abs(units - snapped) < 1e-9 ? snapped : units;
 }
 
-function griddedBaselineInLine(
+export function griddedBaselineInLine(
   line: SemanticSpanVisit['line'],
-  face: EmbeddedFace,
+  face: Pick<EmbeddedFace, 'font'>,
   paragraph: SemanticSpanVisit['paragraph']
 ): number {
   const units = (value: number): number => Math.round(value / PDF_PAINT_GRID_PT);

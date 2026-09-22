@@ -6,21 +6,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /** Node-first DOCX-to-PDF conversion using Core's positioned glyphs. @packageDocumentation */
 import { PDFDocument } from 'pdf-lib';
 import type { ExportFontResolutionReport } from '@docx-editor.dev/core/export';
-import {
-  createPackagedFileFetch,
-  ExportResourceError,
-  openFontBackedDocumentForExport,
-} from '@docx-editor.dev/core/export';
-import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
-import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
+import { ExportResourceError } from '@docx-editor.dev/core/export';
 import { MAX_OUTPUT_BYTES, positiveLimit, Work, PdfWorkLimitError } from './context.ts';
 import { paint } from './paint.ts';
-import {
-  installedWordFonts,
-  isGenericSubstitution,
-  supplementalFonts,
-  PDF_GLYPH_FALLBACKS,
-} from './font-provisioning.ts';
+import { isGenericSubstitution } from './font-provisioning.ts';
+import { openExportSession } from './open-session.ts';
 import {
   PdfDocumentOpenError,
   PdfEncodingError,
@@ -31,14 +21,6 @@ import {
 export { PdfDocumentOpenError, PdfEncodingError, PdfFidelityError } from './types.ts';
 export type { PdfDiagnostic, PdfExportOptions, PdfExportResult } from './types.ts';
 export { ExportResourceError } from '@docx-editor.dev/core/export';
-const bundledFonts = packagedFonts({
-  install: false,
-  fetcher: createPackagedFileFetch({
-    trustedRoot: new URL('./', FONT_ASSET_ROOT),
-    maxBytes: HARD_MAX_FONT_BYTES,
-  }),
-});
-
 /**
  * Say which families render in a stand-in face of another family's metrics. Word's own
  * metric-compatible substitutions (Calibri in Carlito and the like) are silent, as they are
@@ -100,40 +82,12 @@ export async function exportPdf(
     timeoutMs
   );
   const work = new Work(controller.signal, Date.now() + timeoutMs);
-  const {
-    comments = true,
-    fidelityPolicy = 'strict',
-    fonts,
-    fallbackFonts,
-    useSystemFonts = true,
-    timeoutMs: _timeout,
-    maxOutputBytes: _max,
-    ...core
-  } = options;
-  // One pass over the document with every packaged fallback face on offer. The faces are
-  // read lazily, only when a family the document uses needs one, so offering the whole list
-  // costs a plain Latin document nothing; laying the document out twice to find that out
-  // cost every document a second layout and paint.
-  const glyphFallbacks = options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS;
+  const { comments = true, fidelityPolicy = 'strict', ...session } = options;
   try {
     work.check();
     const clock = performance.now();
     const phase = () => Math.round(performance.now() - clock);
-    const opened = await openFontBackedDocumentForExport(source, {
-      documentLigatures: true,
-      ...core,
-      signal: controller.signal,
-      displayMode: options.displayMode ?? 'proposed',
-      reuseAcrossRevisions: false,
-      glyphFallbacks,
-      fonts: [
-        ...(fonts ? (Array.isArray(fonts) ? fonts : [fonts]) : []),
-        ...(useSystemFonts ? [installedWordFonts] : []),
-        bundledFonts,
-        ...(fallbackFonts ? (Array.isArray(fallbackFonts) ? fallbackFonts : [fallbackFonts]) : []),
-        supplementalFonts,
-      ],
-    });
+    const opened = await openExportSession(source, session, controller.signal);
     if (!opened.ok) throw new PdfDocumentOpenError(opened.reason, opened.detail);
     try {
       work.check();
