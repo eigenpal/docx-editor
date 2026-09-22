@@ -8,13 +8,15 @@ Select **File > Export > Markdown (.md)** or **File > Export > PDF (.pdf)**. Eac
 
 ## Install the converters
 
-Install the Markdown package in your browser application:
+The editor packages do not install either converter. Install only the formats you enable. Opening the editor or its menu does not load a converter.
+
+For Markdown export, install the converter in your browser application:
 
 ```sh
 npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
 ```
 
-Install the PDF package on your Node.js server:
+For PDF export, install the converter on your Node.js server:
 
 ```sh
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
@@ -24,7 +26,7 @@ PDF conversion requires the EigenPal Pro License. The PDF package does not run i
 
 ## Configure the menu
 
-Pass conversion handlers through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
+Configure only the conversion handlers your application uses. Pass them through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
 
 The Markdown handler returns `result.markdown`. The menu downloads that continuous text, without page separators, page headers, or page footers. It does not join `result.pages`.
 
@@ -32,10 +34,11 @@ Create `exporters.ts` with browser Markdown conversion and a PDF endpoint:
 
 ```ts
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
-import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
-
 export const exporters: ChromeExportHandlers = {
-  markdown: (source) => exportMarkdown(source, { displayMode: 'proposed' }),
+  async markdown(source) {
+    const { exportMarkdown } = await import('@docx-editor.dev/docx-to-markdown');
+    return exportMarkdown(source, { displayMode: 'proposed' });
+  },
   pdf: async (source) => {
     const response = await fetch('/api/export/pdf', {
       method: 'POST',
@@ -128,6 +131,8 @@ If you replace the **File** menu with `preset={false}`, include these parts insi
 For a custom download interface, call `runChromeExport(editor, format, exporters)` from `@docx-editor.dev/core/editor`. It returns bytes, a filename extension, and a media type. It rejects missing handlers with `ChromeExportError`, whose `code` is `missing-exporter`.
 
 ## Demo behavior
+
+The demos enable both export formats explicitly. Their frontend packages install Markdown; the shared server installs PDF.
 
 The demos use `displayMode: 'proposed'` for both formats. Exports include tracked insertions and omit tracked deletions.
 

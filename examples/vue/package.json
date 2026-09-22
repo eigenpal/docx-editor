@@ -16,8 +16,7 @@
     "@docx-editor.dev/vue": "workspace:*",
     "vue": "^3.5.0",
     "zod": "^4.4.3",
-    "@docx-editor.dev/docx-to-markdown": "workspace:*",
-    "@docx-editor.dev/docx-to-pdf": "workspace:*"
+    "@docx-editor.dev/docx-to-markdown": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

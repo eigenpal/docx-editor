@@ -125,6 +125,8 @@ Read `isEnabled` to set the disabled state. Show `disabledReason` when the comma
 
 ## Export Markdown and PDF
 
+The adapter does not install either converter. Install only the formats your application uses.
+
 Configure `menu.exporters` to enable **File > Export** with the conversion packages. Markdown downloads as one continuous document. PDF conversion requires a Node.js server. Missing converter handlers show an error with setup instructions. See [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export).
 
 ## License
