@@ -30,6 +30,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "check:consumer": "node scripts/check-consumer.mjs",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf --local",

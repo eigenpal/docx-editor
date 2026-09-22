@@ -7,6 +7,64 @@
 /// <reference lib="dom" />
 
 // @public
+export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
+    readonly faceIndex?: number;
+}, options?: {
+    readonly id?: string;
+    readonly maxFontBytes?: number;
+}): {
+    readonly source: FontSource;
+} | {
+    readonly failure: FontLoadFailure;
+};
+
+// @public
+export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
+
+// @public
+export interface ExportFontFaceResolution {
+    // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly hash?: string;
+    // (undocumented)
+    readonly id?: string;
+    readonly identity?: string;
+    // (undocumented)
+    readonly sourceFamily: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    readonly substitution?: FontSubstitution | null;
+    // (undocumented)
+    readonly via: 'direct' | 'substitution';
+    // (undocumented)
+    readonly weight: 400 | 700;
+}
+
+// @public
+export interface ExportFontFamilyResolution {
+    // (undocumented)
+    readonly coverage: 'complete' | 'partial' | 'none';
+    // (undocumented)
+    readonly faces: readonly ExportFontFaceResolution[];
+    // (undocumented)
+    readonly family: string;
+}
+
+// @public
+export interface ExportFontResolutionReport {
+    // (undocumented)
+    readonly defaultFamily: string;
+    readonly droppedEmbeddedFonts?: readonly ExportDroppedEmbeddedFont[];
+    // (undocumented)
+    readonly families: readonly ExportFontFamilyResolution[];
+    // (undocumented)
+    readonly originFailures: readonly FontOriginFailure[];
+    // (undocumented)
+    readonly requestedFamilies: readonly string[];
+}
+
+// @public
 export function exportPdf(source: Uint8Array, options?: PdfExportOptions): Promise<PdfExportResult>;
 
 // @public
@@ -17,81 +75,136 @@ export class ExportResourceError extends Error {
 }
 
 // @public
+export interface FontOriginFailure {
+    // (undocumented)
+    readonly cause: unknown;
+    readonly originIndex: number;
+    readonly originName?: string;
+}
+
+// @public
+export interface FontRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export type HeadlessDocumentRejection = OoxmlPackageRejection | 'no-main-document-tree';
+
+// @public
 export interface PdfDiagnostic {
-    // (undocumented)
     readonly code: string;
-    // (undocumented)
     readonly message: string;
-    // (undocumented)
     readonly pageIndex?: number;
-    // (undocumented)
     readonly severity: 'unsupported' | 'approximation' | 'information';
 }
 
 // @public
 export class PdfDocumentOpenError extends Error {
-    constructor(reason: string, detail?: string | undefined);
+    constructor(reason: HeadlessDocumentRejection | 'aborted', detail?: string | undefined);
+    // (undocumented)
+    readonly code = "documentOpenFailed";
     // (undocumented)
     readonly detail?: string | undefined;
     // (undocumented)
-    readonly reason: string;
+    readonly reason: HeadlessDocumentRejection | 'aborted';
 }
 
 // @public
 export class PdfEncodingError extends Error {
     constructor(message: string, options?: ErrorOptions);
+    // (undocumented)
+    readonly code: 'encodingFailed' | 'outputTooLarge';
 }
 
 // @public
 export interface PdfExportOptions extends Omit<OpenFontBackedDocumentForExportOptions, 'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions'> {
-    // (undocumented)
     readonly comments?: boolean;
-    // (undocumented)
-    readonly fallbackFonts?: OpenFontBackedDocumentForExportOptions['fonts'];
-    // (undocumented)
+    readonly displayMode?: RevisionDisplayMode;
+    readonly documentLigatures?: boolean;
+    readonly fallbackFonts?: PdfFontsSource;
     readonly fidelityPolicy?: 'strict' | 'best-effort';
-    // (undocumented)
-    readonly fonts?: OpenFontBackedDocumentForExportOptions['fonts'];
-    // (undocumented)
+    readonly fonts?: PdfFontsSource;
+    readonly lastResortFonts?: PdfFontsSource;
     readonly maxOutputBytes?: number;
-    // (undocumented)
+    readonly maxPages?: number;
     readonly timeoutMs?: number;
     readonly useSystemFonts?: boolean;
 }
 
 // @public
 export interface PdfExportResult {
-    // (undocumented)
     readonly bytes: Uint8Array;
-    // (undocumented)
     readonly diagnostics: readonly PdfDiagnostic[];
-    // (undocumented)
     readonly displayMode: RevisionDisplayMode;
-    // (undocumented)
     readonly fontResolution: ExportFontResolutionReport;
-    // (undocumented)
     readonly layoutRevision: number;
-    // (undocumented)
     readonly pageCount: number;
-    readonly timings: {
-        readonly layoutMs: number;
-        readonly openMs: number;
-        readonly paintMs: number;
-        readonly saveMs: number;
-    };
+    readonly timings: PdfExportTimings;
+}
+
+// @public
+export interface PdfExportTimings {
+    // (undocumented)
+    readonly layoutMs: number;
+    // (undocumented)
+    readonly openMs: number;
+    // (undocumented)
+    readonly paintMs: number;
+    // (undocumented)
+    readonly saveMs: number;
 }
 
 // @public
 export class PdfFidelityError extends Error {
     constructor(diagnostics: readonly PdfDiagnostic[]);
     // (undocumented)
+    readonly code = "fidelityUnsupported";
+    // (undocumented)
     readonly diagnostics: readonly PdfDiagnostic[];
 }
 
-// @public (undocumented)
+// @public
+export type PdfFontOrigin = FontOrigin;
+
+// @public
+export type PdfFontsSource = PdfFontOrigin | readonly PdfFontOrigin[];
+
+// @public
+export class PdfOutputLimitError extends PdfEncodingError {
+    constructor(limit: number, actual: number);
+    // (undocumented)
+    readonly actual: number;
+    // (undocumented)
+    readonly code = "outputTooLarge";
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
+export class PdfPageLimitError extends RangeError {
+    constructor(limit: number, actual: number);
+    // (undocumented)
+    readonly actual: number;
+    // (undocumented)
+    readonly code = "pageLimitExceeded";
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
 export class PdfWorkLimitError extends Error {
     constructor();
+    // (undocumented)
+    readonly code = "workLimitExceeded";
 }
+
+// @public
+export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // (No @packageDocumentation comment for this package)
 

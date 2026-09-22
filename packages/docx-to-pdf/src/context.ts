@@ -131,7 +131,9 @@ export class Work {
     this.diagnostics.push(Object.freeze({ code, message, pageIndex, severity }));
   }
 }
+/** Content exceeds the operation or diagnostic budget. @public */
 export class PdfWorkLimitError extends Error {
+  readonly code = 'workLimitExceeded';
   constructor() {
     super('PDF operation or diagnostic limit exceeded');
     this.name = 'PdfWorkLimitError';

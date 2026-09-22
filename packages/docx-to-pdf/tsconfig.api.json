@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
+      "@docx-editor.dev/core/editor": ["../core/dist/editor.d.ts"],
       "@docx-editor.dev/core/export": ["../core/dist/export.d.ts"],
       "@docx-editor.dev/core/layout": ["../core/dist/layout.d.ts"],
       "@docx-editor.dev/core/store": ["../core/dist/store.d.ts"],

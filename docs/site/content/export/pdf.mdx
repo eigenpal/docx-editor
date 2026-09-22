@@ -6,7 +6,7 @@ category: Export formats
 
 `@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF using Core's pagination, font resolution, and positioned glyphs. It runs on Node.js. Browser applications send documents to a server for conversion.
 
-The package is private and is not available from the public npm registry. It is distributed under the EigenPal Pro Evaluation License. Production use requires a commercial agreement.
+The package is private and is not available from the public npm registry. It is distributed under the EigenPal Pro License. Production use requires a commercial agreement.
 
 ## Convert a document
 
@@ -29,7 +29,21 @@ By default, export includes proposed revisions and preserves comments as native 
 
 The default `fidelityPolicy: 'strict'` rejects unsupported or approximate output. Use `'best-effort'` to receive available output with `result.diagnostics`.
 
-Core's `fontPolicy` controls font substitution. Inspect `result.fontResolution` for the fonts used in the PDF.
+Core's `fontPolicy` controls failed font sources and incomplete face coverage. Inspect `result.fontResolution` for the fonts used in the PDF.
+
+## Handle limits and failures
+
+Set `maxPages`, `maxOutputBytes`, and `timeoutMs` for your conversion workload. `maxPages` checks completed layout before painting. `maxOutputBytes` checks encoded output; neither option limits process memory. Pass `signal` to cancel conversion between processing batches.
+
+`PdfPageLimitError` and `PdfOutputLimitError` include `limit`, `actual`, and stable `code` fields. `PdfFidelityError.diagnostics` explains a strict refusal. `PdfDocumentOpenError.reason` identifies rejected input.
+
+A `font-origin-failed` diagnostic identifies source failures that fallback sources can recover from. Inspect `fontResolution.originFailures` for causes. Set `fontPolicy: 'strict'` when source failures must reject conversion.
+
+## Configure server fonts
+
+Set `useSystemFonts: false` for consistent font selection across hosts. Supply `fonts` to override packaged sources. Supply `lastResortFonts` to resolve missing faces after embedded fonts and before generic substitutes. Import `createFontSource` and `defineFontResolver` from the converter package.
+
+For examples, see [Configure PDF fonts](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/fonts.md). For response handlers and deployment, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md). For all options and errors, see [PDF export API](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/api.md).
 
 ## Supported content
 

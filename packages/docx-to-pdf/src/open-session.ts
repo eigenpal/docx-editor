@@ -30,7 +30,7 @@ const bundledFonts = packagedFonts({
 /** The export options that shape the session, without the ones that shape the PDF. */
 export type SessionOptions = Omit<
   PdfExportOptions,
-  'comments' | 'fidelityPolicy' | 'timeoutMs' | 'maxOutputBytes'
+  'comments' | 'fidelityPolicy' | 'timeoutMs' | 'maxOutputBytes' | 'maxPages'
 >;
 
 /**
@@ -43,7 +43,7 @@ export function openExportSession(
   options: SessionOptions,
   signal?: AbortSignal
 ): Promise<OpenFontBackedDocumentForExportResult> {
-  const { fonts, fallbackFonts, useSystemFonts = true, ...core } = options;
+  const { fonts, fallbackFonts, lastResortFonts, useSystemFonts = true, ...core } = options;
   const origins: OpenFontBackedDocumentForExportOptions['fonts'] = [
     ...(fonts ? (Array.isArray(fonts) ? fonts : [fonts]) : []),
     ...(useSystemFonts ? [installedWordFonts] : []),
@@ -62,6 +62,13 @@ export function openExportSession(
     glyphFallbacks: options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS,
     fonts: origins,
     // After the document's own embedded fonts: a stand-in for what nothing else covers.
-    lastResortFonts: standInFonts,
+    lastResortFonts: [
+      ...(lastResortFonts
+        ? Array.isArray(lastResortFonts)
+          ? lastResortFonts
+          : [lastResortFonts]
+        : []),
+      standInFonts,
+    ],
   });
 }

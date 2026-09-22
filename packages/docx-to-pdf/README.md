@@ -2,7 +2,11 @@
 
 `@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF on Node.js. It uses Core's pagination, font resolution, and positioned glyphs to produce searchable text.
 
-The package is private and is not published to npm. It is distributed under the [EigenPal Pro Evaluation License](LICENSE.md). Production use requires a commercial agreement.
+The package is private and is not published to npm. It is distributed under the [EigenPal Pro License](LICENSE.md). Production use requires a commercial agreement.
+
+## Before you begin
+
+Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or later. The converter needs WebAssembly and its packaged font assets. Install a compatible `@docx-editor.dev/core` peer alongside the converter in your private distribution. Keep one Core copy in your application.
 
 ## Convert a document
 
@@ -31,17 +35,20 @@ Conversion preserves the source DOCX. Browser applications must send the documen
 | `useSystemFonts` | `true` | Searches standard operating system directories for supported font files. Set to `false` to disable this search. |
 | `timeoutMs` | `60000` | Sets the conversion deadline in milliseconds. |
 | `maxOutputBytes` | `67108864` | Limits output to 64 MiB. You can lower this limit. |
+| `maxPages` | `10000` | Limits output pages after layout. You can lower this limit. |
 | `signal` | — | Cancels conversion through an `AbortSignal`. |
 
 The result includes `bytes`, `pageCount`, `layoutRevision`, `displayMode`, `fontResolution`, `diagnostics`, and `timings`. Timings report milliseconds spent opening the document, laying out pages, painting content, and encoding the PDF. Each result owns its byte buffer.
 
 ### Fonts
 
-Use `fonts` to provide font sources before the installed and packaged sources. Use `fallbackFonts` to add sources after the packaged fonts. The exporter also reads embedded fonts before using a generic substitute for an unresolved family.
+Use `fonts` to provide font sources before the installed and packaged sources. Use `fallbackFonts` to add sources after the packaged fonts. The exporter also reads embedded fonts before using a generic substitute for an unresolved family. Use `lastResortFonts` after embedded fonts and before generic substitutes.
 
 `glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. Emoji from a COLR font retain their palette colors and extractable text.
 
-Core's `fontPolicy` controls substitution. Generic substitutions can change line breaks and page count, so strict export rejects them with a `font-substitution` diagnostic. Best-effort export uses the substitute and reports it. Inspect `result.fontResolution` for the selected fonts.
+Core's `fontPolicy` controls failed font sources and incomplete face coverage. Generic substitutions can change line breaks and page count, so strict export rejects them with a `font-substitution` diagnostic. Best-effort export uses the substitute and reports it. Inspect `result.fontResolution` for the selected fonts.
+
+For custom font files and policy choices, see [Configure PDF fonts](docs/fonts.md).
 
 ### Comments
 
@@ -72,14 +79,22 @@ The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts t
 | --- | --- |
 | `PdfDocumentOpenError` | Core rejected the input document. Inspect `reason` and `detail`. |
 | `PdfFidelityError` | Strict export encountered unsupported or approximate content. Inspect `diagnostics`. |
-| `ExportResourceError` | Conversion was canceled or exceeded its deadline. |
+| `ExportResourceError` | Cancellation, deadlines, font-policy refusals, or layout failures. Inspect `code`. |
 | `PdfWorkLimitError` | Content exceeded a processing limit. |
-| `PdfEncodingError` | PDF encoding failed or the output exceeded `maxOutputBytes`. |
+| `PdfOutputLimitError` | Encoded bytes exceeded `maxOutputBytes`. Inspect `limit` and `actual`. Extends `PdfEncodingError`. |
+| `PdfPageLimitError` | Layout exceeded `maxPages`. Inspect `limit` and `actual`. Extends `RangeError`. |
+| `PdfEncodingError` | PDF encoding failed. Inspect `cause`. |
 | `TypeError` or `RangeError` | An argument is invalid or a size limit was exceeded. |
 
 The writer compresses content streams and embeds font subsets. It retains layout records and font data until conversion finishes. Core's resource limits also apply.
 
 Cancellation is checked between layout, paint, and encoding batches. Synchronous font and image operations cannot be interrupted mid-call. For a hard deadline or heap limit, run conversion in a worker and configure `resourceLimits.maxOldGenerationSizeMb`.
+
+## Developer guides
+
+- [PDF export API](docs/api.md): options, result fields, diagnostics, stable error codes, and resource boundaries.
+- [Configure PDF fonts](docs/fonts.md): custom files, source order, policies, and troubleshooting.
+- [Integrate PDF conversion](docs/integrations.md): HTTP responses, Next.js, deployment, and batches.
 
 ## Run the demo
 

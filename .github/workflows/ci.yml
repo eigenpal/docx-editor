@@ -198,6 +198,9 @@ jobs:
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
         if: "matrix.check == 'build'"
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
+        if: "matrix.check == 'build'"
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size
         if: "matrix.check == 'build'"

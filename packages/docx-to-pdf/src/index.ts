@@ -7,7 +7,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { PDFDocument } from 'pdf-lib';
 import type { ExportFontResolutionReport } from '@docx-editor.dev/core/export';
 import { ExportResourceError } from '@docx-editor.dev/core/export';
-import { MAX_OUTPUT_BYTES, positiveLimit, Work, PdfWorkLimitError } from './context.ts';
+import { Work, PdfWorkLimitError } from './context.ts';
+import { validateOptions } from './options.ts';
 import { paint } from './paint.ts';
 import { isGenericSubstitution } from './font-provisioning.ts';
 import { openExportSession } from './open-session.ts';
@@ -15,19 +16,46 @@ import {
   PdfDocumentOpenError,
   PdfEncodingError,
   PdfFidelityError,
+  PdfOutputLimitError,
+  PdfPageLimitError,
   type PdfExportOptions,
   type PdfExportResult,
 } from './types.ts';
-export { PdfDocumentOpenError, PdfEncodingError, PdfFidelityError } from './types.ts';
+export {
+  PdfDocumentOpenError,
+  PdfEncodingError,
+  PdfFidelityError,
+  PdfOutputLimitError,
+  PdfPageLimitError,
+} from './types.ts';
 export { PdfWorkLimitError } from './context.ts';
-export type { PdfDiagnostic, PdfExportOptions, PdfExportResult } from './types.ts';
+export type {
+  PdfDiagnostic,
+  PdfExportOptions,
+  PdfExportResult,
+  PdfExportTimings,
+  PdfFontOrigin,
+  PdfFontsSource,
+} from './types.ts';
+export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
+export type {
+  ExportFontResolutionReport,
+  ExportFontFaceResolution,
+  ExportFontFamilyResolution,
+  FontOriginFailure,
+} from '@docx-editor.dev/core/export';
+export type { FontRequest, RevisionDisplayMode } from '@docx-editor.dev/core/layout';
+export type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 export { ExportResourceError } from '@docx-editor.dev/core/export';
-/**
- * Say which families render in a stand-in face of another family's metrics. Word's own
- * metric-compatible substitutions (Calibri in Carlito and the like) are silent, as they are
- * in Word; a family this package only knows by name is not, and the report is `unsupported`.
- */
-function reportGenericSubstitutions(resolution: ExportFontResolutionReport, work: Work): void {
+/** Report font-source recovery and substitutions that can change pagination. */
+function reportFontDiagnostics(resolution: ExportFontResolutionReport, work: Work): void {
+  if (resolution.originFailures.length > 0)
+    work.report(
+      'font-origin-failed',
+      `${resolution.originFailures.length} font sources failed; inspect fontResolution.originFailures`,
+      undefined,
+      'information'
+    );
   for (const family of resolution.families) {
     const stand = family.faces.find(
       (face) =>
@@ -49,26 +77,7 @@ export async function exportPdf(
   options: PdfExportOptions = {}
 ): Promise<PdfExportResult> {
   if (!(source instanceof Uint8Array)) throw new TypeError('source must be a Uint8Array');
-  if (
-    options.fidelityPolicy !== undefined &&
-    !['strict', 'best-effort'].includes(options.fidelityPolicy)
-  )
-    throw new RangeError('Invalid fidelityPolicy');
-  if (
-    options.displayMode !== undefined &&
-    !['proposed', 'original', 'all-markup'].includes(options.displayMode)
-  )
-    throw new RangeError('Invalid displayMode');
-  if (options.useSystemFonts !== undefined && typeof options.useSystemFonts !== 'boolean')
-    throw new TypeError('useSystemFonts must be boolean');
-  if (options.comments !== undefined && typeof options.comments !== 'boolean')
-    throw new TypeError('comments must be boolean');
-  const timeoutMs = positiveLimit(options.timeoutMs ?? 60_000, 2_147_483_647, 'timeoutMs');
-  const maxBytes = positiveLimit(
-    options.maxOutputBytes ?? MAX_OUTPUT_BYTES,
-    MAX_OUTPUT_BYTES,
-    'maxOutputBytes'
-  );
+  const { timeoutMs, maxBytes, maxPages } = validateOptions(options);
   const controller = new AbortController();
   const abort = (): void =>
     controller.abort(
@@ -83,7 +92,14 @@ export async function exportPdf(
     timeoutMs
   );
   const work = new Work(controller.signal, Date.now() + timeoutMs);
-  const { comments = true, fidelityPolicy = 'strict', ...session } = options;
+  const {
+    comments = true,
+    fidelityPolicy = 'strict',
+    timeoutMs: _timeout,
+    maxOutputBytes: _maxBytes,
+    maxPages: _maxPages,
+    ...session
+  } = options;
   try {
     work.check();
     const clock = performance.now();
@@ -95,8 +111,9 @@ export async function exportPdf(
       const openMs = phase();
       const layout = await opened.session.layout();
       const layoutMs = phase() - openMs;
-      if (layout.pages.length > 10_000) throw new RangeError('PDF page limit exceeded');
-      reportGenericSubstitutions(opened.session.fontResolution, work);
+      if (layout.pages.length > maxPages)
+        throw new PdfPageLimitError(maxPages, layout.pages.length);
+      reportFontDiagnostics(opened.session.fontResolution, work);
       const doc = await PDFDocument.create({ updateMetadata: false });
       doc.setProducer('docx-editor.dev');
       doc.setCreator('docx-editor.dev');
@@ -116,8 +133,7 @@ export async function exportPdf(
       work.check();
       const bytes = await doc.save({ useObjectStreams: false, objectsPerTick: 50 });
       work.check();
-      if (bytes.byteLength > maxBytes)
-        throw new PdfEncodingError(`PDF exceeds maxOutputBytes (${maxBytes})`);
+      if (bytes.byteLength > maxBytes) throw new PdfOutputLimitError(maxBytes, bytes.byteLength);
       return Object.freeze({
         bytes,
         pageCount: layout.pages.length,
