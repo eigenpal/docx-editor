@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import {
   ChromeExportError,
   runChromeExport,
@@ -11,6 +11,7 @@ import { download, downloadName } from './download';
 
 interface UseMenuExportReturn {
   readonly pending: Ref<boolean>;
+  readonly session: Ref<object>;
   readonly error: Ref<string>;
   readonly format: Ref<ChromeExportFormat>;
   readonly visible: Ref<boolean>;
@@ -28,9 +29,11 @@ export function useMenuExport(
   const error = ref('');
   const format = ref<ChromeExportFormat>('pdf');
   const visible = ref(false);
+  const session = shallowRef<object>({});
   const execute = async (requestedFormat: ChromeExportFormat) => {
     if (!editor.value || pending.value) return;
     const name = fileName();
+    session.value = {};
     format.value = requestedFormat;
     visible.value = true;
     pending.value = true;
@@ -64,6 +67,7 @@ export function useMenuExport(
     error,
     format,
     visible,
+    session,
     dismiss: () => {
       visible.value = false;
     },

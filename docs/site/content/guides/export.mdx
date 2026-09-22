@@ -85,6 +85,8 @@ If conversion fails, the dialog shows an error. Close the dialog, then select th
 
 If a converter handler is missing, the error names the required package and configuration. A missing converter never falls back to another format.
 
+Use `popups.export` to replace progress and error feedback through the shared popup API. For examples, see [Customize export feedback](/docs/2.x/guides/customize-dialogs#customize-export-feedback).
+
 ## Convert PDF on the server
 
 Your PDF endpoint calls `exportPdf` and returns `result.bytes` with the `application/pdf` content type. This Fetch API handler runs on Node.js:

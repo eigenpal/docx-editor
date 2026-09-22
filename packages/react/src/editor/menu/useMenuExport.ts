@@ -20,9 +20,11 @@ export function useMenuExport(
   const [error, setError] = useState('');
   const [format, setFormat] = useState<ChromeExportFormat>('pdf');
   const [visible, setVisible] = useState(false);
+  const [session, setSession] = useState<object>({});
   const execute = async (format: ChromeExportFormat) => {
     if (!editor || running.current) return;
     running.current = true;
+    setSession({});
     setFormat(format);
     setVisible(true);
     setPending(true);
@@ -53,5 +55,5 @@ export function useMenuExport(
       setPending(false);
     }
   };
-  return { pending, error, format, visible, dismiss: () => setVisible(false), execute };
+  return { pending, error, format, visible, session, dismiss: () => setVisible(false), execute };
 }

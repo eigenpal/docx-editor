@@ -1,4 +1,6 @@
-import { MenuExportDialog } from './MenuExportDialog';
+import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
+import { usePopupConfig } from '../popup-config';
+import { renderPopup } from '../popup-renderer';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
@@ -165,6 +167,7 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const dialogs = useDialogHost();
+  const popups = usePopupConfig();
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
   const {
@@ -414,13 +417,29 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       >
         {content}
       </div>
-      {exportState.visible && (
-        <MenuExportDialog
-          format={exportState.format}
-          error={exportState.error}
-          onClose={exportState.dismiss}
-        />
-      )}
+      {exportState.visible && popups?.export !== false ? (
+        popups?.export ? (
+          renderPopup(
+            popups.export,
+            {
+              open: true,
+              format: exportState.format,
+              pending: exportState.pending,
+              error: exportState.error,
+              onClose: exportState.dismiss,
+            },
+            exportState.session
+          )
+        ) : (
+          <DocxEditorExportDialog
+            open
+            format={exportState.format}
+            pending={exportState.pending}
+            error={exportState.error}
+            onClose={exportState.dismiss}
+          />
+        )
+      ) : null}
       {/* Opening a document is a FILE READ the user drives — never a fetched URL. Mounted
           even when the host overrode `onOpen`, because the input costs nothing and a host
           that later drops the override keeps working. */}

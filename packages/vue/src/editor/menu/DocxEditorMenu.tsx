@@ -1,4 +1,6 @@
-import { MenuExportDialog } from './MenuExportDialog';
+import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
+import { usePopupConfig } from '../popup-config';
+import { renderPopup } from '../popup-renderer';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
@@ -123,6 +125,7 @@ const DocxEditorMenuRoot = defineComponent({
   },
   setup(props, { slots }) {
     const dialogs = useDialogHost();
+    const popups = usePopupConfig();
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
     const { t: catalogT } = useTranslation();
@@ -337,13 +340,29 @@ const DocxEditorMenuRoot = defineComponent({
           >
             {content}
           </div>
-          {exportState.visible.value && (
-            <MenuExportDialog
-              format={exportState.format.value}
-              error={exportState.error.value}
-              onClose={exportState.dismiss}
-            />
-          )}
+          {exportState.visible.value && popups.value?.export !== false ? (
+            popups.value?.export ? (
+              renderPopup(
+                popups.value.export,
+                {
+                  open: true,
+                  format: exportState.format.value,
+                  pending: exportState.pending.value,
+                  error: exportState.error.value,
+                  onClose: exportState.dismiss,
+                },
+                exportState.session.value
+              )
+            ) : (
+              <DocxEditorExportDialog
+                open
+                format={exportState.format.value}
+                pending={exportState.pending.value}
+                error={exportState.error.value}
+                onClose={exportState.dismiss}
+              />
+            )
+          ) : null}
           <input
             ref={fileInputRef}
             type="file"

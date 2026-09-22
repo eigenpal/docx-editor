@@ -32,3 +32,18 @@ export const missingOptionalHostProp: DocxEditorPopups = {
   // @ts-expect-error The popup host can omit className.
   pageSetup: definePopup(RequiresOptionalHostProp),
 };
+
+import { DocxEditorExportDialog } from '../src/editor/DocxEditorExportDialog';
+const WrongExportPending = (_props: { pending: string }) => null;
+const NarrowExportFormat = (_props: { format: 'pdf' }) => null;
+export const exportPopup: DocxEditorPopups = {
+  export: definePopup(DocxEditorExportDialog),
+};
+export const wrongExportPending: DocxEditorPopups = {
+  // @ts-expect-error Export progress uses a boolean.
+  export: definePopup(WrongExportPending),
+};
+export const narrowExportFormat: DocxEditorPopups = {
+  // @ts-expect-error Export popups must also accept Markdown.
+  export: definePopup(NarrowExportFormat),
+};
