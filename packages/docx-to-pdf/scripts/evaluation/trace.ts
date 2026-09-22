@@ -49,7 +49,7 @@ const partOf = (nodeId: string) => {
   return split > 0 && nodeId.startsWith('/') ? nodeId.slice(0, split) : null;
 };
 
-/** Exported only for internal calibration tests. All geometry uses page-local points. */
+/** Exported only for eval calibration tests. All geometry uses page-local points. */
 export function summarizeLayout(
   layout: SemanticLayout,
   pageNumber = 1,

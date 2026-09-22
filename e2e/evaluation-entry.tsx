@@ -1,4 +1,4 @@
-/** The corpus probe mounts the same React harness without loading demo routes. */
+/** The eval probe mounts the same React harness without loading demo routes. */
 import { createRoot } from 'react-dom/client';
 import '../examples/vite/src/styles.css';
 import { TableEditingE2EHarness } from '../examples/vite/src/test-harness/TableEditingE2EHarness.tsx';

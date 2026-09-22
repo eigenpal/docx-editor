@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-/** Internal evaluation protocol, version 1. No document-model API additions. */
+/** Eval protocol, version 1. No document-model API additions. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { exportPdf } from '../../src/index.ts';
 

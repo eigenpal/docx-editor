@@ -1,4 +1,4 @@
-/** Internal corpus browser probe. Inputs and evidence stay outside the repository. */
+/** Browser eval probe. Inputs and evidence stay outside the repository. */
 import { chromium, type Page } from '@playwright/test';
 import { gc } from 'bun';
 import { createHash } from 'node:crypto';

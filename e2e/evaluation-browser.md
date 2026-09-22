@@ -1,4 +1,4 @@
-# Corpus browser probe
+# Browser eval probe
 
 Run the probe from the editor checkout. Keep inputs and output outside this repository. Install dependencies with `bun install --frozen-lockfile`. Install the pinned headless browser with `bunx playwright install chromium --only-shell` if it is absent. The probe uses the headless shell to limit browser memory.
 
@@ -22,7 +22,7 @@ Use `--manifest /tmp/jobs.json` for up to 100 documents with one shared static s
 ]
 ```
 
-Each document receives a separate browser process and context. The probe intercepts the fixture request and supplies the input bytes. It never copies corpus documents into the checkout. Browser requests outside the local server origin are blocked.
+Each document receives a separate browser process and context. The probe intercepts the fixture request and supplies the input bytes. It never copies eval documents into the checkout. Browser requests outside the local server origin are blocked.
 
 ## Recipe and checks
 
@@ -42,9 +42,9 @@ A failed or blocked document receives a screenshot and Playwright action trace w
 bun e2e/evaluation-browser.ts --identity
 ```
 
-This prints hashes for the recipe source, launched Chromium executable, and packaged font assets. It also reports the viewport, platform, architecture, Playwright version, Bun version, and the Node.js build runtime. Include the source document hash and editor source identity in cache keys. Include core, React, fonts, the Vite application, and its test harness in the editor identity. Also include root Tailwind and PostCSS configuration. Compare identity before and after a run if another process can edit those files. Prefer normalized corpus copies.
+This prints hashes for the recipe source, launched Chromium executable, and packaged font assets. It also reports the viewport, platform, architecture, Playwright version, Bun version, and the Node.js build runtime. Include the source document hash and editor source identity in cache keys. Include core, React, fonts, the Vite application, and its test harness in the editor identity. Also include root Tailwind and PostCSS configuration. Compare identity before and after a run if another process can edit those files. Prefer normalized eval inputs.
 
-Each document has a 90-second limit and a 32 MiB input limit. Further bounds are 1,000 pages, 20,000 main-story paragraphs, and 4,000,000 text characters. The corpus runner must retain its process memory limits and process-group cleanup.
+Each document has a 90-second limit and a 32 MiB input limit. Further bounds are 1,000 pages, 20,000 main-story paragraphs, and 4,000,000 text characters. The eval runner must retain its process memory limits and process-group cleanup.
 
 This recipe does not check drag selection, formatting, images after editing, comments, tracked changes, or external visual references. It does not prove full editing compatibility. Matching fresh layout can still contain layout defects. Use separate preservation checks for package parts outside the main story.
 

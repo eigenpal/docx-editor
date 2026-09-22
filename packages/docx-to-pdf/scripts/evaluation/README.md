@@ -1,4 +1,4 @@
-# Internal evaluation protocol
+# Eval protocol
 
 These commands serve the separate `docx-eval` repository. They do not add public document automation APIs.
 
@@ -56,6 +56,6 @@ The browser recipe checks pointer placement, keyboard insertion, undo/redo, save
 It uses a local demo server and blocks external browser requests.
 Batch mode reuses a browser process. The parent caches results using browser, recipe, font, and engine identities.
 It does not cover drag selection, formatting, or review operations.
-See [Browser evaluation probe](../../../../e2e/evaluation-browser.md).
+See [Browser eval probe](../../../../e2e/evaluation-browser.md).
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.
