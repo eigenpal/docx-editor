@@ -87,10 +87,14 @@ export function downloadName(title: string | undefined): string {
 }
 
 /** Hand DOCX bytes to the browser as a download. */
-export function download(buffer: ArrayBuffer, name: string): void {
+export function download(
+  buffer: ArrayBuffer,
+  name: string,
+  mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+): void {
   const url = URL.createObjectURL(
     new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      type: mimeType,
     })
   );
   const anchor = document.createElement('a');

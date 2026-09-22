@@ -1,3 +1,5 @@
+import { useMenuExport } from './useMenuExport';
+import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
@@ -42,7 +44,7 @@ import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
 import { download, downloadName } from './download';
-import { barTriggers } from './menu-keyboard';
+import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import {
   Menu,
   MenuEntry,
@@ -56,6 +58,8 @@ import {
   MenuPageSetup,
   MenuRow,
   MenuSave,
+  MenuExportMarkdown,
+  MenuExportPdf,
   MenuGroup,
   MenuSeparator,
   MenuReportIssue,
@@ -77,6 +81,8 @@ const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
 
 /** Props for `DocxEditor.Menu`. @public */
 export interface DocxEditorMenuProps {
+  /** Converter handlers. Markdown requires docx-to-markdown; PDF requires docx-to-pdf on Node.js. Missing handlers show an error. */
+  exporters?: ChromeExportHandlers;
   /** Appended after the base `docx-menubar` class. */
   className?: string;
   /** i18n resolver for row labels; without it the raw keys show (never English). */
@@ -164,6 +170,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     className,
     t,
     fileName,
+    exporters,
     onOpen,
     onOpenFile,
     onSave,
@@ -182,6 +189,11 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const [openedName, setOpenedName] = useState<string | null>(null);
   // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
+  const {
+    pending: exportPending,
+    error: exportError,
+    execute: executeExport,
+  } = useMenuExport(editor, exporters, fileName ?? openedName ?? undefined);
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
@@ -293,6 +305,13 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       activeMenu,
       onOpen: resolvedOpen,
       onSave: resolvedSave,
+      onExport:
+        editor && !exportPending
+          ? (format) => {
+              restoreExportFocus(rootRef.current);
+              return executeExport(format);
+            }
+          : undefined,
       onPageSetup: resolvedPageSetup,
       onParagraphDialog: () =>
         dialogs
@@ -307,6 +326,9 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       reportIssue,
     }),
     [
+      editor,
+      exportPending,
+      executeExport,
       t,
       openMenu,
       openMenuAndFocus,
@@ -394,6 +416,16 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       >
         {content}
       </div>
+      {exportPending && (
+        <div role="status" className="docx-menubar__export-status">
+          {catalogT('toolbar.exporting')}
+        </div>
+      )}
+      {exportError && (
+        <div role="alert" className="docx-menubar__export-status">
+          {exportError}
+        </div>
+      )}
       {/* Opening a document is a FILE READ the user drives — never a fetched URL. Mounted
           even when the host overrode `onOpen`, because the input costs nothing and a host
           that later drops the override keeps working. */}
@@ -456,6 +488,8 @@ export interface DocxEditorMenuNamespace {
   readonly Entry: typeof MenuEntry;
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
+  readonly ExportMarkdown: typeof MenuExportMarkdown;
+  readonly ExportPdf: typeof MenuExportPdf;
   readonly PageSetup: typeof MenuPageSetup;
   /** Insert › Image, so a host can hide it or place it elsewhere by name. */
   readonly ImageInsert: typeof MenuImageInsert;
@@ -491,6 +525,8 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Entry: MenuEntry,
   Open: MenuOpen,
   Save: MenuSave,
+  ExportMarkdown: MenuExportMarkdown,
+  ExportPdf: MenuExportPdf,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
   Reviewers: MenuReviewers,

@@ -34,3 +34,5 @@ export {
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';

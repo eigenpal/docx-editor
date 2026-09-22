@@ -1,6 +1,10 @@
 # Integrate PDF conversion
 
-The converter runs on Node.js and returns PDF bytes. Keep conversion on the server for browser applications. The package remains private under the EigenPal Pro License. The following examples assume your application already has access to the package.
+The converter runs on Node.js and returns PDF bytes. Keep conversion on the server for browser applications. The package uses the EigenPal Pro License. Install the converter and its engine peer before using these examples:
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
 
 ## Return a PDF response
 

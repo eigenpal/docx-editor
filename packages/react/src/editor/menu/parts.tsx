@@ -333,6 +333,16 @@ export const MenuSave = defineActionRow(
   (context) => context.onSave
 );
 
+export const MenuExportMarkdown = defineActionRow(
+  'file.exportMarkdown',
+  undefined,
+  undefined,
+  (context) => (context.onExport ? () => context.onExport?.('markdown') : undefined)
+);
+export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
+  context.onExport ? () => context.onExport?.('pdf') : undefined
+);
+
 /**
  * Page setup. Unlike open and save, the ENGINE has an opinion here — `setPageSetup` is a
  * real command, it just needs the dialog's values — so the row asks through the slot's
@@ -813,6 +823,8 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
   }
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
+  if (entry.slot === 'file.exportMarkdown') return <MenuExportMarkdown />;
+  if (entry.slot === 'file.exportPdf') return <MenuExportPdf />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
   if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;

@@ -8,6 +8,8 @@ import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
+import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
+import { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { ChromeMenu } from '@docx-editor.dev/core/editor';
 import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuId } from '@docx-editor.dev/core/editor';
@@ -122,6 +124,10 @@ import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 export { CHROME_GROUPS }
 
 export { CHROME_MENUS }
+
+export { ChromeExportFormat }
+
+export { ChromeExportHandlers }
 
 export { ChromeMenu }
 
@@ -767,6 +773,10 @@ export interface DocxEditorMenuNamespace {
     (props: DocxEditorMenuProps): ReactNode;
     readonly Entry: typeof MenuEntry;
     // (undocumented)
+    readonly ExportMarkdown: typeof MenuExportMarkdown;
+    // (undocumented)
+    readonly ExportPdf: typeof MenuExportPdf;
+    // (undocumented)
     readonly File: MenuPartComponent;
     // (undocumented)
     readonly Format: MenuPartComponent;
@@ -801,6 +811,7 @@ export interface DocxEditorMenuProps {
     // (undocumented)
     children?: DocxEditorChildren;
     className?: string;
+    exporters?: ChromeExportHandlers;
     fileName?: string;
     onOpen?: () => void;
     onOpenFile?: (file: File) => void;

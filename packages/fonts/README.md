@@ -1,6 +1,6 @@
 # @docx-editor.dev/fonts
 
-Open-licensed substitutes for common Word fonts, packaged for shaped (HarfBuzz) measurement in the docx-editor engine.
+Load open-licensed substitutes for common Word fonts. The docx-editor engine uses these fonts to measure and render text.
 
 | Word font       | Substitute        | License           |
 | --------------- | ----------------- | ----------------- |
@@ -15,9 +15,17 @@ The first five substitutes target matching advance widths for the glyphs they co
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor keeps native family fallback available for missing glyphs. Exact metrics still depend on the font available for that script.
 
-`loadDefaultFonts()` and `defaultFonts()` load the five families Word applies to a document by default. Century Gothic is not one of them and adds about 709 KB, so it is opt-in: pass `families: ALL_WORD_DEFAULT_FAMILIES`, or use `googleFonts()`, which serves it from these same packaged bytes only when a document names it.
+`loadDefaultFonts()` and `defaultFonts()` load the five default families. To include Century Gothic, pass `families: ALL_WORD_DEFAULT_FAMILIES`. Its substitute adds about 709 KB. Alternatively, `googleFonts()` loads it from packaged assets when the document requests it.
 
-## Usage
+## Install the package
+
+Install the fonts package and its required engine peer:
+
+```sh
+npm install @docx-editor.dev/fonts @docx-editor.dev/core
+```
+
+## Load fonts
 
 Use `packagedFonts()` to load document fonts on demand. In React, `useFonts()` keeps the resolver identity stable so rerenders do not rebuild the editor.
 
@@ -176,4 +184,6 @@ From the repository root, run `bun run check:google-catalog` to check the commit
 
 ## Licenses
 
-The packaged fonts keep their licenses in `licenses/`. Carlito, Caladea, and Liberation use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License, which has no SPDX identifier of its own, so `package.json` names it `LicenseRef-GUST-Font-License`. Its operative terms are the LaTeX Project Public License 1.3c or, at your option, any later version; the one clause it adds on top asks you to rename a modified font, and says so as a request rather than a legal requirement. `licenses/` carries both texts, because the GUST license states its terms by reference to the LPPL. The package code uses Apache-2.0.
+The packaged fonts include license texts in `licenses/`. Carlito, Caladea, and Liberation use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License. The package code uses Apache-2.0.
+
+The GUST Font License incorporates the LaTeX Project Public License 1.3c or any later version. It also requests that you rename modified fonts. Both texts ship in `licenses/`. The package identifies this license as `LicenseRef-GUST-Font-License` because GUST has no SPDX identifier.

@@ -63,3 +63,10 @@ export function focusEdge(items: readonly HTMLElement[], edge: 'first' | 'last')
   target.focus();
   return true;
 }
+
+/** Keep keyboard focus on the menu trigger when an export closes its panel. */
+export function restoreExportFocus(root: HTMLElement | null): void {
+  const focused = root?.ownerDocument.activeElement;
+  if (!focused || !root?.contains(focused)) return;
+  focused.closest('[data-menu]')?.querySelector<HTMLElement>(':scope > [role="menuitem"]')?.focus();
+}

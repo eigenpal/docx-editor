@@ -102,9 +102,14 @@ jobs:
       - name: Install Chromium for Markdown preview checks
         if: "matrix.check == 'browser'"
         run: bunx playwright install --with-deps chromium
-      - name: Check table revision grouping in the editor
+      - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
-        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts
+        run: bun run build:pdf
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+      - name: Check table revision grouping and file exports in the editor
+        if: "matrix.check == 'browser'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts e2e/file-export.interaction.spec.ts
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"
@@ -217,14 +222,8 @@ jobs:
       - name: Docs JSON generation (smoke test)
         run: bun run docs:json
         if: "matrix.check == 'build'"
-      - name: Docs MDX check
-        run: bun run check:docs-mdx
-        if: "matrix.check == 'build'"
-      - name: Docs chrome slot coverage
-        run: bun run check:docs-chrome-slots
-        if: "matrix.check == 'build'"
-      - name: Docs Vue ref check
-        run: bun run check:docs-vue-refs
+      - name: Documentation checks
+        run: bun run check:docs
         if: "matrix.check == 'build'"
       - name: Shipped dependency advisories
         run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif

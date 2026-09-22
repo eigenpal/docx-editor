@@ -34,7 +34,15 @@
     "insertFootnote": "Sisipkan catatan kaki",
     "insertEndnote": "Sisipkan catatan akhir",
     "insertTable": null,
-    "review": null
+    "review": null,
+    "export": null,
+    "exportFailed": null,
+    "exportMarkdown": null,
+    "exportMarkdownMissing": null,
+    "exportPdf": null,
+    "exportPdfMissing": null,
+    "exporting": null,
+    "exportPdfServerUnavailable": null
   },
   "formattingBar": {
     "groups": {

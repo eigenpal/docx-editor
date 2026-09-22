@@ -18,6 +18,8 @@
           @input="emit('update:title', ($event.target as HTMLInputElement).value)"
         />
         <DocxEditorMenu
+          :exporters="demoExporters"
+          :file-name="title"
           @open="openFilePicker"
           @save="saveDocument"
           @page-setup="showPageSetup = true"
@@ -26,6 +28,10 @@
             <DocxEditorMenuOpen />
             <DocxEditorMenuRow :disabled="!editor" @select="newDocument">New</DocxEditorMenuRow>
             <DocxEditorMenuSave />
+            <DocxEditorMenuSubmenu label-key="toolbar.export">
+              <DocxEditorMenuExportMarkdown />
+              <DocxEditorMenuExportPdf />
+            </DocxEditorMenuSubmenu>
             <DocxEditorMenuSeparator />
             <DocxEditorMenuPageSetup />
           </DocxEditorMenuFile>
@@ -101,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { demoExporters } from '../../shared/menu-exporters';
 import { ref } from 'vue';
 import {
   DocxEditorMenu,
@@ -134,6 +141,9 @@ const DocxEditorMenuFile = DocxEditorMenu.File;
 const DocxEditorMenuOpen = DocxEditorMenu.Open;
 const DocxEditorMenuRow = DocxEditorMenu.Row;
 const DocxEditorMenuSave = DocxEditorMenu.Save;
+const DocxEditorMenuSubmenu = DocxEditorMenu.Submenu;
+const DocxEditorMenuExportMarkdown = DocxEditorMenu.ExportMarkdown;
+const DocxEditorMenuExportPdf = DocxEditorMenu.ExportPdf;
 const DocxEditorMenuSeparator = DocxEditorMenu.Separator;
 const DocxEditorMenuPageSetup = DocxEditorMenu.PageSetup;
 const DocxEditorMenuInsert = DocxEditorMenu.Insert;

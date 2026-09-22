@@ -30,9 +30,9 @@ If you work on parsing, serialization, or layout, run `bun run reference:fetch` 
 
 ## Demo deployment builds
 
-`bun run build:preview` bundles all four demos directly from workspace source, assembles `examples/parity/dist`, and checks its assets and routing. It needs no package build first: deployments skip the publishable JavaScript bundles and TypeScript declarations. CI's browser lane runs this same command on a clean checkout; the build and typecheck lanes verify package artifacts and types separately.
+`bun run build:preview` builds five demos from workspace source and assembles `examples/parity/dist`. It checks assets and routing without a package build. CI runs this command on a clean checkout. Separate build and type checks verify package artifacts.
 
-Vercel runs `bun run build:preview` for both production and preview deployments. `bun run build` retains the full package-backed demo build for local verification. Vercel runs `bun install --frozen-lockfile` with Git hooks disabled, preserving restored dependencies between deployments.
+Vercel runs `bun run build:pdf` and `bun run build:preview` for production and preview deployments. `bun run build` retains the full package-backed demo build for local verification. Vercel runs `bun install --frozen-lockfile` with Git hooks disabled, preserving restored dependencies between deployments.
 
 ## Run tests
 
@@ -93,17 +93,26 @@ See the [engine architecture](docs/architecture/production-engine-packages.md) a
 
 ## Write documentation
 
-Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights) for READMEs, guides, developer docs, feature descriptions, and release notes. Lead with the task or behavior. Use active voice, sentence-case headings, and short paragraphs. Keep identifiers exact and format them as code. Use descriptive link text that names the destination. Name the operation that fails and explain how to recover. Keep prerequisites, defaults, units, and limits close to their examples. Link to detailed guides instead of repeating them in overviews. Keep implementation history in design and review records.
+Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights) for READMEs, guides, feature descriptions, and release notes.
 
-Before submitting, check examples against the public API, review links, and remove repeated explanations. For MDX, follow [Site documentation source](docs/site/README.md) and run the documentation checks:
+- Lead with the task or behavior. Use active voice and address the reader as "you."
+- Keep sentences to 20 words and paragraphs to six sentences. Give each sentence one idea.
+- Use sentence-case headings, descriptive links, and exact identifiers in code formatting.
+- State prerequisites, defaults, units, and limits near the relevant example.
+- Explain failures and recovery. Link to details instead of repeating them in overviews.
+- Keep implementation history in design and review records.
+
+Every package needs a README with a title and purpose paragraph. Public packages also need an installation command. Keep the root package list complete, including conversion packages. Keep private workspace instructions separate from public installation instructions.
+
+Run the documentation checks before submission:
 
 ```bash
-bun run check:docs-mdx
-bun run check:docs-chrome-slots
-bun run check:docs-vue-refs
-bun run check:public-docs-surface
-bun run check:example-readmes
+bun run check:docs
 ```
+
+The checks cover all package READMEs, package `docs/` guides, example READMEs, and site MDX pages. They check selected prose rules, README structure, documented API exports, and MDX expressions. They do not prove full style compliance or validate every link or example. Review sentence length, heading case, links, and example behavior separately.
+
+For MDX source conventions, see [Site documentation source](docs/site/README.md). Check another authored guide with `bun run check:docs-style path/to/guide.md`.
 
 ## Agent instructions
 
@@ -155,7 +164,7 @@ Every issue needs a `Bug`, `Feature`, or `Task` type. Maintainers also assign on
 
 ## License
 
-By contributing, you agree that your contributions are licensed under [Apache 2.0](LICENSE), except contributions to `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License.
+Contributions to `packages/editor-api/`, `packages/pro/`, and `packages/docx-to-pdf/` use the EigenPal Pro License. Other code contributions use [Apache 2.0](LICENSE).
 
 ## Collaboration compatibility
 

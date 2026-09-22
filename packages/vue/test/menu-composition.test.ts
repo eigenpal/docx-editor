@@ -181,3 +181,31 @@ test('false Page Setup configuration suppresses the default and legacy callback'
     container.remove();
   }
 });
+
+test('File > Export reports missing converters after the menu closes', async () => {
+  const view = mountEditorTree(() => h(DocxEditorMenu));
+  try {
+    await flush();
+    for (const [slot, packageName] of [
+      ['file.exportMarkdown', 'docx-to-markdown'],
+      ['file.exportPdf', 'docx-to-pdf'],
+    ]) {
+      (
+        view.container.querySelector(
+          '[data-menu="file"] .docx-menubar__trigger'
+        ) as HTMLButtonElement
+      ).click();
+      await flush();
+      view.container
+        .querySelector('.docx-menubar__submenu')!
+        .dispatchEvent(new MouseEvent('mouseenter'));
+      await flush();
+      (view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement).click();
+      await flush();
+      expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(packageName!);
+      expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
+    }
+  } finally {
+    view.unmount();
+  }
+});

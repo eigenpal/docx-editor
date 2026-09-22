@@ -797,3 +797,19 @@ describe('chrome contracts', () => {
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 });
+
+test('File > Export reports missing converters after the menu closes', async () => {
+  const { view } = mountMenu(<DocxEditorMenu />);
+  for (const [slot, packageName] of [
+    ['file.exportMarkdown', 'docx-to-markdown'],
+    ['file.exportPdf', 'docx-to-pdf'],
+  ]) {
+    openMenu(view, 'toolbar.file');
+    openSubmenu(view, 'toolbar.export');
+    await act(async () => {
+      fireEvent.click(row(view, slot!));
+    });
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(packageName!);
+    expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
+  }
+});

@@ -1,3 +1,4 @@
+import { demoExporters } from '../../shared/menu-exporters';
 // The FLAGSHIP demo: the provider-first composition API, end to end.
 //
 // Everything on screen is composed under `<DocxEditor.Root>`: the library's compound
@@ -425,6 +426,8 @@ function EditorChrome({
             spellCheck={false}
           />
           <DocxEditor.Menu
+            exporters={demoExporters}
+            fileName={title}
             onOpen={collaborating ? undefined : () => fileInputRef.current?.click()}
             onSave={saveDocument}
             onPageSetup={() => setShowPageSetup(true)}
@@ -437,6 +440,10 @@ function EditorChrome({
                 New
               </DocxEditor.Menu.Row>
               <DocxEditor.Menu.Save />
+              <DocxEditor.Menu.Submenu labelKey="toolbar.export">
+                <DocxEditor.Menu.ExportMarkdown />
+                <DocxEditor.Menu.ExportPdf />
+              </DocxEditor.Menu.Submenu>
               <DocxEditor.Menu.Separator />
               <DocxEditor.Menu.PageSetup />
             </DocxEditor.Menu.File>

@@ -1,3 +1,5 @@
+import { useMenuExport } from './useMenuExport';
+import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
 import {
   computed,
@@ -22,7 +24,7 @@ import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
 import { download, downloadName } from './download';
-import { barTriggers } from './menu-keyboard';
+import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import { flattenChildren } from '../../lib/flattenChildren';
 import {
   Menu,
@@ -37,6 +39,8 @@ import {
   MenuPageSetup,
   MenuRow,
   MenuSave,
+  MenuExportMarkdown,
+  MenuExportPdf,
   MenuGroup,
   MenuSeparator,
   MenuReportIssue,
@@ -57,6 +61,8 @@ const MENU_PARTS: Record<ChromeMenuId, Component> = {
 
 /** @public */
 export interface DocxEditorMenuProps {
+  /** Converter handlers. Markdown requires docx-to-markdown; PDF requires docx-to-pdf on Node.js. Missing handlers show an error. */
+  exporters?: ChromeExportHandlers;
   className?: string;
   t?: ToolbarTranslate;
   fileName?: string;
@@ -100,6 +106,7 @@ const DocxEditorMenuRoot = defineComponent({
   props: {
     className: { type: String, default: undefined },
     t: { type: Function as PropType<ToolbarTranslate>, default: undefined },
+    exporters: { type: Object as PropType<ChromeExportHandlers>, default: undefined },
     fileName: { type: String, default: undefined },
     onOpen: { type: Function as PropType<() => void>, default: undefined },
     /** Prefer over {@link onOpen} — Vue TSX treats `onOpen` as a listener. */
@@ -120,6 +127,11 @@ const DocxEditorMenuRoot = defineComponent({
     const { t: catalogT } = useTranslation();
     const openMenu = ref<MenuId | null>(null);
     const openedName = ref<string | null>(null);
+    const exportState = useMenuExport(
+      editorRef,
+      () => props.exporters,
+      () => props.fileName ?? openedName.value ?? undefined
+    );
     const activeMenu = ref<MenuId | null>(null);
     const pageSetupOpen = ref(false);
     const paragraphDialogOpen = ref(false);
@@ -231,6 +243,13 @@ const DocxEditorMenuRoot = defineComponent({
       activeMenu: activeMenu.value,
       onOpen: resolvedOpen.value,
       onSave: resolvedSave.value,
+      onExport:
+        editorRef.value && !exportState.pending.value
+          ? (format) => {
+              restoreExportFocus(rootRef.value);
+              return exportState.execute(format);
+            }
+          : undefined,
       onPageSetup: resolvedPageSetup.value,
       onParagraphDialog: editorRef.value ? packagedParagraphDialog : undefined,
       onReportIssue: props.onReportIssue,
@@ -317,6 +336,16 @@ const DocxEditorMenuRoot = defineComponent({
           >
             {content}
           </div>
+          {exportState.pending.value && (
+            <div role="status" class="docx-menubar__export-status">
+              {catalogT('toolbar.exporting')}
+            </div>
+          )}
+          {exportState.error.value && (
+            <div role="alert" class="docx-menubar__export-status">
+              {exportState.error.value}
+            </div>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -360,6 +389,8 @@ export interface DocxEditorMenuNamespace {
   readonly Entry: typeof MenuEntry;
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
+  readonly ExportMarkdown: typeof MenuExportMarkdown;
+  readonly ExportPdf: typeof MenuExportPdf;
   readonly PageSetup: typeof MenuPageSetup;
   readonly ImageInsert: typeof MenuImageInsert;
   readonly Reviewers: typeof MenuReviewers;
@@ -383,6 +414,8 @@ export const DocxEditorMenu = Object.assign(DocxEditorMenuRoot, {
   Entry: MenuEntry,
   Open: MenuOpen,
   Save: MenuSave,
+  ExportMarkdown: MenuExportMarkdown,
+  ExportPdf: MenuExportPdf,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
   Reviewers: MenuReviewers,

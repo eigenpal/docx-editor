@@ -1,0 +1,105 @@
+---
+title: Export Markdown and PDF
+description: Connect conversion packages to the File menu in React and Vue.
+category: Guides
+---
+
+The File menu includes **Export > Markdown (.md)** and **Export > PDF (.pdf)**. Each export uses the editor's saved document bytes. Export does not change the document or its undo history.
+
+## Install the converters
+
+Install the Markdown package in your browser application:
+
+```sh
+npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
+```
+
+Install the PDF package on your Node.js server:
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
+
+PDF conversion requires the EigenPal Pro License. The PDF package does not run in browsers. Keep its import in server code.
+
+## Configure the menu
+
+Pass conversion handlers through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
+
+The Markdown handler returns `result.markdown`. The menu downloads that continuous text, without page separators, page headers, or page footers. It does not join `result.pages`.
+
+The following React example uses browser Markdown conversion and a PDF endpoint:
+
+```tsx
+import { DocxEditor, type ChromeExportHandlers } from '@docx-editor.dev/react';
+import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const exporters: ChromeExportHandlers = {
+  markdown: (source) => exportMarkdown(source, { displayMode: 'proposed' }),
+  pdf: async (source) => {
+    const response = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: source.slice().buffer,
+    });
+    if (!response.ok) throw new Error('PDF conversion failed.');
+    return { bytes: new Uint8Array(await response.arrayBuffer()) };
+  },
+};
+
+export function Editor({ source }: { source: Uint8Array }) {
+  return <DocxEditor document={source} menu={{ exporters }} />;
+}
+```
+
+Use the same handlers in Vue:
+
+```vue
+<DocxEditor :document="source" :menu="{ exporters }" />
+```
+
+Define `source` and `exporters` in your component. Import `DocxEditor` and the `ChromeExportHandlers` type from `@docx-editor.dev/vue`.
+
+If a converter handler is missing, the menu shows an error that names the required package and configuration. The menu also shows conversion failures and disables export actions while conversion runs. A missing converter never falls back to another format.
+
+## Convert PDF on the server
+
+Your PDF endpoint calls `exportPdf` and returns `result.bytes` with the `application/pdf` content type. This Fetch API handler runs on Node.js:
+
+```ts
+import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+export async function POST(request: Request): Promise<Response> {
+  const source = new Uint8Array(await request.arrayBuffer());
+  const result = await exportPdf(source, {
+    displayMode: 'proposed',
+    fidelityPolicy: 'strict',
+    useSystemFonts: false,
+  });
+  return new Response(result.bytes.slice().buffer, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+```
+
+Configure authentication, upload limits, and conversion error responses for your application. For complete server examples, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md).
+
+## Compose export controls
+
+The shared slots are `file.exportMarkdown` and `file.exportPdf`. React and Vue expose `DocxEditor.Menu.ExportMarkdown` and `DocxEditor.Menu.ExportPdf`.
+
+If you replace the File menu with `preset={false}`, include these parts inside `DocxEditor.Menu.Submenu`. Set its `labelKey` to `toolbar.export`. Export controls use menu handlers rather than document editing commands.
+
+For a custom download interface, call `runChromeExport(editor, format, exporters)` from `@docx-editor.dev/core/editor`. It returns bytes, a filename extension, and a media type. It rejects missing handlers with `ChromeExportError`, whose `code` is `missing-exporter`.
+
+## Demo behavior
+
+The React and Vue demos convert Markdown in the browser. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
+
+For local PDF export, run `bun run build:pdf` before `bun run dev`. The development server uses the same conversion handler as the deployed demo.
+
+For conversion options and limits, see [DOCX to Markdown](/docs/2.x/export/markdown) and [DOCX to PDF](/docs/2.x/export/pdf).

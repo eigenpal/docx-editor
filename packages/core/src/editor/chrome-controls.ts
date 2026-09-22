@@ -1,3 +1,4 @@
+import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
 import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
@@ -82,7 +83,9 @@ export type ChromeControlState =
    * directions, and an adapter branching on `kind` must be able to tell them apart. Unlike
    * the deleted `parityOnly`, this one IS named by a control (`file.open`).
    */
-  | { readonly kind: 'load' };
+  | { readonly kind: 'load' }
+  /** Host conversion through `runChromeExport`; not an editing command. */
+  | { readonly kind: 'export' };
 
 /**
  * The SHAPE a control renders as (task M6V.1).
@@ -571,42 +574,7 @@ export const CHROME_GROUPS = [
       },
     ],
   },
-  {
-    // The File menu's controls. Contextual because none of them belong in the formatting
-    // bar: the chrome spec puts open, save and page setup in a menu above it.
-    //
-    // Print is deliberately absent. Printing a paginated document faithfully is a paint
-    // concern the engine does not own yet, and a menu row that can only ever be disabled
-    // is the "dead button for a capability that does not exist" this registry avoids.
-    id: 'file',
-    labelKey: 'toolbar.file',
-    contextual: true,
-    controls: [
-      {
-        id: 'open',
-        labelKey: 'toolbar.open',
-        paths: GENERATED_ICON_PATHS['file_upload'],
-        state: { kind: 'load' },
-      },
-      {
-        id: 'save',
-        labelKey: 'toolbar.saveShortcut',
-        paths: GENERATED_ICON_PATHS['file_download'],
-        state: { kind: 'save' },
-      },
-      {
-        // Page setup dispatches `setPageSetup` with the DIALOG's values, so like
-        // `text.link` it is command-shaped without a fixed command: its enabled state
-        // comes from `chromeProbeForSlot`, and the chrome that owns the dialog sends the
-        // real one. Deliberately absent from `SLOT_COMMANDS` for the reason recorded
-        // there — a row would enable it in an adapter that has grown no dialog.
-        id: 'pageSetup',
-        labelKey: 'toolbar.pageSetup',
-        paths: GENERATED_ICON_PATHS['settings'],
-        state: { kind: 'command' },
-      },
-    ],
-  },
+  FILE_CHROME_GROUP,
   {
     // The Insert menu's own controls: the ones that are not already slots elsewhere.
     // Image and table insertion live in the `image` and `table` groups above and are
@@ -784,6 +752,8 @@ export type ChromeSlotId =
   | 'table.cellFill'
   | 'file.open'
   | 'file.save'
+  | 'file.exportMarkdown'
+  | 'file.exportPdf'
   | 'paragraph.dialog'
   | 'file.pageSetup'
   | 'insert.footnote'
@@ -967,6 +937,15 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         shortcutKey: 'toolbar.saveShortcut',
       },
       { kind: 'separator' },
+      {
+        kind: 'submenu',
+        labelKey: 'toolbar.export',
+        paths: GENERATED_ICON_PATHS['file_download'],
+        items: [
+          { kind: 'item', slot: 'file.exportMarkdown' },
+          { kind: 'item', slot: 'file.exportPdf' },
+        ],
+      },
       { kind: 'item', slot: 'file.pageSetup' },
     ],
   },

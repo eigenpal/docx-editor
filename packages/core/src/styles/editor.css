@@ -7424,3 +7424,11 @@ a.docx-hyperlink:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
+
+.docx-editor .docx-menubar__export-status {
+  padding: 8px 12px;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

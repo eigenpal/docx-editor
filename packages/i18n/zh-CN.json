@@ -34,7 +34,15 @@
     "insertFootnote": "插入脚注",
     "insertEndnote": "插入尾注",
     "insertTable": null,
-    "review": null
+    "review": null,
+    "export": null,
+    "exportFailed": null,
+    "exportMarkdown": null,
+    "exportMarkdownMissing": null,
+    "exportPdf": null,
+    "exportPdfMissing": null,
+    "exporting": null,
+    "exportPdfServerUnavailable": null
   },
   "formattingBar": {
     "groups": {

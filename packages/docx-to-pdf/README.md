@@ -2,11 +2,17 @@
 
 `@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF on Node.js. It uses Core's pagination, font resolution, and positioned glyphs to produce searchable text.
 
-The package is private and is not published to npm. It is distributed under the [EigenPal Pro License](LICENSE.md). Production use requires a commercial agreement.
+The package uses the [EigenPal Pro License](LICENSE.md). Production use requires a commercial agreement.
 
 ## Before you begin
 
-Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or later. The converter needs WebAssembly and its packaged font assets. Install a compatible `@docx-editor.dev/core` peer alongside the converter in your private distribution. Keep one Core copy in your application.
+Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or later. The converter needs WebAssembly and its packaged font assets. Install a compatible `@docx-editor.dev/core` peer alongside the converter. Keep one Core copy in your application.
+
+## Install the package
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
 
 ## Convert a document
 
@@ -97,7 +103,6 @@ Cancellation is checked between layout, paint, and encoding batches. Synchronous
 ## Developer guides
 
 - [Compare PDF and Markdown conversion](docs/markdown-contract.md): shared controls and intentional differences.
-
 - [PDF export API](docs/api.md): options, result fields, diagnostics, stable error codes, and resource boundaries.
 - [Configure PDF fonts](docs/fonts.md): custom files, source order, policies, and troubleshooting.
 - [Integrate PDF conversion](docs/integrations.md): HTTP responses, Next.js, deployment, and batches.

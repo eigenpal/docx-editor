@@ -14,7 +14,7 @@
 
 # @docx-editor.dev/i18n
 
-Locale strings, types, and runtime helpers for the [docx-editor.dev](https://docx-editor.dev) editor chrome. Ten languages, with per-key fallback to English.
+Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides ten languages and falls back to English for missing translations.
 
 ## Quick start
 
@@ -33,7 +33,7 @@ import { de } from '@docx-editor.dev/i18n';
 <DocxEditor document={bytes} i18n={de} />;
 ```
 
-For several editors, or for chrome parts you compose yourself, put it in context once with `LocaleProvider` instead:
+To share a locale across editors and custom controls, use `LocaleProvider`:
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
@@ -58,18 +58,6 @@ const myLocale = {
 ```
 
 Keys set to `null` in any locale fall back to English.
-
-## Packages
-
-| Package | Description |
-| --- | --- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome. |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n) | Shared locale strings and types. |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, and custom nodes. |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of the Word Office.js API for server and browser editing. |
-
-If you fork an adapter, keep `@docx-editor.dev/core` as a peer dependency to receive engine fixes.
 
 ## Available locales
 
@@ -96,7 +84,7 @@ import { locales } from '@docx-editor.dev/i18n';
 </LocaleProvider>;
 ```
 
-> Importing `locales` pulls every locale into your bundle. For a smaller bundle, import only the ones you need by name; `sideEffects: false` lets the rest tree-shake.
+Importing `locales` includes every locale in your bundle. Import individual locales to reduce the bundle size.
 
 ## Per-locale subpaths
 
