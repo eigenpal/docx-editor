@@ -484,3 +484,16 @@ export {
 export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
 
 export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
+
+export { createDocumentRefresh, DocumentRefreshError } from '@docx-editor.dev/core/editor';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+} from '@docx-editor.dev/core/editor';

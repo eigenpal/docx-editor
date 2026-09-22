@@ -31,6 +31,7 @@
     "vue/examples",
     "---Guides---",
     "guides/loading-and-saving",
+    "guides/document-refresh",
     "guides/toolbar",
     "guides/chrome-slots",
     "guides/customize-dialogs",

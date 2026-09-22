@@ -1107,6 +1107,7 @@ export interface DocumentChange {
     // (undocumented)
     readonly dirty?: readonly string[];
     readonly revision: number;
+    readonly source?: 'load' | 'refresh' | 'recovery';
 }
 
 // @public

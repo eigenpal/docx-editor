@@ -10,9 +10,11 @@ const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAU
 
 void (async () => {
   const ComposedEditorDemo =
-    params.get('dialogs') === '1'
-      ? (await import('./DialogCustomizationDemo.vue')).default
-      : (await import('./ComposedEditorDemo.vue')).default;
+    params.get('refresh') === '1'
+      ? (await import('./RefreshDemo.vue')).default
+      : params.get('dialogs') === '1'
+        ? (await import('./DialogCustomizationDemo.vue')).default
+        : (await import('./ComposedEditorDemo.vue')).default;
   createApp({
     setup() {
       const fixtureUrl = `${base}${documentName}`;

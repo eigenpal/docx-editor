@@ -1,0 +1,43 @@
+.refresh-demo {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.refresh-demo-panel {
+  padding: 16px 24px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  border-bottom: 1px solid var(--doc-border);
+}
+.refresh-demo-panel h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.refresh-demo-panel p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+.refresh-demo-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.refresh-demo-buttons button {
+  border: 1px solid var(--doc-border);
+  border-radius: 5px;
+  background: var(--doc-bg);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+}
+.refresh-demo-buttons button:disabled {
+  opacity: 0.5;
+}
+.refresh-demo-buttons button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}

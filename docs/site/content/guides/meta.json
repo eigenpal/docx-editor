@@ -2,6 +2,7 @@
   "title": "Guides",
   "pages": [
     "loading-and-saving",
+    "document-refresh",
     "toolbar",
     "chrome-slots",
     "customize-dialogs",

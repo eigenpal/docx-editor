@@ -1,0 +1,156 @@
+---
+title: 'Refresh from server updates'
+description: 'Display updated DOCX files, preserve scroll, and present recent changes in React and Vue.'
+category: 'Guides'
+---
+
+Use `createDocumentRefresh(editor)` when a server returns a complete, updated DOCX file. The controller keeps the editor instance and its subscriptions active. It preserves a clamped scroll position by default. It does not move focus or scroll to changes automatically.
+
+Each accepted file resets selection, undo history, and some review state. This operation does not merge files or compare arbitrary documents. It refuses collaborative sessions, including disconnected sessions. Ordinary `editor.load()` keeps its existing behavior and `void` return type.
+
+The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
+
+## Accept an updated file
+
+Import the controller from your adapter or `@docx-editor.dev/core/editor`. Get the editor through `useDocxEditor()` inside the editor root. React returns an instance or `null`; Vue returns a shallow ref. Call the controller after the document mounts.
+
+This example sends the captured document to your backend:
+
+```ts
+import { createDocumentRefresh } from '@docx-editor.dev/react';
+
+const refresh = createDocumentRefresh(editor);
+const submission = await refresh.capture();
+
+try {
+  const response = await fetch('/api/update-document', {
+    method: 'POST',
+    body: submission.bytes,
+  });
+  if (!response.ok) throw new Error('Processing failed');
+
+  const result = await refresh.apply({
+    submission,
+    sequence: 1,
+    bytes: await response.arrayBuffer(),
+  });
+  if (result.ok) {
+    refresh.highlightChanges();
+  } else {
+    showRefreshError(result.code);
+  }
+} finally {
+  refresh.finish(submission);
+}
+```
+
+`capture()` finishes buffered input and form input before export. It waits for active text composition to finish. It captures bytes and their revision together. The document stays editable during external processing. Edits after capture make `apply()` return `local-edits`, even after undo. Submit the edited document again; do not replay the old result.
+
+Keep the returned `submission` object in the browser. Pass that same object to `apply()`. A copied token, another editor's token, or a superseded token cannot authorize replacement. Send its bytes and ID to your backend when needed.
+
+## Receive cumulative updates
+
+Assign each result a nonnegative integer `sequence` at the processor. Each file must contain the complete cumulative output for that submission. Use processor order, never network arrival order. The controller serializes replacement and rejects duplicate or older accepted sequences. It advances its baseline only after successful loading.
+
+This example receives two cumulative files:
+
+```ts
+const submission = await refresh.capture();
+
+for await (const update of receiveProcessorUpdates(submission.bytes)) {
+  const result = await refresh.apply({
+    submission,
+    sequence: update.sequence,
+    bytes: update.bytes,
+    changes: update.changes,
+    failures: update.failedOperationIds,
+  });
+  if (!result.ok) {
+    showRefreshError(result.code);
+    break;
+  }
+  refresh.highlightChanges();
+  showPartialFailures(result.failures);
+}
+refresh.finish(submission);
+```
+
+`failures` reports processor operation IDs without repeating successful work. The controller never retries processor operations. `cancel()` invalidates pending processing and cancels a deferred replacement. It cannot reverse an already accepted file. Cancel your application's network request separately.
+
+Do not start processing from every document `change` event. Replacement events have `source: 'refresh'` or `source: 'recovery'`. Ordinary loads and internal remounts have `source: 'load'`. User edits omit `source`. Filter replacement events before scheduling automatic processing:
+
+```ts
+editor.on('change', (change) => {
+  if (change.source) return;
+  scheduleProcessing();
+});
+```
+
+## Provide reliable change locations
+
+A plain replacement file does not identify its changes. Without metadata or returned tracked revisions, the result reports `changeInformation: 'unavailable'`. The controller does not invent a document comparison.
+
+Supply metadata for the returned file, using stable change IDs across cumulative results:
+
+```ts
+const result = await refresh.apply({
+  submission,
+  sequence: 2,
+  bytes: updatedBytes,
+  changes: [
+    {
+      id: 'delivery-date',
+      location: {
+        paragraphId: '00A12B34',
+        start: 10,
+        end: 20,
+        text: 'October 12',
+      },
+    },
+    { id: 'removed-clause', unavailableReason: 'deleted' },
+  ],
+});
+```
+
+`paragraphId` is the paragraph's OOXML `w14:paraId`. Alternatively, use `paragraphIndex`, starting at zero in body document order. This order includes paragraphs inside tables. Specify exactly one paragraph selector. Offsets count UTF-16 code units. The `text` must equal the text between `start` and `end` in the returned paragraph.
+
+Locations cover nonempty ranges within one body paragraph. A missing, ambiguous, mismatched, or unplaced location does not receive a highlight. The result reports `invalid`, `unavailable`, `deleted`, or `unsupported-story` explicitly. Header, footer, note, and multiparagraph revision locations are unavailable for this presentation API. Use explicit metadata for a surviving body location when appropriate.
+
+If you omit `changes`, a registered review module supplies tracked revision locations. Tracked revisions already present at capture do not count as new changes. Their preservation does not require a review module. Review module use requires the EigenPal Pro License.
+
+## Highlight and navigate
+
+`result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs and changed text within an existing change ID. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
+
+These calls change presentation only:
+
+```ts
+refresh.highlightChanges(); // New available changes from the latest result.
+refresh.highlightChanges({ includePrevious: true });
+refresh.clearHighlights();
+
+const available = refresh
+  .snapshot()
+  .changes.filter((change) => change.isNew && change.status === 'available');
+if (available.length) {
+  refresh.navigateToChange(available[0].id);
+}
+```
+
+Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
+
+## Show status and handle recovery
+
+`subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `apply()` completion, including refused results. Both subscriptions return an unsubscribe function.
+
+The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. The demo uses no motion, including when reduced motion is enabled.
+
+The controller validates returned bytes before replacement. It retains recovery bytes until loading succeeds. If mounting fails, it reloads the previous document and reports `load-failed`. If recovery also fails, it reports `recovery-failed`. Offer `recover()` and a download of `recoveryBytes()` in that state. Recovery also resets selection and undo history. A document switch invalidates recovery, so it cannot overwrite a later document.
+
+Handle the stable `RefreshFailureCode` values rather than error messages. `capture()` rejects with `DocumentRefreshError` when capture cannot proceed. Check `error instanceof DocumentRefreshError`, then read its typed `code` property. `apply()` returns an explicit success or failure result.
+
+## Run the examples
+
+Run `bun run dev` in the repository. Open the [React refresh example](http://localhost:5173/?refresh=1) or the [Vue refresh example](http://localhost:5174/?refresh=1).
+
+The examples deliver two controlled, cumulative DOCX results. They preserve submitted content outside the sample changes. Try scrolling before processing, navigating after completion, or editing during processing. The example transport runs locally and makes no model calls. Replace it with your backend or event stream in your application.

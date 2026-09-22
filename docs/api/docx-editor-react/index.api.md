@@ -25,11 +25,15 @@ import { ContentControlListNavigation } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentRefresh } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -91,6 +95,13 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { RefreshChange } from '@docx-editor.dev/core/editor';
+import { RefreshChangeInput } from '@docx-editor.dev/core/editor';
+import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
+import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshResult } from '@docx-editor.dev/core/editor';
+import { RefreshSubmission } from '@docx-editor.dev/core/editor';
+import { RefreshUpdate } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
@@ -385,6 +396,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     destructive?: boolean;
 }
 
+export { createDocumentRefresh }
+
 export { createFontSource }
 
 export { defineFontResolver }
@@ -430,6 +443,12 @@ export function DocumentName(input: DocumentNameProps): react__default.JSX.Eleme
 
 // @public (undocumented)
 export const DocumentOutline: react__default.NamedExoticComponent<DocumentOutlineProps>;
+
+export { DocumentRefresh }
+
+export { DocumentRefreshError }
+
+export { DocumentRefreshState }
 
 export { DocxDocument }
 
@@ -2118,6 +2137,20 @@ export interface ProvideDocxEditorResult {
 export { PX_PER_CM }
 
 export { PX_PER_INCH }
+
+export { RefreshChange }
+
+export { RefreshChangeInput }
+
+export { RefreshFailureCode }
+
+export { RefreshLocation }
+
+export { RefreshResult }
+
+export { RefreshSubmission }
+
+export { RefreshUpdate }
 
 // @public
 export const REVIEW_MARKERS_GUTTER = 44;

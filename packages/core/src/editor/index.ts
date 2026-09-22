@@ -412,3 +412,16 @@ export {
   type ToolbarValueSlot,
   type ToolbarSlotValue,
 } from './toolbar-values.ts';
+
+export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+} from './document-refresh.ts';

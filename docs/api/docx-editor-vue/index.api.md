@@ -28,11 +28,15 @@ import { ContentControlListNavigation } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'vue';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentRefresh } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
@@ -94,6 +98,13 @@ import { PropType } from 'vue';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
 import { Ref } from 'vue';
+import { RefreshChange } from '@docx-editor.dev/core/editor';
+import { RefreshChangeInput } from '@docx-editor.dev/core/editor';
+import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
+import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshResult } from '@docx-editor.dev/core/editor';
+import { RefreshSubmission } from '@docx-editor.dev/core/editor';
+import { RefreshUpdate } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
@@ -2037,6 +2048,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     destructive?: boolean;
 }
 
+export { createDocumentRefresh }
+
 export { createFontSource }
 
 export { defineFontResolver }
@@ -2166,6 +2179,12 @@ export const DocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
     scrollLeft: number;
     topOffset: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+export { DocumentRefresh }
+
+export { DocumentRefreshError }
+
+export { DocumentRefreshState }
 
 export { DocxDocument }
 
@@ -5416,6 +5435,20 @@ export interface ProvideDocxEditorResult {
 export { PX_PER_CM }
 
 export { PX_PER_INCH }
+
+export { RefreshChange }
+
+export { RefreshChangeInput }
+
+export { RefreshFailureCode }
+
+export { RefreshLocation }
+
+export { RefreshResult }
+
+export { RefreshSubmission }
+
+export { RefreshUpdate }
 
 // @public
 export const REVIEW_MARKERS_GUTTER = 44;
