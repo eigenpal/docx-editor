@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkDocsStyle, checkPackageReadme } from '../lib/docs-style.mjs';
+import { checkDocsStyle, checkPackageReadme, proseLines } from '../lib/docs-style.mjs';
 
 test('checks prose across line breaks and keeps source line numbers', () => {
   expect(checkDocsStyle('# Guide\n\nIt works out of\nthe box.\n[Click here](guide.md).')).toEqual([
@@ -55,4 +55,10 @@ test('private packages need documentation but no public installation command', (
       private: true,
     })
   ).toEqual([]);
+});
+
+test('tag removal preserves word boundaries and removes incomplete markup', () => {
+  expect(checkDocsStyle('Text<Badge/>currently works.')).toHaveLength(1);
+  expect(proseLines('<script <Badge/>currently>')).toEqual([' currently ']);
+  expect(proseLines('<script')).toEqual([' script']);
 });

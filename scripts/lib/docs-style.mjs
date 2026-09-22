@@ -40,7 +40,8 @@ export function proseLines(markdown) {
     }
     return line
       .replace(/(`+)[\s\S]*?\1/g, 'CODE')
-      .replace(/<[^>]*>/g, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/[<>]/g, ' ')
       .replace(/\]\([^)]*\)/g, ']')
       .replace(/https?:\/\/\S+/g, 'URL');
   });
