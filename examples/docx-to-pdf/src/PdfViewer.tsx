@@ -1,5 +1,13 @@
 import { PDFViewer } from '@/components/extend/pdf-viewer';
+import { loadSharedPdfEngine } from '@/lib/pdf-thumbnail-utils';
 import './pdf-viewer.css';
+
+/** Start the shared renderer while the server converts, instead of after the PDF arrives. */
+export function preparePdfPreview(): void {
+  // The mounted viewer reports engine errors. Prewarming must not fail the conversion or
+  // prevent downloading a PDF when only its preview is unavailable.
+  void loadSharedPdfEngine().catch(() => undefined);
+}
 
 /**
  * The converted PDF in the Extend UI viewer (PDFium in a Web Worker, via EmbedPDF).

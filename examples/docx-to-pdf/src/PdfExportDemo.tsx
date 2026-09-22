@@ -7,16 +7,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
-import { PdfViewer } from './PdfViewer';
+import { PdfViewer, preparePdfPreview } from './PdfViewer';
+import { PdfProgress, formatDuration } from './PdfProgress';
+import { readConversionResponse } from './conversion-response';
 import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
 import {
   diagnosticSummary,
   emptyStateMessage,
   formatBytes,
   generateLabel,
+  isPdfBusy,
   shouldMarkStale,
   type PdfConversion,
-  type PdfDiagnostic,
   type PdfStatus,
 } from './pdf-export-state';
 
@@ -91,6 +93,7 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
   const fileInput = useRef<HTMLInputElement>(null);
   const workbench = useRef<HTMLElement>(null);
   const conversion = useRef(0);
+  const revision = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
 
   const [document, setDocument] = useState<Uint8Array | 'blank'>('blank');
@@ -126,7 +129,14 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
     return () => observer.disconnect();
   }, []);
 
+  const cancelConversion = useCallback(() => {
+    conversion.current += 1;
+    inFlight.current?.abort();
+    inFlight.current = null;
+  }, []);
+
   const loadSample = useCallback(async () => {
+    cancelConversion();
     // Resolve against the app base, not the page URL: on the dedicated host the page is `/`
     // and a relative `sample.docx` would ask the SPA catch-all for HTML.
     const response = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
@@ -135,29 +145,28 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
     setStatus('idle');
     setResult(null);
     setError(null);
-  }, []);
+  }, [cancelConversion]);
 
   useEffect(() => {
     void loadSample();
   }, [loadSample]);
 
   const generate = useCallback(async () => {
-    const saved = await editor.current?.save();
-    if (!saved) return;
-    if (saved.byteLength > MAX_DOCUMENT_BYTES) {
-      setStatus('error');
-      setError(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
-      return;
-    }
-    // Only the newest conversion may publish. An earlier one that is still running is
-    // aborted, and its late reply is ignored even if it lands first.
+    if (inFlight.current) return;
     const current = ++conversion.current;
-    inFlight.current?.abort();
+    const savedRevision = revision.current;
     const abort = new AbortController();
     inFlight.current = abort;
-    setStatus('converting');
+    setStatus('preparing');
+    preparePdfPreview();
     setError(null);
     try {
+      const saved = await editor.current?.save();
+      if (current !== conversion.current) return;
+      if (!saved) throw new Error('The document is not ready. Try again once it has loaded.');
+      if (saved.byteLength > MAX_DOCUMENT_BYTES) {
+        throw new Error(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
+      }
       // Best effort, with the diagnostics shown: a document that names a font this host does
       // not have, or draws a shape the writer does not, still comes back as pages, and the
       // meta line under them says what was approximated. A strict conversion refuses the
@@ -165,6 +174,7 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
       // pipeline and the wrong one for a page whose point is to show the document.
       const response = await fetch('/api/convert?fidelityPolicy=best-effort', {
         method: 'POST',
+        headers: { Accept: 'application/x-ndjson' },
         body: saved,
         signal: abort.signal,
       });
@@ -178,12 +188,10 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         );
         return;
       }
-      const payload = (await response.json()) as {
-        pdf?: string;
-        pageCount?: number;
-        diagnostics?: readonly PdfDiagnostic[];
-        message?: string;
-      };
+      const payload = await readConversionResponse(response, (progress) => {
+        if (current !== conversion.current) return;
+        setStatus(progress.phase === 'starting' ? 'starting' : 'converting');
+      });
       if (current !== conversion.current) return;
       if (!response.ok || !payload.pdf) {
         setStatus('error');
@@ -197,30 +205,37 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         bytes: bytes.byteLength,
         pageCount: payload.pageCount ?? 0,
         diagnostics: payload.diagnostics ?? [],
+        timings: payload.timings,
       });
-      setStatus('ready');
+      setStatus(savedRevision === revision.current ? 'ready' : 'stale');
     } catch (cause) {
       if (current !== conversion.current || abort.signal.aborted) return;
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (current === conversion.current) inFlight.current = null;
     }
   }, []);
 
-  const openFile = useCallback(async (file: File) => {
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      // Say so. Returning silently left the previous document in place with no explanation.
-      setStatus('error');
-      setError(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
-      return;
-    }
-    setDocument(new Uint8Array(await file.arrayBuffer()));
-    setStatus('idle');
-    setResult(null);
-    setError(null);
-  }, []);
+  const openFile = useCallback(
+    async (file: File) => {
+      if (file.size > MAX_DOCUMENT_BYTES) {
+        // Say so. Returning silently left the previous document in place with no explanation.
+        setStatus('error');
+        setError(`The document exceeds the ${formatBytes(MAX_DOCUMENT_BYTES)} demo limit.`);
+        return;
+      }
+      cancelConversion();
+      setDocument(new Uint8Array(await file.arrayBuffer()));
+      setStatus('idle');
+      setResult(null);
+      setError(null);
+    },
+    [cancelConversion]
+  );
 
   const stale = status === 'stale';
-  const busy = status === 'converting';
+  const busy = isPdfBusy(status);
 
   return (
     <div
@@ -299,29 +314,39 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
             <PdfIcon />
             <strong>PDF</strong>
           </div>
+          <div className="pdf-preview-controls">
+            {result ? (
+              <button
+                type="button"
+                className={`pdf-button pdf-button--compact ${stale ? 'pdf-button--primary' : 'pdf-button--quiet'}`}
+                onClick={() => void generate()}
+                disabled={busy}
+                // The document is converted on request, not on every keystroke: a page of PDF
+                // is expensive to produce and nobody wants one per character.
+                title="Convert the current document to PDF"
+              >
+                {generateLabel(status, result !== null)}
+              </button>
+            ) : null}
+          </div>
           <div className="pdf-preview-actions">
-            <button
-              type="button"
-              className={`pdf-button pdf-button--compact${stale ? ' pdf-button--primary' : ''}`}
-              onClick={() => void generate()}
-              disabled={busy}
-              // The document is converted on request, not on every keystroke: a page of PDF
-              // is expensive to produce and nobody wants one per character.
-              title="Convert the current document to PDF"
-            >
-              {generateLabel(status, result !== null)}
-            </button>
-            <a
-              className="pdf-button pdf-button--compact pdf-button--quiet"
-              href={result?.url ?? '#'}
-              download="document.pdf"
-              aria-disabled={result === null}
-              onClick={(event) => {
-                if (!result) event.preventDefault();
-              }}
-            >
-              Download
-            </a>
+            {result ? (
+              <a
+                className="pdf-icon-button"
+                title="Download PDF"
+                aria-label="Download PDF"
+                href={result?.url ?? '#'}
+                download="document.pdf"
+                aria-disabled={result === null}
+                onClick={(event) => {
+                  if (!result) event.preventDefault();
+                }}
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M10 3v9m-3-3 3 3 3-3M4 12v4h12v-4" />
+                </svg>
+              </a>
+            ) : null}
           </div>
         </div>
       </header>
@@ -342,8 +367,8 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
               onOpen={() => fileInput.current?.click()}
               onChange={(change) => {
                 if (!shouldMarkStale(change)) return;
-                // Never downgrade an in-flight conversion; it will settle on its own.
-                setStatus((current) => (current === 'converting' ? current : 'stale'));
+                revision.current += 1;
+                setStatus((current) => (isPdfBusy(current) ? current : 'stale'));
               }}
               navigation={false}
               menu={false}
@@ -396,14 +421,28 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
           className="pdf-panel pdf-panel--preview"
           aria-label="Converted PDF"
         >
+          {result && busy ? <PdfProgress status={status} overlay /> : null}
+          {result && error ? (
+            <div className="pdf-error" role="alert">
+              {error}
+            </div>
+          ) : null}
           {result ? (
             <>
-              <div className={`pdf-preview-viewer${stale ? ' pdf-preview-viewer--stale' : ''}`}>
+              <div
+                className={`pdf-preview-viewer${stale || busy ? ' pdf-preview-viewer--stale' : ''}`}
+              >
                 <PdfViewer src={result.url} />
               </div>
               <div className="pdf-page-meta" role="status" aria-live="polite">
                 {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}
                 {formatBytes(result.bytes)}
+                {result.timings?.workerStartupMs !== undefined
+                  ? ` · Worker startup ${formatDuration(result.timings.workerStartupMs)}`
+                  : ''}
+                {result.timings?.generationMs !== undefined
+                  ? ` · Generated in ${formatDuration(result.timings.generationMs)}`
+                  : ''}
                 {stale ? ' · the document changed since this was generated' : ''}
                 {result.diagnostics.length > 0 ? (
                   <details className="pdf-diagnostics">
@@ -420,10 +459,22 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
                 ) : null}
               </div>
             </>
+          ) : busy ? (
+            <PdfProgress status={status} />
           ) : (
-            <div className="pdf-empty-state" role="status" aria-live="polite">
-              {busy ? <span className="pdf-spinner" aria-hidden="true" /> : null}
-              <p>{emptyStateMessage(status, error)}</p>
+            <div className="pdf-empty-state">
+              {status === 'error' ? (
+                <p className="pdf-empty-error" role="alert">
+                  {emptyStateMessage(status, error)}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="pdf-button pdf-button--primary pdf-generate-action"
+                onClick={() => void generate()}
+              >
+                {status === 'error' ? 'Try again' : 'Generate PDF'}
+              </button>
             </div>
           )}
         </section>

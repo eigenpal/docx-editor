@@ -35,6 +35,10 @@ let active = false;
 
 function json(res: ServerResponse, status: number, value: unknown): void {
   if (res.destroyed || res.writableEnded) return;
+  if (res.headersSent) {
+    res.end(JSON.stringify({ type: 'result', status, ...(value as object) }) + '\n');
+    return;
+  }
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(value));
 }
@@ -78,6 +82,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const bytes = await readBody(req);
     if (bytes === null) return json(res, 413, { message: 'Upload limit is 20 MiB.' });
     if (bytes.byteLength === 0) return json(res, 400, { message: 'Choose a DOCX file.' });
+    // This host converts in-process, so it reports generation without inventing a worker phase.
+    if (req.headers.accept?.includes('application/x-ndjson')) {
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-store, no-transform',
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+      res.write(JSON.stringify({ type: 'progress', phase: 'generating' }) + '\n');
+    }
+    const generationStarted = performance.now();
     const result = await exportPdf(bytes, {
       displayMode: displayMode as 'proposed' | 'original' | 'all-markup',
       comments: comments === 'true',
@@ -91,6 +106,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       pdf: Buffer.from(result.bytes).toString('base64'),
       pageCount: result.pageCount,
       diagnostics: result.diagnostics,
+      timings: { generationMs: performance.now() - generationStarted },
     });
   } catch (error) {
     const name = error instanceof Error ? error.name : 'Error';

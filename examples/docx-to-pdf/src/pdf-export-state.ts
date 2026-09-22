@@ -3,7 +3,20 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-export type PdfStatus = 'idle' | 'converting' | 'ready' | 'stale' | 'error';
+import type { ConversionTimings } from './conversion-response';
+
+export type PdfStatus =
+  | 'idle'
+  | 'preparing'
+  | 'starting'
+  | 'converting'
+  | 'ready'
+  | 'stale'
+  | 'error';
+
+export function isPdfBusy(status: PdfStatus): boolean {
+  return status === 'preparing' || status === 'starting' || status === 'converting';
+}
 
 export interface PdfDiagnostic {
   readonly code: string;
@@ -12,6 +25,7 @@ export interface PdfDiagnostic {
 }
 
 export interface PdfConversion {
+  readonly timings?: ConversionTimings;
   readonly url: string;
   /** The PDF itself, for the viewer; `url` is the same bytes as a download link. */
   readonly data: Uint8Array;
@@ -41,12 +55,16 @@ export function shouldMarkStale(change: DocumentChangeProvenance): boolean {
 /** What the preview pane says while it has nothing to show. */
 export function emptyStateMessage(status: PdfStatus, error: string | null): string {
   if (status === 'error') return error ?? 'The document could not be converted.';
+  if (status === 'preparing') return 'Preparing document…';
+  if (status === 'starting') return 'Starting worker…';
   if (status === 'converting') return 'Generating PDF…';
-  return 'Select Generate PDF to convert the document on the left.';
+  return '';
 }
 
 /** Label for the generate control, which doubles as the stale-preview affordance. */
 export function generateLabel(status: PdfStatus, hasResult: boolean): string {
+  if (status === 'preparing') return 'Preparing…';
+  if (status === 'starting') return 'Starting worker…';
   if (status === 'converting') return 'Generating…';
   return hasResult ? 'Regenerate PDF' : 'Generate PDF';
 }

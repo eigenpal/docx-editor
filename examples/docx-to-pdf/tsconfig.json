@@ -22,7 +22,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "types": ["vite/client"]
+    "types": ["bun", "vite/client"]
   },
   "include": ["src", "vite.config.ts"]
 }

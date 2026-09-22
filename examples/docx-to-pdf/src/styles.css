@@ -200,6 +200,7 @@ button {
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .pdf-button svg,
@@ -334,6 +335,7 @@ button {
 }
 
 .pdf-preview-controls {
+  justify-self: center;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -594,6 +596,10 @@ button {
 }
 
 .pdf-panel--preview {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 0, rgb(255 255 255 / 66%), transparent 28rem),
+    var(--pdf-workspace);
   container-type: inline-size;
 }
 
@@ -661,7 +667,9 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 0 2px 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--pdf-line);
+  background: var(--pdf-surface);
   color: var(--pdf-muted);
   font-size: 11px;
   font-weight: 650;
@@ -896,32 +904,36 @@ button {
   font-style: italic;
 }
 
-/* Centered in the preview pane (a column flexbox) both ways. */
+/* The first conversion starts where its preview will appear. */
 .pdf-empty-state {
-  display: inline-flex;
-  width: fit-content;
+  display: flex;
+  max-width: min(420px, 100%);
   align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 16px;
   margin: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--pdf-line);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 82%);
-  color: var(--pdf-muted);
-  font-size: 11px;
+  padding: 24px;
 }
 
-.pdf-empty-state .pdf-spinner {
-  width: 12px;
-  height: 12px;
-  border-width: 1.5px;
+.pdf-generate-action {
+  height: 40px;
+  padding-inline: 18px;
+  font-size: 12px;
+}
+
+.pdf-empty-error {
+  margin: 0;
+  color: #7d2925;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .pdf-export-loading {
   display: grid;
-  min-height: 100%;
+  flex: 1;
   place-items: center;
-  padding: 40px;
+  padding: 24px;
 }
 
 .pdf-export-loading .pdf-spinner {
@@ -1117,11 +1129,11 @@ button {
     color: var(--pdf-ink);
   }
 
-  .pdf-demo[data-mobile-pane='markdown'] .pdf-topbar-pane--preview {
+  .pdf-demo[data-mobile-pane='pdf'] .pdf-topbar-pane--preview {
     display: grid;
   }
 
-  .pdf-demo[data-mobile-pane='markdown'] .pdf-source-actions {
+  .pdf-demo[data-mobile-pane='pdf'] .pdf-source-actions {
     display: none;
   }
 
@@ -1130,7 +1142,7 @@ button {
   }
 
   .pdf-demo[data-mobile-pane='source'] .pdf-panel--preview,
-  .pdf-demo[data-mobile-pane='markdown'] .pdf-panel--editor {
+  .pdf-demo[data-mobile-pane='pdf'] .pdf-panel--editor {
     display: none;
   }
 
@@ -1335,5 +1347,55 @@ button {
 @media (max-width: 760px) {
   .pdf-demo--embedded .pdf-source-identity {
     display: none;
+  }
+}
+
+/* Match Markdown's quiet loading state and retain the previous PDF during updates. */
+.pdf-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--pdf-muted);
+  font-size: 12px;
+  animation: pdf-progress-enter 180ms var(--pdf-ease-out);
+}
+
+.pdf-progress-time {
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-progress-overlay {
+  position: absolute;
+  z-index: 5;
+  top: 64px;
+  inset-inline: 12px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pdf-progress-overlay .pdf-progress {
+  width: fit-content;
+  padding: 9px 14px;
+  border: 1px solid var(--pdf-line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 5px 18px rgb(31 35 40 / 8%);
+}
+
+.pdf-preview-actions [aria-disabled='true'] {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+@keyframes pdf-progress-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }

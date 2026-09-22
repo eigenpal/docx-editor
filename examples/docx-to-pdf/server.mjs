@@ -35,9 +35,30 @@ export async function createPdfDemo({
   const server = createServer(async (req, res) => {
     const json = (status, value) => {
       if (!res.destroyed && !res.writableEnded) {
+        if (res.headersSent) {
+          res.end(JSON.stringify({ type: 'result', status, ...value }) + '\n');
+          return;
+        }
         res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(value));
       }
+    };
+    const progress = (value) => {
+      if (
+        !req.headers.accept?.includes('application/x-ndjson') ||
+        res.destroyed ||
+        res.writableEnded
+      )
+        return;
+      if (!res.headersSent) {
+        res.writeHead(200, {
+          'Content-Type': 'application/x-ndjson',
+          'Cache-Control': 'no-store, no-transform',
+          'X-Accel-Buffering': 'no',
+        });
+        res.flushHeaders();
+      }
+      res.write(JSON.stringify({ type: 'progress', ...value }) + '\n');
     };
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/api/convert') {
@@ -100,6 +121,9 @@ export async function createPdfDemo({
           return;
         }
         const bytes = new Uint8Array(Buffer.concat(chunks));
+        const workerStarted = performance.now();
+        let workerStartupMs;
+        progress({ phase: 'starting' });
         worker = new Worker(workerUrl, {
           workerData: {
             bytes: bytes.buffer,
@@ -118,11 +142,17 @@ export async function createPdfDemo({
           resourceLimits: { maxOldGenerationSizeMb: WORKER_HEAP_MB },
         });
         workers.add(worker);
-        worker.once('message', (result) => {
+        worker.on('message', (result) => {
           if (finished) return;
+          if (result.type === 'ready') {
+            workerStartupMs = performance.now() - workerStarted;
+            progress({ phase: 'generating', workerStartupMs });
+            return;
+          }
           if (result.ok)
             json(200, {
               ...result,
+              timings: { workerStartupMs, generationMs: result.generationMs },
               bytes: undefined,
               pdf: Buffer.from(result.bytes).toString('base64'),
             });
@@ -187,9 +217,17 @@ export async function createPdfDemo({
     }
     if (vite) return vite.middlewares(req, res);
     try {
-      const target = url.pathname.startsWith('/assets/')
-        ? resolve(root, `dist${url.pathname}`)
-        : resolve(root, 'dist/index.html');
+      const isPublicFile = [
+        '/icon0.svg',
+        '/icon.png',
+        '/apple-icon.png',
+        '/robots.txt',
+        '/sitemap.xml',
+      ].includes(url.pathname);
+      const target =
+        url.pathname.startsWith('/assets/') || isPublicFile
+          ? resolve(root, `dist${url.pathname}`)
+          : resolve(root, 'dist/index.html');
       if (!target.startsWith(resolve(root, 'dist') + '/')) {
         res.writeHead(404);
         res.end();
@@ -206,6 +244,9 @@ export async function createPdfDemo({
             '.css': 'text/css',
             '.html': 'text/html',
             '.svg': 'image/svg+xml',
+            '.png': 'image/png',
+            '.txt': 'text/plain; charset=utf-8',
+            '.xml': 'application/xml',
             '.wasm': 'application/wasm',
             '.woff2': 'font/woff2',
             '.json': 'application/json',

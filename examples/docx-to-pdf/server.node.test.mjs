@@ -11,7 +11,9 @@ import { createPdfDemo } from './server.mjs';
 // says nothing about the server. The unit shards run without `build:packages`; the build lane
 // runs this file after it. Skip here rather than fail there for the wrong reason.
 const built = existsSync(new URL('../../packages/docx-to-pdf/dist/index.js', import.meta.url));
-const skipUnbuilt = built ? false : 'packages/docx-to-pdf is not built; run `bun run build:packages`';
+const skipUnbuilt = built
+  ? false
+  : 'packages/docx-to-pdf is not built; run `bun run build:packages`';
 
 // `node:http`, not `fetch`. The repository test runner preloads happy-dom into every test
 // process (see `bunfig.toml`), and happy-dom's `fetch` applies the same-origin policy to a
@@ -47,44 +49,51 @@ function send(url, { method = 'GET', body, headers = {}, signal } = {}) {
   });
 }
 
-test('Node worker converts a DOCX, rejects bad input, and recovers', { skip: skipUnbuilt }, async () => {
-  const app = await createPdfDemo({ production: true });
-  app.server.listen(0, '127.0.0.1');
-  await once(app.server, 'listening');
-  const base = `http://127.0.0.1:${app.server.address().port}`;
-  try {
-    const bytes = await readFile(new URL('../vite/public/sample.docx', import.meta.url));
-    const invalid = await send(`${base}/api/convert`, { method: 'POST', body: 'bad docx' });
-    assert.equal(invalid.status, 400);
-    // A fixed message: the open error's own text names the zip entry that failed, which is
-    // the upload's to choose, so it stays on the server.
-    assert.equal((await invalid.json()).message, 'The file is not a DOCX this converter can open.');
-    const result = await send(`${base}/api/convert`, { method: 'POST', body: bytes });
-    assert.equal(result.status, 200);
-    const json = await result.json();
-    assert.ok(Buffer.from(json.pdf, 'base64').subarray(0, 5).equals(Buffer.from('%PDF-')));
-    assert.equal(json.pageCount, 27);
-    assert.deepEqual(json.diagnostics, []);
-    assert.equal(
-      (await send(`${base}/api/convert?fidelityPolicy=invalid`, { method: 'POST', body: bytes }))
-        .status,
-      400
-    );
-    assert.equal(
-      (
-        await send(`${base}/api/convert`, {
-          method: 'POST',
-          body: bytes,
-          headers: { Origin: 'https://untrusted.example' },
-        })
-      ).status,
-      403
-    );
-    assert.equal((await send(`${base}/sample.docx`)).status, 200);
-  } finally {
-    await app.close();
+test(
+  'Node worker converts a DOCX, rejects bad input, and recovers',
+  { skip: skipUnbuilt },
+  async () => {
+    const app = await createPdfDemo({ production: true });
+    app.server.listen(0, '127.0.0.1');
+    await once(app.server, 'listening');
+    const base = `http://127.0.0.1:${app.server.address().port}`;
+    try {
+      const bytes = await readFile(new URL('../vite/public/sample.docx', import.meta.url));
+      const invalid = await send(`${base}/api/convert`, { method: 'POST', body: 'bad docx' });
+      assert.equal(invalid.status, 400);
+      // A fixed message: the open error's own text names the zip entry that failed, which is
+      // the upload's to choose, so it stays on the server.
+      assert.equal(
+        (await invalid.json()).message,
+        'The file is not a DOCX this converter can open.'
+      );
+      const result = await send(`${base}/api/convert`, { method: 'POST', body: bytes });
+      assert.equal(result.status, 200);
+      const json = await result.json();
+      assert.ok(Buffer.from(json.pdf, 'base64').subarray(0, 5).equals(Buffer.from('%PDF-')));
+      assert.equal(json.pageCount, 27);
+      assert.deepEqual(json.diagnostics, []);
+      assert.equal(
+        (await send(`${base}/api/convert?fidelityPolicy=invalid`, { method: 'POST', body: bytes }))
+          .status,
+        400
+      );
+      assert.equal(
+        (
+          await send(`${base}/api/convert`, {
+            method: 'POST',
+            body: bytes,
+            headers: { Origin: 'https://untrusted.example' },
+          })
+        ).status,
+        403
+      );
+      assert.equal((await send(`${base}/sample.docx`)).status, 200);
+    } finally {
+      await app.close();
+    }
   }
-});
+);
 
 test('busy requests are refused and cancellation releases the worker slot', async () => {
   const workerUrl = new URL(
@@ -102,10 +111,7 @@ test('busy requests are refused and cancellation releases the worker slot', asyn
       signal: abort.signal,
     }).catch(() => null);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(
-      (await send(`${base}/api/convert`, { method: 'POST', body: 'test' })).status,
-      503
-    );
+    assert.equal((await send(`${base}/api/convert`, { method: 'POST', body: 'test' })).status, 503);
     abort.abort();
     await first;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -149,6 +155,71 @@ test('a conversion past the deadline is a 408 and releases the slot', async () =
     assert.match((await late.json()).message, /exceeded 0 seconds|exceeded \d+ seconds/);
     // The slot is free again: an empty body is refused as 400, not 503.
     assert.equal((await send(`${base}/api/convert`, { method: 'POST', body: '' })).status, 400);
+  } finally {
+    await app.close();
+  }
+});
+
+test('streaming reports worker startup, then generation, then a timed result', async () => {
+  const workerUrl = new URL(
+    'data:text/javascript,' +
+      encodeURIComponent(`
+    import { parentPort } from 'node:worker_threads';
+    setTimeout(() => {
+      parentPort.postMessage({ type: 'ready' });
+      setTimeout(() => parentPort.postMessage({
+        ok: true, bytes: new Uint8Array([37, 80, 68, 70]), pageCount: 1,
+        diagnostics: [], generationMs: 50,
+      }), 50);
+    }, 50);
+  `)
+  );
+  const app = await createPdfDemo({ production: true, workerUrl });
+  app.server.listen(0, '127.0.0.1');
+  await once(app.server, 'listening');
+  try {
+    const response = await send(`http://127.0.0.1:${app.server.address().port}/api/convert`, {
+      method: 'POST',
+      body: 'test',
+      headers: { Accept: 'application/x-ndjson' },
+    });
+    const events = (await response.arrayBuffer()).toString().trim().split('\n').map(JSON.parse);
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+      events.slice(0, 2).map(({ phase }) => phase),
+      ['starting', 'generating']
+    );
+    assert.ok(events[1].workerStartupMs >= 50);
+    assert.equal(events[2].type, 'result');
+    assert.equal(events[2].status, 200);
+    assert.equal(events[2].timings.workerStartupMs, events[1].workerStartupMs);
+    assert.equal(events[2].timings.generationMs, 50);
+    assert.equal(events[2].pdf, 'JVBERg==');
+  } finally {
+    await app.close();
+  }
+});
+
+test('a streaming worker failure finishes with an error and frees the conversion slot', async () => {
+  const app = await createPdfDemo({
+    production: true,
+    workerUrl: new URL('data:text/javascript,process.exit(1);'),
+  });
+  app.server.listen(0, '127.0.0.1');
+  await once(app.server, 'listening');
+  const url = `http://127.0.0.1:${app.server.address().port}/api/convert`;
+  try {
+    const response = await send(url, {
+      method: 'POST',
+      body: 'test',
+      headers: { Accept: 'application/x-ndjson' },
+    });
+    const events = (await response.arrayBuffer()).toString().trim().split('\n').map(JSON.parse);
+    assert.equal(events[0].phase, 'starting');
+    assert.equal(events[1].type, 'result');
+    assert.equal(events[1].status, 500);
+    assert.match(events[1].message, /failed/);
+    assert.equal((await send(url, { method: 'POST', body: '' })).status, 400);
   } finally {
     await app.close();
   }

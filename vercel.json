@@ -32,6 +32,16 @@
       "destination": "/docx-to-markdown/index.html"
     },
     {
+      "source": "/robots.txt",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/sitemap.xml"
+    },
+    {
       "source": "/",
       "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
       "destination": "/docx-to-pdf/index.html"
