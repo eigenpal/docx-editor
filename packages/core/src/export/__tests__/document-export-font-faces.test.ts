@@ -386,3 +386,35 @@ test("fontPolicy:'strict' succeeds when the embedded face resolves", async () =>
     opened.session.dispose();
   }
 });
+
+test('a last-resort origin runs after the embedded fonts and sees what they cover', async () => {
+  let seen: readonly { family: string; weight: number; style: string }[] | undefined;
+  const lastResort = defineFontResolver(async (request) => {
+    seen = request.resolvedFaces;
+    // A stand-in for the embedded family, which must lose to the embedded face itself.
+    return {
+      sources: [],
+      substitutions: [
+        {
+          from: { family: 'Embedded Face', weight: 400, style: 'normal' as const },
+          to: { family: 'DejaVu Sans', weight: 400, style: 'normal' as const },
+        },
+      ],
+    };
+  });
+  const opened = await openFontBackedDocumentForExport(
+    docxWithEmbed('Embedded Face', bodyRun('Embedded Face')),
+    { fonts: fontFragment(), lastResortFonts: lastResort }
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    expect(seen).toContainEqual({ family: 'Embedded Face', weight: 400, style: 'normal' });
+    const reported = opened.session.fontResolution.families
+      .find((family) => family.family === 'Embedded Face')
+      ?.faces.find((entry) => entry.weight === 400 && entry.style === 'normal');
+    expect(reported?.via).toBe('direct');
+  } finally {
+    opened.session.dispose();
+  }
+});

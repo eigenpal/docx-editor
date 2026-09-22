@@ -2398,9 +2398,15 @@ function layoutBlocksPass(
         });
         contentTop = ruleY;
       }
+      // Inside a text frame the paragraph's space after lies INSIDE the frame, above its
+      // bottom edge, and Word draws a bottom border at that edge: below the spacing, not
+      // below the text. A contents heading framed with `w:after="2200"` and a bottom rule
+      // shows its rule 110pt under the heading, just above the entries. A free paragraph
+      // keeps the rule under its text and its space after below the rule.
+      const afterInsideBorder = frame && closingEdge && !continuesBelow ? appliedAfter : 0;
       if (isLast && closingEdge) {
         const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
-        const ruleY = linesBottom + closingEdge.spacePt;
+        const ruleY = linesBottom + afterInsideBorder + closingEdge.spacePt;
         const box = {
           x: boxLeft,
           y: ruleY,
@@ -2414,8 +2420,9 @@ function layoutBlocksPass(
         if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
         contentBottom = ruleY + closeStroke;
       }
-      if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
-      const height = Math.max(contentBottom + appliedAfter - top, 0);
+      const afterBelowBorder = appliedAfter - afterInsideBorder;
+      if (isLast) cursorY = Math.max(cursorY, contentBottom + afterBelowBorder);
+      const height = Math.max(contentBottom + afterBelowBorder - top, 0);
       // Side rules run the height of the bordered block, and inside a group they run THROUGH
       // the inter-paragraph gap so the box reads as one outline rather than a ladder.
       const sideTop = continuesAbove && fragmentIndex === 0 ? top : contentTop;

@@ -96,8 +96,10 @@ export function readParagraphFrame(properties: readonly OoxmlProperty[]): Paragr
     !['0', '1', 'true', 'false', 'on', 'off'].includes(attributes.anchorLock)
   )
     return null;
-  const x = coordinate(attributes.x),
-    y = coordinate(attributes.y),
+  // `w:x` and `w:y` are optional and default to zero (ECMA-376 17.3.1.11); a heading framed
+  // at the text anchor's own left edge is written without them.
+  const x = coordinate(attributes.x ?? '0'),
+    y = coordinate(attributes.y ?? '0'),
     width = coordinate(attributes.w);
   if (x === null || y === null || width === null || width <= 0) return null;
   // Word defaults both anchors to text (MS-OE376 2.1.48).

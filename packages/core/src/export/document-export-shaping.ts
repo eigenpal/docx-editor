@@ -95,6 +95,8 @@ export interface DocumentExportShapingOptions extends DocumentExportFontResoluti
   /** Host supports document optional ligatures in measurement and glyph output. */
   readonly documentLigatures?: boolean;
   readonly glyphFallbacks?: readonly FontRequest[];
+  /** Origins composed after the document-embedded font origin. */
+  readonly lastResortFonts?: readonly FontOrigin[];
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
@@ -135,6 +137,12 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   readonly reuseAcrossRevisions?: false;
   /** Ordered first-wins font origins resolved against this immutable DOCX. */
   readonly fonts: FontOrigin | readonly FontOrigin[];
+  /**
+   * Origins composed AFTER the document's own embedded fonts, for faces nothing else covers.
+   * An origin here sees every face the explicit origins and the embedded fonts can paint in
+   * `resolvedFaces`, so a stand-in it offers cannot shadow a face the document carries.
+   */
+  readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
   readonly fontResolutionTimeoutMs?: number;
   /** Ordered admitted faces used when a complete text span lacks glyph coverage. Maximum 16. */
@@ -232,6 +240,7 @@ export async function openFontBackedDocumentForExport(
   if (!opened.ok) return opened;
   const {
     fonts,
+    lastResortFonts,
     fontResolutionTimeoutMs,
     fontPolicy,
     onFontResolution,
@@ -240,6 +249,12 @@ export async function openFontBackedDocumentForExport(
     ...sessionOptions
   } = options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
+  const lastResort =
+    lastResortFonts === undefined
+      ? []
+      : Array.isArray(lastResortFonts)
+        ? lastResortFonts
+        : [lastResortFonts as FontOrigin];
   let fontResolution: ExportFontResolutionReport | undefined;
   let shaping: DocumentExportShaping | undefined;
   try {
@@ -249,6 +264,7 @@ export async function openFontBackedDocumentForExport(
       fontPolicy,
       glyphFallbacks,
       documentLigatures,
+      lastResortFonts: lastResort,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -371,7 +387,11 @@ export async function acquireDocumentExportShaping(
         const originFailures: FontOriginFailure[] = [];
         const embeddedFontDiagnostics: DocumentEmbeddedFontDiagnostics = { dropped: [] };
         const embeddedOrigin = documentEmbeddedFontOrigin(view, embeddedFontDiagnostics);
-        const resolvedOrigins = embeddedOrigin ? [...origins, embeddedOrigin] : origins;
+        const resolvedOrigins = [
+          ...origins,
+          ...(embeddedOrigin ? [embeddedOrigin] : []),
+          ...(options.lastResortFonts ?? []),
+        ];
         const resolved = await composePreparedFontOrigins(
           resolvedOrigins,
           {

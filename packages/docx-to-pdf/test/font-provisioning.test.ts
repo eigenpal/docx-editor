@@ -12,6 +12,7 @@ import {
   genericSubstituteFor,
   installedWordFontResolver,
   isGenericSubstitution,
+  standInFonts,
   supplementalFonts,
 } from '../src/font-provisioning.ts';
 
@@ -35,19 +36,6 @@ test('installed discovery includes the default family when no run names it', asy
     const explicit = await resolve({ families: ['Arial'], defaultFamily: 'Arial' });
     expect(implicit.sources).toHaveLength(1);
     expect(implicit.sources[0]!.request).toEqual({ family: 'Arial', weight: 400, style: 'normal' });
-    // The faces with no file of their own point at the one that was found.
-    expect(implicit.substitutions).toEqual(
-      (
-        [
-          [700, 'normal'],
-          [400, 'italic'],
-          [700, 'italic'],
-        ] as const
-      ).map(([weight, style]) => ({
-        from: { family: 'Arial', weight, style },
-        to: { family: 'Arial', weight: 400, style: 'normal' },
-      }))
-    );
     expect(explicit.sources).toEqual(implicit.sources);
   });
 });
@@ -122,19 +110,14 @@ test('installed discovery admits the legacy symbol faces a Word bullet names', a
       families: ['Symbol', 'Wingdings', 'Wingdings 2', 'Webdings'],
       defaultFamily: 'Arial',
     });
-    // One regular face each; a symbol font ships in one weight, so its bold and italic faces
-    // are substitutions to that one, as Word does when it emboldens a symbol run.
+    // One regular face each: a symbol font has no bold or italic file to find. The bold and
+    // italic faces reach the regular one through the stand-in origin, tested below.
     expect(result.sources.map((source) => source.request)).toEqual([
       { family: 'Symbol', weight: 400, style: 'normal' },
       { family: 'Wingdings', weight: 400, style: 'normal' },
       { family: 'Wingdings 2', weight: 400, style: 'normal' },
       { family: 'Webdings', weight: 400, style: 'normal' },
     ]);
-    expect(result.substitutions).toHaveLength(12);
-    expect(result.substitutions).toContainEqual({
-      from: { family: 'Wingdings', weight: 700, style: 'normal' },
-      to: { family: 'Wingdings', weight: 400, style: 'normal' },
-    });
   });
 });
 
@@ -208,15 +191,6 @@ test('installed discovery reads a face-named family and a styled family name', a
       { family: 'Times New Roman Bold', weight: 700, style: 'normal' },
       { family: '黑体', weight: 400, style: 'normal' },
     ]);
-    // Faces with no file of their own point at the first face found for the family.
-    expect(result.substitutions).toContainEqual({
-      from: { family: 'Aptos', weight: 400, style: 'italic' },
-      to: { family: 'Aptos', weight: 400, style: 'normal' },
-    });
-    expect(result.substitutions).toContainEqual({
-      from: { family: 'Times New Roman Bold', weight: 700, style: 'italic' },
-      to: { family: 'Times New Roman Bold', weight: 400, style: 'normal' },
-    });
   });
 });
 
@@ -254,19 +228,24 @@ test('a hostile family name of a million spaces resolves in constant time', () =
   expect(canonicalFamily('Bold')).toEqual({ family: 'Bold', bold: false, italic: false });
 });
 
-test('a family nothing resolved gets a stand-in of its class, reported as generic', async () => {
+test('the stand-in origin covers what nothing else did, after the embedded fonts', async () => {
   expect(genericSubstituteFor('Sagona')).toBe('Liberation Serif');
   expect(genericSubstituteFor('Garamond Premier Pro')).toBe('Liberation Serif');
   expect(genericSubstituteFor('Montserrat')).toBe('Liberation Sans');
   expect(genericSubstituteFor('Noto Sans Serif Thing')).toBe('Liberation Sans');
   expect(genericSubstituteFor('Consolas')).toBe('Liberation Mono');
   expect(genericSubstituteFor('Aptos')).toBe('Liberation Sans');
-  // The last origin stands in for an uncovered family, and only for that one: Arial here is
-  // already covered by an earlier origin and is a family this package knows.
-  const result = await supplementalFonts({
+  // Sagona has no face anywhere: a packaged serif stands in for all four faces. Arial is
+  // covered by an earlier origin and is left alone.
+  const result = await standInFonts({
     families: ['Arial', 'Sagona'],
     defaultFamily: 'Arial',
-    resolvedFaces: [{ family: 'Arial', weight: 400, style: 'normal' }],
+    resolvedFaces: [
+      { family: 'Arial', weight: 400, style: 'normal' },
+      { family: 'Arial', weight: 700, style: 'normal' },
+      { family: 'Arial', weight: 400, style: 'italic' },
+      { family: 'Arial', weight: 700, style: 'italic' },
+    ],
   });
   expect(result.sources.map((source) => source.request.family)).toEqual(
     Array(4).fill('Liberation Serif')
@@ -276,19 +255,43 @@ test('a family nothing resolved gets a stand-in of its class, reported as generi
     from: { family: 'Sagona', weight: 700, style: 'normal' },
     to: { family: 'Liberation Serif', weight: 700, style: 'normal' },
   });
-  // A family an earlier origin already covers is left alone.
-  const covered = await supplementalFonts({
-    families: ['Sagona'],
+  // A family whose regular face is covered, by an embedded font say, keeps it: only the
+  // missing bold and italic faces point at that regular face.
+  const partial = await standInFonts({
+    families: ['Ubuntu', 'Wingdings'],
     defaultFamily: 'Arial',
-    resolvedFaces: [{ family: 'Sagona', weight: 400, style: 'normal' }],
+    resolvedFaces: [
+      { family: 'Ubuntu', weight: 400, style: 'normal' },
+      { family: 'Ubuntu', weight: 700, style: 'normal' },
+      { family: 'Wingdings', weight: 400, style: 'normal' },
+    ],
   });
-  expect(covered.sources).toHaveLength(0);
-  // A legacy symbol face never gets a text stand-in: its private-use bullets belong to the
-  // glyph fallback path, which maps them to Unicode in a symbol face.
-  const symbol = await supplementalFonts({
-    families: ['Symbol', 'Wingdings'],
-    defaultFamily: 'Arial',
-  });
+  expect(partial.sources).toHaveLength(0);
+  expect(partial.substitutions).toEqual([
+    {
+      from: { family: 'Ubuntu', weight: 400, style: 'italic' },
+      to: { family: 'Ubuntu', weight: 400, style: 'normal' },
+    },
+    {
+      from: { family: 'Ubuntu', weight: 700, style: 'italic' },
+      to: { family: 'Ubuntu', weight: 400, style: 'normal' },
+    },
+    {
+      from: { family: 'Wingdings', weight: 700, style: 'normal' },
+      to: { family: 'Wingdings', weight: 400, style: 'normal' },
+    },
+    {
+      from: { family: 'Wingdings', weight: 400, style: 'italic' },
+      to: { family: 'Wingdings', weight: 400, style: 'normal' },
+    },
+    {
+      from: { family: 'Wingdings', weight: 700, style: 'italic' },
+      to: { family: 'Wingdings', weight: 400, style: 'normal' },
+    },
+  ]);
+  // A legacy symbol face with no face at all never gets a text stand-in: its private-use
+  // bullets belong to the glyph fallback path, which maps them to Unicode in a symbol face.
+  const symbol = await standInFonts({ families: ['Symbol'], defaultFamily: 'Arial' });
   expect(symbol.sources).toHaveLength(0);
   expect(symbol.substitutions).toHaveLength(0);
   expect(isGenericSubstitution('Sagona', 'Liberation Serif')).toBe(true);

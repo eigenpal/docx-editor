@@ -11,7 +11,12 @@ import {
 } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
-import { installedWordFonts, supplementalFonts, PDF_GLYPH_FALLBACKS } from './font-provisioning.ts';
+import {
+  installedWordFonts,
+  standInFonts,
+  supplementalFonts,
+  PDF_GLYPH_FALLBACKS,
+} from './font-provisioning.ts';
 import type { PdfExportOptions } from './types.ts';
 
 const bundledFonts = packagedFonts({
@@ -56,5 +61,7 @@ export function openExportSession(
     // document uses needs one, so offering the whole list costs a plain Latin document nothing.
     glyphFallbacks: options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS,
     fonts: origins,
+    // After the document's own embedded fonts: a stand-in for what nothing else covers.
+    lastResortFonts: standInFonts,
   });
 }

@@ -264,25 +264,13 @@ export function isGenericSubstitution(family: string, sourceFamily: string): boo
  * substitute for a family the document uses. Reading all five up front mapped about 20 MB of
  * font data into every export, 16 MB of it a CJK face a Latin document never touches.
  */
-export const supplementalFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
+export const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
   const wanted = new Set<string>();
-  // Families still uncovered when this origin, the last one, runs: nothing installed or
-  // packaged answered for them, so the generic stand-in does.
-  const covered = new Set(
-    (resolvedFaces ?? []).map((face) => `${face.family}/${face.weight}/${face.style}`)
-  );
-  const orphaned = families.filter(
-    (family) =>
-      !knownFamilies.has(canonicalFamily(family).family) &&
-      !substituteFor(family) &&
-      !covered.has(`${family}/400/normal`)
-  );
   for (const family of families) {
     wanted.add(family);
     const target = substituteFor(family);
     if (target) wanted.add(target);
   }
-  for (const family of orphaned) wanted.add(genericSubstituteFor(family));
   const sources = await Promise.all(
     supplemental
       .filter(([family]) => wanted.has(family))
@@ -296,9 +284,7 @@ export const supplementalFonts = defineFontResolver(async ({ families, signal, r
   return {
     sources,
     substitutions: families.flatMap((family) => {
-      const target =
-        substituteFor(family) ??
-        (orphaned.includes(family) ? genericSubstituteFor(family) : undefined);
+      const target = substituteFor(family);
       if (!target) return [];
       const { bold, italic } = canonicalFamily(family);
       return [400, 700].flatMap((weight) =>
@@ -316,6 +302,65 @@ export const supplementalFonts = defineFontResolver(async ({ families, signal, r
       );
     }),
   };
+});
+
+/**
+ * The last word on a face nothing else covers, composed after the document's own embedded
+ * fonts so it can never shadow one of them.
+ *
+ * Two answers. A family with no face at all renders in a packaged face of its class
+ * ({@link genericSubstituteFor}); the export reports it. A family whose regular face is
+ * covered but whose bold or italic is not points those at the regular face, as Word does when
+ * it emboldens a font that ships in one weight: every symbol face, most CJK faces. Legacy
+ * symbol families never get a text stand-in; their private-use bullets belong to the glyph
+ * fallback path.
+ */
+export const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
+  const covered = new Set(
+    (resolvedFaces ?? []).map((face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`)
+  );
+  const has = (family: string, weight: number, style: FaceStyle) =>
+    covered.has(`${family.toLowerCase()}/${weight}/${style}`);
+  const faces = [
+    [400, 'normal'],
+    [700, 'normal'],
+    [400, 'italic'],
+    [700, 'italic'],
+  ] as const;
+  const substitutions: { from: FontRequest; to: FontRequest }[] = [];
+  const wanted = new Set<string>();
+  for (const family of families) {
+    if (has(family, 400, 'normal')) {
+      for (const [weight, style] of faces)
+        if (!has(family, weight, style))
+          substitutions.push({ from: face(family, weight, style), to: face(family) });
+      continue;
+    }
+    if (knownFamilies.has(canonicalFamily(family).family)) continue;
+    const target = genericSubstituteFor(family);
+    wanted.add(target);
+    const { bold, italic } = canonicalFamily(family);
+    for (const [weight, style] of faces)
+      substitutions.push({
+        from: face(family, weight, style),
+        to: face(
+          target,
+          bold || weight === 700 ? 700 : 400,
+          italic || style === 'italic' ? 'italic' : 'normal'
+        ),
+      });
+  }
+  const sources = await Promise.all(
+    supplemental
+      .filter(([family]) => wanted.has(family))
+      .map(async ([family, file, weight, style]) => {
+        const bytes = new Uint8Array(await readFontFile(file, signal));
+        const result = createFontSource(bytes, face(family, weight, style));
+        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file.pathname}`);
+        return result.source;
+      })
+  );
+  return { sources, substitutions };
 });
 
 const wordFontRoots =
@@ -390,11 +435,9 @@ export function installedWordFontResolver(roots: readonly string[]) {
       Dotum: [['gulim.ttc'], [], [], []],
     };
     const sources = [];
-    const substitutions: { from: FontRequest; to: FontRequest }[] = [];
     for (const requested of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {
       const { family, bold, italic } = canonicalFamily(requested);
       if (!Object.hasOwn(names, family) && !Object.hasOwn(files, family)) continue;
-      let regular: FontRequest | undefined;
       for (const [weight, style] of [
         [400, 'normal'],
         [700, 'normal'],
@@ -449,7 +492,6 @@ export function installedWordFontResolver(roots: readonly string[]) {
               });
               if ('failure' in source) continue;
               sources.push(source.source);
-              regular ??= face(requested, weight, style);
               found = true;
               break;
             } catch (error) {
@@ -459,15 +501,9 @@ export function installedWordFontResolver(roots: readonly string[]) {
           }
           if (found) break;
         }
-        if (!found && regular)
-          // No file for this face: point it at the face that was found, as Word does when it
-          // emboldens or slants a font that ships in one weight (every symbol face, most CJK
-          // faces). A substitution, not a second source: the bytes count once against Core's
-          // aggregate font ceiling, which a 16 MB collection lent three times would exhaust.
-          substitutions.push({ from: face(requested, weight, style), to: regular });
       }
     }
-    return { sources, substitutions };
+    return { sources };
   });
 }
 
