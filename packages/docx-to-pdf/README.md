@@ -1,69 +1,85 @@
 # DOCX to PDF
 
-`@docx-editor.dev/docx-to-pdf` adds PDF support to the engine. It is a private TypeScript workspace package, licensed under the EigenPal Pro License. It is not published to npm.
+`@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF on Node.js. It uses Core's pagination, font resolution, and positioned glyphs to produce searchable text.
 
-The Node converter consumes Core's layout and HarfBuzz glyph runs. It embeds the admitted font faces and positions those glyphs directly. It does not reshape text, repaginate with another engine, or run a browser.
+The package is private and is not published to npm. It is distributed under the [EigenPal Pro Evaluation License](LICENSE.md). Production use requires a commercial agreement.
 
-The following example converts a document and writes the PDF:
+## Convert a document
 
 ```ts
-import { exportPdf, PdfFidelityError } from '@docx-editor.dev/docx-to-pdf';
+import { readFile, writeFile } from 'node:fs/promises';
+import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
 
-const result = await exportPdf(docxBytes, {
+const source = await readFile('document.docx');
+const result = await exportPdf(source, {
   displayMode: 'proposed',
   comments: true,
 });
+
 await writeFile('document.pdf', result.bytes);
 ```
 
-## Defaults and controls
+Conversion preserves the source DOCX. Browser applications must send the document to a Node.js server for conversion.
 
-- `fidelityPolicy: 'strict'` rejects requested output that is unsupported or approximate. To receive available output with diagnostics, select `'best-effort'` explicitly.
-- `displayMode: 'proposed'` shows the final text. `'original'` and `'all-markup'` use Core's corresponding revision projections. Conversion never changes the DOCX.
-- `comments: true` preserves native PDF comments. To omit annotations, set it to `false`.
-- `useSystemFonts` defaults to `true`. It reads known Word font filenames from standard OS font directories. For portable packaged fonts, set it to `false`.
-- A family written as a face name, such as `Times New Roman Bold`, and a localized East Asian name, such as `宋体`, resolve to the faces Word uses for them. When Helvetica or a common East Asian family is absent, a packaged face stands in for it. A family no installed, packaged, or embedded face covers renders in a packaged face of its class in best-effort export; strict export refuses it with a `font-substitution` diagnostic, because the stand-in's metrics move line breaks.
-- `glyphFallbacks` lists ordered admitted faces for a span that is missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. An emoji from a COLR face paints its palette layers in color and stays extractable as text.
-- `fonts` places caller font origins before installed Word fonts and packaged substitutes. `fallbackFonts` follow the packaged origins. Core's separate `fontPolicy` controls substitution. To see the faces the export used, inspect `result.fontResolution`.
-- `timeoutMs: 60000`, `maxOutputBytes: 67108864`, and an optional `signal` bound the work. You can lower the byte limit, but you cannot raise it. Core resource limits still apply.
+## Configure output
 
-The result contains owned `bytes`, `pageCount`, `layoutRevision`, `displayMode`, `fontResolution`, and frozen `diagnostics`. PDF bytes are mutable by JavaScript convention. They never share storage with another result or a live export session.
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `fidelityPolicy` | `'strict'` | Rejects unsupported or approximate output. Use `'best-effort'` to return available output with diagnostics. |
+| `displayMode` | `'proposed'` | Includes proposed revisions. Use `'original'` for the original content or `'all-markup'` to show revisions. |
+| `comments` | `true` | Includes native PDF annotations. Set to `false` to omit them. |
+| `useSystemFonts` | `true` | Searches standard operating system directories for supported font files. Set to `false` to disable this search. |
+| `timeoutMs` | `60000` | Sets the conversion deadline in milliseconds. |
+| `maxOutputBytes` | `67108864` | Limits output to 64 MiB. You can lower this limit. |
+| `signal` | — | Cancels conversion through an `AbortSignal`. |
 
-`PdfDocumentOpenError` preserves the rejection reason. `PdfFidelityError` includes bounded diagnostics. `ExportResourceError` reports aborts and deadlines. `PdfEncodingError` reports encoder failures. Invalid options raise `TypeError` or `RangeError`.
+The result includes `bytes`, `pageCount`, `layoutRevision`, `displayMode`, `fontResolution`, `diagnostics`, and `timings`. Timings report milliseconds spent opening the document, laying out pages, painting content, and encoding the PDF. Each result owns its byte buffer.
 
-## Supported output
+### Fonts
 
-The writer supports the following output:
+Use `fonts` to provide font sources before the installed and packaged sources. Use `fallbackFonts` to add sources after the packaged fonts. The exporter also reads embedded fonts before using a generic substitute for an unresolved family.
 
-- Static TrueType and CFF fonts, and selected collection faces.
-- Positioned multilingual glyphs, and Unicode extraction.
-- Page sizes, headers and footers, and list markers.
-- Paragraph fills, and single, double, dashed, and dotted paragraph borders.
-- Table text, table shading, and resolved table borders.
-- PNG and JPEG images, crop and affine transforms, and fixed image opacity.
-- Links, destinations, and metadata.
+`glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. Emoji from a COLR font retain their palette colors and extractable text.
 
-Notes, equation geometry, tab leaders, page frames, small caps, and underline variants also paint from Core records.
+Core's `fontPolicy` controls substitution. Generic substitutions can change line breaks and page count, so strict export rejects them with a `font-substitution` diagnostic. Best-effort export uses the substitute and reports it. Inspect `result.fontResolution` for the selected fonts.
 
-PDF sessions enable Core's `documentLigatures` shaping capability. The capability applies authored optional ligatures and document compatibility to both layout measurement and emitted glyphs. It participates in the shaping fingerprint. Browser shaping and DOM paint retain their native ligature behavior, because the canvas fallback cannot select individual OpenType features. Adding that browser capability requires a matching measurement port. Required script substitutions remain enabled in either mode.
+### Comments
 
-Comments use native range highlights or text notes. Authors, dates, replies, and resolved state survive where PDF viewers support them. Cross-page anchors produce page-local annotations. A comment without a visible anchor becomes a labeled first-page note. Editing a PDF annotation does not update the DOCX.
+Comments become range highlights or text notes. PDF viewers determine whether they display authors, dates, replies, and resolved state. Cross-page comments create an annotation on each affected page. Comments without a visible anchor become labeled notes on the first page.
 
-Strict fidelity means representing Core's accepted layout. It does not certify pixel identity with any other renderer. Font substitutions remain possible under Core's default font policy.
+Editing PDF annotations does not update the DOCX.
 
-## Output size and memory
+## Supported content
 
-The writer Flate-compresses content streams, and embeds fonts as subsets of the glyphs the document uses. It writes text one positioned run at a time. A run starts with a text matrix, and the glyphs after it advance from their own widths. An explicit adjustment appears only where the laid-out position differs from the advance. A 521-page document produces about 4.8 MB, near 9.3 kB per page.
+- Searchable multilingual text, small caps, text decorations, and tab leaders.
+- Static TrueType and CFF fonts, including selected faces from font collections.
+- Page sizes, page frames, headers, footers, footnotes, and endnotes.
+- Text and image list markers, paragraph fills, and paragraph borders.
+- Table text, shading, and resolved borders.
+- Textboxes and structured equations.
+- PNG and JPEG images with cropping, transforms, alpha transparency, and fixed opacity.
+- Links, destinations, document metadata, and comments.
 
-The writer holds the laid-out pages and the admitted font data for the length of the call. The same 521-page document peaks near 380 MiB of old space. If you need a hard ceiling, run conversion in a worker with `resourceLimits.maxOldGenerationSizeMb`. The demo server does this, and reports the limit instead of failing the host.
+## Limitations
 
-## Explicit limitations
+Charts, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. Brightness and grayscale adjustments are not supported.
 
-Charts and other non-picture graphics, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. A textbox paints its fill, outline, and clipped text at its place in the drawing order. The writer refuses variable fonts, missing glyphs, prohibited embedding, and font containers the subsetter cannot encode. It also refuses fonts that prohibit subsetting, because it embeds subsets.
+The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts that prohibit subsetting, and font containers that cannot be encoded. Tagged PDF, PDF/A, encryption, forms, and reusable export sessions are not supported.
 
-The writer does not apply color adjustments such as brightness and grayscale. It does support bitmap alpha and fixed picture opacity. Tagged PDF, PDF/A, encryption, forms, DOCX comment round trips, and reusable export sessions are outside this package's scope.
+## Errors and resource limits
 
-Cancellation is cooperative between layout, paint, and encoding batches. A synchronous third-party font or image operation cannot be interrupted mid-call. For hard deadlines, use a worker. The included demo does this.
+| Error | Cause |
+| --- | --- |
+| `PdfDocumentOpenError` | Core rejected the input document. Inspect `reason` and `detail`. |
+| `PdfFidelityError` | Strict export encountered unsupported or approximate content. Inspect `diagnostics`. |
+| `ExportResourceError` | Conversion was canceled or exceeded its deadline. |
+| `PdfWorkLimitError` | Content exceeded a processing limit. |
+| `PdfEncodingError` | PDF encoding failed or the output exceeded `maxOutputBytes`. |
+| `TypeError` or `RangeError` | An argument is invalid or a size limit was exceeded. |
+
+The writer compresses content streams and embeds font subsets. It retains layout records and font data until conversion finishes. Core's resource limits also apply.
+
+Cancellation is checked between layout, paint, and encoding batches. Synchronous font and image operations cannot be interrupted mid-call. For a hard deadline or heap limit, run conversion in a worker and configure `resourceLimits.maxOldGenerationSizeMb`.
 
 ## Run the demo
 
@@ -74,33 +90,4 @@ bun install
 bun run dev:pdf
 ```
 
-Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The local server binds to loopback. The hosted demo converts through a server function with the same upload limit and deadline, its own memory ceiling, and accepts requests only from its own page.
-
-## Verification
-
-Run the following commands to verify the package:
-
-```sh
-bun test packages/docx-to-pdf/test
-bun run --filter '@docx-editor.dev/docx-to-pdf' typecheck
-bun run build:pdf
-node --test examples/docx-to-pdf/server.node.test.mjs
-```
-
-To find out why a folder of documents does not convert strictly, drop the documents into `packages/docx-to-pdf/.local-validation/inbox/` (gitignored) and run the triage script:
-
-```sh
-bun packages/docx-to-pdf/scripts/triage.ts
-```
-
-It converts each document strictly, then in best-effort mode when strict export refuses. Every run writes each document's PDF, a PNG of its first page and of the first page of each diagnostic, and `report.json` under `.local-validation/triage/<timestamp>/`. For each document it prints the phase timings, the diagnostics grouped by code with their pages and messages, the font families no admitted face covers, and a hint at the usual cause, followed by a tally of causes across the folder. `--baseline previous.json` lists the documents that got worse or better since an earlier report. Pass folders or files to triage something else, and `--run-dir` to choose where the output goes. Rendering needs Poppler's `pdftoppm`.
-
-Two more commands answer layout questions without a screenshot. `bun packages/docx-to-pdf/scripts/layout-dump.ts <doc.docx> --grep "<text>"` prints the lines of the paragraphs that contain the text: top, layout baseline, the baseline the PDF paints after the writer's grid rules, height, leading, and each span's start, width, family, size, raise, and shaping face, in points and 0.24pt device units. `bun packages/docx-to-pdf/scripts/pdf-drift.ts <doc.docx> --ref <reference.pdf>` pairs our lines with a reference PDF's lines by page and text and prints, per page, the first line whose baseline or start differs by more than half a unit, both positions, and the trend of baseline deltas down the page as runs, so a local slip and an accumulated drift read differently. Our positions come from the layout records, never from our own PDF.
-
-`bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets. They are not runtime font defaults.
-
-The 50-category editor demo exports in strict mode with 27 pages and no unsupported-content diagnostics. This holds both with installed fonts and with packaged fonts only. Font substitution, emoji art, equation layout, and super/subscript sizing are the areas where output differs most between PDF renderers. A successful export is not a statement about pixel fidelity.
-
-## Memory
-
-Profile memory with `bun packages/docx-to-pdf/scripts/profile-memory.ts input.docx` from the repository root. Add `--collect` for diagnostic garbage collection between phases. Production exports never force garbage collection. The profiler reports both process memory and JavaScript heap statistics. These measure different allocations.
+Open <http://127.0.0.1:5180>. For upload limits, server configuration, and production commands, see the [demo README](../../examples/docx-to-pdf/README.md).

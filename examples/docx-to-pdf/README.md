@@ -1,6 +1,6 @@
 # DOCX to PDF demo
 
-A local demo of PDF support: edit a Word document on the left, and generate a PDF on the right.
+Edit a DOCX document, generate a PDF preview, and download the result.
 
 ## Run the example
 
@@ -11,29 +11,29 @@ bun install
 bun run dev:pdf
 ```
 
-Open `http://127.0.0.1:5180`.
+Open <http://127.0.0.1:5180>.
 
 ## Use the demo
 
-The demo opens the editor sample. Edit it, then select **Generate PDF** to convert the document as it stands. The preview appears beside the editor with a download link.
+Select **Open DOCX** to load a file up to 20 MiB, or edit the sample document. Select **Generate PDF** to create a preview, then **Download PDF** to save it. After editing, select **Regenerate PDF** to update the preview. **Reset** restores the sample.
 
-The demo converts in best-effort mode, so a document that names a font this host does not have, or draws a shape the writer does not support, still produces pages. The line under the pages counts the diagnostics. Select it to read each one with the pages it applies to.
+The demo uses best-effort conversion. Unsupported content and font substitutions appear as diagnostics below the preview. Expand the diagnostics to see the affected pages.
 
-Conversion runs when you ask for it, not on every keystroke, because a page of PDF is expensive to produce. After an edit, the demo marks the preview stale. The page count line says so, and the control becomes **Regenerate PDF**.
+Progress updates distinguish worker startup from PDF generation. The preview footer shows the completed timings.
 
-**Open DOCX** loads a document of your own, up to 20 MiB. **Reset** returns to the sample.
+## Configure the server
 
-## How the server works
+The Node.js server hosts the UI and `/api/convert` on the loopback interface. Set `PORT` to change the default port, `5180`.
 
-The Node server hosts the React UI and `/api/convert`. Conversion runs in a worker with a 60-second deadline and a bounded heap, one conversion at a time. A request that arrives while another conversion runs receives 503. Uploads stay in memory, and are limited to 20 MiB. The server retains neither the uploaded document nor the converted PDF, and it binds to loopback. To change the port, set `PORT`.
+Each conversion runs in a worker with a 60-second deadline and a 512 MiB heap limit. Set `WORKER_HEAP_MB` to change the heap limit. The server accepts one conversion at a time and returns HTTP 503 while busy. Requests are limited to 20 MiB. If a worker exceeds its heap limit, the server reports a memory-limit error.
 
-The hosted demo converts through a server function with the same upload limit, deadline, and one-at-a-time rule per instance. Its memory ceiling is the function's own, and a document beyond it is refused with 507. It accepts a request only when its `Origin` header matches the host, so only the demo page can use it. The local server also accepts requests without an `Origin` header, so a command-line client can exercise it during development.
+Uploads and generated PDFs stay in memory for the request. Cancellation terminates the conversion worker.
 
-The heap ceiling is 512 MiB, set with `WORKER_HEAP_MB`. A 521-page document converts in about 17 seconds and peaks near 380 MiB of old space. The same document fails below about 448 MiB. A document that needs more than the ceiling receives 507, with a message that names the limit. The host is not exhausted.
+The hosted demo uses a server function with the same upload limit and deadline. It allows one conversion per instance and uses the function's memory limit. Requests must include an `Origin` header that matches the host. The local server also accepts requests without `Origin` for command-line use.
 
-The exporter runs only on Node, because `@docx-editor.dev/docx-to-pdf` reads installed font files through `node:fs`. The browser therefore posts the document to the server rather than converting in the page.
+## Run a production build
 
-For a local production build, run:
+From the repository root, run:
 
 ```sh
 bun run build:pdf
@@ -41,12 +41,4 @@ bun run --filter './examples/docx-to-pdf' build
 bun run --filter './examples/docx-to-pdf' start
 ```
 
-## Verification
-
-Run the following command to verify the server:
-
-```sh
-node --test examples/docx-to-pdf/server.node.test.mjs
-```
-
-The test covers conversion, refusal, busy handling, cancellation, and recovery. It runs on Node rather than Bun, because it drives a real HTTP server and a `node:worker_threads` worker built from a `data:` URL. The repository runner dispatches `.node.test.mjs` files accordingly.
+For conversion options and supported content, see the [package README](../../packages/docx-to-pdf/README.md).

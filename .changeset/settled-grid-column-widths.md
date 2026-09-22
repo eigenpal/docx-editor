@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Resolve table column widths from the authored `w:tblGrid` when the table states its own total width, so an absolute cell width fills only the columns the grid leaves open.
+Use authored `w:tblGrid` column widths when the table specifies a total width. Apply absolute cell widths only to columns without a grid width.
