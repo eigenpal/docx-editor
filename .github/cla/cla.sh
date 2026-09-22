@@ -89,6 +89,13 @@ cla_init_signatures() {
   [ -f "$signatures_file" ] || echo '{"signedContributors":[]}' > "$signatures_file"
 }
 
+# Match GitHub's contains() behavior without changing the caller's shell options.
+cla_contains_sign_phrase() (
+  local body="$1" phrase="$2"
+  shopt -s nocasematch
+  [ -n "$phrase" ] && [[ "$body" == *"$phrase"* ]]
+)
+
 # Orchestrates the full workflow. The only function with side effects.
 # Required env: REPO, PR_NUMBER, EVENT_NAME, ALLOWLIST, CLA_URL, SIGN_PHRASE.
 # Required env when EVENT_NAME=issue_comment: COMMENT_USER_LOGIN, COMMENT_USER_ID, COMMENT_BODY.
@@ -103,8 +110,7 @@ cla_main() {
   # Skipped for: allowlisted bots/maintainers, org members, and signers
   # already on file. Idempotent across all three cases.
   if [ "${EVENT_NAME:-}" = "issue_comment" ] &&
-     [ -n "${SIGN_PHRASE:-}" ] &&
-     [[ "${COMMENT_BODY:-}" == *"$SIGN_PHRASE"* ]]; then
+     cla_contains_sign_phrase "${COMMENT_BODY:-}" "${SIGN_PHRASE:-}"; then
     if cla_should_skip "$COMMENT_USER_LOGIN" "$ALLOWLIST" "${CLA_ORG:-}"; then
       :  # allowlisted or org member — no JSON row needed
     elif ! cla_signed "$COMMENT_USER_ID" "$signatures"; then

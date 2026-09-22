@@ -274,6 +274,10 @@ check_cla_scenario 'unsigned recheck' issue_comment '!cla-check' false 0 0 failu
 check_cla_scenario 'empty comment' issue_comment '' false 0 0 failure
 check_cla_scenario 'unrelated comment' issue_comment 'Thanks for checking' false 0 0 failure
 check_cla_scenario 'explicit signature' issue_comment "$phrase" false 1 5 success
+check_cla_scenario 'lowercase signature' issue_comment \
+  'i have read the cla document and i hereby sign the cla' false 1 5 success
+check_cla_scenario 'mixed-case signature' issue_comment \
+  'i HAVE read the Cla DOCUMENT and I hereby SIGN the cLa' false 1 5 success
 check_cla_scenario 'signature with recheck' issue_comment "$phrase"$'\n!cla-check' false 1 5 success
 check_cla_scenario 'signed recheck' issue_comment '!cla-check' true 1 0 success
 check_cla_scenario 'duplicate signature' issue_comment "$phrase" true 1 0 success
