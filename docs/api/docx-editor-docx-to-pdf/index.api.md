@@ -73,6 +73,12 @@ export interface PdfExportResult {
     readonly layoutRevision: number;
     // (undocumented)
     readonly pageCount: number;
+    readonly timings: {
+        readonly layoutMs: number;
+        readonly openMs: number;
+        readonly paintMs: number;
+        readonly saveMs: number;
+    };
 }
 
 // @public
