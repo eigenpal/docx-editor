@@ -227,12 +227,23 @@ export function genericSubstituteFor(family: string): string {
   return 'Liberation Sans';
 }
 
-/** The families this package can answer for by name, which the generic stand-in must not touch. */
+/**
+ * The families the generic stand-in must not touch: the ones this package answers for by
+ * name, and the legacy symbol-encoded faces. A Symbol or Wingdings run draws private-use
+ * codepoints that only those faces carry; a text face standing in has no glyph for them,
+ * where the glyph fallback path maps them to their Unicode twins in a symbol face.
+ */
 const knownFamilies = new Set<string>([
   ...supplemental.map(([family]) => family),
   ...Object.keys(substitutes),
   ...Object.keys(packagedSubstitutes),
   ...Object.values(packagedSubstitutes),
+  'Symbol',
+  'Wingdings',
+  'Wingdings 2',
+  'Wingdings 3',
+  'Webdings',
+  'MT Extra',
 ]);
 
 /**

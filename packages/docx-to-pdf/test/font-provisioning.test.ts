@@ -283,6 +283,14 @@ test('a family nothing resolved gets a stand-in of its class, reported as generi
     resolvedFaces: [{ family: 'Sagona', weight: 400, style: 'normal' }],
   });
   expect(covered.sources).toHaveLength(0);
+  // A legacy symbol face never gets a text stand-in: its private-use bullets belong to the
+  // glyph fallback path, which maps them to Unicode in a symbol face.
+  const symbol = await supplementalFonts({
+    families: ['Symbol', 'Wingdings'],
+    defaultFamily: 'Arial',
+  });
+  expect(symbol.sources).toHaveLength(0);
+  expect(symbol.substitutions).toHaveLength(0);
   expect(isGenericSubstitution('Sagona', 'Liberation Serif')).toBe(true);
   expect(isGenericSubstitution('Calibri', 'Carlito')).toBe(false);
   expect(isGenericSubstitution('Times New Roman Bold', 'Liberation Serif')).toBe(false);
