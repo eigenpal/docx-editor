@@ -59,8 +59,9 @@ for (const [adapter, port] of [
       const action = page.locator(`[data-slot="${slot}"]`);
       await action.focus();
       await action.press('Enter');
-      await expect(file).toBeFocused();
       const result = await download;
+      await expect(page.locator('[data-docx-dialog="export"]')).toHaveCount(0);
+      await expect(file).toBeFocused();
       expect(result.suggestedFilename()).toBe(`Export sample.${extension}`);
       const bytes = await readFile((await result.path())!);
       if (extension === 'md') {
@@ -74,7 +75,7 @@ for (const [adapter, port] of [
         expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
         expect(bytes.length).toBeGreaterThan(1000);
       }
-      await expect(page.locator('.docx-menubar__export-status[role="alert"]')).toHaveCount(0);
+      await expect(page.locator('[data-docx-dialog="export"] [role="alert"]')).toHaveCount(0);
     }
   });
 
@@ -101,8 +102,16 @@ for (const [adapter, port] of [
     });
     await file.click();
     await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
+    const menuBounds = await page.locator('[role="menubar"]').boundingBox();
     await page.locator('[data-slot="file.exportPdf"]').click();
-    await expect(page.locator('.docx-menubar__export-status[role="status"]')).toBeVisible();
+    const progress = page.getByRole('dialog', { name: 'Exporting PDF…', exact: true });
+    await expect(progress).toBeVisible();
+    await expect(progress.getByRole('button', { name: 'Continue editing' })).toBeFocused();
+    expect(await page.locator('[role="menubar"]').boundingBox()).toEqual(menuBounds);
+    await page.screenshot({ path: `/tmp/docx-export-${adapter.toLowerCase()}-progress.png` });
+    await page.keyboard.press('Escape');
+    await expect(progress).toHaveCount(0);
+    await expect(file).toBeFocused();
     await expect.poll(() => requests).toBe(1);
     await file.click();
     await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
@@ -113,8 +122,11 @@ for (const [adapter, port] of [
     }
     expect(requests).toBe(1);
     release();
-    const error = page.locator('.docx-menubar__export-status[role="alert"]');
+    const error = page.locator('[data-docx-dialog="export"] [role="alert"]');
     await expect(error).toContainText('Conversion server unavailable');
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Close', exact: true }).click();
+    if ((await file.getAttribute('aria-expanded')) !== 'true') await file.click();
+    await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
     await expect(page.locator('[data-slot="file.exportPdf"]')).not.toHaveAttribute(
       'aria-disabled',
       'true'
@@ -122,6 +134,7 @@ for (const [adapter, port] of [
     await page.locator('[data-slot="file.exportPdf"]').click();
     await expect.poll(() => requests).toBe(2);
     await expect(error).toContainText('Conversion server unavailable');
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Close', exact: true }).click();
     await file.click();
     await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
     const download = page.waitForEvent('download');

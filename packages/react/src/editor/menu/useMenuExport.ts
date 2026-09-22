@@ -18,9 +18,13 @@ export function useMenuExport(
   const running = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [format, setFormat] = useState<ChromeExportFormat>('pdf');
+  const [visible, setVisible] = useState(false);
   const execute = async (format: ChromeExportFormat) => {
     if (!editor || running.current) return;
     running.current = true;
+    setFormat(format);
+    setVisible(true);
     setPending(true);
     setError('');
     try {
@@ -30,7 +34,9 @@ export function useMenuExport(
         downloadName(fileName).replace(/\.docx$/, `.${result.extension}`),
         result.mimeType
       );
+      setVisible(false);
     } catch (cause) {
+      setVisible(true);
       setError(
         cause instanceof ChromeExportError
           ? t(
@@ -47,5 +53,5 @@ export function useMenuExport(
       setPending(false);
     }
   };
-  return { pending, error, execute };
+  return { pending, error, format, visible, dismiss: () => setVisible(false), execute };
 }

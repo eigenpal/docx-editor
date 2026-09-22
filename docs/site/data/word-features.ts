@@ -89,7 +89,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'community',
     notes:
-      'File > Export downloads continuous Markdown through docx-to-markdown. Configure menu.exporters.markdown. Missing handlers show a setup error. Export preserves the source document.',
+      'File > Export downloads continuous Markdown through docx-to-markdown. Configure menu.exporters.markdown. A dismissible dialog shows progress and errors. Missing handlers show a setup error. Export preserves the source document.',
     docsLink: '/docs/2.x/guides/export',
   },
   {
@@ -101,7 +101,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. Missing handlers show a setup error. PDF conversion requires the EigenPal Pro License.',
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Missing handlers show a setup error. PDF conversion requires the EigenPal Pro License.',
     docsLink: '/docs/2.x/guides/export',
   },
   // --- Text & formatting -----------------------------------------------

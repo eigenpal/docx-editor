@@ -64,9 +64,12 @@ export function focusEdge(items: readonly HTMLElement[], edge: 'first' | 'last')
   return true;
 }
 
-/** Keep keyboard focus on the menu trigger when an export closes its panel. */
+/** Give the export dialog a stable menu trigger to restore focus to. */
 export function restoreExportFocus(root: HTMLElement | null): void {
   const focused = root?.ownerDocument.activeElement;
-  if (!focused || !root?.contains(focused)) return;
-  focused.closest('[data-menu]')?.querySelector<HTMLElement>(':scope > [role="menuitem"]')?.focus();
+  const menu = focused && root?.contains(focused) ? focused.closest('[data-menu]') : null;
+  const trigger =
+    menu?.querySelector<HTMLElement>(':scope > [role="menuitem"]') ??
+    root?.querySelector<HTMLElement>('.docx-menubar__trigger[aria-expanded="true"]');
+  trigger?.focus({ preventScroll: true });
 }

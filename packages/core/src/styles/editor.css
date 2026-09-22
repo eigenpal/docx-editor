@@ -7425,10 +7425,37 @@ a.docx-hyperlink:focus-visible {
   outline-offset: 2px;
 }
 
-.docx-editor .docx-menubar__export-status {
-  padding: 8px 12px;
-  color: var(--doc-text);
-  background: var(--doc-bg);
-  font-size: 13px;
+.docx-editor .docx-export-dialog,
+.docx-editor.docx-export-dialog {
+  max-width: 380px;
+}
+.docx-editor .docx-export-dialog__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.docx-editor .docx-export-dialog__message {
+  margin: 0;
+  color: var(--doc-text-muted);
   overflow-wrap: anywhere;
+}
+.docx-editor .docx-export-dialog__spinner {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
+  border-radius: 50%;
+  animation: docx-export-spin 0.8s linear infinite;
+}
+@keyframes docx-export-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-export-dialog__spinner {
+    animation: none;
+  }
 }

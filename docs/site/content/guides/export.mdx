@@ -79,7 +79,11 @@ defineProps<{ source: Uint8Array }>();
 </template>
 ```
 
-If a converter handler is missing, the menu shows an error that names the required package and configuration. The menu shows conversion failures and disables export actions while conversion runs. After a failure, select the format again to retry. A missing converter never falls back to another format.
+While conversion runs, a dialog shows the export format. Select **Continue editing** to dismiss the dialog without stopping the export. Export actions remain disabled until conversion finishes. The dialog closes when the download starts.
+
+If conversion fails, the dialog shows an error. Close the dialog, then select the format again to retry.
+
+If a converter handler is missing, the error names the required package and configuration. A missing converter never falls back to another format.
 
 ## Convert PDF on the server
 

@@ -1,3 +1,4 @@
+import { MenuExportDialog } from './MenuExportDialog';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
@@ -336,15 +337,12 @@ const DocxEditorMenuRoot = defineComponent({
           >
             {content}
           </div>
-          {exportState.pending.value && (
-            <div role="status" class="docx-menubar__export-status">
-              {catalogT('toolbar.exporting')}
-            </div>
-          )}
-          {exportState.error.value && (
-            <div role="alert" class="docx-menubar__export-status">
-              {exportState.error.value}
-            </div>
+          {exportState.visible.value && (
+            <MenuExportDialog
+              format={exportState.format.value}
+              error={exportState.error.value}
+              onClose={exportState.dismiss}
+            />
           )}
           <input
             ref={fileInputRef}

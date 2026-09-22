@@ -41,8 +41,13 @@
     "exportMarkdownMissing": null,
     "exportPdf": null,
     "exportPdfMissing": null,
-    "exporting": null,
-    "exportPdfServerUnavailable": null
+    "exportPdfServerUnavailable": null,
+    "exportContinueEditing": null,
+    "exportDownloadHint": null,
+    "exportMarkdownFailed": null,
+    "exportPdfFailed": null,
+    "exportingMarkdown": null,
+    "exportingPdf": null
   },
   "formattingBar": {
     "groups": {

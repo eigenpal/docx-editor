@@ -1,3 +1,4 @@
+import { MenuExportDialog } from './MenuExportDialog';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
 import { useDialogHost } from '../dialog-host';
@@ -189,11 +190,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const [openedName, setOpenedName] = useState<string | null>(null);
   // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
-  const {
-    pending: exportPending,
-    error: exportError,
-    execute: executeExport,
-  } = useMenuExport(editor, exporters, fileName ?? openedName ?? undefined);
+  const exportState = useMenuExport(editor, exporters, fileName ?? openedName ?? undefined);
+  const { pending: exportPending, execute: executeExport } = exportState;
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
@@ -416,15 +414,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       >
         {content}
       </div>
-      {exportPending && (
-        <div role="status" className="docx-menubar__export-status">
-          {catalogT('toolbar.exporting')}
-        </div>
-      )}
-      {exportError && (
-        <div role="alert" className="docx-menubar__export-status">
-          {exportError}
-        </div>
+      {exportState.visible && (
+        <MenuExportDialog
+          format={exportState.format}
+          error={exportState.error}
+          onClose={exportState.dismiss}
+        />
       )}
       {/* Opening a document is a FILE READ the user drives — never a fetched URL. Mounted
           even when the host overrode `onOpen`, because the input costs nothing and a host
