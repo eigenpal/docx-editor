@@ -139,8 +139,13 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
     cancelConversion();
     // Resolve against the app base, not the page URL: on the dedicated host the page is `/`
     // and a relative `sample.docx` would ask the SPA catch-all for HTML.
-    const response = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
-    if (!response.ok) return;
+    const response = await fetch(`${import.meta.env.BASE_URL}sample.docx`).catch(() => null);
+    if (!response?.ok) {
+      // Say so: an empty editor with no explanation reads as a broken page.
+      setStatus('error');
+      setError('The sample document could not be loaded. Open a DOCX of your own instead.');
+      return;
+    }
     setDocument(new Uint8Array(await response.arrayBuffer()));
     setStatus('idle');
     setResult(null);
@@ -201,7 +206,6 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
       const bytes = Uint8Array.from(atob(payload.pdf), (character) => character.charCodeAt(0));
       setResult({
         url: URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })),
-        data: bytes,
         bytes: bytes.byteLength,
         pageCount: payload.pageCount ?? 0,
         diagnostics: payload.diagnostics ?? [],

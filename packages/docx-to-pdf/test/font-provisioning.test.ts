@@ -299,3 +299,27 @@ test('the stand-in origin covers what nothing else did, after the embedded fonts
   expect(isGenericSubstitution('Times New Roman Bold', 'Liberation Serif')).toBe(false);
   expect(isGenericSubstitution('Helvetica', 'Liberation Sans')).toBe(false);
 });
+
+test('a family with no face anywhere refuses strict export and renders in best effort', async () => {
+  const { exportPdf } = await import('../src/index.ts');
+  const { docx, paragraph } = await import('./fixture.ts');
+  const input = docx(
+    paragraph(
+      'Set in a font this machine lacks',
+      '<w:rPr><w:rFonts w:ascii="Sagona" w:hAnsi="Sagona"/></w:rPr>'
+    )
+  );
+  await expect(exportPdf(input, { useSystemFonts: false })).rejects.toMatchObject({
+    name: 'PdfFidelityError',
+    diagnostics: [
+      expect.objectContaining({
+        code: 'font-substitution',
+        severity: 'unsupported',
+        message: 'Sagona is not available; best-effort export renders it in Liberation Serif',
+      }),
+    ],
+  });
+  const lenient = await exportPdf(input, { useSystemFonts: false, fidelityPolicy: 'best-effort' });
+  expect(lenient.pageCount).toBe(1);
+  expect(lenient.diagnostics.map((d) => d.code)).toEqual(['font-substitution']);
+});

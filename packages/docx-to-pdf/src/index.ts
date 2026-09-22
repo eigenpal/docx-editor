@@ -19,12 +19,13 @@ import {
   type PdfExportResult,
 } from './types.ts';
 export { PdfDocumentOpenError, PdfEncodingError, PdfFidelityError } from './types.ts';
+export { PdfWorkLimitError } from './context.ts';
 export type { PdfDiagnostic, PdfExportOptions, PdfExportResult } from './types.ts';
 export { ExportResourceError } from '@docx-editor.dev/core/export';
 /**
  * Say which families render in a stand-in face of another family's metrics. Word's own
  * metric-compatible substitutions (Calibri in Carlito and the like) are silent, as they are
- * in Word; a family this package only knows by name is not.
+ * in Word; a family this package only knows by name is not, and the report is `unsupported`.
  */
 function reportGenericSubstitutions(resolution: ExportFontResolutionReport, work: Work): void {
   for (const family of resolution.families) {
@@ -33,11 +34,11 @@ function reportGenericSubstitutions(resolution: ExportFontResolutionReport, work
         face.via === 'substitution' && isGenericSubstitution(family.family, face.sourceFamily)
     );
     if (stand)
+      // Not information: the stand-in's metrics move line breaks and page count, so a strict
+      // export refuses rather than paginate in another font. Best effort renders and says so.
       work.report(
         'font-substitution',
-        `${family.family} is not available and renders in ${stand.sourceFamily}`,
-        undefined,
-        'information'
+        `${family.family} is not available; best-effort export renders it in ${stand.sourceFamily}`
       );
   }
 }

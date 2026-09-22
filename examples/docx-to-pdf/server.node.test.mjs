@@ -224,3 +224,42 @@ test('a streaming worker failure finishes with an error and frees the conversion
     await app.close();
   }
 });
+
+test(
+  'a fidelity refusal answers with fixed text and the diagnostics, like the hosted function',
+  {
+    skip: skipUnbuilt,
+  },
+  async () => {
+    const { zipSync, strToU8 } = await import('fflate');
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const unknownFont = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="Sagona" w:hAnsi="Sagona"/></w:rPr><w:t>Text</w:t></w:r></w:p></w:body></w:document>`
+      ),
+    });
+    const app = await createPdfDemo({ production: true });
+    app.server.listen(0, '127.0.0.1');
+    await once(app.server, 'listening');
+    const base = `http://127.0.0.1:${app.server.address().port}`;
+    try {
+      const refused = await send(`${base}/api/convert`, { method: 'POST', body: unknownFont });
+      assert.equal(refused.status, 422);
+      const payload = await refused.json();
+      assert.equal(payload.error, 'PdfFidelityError');
+      assert.equal(
+        payload.message,
+        'The document has content this converter cannot reproduce exactly.'
+      );
+      assert.equal(payload.diagnostics[0].code, 'font-substitution');
+    } finally {
+      await app.close();
+    }
+  }
+);

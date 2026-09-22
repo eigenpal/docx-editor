@@ -27,7 +27,7 @@ Conversion runs when you ask for it, not on every keystroke, because a page of P
 
 The Node server hosts the React UI and `/api/convert`. Conversion runs in a worker with a 60-second deadline and a bounded heap, one conversion at a time. A request that arrives while another conversion runs receives 503. Uploads stay in memory, and are limited to 20 MiB. The server retains neither the uploaded document nor the converted PDF, and it binds to loopback. To change the port, set `PORT`.
 
-The hosted demo converts through a server function with the same limits. It accepts a request only when its `Origin` header matches the host, so only the demo page can use it.
+The hosted demo converts through a server function with the same upload limit, deadline, and one-at-a-time rule per instance. Its memory ceiling is the function's own, and a document beyond it is refused with 507. It accepts a request only when its `Origin` header matches the host, so only the demo page can use it. The local server also accepts requests without an `Origin` header, so a command-line client can exercise it during development.
 
 The heap ceiling is 512 MiB, set with `WORKER_HEAP_MB`. A 521-page document converts in about 17 seconds and peaks near 380 MiB of old space. The same document fails below about 448 MiB. A document that needs more than the ceiling receives 507, with a message that names the limit. The host is not exhausted.
 

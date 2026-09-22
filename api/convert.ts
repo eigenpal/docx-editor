@@ -10,12 +10,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * local demo server in `examples/docx-to-pdf/server.mjs`. The conversion runs in Node because
  * the exporter resolves font files through `node:fs`; this function is that Node.
  *
- * It keeps the local server's contract and its limits: a 20 MiB upload, a 60 second deadline,
+ * It keeps the local server's contract and its limits: a 20 MiB upload (the function's own
+ * bound; the platform accepts larger bodies), a 60 second deadline,
  * one conversion at a time, and no retention of the upload or the result. Two things differ
  * because a function has no worker to hand the work to. The conversion runs in this process,
  * so its memory ceiling is the function's own, set in `vercel.json`; and "one at a time" is
  * per instance, a second request arriving while one runs is refused with 503 as the local
- * server does, so one instance never lays out two documents at once. The request must carry
+ * server does, so one instance never lays out two documents at once. The platform's own
+ * concurrency limit bounds how many instances run; this function does not add a global lock. The request must carry
  * an `Origin` that matches the host: this endpoint exists for the demo page, and a browser
  * always sends `Origin` on a `POST`, so a request without one is not the page.
  */

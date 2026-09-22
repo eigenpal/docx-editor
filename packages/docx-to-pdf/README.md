@@ -22,7 +22,7 @@ await writeFile('document.pdf', result.bytes);
 - `displayMode: 'proposed'` shows the final text. `'original'` and `'all-markup'` use Core's corresponding revision projections. Conversion never changes the DOCX.
 - `comments: true` preserves native PDF comments. To omit annotations, set it to `false`.
 - `useSystemFonts` defaults to `true`. It reads known Word font filenames from standard OS font directories. For portable packaged fonts, set it to `false`.
-- A family written as a face name, such as `Times New Roman Bold`, and a localized East Asian name, such as `宋体`, resolve to the faces Word uses for them. When Helvetica or a common East Asian family is absent, a packaged face stands in for it.
+- A family written as a face name, such as `Times New Roman Bold`, and a localized East Asian name, such as `宋体`, resolve to the faces Word uses for them. When Helvetica or a common East Asian family is absent, a packaged face stands in for it. A family no installed, packaged, or embedded face covers renders in a packaged face of its class in best-effort export; strict export refuses it with a `font-substitution` diagnostic, because the stand-in's metrics move line breaks.
 - `glyphFallbacks` lists ordered admitted faces for a span that is missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. An emoji from a COLR face paints its palette layers in color and stays extractable as text.
 - `fonts` places caller font origins before installed Word fonts and packaged substitutes. `fallbackFonts` follow the packaged origins. Core's separate `fontPolicy` controls substitution. To see the faces the export used, inspect `result.fontResolution`.
 - `timeoutMs: 60000`, `maxOutputBytes: 67108864`, and an optional `signal` bound the work. You can lower the byte limit, but you cannot raise it. Core resource limits still apply.
@@ -74,7 +74,7 @@ bun install
 bun run dev:pdf
 ```
 
-Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The local server binds to loopback. The hosted demo converts through a server function with the same limits, and accepts requests only from its own page.
+Open `http://127.0.0.1:5180`. Uploads stay in memory on the local server. The server allows one active conversion, a 20 MiB upload, and a 60-second deadline. A worker handles each conversion, and cancellation terminates that worker. The local server binds to loopback. The hosted demo converts through a server function with the same upload limit and deadline, its own memory ceiling, and accepts requests only from its own page.
 
 ## Verification
 

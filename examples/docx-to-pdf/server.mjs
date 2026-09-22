@@ -156,7 +156,15 @@ export async function createPdfDemo({
               bytes: undefined,
               pdf: Buffer.from(result.bytes).toString('base64'),
             });
-          else if (result.error === 'PdfFidelityError') json(422, result);
+          // Fixed text plus the writer's own diagnostics, the same shape the hosted function
+          // sends, so a strict caller gets one answer whichever host converts.
+          else if (result.error === 'PdfFidelityError')
+            json(422, {
+              ok: false,
+              error: result.error,
+              message: 'The document has content this converter cannot reproduce exactly.',
+              diagnostics: result.diagnostics ?? [],
+            });
           // An open failure's own message names the zip entry that failed, which is the
           // upload's to choose. Keep that detail on the server side.
           else

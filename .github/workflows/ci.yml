@@ -139,6 +139,9 @@ jobs:
       - name: PDF demo worker integration
         run: node --test examples/docx-to-pdf/server.node.test.mjs
         if: "matrix.check == 'build'"
+      - name: PDF conversion function contract
+        run: node --test api/convert.node.test.mjs
+        if: "matrix.check == 'build'"
       - name: Editor API public consumer workflows
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
         if: "matrix.check == 'build'"

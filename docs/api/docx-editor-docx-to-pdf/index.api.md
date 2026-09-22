@@ -88,6 +88,11 @@ export class PdfFidelityError extends Error {
     readonly diagnostics: readonly PdfDiagnostic[];
 }
 
+// @public (undocumented)
+export class PdfWorkLimitError extends Error {
+    constructor();
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

@@ -24,7 +24,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * time. `--baseline` names a previous report and prints what got worse and what got better.
  */
 /* eslint-disable no-console -- a command-line report; stdout is its output. */
-import { readdir, readFile, stat, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, readFile, lstat, writeFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { basename, join, resolve } from 'node:path';
@@ -76,6 +77,15 @@ export const HINTS: Readonly<Record<string, string>> = {
   'run-border-style': 'A character border style outside single, thick, dashed, dotted, double.',
   'paragraph-border-style': 'A paragraph border style the writer does not draw.',
 };
+
+/** The demo's upload limit; a larger document is skipped rather than read. */
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+
+/** A numeric flag within its bounds, or the default when it is missing or out of range. */
+export function clamp(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
 
 /** Diagnostics grouped by code and message: one line per distinct problem. */
 export function groupDiagnostics(diagnostics: readonly PdfDiagnostic[]): DiagnosticGroup[] {
@@ -193,9 +203,9 @@ async function keep(
 
 async function triageOne(
   path: string,
+  name: string,
   options: { timeoutMs: number; useSystemFonts: boolean; runDir: string; dpi: number }
 ): Promise<TriageRow> {
-  const name = basename(path);
   const bytes = new Uint8Array(await readFile(path));
   const started = performance.now();
   const ms = () => Math.round(performance.now() - started);
@@ -292,8 +302,8 @@ async function main(argv: readonly string[]): Promise<void> {
     if (arg === '--out') out = argv[++i];
     else if (arg === '--baseline') baseline = argv[++i];
     else if (arg === '--run-dir') runDir = argv[++i];
-    else if (arg === '--dpi') dpi = Number(argv[++i]);
-    else if (arg === '--timeout') timeoutMs = Number(argv[++i]);
+    else if (arg === '--dpi') dpi = clamp(Number(argv[++i]), 24, 300, 80);
+    else if (arg === '--timeout') timeoutMs = clamp(Number(argv[++i]), 1_000, 600_000, 120_000);
     else if (arg === '--no-system-fonts') useSystemFonts = false;
     else if (arg === '--help' || arg === '-h') {
       console.log(
@@ -309,24 +319,47 @@ async function main(argv: readonly string[]): Promise<void> {
   out ??= join(runDir, 'report.json');
   const poppler = spawnSync('pdftoppm', ['-v'], { stdio: 'ignore' });
   if (poppler.error) console.log('pdftoppm not found: PDFs are written, pages are not rendered');
-  const files: string[] = [];
+  const files: { path: string; name: string }[] = [];
   for (const input of inputs) {
     const path = resolve(input);
-    const info = await stat(path).catch(() => null);
+    const info = await lstat(path).catch(() => null);
     if (!info) {
       console.error(`${path} does not exist; drop documents into ${inputs[0]} or name a folder`);
       process.exitCode = 2;
       return;
     }
     if (info.isDirectory()) {
-      for (const entry of (await readdir(path)).sort())
-        if (entry.toLowerCase().endsWith('.docx') && !entry.startsWith('~$'))
-          files.push(join(path, entry));
-    } else files.push(path);
+      for (const entry of (await readdir(path)).sort()) {
+        if (!entry.toLowerCase().endsWith('.docx') || entry.startsWith('~$')) continue;
+        const file = join(path, entry);
+        const detail = await lstat(file);
+        // Symbolic links are not followed: the folder is the boundary of what this reads.
+        if (detail.isSymbolicLink() || !detail.isFile()) continue;
+        if (detail.size > MAX_DOCUMENT_BYTES) {
+          console.log(
+            `skip ${entry}: ${Math.round(detail.size / 1048576)} MiB is over the 20 MiB limit`
+          );
+          continue;
+        }
+        files.push({ path: file, name: entry });
+      }
+    } else if (!info.isSymbolicLink()) files.push({ path, name: basename(path) });
+  }
+  // Two folders can hold the same file name; the second of a name gets a hash suffix so
+  // neither's PDF, pages or report row overwrites the other's.
+  const seen = new Map<string, number>();
+  for (const [index, file] of files.entries()) {
+    const count = seen.get(file.name) ?? 0;
+    seen.set(file.name, count + 1);
+    if (count > 0)
+      files[index] = {
+        ...file,
+        name: `${file.name}-${createHash('sha256').update(file.path).digest('hex').slice(0, 8)}`,
+      };
   }
   const rows: TriageRow[] = [];
   for (const file of files) {
-    const row = await triageOne(file, { timeoutMs, useSystemFonts, runDir, dpi });
+    const row = await triageOne(file.path, file.name, { timeoutMs, useSystemFonts, runDir, dpi });
     rows.push(row);
     printRow(row);
   }

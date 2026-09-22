@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { PDFName, type PDFDocument, type PDFPage } from 'pdf-lib';
+import { PDFName, type PDFDocument, type PDFPage, type PDFRef } from 'pdf-lib';
 import type {
   FontBackedExportCapabilities,
   ExportAdmittedFontIdentity,
@@ -22,7 +22,7 @@ import {
 import { underlineGap } from './underline-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
-import { colorGlyphLayers, type ColorGlyphLayer } from './color-glyphs.ts';
+import { colorGlyph, type ColorGlyphLayer } from './color-glyphs.ts';
 import { color, number as n, rect, Work } from './context.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
@@ -352,10 +352,22 @@ export class TextWriter {
         const gx = x + (origin + glyph.offsetX) * scale * horizontal + extra;
         const gy = baseline + (glyph.originY + glyph.offsetY) * scale;
         if (activeFace.colorLayers) {
-          const layers = colorGlyphLayers(activeFace.font, glyph.id, this.work);
-          if (layers)
+          const color = colorGlyph(activeFace.font, glyph.id, this.work);
+          // A glyph this writer cannot paint is reported and left out, carrier included, so
+          // strict export refuses and best-effort never extracts text the page does not show.
+          if (color.kind === 'refused' || (color.kind === 'none' && color.outlined)) {
+            this.work.report(
+              'color-glyph',
+              color.kind === 'refused'
+                ? `A color glyph could not be painted: ${color.reason}`
+                : 'A glyph of a color face has no color layers and the face is not embedded',
+              visit.page.index
+            );
+            continue;
+          }
+          if (color.kind === 'layers')
             colorGlyphs.push({
-              layers,
+              layers: color.layers,
               x: gx,
               y: gy,
               scale: glyphSize / activeFace.font.unitsPerEm,
@@ -395,7 +407,13 @@ export class TextWriter {
     if (style.textOutline) out.push('Q');
     for (const { layers, x: gx, y: gy, scale: glyphScale } of colorGlyphs) {
       out.push(`q ${n(glyphScale * horizontal)} 0 0 ${n(glyphScale)} ${n(gx)} ${n(gy)} cm`);
-      for (const layer of layers) out.push(`${layer.fill} ${layer.path} f`);
+      for (const layer of layers) {
+        // A translucent palette layer keeps its alpha through a graphics state.
+        const alpha = layer.alpha < 1 ? this.alphaState(page, layer.alpha) : null;
+        out.push(
+          alpha ? `q /${alpha} gs ${layer.fill} ${layer.path} f Q` : `${layer.fill} ${layer.path} f`
+        );
+      }
       out.push('Q');
     }
     const metricScale = size / face.font.unitsPerEm;
@@ -587,6 +605,21 @@ export class TextWriter {
       faceBaseline -
       baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
     return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
+  }
+  private readonly alphaStates = new Map<number, PDFRef>();
+  /** A registered constant-alpha graphics state, shared across layers of the same alpha. */
+  private alphaState(page: PDFPage, alpha: number): string {
+    const key = Math.round(alpha * 1000);
+    let ref = this.alphaStates.get(key);
+    if (!ref) {
+      ref = this.doc.context.register(
+        this.doc.context.obj({ Type: 'ExtGState', ca: key / 1000, CA: key / 1000 })
+      );
+      this.alphaStates.set(key, ref);
+    }
+    const name = `LayerAlpha${key}`;
+    page.node.setExtGState(PDFName.of(name), ref);
+    return name;
   }
   /** An embedded text face on this page to carry extractable characters: the run's own, or any. */
   private textHost(face: EmbeddedFace, page: PDFPage): EmbeddedFace | null {

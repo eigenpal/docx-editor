@@ -301,7 +301,15 @@ export async function paint(
   forEachSemanticStory(layout, (root) => markRotated(root.host.fragments));
   const rotatedBuffers = new Map<
     string,
-    { cell: TableCellFragmentRecord; x: number; y: number; page: number; commands: Commands }
+    {
+      cell: TableCellFragmentRecord;
+      x: number;
+      y: number;
+      page: number;
+      commands: Commands;
+      /** Behind-text drawings of the cell, turned with it but painted under the page's text. */
+      behind: Commands;
+    }
   >();
   const outFor = (
     visit: Pick<SemanticSpanVisit, 'story' | 'textboxOwner' | 'page'> & {
@@ -320,6 +328,7 @@ export async function paint(
           y: visit.storyOrigin.y - visit.page.box.y,
           page: visit.page.index,
           commands: new Commands(work),
+          behind: new Commands(work),
         };
         rotatedBuffers.set(key, entry);
       }
@@ -503,21 +512,22 @@ export async function paint(
     if (visit.story === 'textbox' && visit.textboxOwner) continue;
     const commands = await paintDrawing(visit);
     if (visit.paragraph && rotatedCellOf.has(visit.paragraph)) {
-      outFor(visit).push(commands);
+      const cell = rotatedCellOf.get(visit.paragraph)!;
+      outFor(visit);
+      const entry = rotatedBuffers.get(`${visit.page.index}:${cell.id}`)!;
+      (visit.paintLayer === 'behind-text' ? entry.behind : entry.commands).push(commands);
       continue;
     }
     (visit.paintLayer === 'behind-text' ? behindStreams : streams)[visit.page.index]!.push(
       commands
     );
   }
-  for (const { cell, x, y, page, commands } of rotatedBuffers.values()) {
-    if (commands.length === 0) continue;
-    streams[page]!.push(
-      'q',
-      rotatedCellMatrix(cell.box, x, y, pages[page]!.getHeight()),
-      ...commands,
-      'Q'
-    );
+  // Each rotated cell's ink turns as one: behind-text drawings under the page's text, the
+  // text and in-front drawings over it, both under the same matrix.
+  for (const { cell, x, y, page, commands, behind } of rotatedBuffers.values()) {
+    const matrix = rotatedCellMatrix(cell.box, x, y, pages[page]!.getHeight());
+    if (behind.length) behindStreams[page]!.push('q', matrix, ...behind, 'Q');
+    if (commands.length) streams[page]!.push('q', matrix, ...commands, 'Q');
   }
   // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings
   // included, so it goes into the stream after them, not before.
