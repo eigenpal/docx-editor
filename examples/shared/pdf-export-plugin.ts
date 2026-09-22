@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 /** Use the deployed PDF function contract in the React and Vue development servers. */
 export function pdfExportPlugin(): Plugin {
@@ -7,7 +8,9 @@ export function pdfExportPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         if (request.url?.split('?')[0] !== '/api/convert') return next();
-        void import('../../api/convert.ts')
+        const handlerPath = fileURLToPath(new URL('../../api/convert.ts', import.meta.url));
+        void server
+          .ssrLoadModule(handlerPath)
           .then(({ default: handler }) => handler(request, response))
           .catch((error: unknown) => {
             server.config.logger.error(String(error));
