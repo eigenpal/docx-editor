@@ -33,7 +33,11 @@ async function yellowBands(body: string): Promise<{ bottom: number; top: number 
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 22 } },
   });
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const parsed = await PDFDocument.load(result.bytes);
   const commands = parsed.context
     .enumerateIndirectObjects()

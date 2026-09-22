@@ -80,7 +80,7 @@ The callback runs before a strict font refusal. Returned callback promises do no
 
 `result.fontResolution.families` records each family's coverage and selected faces. Inspect each face's `sourceFamily`, `via`, and `substitution` fields. `originFailures` retains source failures and their causes. `droppedEmbeddedFonts` identifies embedded faces rejected during font admission.
 
-The `font-origin-failed` diagnostic directs you to this evidence. It remains informational when `fontPolicy` permits recovery.
+Each `font-origin-failed` diagnostic provides the source index, optional source name, and a guarded cause message. The `incomplete-font` diagnostic reports partial coverage and substituted variants within a family. It remains informational when `fontPolicy` permits recovery.
 
 | Symptom | Action |
 | --- | --- |

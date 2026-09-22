@@ -25,6 +25,10 @@ await writeFile('document.pdf', result.bytes);
 
 Conversion preserves the source DOCX. Browser applications must send the document to a Node.js server for conversion.
 
+## Reuse a layout
+
+Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and layout. The session also works with Markdown's `exportMarkdownFrom`. Dispose the session after all exports, including failed exports. For an example, see [Compare PDF and Markdown conversion](docs/markdown-contract.md#reuse-one-session).
+
 ## Configure output
 
 | Option | Default | Behavior |
@@ -71,7 +75,7 @@ Editing PDF annotations does not update the DOCX.
 
 Charts, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. Brightness and grayscale adjustments are not supported.
 
-The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts that prohibit subsetting, and font containers that cannot be encoded. Tagged PDF, PDF/A, encryption, forms, and reusable export sessions are not supported.
+The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts that prohibit subsetting, and font containers that cannot be encoded. Tagged PDF, PDF/A, encryption, and forms are not supported.
 
 ## Errors and resource limits
 
@@ -91,6 +95,8 @@ The writer compresses content streams and embeds font subsets. It retains layout
 Cancellation is checked between layout, paint, and encoding batches. Synchronous font and image operations cannot be interrupted mid-call. For a hard deadline or heap limit, run conversion in a worker and configure `resourceLimits.maxOldGenerationSizeMb`.
 
 ## Developer guides
+
+- [Compare PDF and Markdown conversion](docs/markdown-contract.md): shared controls and intentional differences.
 
 - [PDF export API](docs/api.md): options, result fields, diagnostics, stable error codes, and resource boundaries.
 - [Configure PDF fonts](docs/fonts.md): custom files, source order, policies, and troubleshooting.

@@ -158,6 +158,15 @@ export async function createPdfDemo({
             });
           // Fixed text plus the writer's own diagnostics, the same shape the hosted function
           // sends, so a strict caller gets one answer whichever host converts.
+          else if (
+            ['PdfPageLimitError', 'PdfOutputLimitError', 'PdfWorkLimitError'].includes(result.error)
+          )
+            json(507, {
+              ok: false,
+              error: result.error,
+              message:
+                'The document is larger than this demo converts. Convert a smaller document.',
+            });
           else if (result.error === 'PdfFidelityError')
             json(422, {
               ok: false,

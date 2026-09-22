@@ -106,8 +106,7 @@ export class Work {
   }
   reserveContent(bytes: number): void {
     this.contentBytes += bytes;
-    if (this.contentBytes > MAX_OUTPUT_BYTES)
-      throw new RangeError('PDF uncompressed content limit exceeded');
+    if (this.contentBytes > MAX_OUTPUT_BYTES) throw new PdfWorkLimitError();
   }
   tick(): void {
     this.check();
@@ -122,20 +121,30 @@ export class Work {
     code: string,
     message: string,
     pageIndex?: number,
-    severity: PdfDiagnostic['severity'] = 'unsupported'
+    severity: PdfDiagnostic['severity'] = 'unsupported',
+    origin?: Pick<PdfDiagnostic, 'originIndex' | 'originName'>
   ): void {
-    const key = `${code}:${pageIndex ?? ''}:${message}`;
+    const key = `${code}:${pageIndex ?? ''}:${origin?.originIndex ?? ''}:${message}`;
     if (this.seen.has(key)) return;
     if (this.diagnostics.length >= 10_000) throw new PdfWorkLimitError();
     this.seen.add(key);
-    this.diagnostics.push(Object.freeze({ code, message, pageIndex, severity }));
+    this.diagnostics.push(
+      Object.freeze({
+        code,
+        message,
+        pageIndex,
+        ...(pageIndex === undefined ? {} : { pageNumber: pageIndex + 1 }),
+        severity,
+        ...origin,
+      })
+    );
   }
 }
-/** Content exceeds the operation or diagnostic budget. @public */
+/** Content exceeds a processing budget. @public */
 export class PdfWorkLimitError extends Error {
   readonly code = 'workLimitExceeded';
   constructor() {
-    super('PDF operation or diagnostic limit exceeded');
+    super('PDF content, operation, or diagnostic limit exceeded');
     this.name = 'PdfWorkLimitError';
   }
 }

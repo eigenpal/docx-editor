@@ -137,3 +137,33 @@ test(
     assert.equal(lenient.json.diagnostics[0].code, 'font-substitution');
   }
 );
+
+test('typed PDF limits retain the hosted resource-limit response', { skip }, async () => {
+  const { pdfFailureResponse } = await import('./convert.ts');
+  const { PdfPageLimitError, PdfOutputLimitError, PdfWorkLimitError } =
+    await import('@docx-editor.dev/docx-to-pdf');
+  for (const error of [
+    new PdfPageLimitError(1, 2),
+    new PdfOutputLimitError(1, 2),
+    new PdfWorkLimitError(),
+  ]) {
+    const result = pdfFailureResponse(error);
+    assert.equal(result.status, 507);
+    assert.equal(result.body.error, error.name);
+    assert.equal(
+      result.body.message,
+      'The document is larger than this demo converts. Convert a smaller document.'
+    );
+  }
+});
+
+test('hosted resource timeouts use the stable code instead of message text', { skip }, async () => {
+  const { pdfFailureResponse } = await import('./convert.ts');
+  const { ExportResourceError } = await import('@docx-editor.dev/docx-to-pdf');
+  for (const message of ['Layout did not stabilize', 'Image decode did not settle']) {
+    const result = pdfFailureResponse(new ExportResourceError('timedOut', message));
+    assert.equal(result.status, 408);
+    assert.equal(result.body.message, 'Conversion exceeded 60 seconds.');
+  }
+  assert.equal(pdfFailureResponse(new ExportResourceError('aborted', 'timed out')).status, 500);
+});

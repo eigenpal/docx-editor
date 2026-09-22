@@ -1,5 +1,5 @@
 ---
-"@docx-editor.dev/core": minor
+"@docx-editor.dev/core": patch
 ---
 
-Improve PDF conversion with configurable page limits, typed limit errors, font helpers, and explicit font-source diagnostics.
+Improve PDF conversion with reusable export sessions, configurable limits, typed errors, and font diagnostics.

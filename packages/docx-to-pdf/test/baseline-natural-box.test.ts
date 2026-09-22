@@ -33,7 +33,11 @@ async function firstBaselineFromTop(body: string): Promise<number> {
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
   });
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const height = (await PDFDocument.load(result.bytes)).getPage(0).getHeight();
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
   try {
@@ -75,7 +79,11 @@ test('every run on one line shares a baseline whatever size it is drawn at', asy
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
   });
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const baselines = await baselineYPositions(result.bytes);
   expect(baselines.length).toBeGreaterThan(1);
   expect(new Set(baselines.map((y) => y.toFixed(4))).size).toBe(1);

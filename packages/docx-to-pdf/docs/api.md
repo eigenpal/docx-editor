@@ -8,6 +8,18 @@ Import conversion functions, error classes, font helpers, and result types from 
 
 Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or later. The converter needs WebAssembly and access to its packaged font files. Browser and Edge runtimes are not supported.
 
+## Reusable sessions
+
+`openDocumentForExport(source, options?)` returns `Promise<OpenPdfDocumentForExportResult>`. It accepts immutable DOCX bytes and font/layout options. Its result has the same success/refusal shape as Markdown's open function. On success, `result.session` provides the font-backed capabilities required by PDF output. On refusal, inspect `reason` and optional `detail`. Font policy and resource failures still throw typed errors.
+
+`exportPdfFrom(session, options?)` returns `Promise<PdfExportResult>` without reopening the document. It accepts `PdfProjectionOptions`: `comments`, `fidelityPolicy`, `displayMode`, `timeoutMs`, `maxPages`, `maxOutputBytes`, and `signal`. Omit `displayMode` to use the session's default projection. An explicit mode uses the session's cached `layoutFor(mode)` projection. Result `timings.openMs` is `0` because this call does not open the document.
+
+Use `OpenPdfDocumentForExportOptions` for font and layout settings when opening. Use `PdfExportSession` when you need to name the session type. An ordinary Core session with approximate measurement cannot produce PDF output. `exportPdfFrom` rejects a session that lacks admitted fonts and glyph capabilities.
+
+The caller owns the session and must call `dispose()` in `finally`. An export failure, projection cancellation, or projection deadline does not dispose a caller-owned session. The signal supplied when opening controls shared resource work and the session lifetime. A signal supplied to `exportPdfFrom` stops only that export's wait and encoding work. Shared resource work can continue until settlement, its resource deadline, or session disposal. After disposal, later exports reject with `ExportResourceError` and `code: 'disposed'`.
+
+For both formats from one layout, see [Compare PDF and Markdown conversion](markdown-contract.md#reuse-one-session).
+
 ## Options
 
 | Option | Default | Behavior |
@@ -52,7 +64,7 @@ The result object and timing fields are immutable. The byte array remains mutabl
 
 ## Diagnostics
 
-Each `PdfDiagnostic` includes `code`, `message`, `severity`, and an optional zero-based `pageIndex`. An absent `pageIndex` means the diagnostic applies to the document or has no specific page.
+Each `PdfDiagnostic` includes `code`, `message`, and `severity`. Page diagnostics include zero-based `pageIndex` and one-based `pageNumber`. Use `pageNumber` for display, as with Markdown warnings. An absent page field means the diagnostic applies to the document or has no specific page.
 
 | Severity        | Strict output | Meaning                                                       |
 | --------------- | ------------- | ------------------------------------------------------------- |
@@ -60,7 +72,7 @@ Each `PdfDiagnostic` includes `code`, `message`, `severity`, and an optional zer
 | `approximation` | Rejected      | Output changes the requested presentation.                    |
 | `unsupported`   | Rejected      | The writer cannot reproduce the content.                      |
 
-For example, `font-origin-failed` reports failed sources even when another source supplies the font. It has `information` severity; `fontPolicy: 'strict'` independently rejects the font failure. `font-substitution` reports generic substitutes that can change pagination. Other codes identify limitations such as `equation-fallback`, `image-clip`, or `core-*` source omissions. Handle unknown diagnostic codes by severity; the set can grow. Use messages for display, not program control.
+Each `font-origin-failed` diagnostic identifies one failed source through `originIndex`, optional `originName`, and a guarded cause message. It appears even when another source supplies the font. `incomplete-font` identifies incomplete coverage or substituted face variants within a family. It has `information` severity; `fontPolicy: 'strict'` independently rejects the font failure. `font-substitution` reports generic substitutes that can change pagination. Other codes identify limitations such as `equation-fallback`, `image-clip`, or `core-*` source omissions. Handle unknown diagnostic codes by severity; the set can grow. Use messages for display, not program control.
 
 ## Errors
 
@@ -70,10 +82,12 @@ For example, `font-origin-failed` reports failed sources even when another sourc
 | `PdfFidelityError` | `fidelityUnsupported` | `diagnostics` for the refused output. |
 | `PdfPageLimitError` | `pageLimitExceeded` | `limit` and `actual` page counts. Extends `RangeError`. |
 | `PdfOutputLimitError` | `outputTooLarge` | `limit` and `actual` byte counts. Extends `PdfEncodingError`. |
-| `PdfWorkLimitError` | `workLimitExceeded` | Operation or diagnostic budget exceeded. |
+| `PdfWorkLimitError` | `workLimitExceeded` | Content, operation, or diagnostic budget exceeded. |
 | `PdfEncodingError` | `encodingFailed` | Optional underlying `cause`. |
 | `ExportResourceError` | Core resource code | Optional underlying `cause`. |
 | `TypeError`, `RangeError` | — | Invalid arguments or other internal size limits. |
+
+PDF failure codes use Core's camelCase convention. Content diagnostic codes use kebab-case, as Markdown warnings do. Limit errors retain their previous base classes so existing `RangeError` and `PdfEncodingError` handlers still catch them.
 
 Core resource codes include `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, and `layoutFailed`. A strict font refusal uses `ExportResourceError` with `code: 'layoutFailed'`. Use `onFontResolution` to retain its font evidence.
 

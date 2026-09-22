@@ -52,8 +52,8 @@ export function openExportSession(
     supplementalFonts,
   ];
   return openFontBackedDocumentForExport(source, {
-    documentLigatures: true,
     ...core,
+    documentLigatures: options.documentLigatures ?? true,
     signal,
     displayMode: options.displayMode ?? 'proposed',
     reuseAcrossRevisions: false,

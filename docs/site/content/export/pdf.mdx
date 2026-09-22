@@ -45,6 +45,14 @@ Set `useSystemFonts: false` for consistent font selection across hosts. Supply `
 
 For examples, see [Configure PDF fonts](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/fonts.md). For response handlers and deployment, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md). For all options and errors, see [PDF export API](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/api.md).
 
+For shared options and defaults, see [Compare PDF and Markdown conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/markdown-contract.md).
+
+## Reuse a conversion session
+
+Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and layout. Pass the same session to Markdown's `exportMarkdownFrom` when you need both formats. Dispose the session in `finally` after all exports. An export failure does not dispose a caller-owned session.
+
+Page diagnostics include one-based `pageNumber`, consistent with Markdown warnings. The existing zero-based `pageIndex` remains available.
+
 ## Supported content
 
 The exporter supports searchable multilingual text, tables, images, notes, textboxes, structured equations, links, and comments. Charts, rotated table-cell text, and advanced image effects produce diagnostics.

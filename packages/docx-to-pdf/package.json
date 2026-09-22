@@ -21,6 +21,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
     "THIRD_PARTY_NOTICES.md",

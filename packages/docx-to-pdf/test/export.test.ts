@@ -55,7 +55,11 @@ describe('exact PDF export', () => {
       }
     );
     const result = await exportPdf(input);
-    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.diagnostics.filter(
+        (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+      )
+    ).toEqual([]);
     const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
     try {
       const text = await (await pdf.getPage(1)).getTextContent();

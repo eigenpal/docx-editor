@@ -38,6 +38,9 @@ test('JavaScript option errors precede document parsing and font work', async ()
     { documentLigatures: 'true' },
     { onFontResolution: true },
     { convertPreservedImage: true },
+    { imageDecodePort: null },
+    { imageDecodePort: {} },
+    { imageDecodePort: { decode: true } },
     { signal: {} },
     { signal: null },
     { timeoutMs: NaN },
@@ -192,5 +195,47 @@ test('encoder TypeErrors retain their cause inside PdfEncodingError', async () =
   } finally {
     create.mockRestore();
   }
+  expect((await exportPdf(source, deterministic)).pageCount).toBe(1);
+});
+
+test('image-wait deadlines report timedOut', async () => {
+  const input = new Uint8Array(
+    await readFile(new URL('../../../e2e/fixtures/images-crop.docx', import.meta.url))
+  );
+  let decoding = false;
+  await expect(
+    exportPdf(input, {
+      ...deterministic,
+      timeoutMs: 2_000,
+      resourceTimeoutMs: 60_000,
+      imageDecodePort: {
+        decode() {
+          decoding = true;
+          return new Promise<never>(() => {});
+        },
+      },
+    })
+  ).rejects.toMatchObject({ code: 'timedOut' });
+  expect(decoding).toBe(true);
+}, 10_000);
+
+test('caller cancellation during an image wait preserves its cause', async () => {
+  const input = new Uint8Array(
+    await readFile(new URL('../../../e2e/fixtures/images-crop.docx', import.meta.url))
+  );
+  const controller = new AbortController();
+  const reason = new Error('Request disconnected during image decoding');
+  await expect(
+    exportPdf(input, {
+      ...deterministic,
+      signal: controller.signal,
+      imageDecodePort: {
+        decode() {
+          queueMicrotask(() => controller.abort(reason));
+          return new Promise<never>(() => {});
+        },
+      },
+    })
+  ).rejects.toMatchObject({ code: 'aborted', cause: reason });
   expect((await exportPdf(source, deterministic)).pageCount).toBe(1);
 });

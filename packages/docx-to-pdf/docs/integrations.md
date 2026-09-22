@@ -87,7 +87,7 @@ for (const name of ['first', 'second']) {
 }
 ```
 
-The exporter disposes its document session after each call, including failed calls. It does not expose reusable PDF sessions or accept Markdown export sessions.
+The exporter disposes its document session after each call, including failed calls. For repeated exports or both formats from one layout, use [a reusable PDF session](markdown-contract.md#reuse-one-session).
 
 ## Runtime checks
 
@@ -95,6 +95,7 @@ From this repository, validate packed Node.js consumers with:
 
 ```sh
 bun run build:pdf
+bun run --filter '@docx-editor.dev/docx-to-markdown' build
 bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer
 ```
 

@@ -5,6 +5,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import type {
   ExportFontResolutionReport,
+  FontBackedExportCapabilities,
+  OpenFontBackedDocumentForExportResult,
   OpenFontBackedDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/editor';
@@ -19,6 +21,12 @@ export interface PdfDiagnostic {
   readonly message: string;
   /** Zero-based page index. Omitted for document-wide diagnostics. */
   readonly pageIndex?: number;
+  /** One-based page number for display, consistent with Markdown warnings. */
+  readonly pageNumber?: number;
+  /** Failed font source index, when this diagnostic describes a source failure. */
+  readonly originIndex?: number;
+  /** Failed font source name, when the source provided one. */
+  readonly originName?: string;
   /** Strict export permits only information diagnostics. */
   readonly severity: 'unsupported' | 'approximation' | 'information';
 }
@@ -128,3 +136,24 @@ export class PdfPageLimitError extends RangeError {
     this.name = 'PdfPageLimitError';
   }
 }
+
+/** Output controls for a caller-owned PDF session. @public */
+export type PdfProjectionOptions = Pick<
+  PdfExportOptions,
+  | 'comments'
+  | 'fidelityPolicy'
+  | 'timeoutMs'
+  | 'maxOutputBytes'
+  | 'maxPages'
+  | 'signal'
+  | 'displayMode'
+>;
+/** Font and layout controls for a reusable immutable-byte session. @public */
+export type OpenPdfDocumentForExportOptions = Omit<
+  PdfExportOptions,
+  'comments' | 'fidelityPolicy' | 'timeoutMs' | 'maxOutputBytes' | 'maxPages'
+>;
+/** Session that retains the admitted fonts and glyph capabilities needed by PDF output. @public */
+export type PdfExportSession = FontBackedExportCapabilities;
+/** Open result with the same success/refusal shape as Markdown sessions. @public */
+export type OpenPdfDocumentForExportResult = OpenFontBackedDocumentForExportResult;

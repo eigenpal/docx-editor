@@ -22,6 +22,16 @@ export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
 export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
+export interface ExportDroppedEmbeddedFont {
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly reason: 'overLimit' | 'malformed';
+    // (undocumented)
+    readonly request: FontRequest;
+}
+
+// @public
 export interface ExportFontFaceResolution {
     // (undocumented)
     readonly faceIndex?: number;
@@ -68,6 +78,9 @@ export interface ExportFontResolutionReport {
 export function exportPdf(source: Uint8Array, options?: PdfExportOptions): Promise<PdfExportResult>;
 
 // @public
+export function exportPdfFrom(session: PdfExportSession, options?: PdfProjectionOptions): Promise<PdfExportResult>;
+
+// @public
 export class ExportResourceError extends Error {
     constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string, options?: ErrorOptions);
     // (undocumented)
@@ -93,13 +106,38 @@ export interface FontRequest {
 }
 
 // @public
+export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly requested: FontRequest;
+    // (undocumented)
+    readonly resolved: FontRequest;
+}
+
+// @public
 export type HeadlessDocumentRejection = OoxmlPackageRejection | 'no-main-document-tree';
+
+// @public
+export function openDocumentForExport(source: Uint8Array, options?: OpenPdfDocumentForExportOptions): Promise<OpenPdfDocumentForExportResult>;
+
+// @public
+export type OpenPdfDocumentForExportOptions = Omit<PdfExportOptions, 'comments' | 'fidelityPolicy' | 'timeoutMs' | 'maxOutputBytes' | 'maxPages'>;
+
+// @public
+export type OpenPdfDocumentForExportResult = OpenFontBackedDocumentForExportResult;
 
 // @public
 export interface PdfDiagnostic {
     readonly code: string;
     readonly message: string;
+    readonly originIndex?: number;
+    readonly originName?: string;
     readonly pageIndex?: number;
+    readonly pageNumber?: number;
     readonly severity: 'unsupported' | 'approximation' | 'information';
 }
 
@@ -146,6 +184,9 @@ export interface PdfExportResult {
     readonly pageCount: number;
     readonly timings: PdfExportTimings;
 }
+
+// @public
+export type PdfExportSession = FontBackedExportCapabilities;
 
 // @public
 export interface PdfExportTimings {
@@ -195,6 +236,9 @@ export class PdfPageLimitError extends RangeError {
     // (undocumented)
     readonly limit: number;
 }
+
+// @public
+export type PdfProjectionOptions = Pick<PdfExportOptions, 'comments' | 'fidelityPolicy' | 'timeoutMs' | 'maxOutputBytes' | 'maxPages' | 'signal' | 'displayMode'>;
 
 // @public
 export class PdfWorkLimitError extends Error {

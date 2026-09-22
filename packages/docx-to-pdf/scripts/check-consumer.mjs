@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Exercise packed artifacts outside workspace aliases. Run after build:pdf.
+// Exercise packed artifacts outside workspace aliases. Build PDF and Markdown first.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,11 +25,19 @@ function run(command, args, cwd = consumer) {
 try {
   mkdirSync(packs);
   mkdirSync(consumer);
-  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-pdf'].map((name) => {
+  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'docx-to-pdf'].map((name) => {
     const [packed] = JSON.parse(
       run('npm', ['pack', path.join(root, 'packages', name), '--json', '--pack-destination', packs])
     );
     assert.ok(packed.filename);
+    if (name === 'docx-to-pdf') {
+      for (const guide of ['api', 'fonts', 'integrations', 'markdown-contract']) {
+        assert.ok(
+          packed.files.some((file) => file.path === `docs/${guide}.md`),
+          `Packed PDF package omits docs/${guide}.md`
+        );
+      }
+    }
     return path.join(packs, packed.filename);
   });
   writeFileSync(
@@ -59,8 +67,9 @@ try {
   const program = `
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { exportMarkdownFrom } from '@docx-editor.dev/docx-to-markdown';
 import {
-  createFontSource, defineFontResolver, exportPdf, PdfDocumentOpenError,
+  createFontSource, defineFontResolver, exportPdf, openDocumentForExport, exportPdfFrom, PdfDocumentOpenError,
   PdfOutputLimitError, PdfPageLimitError, PdfEncodingError, ExportResourceError,
   type PdfExportOptions, type PdfExportResult, type PdfExportTimings,
   type PdfFontsSource, type ExportFontResolutionReport,
@@ -70,6 +79,18 @@ async function main() {
   const fonts: PdfFontsSource = defineFontResolver(() => ({ sources: [] }));
   const options: PdfExportOptions = { fonts, useSystemFonts: false, maxPages: 1 };
   const source = await readFile('document.docx');
+  const opened = await openDocumentForExport(source, { fonts, useSystemFonts: false });
+  assert.ok(opened.ok);
+  try {
+    const sharedPdf = await exportPdfFrom(opened.session);
+    const sharedMarkdown = await exportMarkdownFrom(opened.session);
+    assert.equal(sharedPdf.pageCount, sharedMarkdown.pages.length);
+    assert.equal(sharedPdf.displayMode, sharedMarkdown.pagination.displayMode);
+    assert.equal(sharedPdf.fontResolution, sharedMarkdown.fontResolution);
+    assert.ok(sharedMarkdown.markdown.includes('Installed PDF conversion'));
+  } finally { opened.session.dispose(); }
+  await assert.rejects(exportPdfFrom(opened.session), (error: unknown) =>
+    error instanceof ExportResourceError && error.code === 'disposed');
   const result: PdfExportResult = await exportPdf(source, options);
   const timings: PdfExportTimings = result.timings;
   const report: ExportFontResolutionReport = result.fontResolution;

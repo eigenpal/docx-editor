@@ -80,7 +80,11 @@ test('a textbox paints its fill, then its clipped text, at its place in the draw
   const { result, stream, text } = await exported(
     `<w:p><w:r>${textbox(paragraph('Boxed'), false, fill)}</w:r></w:p>${paragraph('Body')}`
   );
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   expect(text).toContain('Boxed');
   expect(text).toContain('Body');
   // 2F1D79 as `rg`, filled over the 144pt x 36pt extent at (72pt, 72pt).
@@ -101,7 +105,11 @@ test('a behind-text textbox paints before the body text', async () => {
   const { result, stream, text } = await exported(
     `<w:p><w:r>${textbox(paragraph('Under'), true)}</w:r></w:p>${paragraph('Body')}`
   );
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   expect(text).toContain('Under');
   // Behind-text content precedes everything else on the page, so the first glyph run in the
   // page stream is the textbox's, and a body glyph run follows.

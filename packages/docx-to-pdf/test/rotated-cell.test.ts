@@ -38,7 +38,11 @@ test('a btLr cell paints its text turned a quarter turn, reading up the page', a
     useSystemFonts: false,
     fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 22 } },
   });
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const parsed = await PDFDocument.load(result.bytes);
   const stream = parsed.context
     .enumerateIndirectObjects()

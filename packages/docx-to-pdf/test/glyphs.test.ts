@@ -49,7 +49,11 @@ test('a single span can embed distinct fallback faces without losing text or gly
     paragraph(text, '<w:rPr><w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans"/></w:rPr>')
   );
   const result = await exportPdf(input, { fonts, useSystemFonts: false });
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
   try {
     const content = await (await pdf.getPage(1)).getTextContent({ disableNormalization: true });
@@ -85,7 +89,11 @@ for (const entry of cases)
       )
     );
     const result = await exportPdf(input, { fonts });
-    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.diagnostics.filter(
+        (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+      )
+    ).toEqual([]);
     const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
     try {
       const content = await (await pdf.getPage(1)).getTextContent();
@@ -160,7 +168,11 @@ test('selected TTC face is embedded, not the first collection face', async () =>
       },
     }
   );
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   expect(
     result.fontResolution.families.some((f) => f.faces.some((face) => face.faceIndex === 1))
   ).toBe(true);

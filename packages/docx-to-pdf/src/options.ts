@@ -36,6 +36,13 @@ export function validateOptions(options: PdfExportOptions): {
     if (options[name] !== undefined && typeof options[name] !== 'function')
       throw new TypeError(`${name} must be a function`);
   }
+  if (
+    options.imageDecodePort !== undefined &&
+    (!options.imageDecodePort ||
+      typeof options.imageDecodePort !== 'object' ||
+      typeof options.imageDecodePort.decode !== 'function')
+  )
+    throw new TypeError('imageDecodePort must provide a decode function');
   const signal = options.signal;
   if (
     signal !== undefined &&

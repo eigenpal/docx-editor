@@ -16,6 +16,24 @@ export const PACKAGES = [
     root: 'packages/docx-to-pdf',
     pkgSlug: 'docx-editor-docx-to-pdf',
     tsconfigPath: 'packages/docx-to-pdf/tsconfig.api.json',
+    // These nested types belong to Core. Package-owned types must remain exported.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        index: [
+          'FontBackedExportCapabilities',
+          'FontFaceRequest',
+          'FontLoadFailure',
+          'FontOrigin',
+          'FontResolver',
+          'FontSource',
+          'MarkedFontResolver',
+          'OoxmlPackageRejection',
+          'OpenFontBackedDocumentForExportOptions',
+          'OpenFontBackedDocumentForExportResult',
+        ],
+      },
+    },
   },
   {
     name: '@docx-editor.dev/i18n',

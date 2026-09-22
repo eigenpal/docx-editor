@@ -263,3 +263,32 @@ test(
     }
   }
 );
+
+for (const name of ['PdfPageLimitError', 'PdfOutputLimitError', 'PdfWorkLimitError']) {
+  test(`${name} returns a resource-limit response from the worker`, async () => {
+    const workerUrl = new URL(
+      'data:text/javascript,' +
+        encodeURIComponent(
+          `import { parentPort } from 'node:worker_threads'; parentPort.postMessage({ ok: false, error: '${name}' });`
+        )
+    );
+    const app = await createPdfDemo({ production: true, workerUrl });
+    app.server.listen(0, '127.0.0.1');
+    await once(app.server, 'listening');
+    try {
+      const result = await send(`http://127.0.0.1:${app.server.address().port}/api/convert`, {
+        method: 'POST',
+        body: 'input',
+      });
+      assert.equal(result.status, 507);
+      const payload = await result.json();
+      assert.equal(payload.error, name);
+      assert.equal(
+        payload.message,
+        'The document is larger than this demo converts. Convert a smaller document.'
+      );
+    } finally {
+      await app.close();
+    }
+  });
+}

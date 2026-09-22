@@ -111,34 +111,46 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       timings: { generationMs: performance.now() - generationStarted },
     });
   } catch (error) {
-    const name = error instanceof Error ? error.name : 'Error';
-    const message = error instanceof Error ? error.message : '';
-    // The same shape the local demo server sends. Every message here is fixed text: an open
-    // failure's own message names the zip entry that failed, which is the upload's to choose,
-    // and the diagnostics are the writer's own codes and wording.
-    if (name === 'PdfFidelityError')
-      return json(res, 422, {
-        ok: false,
-        error: name,
-        message: 'The document has content this converter cannot reproduce exactly.',
-        diagnostics: (error as { diagnostics?: unknown }).diagnostics ?? [],
-      });
-    if (name === 'PdfDocumentOpenError')
-      return json(res, 400, {
-        ok: false,
-        error: name,
-        message: 'The file is not a DOCX this converter can open.',
-      });
-    if (name === 'ExportResourceError' && /timed out/i.test(message))
-      return json(res, 408, { ok: false, error: name, message: 'Conversion exceeded 60 seconds.' });
-    if (name === 'RangeError' || name === 'PdfWorkLimitError')
-      return json(res, 507, {
-        ok: false,
-        error: name,
-        message: 'The document is larger than this demo converts. Convert a smaller document.',
-      });
-    return json(res, 500, { ok: false, error: name, message: 'The conversion failed.' });
+    const failure = pdfFailureResponse(error);
+    return json(res, failure.status, failure.body);
   } finally {
     active = false;
   }
+}
+
+/** Fixed public failure responses; never return raw exception messages. */
+export function pdfFailureResponse(error: unknown): {
+  status: number;
+  body: Record<string, unknown>;
+} {
+  const response = (status: number, body: Record<string, unknown>) => ({ status, body });
+  const name = error instanceof Error ? error.name : 'Error';
+  const code = error instanceof Error && 'code' in error ? error.code : undefined;
+  // The same shape the local demo server sends. Every message here is fixed text: an open
+  // failure's own message names the zip entry that failed, which is the upload's to choose,
+  // and the diagnostics are the writer's own codes and wording.
+  if (name === 'PdfFidelityError')
+    return response(422, {
+      ok: false,
+      error: name,
+      message: 'The document has content this converter cannot reproduce exactly.',
+      diagnostics: (error as { diagnostics?: unknown }).diagnostics ?? [],
+    });
+  if (name === 'PdfDocumentOpenError')
+    return response(400, {
+      ok: false,
+      error: name,
+      message: 'The file is not a DOCX this converter can open.',
+    });
+  if (name === 'ExportResourceError' && code === 'timedOut')
+    return response(408, { ok: false, error: name, message: 'Conversion exceeded 60 seconds.' });
+  if (
+    ['RangeError', 'PdfWorkLimitError', 'PdfPageLimitError', 'PdfOutputLimitError'].includes(name)
+  )
+    return response(507, {
+      ok: false,
+      error: name,
+      message: 'The document is larger than this demo converts. Convert a smaller document.',
+    });
+  return response(500, { ok: false, error: name, message: 'The conversion failed.' });
 }

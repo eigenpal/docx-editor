@@ -35,7 +35,11 @@ test('a long run steps by the unrounded advance, not a quantised one', async () 
       fonts: { sources: [source.source], defaultFont: { family: FAMILY, sizeHalfPoints: 22 } },
     }
   );
-  expect(result.diagnostics).toEqual([]);
+  expect(
+    result.diagnostics.filter(
+      (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
+    )
+  ).toEqual([]);
   const xs = await glyphPositions(result.bytes);
   expect(xs).toHaveLength(count);
 
