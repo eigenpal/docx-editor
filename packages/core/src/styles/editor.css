@@ -7429,10 +7429,18 @@ a.docx-hyperlink:focus-visible {
 .docx-editor.docx-export-dialog {
   max-width: 380px;
 }
-.docx-editor .docx-export-dialog__title {
+.docx-editor .docx-export-dialog__progress {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: center;
+  margin: 4px 0 16px;
+}
+.docx-editor .docx-export-dialog--pending,
+.docx-editor.docx-export-dialog--pending {
+  text-align: center;
+}
+.docx-editor .docx-export-dialog--pending .docx-dialog__footer,
+.docx-editor.docx-export-dialog--pending .docx-dialog__footer {
+  justify-content: center;
 }
 .docx-editor .docx-export-dialog__message {
   margin: 0;
@@ -7440,9 +7448,9 @@ a.docx-hyperlink:focus-visible {
   overflow-wrap: anywhere;
 }
 .docx-editor .docx-export-dialog__spinner {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   box-sizing: border-box;
   border: 2px solid var(--doc-border);
   border-top-color: var(--doc-primary);

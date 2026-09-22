@@ -108,6 +108,14 @@ for (const [adapter, port] of [
     await expect(progress).toBeVisible();
     await expect(progress.getByRole('button', { name: 'Continue editing' })).toBeFocused();
     expect(await page.locator('[role="menubar"]').boundingBox()).toEqual(menuBounds);
+    const dialogBounds = await progress.boundingBox();
+    const spinnerBounds = await progress.locator('.docx-export-dialog__spinner').boundingBox();
+    expect(dialogBounds).not.toBeNull();
+    expect(spinnerBounds).not.toBeNull();
+    expect(spinnerBounds!.x + spinnerBounds!.width / 2).toBeCloseTo(
+      dialogBounds!.x + dialogBounds!.width / 2,
+      0
+    );
     await page.screenshot({ path: `/tmp/docx-export-${adapter.toLowerCase()}-progress.png` });
     await page.keyboard.press('Escape');
     await expect(progress).toHaveCount(0);

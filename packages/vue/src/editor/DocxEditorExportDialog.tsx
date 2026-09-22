@@ -50,7 +50,12 @@ export const DocxEditorExportDialog = defineComponent({
           kind="export"
           label={title}
           role={props.error ? 'alertdialog' : 'dialog'}
-          class={['docx-export-dialog', props.className, attrs.class]}
+          class={[
+            'docx-export-dialog',
+            props.pending && 'docx-export-dialog--pending',
+            props.className,
+            attrs.class,
+          ]}
           style={props.style}
           dismissOutside={false}
           onClose={props.onClose}
@@ -59,12 +64,12 @@ export const DocxEditorExportDialog = defineComponent({
             props.children ?? (
               <>
                 <header class="docx-dialog__header">
-                  <h2 class="docx-dialog__title docx-export-dialog__title">
-                    {props.pending && (
-                      <span class="docx-export-dialog__spinner" aria-hidden="true" />
-                    )}
-                    {title}
-                  </h2>
+                  {props.pending && (
+                    <div class="docx-export-dialog__progress" aria-hidden="true">
+                      <span class="docx-export-dialog__spinner" />
+                    </div>
+                  )}
+                  <h2 class="docx-dialog__title">{title}</h2>
                 </header>
                 <div class="docx-dialog__body">
                   <p class="docx-export-dialog__message" role={props.error ? 'alert' : 'status'}>

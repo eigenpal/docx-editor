@@ -45,7 +45,7 @@ export function DocxEditorExportDialog({
       kind="export"
       label={title}
       role={error ? 'alertdialog' : 'dialog'}
-      className={`docx-export-dialog${className ? ` ${className}` : ''}`}
+      className={`docx-export-dialog${pending ? ' docx-export-dialog--pending' : ''}${className ? ` ${className}` : ''}`}
       style={style}
       dismissOutside={false}
       onClose={onClose}
@@ -53,10 +53,12 @@ export function DocxEditorExportDialog({
       {children ?? (
         <>
           <header className="docx-dialog__header">
-            <h2 className="docx-dialog__title docx-export-dialog__title">
-              {pending && <span className="docx-export-dialog__spinner" aria-hidden="true" />}
-              {title}
-            </h2>
+            {pending && (
+              <div className="docx-export-dialog__progress" aria-hidden="true">
+                <span className="docx-export-dialog__spinner" />
+              </div>
+            )}
+            <h2 className="docx-dialog__title">{title}</h2>
           </header>
           <div className="docx-dialog__body">
             <p className="docx-export-dialog__message" role={error ? 'alert' : 'status'}>
