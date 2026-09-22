@@ -195,6 +195,7 @@ const packagedSubstitutes: Record<string, string> = {
   'Times New Roman': 'Liberation Serif',
   Arial: 'Liberation Sans',
   'Courier New': 'Liberation Mono',
+  'Century Gothic': 'TeX Gyre Adventor',
 };
 const substituteFor = (family: string): string | undefined => {
   const canonical = canonicalFamily(family).family;
@@ -205,6 +206,46 @@ const substituteFor = (family: string): string | undefined => {
 };
 
 /**
+ * The packaged face that stands in for a family nothing else resolved.
+ *
+ * Word does the same when a document names a font the machine lacks: it picks a face of the
+ * same class and renders. The class is read from the name, which is all a resolver sees:
+ * monospaced names to Liberation Mono, serif names to Liberation Serif, everything else to
+ * Liberation Sans. The metrics are not the missing font's, and the export says so with an
+ * information diagnostic, but the page shows the text.
+ */
+export function genericSubstituteFor(family: string): string {
+  const name = canonicalFamily(family).family;
+  if (/mono|courier|consol|menlo|typewriter|\bcode\b|fixed/i.test(name)) return 'Liberation Mono';
+  if (/sans/i.test(name)) return 'Liberation Sans';
+  if (
+    /serif|roman|garamond|georgia|times|book|baskerville|cambria|minion|palatino|century|didot|caslon|constantia|sagona|lora|merriweather|playfair|charter|bodoni|perpetua|rockwell|goudy|bembo|sabon|antiqua/i.test(
+      name
+    )
+  )
+    return 'Liberation Serif';
+  return 'Liberation Sans';
+}
+
+/** The families this package can answer for by name, which the generic stand-in must not touch. */
+const knownFamilies = new Set<string>([
+  ...supplemental.map(([family]) => family),
+  ...Object.keys(substitutes),
+  ...Object.keys(packagedSubstitutes),
+  ...Object.values(packagedSubstitutes),
+]);
+
+/**
+ * Whether a face resolved through the generic stand-in rather than a metric-compatible
+ * plan: a substitution whose family this package knows nothing about. The writer reports
+ * these at information level, since the page carries the text in another font's metrics.
+ */
+export function isGenericSubstitution(family: string, sourceFamily: string): boolean {
+  if (family === sourceFamily) return false;
+  return !knownFamilies.has(canonicalFamily(family).family);
+}
+
+/**
  * Packaged faces, read on demand.
  *
  * `families` is every family the document names plus every fallback the caller requested, so a
@@ -212,13 +253,25 @@ const substituteFor = (family: string): string | undefined => {
  * substitute for a family the document uses. Reading all five up front mapped about 20 MB of
  * font data into every export, 16 MB of it a CJK face a Latin document never touches.
  */
-export const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
+export const supplementalFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
   const wanted = new Set<string>();
+  // Families still uncovered when this origin, the last one, runs: nothing installed or
+  // packaged answered for them, so the generic stand-in does.
+  const covered = new Set(
+    (resolvedFaces ?? []).map((face) => `${face.family}/${face.weight}/${face.style}`)
+  );
+  const orphaned = families.filter(
+    (family) =>
+      !knownFamilies.has(canonicalFamily(family).family) &&
+      !substituteFor(family) &&
+      !covered.has(`${family}/400/normal`)
+  );
   for (const family of families) {
     wanted.add(family);
     const target = substituteFor(family);
     if (target) wanted.add(target);
   }
+  for (const family of orphaned) wanted.add(genericSubstituteFor(family));
   const sources = await Promise.all(
     supplemental
       .filter(([family]) => wanted.has(family))
@@ -232,7 +285,9 @@ export const supplementalFonts = defineFontResolver(async ({ families, signal })
   return {
     sources,
     substitutions: families.flatMap((family) => {
-      const target = substituteFor(family);
+      const target =
+        substituteFor(family) ??
+        (orphaned.includes(family) ? genericSubstituteFor(family) : undefined);
       if (!target) return [];
       const { bold, italic } = canonicalFamily(family);
       return [400, 700].flatMap((weight) =>
@@ -324,9 +379,11 @@ export function installedWordFontResolver(roots: readonly string[]) {
       Dotum: [['gulim.ttc'], [], [], []],
     };
     const sources = [];
+    const substitutions: { from: FontRequest; to: FontRequest }[] = [];
     for (const requested of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {
       const { family, bold, italic } = canonicalFamily(requested);
       if (!Object.hasOwn(names, family) && !Object.hasOwn(files, family)) continue;
+      let regular: FontRequest | undefined;
       for (const [weight, style] of [
         [400, 'normal'],
         [700, 'normal'],
@@ -345,6 +402,7 @@ export function installedWordFontResolver(roots: readonly string[]) {
         ][slot]!;
         let found = false;
         for (const root of roots) {
+          if (found) break;
           const shortSuffix = ['Georgia', 'Verdana', 'Calibri', 'Cambria'].includes(family)
             ? (({ bd: 'b', bi: 'z' } as Record<string, string>)[short] ?? short)
             : short;
@@ -380,6 +438,7 @@ export function installedWordFontResolver(roots: readonly string[]) {
               });
               if ('failure' in source) continue;
               sources.push(source.source);
+              regular ??= face(requested, weight, style);
               found = true;
               break;
             } catch (error) {
@@ -389,9 +448,15 @@ export function installedWordFontResolver(roots: readonly string[]) {
           }
           if (found) break;
         }
+        if (!found && regular)
+          // No file for this face: point it at the face that was found, as Word does when it
+          // emboldens or slants a font that ships in one weight (every symbol face, most CJK
+          // faces). A substitution, not a second source: the bytes count once against Core's
+          // aggregate font ceiling, which a 16 MB collection lent three times would exhaust.
+          substitutions.push({ from: face(requested, weight, style), to: regular });
       }
     }
-    return { sources };
+    return { sources, substitutions };
   });
 }
 

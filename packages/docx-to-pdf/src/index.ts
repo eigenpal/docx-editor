@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /** Node-first DOCX-to-PDF conversion using Core's positioned glyphs. @packageDocumentation */
 import { PDFDocument } from 'pdf-lib';
+import type { ExportFontResolutionReport } from '@docx-editor.dev/core/export';
 import {
   createPackagedFileFetch,
   ExportResourceError,
@@ -14,7 +15,12 @@ import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import { MAX_OUTPUT_BYTES, positiveLimit, Work, PdfWorkLimitError } from './context.ts';
 import { paint } from './paint.ts';
-import { installedWordFonts, supplementalFonts, PDF_GLYPH_FALLBACKS } from './font-provisioning.ts';
+import {
+  installedWordFonts,
+  isGenericSubstitution,
+  supplementalFonts,
+  PDF_GLYPH_FALLBACKS,
+} from './font-provisioning.ts';
 import {
   PdfDocumentOpenError,
   PdfEncodingError,
@@ -32,6 +38,27 @@ const bundledFonts = packagedFonts({
     maxBytes: HARD_MAX_FONT_BYTES,
   }),
 });
+
+/**
+ * Say which families render in a stand-in face of another family's metrics. Word's own
+ * metric-compatible substitutions (Calibri in Carlito and the like) are silent, as they are
+ * in Word; a family this package only knows by name is not.
+ */
+function reportGenericSubstitutions(resolution: ExportFontResolutionReport, work: Work): void {
+  for (const family of resolution.families) {
+    const stand = family.faces.find(
+      (face) =>
+        face.via === 'substitution' && isGenericSubstitution(family.family, face.sourceFamily)
+    );
+    if (stand)
+      work.report(
+        'font-substitution',
+        `${family.family} is not available and renders in ${stand.sourceFamily}`,
+        undefined,
+        'information'
+      );
+  }
+}
 
 /** Convert DOCX bytes without modifying the source document. Defaults to strict, proposed view, and native comments. @public */
 export async function exportPdf(
@@ -90,6 +117,8 @@ export async function exportPdf(
   const glyphFallbacks = options.glyphFallbacks ?? PDF_GLYPH_FALLBACKS;
   try {
     work.check();
+    const clock = performance.now();
+    const phase = () => Math.round(performance.now() - clock);
     const opened = await openFontBackedDocumentForExport(source, {
       documentLigatures: true,
       ...core,
@@ -108,8 +137,11 @@ export async function exportPdf(
     if (!opened.ok) throw new PdfDocumentOpenError(opened.reason, opened.detail);
     try {
       work.check();
+      const openMs = phase();
       const layout = await opened.session.layout();
+      const layoutMs = phase() - openMs;
       if (layout.pages.length > 10_000) throw new RangeError('PDF page limit exceeded');
+      reportGenericSubstitutions(opened.session.fontResolution, work);
       const doc = await PDFDocument.create({ updateMetadata: false });
       doc.setProducer('docx-editor.dev');
       doc.setCreator('docx-editor.dev');
@@ -122,6 +154,7 @@ export async function exportPdf(
       if (metadata?.subject) doc.setSubject(metadata.subject);
       if (metadata?.keywords) doc.setKeywords([metadata.keywords]);
       await paint(doc, opened.session, layout, work, comments);
+      const paintMs = phase() - openMs - layoutMs;
       const diagnostics = Object.freeze([...work.diagnostics]);
       if (fidelityPolicy === 'strict' && diagnostics.some((d) => d.severity !== 'information'))
         throw new PdfFidelityError(diagnostics);
@@ -137,6 +170,12 @@ export async function exportPdf(
         displayMode: options.displayMode ?? 'proposed',
         fontResolution: opened.session.fontResolution,
         diagnostics,
+        timings: Object.freeze({
+          openMs,
+          layoutMs,
+          paintMs,
+          saveMs: phase() - openMs - layoutMs - paintMs,
+        }),
       });
     } finally {
       opened.session.dispose();

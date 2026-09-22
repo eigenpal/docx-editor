@@ -7,20 +7,26 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Triage a folder of DOCX files: which convert strictly, and for the rest, what stands in
  * the way, grouped so the answer is one screen, not a diagnostic per page.
  *
- *   bun packages/docx-to-pdf/scripts/triage.ts <dir-or-file>... [--out report.json]
- *       [--baseline previous.json] [--pdf out-dir] [--timeout ms] [--no-system-fonts]
+ *   bun packages/docx-to-pdf/scripts/triage.ts [<dir-or-file>...] [--out report.json]
+ *       [--baseline previous.json] [--run-dir dir] [--dpi 80] [--timeout ms] [--no-system-fonts]
  *
- * For every document: strict export first; a refused document is exported again in best
- * effort so its pages, font resolution and full diagnostics are known. Each refusal is
- * summarised by code with its count, the pages it touches, up to three distinct messages,
- * the font families no admitted face covers, and a hint at the usual cause. `--baseline`
- * names a previous report and prints what got worse and what got better. `--pdf` writes the
- * best-effort PDFs for a visual check.
+ * With no input it reads `packages/docx-to-pdf/.local-validation/inbox/`, a gitignored folder
+ * to drop documents into. For every document: strict export first; a refused document is
+ * exported again in best effort so its pages, font resolution and full diagnostics are
+ * known. Every run writes `<run-dir>/<name>.pdf` for each document and, when Poppler's
+ * `pdftoppm` is installed, a PNG of its first page and of the first page carrying each
+ * diagnostic code, so a suspected paint problem is a picture away. The run directory
+ * defaults to `packages/docx-to-pdf/.local-validation/triage/<timestamp>/`, also gitignored.
  *
- * Documents are often confidential. This prints file names, codes, page numbers, font
- * family names and diagnostic messages, and never document text.
+ * Each refusal is summarised by code with its count, the pages it touches, up to three
+ * distinct messages, the font families no admitted face covers, and a hint at the usual
+ * cause. Phase timings (open, layout, paint, save) show where a slow document spends its
+ * time. `--baseline` names a previous report and prints what got worse and what got better.
  */
+/* eslint-disable no-console -- a command-line report; stdout is its output. */
 import { readdir, readFile, stat, writeFile, mkdir } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { basename, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { exportPdf, PdfFidelityError } from '../src/index.ts';
@@ -47,9 +53,12 @@ export interface TriageRow {
   readonly status: 'strict' | 'best-effort' | 'error';
   readonly pages?: number;
   readonly ms: number;
+  readonly timings?: PdfExportResult['timings'];
   readonly error?: string;
   readonly groups: readonly DiagnosticGroup[];
   readonly fonts: readonly FontGap[];
+  /** Files this run wrote for the document: its PDF and the rendered pages. */
+  readonly artifacts?: readonly string[];
 }
 
 /** The usual cause behind a code, for the reader who has not seen it before. */
@@ -147,9 +156,44 @@ export function compareReports(
   return { worse, better };
 }
 
+/** Rasterize one-based `pages` of `pdf` beside it with Poppler; returns the PNG paths. */
+function renderPages(pdf: string, pages: readonly number[], dpi: number): string[] {
+  const out: string[] = [];
+  for (const page of pages) {
+    const stem = pdf.replace(/\.pdf$/, `-p${page}`);
+    const result = spawnSync(
+      'pdftoppm',
+      ['-r', String(dpi), '-f', String(page), '-l', String(page), '-singlefile', '-png', pdf, stem],
+      { stdio: 'ignore' }
+    );
+    if (result.error || result.status !== 0) return out;
+    out.push(`${stem}.png`);
+  }
+  return out;
+}
+
+/** Page 1 and the first page of every diagnostic that is not mere information. */
+function pagesWorthSeeing(groups: readonly DiagnosticGroup[]): number[] {
+  const pages = new Set<number>([1]);
+  for (const group of groups)
+    if (group.severity !== 'information' && group.pages[0] !== undefined) pages.add(group.pages[0]);
+  return [...pages].sort((a, b) => a - b).slice(0, 12);
+}
+
+async function keep(
+  result: PdfExportResult,
+  name: string,
+  groups: readonly DiagnosticGroup[],
+  options: { runDir: string; dpi: number }
+): Promise<string[]> {
+  const pdf = join(options.runDir, `${name}.pdf`);
+  await writeFile(pdf, result.bytes);
+  return [pdf, ...renderPages(pdf, pagesWorthSeeing(groups), options.dpi)];
+}
+
 async function triageOne(
   path: string,
-  options: { timeoutMs: number; useSystemFonts: boolean; pdfDir?: string }
+  options: { timeoutMs: number; useSystemFonts: boolean; runDir: string; dpi: number }
 ): Promise<TriageRow> {
   const name = basename(path);
   const bytes = new Uint8Array(await readFile(path));
@@ -158,14 +202,16 @@ async function triageOne(
   const shared = { timeoutMs: options.timeoutMs, useSystemFonts: options.useSystemFonts };
   try {
     const strict = await exportPdf(bytes, { ...shared, fidelityPolicy: 'strict' });
-    if (options.pdfDir) await writeFile(join(options.pdfDir, `${name}.pdf`), strict.bytes);
+    const groups = groupDiagnostics(strict.diagnostics);
     return {
       name,
       status: 'strict',
       pages: strict.pageCount,
       ms: ms(),
-      groups: groupDiagnostics(strict.diagnostics),
+      timings: strict.timings,
+      groups,
       fonts: fontGaps(strict.fontResolution),
+      artifacts: await keep(strict, name, groups, options),
     };
   } catch (error) {
     if (!(error instanceof PdfFidelityError)) {
@@ -180,14 +226,16 @@ async function triageOne(
     }
     try {
       const lenient = await exportPdf(bytes, { ...shared, fidelityPolicy: 'best-effort' });
-      if (options.pdfDir) await writeFile(join(options.pdfDir, `${name}.pdf`), lenient.bytes);
+      const groups = groupDiagnostics(lenient.diagnostics);
       return {
         name,
         status: 'best-effort',
         pages: lenient.pageCount,
         ms: ms(),
-        groups: groupDiagnostics(lenient.diagnostics),
+        timings: lenient.timings,
+        groups,
         fonts: fontGaps(lenient.fontResolution),
+        artifacts: await keep(lenient, name, groups, options),
       };
     } catch (second) {
       return {
@@ -205,9 +253,16 @@ async function triageOne(
 
 function printRow(row: TriageRow): void {
   const pages = row.pages === undefined ? '-' : String(row.pages);
+  const t = row.timings;
+  const phases = t
+    ? ` open ${t.openMs} layout ${t.layoutMs} paint ${t.paintMs} save ${t.saveMs}`
+    : '';
   console.log(
-    `${row.status === 'strict' ? 'OK  ' : row.status === 'error' ? 'ERR ' : 'BEST'} ${row.name.padEnd(48).slice(0, 48)} ${pages.padStart(4)}pp ${String(row.ms).padStart(6)}ms`
+    `${row.status === 'strict' ? 'OK  ' : row.status === 'error' ? 'ERR ' : 'BEST'} ${row.name.padEnd(48).slice(0, 48)} ${pages.padStart(4)}pp ${String(row.ms).padStart(6)}ms${phases}`
   );
+  const pngs = (row.artifacts ?? []).filter((file) => file.endsWith('.png'));
+  if (pngs.length && row.status !== 'strict')
+    console.log(`      rendered ${pngs.map((file) => basename(file)).join(' ')}`);
   if (row.error) console.log(`      ${row.error}`);
   for (const group of row.groups) {
     if (group.severity === 'information' && row.status === 'strict') continue;
@@ -224,41 +279,54 @@ function printRow(row: TriageRow): void {
 }
 
 async function main(argv: readonly string[]): Promise<void> {
+  const packageRoot = fileURLToPath(new URL('..', import.meta.url));
   const inputs: string[] = [];
   let out: string | undefined;
   let baseline: string | undefined;
-  let pdfDir: string | undefined;
+  let runDir: string | undefined;
+  let dpi = 80;
   let timeoutMs = 120_000;
   let useSystemFonts = true;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--out') out = argv[++i];
     else if (arg === '--baseline') baseline = argv[++i];
-    else if (arg === '--pdf') pdfDir = argv[++i];
+    else if (arg === '--run-dir') runDir = argv[++i];
+    else if (arg === '--dpi') dpi = Number(argv[++i]);
     else if (arg === '--timeout') timeoutMs = Number(argv[++i]);
     else if (arg === '--no-system-fonts') useSystemFonts = false;
-    else inputs.push(arg);
+    else if (arg === '--help' || arg === '-h') {
+      console.log(
+        'usage: bun packages/docx-to-pdf/scripts/triage.ts [<dir-or-file>...] [--out report.json] [--baseline previous.json] [--run-dir dir] [--dpi 80] [--timeout ms] [--no-system-fonts]'
+      );
+      return;
+    } else inputs.push(arg);
   }
-  if (inputs.length === 0) {
-    console.error(
-      'usage: bun packages/docx-to-pdf/scripts/triage.ts <dir-or-file>... [--out report.json] [--baseline previous.json] [--pdf dir] [--timeout ms] [--no-system-fonts]'
-    );
-    process.exitCode = 2;
-    return;
-  }
+  if (inputs.length === 0) inputs.push(join(packageRoot, '.local-validation/inbox'));
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+  runDir ??= join(packageRoot, '.local-validation/triage', stamp);
+  await mkdir(runDir, { recursive: true });
+  out ??= join(runDir, 'report.json');
+  const poppler = spawnSync('pdftoppm', ['-v'], { stdio: 'ignore' });
+  if (poppler.error) console.log('pdftoppm not found: PDFs are written, pages are not rendered');
   const files: string[] = [];
   for (const input of inputs) {
     const path = resolve(input);
-    if ((await stat(path)).isDirectory()) {
+    const info = await stat(path).catch(() => null);
+    if (!info) {
+      console.error(`${path} does not exist; drop documents into ${inputs[0]} or name a folder`);
+      process.exitCode = 2;
+      return;
+    }
+    if (info.isDirectory()) {
       for (const entry of (await readdir(path)).sort())
         if (entry.toLowerCase().endsWith('.docx') && !entry.startsWith('~$'))
           files.push(join(path, entry));
     } else files.push(path);
   }
-  if (pdfDir) await mkdir(pdfDir, { recursive: true });
   const rows: TriageRow[] = [];
   for (const file of files) {
-    const row = await triageOne(file, { timeoutMs, useSystemFonts, pdfDir });
+    const row = await triageOne(file, { timeoutMs, useSystemFonts, runDir, dpi });
     rows.push(row);
     printRow(row);
   }
@@ -275,15 +343,23 @@ async function main(argv: readonly string[]): Promise<void> {
   );
   for (const [code, count] of [...causes].sort((a, b) => b[1] - a[1]))
     console.log(`   ${String(count).padStart(3)} documents  ${code}`);
-  if (baseline) {
-    const previous = JSON.parse(await readFile(baseline, 'utf8')) as TriageRow[];
+  await writeFile(out, JSON.stringify(rows, null, 1) + '\n');
+  const previous = baseline
+    ? await readFile(baseline, 'utf8').then(
+        (text) => JSON.parse(text) as TriageRow[],
+        () => null
+      )
+    : null;
+  if (baseline && !previous)
+    console.log(`\nBaseline ${baseline} could not be read; no comparison.`);
+  if (previous) {
     const { worse, better } = compareReports(previous, rows);
     console.log(`\nAgainst ${baseline}: ${worse.length} worse, ${better.length} better`);
     for (const line of worse) console.log(`   worse  ${line}`);
     for (const line of better) console.log(`   better ${line}`);
     if (worse.length) process.exitCode = 1;
   }
-  if (out) await writeFile(out, JSON.stringify(rows, null, 1) + '\n');
+  console.log(`\nPDFs, rendered pages and ${basename(out)} are in ${runDir}`);
 }
 
 if (import.meta.main) await main(process.argv.slice(2));

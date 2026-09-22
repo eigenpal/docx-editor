@@ -38,6 +38,13 @@ export interface PdfExportResult {
   readonly displayMode: RevisionDisplayMode;
   readonly fontResolution: ExportFontResolutionReport;
   readonly diagnostics: readonly PdfDiagnostic[];
+  /** Wall-clock milliseconds spent opening and resolving fonts, laying out, painting, and saving. */
+  readonly timings: {
+    readonly openMs: number;
+    readonly layoutMs: number;
+    readonly paintMs: number;
+    readonly saveMs: number;
+  };
 }
 /** Requested content could not be represented faithfully. @public */
 export class PdfFidelityError extends Error {

@@ -87,13 +87,13 @@ bun run build:pdf
 node --test examples/docx-to-pdf/server.node.test.mjs
 ```
 
-To find out why a folder of documents does not convert strictly, run the triage script:
+To find out why a folder of documents does not convert strictly, drop the documents into `packages/docx-to-pdf/.local-validation/inbox/` (gitignored) and run the triage script:
 
 ```sh
-bun packages/docx-to-pdf/scripts/triage.ts <dir> --out report.json --pdf out/
+bun packages/docx-to-pdf/scripts/triage.ts
 ```
 
-It converts each document strictly, then in best-effort mode when strict export refuses. For each document it prints the diagnostics grouped by code with their pages and messages, the font families no admitted face covers, and a hint at the usual cause, followed by a tally of causes across the folder. `--baseline previous.json` lists the documents that got worse or better since an earlier report. The script prints file names, codes, and font family names, never document text.
+It converts each document strictly, then in best-effort mode when strict export refuses. Every run writes each document's PDF, a PNG of its first page and of the first page of each diagnostic, and `report.json` under `.local-validation/triage/<timestamp>/`. For each document it prints the phase timings, the diagnostics grouped by code with their pages and messages, the font families no admitted face covers, and a hint at the usual cause, followed by a tally of causes across the folder. `--baseline previous.json` lists the documents that got worse or better since an earlier report. Pass folders or files to triage something else, and `--run-dir` to choose where the output goes. Rendering needs Poppler's `pdftoppm`.
 
 `bun packages/docx-to-pdf/test/render-fixtures.ts` writes visual QA PDFs under `.cache/pdf/`. The test fonts include licensed script-specific subsets. They are not runtime font defaults.
 
