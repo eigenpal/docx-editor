@@ -101,7 +101,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. PDF conversion requires the EigenPal Pro License.',
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License.',
     docsLink: '/docs/2.x/guides/export',
   },
   // --- Text & formatting -----------------------------------------------

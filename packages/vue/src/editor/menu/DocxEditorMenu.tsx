@@ -3,7 +3,7 @@ import { usePopupConfig } from '../popup-config';
 import { renderPopup } from '../popup-renderer';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
-import { useDialogHost } from '../dialog-host';
+import { DialogPortal, useDialogHost } from '../dialog-host';
 import {
   computed,
   defineComponent,
@@ -340,29 +340,33 @@ const DocxEditorMenuRoot = defineComponent({
           >
             {content}
           </div>
-          {exportState.visible.value && popups.value?.export !== false ? (
-            popups.value?.export ? (
-              renderPopup(
-                popups.value.export,
-                {
-                  open: true,
-                  format: exportState.format.value,
-                  pending: exportState.pending.value,
-                  error: exportState.error.value,
-                  onClose: exportState.dismiss,
-                },
-                exportState.session.value
-              )
-            ) : (
-              <DocxEditorExportDialog
-                open
-                format={exportState.format.value}
-                pending={exportState.pending.value}
-                error={exportState.error.value}
-                onClose={exportState.dismiss}
-              />
-            )
-          ) : null}
+          <DialogPortal
+            content={() =>
+              exportState.visible.value && popups.value?.export !== false ? (
+                popups.value?.export ? (
+                  renderPopup(
+                    popups.value.export,
+                    {
+                      open: true,
+                      format: exportState.format.value,
+                      pending: exportState.pending.value,
+                      error: exportState.error.value,
+                      onClose: exportState.dismiss,
+                    },
+                    exportState.session.value
+                  )
+                ) : (
+                  <DocxEditorExportDialog
+                    open
+                    format={exportState.format.value}
+                    pending={exportState.pending.value}
+                    error={exportState.error.value}
+                    onClose={exportState.dismiss}
+                  />
+                )
+              ) : null
+            }
+          />
           <input
             ref={fileInputRef}
             type="file"

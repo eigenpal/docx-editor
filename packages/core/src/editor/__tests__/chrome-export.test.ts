@@ -56,3 +56,17 @@ test('PDF exports handler bytes and reports conversion failures', async () => {
     })
   ).rejects.toThrow('no PDF bytes');
 });
+
+test('PDF export rejects endpoint error pages and incomplete headers', async () => {
+  for (const body of [
+    '<!doctype html><title>Missing PDF endpoint</title>',
+    '{"message":"Converter is not installed"}',
+    '%PD',
+  ]) {
+    await expect(
+      runChromeExport({ save: async () => new ArrayBuffer(0) }, 'pdf', {
+        pdf: async () => ({ bytes: new TextEncoder().encode(body) }),
+      })
+    ).rejects.toThrow('without a PDF header');
+  }
+});

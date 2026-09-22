@@ -3,7 +3,7 @@ import { usePopupConfig } from '../popup-config';
 import { renderPopup } from '../popup-renderer';
 import { useMenuExport } from './useMenuExport';
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
-import { useDialogHost } from '../dialog-host';
+import { DialogPortal, useDialogHost } from '../dialog-host';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The compound menu bar: File · Format · Insert · Review · Help, derived FROM the chrome registry.
@@ -417,29 +417,31 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       >
         {content}
       </div>
-      {exportState.visible && popups?.export !== false ? (
-        popups?.export ? (
-          renderPopup(
-            popups.export,
-            {
-              open: true,
-              format: exportState.format,
-              pending: exportState.pending,
-              error: exportState.error,
-              onClose: exportState.dismiss,
-            },
-            exportState.session
+      <DialogPortal>
+        {exportState.visible && popups?.export !== false ? (
+          popups?.export ? (
+            renderPopup(
+              popups.export,
+              {
+                open: true,
+                format: exportState.format,
+                pending: exportState.pending,
+                error: exportState.error,
+                onClose: exportState.dismiss,
+              },
+              exportState.session
+            )
+          ) : (
+            <DocxEditorExportDialog
+              open
+              format={exportState.format}
+              pending={exportState.pending}
+              error={exportState.error}
+              onClose={exportState.dismiss}
+            />
           )
-        ) : (
-          <DocxEditorExportDialog
-            open
-            format={exportState.format}
-            pending={exportState.pending}
-            error={exportState.error}
-            onClose={exportState.dismiss}
-          />
-        )
-      ) : null}
+        ) : null}
+      </DialogPortal>
       {/* Opening a document is a FILE READ the user drives — never a fetched URL. Mounted
           even when the host overrode `onOpen`, because the input costs nothing and a host
           that later drops the override keeps working. */}

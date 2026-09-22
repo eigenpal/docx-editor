@@ -1,5 +1,7 @@
 import type { Editor } from '../contracts/editor.ts';
 
+const PDF_HEADER = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
+
 /** File menu conversion formats. @public */
 export type ChromeExportFormat = 'markdown' | 'pdf';
 
@@ -61,6 +63,9 @@ export async function runChromeExport(
   const result = await handlers.pdf(new Uint8Array(await editor.save()));
   if (!(result?.bytes instanceof Uint8Array) || result.bytes.length === 0) {
     throw new TypeError('The PDF converter returned no PDF bytes.');
+  }
+  if (!PDF_HEADER.every((byte, index) => result.bytes[index] === byte)) {
+    throw new TypeError('The PDF converter returned a file without a PDF header.');
   }
   return { bytes: result.bytes, extension: 'pdf', mimeType: 'application/pdf' };
 }

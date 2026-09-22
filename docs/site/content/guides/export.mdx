@@ -45,7 +45,13 @@ export const exporters: ChromeExportHandlers = {
       headers: { 'Content-Type': 'application/octet-stream' },
       body: source.slice().buffer,
     });
-    if (!response.ok) throw new Error('PDF conversion failed.');
+    const contentType = response.headers.get('Content-Type') ?? '';
+    if (!response.ok || !contentType.includes('application/pdf')) {
+      throw new Error(
+        'PDF export is unavailable. Configure a Node.js server with ' +
+          '@docx-editor.dev/docx-to-pdf.'
+      );
+    }
     return { bytes: new Uint8Array(await response.arrayBuffer()) };
   },
 };
@@ -81,7 +87,7 @@ defineProps<{ source: Uint8Array }>();
 
 While conversion runs, a dialog shows the export format. Select **Continue editing** to dismiss the dialog without stopping the export. Export actions remain disabled until conversion finishes. The dialog closes when the download starts.
 
-If conversion fails, the dialog shows an error. Close the dialog, then select the format again to retry.
+The editor checks the PDF header before downloading. If conversion fails or returns another file type, the dialog shows an error. Close the dialog, then select the format again to retry.
 
 If a converter handler is missing, the error names the required package and configuration. A missing converter never falls back to another format.
 

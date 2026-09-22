@@ -79,6 +79,79 @@ for (const [adapter, port] of [
     }
   });
 
+  test(`${adapter} keeps export feedback visible when responsive chrome hides the menu`, async ({
+    page,
+  }) => {
+    await page.goto(`http://localhost:${port}/`);
+    await page.getByTitle('Dark mode', { exact: true }).click();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/convert?**', async (route) => {
+      await gate;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Conversion failed' }),
+      });
+    });
+    try {
+      await page.locator('[data-menu="file"] > [role="menuitem"]').click();
+      await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
+      await page.locator('[data-slot="file.exportPdf"]').click();
+      const dialog = page.getByRole('dialog', { name: 'Exporting PDF…' });
+      await expect(dialog).toBeVisible();
+      await page.setViewportSize({ width: 375, height: 667 });
+      await expect(dialog).toBeVisible();
+      const bounds = await dialog.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(667);
+      await expect(dialog.locator('.docx-export-dialog__spinner')).toHaveCSS(
+        'animation-name',
+        'none'
+      );
+      const button = dialog.getByRole('button', { name: 'Continue editing' });
+      await expect(button).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(button).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(button).toBeFocused();
+      await page.screenshot({ path: `/tmp/docx-export-${adapter.toLowerCase()}-dark-mobile.png` });
+      release();
+      await expect(page.getByRole('alertdialog')).toBeVisible();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    } finally {
+      release();
+    }
+  });
+
+  test(`${adapter} refuses server error pages returned as PDF bytes`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/`);
+    await page.route('**/api/convert?**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          pdf: Buffer.from('<!doctype html><title>Missing PDF endpoint</title>').toString('base64'),
+        }),
+      })
+    );
+    let downloads = 0;
+    page.on('download', () => {
+      downloads++;
+    });
+    await page.locator('[data-menu="file"] > [role="menuitem"]').click();
+    await page.getByRole('menuitem', { name: 'Export', exact: true }).hover();
+    await page.locator('[data-slot="file.exportPdf"]').click();
+    await expect(page.getByRole('alertdialog')).toContainText('without a PDF header');
+    expect(downloads).toBe(0);
+  });
+
   test(`${adapter} blocks duplicate exports and recovers after server failure`, async ({
     page,
   }) => {

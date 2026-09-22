@@ -174,7 +174,11 @@ const popups: DocxEditorPopups = {
 };
 ```
 
-The editor updates the same component when progress changes to an error. A later export starts a separate component instance. Successful downloads close the popup automatically. Dismissing feedback leaves conversion running and keeps export actions disabled until it finishes. If that conversion fails, the error opens the popup again.
+The editor updates the same component when progress changes to an error. A later export starts a separate component instance.
+
+The popup uses the shared dialog mount outside the menu. Hiding responsive menu controls does not hide an active popup. Successful downloads close the popup automatically.
+
+Dismissing feedback leaves conversion running and keeps export actions disabled until it finishes. If that conversion fails, the error opens the popup again.
 
 Set `popups.export` to `false` to suppress export feedback. Conversion still runs. Your conversion handlers must provide any progress and error feedback your application needs.
 
