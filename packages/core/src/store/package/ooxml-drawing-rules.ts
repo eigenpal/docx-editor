@@ -174,6 +174,23 @@ export function drawingKindLegalParent(kind: string, parent?: DrawingParentConte
   }
 }
 
+/**
+ * The fixed `whiteSpace="collapse"` facet of `xsd:boolean` and the numeric `xsd:` types
+ * (`xsd:string`, e.g. `docPr/@descr`, preserves instead). XML 1.0's `S` is exactly
+ * `#x20 | #x9 | #xD | #xA`; JavaScript's `\s` is wider (`\v`, `\f`, NBSP, U+FEFF) and would
+ * accept what the schema does not.
+ */
+export function collapseSchemaWhitespace(value: string): string {
+  return value.replace(/[ \t\n\r]+/g, ' ').trim();
+}
+
+export function parseSchemaBoolean(value: string | undefined): boolean | null {
+  const lexical = collapseSchemaWhitespace(value ?? '');
+  if (lexical === '1' || lexical === 'true') return true;
+  if (lexical === '0' || lexical === 'false') return false;
+  return null;
+}
+
 /** Schema-local attribute: unqualified only (no owner-namespace or foreign lookalikes). */
 export function schemaAttributeValue(
   attributes: readonly OoxmlAttribute[],
@@ -240,24 +257,15 @@ function anchorAttributesValid(attributes: readonly OoxmlAttribute[]): boolean {
     const value = schemaAttributeValue(attributes, name);
     if (value !== undefined && unsignedIntAttribute(attributes, name) === undefined) return false;
   }
-  const simplePos = schemaAttributeValue(attributes, 'simplePos');
-  if (
-    simplePos !== undefined &&
-    simplePos !== '0' &&
-    simplePos !== '1' &&
-    simplePos !== 'true' &&
-    simplePos !== 'false'
-  ) {
-    return false;
-  }
   if (unsignedIntAttribute(attributes, 'relativeHeight') === undefined) return false;
-  for (const name of ['behindDoc', 'locked', 'layoutInCell', 'allowOverlap'] as const) {
+  // CT_Anchor's xsd:boolean attributes: `simplePos` and `hidden` optional, the rest required.
+  for (const name of ['simplePos', 'hidden'] as const) {
     const value = schemaAttributeValue(attributes, name);
-    if (value === undefined) return false;
-    if (!['0', '1', 'true', 'false'].includes(value)) return false;
+    if (value !== undefined && parseSchemaBoolean(value) === null) return false;
   }
-  const hidden = schemaAttributeValue(attributes, 'hidden');
-  if (hidden !== undefined && !['0', '1', 'true', 'false'].includes(hidden)) return false;
+  for (const name of ['behindDoc', 'locked', 'layoutInCell', 'allowOverlap'] as const) {
+    if (parseSchemaBoolean(schemaAttributeValue(attributes, name)) === null) return false;
+  }
   return true;
 }
 

@@ -5,7 +5,11 @@
 import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
-import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
+import {
+  collapseSchemaWhitespace,
+  parseSchemaBoolean,
+  schemaAttributeValue,
+} from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
@@ -29,47 +33,28 @@ export type ShapeStyleMatrixResolver = (
 /**
  * An `xsd:boolean` attribute read fail-closed.
  *
- * Ignoring whitespace, the schema allows exactly `0`, `1`, `false` and `true`. Only `0`,
- * `false` and an absent attribute mean "not set"; every other spelling — `TRUE`, `yes`, `2`
- * — is schema-invalid, and the sender chose it, so it refuses the shape rather than painting
- * as if the flag were unset.
- *
- * The collapse is load-bearing. `xsd:boolean` carries a fixed `whiteSpace="collapse"` facet,
- * so ` 0 ` and `0\n` are valid false, but the XML reader keeps attribute values verbatim
- * (`trimValues: false`). Comparing the raw string would refuse a shape Word paints, which is
- * the one way a fail-closed read like this can be worse than the permissive one it replaced.
+ * Only a legal `0`/`false` and an absent attribute mean "not set"; every other spelling —
+ * `TRUE`, `yes`, `2` — is schema-invalid, and the sender chose it, so it refuses the shape
+ * rather than painting as if the flag were unset. The collapse inside
+ * {@link parseSchemaBoolean} is load-bearing here: comparing the raw string would refuse a
+ * shape Word paints, which is the one way a fail-closed read can be worse than the
+ * permissive one it replaced.
  */
 function schemaFlagIsUnset(value: string | undefined): boolean {
-  if (value === undefined) return true;
-  const collapsed = collapseSchemaWhitespace(value);
-  return collapsed === '0' || collapsed === 'false';
+  return value === undefined || parseSchemaBoolean(value) === false;
 }
 
 /**
  * The complement of {@link schemaFlagIsUnset}: an `xsd:boolean` that legally reads true.
  *
- * A value is neither set nor unset when it is schema-invalid, and the two callers want
- * opposite things there. A flag the engine cannot HONOUR (a flipped vector group) refuses
- * through `schemaFlagIsUnset`, because painting it unflipped would be a wrong render. A flag
- * the engine can honour (a flipped picture) reads through here and treats anything invalid
- * as unset, because refusing would drop the picture entirely — a worse outcome than a
- * mirror the sender spelled illegally.
+ * A value that is neither set nor unset is schema-invalid. The `a:xfrm` check refuses the
+ * shape on one, so the flip reads further down only ever see a legal spelling. A picture
+ * flip, which the engine can paint either way, does not go through here: it reads
+ * `parseSchemaBoolean(...) ?? false` and treats an invalid spelling as unset rather than
+ * dropping the picture.
  */
-export function schemaFlagIsSet(value: string | undefined): boolean {
-  if (value === undefined) return false;
-  const collapsed = collapseSchemaWhitespace(value);
-  return collapsed === '1' || collapsed === 'true';
-}
-
-/**
- * Apply the fixed `whiteSpace="collapse"` facet every `xsd:` simple type below carries.
- *
- * XML 1.0's `S` production is exactly `#x20 | #x9 | #xD | #xA`. JavaScript's `\s` is wider —
- * it also matches `\v`, `\f`, NBSP and U+FEFF — so using it here would accept a `val` the
- * schema does not.
- */
-function collapseSchemaWhitespace(value: string): string {
-  return value.replace(/[ \t\n\r]+/g, ' ').trim();
+function schemaFlagIsSet(value: string | undefined): boolean {
+  return parseSchemaBoolean(value) === true;
 }
 
 /**
