@@ -69,10 +69,8 @@ export function anchorLaidOutInCell(
 
 /**
  * An anchor in a table cell that Word lays out against the page instead. It is not part of
- * the cell's flow and carves no side hole in it: Word runs the cell's text straight through
- * it. `topAndBottom` does not go through here: Word moves the whole table below such an
- * object, and pushing the cell's text down is the nearer approximation of that than letting
- * the object cover it.
+ * the cell's flow and carves no hole in it, of any wrap: Word moves the table's rows below
+ * such an object instead (see `table-out-of-cell-floats.ts`), so the cell text never meets it.
  */
 export function anchoredOutOfCell(
   projection: DrawingProjection,

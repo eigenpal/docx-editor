@@ -572,6 +572,8 @@ export function breakParagraph(
             contentRight,
             paragraphStartY: flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0,
             anchorLineTopByModelStart,
+            anchorCellBox: flow.anchorCellBox,
+            cellAnchorScope: flow.cellAnchorScope,
             displayMode: anchorDisplayMode,
             ...(flow.revisionAuthorFilter
               ? { revisionAuthorFilter: flow.revisionAuthorFilter }

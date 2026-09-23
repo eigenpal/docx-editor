@@ -556,6 +556,9 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   readonly anchorLineTopByModelStart: ReadonlyMap<number, number>;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   readonly columnIndex?: number;
+  /** Set inside a table cell; with the scope, drops the anchors Word lays out off the cell. */
+  readonly anchorCellBox?: LayoutBox | null;
+  readonly cellAnchorScope?: CellAnchorScope;
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
@@ -570,6 +573,8 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (atom.projection.wrap !== 'topAndBottom') continue;
+    // The table moves below an out-of-cell float instead; see `table-out-of-cell-floats.ts`.
+    if (anchoredOutOfCell(atom.projection, options)) continue;
     const modelStart = offsets.get(atom.atomId);
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);

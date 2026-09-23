@@ -1,0 +1,84 @@
+import { describe, expect, test } from 'bun:test';
+import { load, layoutContext, squareAnchorInCell } from './anchored-drawing-test-fixtures.ts';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import type { TableFragmentRecord } from '../semantic-records.ts';
+
+const measurer = createFixedMeasurer(6, 14);
+const TEXT = 'word '.repeat(60);
+
+function layout(options: Parameters<typeof squareAnchorInCell>[0], compatibilityMode: number) {
+  const part = load(squareAnchorInCell(options));
+  const page = layoutSemanticDocument(part, 1, {
+    measurer,
+    inlineDrawingLayout: layoutContext(part),
+    compatibilityMode,
+  }).pages[0]!;
+  const table = page.fragments.find((fragment) => fragment.kind === 'table') as
+    | TableFragmentRecord
+    | undefined;
+  expect(table).toBeDefined();
+  const drawing = page.anchoredDrawings?.[0];
+  expect(drawing).toBeDefined();
+  return { table: table!, drawing: drawing! };
+}
+
+// Word 16.113, mode 14: a float a cell anchors with `layoutInCell="0"` wraps like a body float.
+// It stays where the unpushed table puts it, and the table's rows move below it, whether or
+// not they overlap it horizontally. From mode 15 the float is in the cell and nothing moves.
+describe('out-of-cell floats push the table rows (mode 14)', () => {
+  for (const wrap of ['square', 'topAndBottom'] as const) {
+    test(`a ${wrap} float moves the table below it and stays put`, () => {
+      const { table, drawing } = layout(
+        { text: TEXT, layoutInCell: '0', tableIndent: 2880, wrap },
+        14
+      );
+      expect(drawing.layoutInCell).toBe(false);
+      // The float keeps the unpushed table top (y 0, the first paragraph's top).
+      expect(drawing.y).toBeCloseTo(0, 3);
+      // The table starts below the float's bottom.
+      expect(table.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
+      // Its first line starts at the cell's own inset: nothing inside the cell pushes it.
+      const firstLineY = (table.rows[0]!.cells[0]!.blocks[0] as { lines: { box: { y: number } }[] })
+        .lines[0]!.box.y;
+      expect(firstLineY - table.box.y).toBeLessThan(10);
+    });
+  }
+
+  test('an in-cell float in mode 15 moves nothing', () => {
+    const { table, drawing } = layout(
+      { text: TEXT, layoutInCell: '0', tableIndent: 2880, wrap: 'topAndBottom' },
+      15
+    );
+    expect(drawing.layoutInCell).toBe(true);
+    expect(table.box.y).toBeCloseTo(0, 3);
+  });
+
+  test('a row ending where a float in the next row begins moves below it too', () => {
+    const single = squareAnchorInCell({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' });
+    const anchorRow = single.slice(single.indexOf('<w:tr>'), single.indexOf('</w:tr>') + 7);
+    const firstRow =
+      '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>row one</w:t></w:r></w:p></w:tc></w:tr>';
+    const rules =
+      '<w:tblBorders><w:top w:val="single" w:sz="8"/><w:bottom w:val="single" w:sz="8"/>' +
+      '<w:insideH w:val="single" w:sz="8"/></w:tblBorders>';
+    for (const borders of ['', rules]) {
+      const part = load(
+        single
+          .replace(anchorRow, firstRow + anchorRow)
+          .replace('<w:tblLayout w:type="fixed"/>', `${borders}<w:tblLayout w:type="fixed"/>`)
+      );
+      const page = layoutSemanticDocument(part, 1, {
+        measurer,
+        inlineDrawingLayout: layoutContext(part),
+        compatibilityMode: 14,
+      }).pages[0]!;
+      const table = page.fragments[0] as TableFragmentRecord;
+      const drawing = page.anchoredDrawings![0]!;
+      // The float keeps row two's unpushed top, just below row one.
+      expect(drawing.y).toBeLessThan(20);
+      // Both rows, the first included, start below it.
+      expect(table.rows[0]!.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
+    }
+  });
+});
