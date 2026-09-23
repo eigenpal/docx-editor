@@ -188,7 +188,11 @@ describe('w:layoutInCell and a float anchored inside a table cell', () => {
   }
 
   test('a header TABLE cell still wraps its text around its logo before mode 15', () => {
-    const cell = squareAnchorInCell({ text: TEXT, layoutInCell: '1' });
+    // A second paragraph in the same cell wraps too: it reads the float's zone, not its own.
+    const cell = squareAnchorInCell({ text: 'logo line', layoutInCell: '1' }).replace(
+      '</w:p></w:tc>',
+      `</w:p><w:p><w:r><w:t>${TEXT}</w:t></w:r></w:p></w:tc>`
+    );
     const table = cell.slice(cell.indexOf('<w:tbl>'), cell.lastIndexOf('</w:tbl>') + 8);
     const xml =
       cell.slice(0, cell.indexOf('>') + 1).replace('<w:document', '<w:hdr') + table + '</w:hdr>';
@@ -222,8 +226,9 @@ describe('w:layoutInCell and a float anchored inside a table cell', () => {
     const tableFragment = story.fragments[0] as {
       rows: { cells: { blocks: { lines: { contentX: number }[] }[] }[] }[];
     };
-    const lines = tableFragment.rows[0]!.cells[0]!.blocks[0]!.lines;
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]!.contentX).toBeGreaterThan(100);
+    const blocks = tableFragment.rows[0]!.cells[0]!.blocks;
+    expect(blocks[0]!.lines[0]!.contentX).toBeGreaterThan(100);
+    expect(blocks[1]!.lines.length).toBeGreaterThan(1);
+    expect(blocks[1]!.lines[0]!.contentX).toBeGreaterThan(100);
   });
 });

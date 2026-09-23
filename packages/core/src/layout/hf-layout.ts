@@ -390,7 +390,8 @@ export function layoutHeaderFooterStory(
 
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
-    // Before mode 15 Word runs header and footer text straight under their own logos.
+    // Before mode 15 Word runs header and footer text outside tables under their own logos;
+    // the cells read it through `CellAnchorScope.anchorsWrapText`.
     const anchorsWrapText = isWord2013OrLaterMode(inputs?.compatibilityMode);
 
     if (inlineDrawingLayout) {
@@ -463,14 +464,12 @@ export function layoutHeaderFooterStory(
             ? { projectionTokenForTable: inputs.projectionTokenForTable }
             : {}),
         });
-        const nextZones = anchorsWrapText
-          ? collectExclusionZonesFromDrawings(
-              pendingAnchoredDrawings,
-              inlineDrawingLayout,
-              0,
-              contentWidth
-            )
-          : Object.freeze([]);
+        const nextZones = collectExclusionZonesFromDrawings(
+          pendingAnchoredDrawings,
+          inlineDrawingLayout,
+          0,
+          contentWidth
+        );
         if (nextZones.length === 0) {
           converged = true;
           exclusionZones = nextZones;

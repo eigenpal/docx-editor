@@ -463,7 +463,8 @@ function placeCellParagraph(
     startOffset === 0
       ? directionalListFirstLineShift(listItem, indent, deps.measurer, tabStops, available, rtl)
       : 0;
-  const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
+  const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
+  const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
   const filtered = deps.paragraphOrderIndex
     ? filterExclusionZonesForParagraphOrder(rawZones, paragraphOrder, (id) =>
@@ -472,7 +473,6 @@ function placeCellParagraph(
     : rawZones;
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
-  const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
   const pageZones = localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the

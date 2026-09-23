@@ -198,4 +198,19 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
         3
       );
   });
+
+  test('a float whose own push would carry its row off the page leaves no gap', () => {
+    const layout = withRows({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' }, (xml, row) =>
+      xml.replace(row, fillerRow.repeat(44) + row + fillerRow.repeat(4))
+    );
+    const rows = (layout.pages[0]!.fragments[0] as TableFragmentRecord).rows;
+    for (let index = 1; index < rows.length; index += 1)
+      expect(rows[index]!.box.y).toBeCloseTo(
+        rows[index - 1]!.box.y + rows[index - 1]!.box.height,
+        3
+      );
+    const drawings = layout.pages.flatMap((page) => page.anchoredDrawings ?? []);
+    expect(drawings).toHaveLength(1);
+    expect(drawings[0]!.y).toBeGreaterThanOrEqual(0);
+  });
 });

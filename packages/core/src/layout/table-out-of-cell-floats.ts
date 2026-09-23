@@ -38,8 +38,11 @@ interface OutOfCellBand {
   readonly top: number;
   readonly bottom: number;
   readonly paragraphId: string;
-  /** Where the unpushed probe ended the float's anchor row. */
+  /** Where the unpushed probe placed the float's anchor row. */
+  readonly anchorRowTop: number;
   readonly anchorRowBottom: number;
+  /** How far above the anchor row the first row the band touches starts, unpushed. */
+  readonly leadIn: number;
 }
 
 export interface OutOfCellFloatPlan {
@@ -93,6 +96,17 @@ export function planOutOfCellFloats(
   if (paragraphs.size === 0) return null;
   let push = 0;
   const pushByParagraph = new Map<string, number>();
+  // Anchor rows already cleared for placement: their bands stay, whatever pushes come later.
+  const placedAnchors = new Set<string>();
+  /** Whether a band's anchor row still ends on this sheet once pushed, by its own band too. */
+  const anchorRowFits = (band: OutOfCellBand, pageBottom: number): boolean => {
+    const height = band.anchorRowBottom - band.anchorRowTop;
+    const top = band.anchorRowTop + push;
+    // Every row from the first one the band touches down to the anchor row moves below it.
+    const finalTop =
+      band.top <= top + height + EPSILON ? Math.max(top, band.bottom + band.leadIn) : top;
+    return finalTop + height <= pageBottom + EPSILON;
+  };
   // Only a flow-framed float moved with its pushed row; a page- or margin-framed one never
   // did, which is the same rule `shiftAnchoredDrawingRecords` applies.
   const pin = (drawings: readonly AnchoredDrawingRecord[]): readonly AnchoredDrawingRecord[] =>
@@ -116,14 +130,14 @@ export function planOutOfCellFloats(
       outOfCellFloatParagraphs: paragraphs,
     },
     clear: (from, heightAt, rows, pageBottom) => {
-      // A band whose anchor row the page break will carry away, even pushed as far as the rows
-      // already are, belongs to that later sheet: it pushes nothing here.
-      bands = bands.filter(
-        (band) =>
-          band.bottom > from + EPSILON &&
-          band.top < pageBottom &&
-          band.anchorRowBottom + push <= pageBottom + EPSILON
-      );
+      bands = bands.filter((band) => {
+        if (band.bottom <= from + EPSILON || band.top >= pageBottom) return false;
+        if (placedAnchors.has(band.paragraphId) || anchorRowFits(band, pageBottom)) return true;
+        // The page break carries this float's row, pushed, to a later sheet: it pushes
+        // nothing here, and there its cell handles it as the cell flow always has.
+        paragraphs.delete(band.paragraphId);
+        return false;
+      });
       let current = from;
       for (let moves = 0; bands.length > 0 && moves <= bands.length; moves += 1) {
         const bottom = current + heightAt(current);
@@ -134,17 +148,20 @@ export function planOutOfCellFloats(
         current = hit.bottom;
       }
       push += current - from;
-      if (push > EPSILON)
-        for (const row of rows)
-          for (const cell of row.cells)
-            for (const block of cell.blocks)
-              if (paragraphs.has(block.id)) pushByParagraph.set(block.id, push);
+      for (const row of rows)
+        for (const cell of row.cells)
+          for (const block of cell.blocks) {
+            if (!paragraphs.has(block.id)) continue;
+            placedAnchors.add(block.id);
+            if (push > EPSILON) pushByParagraph.set(block.id, push);
+          }
       return current;
     },
     end: () => {
       bands = [];
       push = 0;
       pushByParagraph.clear();
+      placedAnchors.clear();
       paragraphs.clear();
     },
   };
@@ -259,11 +276,21 @@ function probeBands(
           top: bandTop,
           bottom,
           paragraphId: drawing.anchorParagraphId,
+          anchorRowTop: row.top,
           anchorRowBottom: row.bottom,
+          leadIn: Math.max(0, row.top - firstTouchedRowTop(probe.fragment, bandTop)),
         })
       );
   }
   return bands;
+}
+
+/** The top of the first probed row that ends at or below `y`: the first one a band there touches. */
+function firstTouchedRowTop(fragment: TableFragmentRecord, y: number): number {
+  const row = fragment.rows.find(
+    (candidate) => candidate.box.y + candidate.box.height >= y - EPSILON
+  );
+  return row ? row.box.y : y;
 }
 
 interface ProbedRow {
