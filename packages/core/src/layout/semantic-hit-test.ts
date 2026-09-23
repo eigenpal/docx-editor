@@ -47,6 +47,7 @@ import type {
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import { pointInDrawingClip } from './drawing-wrap.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
+import { blockDistance, isCollapsedSectionMark, weightedDistance } from './hit-test-blocks.ts';
 import { bottomToTopCaretInLayout, pointInBottomToTopCell } from './table-cell-text-direction.ts';
 
 /** A point in the coordinate space named by the function taking it. */
@@ -474,38 +475,6 @@ function contentControlIdAtPoint(
   return contentControlAtPoint(layout, pageIndex, point)?.id ?? null;
 }
 
-/** Distance from a point to a box, with the vertical axis weighted. Zero means inside. */
-function weightedDistance(box: LayoutBox, point: HitPoint, verticalWeight: number): number {
-  const dx = Math.max(box.x - point.x, 0, point.x - (box.x + box.width));
-  const dy = Math.max(box.y - point.y, 0, point.y - (box.y + box.height));
-  return dx + dy * verticalWeight;
-}
-
-/**
- * How far a point is from a BLOCK, which is not the same question as how far it is from the
- * block's box.
- *
- * A table owns its whole horizontal band. Its box is only as wide as its columns, so the
- * blank strip beside a narrow table sits outside every box on the page, and plain
- * nearest-box hands that strip to whichever PARAGRAPH above or below happens to be closer —
- * a click level with row three lands two paragraphs up. Word puts the caret in the nearest
- * cell of the row you clicked beside, so a table level with the point is at distance zero
- * horizontally and the row resolution below picks the cell.
- *
- * Paragraphs keep the plain measure: their boxes start at the left indent, and the indent
- * strip must stay reachable by real proximity.
- */
-function blockDistance(
-  block: BlockFragmentRecord,
-  point: HitPoint,
-  verticalWeight: number
-): number {
-  if (block.kind !== 'table') return weightedDistance(block.box, point, verticalWeight);
-  const dy = Math.max(block.box.y - point.y, 0, point.y - (block.box.y + block.box.height));
-  if (dy > 0) return weightedDistance(block.box, point, verticalWeight);
-  return 0;
-}
-
 /**
  * The block a point means, then the position within it.
  *
@@ -520,6 +489,17 @@ function resolveBlocks(
   cell: TableCellAddress | null
 ): SemanticHit | null {
   if (blocks.length === 0) return null;
+
+  // A collapsed section mark keeps a fragment for the caret, but it shows nothing and takes no
+  // flow height, so it overlaps the next section's first line. A press reaches it only when no
+  // other block on the page can answer.
+  const marks = blocks.filter(isCollapsedSectionMark);
+  if (marks.length > 0 && marks.length < blocks.length) {
+    const others = blocks.filter((block) => !isCollapsedSectionMark(block));
+    return (
+      resolveBlocks(others, point, context, cell) ?? resolveBlocks(marks, point, context, cell)
+    );
+  }
 
   // Positioned paragraphs may overlap. Resolve their shared band in reverse paint order,
   // including ordinary anchor text painted after them. Keep ordinary flow's edge rules.

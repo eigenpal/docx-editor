@@ -63,9 +63,21 @@ export function paragraphPaintsNothing(
   lines: readonly PendingLine[],
   drawingContext: InlineDrawingLayoutContext | undefined
 ): boolean {
-  if (entry.listItem !== undefined || entry.shading !== undefined) return false;
-  const { top, bottom, left, right, between } = entry.borders;
-  if (top ?? bottom ?? left ?? right ?? between) return false;
+  return entry.shading === undefined && paragraphHoldsNothing(entry, lines, drawingContext);
+}
+
+/**
+ * Whether a paragraph holds nothing but its mark: no text, list marker, drawing, break, or
+ * border rule. Shading is not content: it only fills the box the paragraph occupies.
+ */
+export function paragraphHoldsNothing(
+  entry: PaintableParagraph,
+  lines: readonly PendingLine[],
+  drawingContext: InlineDrawingLayoutContext | undefined
+): boolean {
+  if (entry.listItem !== undefined) return false;
+  const { top, bottom, left, right, between, bar } = entry.borders;
+  if (top ?? bottom ?? left ?? right ?? between ?? bar) return false;
   if (
     drawingContext &&
     anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0

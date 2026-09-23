@@ -420,7 +420,11 @@ export interface ParagraphFragmentRecord {
   readonly emptyParagraphStyle?: ResolvedRunStyle;
   /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
   readonly clipToBox?: true;
-  /** A positioned text frame retains its source identity without consuming body flow height. */
+  /**
+   * The fragment retains its source identity without consuming body flow height: a positioned
+   * text frame (with {@link ParagraphFragmentRecord.positionedFrame}), or an empty section-mark
+   * paragraph before a continuous section, which paints nothing.
+   */
   readonly outOfFlow?: true;
   /** Placement and wrapping of one authored text-frame group, in page-content coordinates. */
   readonly positionedFrame?: {

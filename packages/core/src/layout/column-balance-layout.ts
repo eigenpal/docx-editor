@@ -39,6 +39,8 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly continuedPageInsets?: PageContentInsets;
   /** Balance a continuous section's columns instead of filling each to the page bottom. */
   readonly balanceColumns?: boolean;
+  /** A continuous section follows, so an empty section-mark paragraph takes no flow height. */
+  readonly sectionMarkCollapses?: boolean;
   /** First-page column bottom used internally by the bounded balance search. */
   readonly columnRegionBottom?: number;
   /** Section page-number format used to measure body page-field placeholders. */

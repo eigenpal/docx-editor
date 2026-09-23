@@ -22,6 +22,8 @@ export interface LayoutPassContextInputs {
   /** Set while a column-balance probe caps the flow at a page-local bottom. */
   readonly columnRegionBottom: number | undefined;
   readonly sectionPageBorders: SectionPageBorders | undefined;
+  /** Set when a continuous section follows, so an empty section mark takes no flow height. */
+  readonly sectionMarkCollapses?: boolean;
 }
 
 /**
@@ -56,5 +58,7 @@ export function layoutPassContextKey(
     ? `|pgb:${pageBordersFingerprint(inputs.sectionPageBorders)}`
     : '';
   const head = `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${inputs.flowStartY},${inputs.spaceBeforeCarry}${continuedContext}${inputs.furnitureContext}`;
-  return (notesReserveKey) => `${head}${notesReserveKey}${columnsContext}${pageBordersContext}`;
+  const markContext = inputs.sectionMarkCollapses ? '|smc' : '';
+  return (notesReserveKey) =>
+    `${head}${notesReserveKey}${columnsContext}${pageBordersContext}${markContext}`;
 }

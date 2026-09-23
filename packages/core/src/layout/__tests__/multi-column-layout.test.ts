@@ -287,17 +287,14 @@ describe('multi-column section layout', () => {
     expect(layout.pages).toHaveLength(1);
     const at = (text: string) =>
       layout.pages[0]!.fragments.find((fragment) => fragmentText(fragment) === text)!;
-    // Five lines (DELTA plus the section-mark paragraph fill column two) balance 3/2
-    // instead of stacking all five in column one.
-    expect([at('ALPHA').box.x, at('BETA').box.x, at('GAMMA').box.x]).toEqual([0, 0, 0]);
-    expect(at('DELTA').box.x).toBe(150);
-    expect(at('DELTA').box.y).toBe(at('ALPHA').box.y);
-    // The section after the balanced region resumes below the WHOLE region, full width.
+    // The empty section-mark paragraph takes no height before a continuous section, so four
+    // lines balance 2/2 instead of stacking all four in column one.
+    expect([at('ALPHA').box.x, at('BETA').box.x]).toEqual([0, 0]);
+    expect([at('GAMMA').box.x, at('DELTA').box.x]).toEqual([150, 150]);
+    expect(at('GAMMA').box.y).toBe(at('ALPHA').box.y);
+    // The section after the balanced region resumes directly below the WHOLE region.
     expect(at('TAIL').box.x).toBe(0);
-    expect(at('TAIL').box.y).toBeGreaterThanOrEqual(
-      at('GAMMA').box.y + at('GAMMA').box.height - 0.001
-    );
-    expect(at('TAIL').box.y).toBeLessThan(at('GAMMA').box.y + at('GAMMA').box.height + 15);
+    expect(at('TAIL').box.y).toBeCloseTo(at('BETA').box.y + at('BETA').box.height, 3);
   });
 
   test('a page-positioned table does not stretch its balanced two-column section', () => {

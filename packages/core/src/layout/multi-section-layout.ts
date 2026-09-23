@@ -77,6 +77,7 @@ export type LayoutSectionFn = (
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
     readonly balanceColumns?: boolean;
+    readonly sectionMarkCollapses?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
     readonly bodyPageNumberFormat?: string;
   }
@@ -457,9 +458,8 @@ export function layoutMultiSectionDocument(
     // A multi-column section that ends in a continuous section break balances its columns
     // (ECMA-376 §17.6.4). The break that ENDS this section is the next section's `w:type`;
     // the document's last section has no such break, so it keeps the fill-first shape.
-    const balanceColumns =
-      section.properties.columns.count > 1 &&
-      sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+    const endsContinuous = sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+    const balanceColumns = section.properties.columns.count > 1 && endsContinuous;
 
     // A continued section's local page 0 IS the host sheet, so it must flow against the box
     // that sheet already has. Its own variants describe a page it never opens: with `w:titlePg`
@@ -502,6 +502,9 @@ export function layoutMultiSectionDocument(
         ? { sectionPageBorders: section.properties.pageBorders }
         : {}),
       ...(balanceColumns ? { balanceColumns } : {}),
+      // The empty paragraph that carries this section's mark takes no flow height when the
+      // next section is continuous: the next section starts where the content ended.
+      ...(endsContinuous ? { sectionMarkCollapses: true } : {}),
       lineCounterStart: lineCounter,
       // A continued section's local page 0 IS the host sheet, so its document page index
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
