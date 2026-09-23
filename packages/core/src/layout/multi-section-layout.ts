@@ -12,6 +12,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { framedTokenJoin } from './layout-cache.ts';
+import type { ContinuedPageFurniture } from './furniture-drawing-exclusion.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
@@ -85,6 +86,7 @@ export type LayoutSectionFn = (
     readonly balanceColumns?: boolean;
     readonly sectionMarkCollapses?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
+    readonly continuedPageFurniture?: ContinuedPageFurniture;
     readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
@@ -415,7 +417,6 @@ export function layoutMultiSectionDocument(
     readonly at: (index: number, box: LayoutBox) => OverflowPageShell;
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
-  let previousFurnitureKey = '';
   /**
    * The running displayed number: the PAGE value the next new sheet gets when its section
    * does not author `w:start`. A continuous section shares its host sheet, so this can move
@@ -462,8 +463,6 @@ export function layoutMultiSectionDocument(
     const startIndex = pages.length;
     const startSheetY = sheetY;
 
-    const furnitureKey = furnitureGeometryFingerprint(furniture);
-
     // Empty continuous: share/continue — record a zero-page span so section indices stay
     // aligned for incremental reuse, and do not invent a blank sheet.
     if (slice.length === 0 && !emptySectionNeedsBlankPage(section.properties.breakType)) {
@@ -480,8 +479,10 @@ export function layoutMultiSectionDocument(
     // CONTINUOUS: `w:type` on THIS section's trailing `w:sectPr` says how the section starts
     // relative to the previous one (ECMA-376 §17.6.22 / ST_SectionMark). Absent type is
     // nextPage. When continuous, Word keeps the section on the page the last one ended,
-    // resuming the column immediately below its final paragraph — only when the sheet size
-    // and furniture push-down are unchanged (furniture belongs to the host sheet).
+    // resuming the column immediately below its final paragraph, when the sheet size is
+    // unchanged. Header and footer furniture belongs to the host sheet: a different height or
+    // `w:titlePg` does not start a new sheet. The host keeps its furniture and content box
+    // (`continuedPageInsets`), and the section's own furniture starts on its next sheet.
     const continues =
       sectionIndex > 0 &&
       section.properties.breakType === 'continuous' &&
@@ -490,8 +491,7 @@ export function layoutMultiSectionDocument(
       // section after that break, not on top of the page it closed.
       flowOpenPage &&
       previousGeometry !== null &&
-      samePageSize(previousGeometry, geometry) &&
-      previousFurnitureKey === furnitureKey;
+      samePageSize(previousGeometry, geometry);
 
     // Empty nextPage/even/odd: lay out zero blocks so the section still flushes one blank
     // page under its own geometry and furniture (Word-compatible trailing section break).
@@ -508,6 +508,8 @@ export function layoutMultiSectionDocument(
     // on both sections the host resolves `default` and this section would resolve `first`, and
     // the taller box packs content past the host's content bottom.
     const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
+    // For the same reason its text wraps around the drawings the host sheet paints.
+    const continuedPageFurniture = continues ? pages[pages.length - 1] : undefined;
 
     // The page-number format a body page-field placeholder is MEASURED against.
     //
@@ -556,6 +558,7 @@ export function layoutMultiSectionDocument(
       spaceBeforeCarry: flowSpaceAfter,
       ...(continues ? { flowStartY: flowCursorY } : {}),
       ...(continuedPageInsets ? { continuedPageInsets } : {}),
+      ...(continuedPageFurniture ? { continuedPageFurniture } : {}),
       ...(measuredPageNumberFormat !== undefined
         ? { bodyPageNumberFormat: measuredPageNumberFormat }
         : {}),
@@ -567,7 +570,6 @@ export function layoutMultiSectionDocument(
     flowSpaceAfter = laid.endSpaceAfter;
     flowOpenPage = laid.endsOpenPage;
     previousGeometry = geometry;
-    previousFurnitureKey = furnitureKey;
 
     if (sectionSession) {
       placed += sectionSession.stats.placed;

@@ -10,6 +10,7 @@ import {
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
 import {
+  continuedPageFurnitureZones,
   furnitureDrawingExclusionsForPage,
   hasFurnitureDrawingExclusions,
 } from './furniture-drawing-exclusion.ts';
@@ -730,11 +731,23 @@ function layoutBlocksPass(
   const reserveKeyBound = session?.previous ? session.previous.pages.length + 1 : Infinity;
   const columnRegionBottom = options.columnRegionBottom;
   const continuedInsets = options.continuedPageInsets;
+  // Local page 0 of a continued section IS the host sheet, so its text wraps around the
+  // drawings of the header and footer the host paints, never around this section's own.
+  const continuedZones =
+    continuedInsets && options.continuedPageFurniture
+      ? continuedPageFurnitureZones(
+          options.continuedPageFurniture,
+          continuedInsets,
+          geometry.margin.left,
+          contentWidthForReflow
+        )
+      : undefined;
   const contextFor = layoutPassContextKey({
     geometry,
     flowStartY,
     spaceBeforeCarry,
     continuedInsets,
+    continuedZones: continuedZones ? exclusionLayoutToken(continuedZones) : '',
     furnitureContext,
     columns,
     columnRegionBottom,
@@ -771,7 +784,8 @@ function layoutBlocksPass(
   });
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 
-  const furnitureHasWrap = hasFurnitureDrawingExclusions(furniture);
+  const furnitureHasWrap =
+    hasFurnitureDrawingExclusions(furniture) || (continuedZones?.length ?? 0) > 0;
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
   const pageExclusionZones = (): readonly ExclusionZone[] => {
@@ -780,7 +794,10 @@ function layoutBlocksPass(
     const bodyZones = options.drawingExclusionZonesByPage?.get(index) ?? Object.freeze([]);
     exclusionPageIndex = index;
     currentPageZones = bodyZones;
-    if (furnitureHasWrap) {
+    const hostZones = index === 0 ? continuedZones : undefined;
+    if (hostZones) {
+      if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
+    } else if (furnitureHasWrap) {
       const box = pageBox(index);
       const insets = insetsFor(index);
       // Resolve furniture on the page being filled, including newly minted pages.

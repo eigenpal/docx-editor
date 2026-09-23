@@ -16,6 +16,8 @@ export interface LayoutPassContextInputs {
   readonly spaceBeforeCarry: number;
   /** The host sheet's content box when this section continues on another section's page. */
   readonly continuedInsets: PageContentInsets | undefined;
+  /** Wrap zones of the host sheet's furniture on a continued section's local page 0. */
+  readonly continuedZones?: string;
   /** The header/footer half of the key, from `furnitureLayoutContext`. */
   readonly furnitureContext: string;
   readonly columns: ResolvedSectionColumns;
@@ -46,9 +48,12 @@ export function layoutPassContextKey(
   const { geometry, columns, columnRegionBottom, continuedInsets } = inputs;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
-  // must not let this section resume a flow measured against the box it used to have.
+  // must not let this section resume a flow measured against the box it used to have. The
+  // host's furniture wrap zones are an input too. Their token embeds part names from the file,
+  // so it is length-framed: a printable separator would be a forgeable boundary.
+  const zones = inputs.continuedZones ?? '';
   const continuedContext = continuedInsets
-    ? `|cont:${continuedInsets.top},${continuedInsets.height}`
+    ? `|cont:${continuedInsets.top},${continuedInsets.height};z${zones.length}:${zones}`
     : '';
   // A `w:pgBorders` edit moves NO paragraph key: the frame is drawn beside the text and never
   // through it, so every per-block key and every checkpoint still matches and each reuse path

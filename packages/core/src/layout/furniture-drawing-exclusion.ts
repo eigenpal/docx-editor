@@ -75,3 +75,33 @@ export function furnitureDrawingExclusionsForPage(
   }
   return Object.freeze(added);
 }
+
+/** The host sheet's header and footer records, for a section that continues on that sheet. */
+export type ContinuedPageFurniture = Pick<PageRecord, 'header' | 'footer' | 'box'>;
+
+/**
+ * Wrap zones on the host sheet, relative to the content column of the section continuing on it.
+ *
+ * The host sheet keeps and paints its own header and footer, so a continued section's text on
+ * that sheet wraps around THOSE drawings. The section's own furniture starts on its next sheet.
+ * `contentLeft` and `contentWidth` are the continued section's column, which can differ from
+ * the host's when the margins change.
+ */
+export function continuedPageFurnitureZones(
+  host: ContinuedPageFurniture,
+  insets: { readonly top: number; readonly height: number },
+  contentLeft: number,
+  contentWidth: number
+): readonly ExclusionZone[] {
+  return furnitureDrawingExclusionsForPage({
+    header: host.header,
+    footer: host.footer,
+    box: host.box,
+    contentBox: {
+      x: host.box.x + contentLeft,
+      y: host.box.y + insets.top,
+      width: contentWidth,
+      height: insets.height,
+    },
+  });
+}

@@ -224,8 +224,8 @@ describe('per-page header/footer variant insets', () => {
   });
 
   test('a continuous section flows against the host sheet box, not its own first page', () => {
-    // Both sections carry `w:titlePg` and the same references — the copied-`sectPr` shape the
-    // continuation gate requires. Section 2's local page 0 IS section 1's last sheet, so it
+    // Both sections carry `w:titlePg` and the same references — the copied-`sectPr` shape.
+    // Section 2's local page 0 IS section 1's last sheet, so it
     // must use that sheet's box: resolving its own `first` variant hands it a box taller by a
     // whole header and packs content past the host's content bottom into the bottom margin.
     const layout = layoutOf(titlePageDoc(60, 30));
