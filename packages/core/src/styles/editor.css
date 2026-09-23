@@ -7426,3 +7426,8 @@ a.docx-hyperlink:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
+
+/* Keep dark document text legible beneath decorative change overlays. */
+:where(.docx-editor) [data-docx-refresh-highlight] {
+  mix-blend-mode: multiply;
+}

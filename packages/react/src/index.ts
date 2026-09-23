@@ -513,4 +513,5 @@ export type {
   RefreshHighlightOptions,
   RefreshHighlightAnimation,
   ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
 } from '@docx-editor.dev/core/editor';

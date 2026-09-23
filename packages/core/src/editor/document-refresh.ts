@@ -256,7 +256,9 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           if (!readOoxmlPackage(bytes).ok)
             return publish(failure(resultId, 'invalid-document'), 'failed');
           highlights.clear();
-          notify({ phase: 'refreshing', highlightsVisible: false });
+          located = [];
+          acceptedRevision = null;
+          notify({ phase: 'refreshing', changes: [], highlightsVisible: false });
           // Observers can cancel, switch documents, or edit when notified.
           if (!valid()) return publish(failure(resultId, 'cancelled'));
           const finalBytes = host.surface()!.save();
@@ -284,6 +286,7 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           }
           // Accepted content stays accepted if cancellation races with mount completion.
           recovery = null;
+          highlights.clear();
           request.revision = host.mountedRevision;
           request.sequence = owned.sequence;
           const resolved = resolveRefreshChanges(host, resultId, owned.changes, request.seen);
@@ -353,27 +356,47 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
       };
     },
     highlightChanges(options) {
-      if (acceptedRevision !== host.revision) return;
+      highlights.validate(options);
+      if (acceptedRevision !== host.revision) return 0;
+      const ids = options?.changeIds === undefined ? null : new Set(options.changeIds);
       const selected = located.filter(
         (entry) =>
-          entry.change.status === 'available' && (options?.includePrevious || entry.change.isNew)
+          entry.change.status === 'available' &&
+          (ids ? ids.has(entry.change.id) : options?.includePrevious || entry.change.isNew)
       );
       highlights.show(selected, options);
       notify({ highlightsVisible: selected.length > 0 });
+      return selected.length;
     },
     clearHighlights(options) {
       highlights.hide(options);
       notify({ highlightsVisible: false });
     },
-    navigateToChange(id, options) {
+    navigateToChange(id, options = {}) {
+      const block = options.block ?? 'center';
+      const behavior = options.behavior ?? 'instant';
+      const offsetPx = options.offsetPx ?? 24;
+      if (!['start', 'center', 'centerIfNeeded', 'nearest'].includes(block))
+        throw new TypeError('block must be start, center, centerIfNeeded, or nearest.');
+      if (!['instant', 'smooth'].includes(behavior))
+        throw new TypeError('behavior must be instant or smooth.');
+      if (options.focus !== undefined && typeof options.focus !== 'boolean')
+        throw new TypeError('focus must be a boolean.');
+      if (!Number.isFinite(offsetPx) || offsetPx < 0)
+        throw new RangeError('offsetPx must be finite and nonnegative.');
       if (acceptedRevision !== host.revision) return false;
+      const reduced =
+        host
+          .container()
+          ?.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
+        false;
       const target = located.find((entry) => entry.change.id === id);
       if (!target?.paragraphId || target.offset === undefined) return false;
       const surface = host.surface();
       if (
         !surface?.revealPosition(
           { paragraphId: target.paragraphId, offset: target.offset },
-          { block: 'center', behavior: 'instant' }
+          { block, offsetPx, behavior: reduced ? 'instant' : behavior }
         )
       )
         return false;

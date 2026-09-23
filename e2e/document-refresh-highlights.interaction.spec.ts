@@ -75,11 +75,11 @@ test('default fade is subtle, borderless, padded, and stable across repeated cal
   });
   expect(result.duration).toBe(180);
   expect(result.opacity).toBeGreaterThan(0);
-  expect(result.opacity).toBeLessThan(0.14);
-  expect(result.target).toBe('0.14');
+  expect(result.opacity).toBeLessThan(1);
+  expect(result.target).toBe('1');
   expect(result.radius).toBe('6px');
   expect(result.border).toBe('0px');
-  expect(result.background).toBe('rgb(59, 130, 246)');
+  expect(result.background).toBe('color(srgb 0.231373 0.509804 0.964706 / 0.14)');
   expect(result.same).toBe(true);
   expect(result.scroll).toBe(true);
   expect(result.paddingWidth).toBeCloseTo(8, 1);
@@ -110,7 +110,7 @@ test('dismissal reverses from current opacity and stale highlights disappear imm
     };
   });
   expect(result.duringExit).toBeGreaterThan(0);
-  expect(result.duringExit).toBeLessThan(0.14);
+  expect(result.duringExit).toBeLessThan(1);
   expect(result.start).toBeCloseTo(result.duringExit, 5);
   expect(result.count).toBe(2);
   expect(result.exitState).toBe('idle');
@@ -151,8 +151,8 @@ test('custom settings survive zoom without replay and reduced motion limits fade
   expect(result).toEqual({
     duration: 125,
     radius: '9px',
-    opacity: '0.22',
-    color: 'rgb(102, 51, 153)',
+    opacity: '1',
+    color: 'color(srgb 0.4 0.2 0.6 / 0.22)',
     animations: 0,
   });
   await expect(page.locator('[data-docx-refresh-highlight]')).toHaveCount(0);
@@ -219,4 +219,113 @@ test('highlights expire after three seconds, reset their timer, and support expl
     };
   });
   expect(exit).toEqual({ visible: false, opacity: '0', duration: 220 });
+});
+
+test('targeted navigation supports alignment, edge padding, and reduced-motion scrolling', async ({
+  page,
+}) => {
+  await open(page);
+  const target = page
+    .locator('[data-paragraph-id]')
+    .filter({ hasText: 'Section 25: Updated review date.' })
+    .first();
+  const result = await page.evaluate(() => {
+    const { refresh, scroll } = window.__refreshMotion;
+    scroll.scrollTop = 0;
+    const found = refresh.navigateToChange('review-date', { block: 'start', offsetPx: 80 });
+    const count = refresh.highlightChanges({ changeIds: ['review-date'], animation: false });
+    const top = scroll.scrollTop;
+    refresh.navigateToChange('review-date', { block: 'centerIfNeeded' });
+    return { found, count, top, unchanged: top === scroll.scrollTop };
+  });
+  expect(result).toMatchObject({ found: true, count: 1, unchanged: true });
+  expect(result.top).toBeGreaterThan(0);
+  await expect(page.locator('[data-docx-refresh-highlight]')).toHaveCount(1);
+  const location = await target.boundingBox();
+  const scrollBox = await page.locator('.docx-editor__scroll-container').boundingBox();
+  expect(location!.y - scrollBox!.y).toBeGreaterThan(60);
+  expect(location!.y - scrollBox!.y).toBeLessThan(100);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(
+    await page.evaluate(() => {
+      const { refresh, scroll } = window.__refreshMotion;
+      let behavior: ScrollBehavior | undefined;
+      const original = scroll.scrollTo.bind(scroll);
+      scroll.scrollTo = ((options: ScrollToOptions) => {
+        behavior = options.behavior;
+        original(options);
+      }) as typeof scroll.scrollTo;
+      refresh.navigateToChange('delivery-date', { behavior: 'smooth' });
+      return behavior;
+    })
+  ).toBe('instant');
+});
+
+test('CSS decoration, border options, custom easing, and separate exit timing work together', async ({
+  page,
+}) => {
+  await open(page);
+  const result = await page.evaluate(() => {
+    const { refresh, scroll } = window.__refreshMotion;
+    const stylesheet = document.createElement('style');
+    stylesheet.textContent = '.review-pattern { box-shadow: 0 0 8px blue; }';
+    document.head.append(stylesheet);
+    const count = refresh.highlightChanges({
+      changeIds: ['delivery-date'],
+      color: 'rebeccapurple',
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: 'blue',
+      className: 'review-pattern',
+      animation: { durationMs: 160, exitDurationMs: 240, easing: 'linear' },
+      timeoutMs: null,
+    });
+    const band = scroll.querySelector<HTMLElement>('[data-docx-refresh-highlight]')!;
+    const enter = band.getAnimations()[0]!;
+    enter.finish();
+    const style = getComputedStyle(band);
+    const decoration = {
+      count,
+      borderWidth: style.borderWidth,
+      borderStyle: style.borderStyle,
+      shadow: style.boxShadow,
+      borderColor: style.borderColor,
+      bandOpacity: style.opacity,
+      fill: style.backgroundColor,
+      blendMode: style.mixBlendMode,
+      pointer: style.pointerEvents,
+    };
+    const errors: string[] = [];
+    for (const options of [
+      { color: 'not-a-color' },
+      { borderColor: 'not-a-color' },
+      { animation: { easing: 'nonsense' } },
+      { animation: { easing: 'ease, linear' } },
+    ]) {
+      try {
+        refresh.highlightChanges(options);
+      } catch (error) {
+        errors.push((error as Error).name);
+      }
+    }
+    const same = scroll.querySelector('[data-docx-refresh-highlight]') === band;
+    refresh.clearHighlights();
+    const exit = band.getAnimations()[0]!;
+    exit.pause();
+    return { ...decoration, errors, same, exit: exit.effect!.getTiming() };
+  });
+  expect(result).toMatchObject({
+    count: 1,
+    borderWidth: '2px',
+    borderStyle: 'dashed',
+    borderColor: 'rgb(0, 0, 255)',
+    bandOpacity: '1',
+    fill: 'color(srgb 0.4 0.2 0.6 / 0.14)',
+    blendMode: 'multiply',
+    pointer: 'none',
+    errors: ['TypeError', 'TypeError', 'TypeError', 'TypeError'],
+    same: true,
+    exit: { duration: 240, easing: 'linear' },
+  });
+  expect(result.shadow).not.toBe('none');
 });

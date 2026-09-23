@@ -91,7 +91,7 @@ export interface DocumentRefreshState {
     | 'failed';
   readonly result: RefreshResult | null;
   readonly changes: readonly RefreshChange[];
-  /** Whether highlights are requested for available locations. False during an explicit exit fade. */
+  /** Whether highlights are requested for available locations. False when any exit fade starts. */
   readonly highlightsVisible: boolean;
   /** Offer restore and download controls when true. */
   readonly recoveryAvailable: boolean;
@@ -101,12 +101,18 @@ export interface DocumentRefreshState {
 export interface RefreshHighlightAnimation {
   /** Fade duration in milliseconds. Default: 180. Must be finite and between 0 and 10000. */
   readonly durationMs?: number;
+  /** Automatic and explicit exit fade duration. Defaults to durationMs. Range: 0 through 10000. */
+  readonly exitDurationMs?: number;
+  /** CSS timing function for both fades. Defaults to --doc-motion-ease-out. CSS variables are not accepted here. */
+  readonly easing?: string;
 }
 
 /** Presentation for temporary paragraph highlights. Each call starts from these defaults. @public */
 export interface RefreshHighlightOptions {
   /** Include earlier changes from the latest cumulative result. Default: false. */
   readonly includePrevious?: boolean;
+  /** Select these change IDs instead of the recent/all filter. Unknown or unavailable IDs are skipped. Empty means none. */
+  readonly changeIds?: readonly string[];
   /** CSS color, including var(). Default: var(--doc-refresh-highlight-color), a light blue. */
   readonly color?: string;
   /** Fill opacity, from 0 to 1. Default: 0.14. Does not change document text opacity. */
@@ -115,6 +121,14 @@ export interface RefreshHighlightOptions {
   readonly padding?: number;
   /** Corner radius in CSS pixels at 100% zoom. Default: 6. Must be finite and nonnegative. */
   readonly borderRadius?: number;
+  /** Border width in CSS pixels at 100% zoom. Default: 0. Finite and nonnegative. */
+  readonly borderWidth?: number;
+  /** CSS border color. Defaults to color. Use an alpha color for a translucent border; opacity controls only the fill. */
+  readonly borderColor?: string;
+  /** Border pattern. Default: solid. */
+  readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+  /** Optional CSS classes for extra decoration, such as shadows or patterns. Geometry remains engine-owned. */
+  readonly className?: string;
   /** Milliseconds before dismissal starts. Default: 3000. Null keeps highlights until cleared. Maximum: 2147483647. */
   readonly timeoutMs?: number | null;
   /** Default: true, a 180ms fade. False disables motion. Repeated calls do not replay the entrance. */
@@ -125,6 +139,18 @@ export interface RefreshHighlightOptions {
 export interface ClearRefreshHighlightsOptions {
   /** Defaults to the last highlightChanges() animation. False removes highlights immediately. */
   readonly animation?: boolean | RefreshHighlightAnimation;
+}
+
+/** Explicit change navigation. Does not change the default scroll preservation during refresh. @public */
+export interface NavigateToChangeOptions {
+  /** Move the caret and focus to the changed range start. Default: false. */
+  readonly focus?: boolean;
+  /** Target alignment. Default: center. centerIfNeeded preserves scroll for an already visible target. */
+  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+  /** Default: instant. Reduced motion uses instant even when smooth is requested. */
+  readonly behavior?: 'instant' | 'smooth';
+  /** Edge padding for start/nearest placement, in CSS pixels. Default: 24. Finite and nonnegative. */
+  readonly offsetPx?: number;
 }
 
 /** External file transport stays in your application. Reload resets selection and undo history. @public */
@@ -143,12 +169,12 @@ export interface DocumentRefresh {
   subscribe(listener: () => void): () => void;
   /** Completion notification for every apply call, including a refused result. */
   onResult(listener: (result: RefreshResult) => void): () => void;
-  /** Highlight paragraphs containing available changes. Defaults to new changes from the latest accepted result. */
-  highlightChanges(options?: RefreshHighlightOptions): void;
+  /** Highlight available changes and return their count, including offscreen locations. Zero means none. Always validates options. */
+  highlightChanges(options?: RefreshHighlightOptions): number;
   /** Remove temporary paragraph highlights without changing document content or history. */
   clearHighlights(options?: ClearRefreshHighlightsOptions): void;
   /** Explicit navigation. Does not focus unless requested. Returns false for unavailable locations. */
-  navigateToChange(id: string, options?: { readonly focus?: boolean }): boolean;
+  navigateToChange(id: string, options?: NavigateToChangeOptions): boolean;
   /** Return a copy for download after recovery fails. */
   recoveryBytes(): ArrayBuffer | null;
   /** Retry recovery only while the failed document session is still active. */

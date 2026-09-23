@@ -62,7 +62,13 @@ export function createRefreshHighlights(
   let opacity = 0.14;
   let padding = 4;
   let radius = 6;
+  let borderWidth = 0;
+  let borderColor = DEFAULT_COLOR;
+  let borderStyle = 'solid';
+  let className = '';
   let duration = 180;
+  let exitDuration = 180;
+  let configuredEasing: string | undefined;
   let easing = DEFAULT_EASING;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timerVersion = 0;
@@ -72,6 +78,109 @@ export function createRefreshHighlights(
     timer = undefined;
   };
 
+  const validateEasing = (value: string | undefined) => {
+    const css = host.container()?.ownerDocument.defaultView?.CSS ?? globalThis.CSS;
+    if (
+      value !== undefined &&
+      (typeof value !== 'string' ||
+        !value.trim() ||
+        /var\(|^(inherit|initial|unset|revert|revert-layer)$/i.test(value.trim()) ||
+        (css?.supports && !css.supports('animation-timing-function', value)))
+    )
+      throw new TypeError('animation.easing must be a CSS timing function without variables.');
+    const Effect =
+      host.container()?.ownerDocument.defaultView?.KeyframeEffect ?? globalThis.KeyframeEffect;
+    if (value !== undefined && Effect) {
+      try {
+        // CSS accepts lists and inherited values that the animation API rejects.
+        new Effect(null, [], { easing: value });
+      } catch {
+        throw new TypeError('animation.easing must be one valid animation timing function.');
+      }
+    }
+    return value;
+  };
+  const exitDurationOf = (
+    animation: boolean | RefreshHighlightAnimation | undefined,
+    fallback: number
+  ) =>
+    numberOption(
+      typeof animation === 'object' ? animation.exitDurationMs : undefined,
+      fallback,
+      'animation.exitDurationMs',
+      10000
+    );
+  const validate = (options: RefreshHighlightOptions = {}) => {
+    if (options.includePrevious !== undefined && typeof options.includePrevious !== 'boolean')
+      throw new TypeError('includePrevious must be a boolean.');
+    const nextOpacity = numberOption(options.opacity, 0.14, 'opacity', 1);
+    const nextPadding = numberOption(options.padding, 4, 'padding');
+    const nextRadius = numberOption(options.borderRadius, 6, 'borderRadius');
+    const nextDuration = durationOf(options.animation);
+    const nextExitDuration = exitDurationOf(options.animation, nextDuration);
+    const nextEasing = validateEasing(
+      typeof options.animation === 'object' ? options.animation.easing : undefined
+    );
+    const nextTimeout =
+      options.timeoutMs === null
+        ? null
+        : numberOption(options.timeoutMs, 3000, 'timeoutMs', 2147483647);
+    const nextColor = options.color ?? DEFAULT_COLOR;
+    const nextBorderWidth = numberOption(options.borderWidth, 0, 'borderWidth');
+    const nextBorderColor = options.borderColor ?? nextColor;
+    const nextBorderStyle = options.borderStyle ?? 'solid';
+    const nextClassName = options.className ?? '';
+    if (!['solid', 'dashed', 'dotted'].includes(nextBorderStyle))
+      throw new TypeError('borderStyle must be solid, dashed, or dotted.');
+    if (typeof nextClassName !== 'string') throw new TypeError('className must be a string.');
+    const css = host.container()?.ownerDocument.defaultView?.CSS ?? globalThis.CSS;
+    if (
+      typeof nextColor !== 'string' ||
+      !nextColor.trim() ||
+      (css?.supports && !css.supports('color', nextColor))
+    )
+      throw new TypeError('color must be a CSS color or var() expression.');
+    if (
+      css?.supports &&
+      !css.supports('color', `color-mix(in srgb, ${nextColor} ${nextOpacity * 100}%, transparent)`)
+    )
+      throw new TypeError('color must be valid inside color-mix(), including var() expressions.');
+    if (
+      typeof nextBorderColor !== 'string' ||
+      !nextBorderColor.trim() ||
+      (css?.supports && !css.supports('color', nextBorderColor))
+    )
+      throw new TypeError('borderColor must be a CSS color or var() expression.');
+    if (
+      options.changeIds !== undefined &&
+      (!Array.isArray(options.changeIds) ||
+        options.changeIds.length > 10000 ||
+        options.changeIds.some((id) => typeof id !== 'string' || !id))
+    )
+      throw new TypeError('changeIds must contain at most 10000 nonempty string IDs.');
+    return {
+      nextOpacity,
+      nextPadding,
+      nextRadius,
+      nextDuration,
+      nextExitDuration,
+      nextEasing,
+      nextTimeout,
+      nextColor,
+      nextBorderWidth,
+      nextBorderColor,
+      nextBorderStyle,
+      nextClassName,
+    };
+  };
+  const resolveEasing = () =>
+    configuredEasing ||
+    host
+      .container()
+      ?.ownerDocument.defaultView?.getComputedStyle(host.container()!)
+      .getPropertyValue('--doc-motion-ease-out')
+      .trim() ||
+    DEFAULT_EASING;
   const stop = (band: Band) => {
     if (band.animation) {
       band.animation.onfinish = null;
@@ -148,11 +257,7 @@ export function createRefreshHighlights(
     const surface = host.surface();
     const container = host.container();
     if (!surface || !container || selected.length === 0) return;
-    easing =
-      container.ownerDocument.defaultView
-        ?.getComputedStyle(container)
-        .getPropertyValue('--doc-motion-ease-out')
-        .trim() || DEFAULT_EASING;
+    easing = resolveEasing();
     const ids = new Set(selected.map((entry) => entry.paragraphId));
     const scale = editor.getRenderScale();
     const zoom = editor.snapshot().zoom;
@@ -198,7 +303,7 @@ export function createRefreshHighlights(
           element.setAttribute('data-docx-refresh-highlight', '');
           element.setAttribute('contenteditable', 'false');
           element.setAttribute('aria-hidden', 'true');
-          element.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:0;';
+          element.style.cssText = 'position:absolute;pointer-events:none;box-sizing:border-box;';
           band = { element, paragraphId: paragraph.paragraphId, target: -1, exiting: false };
           bands.set(key, band);
           parent.append(element);
@@ -206,32 +311,28 @@ export function createRefreshHighlights(
         const returning = band.exiting;
         band.exiting = false;
         if (returning) band.target = -1;
+        band.element.className = className;
         Object.assign(band.element.style, {
-          backgroundColor: color,
+          border: borderWidth ? `${borderWidth * zoom}px ${borderStyle} ${borderColor}` : '0',
+          backgroundColor: `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)`,
           borderRadius: `${radius * zoom}px`,
           left: `${left}px`,
           top: `${top}px`,
           width: `${Math.max(0, right - left)}px`,
           height: `${Math.max(0, bottom - top)}px`,
         });
-        fade(
-          key,
-          band,
-          opacity,
-          created && seen.has(paragraph.paragraphId) ? 0 : duration,
-          created
-        );
+        fade(key, band, 1, created && seen.has(paragraph.paragraphId) ? 0 : duration, created);
         presented.add(paragraph.paragraphId);
       }
     }
     for (const id of presented) seen.add(id);
     for (const [key, band] of bands) {
       if (keep.has(key)) continue;
-      if (!band.element.isConnected || ids.has(band.paragraphId) || duration === 0) {
+      if (!band.element.isConnected || ids.has(band.paragraphId) || exitDuration === 0) {
         remove(key, band);
       } else if (!band.exiting) {
         band.exiting = true;
-        fade(key, band, 0, duration);
+        fade(key, band, 0, exitDuration);
       }
     }
     observer ??= new MutationObserver(paint);
@@ -246,7 +347,14 @@ export function createRefreshHighlights(
     releaseMedia();
   };
   const hide = (options: ClearRefreshHighlightsOptions = {}) => {
-    const milliseconds = durationOf(options.animation, duration);
+    const milliseconds = exitDurationOf(
+      options.animation,
+      durationOf(options.animation, exitDuration)
+    );
+    const nextEasing = validateEasing(
+      typeof options.animation === 'object' ? options.animation.easing : undefined
+    );
+    easing = nextEasing ?? resolveEasing();
     stopTimer();
     selected = [];
     seen.clear();
@@ -264,33 +372,37 @@ export function createRefreshHighlights(
   return {
     show(changes: readonly LocatedChange[], options: RefreshHighlightOptions = {}) {
       // Validate the complete request before changing visible presentation.
-      const nextOpacity = numberOption(options.opacity, 0.14, 'opacity', 1);
-      const nextPadding = numberOption(options.padding, 4, 'padding');
-      const nextRadius = numberOption(options.borderRadius, 6, 'borderRadius');
-      const nextDuration = durationOf(options.animation);
-      const nextTimeout =
-        options.timeoutMs === null
-          ? null
-          : numberOption(options.timeoutMs, 3000, 'timeoutMs', 2147483647);
-      const nextColor = options.color ?? DEFAULT_COLOR;
-      const css = host.container()?.ownerDocument.defaultView?.CSS;
-      if (
-        typeof nextColor !== 'string' ||
-        !nextColor.trim() ||
-        (css?.supports && !css.supports('color', nextColor))
-      )
-        throw new TypeError('color must be a CSS color or var() expression.');
+      const {
+        nextOpacity,
+        nextPadding,
+        nextRadius,
+        nextDuration,
+        nextExitDuration,
+        nextEasing,
+        nextTimeout,
+        nextColor,
+        nextBorderWidth,
+        nextBorderColor,
+        nextBorderStyle,
+        nextClassName,
+      } = validate(options);
       const previous = new Set(selected.map((entry) => entry.paragraphId));
       seen = new Set([...seen].filter((id) => previous.has(id)));
       color = nextColor;
+      borderWidth = nextBorderWidth;
+      borderColor = nextBorderColor;
+      borderStyle = nextBorderStyle;
+      className = nextClassName;
       opacity = nextOpacity;
       padding = nextPadding;
       radius = nextRadius;
       duration = nextDuration;
+      exitDuration = nextExitDuration;
+      configuredEasing = nextEasing;
       selected = changes;
-      if (duration === 0) for (const band of bands.values()) stop(band);
+      if (duration === 0) for (const band of bands.values()) if (!band.exiting) stop(band);
       if (!selected.length) {
-        clear();
+        hide();
         return;
       }
       paint();
@@ -305,6 +417,7 @@ export function createRefreshHighlights(
         }, nextTimeout);
       }
     },
+    validate,
     hide,
     clear,
     repaint: paint,

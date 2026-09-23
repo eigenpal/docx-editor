@@ -427,4 +427,5 @@ export type {
   RefreshHighlightOptions,
   RefreshHighlightAnimation,
   ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
 } from './document-refresh.ts';

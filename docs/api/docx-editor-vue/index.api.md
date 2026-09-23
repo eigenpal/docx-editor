@@ -86,6 +86,7 @@ import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { MaybeRef } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
+import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
@@ -4730,6 +4731,8 @@ export interface MenuTableGridProps {
     className?: string;
     slot?: ChromeSlotId;
 }
+
+export { NavigateToChangeOptions }
 
 // @public
 export const NAVIGATION_PANE_GAP = 16;

@@ -1,4 +1,8 @@
-import { createDocumentRefresh, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  createDocumentRefresh,
+  type DocxEditorInstance,
+  type RefreshSubmission,
+} from '@docx-editor.dev/core/editor';
 import type { TFunction } from '@docx-editor.dev/i18n';
 import { refreshFixture, sampleProcessor } from './refresh-demo-fixture';
 
@@ -42,9 +46,10 @@ export function mountRefreshDemoControls(
     start.disabled = active;
     cancel.disabled = !active;
     const changes = state.changes.filter((change) => change.isNew && change.status === 'available');
-    show.disabled = changes.length === 0;
+    const replacing = ['refreshing', 'recovering'].includes(state.phase);
+    show.disabled = replacing || changes.length === 0;
     clear.disabled = !state.highlightsVisible;
-    previous.disabled = next.disabled = changes.length === 0;
+    previous.disabled = next.disabled = replacing || changes.length === 0;
     retry.hidden = download.hidden = !state.recoveryAvailable;
     let message = t(`documentRefresh.${state.phase}`);
     if (state.result && !state.result.ok) {
@@ -66,8 +71,9 @@ export function mountRefreshDemoControls(
   const start = button(t('documentRefresh.start'), () => {
     const current = ++run;
     void (async () => {
+      let submission: RefreshSubmission | undefined;
       try {
-        const submission = await refresh.capture();
+        submission = await refresh.capture();
         for (const sequence of [1, 2]) {
           // Replace this controlled delivery with your application's backend or event stream.
           await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -78,9 +84,10 @@ export function mountRefreshDemoControls(
           index = -1;
           refresh.highlightChanges();
         }
-        refresh.finish(submission);
       } catch {
         if (!disposed) status.textContent = t('documentRefresh.failed');
+      } finally {
+        if (submission) refresh.finish(submission);
       }
     })();
   });
@@ -106,7 +113,8 @@ export function mountRefreshDemoControls(
           ? changes.length - 1
           : 0
         : (index + direction + changes.length) % changes.length;
-    if (refresh.navigateToChange(changes[index]!.id)) {
+    if (refresh.navigateToChange(changes[index]!.id, { block: 'centerIfNeeded' })) {
+      refresh.highlightChanges({ changeIds: [changes[index]!.id] });
       summary.textContent = t('documentRefresh.position', {
         current: index + 1,
         total: changes.length,

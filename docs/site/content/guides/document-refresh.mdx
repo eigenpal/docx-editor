@@ -37,9 +37,8 @@ export const refreshPreview = String.raw`<!doctype html>
   article { max-width: 460px; margin: auto; padding: 24px; background: var(--bg); }
   article p { position: relative; margin: 0 0 34px; padding: 6px; }
   :root { --highlight-color: #3b82f6; --highlight-opacity: .14; --highlight-padding: 4px; --highlight-radius: 6px; --highlight-duration: 180ms; }
-  article p::after { content: ''; position: absolute; inset: calc(-1 * var(--highlight-padding)); border-radius: var(--highlight-radius); background: var(--highlight-color); opacity: 0; pointer-events: none; transition: opacity var(--highlight-duration) cubic-bezier(.23,1,.32,1); }
-  article p[data-mark]::after { opacity: var(--highlight-opacity); }
-  article p[data-mark]::before { content: 'Changed'; position: absolute; top: -18px; left: 0; font: 600 11px system-ui, sans-serif; color: var(--accent); }
+  article p::after { content: ''; position: absolute; inset: calc(-1 * var(--highlight-padding)); border-radius: var(--highlight-radius); background: color-mix(in srgb, var(--highlight-color) calc(var(--highlight-opacity) * 100%), transparent); opacity: 0; mix-blend-mode: multiply; pointer-events: none; border: var(--highlight-border, 0px) dashed var(--highlight-color); box-sizing: border-box; transition: opacity var(--highlight-exit-duration, 180ms) cubic-bezier(.23,1,.32,1); }
+  article p[data-mark]::after { opacity: 1; transition-duration: var(--highlight-duration); }
   #code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 44px; font-size: 11px; padding-top: 12px; }
   #position { font-size: 11px; margin: 5px 0 0; }
   @media(max-width: 440px) { body { padding: 10px; } button, select { padding: 6px; } article { padding: 12px; } #viewport { padding: 10px; height: 200px; } }
@@ -71,7 +70,9 @@ export const refreshPreview = String.raw`<!doctype html>
 </div>
 <div class="row">
   <label for="color">Color</label><select id="color"><option value="#3b82f6">Light blue</option><option value="#8b5cf6">Violet</option><option value="#10b981">Green</option></select>
-  <label for="motion">Fade</label><select id="motion"><option value="180">180ms</option><option value="250">250ms</option><option value="0">None</option></select>
+  <label for="motion">Fade in</label><select id="motion"><option value="180">180ms</option><option value="250">250ms</option><option value="0">None</option></select>
+  <label for="exit">Fade out</label><select id="exit"><option value="same">Same as fade in</option><option value="125">125ms</option><option value="250">250ms</option></select>
+  <label for="border">Border</label><select id="border"><option value="0">None</option><option value="2">Dashed</option></select>
   <label for="hold">Visible for</label><select id="hold"><option value="3000">3 seconds</option><option value="1000">1 second</option><option value="6000">6 seconds</option><option value="persist">Until cleared</option></select>
   <label for="shape">Corners</label><select id="shape"><option value="6">Rounded</option><option value="0">Square</option><option value="12">More rounded</option></select>
 </div>
@@ -100,10 +101,10 @@ export const refreshPreview = String.raw`<!doctype html>
     get('all').disabled = get('next').disabled = get('focus').disabled = !changes.length;
     get('clear').disabled = !article.querySelector('[data-mark]');
   }
-  function highlight(all = false) {
+  function highlight(all = false, changeIds) {
     stopExpiry();
     Array.from(article.children).forEach(p => p.removeAttribute('data-mark'));
-    changes.filter(c => all || c.recent).forEach(c => {
+    changes.filter(c => changeIds ? changeIds.includes(c.id) : all || c.recent).forEach(c => {
       const p = article.children[c.index];
       // Resolve the unmarked style before starting a newly rendered paragraph's fade.
       getComputedStyle(p, '::after').opacity;
@@ -155,9 +156,9 @@ export const refreshPreview = String.raw`<!doctype html>
       [{ id: 'delivery', index: 3, recent: false }, { id: 'review', index: 8, recent: true }] : [];
     render(effect === 'different');
     if (effect === 'scroll-highlight') {
-      navigate(false); highlight();
+      navigate(false); highlight(false, ['delivery']);
       message('Scrolled to the change. Its highlight fades in, then fades out after the display time.',
-        "if (refresh.navigateToChange('delivery')) {\n  refresh.highlightChanges();\n}");
+        "if (refresh.navigateToChange('delivery')) {\n  refresh.highlightChanges({ changeIds: ['delivery'] });\n}");
       return;
     }
     highlight();
@@ -170,8 +171,11 @@ export const refreshPreview = String.raw`<!doctype html>
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   function stylePreview(announce = true) {
     const duration = Number(get('motion').value);
-    const options = { color: get('color').value, opacity: .14, padding: 4, borderRadius: Number(get('shape').value), timeoutMs: get('hold').value === 'persist' ? null : Number(get('hold').value), animation: duration ? { durationMs: duration } : false };
+    const exitDuration = get('exit').value === 'same' ? duration : Number(get('exit').value);
+    const options = { borderWidth: Number(get('border').value), borderStyle: 'dashed', color: get('color').value, opacity: .14, padding: 4, borderRadius: Number(get('shape').value), timeoutMs: get('hold').value === 'persist' ? null : Number(get('hold').value), animation: { durationMs: duration, exitDurationMs: exitDuration } };
     document.documentElement.style.setProperty('--highlight-color', options.color);
+    document.documentElement.style.setProperty('--highlight-border', options.borderWidth + 'px');
+    document.documentElement.style.setProperty('--highlight-exit-duration', (reducedMotion.matches ? Math.min(exitDuration, 125) : exitDuration) + 'ms');
     document.documentElement.style.setProperty('--highlight-radius', options.borderRadius + 'px');
     document.documentElement.style.setProperty('--highlight-duration', (reducedMotion.matches ? Math.min(duration, 125) : duration) + 'ms');
     if (announce) {
@@ -179,7 +183,7 @@ export const refreshPreview = String.raw`<!doctype html>
       message('Highlight style updated. Text and scroll stay still.', 'refresh.highlightChanges(' + JSON.stringify(options, null, 2) + ');');
     }
   }
-  ['color', 'motion', 'shape', 'hold'].forEach(id => { get(id).onchange = () => stylePreview(); });
+  ['color', 'motion', 'exit', 'border', 'shape', 'hold'].forEach(id => { get(id).onchange = () => stylePreview(); });
   reducedMotion.addEventListener('change', () => stylePreview(false));
   viewport.addEventListener('scroll', position); stylePreview(false); render(); controls();
 </script>
@@ -322,28 +326,31 @@ if (available.length) {
 }
 ```
 
-Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
+Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes by default. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
 
 To scroll to a recent change before the fade starts, navigate first:
 
 ```ts
-const change = refresh
+const target = refresh
   .snapshot()
   .changes.find((change) => change.isNew && change.status === 'available');
 
-if (change && refresh.navigateToChange(change.id)) {
+if (target && refresh.navigateToChange(target.id, { block: 'centerIfNeeded' })) {
   refresh.highlightChanges({
+    changeIds: [target.id],
     timeoutMs: 3000,
     animation: { durationMs: 180 },
   });
 }
 ```
 
-The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Select **Scroll to change, then fade in and out** in the preview to try it.
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Select **Scroll to change, then fade in and out** in the preview to try it.
 
 ## Customize highlights and motion
 
 The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It starts fading out after three seconds. It never moves text, changes scroll, or steals focus.
+
+`highlightChanges()` returns the number of selected, available changes, including offscreen locations. A zero result means no locations were selected. Options are validated even when locations are stale or unavailable. During document replacement, highlighting returns zero and navigation returns `false`. Completion listeners can present the accepted locations.
 
 Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling:
 
@@ -365,21 +372,28 @@ refresh.highlightChanges({ ...highlights, includePrevious: true });
 
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `changeIds` | Omitted | Select only these IDs, including earlier changes. Overrides `includePrevious`. Missing IDs are skipped. An empty array dismisses highlights. |
 | `color` | `var(--doc-refresh-highlight-color)` | A CSS color or a CSS variable. The theme token defaults to blue. |
-| `opacity` | `0.14` | Fill opacity between `0` and `1`. |
+| `opacity` | `0.14` | Fill opacity between `0` and `1`. Borders, shadows, and patterns retain their own color alpha. |
 | `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
 | `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
+| `borderWidth` | `0` | Border width in CSS pixels at 100% zoom. |
+| `borderColor` | Same as `color` | CSS border color, independent of fill opacity. Use an alpha color for a lighter border. |
+| `borderStyle` | `'solid'` | Use `'solid'`, `'dashed'`, or `'dotted'`. |
+| `className` | Omitted | Add CSS classes for shadows, outlines, or background patterns. |
 | `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep highlights until cleared. |
 | `animation` | `true` | A 180ms opacity fade. Use `false` for immediate changes. |
-| `animation.durationMs` | `180` | Fade duration from `0` to `10000` milliseconds. Use short durations for normal interaction. |
+| `animation.durationMs` | `180` | Entrance and default exit duration, from `0` to `10000` milliseconds. |
+| `animation.exitDurationMs` | Same as `durationMs` | Separate automatic and explicit exit duration, from `0` to `10000` milliseconds. |
+| `animation.easing` | Theme token | CSS timing function for both fades. Accepts keywords, `cubic-bezier()`, and `steps()`. |
 
-All numeric settings must be finite. `timeoutMs` accepts `0` through `2147483647`, or `null`. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
+All numeric settings must be finite. Border width must be nonnegative. `changeIds` accepts at most 10000 nonempty string IDs. `timeoutMs` accepts `0` through `2147483647`, or `null`. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
 
-Repeated calls reset the timeout without replaying the entrance. Expiration removes styling; change metadata and navigation remain available. Caret changes, zoom, and scrolling do not replay existing highlights. Changed opacity transitions from its current value. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
+Repeated calls reset the timeout without replaying the entrance. Expiration removes styling; change metadata and navigation remain available. Caret changes, zoom, and scrolling do not replay existing highlights. Style updates apply immediately; entrance and exit fades reverse from their current opacity. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
 
-Switching from all changes to recent changes fades out the excluded boxes.
+Switching from all changes to recent changes fades out the excluded boxes. To replay an entrance deliberately, call `clearHighlights({ animation: false })` before `highlightChanges()`.
 
-`clearHighlights()` uses the last requested fade duration. Showing highlights during dismissal reverses the fade without adding duplicate boxes. `snapshot().highlightsVisible` becomes `false` when dismissal starts. Local edits, document replacement, and editor teardown remove stale highlights immediately.
+`clearHighlights()` uses the last requested exit duration and easing. Showing highlights during dismissal reverses the fade without adding duplicate boxes. `snapshot().highlightsVisible` becomes `false` when dismissal starts. Local edits, document replacement, and editor teardown remove stale highlights immediately.
 
 Control the display time separately from the fade duration:
 
@@ -408,9 +422,73 @@ You can also choose a different dismissal duration:
 refresh.clearHighlights({ animation: { durationMs: 125 } });
 ```
 
-Reduced-motion preferences cap fades at 125 milliseconds. Switching that preference on finishes active fades immediately. Unsupported animation environments show or remove highlights immediately. Navigation remains immediate and does not animate document movement.
+Reduced-motion preferences cap fades at 125 milliseconds. Switching that preference on finishes active fades immediately. Unsupported animation environments show or remove highlights immediately. Navigation stays immediate unless you request smooth scrolling. Reduced motion makes smooth navigation immediate.
 
 For frequent server results, highlight only recent changes and keep previous changes available through explicit controls. Avoid repeatedly clearing and showing unchanged highlights. Keep a text count or change list beside the document; color alone does not explain what changed.
+
+### Add your own decoration
+
+Use the typed options for the fill, border, spacing, and timing. Add a class for other CSS decoration:
+
+```ts
+refresh.highlightChanges({
+  changeIds: ['delivery-date'],
+  color: 'var(--review-fill)',
+  borderColor: 'var(--review-border)',
+  borderWidth: 2,
+  borderStyle: 'dashed',
+  borderRadius: 8,
+  padding: 6,
+  opacity: 0.2,
+  className: 'server-change',
+  animation: {
+    durationMs: 180,
+    exitDurationMs: 250,
+    easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+  },
+});
+```
+
+Define your colors and decoration in application CSS:
+
+```css
+.docx-editor {
+  --review-fill: #93c5fd;
+  --review-border: #2563eb;
+  --review-shadow: #60a5fa;
+}
+
+.server-change {
+  box-shadow: 0 0 10px var(--review-shadow);
+}
+```
+
+The class decorates the overlay, not document text. Keep position, dimensions, pointer behavior, and animation under API control. The API controls fill opacity; the overlay opacity controls fades. The overlay remains decorative and does not enter saved DOCX files. Its default multiply blend keeps dark text readable. Your class can override `mix-blend-mode`. The default easing comes from `--doc-motion-ease-out`, with a built-in fallback. Set `animation.easing` to override it per call. This option does not accept CSS variables or inheritance keywords. Use `animation: false` to disable both fades.
+
+### Control change navigation
+
+Import `NavigateToChangeOptions` from your adapter or `@docx-editor.dev/core/editor`. All navigation settings belong to the host API:
+
+```ts
+import type { NavigateToChangeOptions } from '@docx-editor.dev/react';
+
+const navigation: NavigateToChangeOptions = {
+  block: 'centerIfNeeded',
+  behavior: 'instant',
+  offsetPx: 24,
+  focus: false,
+};
+refresh.navigateToChange('delivery-date', navigation);
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `block` | `'center'` | Use `'start'`, `'center'`, `'centerIfNeeded'`, or `'nearest'`. |
+| `behavior` | `'instant'` | Use `'smooth'` for an explicit animated navigation action. |
+| `offsetPx` | `24` | Nonnegative edge padding for `'start'` and `'nearest'`, in CSS pixels. |
+| `focus` | `false` | Move focus and the caret to the changed range start. |
+
+`centerIfNeeded` keeps the viewport still when the target is already visible. Navigation returns whether the location is available; it does not await smooth scrolling. Use `'instant'` when the highlight must start after the target is visible. Invalid navigation modes throw `TypeError`. Invalid padding throws `RangeError`. Keep automatic scrolling opt-in so server updates do not interrupt reading.
 
 ## Handle a completely different document
 
@@ -493,7 +571,7 @@ function cancelProcessing() {
 
 `subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `apply()` completion, including refused results. Both subscriptions return an unsubscribe function.
 
-The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. Highlight fades respect reduced-motion preferences. Navigation does not animate scrolling.
+The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. Highlight fades respect reduced-motion preferences. Navigation scrolls instantly by default.
 
 The controller validates returned bytes before replacement. It retains recovery bytes until loading succeeds. If mounting fails, it reloads the previous document and reports `load-failed`. If recovery also fails, it reports `recovery-failed`. Offer `recover()` and a download of `recoveryBytes()` in that state. Recovery also resets selection and undo history. A document switch invalidates recovery, so it cannot overwrite a later document.
 

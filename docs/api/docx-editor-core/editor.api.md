@@ -1045,10 +1045,8 @@ export interface DocumentRefresh {
     capture(): Promise<RefreshSubmission>;
     clearHighlights(options?: ClearRefreshHighlightsOptions): void;
     finish(submission: RefreshSubmission): void;
-    highlightChanges(options?: RefreshHighlightOptions): void;
-    navigateToChange(id: string, options?: {
-        readonly focus?: boolean;
-    }): boolean;
+    highlightChanges(options?: RefreshHighlightOptions): number;
+    navigateToChange(id: string, options?: NavigateToChangeOptions): boolean;
     onResult(listener: (result: RefreshResult) => void): () => void;
     recover(): Promise<boolean>;
     recoveryBytes(): ArrayBuffer | null;
@@ -1628,6 +1626,14 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
 
 // @public
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
+
+// @public
+export interface NavigateToChangeOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly focus?: boolean;
+    readonly offsetPx?: number;
+}
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
@@ -2242,12 +2248,19 @@ export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'can
 // @public
 export interface RefreshHighlightAnimation {
     readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
 }
 
 // @public
 export interface RefreshHighlightOptions {
     readonly animation?: boolean | RefreshHighlightAnimation;
+    readonly borderColor?: string;
     readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly changeIds?: readonly string[];
+    readonly className?: string;
     readonly color?: string;
     readonly includePrevious?: boolean;
     readonly opacity?: number;
