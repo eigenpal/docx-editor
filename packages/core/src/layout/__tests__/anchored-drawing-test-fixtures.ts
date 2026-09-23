@@ -120,7 +120,7 @@ export function squareAnchorInCell(options: {
   /** A tall row with `w:vAlign="center"`, which moves the cell's content after it flows. */
   readonly centred?: boolean;
   readonly horizontalFrame?: 'column' | 'character';
-  readonly verticalFrame?: 'paragraph' | 'line';
+  readonly verticalFrame?: 'paragraph' | 'line' | 'margin';
   readonly wrap?: 'square' | 'topAndBottom';
 }): string {
   const indent =

@@ -152,4 +152,22 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
     expect(drawings.length).toBeGreaterThan(0);
     for (const drawing of drawings) expect(drawing.y).toBeGreaterThanOrEqual(0);
   });
+
+  test('a margin-framed float in a pushed row stays at its margin position', () => {
+    const page = withRows(
+      { text: 'word', layoutInCell: '0', wrap: 'topAndBottom', verticalFrame: 'margin' },
+      (xml, row) =>
+        xml.replace(
+          row,
+          '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+            '<w:p><w:r><w:t>row one</w:t></w:r></w:p></w:tc></w:tr>' +
+            row
+        )
+    ).pages[0]!;
+    const drawing = page.anchoredDrawings![0]!;
+    // Offset 0 from the top margin: the content top, whatever the rows did.
+    expect(drawing.y).toBeCloseTo(0, 3);
+    const table = page.fragments[0] as TableFragmentRecord;
+    expect(table.rows[0]!.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
+  });
 });

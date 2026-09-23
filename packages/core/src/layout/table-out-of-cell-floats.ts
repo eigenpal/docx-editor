@@ -20,6 +20,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { shiftAnchoredDrawing } from './drawing-overlap.ts';
+import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFragmentRecord } from './semantic-records.ts';
 import {
@@ -35,6 +36,7 @@ const EPSILON = 0.001;
 interface OutOfCellBand {
   readonly top: number;
   readonly bottom: number;
+  readonly paragraphId: string;
 }
 
 export interface OutOfCellFloatPlan {
@@ -81,12 +83,20 @@ export function planOutOfCellFloats(
     ...deps,
     outOfCellFloatParagraphs: paragraphs,
   });
+  // A float the probe gave no band pushes nothing; its cell keeps the cell-flow handling.
+  for (const id of [...paragraphs])
+    if (!bands.some((band) => band.paragraphId === id)) paragraphs.delete(id);
+  if (paragraphs.size === 0) return null;
   let push = 0;
   const pushByParagraph = new Map<string, number>();
+  // Only a flow-framed float moved with its pushed row; a page- or margin-framed one never
+  // did, which is the same rule `shiftAnchoredDrawingRecords` applies.
   const pin = (drawings: readonly AnchoredDrawingRecord[]): readonly AnchoredDrawingRecord[] =>
     drawings.map((drawing) => {
       const dy = pushByParagraph.get(drawing.anchorParagraphId);
-      return dy === undefined ? drawing : shiftAnchoredDrawing(drawing, 0, -dy);
+      if (dy === undefined || !['paragraph', 'line'].includes(drawing.verticalFrame))
+        return drawing;
+      return shiftAnchoredDrawing(drawing, 0, -dy);
     });
   const sink = (target: ((drawings: readonly AnchoredDrawingRecord[]) => void) | undefined) =>
     target && ((drawings: readonly AnchoredDrawingRecord[]) => target(pin(drawings)));
@@ -131,9 +141,9 @@ export function planOutOfCellFloats(
 }
 
 /**
- * Top-level cell paragraphs whose every anchor is an out-of-cell float that wraps text. A
- * table with a vertical merge, or a cell that is not top-aligned, is left to the cell flow:
- * finalize moves such content after the probe placed it, so the probe could not pin it.
+ * Top-level body-row cell paragraphs whose every anchor is an out-of-cell float that wraps
+ * text. A table with a vertical merge, or a cell that is not top-aligned, is left to the cell
+ * flow: finalize moves such content after the probe placed it, so the probe could not pin it.
  */
 function outOfCellFloatParagraphs(
   structure: SemanticTableStructure,
@@ -144,6 +154,8 @@ function outOfCellFloatParagraphs(
   if (structure.rows.some((row) => row.cells.some((cell) => cell.vMergeContinue))) return found;
   const scope = cellAnchorScope(true, deps);
   for (const row of structure.rows) {
+    // A header row repeats on later sheets, where nothing is pushed: it keeps the cell flow.
+    if (row.isHeader) continue;
     for (const cell of row.cells) {
       if (cell.vAlign !== 'top') continue;
       for (const block of cell.blocks) {
@@ -189,12 +201,12 @@ function probeBands(
   const zones = deps.pageExclusionZones;
   let line = 0;
   const probe = layoutTableFragment(structure, left, top, 0, tableId, 0, {
-    ...deps,
+    // Every live sink stripped, then only the capture put back: the probe must publish nothing.
+    ...stripAnchorSinksForProbe(deps),
+    measuringOnly: deps.measuringOnly,
+    anchorDeferOnly: false,
     publishAnchoredDrawings: capture,
     collectAnchoredDrawings: capture,
-    deferAnchoredDrawings: undefined,
-    onAnchorShift: undefined,
-    onAnchorRepublish: undefined,
     onCellBreakKey: undefined,
     ...(zones
       ? {
@@ -230,7 +242,8 @@ function probeBands(
     const row = rowTops.get(drawing.anchorParagraphId);
     if (row && drawing.paintBounds.y <= row.contentTop + EPSILON)
       bandTop = Math.min(bandTop, row.top);
-    if (bottom > bandTop + EPSILON) bands.push(Object.freeze({ top: bandTop, bottom }));
+    if (bottom > bandTop + EPSILON)
+      bands.push(Object.freeze({ top: bandTop, bottom, paragraphId: drawing.anchorParagraphId }));
   }
   return bands;
 }
