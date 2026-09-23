@@ -541,9 +541,10 @@ describe('HarfBuzz production shaper', () => {
     expect(events.filter(({ kind }) => kind === 'stored')).toHaveLength(32);
     expect(events.some(({ kind }) => kind === 'evicted')).toBe(true);
     expect(Math.max(...events.map(({ retainedBytes }) => retainedBytes))).toBeLessThanOrEqual(3500);
-    const callsBeforeSecondLast = shapeCalls;
-    bounded.shape(input('', regular, { language: 'en-x30' }));
-    expect(shapeCalls).toBe(callsBeforeSecondLast + 1);
+    // The byte budget holds fewer than 32 entries, so the oldest one was evicted.
+    const callsBeforeOldest = shapeCalls;
+    bounded.shape(input('', regular, { language: 'en-x0' }));
+    expect(shapeCalls).toBe(callsBeforeOldest + 1);
     bounded.dispose();
     expect(events.at(-1)).toMatchObject({ kind: 'cleared', retainedBytes: 0 });
   });

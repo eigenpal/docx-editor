@@ -9,7 +9,7 @@ import type { ExportAdmittedFontFace } from '@docx-editor.dev/core/export';
 import { mapSymbolPuaText } from '@docx-editor.dev/core/layout';
 import { fontEmbeddingDecision } from './pdf-font-embedding.ts';
 import { strikeMetrics } from './font-metrics.ts';
-import { hex, unicodeHex, Work } from './context.ts';
+import { flateStream, hex, unicodeHex, Work } from './context.ts';
 
 function cmap(body: string, type: 1 | 2): string {
   return `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def\n/CMapName /Docx${type} def\n/CMapType ${type} def\n1 begincodespacerange\n<0000> <ffff>\nendcodespacerange\n${body}\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
@@ -131,7 +131,7 @@ export class EmbeddedFace {
       .join('');
     const base = PDFName.of(`${prefix}+DocxFont`);
     const file = ctx.register(
-      ctx.flateStream(bytes, cff ? { Subtype: 'CIDFontType0C' } : { Length1: bytes.length })
+      flateStream(ctx, bytes, cff ? { Subtype: 'CIDFontType0C' } : { Length1: bytes.length })
     );
     const factor = 1000 / this.font.unitsPerEm;
     const bbox = this.font.bbox;
@@ -173,7 +173,8 @@ export class EmbeddedFace {
       })
     );
     const encoding = ctx.register(
-      ctx.flateStream(
+      flateStream(
+        ctx,
         cmap(
           groups(
             this.rows.map((row, i) => `<${hex(i + 1)}> ${row.cid}`),
@@ -186,7 +187,7 @@ export class EmbeddedFace {
     const mappings = this.rows.flatMap((row, i) =>
       row.text ? [`<${hex(i + 1)}> <${unicodeHex(row.text)}>`] : []
     );
-    const unicode = ctx.register(ctx.flateStream(cmap(groups(mappings, 'bfchar'), 2)));
+    const unicode = ctx.register(flateStream(ctx, cmap(groups(mappings, 'bfchar'), 2)));
     ctx.assign(
       this.ref,
       ctx.obj({

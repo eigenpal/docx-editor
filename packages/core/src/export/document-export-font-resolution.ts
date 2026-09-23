@@ -117,8 +117,18 @@ function freezeRequest(request: FontRequest): FontRequest {
   });
 }
 
+const admittedFontIdentities = new WeakMap<ResolvedFont, ExportAdmittedFontIdentity>();
+
 /** Frozen identity without font bytes. Safe to retain per laid-out span. @internal */
 export function describeAdmittedFontIdentity(resolved: ResolvedFont): ExportAdmittedFontIdentity {
+  // A resolved font is immutable, so every span painted in it can share one frozen identity.
+  let identity = admittedFontIdentities.get(resolved);
+  if (!identity)
+    admittedFontIdentities.set(resolved, (identity = admittedFontIdentityOf(resolved)));
+  return identity;
+}
+
+function admittedFontIdentityOf(resolved: ResolvedFont): ExportAdmittedFontIdentity {
   const substitution = resolved.substitution;
   return Object.freeze({
     id: resolved.id,

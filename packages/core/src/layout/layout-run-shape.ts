@@ -1,5 +1,5 @@
 import { isRunKerningEnabled } from './run-kerning.ts';
-import { runLigatureFeatures } from './run-ligatures.ts';
+import { runLigatureFeatureKey, runLigatureFeatures } from './run-ligatures.ts';
 // Shared HarfBuzz call used by shaped measurement and non-DOM exporters.
 
 import type { ResolvedFont } from './font-resource.ts';
@@ -7,6 +7,7 @@ import type { ResolvedRunStyle } from './run-style.ts';
 import {
   createShapingEnvironment,
   type ShapedRun,
+  type ShapingEnvironment,
   type ShapingEnvironmentInput,
   type TextShaper,
 } from './shaped-run.ts';
@@ -64,25 +65,71 @@ export function shapeLayoutStyleRun(
     text,
     fontSizeHalfPoints: layoutRunHalfPointsOf(style),
     bidiLevel: style.shaping?.direction === 'rtl' ? 1 : 0,
-    environment: createShapingEnvironment({
-      ...environment,
-      font,
-      direction: style.shaping?.direction ?? 'ltr',
-      script:
-        style.shaping?.script === 'Zyyy'
-          ? environment.script
-          : (style.shaping?.script ?? environment.script),
-      // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
-      // feature, so shaping must reserve those glyph advances instead of lowercase advances.
-      features: {
-        ...environment.features,
-        kern: isRunKerningEnabled(style) ? 1 : 0,
-        ...(environment.documentLigatures ? runLigatureFeatures(style) : {}),
-        ...(style.smallCaps ? { smcp: 1 } : {}),
-      },
-      fallbackOrder: [],
-    } satisfies ShapingEnvironmentInput),
+    environment: runShapingEnvironment(environment, font, style),
   });
+}
+
+/**
+ * Environments per (operation environment, face, run-level shaping inputs).
+ *
+ * Every span of a document shapes in one of a handful of environments, and building one
+ * validates, sorts and freezes every record. Only a frozen operation environment is keyed: a
+ * caller's mutable object could change under the cache.
+ */
+const runEnvironments = new WeakMap<
+  LayoutShapingEnvironment,
+  WeakMap<ResolvedFont, Map<string, ShapingEnvironment>>
+>();
+
+function runShapingEnvironment(
+  environment: LayoutShapingEnvironment,
+  font: ResolvedFont,
+  style: ResolvedRunStyle
+): ShapingEnvironment {
+  if (
+    !Object.isFrozen(environment) ||
+    !Object.isFrozen(environment.features) ||
+    !Object.isFrozen(environment.variationAxes) ||
+    !Object.isFrozen(environment.shapingLibrary)
+  )
+    return buildRunShapingEnvironment(environment, font, style);
+  const direction = style.shaping?.direction ?? 'ltr';
+  const script = style.shaping?.script;
+  const key = `${direction}|${script ?? ''}|${isRunKerningEnabled(style) ? 1 : 0}|${
+    environment.documentLigatures ? runLigatureFeatureKey(style) : ''
+  }|${style.smallCaps ? 1 : 0}`;
+  let byFont = runEnvironments.get(environment);
+  if (!byFont) runEnvironments.set(environment, (byFont = new WeakMap()));
+  let byKey = byFont.get(font);
+  if (!byKey) byFont.set(font, (byKey = new Map()));
+  let cached = byKey.get(key);
+  if (!cached) byKey.set(key, (cached = buildRunShapingEnvironment(environment, font, style)));
+  return cached;
+}
+
+function buildRunShapingEnvironment(
+  environment: LayoutShapingEnvironment,
+  font: ResolvedFont,
+  style: ResolvedRunStyle
+): ShapingEnvironment {
+  return createShapingEnvironment({
+    ...environment,
+    font,
+    direction: style.shaping?.direction ?? 'ltr',
+    script:
+      style.shaping?.script === 'Zyyy'
+        ? environment.script
+        : (style.shaping?.script ?? environment.script),
+    // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
+    // feature, so shaping must reserve those glyph advances instead of lowercase advances.
+    features: {
+      ...environment.features,
+      kern: isRunKerningEnabled(style) ? 1 : 0,
+      ...(environment.documentLigatures ? runLigatureFeatures(style) : {}),
+      ...(style.smallCaps ? { smcp: 1 } : {}),
+    },
+    fallbackOrder: [],
+  } satisfies ShapingEnvironmentInput);
 }
 
 /**

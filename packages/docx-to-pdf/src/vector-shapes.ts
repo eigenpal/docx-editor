@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
 import type { SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
-import { color, number as n, pdfLiteralUri, rect, Commands, Work } from './context.ts';
+import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 
 /** Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic. */
 export function paintVectorShape(
@@ -28,8 +28,8 @@ export function paintVectorShape(
   const sy = content.height / (shape.extentEmu.cy / unit);
   const out = new Commands(work);
   out.push(
-    `q ${rect(bounds, -visit.page.box.x, -visit.page.box.y, page.getHeight())} W n`,
-    `${n(sx)} 0 0 ${n(-sy)} ${n(content.x + x)} ${n(page.getHeight() - content.y - y)} cm`,
+    `q ${rect(bounds, -visit.page.box.x, -visit.page.box.y, pageHeight(page))} W n`,
+    `${n(sx)} 0 0 ${n(-sy)} ${n(content.x + x)} ${n(pageHeight(page) - content.y - y)} cm`,
     '0 J 0 j 4 M [] 0 d'
   );
   const path = (points: readonly Readonly<{ x: number; y: number }>[], closed: boolean) => {
@@ -92,7 +92,7 @@ export function paintVectorShape(
       : null;
   if (uri !== null) {
     const left = bounds.x - visit.page.box.x;
-    const bottom = page.getHeight() - bounds.y + visit.page.box.y - bounds.height;
+    const bottom = pageHeight(page) - bounds.y + visit.page.box.y - bounds.height;
     page.node.addAnnot(
       doc.context.register(
         doc.context.obj({

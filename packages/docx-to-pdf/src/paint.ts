@@ -19,7 +19,16 @@ import {
   type SemanticDrawingVisit,
   type TableCellFragmentRecord,
 } from '@docx-editor.dev/core/layout';
-import { color, number as n, unicodeHex, Work, Commands, rect } from './context.ts';
+import {
+  color,
+  flateStream,
+  number as n,
+  pageHeight,
+  unicodeHex,
+  Work,
+  Commands,
+  rect,
+} from './context.ts';
 import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
@@ -92,7 +101,7 @@ function decorations(
     if (block.kind === 'paragraph') {
       if (block.shading && block.shadingBox)
         out.push(
-          `${color(block.shading)} rg ${rect(block.shadingBox, x, y, page.getHeight(), true)} f`
+          `${color(block.shading)} rg ${rect(block.shadingBox, x, y, pageHeight(page), true)} f`
         );
       for (const border of block.borders ??
         (block.bottomBorder ? [{ ...block.bottomBorder, side: 'bottom' }] : [])) {
@@ -105,7 +114,7 @@ function decorations(
             `Unsupported paragraph border: ${style}`,
             pageIndex
           );
-        out.push(rule(border.box, border.edge.color, style, x, y, page.getHeight()));
+        out.push(rule(border.box, border.edge.color, style, x, y, pageHeight(page)));
       }
     } else {
       // Complete the backgrounds before drawing shared borders. Later cells and
@@ -114,10 +123,10 @@ function decorations(
         for (const cell of row.cells) {
           if (cell.paintInert || cell.vMergeContinue) continue;
           if (cell.shading)
-            out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, page.getHeight(), true)} f`);
+            out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`);
           const inner = decorations(cell.blocks, x, y, page, work, pageIndex);
           if (cell.textDirection && inner.length)
-            out.push('q', rotatedCellMatrix(cell.box, x, y, page.getHeight()), ...inner, 'Q');
+            out.push('q', rotatedCellMatrix(cell.box, x, y, pageHeight(page)), ...inner, 'Q');
           else out.push(...inner);
         }
       for (const row of block.rows)
@@ -131,7 +140,7 @@ function decorations(
                 stroke.cssStyle,
                 x + cell.box.x,
                 y + cell.box.y,
-                page.getHeight()
+                pageHeight(page)
               )
             );
           const publishedSides = new Set(
@@ -148,7 +157,7 @@ function decorations(
               width: side === 'left' || side === 'right' ? width : b.width,
               height: side === 'top' || side === 'bottom' ? width : b.height,
             };
-            out.push(rule(box, edge.color, edge.style, x, y, page.getHeight()));
+            out.push(rule(box, edge.color, edge.style, x, y, pageHeight(page)));
           }
         }
     }
@@ -216,7 +225,7 @@ export async function paint(
     const out = streams[record.index]!;
     // Chrome flips y from the same gridded page height the text uses. `record.box.height` is
     // the ungridded layout value, and the two differ by up to half a device unit on A4.
-    const pageHeight = pages[record.index]!.getHeight();
+    const height = pageHeight(pages[record.index]!);
     if (record.pageBorders) {
       const borderOut = record.pageBorders.zOrder === 'front' ? frontBorders[record.index]! : out;
       for (const border of record.pageBorders.strokes) {
@@ -229,19 +238,19 @@ export async function paint(
             `Unsupported page border: ${border.edge.val}`,
             record.index
           );
-        borderOut.push(rule(border.box, border.edge.color, border.edge.val, 0, 0, pageHeight));
+        borderOut.push(rule(border.box, border.edge.color, border.edge.val, 0, 0, height));
       }
     }
     for (const separator of record.columnSeparators ?? [])
       out.push(
-        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, pageHeight, true)} f`
+        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, height, true)} f`
       );
     for (const area of [record.footnotes, record.endnotes]) {
       const sep = area?.separator;
       if (!sep || !(sep.ruleStyle || sep.synthetic)) continue;
       for (const offset of sep.ruleStyle === 'double' ? [0, 2] : [0])
         out.push(
-          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, pageHeight, true)} f`
+          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, height, true)} f`
         );
     }
   }
@@ -439,12 +448,12 @@ export async function paint(
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)
       out.push(
-        `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, page.getHeight(), true)} f`
+        `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
       );
     const clipping = visit.paragraph.clipToBox;
     if (clipping)
       out.push(
-        `q ${rect(visit.paragraph.box, visit.storyOrigin.x - visit.page.box.x, visit.storyOrigin.y - visit.page.box.y, page.getHeight())} W n`
+        `q ${rect(visit.paragraph.box, visit.storyOrigin.x - visit.page.box.x, visit.storyOrigin.y - visit.page.box.y, pageHeight(page))} W n`
       );
     out.push(
       visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page)
@@ -462,7 +471,7 @@ export async function paint(
       if (strokes.length === 0) continue;
       work.tick();
       const out = outFor(visit);
-      const height = pages[visit.page.index]!.getHeight();
+      const height = pageHeight(pages[visit.page.index]!);
       const x = visit.storyOrigin.x - visit.page.box.x;
       const y = visit.storyOrigin.y - visit.page.box.y;
       if (visit.paragraph.clipToBox) out.push(`q ${rect(visit.paragraph.box, x, y, height)} W n`);
@@ -525,7 +534,7 @@ export async function paint(
   // Each rotated cell's ink turns as one: behind-text drawings under the page's text, the
   // text and in-front drawings over it, both under the same matrix.
   for (const { cell, x, y, page, commands, behind } of rotatedBuffers.values()) {
-    const matrix = rotatedCellMatrix(cell.box, x, y, pages[page]!.getHeight());
+    const matrix = rotatedCellMatrix(cell.box, x, y, pageHeight(pages[page]!));
     if (behind.length) behindStreams[page]!.push('q', matrix, ...behind, 'Q');
     if (commands.length) streams[page]!.push('q', matrix, ...commands, 'Q');
   }
@@ -536,7 +545,7 @@ export async function paint(
     work.check();
     pages[i]!.node.addContentStream(
       doc.context.register(
-        doc.context.flateStream(behindStreams[i]!.join('\n') + '\n' + streams[i]!.join('\n'))
+        flateStream(doc.context, behindStreams[i]!.join('\n') + '\n' + streams[i]!.join('\n'))
       )
     );
   }

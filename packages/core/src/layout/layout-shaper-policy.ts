@@ -59,7 +59,7 @@ export const LAYOUT_HARFBUZZ_SHAPER_POLICY = Object.freeze({
   // Keep mixed-document faces warm without exceeding the old 4 × 16 MiB byte bound.
   maxCachedFaces: 32,
   maxCachedFontBytes: 64 * 1024 * 1024,
-  maxCachedShapes: 512,
+  maxCachedShapes: 4096,
   maxOutlineBytes: 1024 * 1024,
   maxCachedOutlineBytes: 16 * 1024 * 1024,
   maxShapedRunBytes: 32 * 1024 * 1024,

@@ -314,6 +314,8 @@ const freezeSubstitution = (
     : undefined;
 
 const shapingValidatedFonts = new WeakSet<object>();
+const createdEnvironments = new WeakSet<object>();
+const environmentFingerprints = new WeakMap<object, string>();
 
 const assertFont = (font: ResolvedFont): void => {
   assertValidatedResolvedFont(font);
@@ -357,6 +359,9 @@ const fontFingerprintInputs = (font: ResolvedFont): FontFingerprintInputs => {
  * @throws TypeError on a malformed tag, name, or axis value.
  */
 export const createShapingEnvironment = (input: ShapingEnvironmentInput): ShapingEnvironment => {
+  // An environment this function built is deeply frozen, so validating it again yields an equal
+  // object. Shaping re-enters here several times per call; the pass-through keeps that free.
+  if (createdEnvironments.has(input)) return input as ShapingEnvironment;
   assertNonBlank(input.shapingLibrary.name, 'shaping library name');
   assertNonBlank(input.shapingLibrary.version, 'shaping library version');
   assertNonBlank(input.unicodeDataVersion, 'Unicode data version');
@@ -393,7 +398,7 @@ export const createShapingEnvironment = (input: ShapingEnvironmentInput): Shapin
     if (seenFallbacks.has(key)) throw new TypeError('fallback order contains a duplicate font');
     seenFallbacks.add(key);
   }
-  return Object.freeze({
+  const environment: ShapingEnvironment = Object.freeze({
     font,
     variationAxes: sortedNumericRecord(input.variationAxes, 'variation axis', false),
     shapingLibrary: Object.freeze({
@@ -410,6 +415,8 @@ export const createShapingEnvironment = (input: ShapingEnvironmentInput): Shapin
     fixedPointScale: input.fixedPointScale,
     roundingMode: input.roundingMode,
   });
+  createdEnvironments.add(environment);
+  return environment;
 };
 
 /**
@@ -444,8 +451,14 @@ export const shapingEnvironmentFingerprintInputs = (
 };
 
 /** Canonical serialization of every shaping variable, including byte hash and provenance. */
-export const shapingEnvironmentFingerprint = (environment: ShapingEnvironmentInput): string =>
-  JSON.stringify(shapingEnvironmentFingerprintInputs(environment));
+export const shapingEnvironmentFingerprint = (environment: ShapingEnvironmentInput): string => {
+  const cached = environmentFingerprints.get(environment);
+  if (cached !== undefined) return cached;
+  const fingerprint = JSON.stringify(shapingEnvironmentFingerprintInputs(environment));
+  // Only a frozen environment built here can keep its fingerprint; a caller's input may change.
+  if (createdEnvironments.has(environment)) environmentFingerprints.set(environment, fingerprint);
+  return fingerprint;
+};
 
 const assertIndex = (value: number, name: string): void => {
   if (!Number.isSafeInteger(value) || value < 0) {

@@ -16,7 +16,7 @@ import {
 } from 'pdf-lib';
 import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
 import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
-import { pdfLiteralUri, Work } from './context.ts';
+import { pageHeight, pdfLiteralUri, Work } from './context.ts';
 
 type Literal =
   | string
@@ -45,7 +45,7 @@ export function linkAnnotation(
   if (!link || !link.href) return;
   const b = visit.absoluteBox;
   const x = b.x - visit.page.box.x,
-    y = page.getHeight() - (b.y - visit.page.box.y) - b.height;
+    y = pageHeight(page) - (b.y - visit.page.box.y) - b.height;
   const base = {
     Type: 'Annot',
     Subtype: 'Link',
@@ -88,7 +88,7 @@ export function destinations(
         page.ref,
         'XYZ',
         dest.pageStack.x - record.box.x,
-        page.getHeight() - dest.pageStack.y + record.box.y,
+        pageHeight(page) - dest.pageStack.y + record.box.y,
         null,
       ])
     );
@@ -121,13 +121,13 @@ export function comments(
       const quads: number[] = [];
       for (const b of boxes) {
         const x = b.x - record.box.x,
-          top = page.getHeight() - b.y + record.box.y;
+          top = pageHeight(page) - b.y + record.box.y;
         if (b.width > 0)
           quads.push(x, top, x + b.width, top, x, top - b.height, x + b.width, top - b.height);
       }
       const b = boxes[0];
       const x = b ? b.x - record.box.x : 12;
-      const y = b ? page.getHeight() - b.y + record.box.y : page.getHeight() - 12;
+      const y = b ? pageHeight(page) - b.y + record.box.y : pageHeight(page) - 12;
       const xs = quads.filter((_, i) => i % 2 === 0),
         ys = quads.filter((_, i) => i % 2 === 1);
       // Avoid spreading attacker-sized coordinate lists into Math.min/max.

@@ -10,7 +10,6 @@ import {
   createShapedRun,
   createShapingEnvironment,
   fixedPoint,
-  shapingEnvironmentFingerprint,
   type FixedPoint,
   type FixedPointRoundingMode,
   type GlyphOutline,
@@ -21,6 +20,7 @@ import {
   type TextShaper,
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
+import { ShapeCacheKeys } from './shape-cache-key.ts';
 import {
   harfBuzzUnsupportedRuntimeDiagnostic,
   harfBuzzVersionMismatchDiagnostic,
@@ -512,6 +512,8 @@ interface CachedOutline {
 interface CachedShape {
   readonly run: ShapedRun;
   readonly bytes: number;
+  /** The recency stamp when the entry last went to the young end of the map. */
+  stamp: number;
 }
 
 class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
@@ -533,8 +535,16 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   readonly #faces = new Map<string, ActiveHarfBuzzFont>();
   readonly #outlines = new Map<string, CachedOutline>();
   readonly #shapeResults = new Map<string, CachedShape>();
+  readonly #keys = new ShapeCacheKeys(() => {
+    this.#shapeResults.clear();
+    this.#shapeBytes = 0;
+    this.#instrumentation?.onShapeCacheEvent?.(
+      Object.freeze({ kind: 'cleared', retainedBytes: 0 })
+    );
+  });
   #outlineBytes = 0;
   #shapeBytes = 0;
+  #shapeStamp = 0;
   #buffer: HarfBuzzBuffer | undefined;
 
   constructor(harfBuzz: HarfBuzzModule, options: HarfBuzzTextShaperOptions) {
@@ -604,6 +614,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
     this.#fontBytes = 0;
     this.#outlines.clear();
     this.#shapeResults.clear();
+    this.#keys.clear();
     this.#outlineBytes = 0;
     this.#shapeBytes = 0;
     this.#instrumentation?.onOutlineCacheEvent?.(
@@ -764,16 +775,16 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     const environment = createShapingEnvironment(input.environment);
-    const cacheKey = JSON.stringify([
-      input.text,
-      input.fontSizeHalfPoints,
-      input.bidiLevel,
-      shapingEnvironmentFingerprint(environment),
-    ]);
+    const cacheKey = this.#keys.keyOf(input, environment);
     const cached = this.#shapeResults.get(cacheKey);
     if (cached) {
-      this.#shapeResults.delete(cacheKey);
-      this.#shapeResults.set(cacheKey, cached);
+      // Approximate recency: an entry in the younger half stays put. A delete and re-insert on
+      // every hit cost a long document more than the shaping the cache saves.
+      if (this.#shapeStamp - cached.stamp >= Math.max(1, this.#shapeResults.size >> 1)) {
+        this.#shapeResults.delete(cacheKey);
+        this.#shapeResults.set(cacheKey, cached);
+        cached.stamp = ++this.#shapeStamp;
+      }
       this.#instrumentation?.onShapeCacheEvent?.(
         Object.freeze({ kind: 'hit', retainedBytes: this.#shapeBytes })
       );
@@ -944,7 +955,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           Object.freeze({ kind: 'evicted', retainedBytes: this.#shapeBytes })
         );
       }
-      this.#shapeResults.set(cacheKey, { run: result, bytes: cachedBytes });
+      this.#shapeResults.set(cacheKey, {
+        run: result,
+        bytes: cachedBytes,
+        stamp: ++this.#shapeStamp,
+      });
       this.#shapeBytes += cachedBytes;
       this.#instrumentation?.onShapeCacheEvent?.(
         Object.freeze({ kind: 'stored', retainedBytes: this.#shapeBytes })

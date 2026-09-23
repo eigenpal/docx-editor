@@ -10,7 +10,7 @@ import type {
   ListMarkerPictureRecord,
   SemanticDrawingVisit,
 } from '@docx-editor.dev/core/layout';
-import { color, number as n, pdfLiteralUri, rect, Commands, Work } from './context.ts';
+import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
 
 /**
@@ -96,7 +96,7 @@ export class ImageWriter {
     const key = `Im${image.ref.objectNumber}`;
     page.node.setXObject(PDFName.of(key), image.ref);
     const x = box.x;
-    const y = page.getHeight() - box.y - box.height;
+    const y = pageHeight(page) - box.y - box.height;
     return `q ${n(box.width)} 0 0 ${n(box.height)} ${n(x)} ${n(y)} cm /${key} Do Q`;
   }
 
@@ -130,7 +130,7 @@ export class ImageWriter {
       );
       return '';
     }
-    const height = page.getHeight();
+    const height = pageHeight(page);
     const x = visit.drawingOrigin.x - visit.page.box.x;
     const y = visit.drawingOrigin.y - visit.page.box.y;
     const extent = { x, y, width: d.width, height: d.height };
@@ -212,7 +212,7 @@ export class ImageWriter {
       this.work.report('image-clip', 'Image clipping uses a Core fallback', visit.page.index);
     const offsetX = visit.drawingOrigin.x - d.x - visit.page.box.x;
     const offsetY = visit.drawingOrigin.y - d.y - visit.page.box.y;
-    const p = points.map((v) => ({ x: v.x + offsetX, y: page.getHeight() - v.y - offsetY }));
+    const p = points.map((v) => ({ x: v.x + offsetX, y: pageHeight(page) - v.y - offsetY }));
     const topLeft = p[0]!,
       topRight = p[1]!,
       bottomLeft = p[3]!;
@@ -228,7 +228,7 @@ export class ImageWriter {
     const clip = d.geometry.clipPolygon?.length
       ? d.geometry.clipPolygon.map((v) => ({
           x: v.x + offsetX,
-          y: page.getHeight() - v.y - offsetY,
+          y: pageHeight(page) - v.y - offsetY,
         }))
       : p;
     // A byte string, escaped: `PDFString.of` writes its value verbatim, and a `)` in the href

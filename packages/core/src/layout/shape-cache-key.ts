@@ -1,0 +1,42 @@
+// Short, unambiguous keys for a shaper's result cache.
+
+import {
+  shapingEnvironmentFingerprint,
+  type ShapeInput,
+  type ShapingEnvironment,
+} from './shaped-run.ts';
+
+const MAX_INTERNED_ENVIRONMENTS = 4096;
+
+/**
+ * Interns environment fingerprints to small ids, so a cache key costs a concatenation instead
+ * of a serialization of every shaping variable.
+ *
+ * A long-lived shared shaper sees every document's faces, so the ids are bounded. Starting them
+ * over calls `onRestart`, which must drop every result keyed by an old id: otherwise a reused id
+ * would find another environment's run.
+ */
+export class ShapeCacheKeys {
+  readonly #ids = new Map<string, number>();
+
+  constructor(private readonly onRestart: () => void) {}
+
+  /** The text goes last, so no split of the key is ambiguous. */
+  keyOf(input: ShapeInput, environment: ShapingEnvironment): string {
+    const fingerprint = shapingEnvironmentFingerprint(environment);
+    let id = this.#ids.get(fingerprint);
+    if (id === undefined) {
+      if (this.#ids.size >= MAX_INTERNED_ENVIRONMENTS) {
+        this.#ids.clear();
+        this.onRestart();
+      }
+      id = this.#ids.size;
+      this.#ids.set(fingerprint, id);
+    }
+    return `${id}\u0000${input.fontSizeHalfPoints}\u0000${input.bidiLevel}\u0000${input.text}`;
+  }
+
+  clear(): void {
+    this.#ids.clear();
+  }
+}

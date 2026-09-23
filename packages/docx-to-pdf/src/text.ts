@@ -23,7 +23,7 @@ import { underlineGap } from './underline-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
 import { colorGlyph, type ColorGlyphLayer } from './color-glyphs.ts';
-import { color, number as n, rect, Work } from './context.ts';
+import { color, number as n, pageHeight, rect, Work } from './context.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
@@ -228,7 +228,7 @@ export class TextWriter {
     if (span.style.hidden || !span.text) return '';
     if (span.noteSeparator) {
       const box = noteSeparatorRuleBox(span, line);
-      return `${color(span.style.color)} rg ${rect(box, storyOrigin.x - visit.page.box.x, storyOrigin.y - visit.page.box.y, page.getHeight(), true)} f`;
+      return `${color(span.style.color)} rg ${rect(box, storyOrigin.x - visit.page.box.x, storyOrigin.y - visit.page.box.y, pageHeight(page), true)} f`;
     }
     if (/^[\t\n\r\f]+$/.test(span.text)) return span.tabLeader ? this.leader(visit, page) : '';
     const report = (code: string, message: string): string => {
@@ -301,7 +301,7 @@ export class TextWriter {
     // the one the tie rule asks for, painting the whole line 0.24pt low. Snap the quotient back
     // to the grid first. The tolerance is far under any real geometry and far over the error.
     const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
-    const baseline = page.getHeight() - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
+    const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
     const revisions = this.showRevisionMarkup ? (span.revisions ?? []) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
@@ -626,7 +626,7 @@ export class TextWriter {
     const host = face.colorLayers
       ? ([...this.faces.values()].find((candidate) => !candidate.colorLayers) ?? null)
       : face;
-    if (host) page.node.setFontDictionary(PDFName.of(host.name), host.ref);
+    if (host) this.registerFont(page, host);
     return host;
   }
   private embeddedFace(
@@ -635,8 +635,20 @@ export class TextWriter {
     page: PDFPage
   ): EmbeddedFace | undefined {
     const face = this.admittedFace(font, visit);
-    if (face && !face.colorLayers) page.node.setFontDictionary(PDFName.of(face.name), face.ref);
+    if (face && !face.colorLayers) this.registerFont(page, face);
     return face;
+  }
+  private readonly pageFonts = new WeakMap<PDFPage, Set<EmbeddedFace>>();
+  /**
+   * Name a face in the page's font resources once. pdf-lib re-reads the page's inherited
+   * resources on every call, and nearly every span on a page names a face already there.
+   */
+  private registerFont(page: PDFPage, face: EmbeddedFace): void {
+    let registered = this.pageFonts.get(page);
+    if (!registered) this.pageFonts.set(page, (registered = new Set()));
+    if (registered.has(face)) return;
+    registered.add(face);
+    page.node.setFontDictionary(PDFName.of(face.name), face.ref);
   }
   /** The embedded face for a shaped font, without registering it on a page. */
   private admittedFace(
@@ -684,7 +696,7 @@ export class TextWriter {
       advance
     );
     const y =
-      page.getHeight() -
+      pageHeight(page) -
       (visit.storyOrigin.y + visit.line.box.y - visit.page.box.y) -
       visit.line.box.height;
     const out = [

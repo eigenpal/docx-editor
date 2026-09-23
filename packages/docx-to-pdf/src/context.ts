@@ -6,6 +6,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { ExportResourceError } from '@docx-editor.dev/core/export';
 import type { PdfDiagnostic } from './types.ts';
 import type { LayoutBox } from '@docx-editor.dev/core/layout';
+import { deflateSync } from 'node:zlib';
+import type { PDFContext, PDFPage, PDFRawStream } from 'pdf-lib';
 
 export const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 export const MAX_OPERATIONS = 2_000_000;
@@ -73,13 +75,45 @@ export function pdfLiteralUri(href: string): string | null {
   }
   return href.replace(/[\\()]/g, (character) => `\\${character}`);
 }
+/**
+ * A `FlateDecode` stream compressed by Node's native zlib. pdf-lib's `flateStream` runs the
+ * same algorithm in JavaScript, which was most of the time spent writing a long document's
+ * pages. A string is taken byte per UTF-16 unit, as pdf-lib takes it.
+ */
+export function flateStream(
+  context: PDFContext,
+  contents: string | Uint8Array,
+  dict: Record<string, unknown> = {}
+): PDFRawStream {
+  const bytes = typeof contents === 'string' ? Buffer.from(contents, 'latin1') : contents;
+  const deflated = deflateSync(bytes);
+  // A small result is a view of zlib's 16 KiB output chunk. pdf-lib keeps every stream until
+  // the save, so keep only the bytes rather than one chunk per page.
+  const owned =
+    deflated.buffer.byteLength > deflated.byteLength * 2 ? new Uint8Array(deflated) : deflated;
+  return context.stream(owned, { ...dict, Filter: 'FlateDecode' } as never);
+}
+const pageHeights = new WeakMap<PDFPage, number>();
+/**
+ * A page's height in user space. pdf-lib walks the page tree and parses the media box on
+ * every `getHeight()`, and paint asks once per span. The exporter never resizes a page.
+ */
+export function pageHeight(page: PDFPage): number {
+  let height = pageHeights.get(page);
+  if (height === undefined) pageHeights.set(page, (height = page.getHeight()));
+  return height;
+}
+const HEX_BYTES = Array.from({ length: 256 }, (_, byte) => byte.toString(16).padStart(2, '0'));
 export function hex(value: number): string {
+  // A UTF-16 code unit or a character code: always four digits, no wider.
+  if (value >= 0 && value <= 0xffff && Number.isInteger(value))
+    return HEX_BYTES[value >> 8]! + HEX_BYTES[value & 0xff]!;
   return value.toString(16).padStart(4, '0');
 }
 export function unicodeHex(text: string): string {
-  let out = '';
-  for (let i = 0; i < text.length; i++) out += hex(text.charCodeAt(i));
-  return out;
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i++) out.push(hex(text.charCodeAt(i)));
+  return out.join('');
 }
 export function color(value: string | null | undefined): string {
   const v = value && /^[a-f\d]{6}$/i.test(value) ? value : '000000';
