@@ -24,7 +24,7 @@ Open `http://localhost:5177`.
 
 The client captures the open document, requests a result, and calls `refresh.apply()`. The server returns a complete DOCX and the changed text location. Highlights fade in and disappear after three seconds.
 
-The mock generates two fixed sample files. It does not edit uploaded files and replaces edits made before capture. Reset the sample between tests. A production processor can receive `submission.bytes` and modify that document.
+The mock generates two fixed sample files. It does not edit uploaded files. If you edit the sample, reset it before another request. A production processor can receive `submission.bytes` and modify that document.
 
 Each accepted replacement resets selection and undo history. Document refresh does not merge concurrent edits or watch a file URL.
 

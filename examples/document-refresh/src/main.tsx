@@ -32,6 +32,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   const request = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [sampleEdited, setSampleEdited] = useState(false);
   const [scrollToChange, setScrollToChange] = useState(false);
   const [message, setMessage] = useState(t('documentRefresh.idle'));
 
@@ -43,8 +44,19 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
     [refresh]
   );
 
+  // This fixed fixture demo requires a reset after any user edit.
+  useEffect(
+    () =>
+      editor.on('change', (change) => {
+        if (change.source) return;
+        setSampleEdited(true);
+        if (!request.current) setMessage(t('documentRefresh.sampleEdited'));
+      }),
+    [editor]
+  );
+
   async function update() {
-    if (request.current) return;
+    if (request.current || sampleEdited) return;
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -74,7 +86,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
       if (!result.ok) {
         setMessage(
           result.code === 'local-edits'
-            ? t('documentRefresh.localEdits')
+            ? t('documentRefresh.sampleEdited')
             : `${t('documentRefresh.failed')} (${result.code})`
         );
         return;
@@ -114,12 +126,12 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
         <input
           type="checkbox"
           checked={scrollToChange}
-          disabled={busy || done}
+          disabled={busy || done || sampleEdited}
           onChange={(event) => setScrollToChange(event.target.checked)}
         />
         {t('documentRefresh.scrollToChange')}
       </label>{' '}
-      <button disabled={busy || done} onClick={update}>
+      <button disabled={busy || done || sampleEdited} onClick={update}>
         {busy ? t('documentRefresh.processingLabel') : t('documentRefresh.start')}
       </button>{' '}
       <button disabled={busy} onClick={() => location.reload()}>

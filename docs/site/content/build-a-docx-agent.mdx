@@ -47,7 +47,7 @@ See [Document refresh API](/docs/2.x/guides/document-refresh) for options and fa
 
 For API-driven text review, set `document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion separately so readers can review it while the agent continues.
 
-Tracked edits require an author and support inline text within one paragraph, including table cells. Browser tracking also requires the Pro review module and an editable editor. Tracked structural edits and edits that overlap pending revisions are unsupported. Tracking records the edits you submit; it does not turn a paragraph rewrite into smaller suggestions.
+Tracked edits require an author and support inline text within one paragraph, including table cells. Browser tracking also requires the Pro review module and an editable editor. Tracked structural edits and edits that touch pending revisions are unsupported. Tracking records the edits you submit; it does not turn a paragraph rewrite into smaller suggestions.
 
 If a document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering the proposal. Do not replay the old edit automatically. Serialize agent operations. Use tool-call IDs to prevent duplicate execution, including calls that are still running.
 

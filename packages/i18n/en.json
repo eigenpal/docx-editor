@@ -965,6 +965,7 @@
     "sampleDescription": "The mock replaces this sample. Reset the example before each test.",
     "scrollToChange": "Scroll to the change after the update",
     "scrolled": "Document updated. Scrolled to the changed paragraph.",
-    "processingLabel": "Processing"
+    "processingLabel": "Processing",
+    "sampleEdited": "Your edits stay in the document. Reset the sample to run this demo again."
   }
 }
