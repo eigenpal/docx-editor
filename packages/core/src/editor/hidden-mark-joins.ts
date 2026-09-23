@@ -12,6 +12,12 @@
 // Which paragraphs count as removed is LAYOUT'S answer for the view being edited, not a
 // separate rule: a paragraph whose only content is a tracked deletion is removed in the
 // proposed view and shown in all-markup, and editing has to agree with the page either way.
+//
+// The caret can still come to rest in such a paragraph: Enter at the end of a paragraph whose
+// mark is hidden makes an empty one, and deleting the last character of one empties it. A
+// break the reader cannot see is not a place they can see either, so a caret there SHOWS at
+// the start of the paragraph that takes the join, and Backspace and Delete act from there.
+// Typing still lands in the paragraph itself, which then shows again.
 
 import {
   parentNodeOf,
@@ -19,7 +25,13 @@ import {
   type OoxmlPart,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import type {
+  SemanticLayout,
+  SemanticPosition,
+  SemanticSelection,
+} from '@docx-editor.dev/core/layout';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
+import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
 
@@ -91,4 +103,64 @@ export function joinAcrossHiddenMarks(
   );
   if (between === null) return null;
   return [...between, secondId].map((id) => ({ op: 'joinParagraphs', firstId, secondId: id }));
+}
+
+/**
+ * Where a position shows on the page.
+ *
+ * A position in a paragraph that layout removed shows at the start of the laid-out paragraph
+ * that takes its join. Any other position, and one whose container holds nothing laid out
+ * after it, shows where it is.
+ */
+export function shownPosition(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition,
+  view: RevisionView
+): SemanticPosition {
+  if (paragraphLinesIndex(layout).has(position.paragraphId)) return position;
+  const parent = parentNodeOf(part, position.paragraphId);
+  if (parent === null) return position;
+  const removed = hiddenMarkRemovedIds(parent.children, view);
+  if (!removed.has(position.paragraphId)) return position;
+  const siblings = parent.children;
+  const start = siblings.findIndex(
+    (child) => child.kind !== 'textValue' && child.id === position.paragraphId
+  );
+  for (let index = start + 1; index < siblings.length; index += 1) {
+    const child = siblings[index]!;
+    if (child.kind === 'textValue' || removed.has(child.id)) continue;
+    return child.kind === 'paragraph' ? { paragraphId: child.id, offset: 0 } : position;
+  }
+  return position;
+}
+
+/** The editing surface's view of the rules above, over its live layout, story, and view. */
+export function createHiddenMarkEditing(deps: {
+  readonly layout: () => SemanticLayout;
+  readonly part: () => OoxmlPart;
+  readonly view: () => RevisionView;
+}): {
+  /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
+  joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
+  /** See {@link shownPosition}. */
+  shown(position: SemanticPosition): SemanticPosition;
+  /** A collapsed selection moved to where it shows; a range is left alone. */
+  shownSelection(selection: SemanticSelection): SemanticSelection;
+} {
+  const shown = (position: SemanticPosition): SemanticPosition =>
+    shownPosition(deps.layout(), deps.part(), position, deps.view());
+  return {
+    joinOps: (firstId, secondId) =>
+      joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
+    shown,
+    shownSelection: (selection) => {
+      const { anchor, head } = selection;
+      if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) {
+        return selection;
+      }
+      const position = shown(head);
+      return position === head ? selection : { ...selection, anchor: position, head: position };
+    },
+  };
 }

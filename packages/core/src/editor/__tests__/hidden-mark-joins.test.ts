@@ -9,7 +9,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
-import { hiddenMarkRemovedIds, hiddenParagraphsBetween } from '../hidden-mark-joins.ts';
+import {
+  hiddenMarkRemovedIds,
+  hiddenParagraphsBetween,
+  shownPosition,
+} from '../hidden-mark-joins.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -273,6 +277,81 @@ describe('a paragraph that only this view removes', () => {
   });
 });
 
+describe('a caret left in a paragraph layout removes', () => {
+  // A style separator: the heading's mark is hidden, so the heading runs into the next one.
+  const heading = (text: string) =>
+    `<w:p><w:pPr><w:rPr><w:specVanish/></w:rPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+  function focused(body: string): { surface: PaginatedSurface; container: HTMLElement } {
+    const surface = mount(body);
+    surface.focus();
+    return { surface, container: mounted[mounted.length - 1]!.container };
+  }
+  const painted = (container: HTMLElement) => {
+    const element = container.querySelector<HTMLElement>('.docx-editor-one-surface__caret');
+    return element?.isConnected ? { left: element.style.left, top: element.style.top } : null;
+  };
+  const lineTexts = (surface: PaginatedSurface) =>
+    surface
+      .layout()
+      .pages.flatMap((page) =>
+        page.fragments.flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+      )
+      .map((line) => line.spans.map((span) => span.text).join(''));
+
+  test('Enter at the end of a paragraph with a hidden mark shows the caret where the join lands', () => {
+    const { surface, container } = focused(heading('Head') + para('Body'));
+    caret(surface, idOf(surface, 'Body'), 0);
+    const atBody = painted(container);
+    expect(atBody).not.toBeNull();
+
+    caret(surface, idOf(surface, 'Head'), 4);
+    surface.splitParagraph();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['Head', '', 'Body']);
+    expect(lineTexts(surface)).toEqual(['Head', 'Body']);
+    expect(painted(container)).toEqual(atBody);
+
+    // Typing lands in the new paragraph, which then shows as its own line.
+    surface.type('X');
+    expect(texts(surface)).toEqual(['Head', 'X', 'Body']);
+    expect(lineTexts(surface)).toEqual(['Head', 'X', 'Body']);
+  });
+
+  function emptied(): { surface: PaginatedSurface; container: HTMLElement } {
+    const opened = focused(para('Top') + heading('Hd') + para('Body'));
+    caret(opened.surface, idOf(opened.surface, 'Hd'), 2);
+    opened.surface.deleteBackward();
+    opened.surface.deleteBackward();
+    expect(texts(opened.surface)).toEqual(['Top', '', 'Body']);
+    expect(lineTexts(opened.surface)).toEqual(['Top', 'Body']);
+    expect(painted(opened.container)).not.toBeNull();
+    return opened;
+  }
+
+  test('Backspace from an emptied one joins the paragraphs on either side', () => {
+    const { surface } = emptied();
+    surface.deleteBackward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['TopBody']);
+  });
+
+  test('word Backspace from an emptied one does the same', () => {
+    const { surface } = emptied();
+    surface.deleteWordBackward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['TopBody']);
+  });
+
+  test('Delete from an emptied one takes the next visible character', () => {
+    const { surface, container } = emptied();
+    surface.deleteForward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['Top', '', 'ody']);
+    expect(painted(container)).not.toBeNull();
+  });
+});
+
 describe('hiddenParagraphsBetween', () => {
   const siblings = (body: string) => {
     const result = readOoxmlPart(
@@ -303,6 +382,19 @@ describe('hiddenParagraphsBetween', () => {
     expect([
       ...hiddenMarkRemovedIds(children, { displayMode: 'proposed', authorFilter: undefined }),
     ]).toEqual([ids[1]]);
+  });
+
+  test('shownPosition moves only a position in a removed paragraph', () => {
+    const surface = mount(para('a') + hidden + hidden + para('b') + hidden);
+    const part = surface.session.part();
+    const ids = surface.session.paragraphIds();
+    const at = (index: number, offset = 0) =>
+      shownPosition(surface.layout(), part, { paragraphId: ids[index]!, offset }, allMarkup);
+    expect(at(1)).toEqual({ paragraphId: ids[3], offset: 0 });
+    expect(at(2)).toEqual({ paragraphId: ids[3], offset: 0 });
+    expect(at(0, 1)).toEqual({ paragraphId: ids[0], offset: 1 });
+    // The last paragraph has nothing to join, so layout keeps it and it shows where it is.
+    expect(at(4)).toEqual({ paragraphId: ids[4], offset: 0 });
   });
 
   test('refuses anything else between, and the wrong order', () => {
