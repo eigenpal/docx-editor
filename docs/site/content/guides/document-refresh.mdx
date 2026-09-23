@@ -36,7 +36,7 @@ Try the [interactive effects preview](#try-the-effects), then follow [Accept an 
 
 This interactive mock shows the presentation and refusal states. It uses sample text, without loading the editor or contacting a server. The runnable examples use actual DOCX files and the public API.
 
-Choose an **Effect**, then select **Run effect**. Adjust the highlight appearance and timing with the preview controls. Expand **Source code** to inspect the API calls. Select **Reset** to restore the sample.
+Choose an **Example**, then select **Run preview**. Each example shows one behavior and its API source. Expand **Source code** to inspect the calls. Select **Replay** to run the example again.
 
 <DocumentRefreshDemo />
 
@@ -190,7 +190,7 @@ if (target && refresh.navigateToChange(target.id, { block: 'centerIfNeeded' })) 
 }
 ```
 
-The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll to change, then fade in and out** in the preview to try it.
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll and fade** in the preview to try it.
 
 ## Customize highlights and motion
 
