@@ -124,18 +124,34 @@ function alignLogicalSpans(
   // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
   // over-stretches the line. Measured only on that path.
-  const contentEndWithoutTrailingWhitespace = (): number => {
-    // `trimEnd` strips exactly the `\s` set, in linear time; `/\s+$/` is quadratic on a
-    // long whitespace run that does not reach the end.
-    const visible = last.text.trimEnd();
-    const trailing =
-      visible === last.text
-        ? 0
-        : last.box.width -
-          measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-    return last.box.x - indentLeft + last.box.width - trailing;
-  };
-  let used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
+  // `trimEnd` strips exactly the `\s` set, in linear time; `/\s+$/` is quadratic on a
+  // long whitespace run that does not reach the end.
+  const trailingWhitespaceOf = (span: StyleSpanRecord, visible = span.text.trimEnd()): number =>
+    visible === span.text
+      ? 0
+      : span.box.width -
+        measureDisplayText(visible, styleForFontSlot(span.style, span.fontSlot), measurer);
+  const contentEndWithoutTrailingWhitespace = (): number =>
+    last.box.x - indentLeft + last.box.width - trailingWhitespaceOf(last);
+  // A justified line's hanging spaces may follow a word that keeps its own space (a double
+  // space split across runs). That space hangs too: it is neither content nor a slot.
+  // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
+  const hangsAfterOwnSpace =
+    alignment === 'both' &&
+    !paragraphRtl &&
+    lineUsedWidth === undefined &&
+    trailingStart > 0 &&
+    trailingStart < trailingEnd;
+  let used =
+    lineUsedWidth ??
+    (hangingStart !== undefined && hangsAfterOwnSpace
+      ? hangingStart -
+        trailingWhitespaceOf(
+          spans[trailingStart - 1]!,
+          withoutTrailingSpaces(spans[trailingStart - 1]!.text)
+        )
+      : hangingStart) ??
+    contentEndWithoutTrailingWhitespace();
   let rtlTrailingAdvance = 0;
   // A space retained at a natural wrap still owns its model/caret advance, but Word
   // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
@@ -160,7 +176,12 @@ function alignLogicalSpans(
   }
   const slack = available - used;
   if (slack < -0.001 && alignment === 'both' && !isLastLine)
-    return shrinkJustifiedSpans(spans, -slack, measurer);
+    return shrinkJustifiedSpans(
+      spans,
+      -slack,
+      measurer,
+      hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
+    );
   if (slack <= 0) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.

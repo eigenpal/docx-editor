@@ -78,15 +78,17 @@ export function fitsWithSpaceShrink(
   return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
 }
 
-/** Compress eligible spaces evenly, respecting every face's minimum space advance. */
+/**
+ * Compress eligible spaces evenly, respecting every face's minimum space advance.
+ * Only spans before `slotEnd` are slots: the span there ends the content and its space hangs.
+ */
 export function shrinkJustifiedSpans(
   spans: readonly StyleSpanRecord[],
   needed: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  slotEnd: number = spans.length - 1
 ): readonly StyleSpanRecord[] {
-  const capacities = spans.map((span, index) =>
-    index < spans.length - 1 ? capacity(span, measurer) : 0
-  );
+  const capacities = spans.map((span, index) => (index < slotEnd ? capacity(span, measurer) : 0));
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);
   let remaining = needed;

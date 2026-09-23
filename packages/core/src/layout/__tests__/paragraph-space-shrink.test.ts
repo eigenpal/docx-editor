@@ -195,3 +195,45 @@ test('a following run that continues the word, or ends the paragraph, gets no sh
     ).toEqual(expected);
   }
 });
+
+// A double space split across runs: the word keeps its own space and the next run's
+// space hangs after it. Both spaces hang, so the line still compresses to the measure.
+test('a word with its own space and a hanging space run still compresses to the measure', () => {
+  const result = layoutSemanticDocument(seamSource(['aa bb cc ', ' dd']), 1, {
+    measurer,
+    compatibilityMode: 15,
+  });
+  expect(content(result)).toEqual(['aa bb cc', 'dd']);
+  const spans = linesOf(result)[0]!.spans;
+  const cc = spans.find((s) => s.text.startsWith('cc'))!;
+  expect(cc.box.x).toBeCloseTo(46, 6);
+  expect(cc.box.x + measurer.measure('cc', cc.style)).toBeLessThanOrEqual(66.001);
+  expect(cc.style.shaping?.wordSpacingPt ?? 0).toBe(0);
+});
+
+test('a hanging space run after a word with its own space does not shorten the stretch', () => {
+  for (const compatibilityMode of [14, 15]) {
+    const endOf = (runs: readonly string[]) => {
+      const spans = linesOf(
+        layoutSemanticDocument(seamSource(runs, -1, 72), 1, { measurer, compatibilityMode })
+      )[0]!.spans;
+      const cc = spans.find((s) => s.text.startsWith('cc'))!;
+      return cc.box.x + measurer.measure('cc', cc.style);
+    };
+    expect(endOf(['aa bb cc ', ' dd'])).toBeCloseTo(endOf(['aa bb cc dd']), 6);
+    expect(endOf(['aa bb cc ', '  dd'])).toBeCloseTo(endOf(['aa bb cc dd']), 6);
+  }
+});
+
+test('a no-break space before a hanging space stays content in the stretch', () => {
+  const lines = linesOf(
+    layoutSemanticDocument(seamSource(['aa bb cc ', ' dd'], -1, 80), 1, {
+      measurer,
+      compatibilityMode: 15,
+    })
+  );
+  expect(lines.length).toBe(2);
+  const spans = lines[0]!.spans;
+  const cc = spans.find((s) => s.text.startsWith('cc'))!;
+  expect(cc.box.x + measurer.measure('cc ', cc.style) - spans[0]!.box.x).toBeCloseTo(80, 6);
+});
