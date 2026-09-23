@@ -170,4 +170,32 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
     const table = page.fragments[0] as TableFragmentRecord;
     expect(table.rows[0]!.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
   });
+
+  const fillerRow =
+    '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+    '<w:p><w:r><w:t>filler</w:t></w:r></w:p></w:tc></w:tr>';
+
+  test('a float whose row lands on a later page pushes nothing on this one', () => {
+    const layout = withRows(
+      { text: 'word', layoutInCell: '0', wrap: 'topAndBottom', verticalFrame: 'margin' },
+      (xml, row) => xml.replace(row, fillerRow.repeat(60) + row)
+    );
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const first = layout.pages[0]!.fragments[0] as TableFragmentRecord;
+    expect(first.box.y).toBeCloseTo(0, 3);
+    expect(layout.pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
+  });
+
+  test('a push that sends a later float row to the next page leaves no gap before it', () => {
+    const layout = withRows({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' }, (xml, row) =>
+      xml.replace(row, row + fillerRow.repeat(45) + row.replace(/id="1"/g, 'id="2"'))
+    );
+    const rows = (layout.pages[0]!.fragments[0] as TableFragmentRecord).rows;
+    // After row one's own push, the rows run on without another gap.
+    for (let index = 2; index < rows.length; index += 1)
+      expect(rows[index]!.box.y).toBeCloseTo(
+        rows[index - 1]!.box.y + rows[index - 1]!.box.height,
+        3
+      );
+  });
 });

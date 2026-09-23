@@ -13,6 +13,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { anchorLaidOutInCell, cellAnchorScope } from './cell-anchor-layout.ts';
+import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import { exclusionZoneFromAnchoredDrawing, wrapProducesExclusion } from './drawing-exclusion.ts';
 import {
   anchoredDrawingAtomsInParagraph,
@@ -37,6 +38,8 @@ interface OutOfCellBand {
   readonly top: number;
   readonly bottom: number;
   readonly paragraphId: string;
+  /** Where the unpushed probe ended the float's anchor row. */
+  readonly anchorRowBottom: number;
 }
 
 export interface OutOfCellFloatPlan {
@@ -74,7 +77,8 @@ export function planOutOfCellFloats(
   deps: TableFlowDeps
 ): OutOfCellFloatPlan | null {
   const layout = deps.inlineDrawingLayout;
-  if (!layout) return null;
+  // From mode 15 no anchor is out of its cell, so there is nothing to walk.
+  if (!layout || isWord2013OrLaterMode(deps.compatibilityMode)) return null;
   // Live: cells read it as they break, and `end` empties it.
   const paragraphs = new Set(outOfCellFloatParagraphs(structure, layout, deps));
   if (paragraphs.size === 0) return null;
@@ -112,8 +116,14 @@ export function planOutOfCellFloats(
       outOfCellFloatParagraphs: paragraphs,
     },
     clear: (from, heightAt, rows, pageBottom) => {
-      // A band past the page bottom belongs to rows the page break will carry away.
-      bands = bands.filter((band) => band.bottom > from + EPSILON && band.top < pageBottom);
+      // A band whose anchor row the page break will carry away, even pushed as far as the rows
+      // already are, belongs to that later sheet: it pushes nothing here.
+      bands = bands.filter(
+        (band) =>
+          band.bottom > from + EPSILON &&
+          band.top < pageBottom &&
+          band.anchorRowBottom + push <= pageBottom + EPSILON
+      );
       let current = from;
       for (let moves = 0; bands.length > 0 && moves <= bands.length; moves += 1) {
         const bottom = current + heightAt(current);
@@ -218,7 +228,7 @@ function probeBands(
     vMergeResolveBudget: createTableVMergeResolveBudget(),
     nextLineId: () => `out-of-cell-float-probe-${line++}`,
   });
-  const rowTops = rowTopByParagraph(probe.fragment);
+  const rows = rowByParagraph(probe.fragment);
   const bands: OutOfCellBand[] = [];
   for (const drawing of captured) {
     if (!paragraphs.has(drawing.anchorParagraphId)) continue;
@@ -239,25 +249,44 @@ function probeBands(
     // Word resolves a float at the top of its row ON the row edge, where the engine resolves
     // it at the cell's content top, inside the rule between the rows. Measured from the edge,
     // the row above ends exactly where the float begins, and moves with it, as in Word.
-    const row = rowTops.get(drawing.anchorParagraphId);
-    if (row && drawing.paintBounds.y <= row.contentTop + EPSILON)
+    const row = rows.get(drawing.anchorParagraphId);
+    if (!row) continue;
+    if (row.contentTop !== undefined && drawing.paintBounds.y <= row.contentTop + EPSILON)
       bandTop = Math.min(bandTop, row.top);
     if (bottom > bandTop + EPSILON)
-      bands.push(Object.freeze({ top: bandTop, bottom, paragraphId: drawing.anchorParagraphId }));
+      bands.push(
+        Object.freeze({
+          top: bandTop,
+          bottom,
+          paragraphId: drawing.anchorParagraphId,
+          anchorRowBottom: row.bottom,
+        })
+      );
   }
   return bands;
 }
 
-/** Each cell's opening paragraph: its row's top, and the top of the content it opens. */
-function rowTopByParagraph(
-  fragment: TableFragmentRecord
-): ReadonlyMap<string, { readonly top: number; readonly contentTop: number }> {
-  const found = new Map<string, { readonly top: number; readonly contentTop: number }>();
+interface ProbedRow {
+  readonly top: number;
+  readonly bottom: number;
+  /** The paragraph's top when it opens its cell; otherwise none. */
+  readonly contentTop?: number;
+}
+
+/** Each top-level cell paragraph's row, and the top of the content it opens its cell with. */
+function rowByParagraph(fragment: TableFragmentRecord): ReadonlyMap<string, ProbedRow> {
+  const found = new Map<string, ProbedRow>();
   for (const row of fragment.rows) {
+    const bottom = row.box.y + row.box.height;
     for (const cell of row.cells) {
-      const block = cell.blocks[0];
-      if (block?.kind === 'paragraph')
-        found.set(block.paragraphId, { top: row.box.y, contentTop: block.box.y });
+      for (const [index, block] of cell.blocks.entries()) {
+        if (block.kind !== 'paragraph') continue;
+        found.set(block.paragraphId, {
+          top: row.box.y,
+          bottom,
+          ...(index === 0 ? { contentTop: block.box.y } : {}),
+        });
+      }
     }
   }
   return found;

@@ -18,8 +18,9 @@ export interface CellAnchorScope {
   readonly compatibilityMode: number | undefined;
   /**
    * False where Word lays the story's text out as if its anchored objects had no wrap: a
-   * header or footer before mode 15 runs its text straight under every logo, whatever the
-   * wrap type. The objects still paint where they are anchored.
+   * header or footer paragraph before mode 15 runs its text straight under every logo,
+   * whatever the wrap type. A table cell inside that header still wraps, as in Word. The
+   * objects still paint where they are anchored.
    */
   readonly anchorsWrapText: boolean;
   /**
@@ -53,7 +54,7 @@ export function cellAnchorScope(
   return Object.freeze({
     inTableCell: inTableCell === true,
     compatibilityMode: story.compatibilityMode,
-    anchorsWrapText: story.anchorsWrapText !== false,
+    anchorsWrapText: story.anchorsWrapText !== false || inTableCell === true,
     rowsClearOutOfCellFloats:
       paragraphId !== undefined && story.outOfCellFloatParagraphs?.has(paragraphId) === true,
   });

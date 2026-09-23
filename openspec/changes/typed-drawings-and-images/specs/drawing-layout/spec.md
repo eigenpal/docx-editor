@@ -61,7 +61,7 @@ An anchored drawing SHALL resolve `wp:positionH` against its `ST_RelFromH` frame
 
 - **WHEN** a header or footer story contains an anchored drawing with a wrapping mode
 - **THEN** in compatibility mode 15 or higher the story's text wraps around it
-- **AND** in compatibility mode 14 or lower, or with no mode declared, the story's text runs under it as if it had no wrap, as Word does
+- **AND** in compatibility mode 14 or lower, or with no mode declared, the story's text outside tables runs under it as if it had no wrap, as Word does, while text in a table cell of that story still wraps
 
 #### Scenario: Unsupported frame falls back visibly
 

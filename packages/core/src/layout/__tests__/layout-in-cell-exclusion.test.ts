@@ -186,4 +186,44 @@ describe('w:layoutInCell and a float anchored inside a table cell', () => {
       expect(headerStory(layoutInCell, 15, 'topAndBottom').lines[0]!.box.y).toBeGreaterThan(70);
     });
   }
+
+  test('a header TABLE cell still wraps its text around its logo before mode 15', () => {
+    const cell = squareAnchorInCell({ text: TEXT, layoutInCell: '1' });
+    const table = cell.slice(cell.indexOf('<w:tbl>'), cell.lastIndexOf('</w:tbl>') + 8);
+    const xml =
+      cell.slice(0, cell.indexOf('>') + 1).replace('<w:document', '<w:hdr') + table + '</w:hdr>';
+    const part = load(xml, '/word/header1.xml');
+    const story = layoutHeaderFooterStory(
+      part,
+      468,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      128,
+      undefined,
+      undefined,
+      layoutContext(part, '/word/header1.xml'),
+      undefined,
+      undefined,
+      {
+        pageNumber: 1,
+        pageWidth: 612,
+        pageHeight: 792,
+        marginLeft: 72,
+        marginRight: 72,
+        marginTop: 72,
+        marginBottom: 72,
+      },
+      undefined,
+      { compatibilityMode: 14 }
+    );
+    const tableFragment = story.fragments[0] as {
+      rows: { cells: { blocks: { lines: { contentX: number }[] }[] }[] }[];
+    };
+    const lines = tableFragment.rows[0]!.cells[0]!.blocks[0]!.lines;
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0]!.contentX).toBeGreaterThan(100);
+  });
 });
