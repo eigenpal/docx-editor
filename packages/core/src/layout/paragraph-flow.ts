@@ -3,7 +3,7 @@ import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import { markPendingLineWrapAdvances, growPendingLineDrawingExtent } from './pending-line.ts';
 import { shouldIncludeParagraphMarkHeight } from './paragraph-mark-metrics.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
-import { fitsWithSpaceShrink } from './paragraph-space-shrink.ts';
+import { fitsWithSpaceShrink, opensWithHangingSpace } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
 export {
@@ -1457,7 +1457,9 @@ export function breakParagraph(
             lineAvailable(),
             opensWord ? line.spans.length : wordStartSpan,
             opensWord ? line.width : wordStartWidth,
-            (piece.text[boundary] ?? pieces[pieceIndex + 1]?.text[0]) === ' '
+            boundary < piece.text.length
+              ? !layoutOwned && piece.text[boundary] === ' '
+              : opensWithHangingSpace(pieces[pieceIndex + 1])
           )
         ) &&
         (line.spans.length > 0 || line.drawings.length > 0)

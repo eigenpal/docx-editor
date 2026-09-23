@@ -7,6 +7,7 @@ import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { FieldAwarePiece } from './field-pieces.ts';
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
@@ -76,6 +77,22 @@ export function fitsWithSpaceShrink(
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
   const compression = spaceWidth / (spaceWidth - needed);
   return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+}
+
+/**
+ * True when `piece` opens with a U+0020 that can hang at a line end. Only a plain text
+ * piece splits into candidates; a projected field result, positional tab, or reserved
+ * measure is laid out whole, so its leading space would open the next line instead.
+ */
+export function opensWithHangingSpace(piece: FieldAwarePiece | undefined): boolean {
+  return (
+    piece !== undefined &&
+    piece.text[0] === ' ' &&
+    !piece.projected &&
+    !piece.positionalTab &&
+    piece.measureText === undefined &&
+    piece.end - piece.start === piece.text.length
+  );
 }
 
 /**

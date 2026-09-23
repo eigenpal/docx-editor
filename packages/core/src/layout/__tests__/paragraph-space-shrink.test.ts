@@ -237,3 +237,25 @@ test('a no-break space before a hanging space stays content in the stretch', () 
   const cc = spans.find((s) => s.text.startsWith('cc'))!;
   expect(cc.box.x + measurer.measure('cc ', cc.style) - spans[0]!.box.x).toBeCloseTo(80, 6);
 });
+
+// A field result is measured whole, so its leading space cannot hang at the line end.
+// A word before it must not borrow space on the promise that the space will hang.
+test('a space that opens a field result does not let the word before it compress', () => {
+  const result = ' 1';
+  for (const field of [
+    `<w:fldSimple w:instr="PAGE"><w:r><w:t xml:space="preserve">${result}</w:t></w:r></w:fldSimple>`,
+    `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> REF bm1 \\h </w:instrText></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t xml:space="preserve">${result}</w:t></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="end"/></w:r>`,
+  ]) {
+    const body = loadBody(
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>aa bb cc</w:t></w:r>${field}` +
+        `<w:r><w:t xml:space="preserve"> ee</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="2320" w:h="6000"/>` +
+        `<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
+    );
+    const lines = linesOf(layoutSemanticDocument(body, 1, { measurer, compatibilityMode: 15 }));
+    const texts = lines.map((l) => l.spans.map((s) => s.text).join(''));
+    expect(texts[0]!.trimEnd()).toBe('aa bb');
+    for (const text of texts.slice(1)) expect(text.startsWith(' ')).toBe(false);
+  }
+});
