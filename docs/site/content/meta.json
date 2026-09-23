@@ -46,6 +46,8 @@
     "guides/fonts",
     "guides/dark-mode",
     "---Export formats---",
+    "guides/export",
+    "guides/print",
     "export/markdown",
     "export/pdf",
     "---Pro---",
@@ -78,8 +80,6 @@
     "core/index",
     "core/architecture",
     "i18n/index",
-    "i18n/contributing",
-    "guides/export",
-    "guides/print"
+    "i18n/contributing"
   ]
 }

@@ -93,15 +93,26 @@ describe('engine dependency integrity', () => {
       (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
     );
     expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
-    // The Markdown pages, then the PDF page, and nothing else before the next section.
+    // Keep format guides nested below the shared export and print guides.
     expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
-      ...markdownNavigation.pages.map((page: string) => `export/markdown/${page}`),
+      'guides/export',
+      'guides/print',
+      'export/markdown',
       'export/pdf',
     ]);
     expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');
     expect(exportNavigation.pages).toContain('markdown');
-    expect(markdownNavigation.pages).toContain('index');
+    expect(markdownNavigation.pagesIndex).toBe('index');
+    for (const format of ['markdown', 'pdf']) {
+      const directory = join(repositoryRoot, 'docs/site/content/export', format);
+      const group = JSON.parse(readFileSync(join(directory, 'meta.json'), 'utf8'));
+      expect(group.pagesIndex).toBe('index');
+      expect(group.pages).not.toContain(group.pagesIndex);
+      for (const page of [group.pagesIndex, ...group.pages]) {
+        expect(existsSync(join(directory, `${page}.mdx`))).toBe(true);
+      }
+    }
   });
 
   test('confines packaged fonts through the fonts package asset-root contract', () => {

@@ -82,8 +82,9 @@ export interface ChromePrintJob {
  * Saves the current document, converts it with the configured PDF handler, and prepares
  * the result for printing. Uses the same handler and checks as File > Export > PDF, so a
  * missing handler rejects with `ChromeExportError` before the document is saved.
- * The document and its undo history do not change. `container` receives the hidden print
- * frame: pass an element inside the editor when the editor can sit in a modal dialog.
+ * Saving commits pending form input and can refresh field results with an undo step.
+ * `container` receives the hidden print frame. For an editor inside a modal dialog,
+ * pass an element inside that dialog.
  * @public
  */
 export async function runChromePrint(

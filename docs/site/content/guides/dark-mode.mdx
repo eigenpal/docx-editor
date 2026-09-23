@@ -76,22 +76,17 @@ To follow the operating system instead, pass `colorMode="system"`.
 
 ## What dark mode changes
 
-Dark mode has two layers:
+Dark mode changes the editor controls and the document preview:
 
-- **Editor chrome** (toolbar, title bar, dialogs, dropdowns, sidebar, menus) re-themes through the shared design tokens, so every surface tracks the theme.
-- **The document canvas** is rendered like Word's dark view: the page turns dark and text turns light. Rather than swapping two fixed colors, the canvas applies a perceptual transform that inverts each authored color's lightness while preserving its hue: black body text becomes near-white, a dark-navy heading becomes light blue, a dark red stays red. Authored colors keep contrast under the lightness transform.
+- Editor controls use the shared color tokens.
+- The document preview adjusts color lightness while preserving hue.
+- Embedded images retain their original colors.
 
-It is a display transform only. Dark mode never changes the document itself:
-
-- Authored document colors are preserved; the display transform is never written into the DOCX.
-- Printing always uses a white page with black text, regardless of `colorMode`.
-- Embedded images, logos, and screenshots are not inverted; they render as authored.
-
-The light theme is unchanged when `colorMode` is `'light'`.
+The preview transform does not change authored colors or saved DOCX bytes. Printing uses document colors and ignores `colorMode`.
 
 ## Reporting issues
 
-Dark mode covers chrome and the document canvas, and the canvas transform is heuristic. If a control does not use the theme correctly, open an issue at [GitHub issues](https://github.com/eigenpal/docx-editor/issues). Also report text with low contrast or colors that transform incorrectly. Mention `colorMode` and include a screenshot.
+The document preview uses a color transform that can reduce contrast in some documents. If a control does not use the theme correctly, open an issue at [GitHub issues](https://github.com/eigenpal/docx-editor/issues). Also report text with low contrast or colors that transform incorrectly. Mention `colorMode` and include a screenshot.
 
 ## Next steps
 

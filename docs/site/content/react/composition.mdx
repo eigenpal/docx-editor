@@ -289,6 +289,8 @@ The compound appends unrecognized children after its rows. It keeps the packaged
 
 ## Custom menu bar
 
+Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
+
 The default menu bar derives from `CHROME_MENUS`. Registry updates therefore appear in the default bar. You can add a host menu or replace the **Help** menu:
 
 ```tsx
@@ -415,7 +417,9 @@ const [open, setOpen] = useState(false);
 
 The dialog and `usePageSetup()` use the same engine command.
 
-Page Setup, Paragraph Options, and legacy text Field Options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/react`. Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`. Use `popups.export` and `DocxEditor.ExportDialog` to customize File menu export feedback. Use `popups.print` and `DocxEditor.PrintDialog` to customize File menu print feedback. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+Page setup, paragraph options, and legacy text field options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/react` and pass your component through the editor's `popups` map.
+
+Use `popups.export` for export feedback and `popups.print` for print feedback. The packaged dialogs are `DocxEditor.ExportDialog` and `DocxEditor.PrintDialog`. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Content-control panel
 

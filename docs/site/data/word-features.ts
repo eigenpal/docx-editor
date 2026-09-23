@@ -113,7 +113,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Print and Ctrl+P convert the document through menu.exporters.pdf, then open the browser print dialog. A dialog shows progress and errors, and closes when the browser print dialog opens. Customize it with popups.print. Missing handlers show a setup error. Browsers without a PDF viewer get an Open PDF link instead. Printing requires the EigenPal Pro License.',
+      'File > Print converts the document through menu.exporters.pdf and opens the browser print dialog. Press Ctrl+P, or Cmd+P on macOS. A dialog shows progress and errors, and closes when the browser print dialog opens. Customize it with popups.print. Missing handlers show a setup error. Browsers without a PDF viewer get an Open PDF link instead. Printing requires the EigenPal Pro License.',
     docsLink: '/docs/2.x/guides/print',
   },
   // --- Text & formatting -----------------------------------------------
@@ -221,7 +221,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The editor does not draw w:vanish runs and gives them no space. The text survives a round trip. There is no "show hidden text" option. A paragraph that shows nothing and whose mark is directly hidden takes no space when another paragraph follows it in the same container, and it still counts in list numbering. A mark hidden only through a style still occupies a line.',
+      'The editor does not draw w:vanish runs or give them space, but preserves their text on save. There is no "show hidden text" option. A paragraph with no visible content collapses when its directly hidden mark precedes another paragraph in the same container. Collapsed paragraphs still advance list numbering. Paragraphs with section breaks follow the section layout rules instead. A mark hidden only through a style still occupies a line.',
   },
   {
     id: 'text.math',
@@ -733,7 +733,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section uses its own page dimensions and margins for pagination. You can insert a next-page or a continuous section break; a continuous one keeps the new section on the sheet the previous section ended. When a section has other content, the empty paragraph that ends it before a continuous section takes no vertical space. Even and odd page break parity and per-section columns are not modelled yet.',
+      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section uses its own page dimensions and margins for pagination. You can insert a next-page or a continuous section break; a continuous one keeps the new section on the sheet the previous section ended. When a section has other content, the empty paragraph that ends it before a continuous section takes no vertical space. Per-section columns render from w:cols, but column editing controls are unavailable. Even and odd page break parity remains unsupported.',
   },
   {
     id: 'layout.headers-footers',

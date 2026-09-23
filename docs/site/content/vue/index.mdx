@@ -112,6 +112,12 @@ To choose a subset of packaged controls, set `:preset="false"` and include the n
 
 Use `@mousedown.prevent` on custom chrome buttons. This keeps the document caret in place.
 
+## Export and print
+
+Configure `menu.exporters` to connect Markdown and PDF conversion handlers. **File > Print** uses the same PDF handler as **File > Export > PDF**. PDF conversion runs on your Node.js server and requires the EigenPal Pro License.
+
+For setup, see [Export Markdown and PDF](/docs/2.x/guides/export) and [Print documents](/docs/2.x/guides/print).
+
 ## Editing API
 
 Use `@docx-editor.dev/editor-api/browser` to automate the open document. Pass the editor instance that the Vue adapter creates:

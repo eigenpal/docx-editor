@@ -272,6 +272,8 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
 
 ## Custom menu bar
 
+Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
+
 `DocxEditorMenu` derives its default menus from `CHROME_MENUS`. Override only the menus that your product changes.
 
 ```vue
@@ -401,7 +403,9 @@ const pageSetupOpen = ref(false);
 
 Use `usePageSetup()` to build a different form.
 
-Page Setup, Paragraph Options, and legacy text Field Options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue`. Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`. Use `popups.export` and `DocxEditor.ExportDialog` to customize File menu export feedback. Use `popups.print` and `DocxEditor.PrintDialog` to customize File menu print feedback. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+Page setup, paragraph options, and legacy text field options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue` and pass your component through the editor's `popups` map.
+
+Use `popups.export` for export feedback and `popups.print` for print feedback. The packaged dialogs are `DocxEditor.ExportDialog` and `DocxEditor.PrintDialog`. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Content-control panel
 

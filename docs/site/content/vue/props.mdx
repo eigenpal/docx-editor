@@ -86,7 +86,7 @@ The appearance prop name is `colorMode`.
 | --- | --- | --- | --- |
 | `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Sets the chrome and document color mode. |
 
-`colorMode` applies a display transform to the document canvas. The setting does not change authored document colors or saved output. Printing uses a light page regardless of this setting.
+`colorMode` applies a display transform to the document canvas. The setting does not change authored document colors or saved output. Printing ignores `colorMode` and preserves authored document colors.
 
 ```vue
 <script setup lang="ts">

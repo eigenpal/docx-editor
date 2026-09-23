@@ -1,25 +1,27 @@
 ---
 title: Print documents
-description: Print the current document from the File menu through the PDF converter in React and Vue.
+description: Connect PDF conversion to the File menu for printing in React and Vue.
 category: Guides
 ---
 
-To print, select **File > Print** or press Ctrl+P. On macOS, press Cmd+P. The editor converts the current document to PDF with your PDF handler. Then it opens the browser print dialog for that PDF. The user selects the printer, pages, and copies in the browser print dialog.
+Select **File > Print** or press Ctrl+P. On macOS, press Cmd+P. The editor converts the current document with your PDF handler, then opens the browser print dialog. Choose the printer, pages, and copies there.
 
-Printing uses the editor's saved document bytes. It does not change the document or its undo history. The printed pages use the PDF converter's page layout, not the browser's rendering of the editor page.
+Printing calls `editor.save()` before conversion. Saving commits pending form input and can refresh field results with an undo step. For details, see [Save a document](/docs/2.x/guides/loading-and-saving#save-a-document). The PDF converter determines the printed page layout.
 
 ## Before you begin
 
-Printing uses the same PDF handler as **File > Export > PDF**. Set up that handler first:
+Printing uses the same PDF handler as **File > Export > PDF**:
 
-- Install `@docx-editor.dev/docx-to-pdf` on your Node.js server.
-- Configure `menu.exporters.pdf` to send the document to your server.
+1. Install `@docx-editor.dev/docx-to-pdf` on your Node.js server.
+1. Configure `menu.exporters.pdf` to send the document to that server.
 
 PDF conversion requires the EigenPal Pro License. For installation and server setup, see [Export Markdown and PDF](/docs/2.x/guides/export).
 
 ## Enable printing
 
-If you configured `menu.exporters.pdf`, **File > Print** is ready to use. You do not need other configuration.
+Configure `menu.exporters.pdf` to enable printing. No separate print handler is needed.
+
+Use the `exporters.ts` module from [Configure the menu](/docs/2.x/guides/export#configure-the-menu) in your editor:
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -54,57 +56,59 @@ defineProps<{ source: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-The `exporters.ts` module is the one from [Configure the menu](/docs/2.x/guides/export#configure-the-menu). For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
+For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu` inside `Root`.
 
 ## How printing works
 
-When the user selects **File > Print**, these steps occur:
+When you select **File > Print**, the editor completes these steps:
 
-1. The editor saves the current document and sends the bytes to `exporters.pdf`.
-1. A dialog shows progress. To stop printing, the user selects **Cancel**. If the conversion finishes later, the editor discards the PDF.
-1. The editor checks that the result is a PDF. Then it loads the PDF into a hidden frame.
-1. The editor closes its dialog and opens the browser print dialog.
+1. Show the preparation dialog.
+1. Save the current document and send its bytes to `exporters.pdf`.
+1. Check the PDF header and load the PDF into a hidden frame.
+1. Close the progress dialog and open the browser print dialog.
 
-The hidden frame keeps the PDF until the next print or until the menu unmounts. If the editor removed the frame while the browser prints from it, the browser could cancel the printout.
+Select **Cancel** during preparation to stop printing. Conversion can continue, but the editor discards a result that arrives after cancellation.
 
-**File > Print** stays unavailable while the progress dialog is open.
+The print action stays unavailable during preparation and while an error dialog remains open. The editor retains the PDF until the next print or until the menu unmounts. Removing its frame during printing can cancel the printout.
 
 ## Use the keyboard shortcut
 
-On Windows and Linux, press Ctrl+P. On macOS, press Cmd+P. On macOS, Ctrl+P keeps its text-editing meaning and moves the cursor to the previous line.
+On Windows and Linux, press Ctrl+P. On macOS, press Cmd+P. The editor leaves macOS Ctrl+P available for moving the cursor to the previous line.
 
-The shortcut prints when focus is in the editor, including the menu bar and the document. Outside the editor, the browser handles the shortcut.
+The shortcut prints when focus is inside the editor, including its menu bar and document. Outside the editor, the browser handles the shortcut.
 
-If `menu.exporters.pdf` is not configured, the editor leaves the shortcut to the browser. The **File > Print** menu item then shows no shortcut, and selecting it shows the setup error.
+Without `menu.exporters.pdf`, the browser handles the shortcut. **File > Print** then shows no shortcut, and selecting it opens a setup error.
 
-To handle the same shortcut in your own UI, call `isChromePrintShortcut(event)` from `@docx-editor.dev/core/editor`.
+For your own controls, use `isChromePrintShortcut(event)` from `@docx-editor.dev/core/editor` to recognize the same shortcut.
 
 ## Browser requirements
 
-Printing requires the browser's built-in PDF viewer. If `navigator.pdfViewerEnabled` is `false`, the editor does not load the PDF into the page. The dialog shows an error with an **Open PDF** link. The user opens the PDF in a new tab and prints from the PDF viewer.
+Printing inside the page requires the browser's built-in PDF viewer. When `navigator.pdfViewerEnabled` is `false`, the editor shows an error with an **Open PDF** link. The browser can open or download that PDF. Print it from a PDF viewer.
 
-Some browsers print a PDF from a page frame as blank pages. If that happens, select **File > Export > PDF**. Then print the downloaded PDF from a PDF viewer.
+Some browsers produce blank pages when printing a PDF from a frame. In that case, select **File > Export > PDF** and print the downloaded file from a PDF viewer.
 
 ## Handle errors
 
-The dialog shows these errors:
+The dialog reports these failures:
 
-- If `exporters.pdf` is missing, the error names the required package and configuration.
-- If conversion fails or returns another file type, the error includes the handler's message.
-- If the PDF does not load within 15 seconds, the error says so and shows **Open PDF**.
-- If the browser does not allow printing from the page, the error says so and shows **Open PDF**.
+- A missing `exporters.pdf` handler produces package and configuration instructions.
+- A conversion or PDF validation failure includes its error message.
+- A PDF load that exceeds 15 seconds produces an error with **Open PDF**.
+- A browser refusal to print from the page produces an error with **Open PDF**.
 
 To retry, close the dialog and select **File > Print** again.
 
 ## Customize the print dialog
 
-Use `popups.print` to replace the progress and error dialog. It supports `definePopup()`, render callbacks, and `false`. For examples, see [Customize print feedback](/docs/2.x/guides/customize-dialogs#customize-print-feedback).
+Use `popups.print` to replace progress and error feedback. It accepts `definePopup()`, render callbacks, and `false`. For examples, see [Customize print feedback](/docs/2.x/guides/customize-dialogs#customize-print-feedback).
 
 ## Compose the print control
 
 The shared slot is `file.print`. React exposes `DocxEditor.Menu.Print`, and Vue exposes `DocxEditorMenu.Print`.
 
-If you replace the **File** menu with `preset={false}`, include the print part. In Vue, use `:preset="false"`. This React example keeps **Print** after **Export**:
+When replacing the **File** menu, include the print part. In React, use `preset={false}`; in Vue, use `:preset="false"`.
+
+Inside `DocxEditor.Root`, this React arrangement keeps **Print** after **Export**:
 
 ```tsx
 <DocxEditor.Menu exporters={exporters}>
@@ -121,17 +125,21 @@ If you replace the **File** menu with `preset={false}`, include the print part. 
 </DocxEditor.Menu>
 ```
 
-To remove the menu item, pass `hidden` to the print part. `Menu.Item` dispatches editing commands, so it does not print.
+Pass `hidden` to the print part to remove its menu item. `Menu.Item` dispatches editing commands and does not print.
 
 ## Build a custom print flow
 
-To print from your own control, call `runChromePrint(editor, exporters, container)` from `@docx-editor.dev/core/editor`. It converts the document and returns a `ChromePrintJob`. The optional `container` receives the hidden print frame. If your editor can appear in a modal dialog, pass an element inside that dialog. The job has these members:
+Call `runChromePrint(editor, exporters, container)` from `@docx-editor.dev/core/editor` to prepare a `ChromePrintJob`:
 
-- `url` is an object URL for the PDF.
-- `print()` opens the browser print dialog.
-- `dispose()` removes the hidden frame and revokes `url`.
+| Member      | Behavior                                                   |
+| ----------- | ---------------------------------------------------------- |
+| `url`       | Object URL for the converted PDF. Valid until `dispose()`. |
+| `print()`   | Loads the PDF and opens the browser print dialog.          |
+| `dispose()` | Removes the hidden frame and revokes `url`.                |
 
-This example prints and returns the job, so your UI can offer `job.url` after a failure:
+The optional `container` receives the hidden print frame. It accepts a `Document` or `Element` and defaults to `document`. For an editor inside a modal dialog, pass an element inside that dialog.
+
+This function returns the job after a browser print failure so your UI can offer an **Open PDF** link:
 
 ```ts
 import {
@@ -151,20 +159,32 @@ export async function printDocument(
   try {
     await job.print();
   } catch (error) {
-    if (!(error instanceof ChromePrintError)) throw error;
-    // Show job.url as a link so the user can print from the PDF viewer.
+    if (!(error instanceof ChromePrintError)) {
+      job.dispose();
+      throw error;
+    }
+    // Show job.url as a link to the PDF viewer.
   }
-  // Keep the job while the browser prints. Call job.dispose() before the next print.
+  // Keep the job during printing. Dispose it before the next print or on unmount.
   return job;
 }
 ```
 
-`runChromePrint` rejects with `ChromeExportError` when `exporters.pdf` is missing. `print()` rejects with `ChromePrintError`. Its `code` is `pdf-viewer-unavailable`, `pdf-load-failed`, `print-refused`, or `print-ended`. After `pdf-load-failed`, the next `print()` call loads the PDF again.
+A missing PDF handler makes `runChromePrint` reject with `ChromeExportError`. Conversion and PDF validation errors also reject the call.
 
-If your UI shows a modal dialog while the PDF loads, close it in the `beforePrint` option: `job.print({ beforePrint: closeDialog })`. A modal dialog makes the rest of the page inert, including the hidden frame.
+Browser print failures use `ChromePrintError` with these codes:
 
-Keep the job until the user finishes printing. If you remove the frame while the browser prints from it, the browser can cancel the printout.
+| Code                     | Meaning                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| `pdf-viewer-unavailable` | The browser reports no built-in PDF viewer.                     |
+| `pdf-load-failed`        | The PDF frame fails to load. Call `print()` again to reload it. |
+| `print-refused`          | The browser refuses access to PDF printing.                     |
+| `print-ended`            | The job was disposed. Create another job.                       |
+
+For a modal progress dialog, use `job.print({ beforePrint: closeDialog })`. The callback runs after PDF loading and before printing. Wait for the dialog to unmount before the callback returns. In React, use `flushSync` for the closing state update. In Vue, update the state and await `nextTick()`.
+
+Keep the job while the user prints or opens its PDF link. Calling `dispose()` removes the frame and invalidates the link.
 
 ## Demo behavior
 
-The React and Vue demos include **File > Print**. It uses the same `/api/convert` endpoint as PDF export. For local printing, run `bun run build:pdf` before `bun run dev`.
+The React and Vue demos include **File > Print**. Both use the `/api/convert` endpoint shared with PDF export. For local printing, run `bun run build:pdf` before `bun run dev`.

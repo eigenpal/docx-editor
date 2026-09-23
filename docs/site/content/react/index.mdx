@@ -110,6 +110,12 @@ export function ToolbarOnly({ bytes }: { bytes: Uint8Array }) {
 
 To choose a subset of packaged controls, set `preset={false}` and include the named parts you need. For examples, see [Custom toolbar](/docs/2.x/react/composition#custom-toolbar).
 
+## Export and print
+
+Configure `menu.exporters` to connect Markdown and PDF conversion handlers. **File > Print** uses the same PDF handler as **File > Export > PDF**. PDF conversion runs on your Node.js server and requires the EigenPal Pro License.
+
+For setup, see [Export Markdown and PDF](/docs/2.x/guides/export) and [Print documents](/docs/2.x/guides/print).
+
 ## Editing API
 
 Use `@docx-editor.dev/editor-api/browser` to control the open document. Pass the React adapter's editor instance to the API, which follows the supported Office.js subset:
