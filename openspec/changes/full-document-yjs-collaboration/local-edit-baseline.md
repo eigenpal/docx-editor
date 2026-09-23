@@ -16,9 +16,16 @@ This capture replaces a stale record that wrote 203 into
 `steady-middle-text`. 203 is `paint.reusedPageRecords` (page-record object
 identity). The two counters are not interchangeable.
 
+The section-mark pagination update refreshes cumulative cache hits from 12 to 13.
+A page break before a section mark adds one cached read during initial layout.
+The edit still uses 12 cache hits and one miss.
+Cache misses and all other work counters stay unchanged.
+The capture date, revision, timings, and memory values retain their original provenance.
+
 ## Gate-worthy work counters (deterministic)
 
-These values matched on three independent 9+2 runs. Use them as the gate.
+The original counters matched on three independent 9+2 runs.
+The cache-hit counter includes the documented section-mark refresh. Use these values as the gate.
 
 | Metric                                        | Value                       |
 | --------------------------------------------- | --------------------------- |
@@ -35,7 +42,7 @@ These values matched on three independent 9+2 runs. Use them as the gate.
 | Layout reused pages (`LayoutSession.stats`)   | 154                         |
 | Layout full passes                            | 1                           |
 | Pages before → after                          | 204 → 204                   |
-| Layout cache hits / misses / evictions / size | 12 / 3201 / 0 / 3201        |
+| Layout cache hits / misses / evictions / size | 13 / 3201 / 0 / 3201        |
 | Reused / new page records (object identity)   | 203 / 1                     |
 | Materialized pages                            | 4                           |
 | Reused / rebuilt paint elements               | 204 / 0                     |

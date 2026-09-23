@@ -753,6 +753,7 @@ function layoutBlocksPass(
     columnRegionBottom,
     sectionPageBorders: options.sectionPageBorders,
     sectionMarkCollapses: options.sectionMarkCollapses,
+    markJoinsBreakSheet: options.markJoinsBreakSheet,
   });
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
@@ -1164,6 +1165,7 @@ function layoutBlocksPass(
     // FLOW keys — what incremental resume compares. The composition, its fold order and
     // the argument for that order live with the folds in `pagination-keeps.ts`, where the
     // order is testable.
+    const lastBlock = prepared.at(-1);
     const flow = composeFlowKeys(
       listAutoSpacingFlowKeys(paragraphFrameFlowKeys(keys, prepared), prepared),
       {
@@ -1173,6 +1175,8 @@ function layoutBlocksPass(
         tocVerdicts,
         markerTextAt: (index) => markerTexts[index],
         keepsNextAt: (index) => keepsNext[index]!,
+        endsWithSectionMark:
+          lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
         skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
       }
     );
@@ -1896,22 +1900,28 @@ function layoutBlocksPass(
         }
       }
     );
-  // Before a continuous section, the empty mark that ends this one is out of flow: no line,
-  // no spacing. Its fragment stays for caret and selection, but it moves nothing.
-  const collapsesSectionMark = (at: number, lines?: readonly PendingLine[]): boolean => {
+  /** The section's last block, when it is an empty paragraph carrying the section mark. */
+  const emptySectionMarkAt = (at: number, lines?: readonly PendingLine[]) => {
     const mark = prepared[at];
-    return (
-      options.sectionMarkCollapses === true &&
-      // A mark that is its section's only block IS the section's content: it keeps its line.
-      at > 0 &&
-      at === prepared.length - 1 &&
+    return at === prepared.length - 1 &&
       mark?.kind === 'paragraph' &&
       !mark.frame &&
-      !paragraphBreaksBefore(mark.props) &&
       paragraphSectionNode(mark.paragraph) !== undefined &&
       (listItems?.get(mark.paragraph.id) ?? mark.listItem) === undefined &&
       paragraphHoldsNothing(mark, lines ?? breakBlock(mark, at), options.inlineDrawingLayout)
-    );
+      ? mark
+      : undefined;
+  };
+  /** The mark a trailing page break kept on its own sheet (`markJoinsBreakSheet`). */
+  let markOnBreakSheet = -1;
+  // Before a continuous section, the empty mark that ends this one is out of flow: no line,
+  // no spacing. Its fragment stays for caret and selection, but it moves nothing.
+  const collapsesSectionMark = (at: number, lines?: readonly PendingLine[]): boolean => {
+    if (at === markOnBreakSheet) return true;
+    // A mark that is its section's only block IS the section's content: it keeps its line.
+    if (options.sectionMarkCollapses !== true || at === 0) return false;
+    const mark = emptySectionMarkAt(at, lines);
+    return mark !== undefined && !paragraphBreaksBefore(mark.props);
   };
   let converged = false;
   let convergedAt = prepared.length;
@@ -2088,7 +2098,11 @@ function layoutBlocksPass(
 
     // A fresh section already starts on a new sheet. Only break when this sheet
     // holds content, including the host content of a continued section.
-    if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || cursorY > 0)) {
+    if (
+      paragraphBreaksBefore(props) &&
+      (pageFragments.length > 0 || cursorY > 0) &&
+      index !== markOnBreakSheet
+    ) {
       flushPage();
       previousSpaceAfter = 0;
     }
@@ -2833,7 +2847,11 @@ function layoutBlocksPass(
       } else if (pendingLine.pageBreakAfter) {
         const priorPageHadExclusions = pageExclusionZones().length > 0;
         flushFragment(isLastLine);
-        flushPage();
+        // The empty mark after this break, before a section that opens its own sheet, stays
+        // here: the break and the mark advance one sheet together.
+        if (isLastLine && options.markJoinsBreakSheet && !frame && emptySectionMarkAt(index + 1)) {
+          markOnBreakSheet = index + 1;
+        } else flushPage();
         fragmentBefore = 0;
         fragmentTopExtent = 0;
         endedWithPageBreak = true;

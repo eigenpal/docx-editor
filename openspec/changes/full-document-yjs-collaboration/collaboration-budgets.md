@@ -34,6 +34,12 @@ record copied 203 into both fields. This refresh splits them. Remote
 `reusedPageRecordsMinInclusive` stays 203. This is not a loosened identity
 gate.
 
+The section-mark pagination update refreshes cumulative cache hits from 12 to 13.
+A page break before a section mark adds one cached read during initial layout.
+The edit still uses 12 cache hits and one miss.
+Cache misses and all other work counters stay unchanged.
+The capture date, revision, timings, and memory values retain their original provenance.
+
 ## Lanes
 
 | Lane                                                                                                  | Pull request | Maintained hardware          |
@@ -78,7 +84,7 @@ Work counters must match across extra runs. Pull-request tests use 1 warmup and
 ### Local one-character path
 
 The local non-collaborative path and the local authoring path must match the
-1.7 capture exactly. Layout fields also lock to `edit-bench-gates` scenario
+1.7 capture, with the documented counter refresh. Layout fields also lock to `edit-bench-gates` scenario
 `steady-middle-text`.
 
 | Field                                  | Budget                        |
@@ -96,7 +102,7 @@ The local non-collaborative path and the local authoring path must match the
 | Layout reused pages                    | 154                           |
 | Layout full passes                     | 1                             |
 | Pages before → after                   | 204 → 204                     |
-| Cache hits / misses / evictions / size | 12 / 3201 / 0 / 3201          |
+| Cache hits / misses / evictions / size | 13 / 3201 / 0 / 3201          |
 | Reused / new page records              | 203 / 1                       |
 | Materialized pages                     | 4                             |
 | Reused / rebuilt paint elements        | 204 / 0                       |

@@ -44,6 +44,11 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly balanceColumns?: boolean;
   /** A continuous section follows, so an empty section-mark paragraph takes no flow height. */
   readonly sectionMarkCollapses?: boolean;
+  /**
+   * A later section opens the next sheet, so an empty mark right after a page break stays on
+   * the sheet the break closed.
+   */
+  readonly markJoinsBreakSheet?: boolean;
   /** First-page column bottom used internally by the bounded balance search. */
   readonly columnRegionBottom?: number;
   /** Section page-number format used to measure body page-field placeholders. */

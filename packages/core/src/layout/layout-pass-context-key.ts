@@ -26,6 +26,8 @@ export interface LayoutPassContextInputs {
   readonly sectionPageBorders: SectionPageBorders | undefined;
   /** Set when a continuous section follows, so an empty section mark takes no flow height. */
   readonly sectionMarkCollapses?: boolean;
+  /** Set when an empty mark after a page break may stay on the sheet the break closed. */
+  readonly markJoinsBreakSheet?: boolean;
 }
 
 /**
@@ -63,7 +65,7 @@ export function layoutPassContextKey(
     ? `|pgb:${pageBordersFingerprint(inputs.sectionPageBorders)}`
     : '';
   const head = `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${inputs.flowStartY},${inputs.spaceBeforeCarry}${continuedContext}${inputs.furnitureContext}`;
-  const markContext = inputs.sectionMarkCollapses ? '|smc' : '';
+  const markContext = `${inputs.sectionMarkCollapses ? '|smc' : ''}${inputs.markJoinsBreakSheet ? '|mjb' : ''}`;
   return (notesReserveKey) =>
     `${head}${notesReserveKey}${columnsContext}${pageBordersContext}${markContext}`;
 }

@@ -28,6 +28,7 @@ import {
   type SectionColumns,
 } from './section-properties.ts';
 import { pageBordersFingerprint } from './page-borders.ts';
+import { sectionMarksJoiningBreakSheet } from './section-mark-break.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
 import {
@@ -85,6 +86,7 @@ export type LayoutSectionFn = (
     readonly pageIndexStart?: number;
     readonly balanceColumns?: boolean;
     readonly sectionMarkCollapses?: boolean;
+    readonly markJoinsBreakSheet?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
     readonly continuedPageFurniture?: ContinuedPageFurniture;
     readonly bodyPageNumberFormat?: string;
@@ -435,10 +437,19 @@ export function layoutMultiSectionDocument(
       (_, index) => furnitureForSection(options, index, sections.length)?.evenAndOddHeaders === true
     );
 
+  const geometries = sections.map((section) => geometryOfSection(section.properties));
+  const marksJoinBreakSheet = sectionMarksJoiningBreakSheet(
+    sections,
+    blocks,
+    (index) =>
+      sections[index]!.properties.breakType === 'continuous' &&
+      samePageSize(geometries[index - 1]!, geometries[index]!)
+  );
+
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     const slice = blocks.slice(section.blockStart, section.blockEndExclusive);
-    const geometry = geometryOfSection(section.properties);
+    const geometry = geometries[sectionIndex]!;
     const furniture = furnitureForSection(options, sectionIndex, sections.length);
     const prevSpan = multi?.spans[sectionIndex];
 
@@ -488,7 +499,8 @@ export function layoutMultiSectionDocument(
       section.properties.breakType === 'continuous' &&
       pages.length > 0 &&
       // A trailing page break already ended the previous sheet. Word puts the continued
-      // section after that break, not on top of the page it closed.
+      // section after that break, not on top of the page it closed. A break that kept its
+      // empty mark (`markJoinsBreakSheet`) leaves the sheet open for mark-only sections only.
       flowOpenPage &&
       previousGeometry !== null &&
       samePageSize(previousGeometry, geometry);
@@ -502,6 +514,10 @@ export function layoutMultiSectionDocument(
     // the document's last section has no such break, so it keeps the fill-first shape.
     const endsContinuous = sections[sectionIndex + 1]?.properties.breakType === 'continuous';
     const balanceColumns = section.properties.columns.count > 1 && endsContinuous;
+    // A page break and the empty mark after it advance one sheet when a later section opens
+    // the next sheet. Mark-only sections in between then continue on the break's sheet. A
+    // balanced section is left as it was: the balance search needs one open page.
+    const markJoinsBreakSheet = !balanceColumns && marksJoinBreakSheet[sectionIndex]!;
 
     // A continued section's local page 0 IS the host sheet, so it must flow against the box
     // that sheet already has. Its own variants describe a page it never opens: with `w:titlePg`
@@ -549,6 +565,7 @@ export function layoutMultiSectionDocument(
       // The empty paragraph that carries this section's mark takes no flow height when the
       // next section is continuous: the next section starts where the content ended.
       ...(endsContinuous ? { sectionMarkCollapses: true } : {}),
+      ...(markJoinsBreakSheet ? { markJoinsBreakSheet } : {}),
       lineCounterStart: lineCounter,
       // A continued section's local page 0 IS the host sheet, so its document page index
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.

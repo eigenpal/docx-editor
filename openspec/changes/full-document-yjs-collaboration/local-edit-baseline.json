@@ -94,7 +94,7 @@
       "pagesBefore": 204,
       "pagesAfter": 204,
       "cache": {
-        "hits": 12,
+        "hits": 13,
         "misses": 3201,
         "evictions": 0,
         "size": 3201

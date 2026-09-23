@@ -97,7 +97,7 @@
       "fullPasses": 1,
       "pagesBefore": 204,
       "pagesAfter": 204,
-      "cache": { "hits": 12, "misses": 3201, "evictions": 0, "size": 3201 }
+      "cache": { "hits": 13, "misses": 3201, "evictions": 0, "size": 3201 }
     },
     "paint": {
       "pagesBefore": 204,

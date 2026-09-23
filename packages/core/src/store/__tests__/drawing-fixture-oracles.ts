@@ -43,11 +43,34 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     // Word-authored VML uses repeated inert styles and page wrap anchors.
     // The paint harness injects ready resources; the package tests refuse external fetches.
     drawingCount: 28,
-    // Fixed-measurer baseline, not Word's page count: 717 authored w:cr breaks now
-    // lay out like w:br (83 pages); dropping those breaks reproduces the old 81.
-    pageCount: 83,
+    // Fixed-measurer baseline: all 717 authored w:cr breaks remain line breaks.
+    // Empty section marks reuse the preceding page break, which removes 17 empty sheets.
+    // Their editable fragments remain on the preceding sheet; text and drawings stay intact.
+    pageCount: 66,
     readyCount: 27,
     placeholderCount: 0,
+    assertLayout: (layout) => {
+      // Each retained sheet holds text, a table, or a drawing.
+      for (const page of layout.pages) {
+        const holdsContent =
+          (page.anchoredDrawings?.length ?? 0) > 0 ||
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind !== 'paragraph' ||
+              fragment.lines.some(
+                (line) =>
+                  (line.drawings?.length ?? 0) > 0 ||
+                  line.spans.some((span) => /[^\s\u200b]/.test(span.text))
+              )
+          );
+        expect(holdsContent).toBe(true);
+      }
+      // Seventeen marks join their break sheet; two collapse before continuous sections.
+      const outOfFlow = layout.pages.flatMap((page) =>
+        page.fragments.filter((fragment) => fragment.kind === 'paragraph' && fragment.outOfFlow)
+      );
+      expect(outOfFlow).toHaveLength(19);
+    },
     assertProjections: (projections) => {
       const photos = projections.filter((projection) => projection.picture);
       expect(photos).toHaveLength(27);

@@ -363,6 +363,22 @@ export function tocFieldFlowKeys(keys: string[], verdictAt: (index: number) => s
 }
 
 /**
+ * Flow keys where the block before a section's closing mark carries the mark's key.
+ *
+ * A page break that ends that block may keep the empty mark on the sheet it closes, which
+ * `markJoinsBreakSheet` decides from the MARK's content. Typing into the mark changes only
+ * the mark's key, and resume would start at the mark from a checkpoint whose sheet the break
+ * never closed. The fold makes the block that owns the decision re-place with it.
+ */
+export function sectionMarkFlowKeys(keys: string[], endsWithSectionMark: boolean): string[] {
+  const last = keys.length - 1;
+  if (!endsWithSectionMark || last < 1) return keys;
+  const flow = [...keys];
+  flow[last - 1] = `${keys[last - 1]}~sm~${keys[last]}`;
+  return flow;
+}
+
+/**
  * Flow keys that carry a `w:keepNext` chain's SUCCESSOR KEY.
  *
  * RUN THIS FOLD LAST. It is the only one that splices a neighbour's whole key into a
@@ -414,6 +430,8 @@ export interface FlowKeyFoldInputs {
   readonly tocVerdicts: readonly string[];
   readonly markerTextAt: (index: number) => string | undefined;
   readonly keepsNextAt: (index: number) => boolean;
+  /** The last block is the paragraph that carries the section mark. */
+  readonly endsWithSectionMark?: boolean;
   /** Positioned frames contribute neither flow height nor a keep-chain boundary. */
   readonly skipKeepNextAt?: (index: number) => boolean;
 }
@@ -423,8 +441,9 @@ export interface FlowKeyFoldInputs {
  *
  * `keys` stays what the break cache is stored under; the CROSS-BLOCK properties make the
  * two differ: `w:contextualSpacing` (§17.3.1.9), paragraph border groups (§17.3.1.24), the
- * TOC field verdicts, the list marker, and `w:keepNext` (§17.3.1.15) — each of which makes
- * a block's placement depend on a block it does not contain.
+ * TOC field verdicts, the list marker, a page break before the section mark, and
+ * `w:keepNext` (§17.3.1.15) — each of which makes a block's placement depend on a block it
+ * does not contain.
  *
  * Each fold returns its input BY IDENTITY when nothing folds, so a document that reads
  * across no boundary at all reaches the end holding the array it started with.
@@ -456,6 +475,7 @@ export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[]
   flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);
+  flow = sectionMarkFlowKeys(flow, at.endsWithSectionMark === true);
   flow = keepNextFlowKeys(flow, at.keepsNextAt, at.skipKeepNextAt); // LAST — see the doc comment above.
   return flow;
 }
