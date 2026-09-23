@@ -609,6 +609,21 @@ describe('record-only Markdown export', () => {
     expect(html).toContain('<a href="https://example.com/space">  </a>');
   });
 
+  test('moves trailing link whitespace outside the label, across runs', async () => {
+    // The label's trailing whitespace spans two runs and includes a tab. It must land after
+    // the link, whole and in order, not inside the brackets.
+    const body =
+      '<w:p><w:hyperlink r:id="rLink"><w:r><w:t xml:space="preserve">go  x </w:t></w:r>' +
+      '<w:r><w:tab/><w:t xml:space="preserve">  </w:t></w:r></w:hyperlink>' +
+      '<w:r><w:t>next</w:t></w:r></w:p>';
+    const result = await exportMarkdown(
+      docx(body, undefined, {
+        documentRelationships: `<Relationship Id="rLink" Type="${R}/hyperlink" Target="https://a.example" TargetMode="External"/>`,
+      })
+    );
+    expect(result.markdown).toBe('[go  x](https://a.example)    next');
+  });
+
   test('projects sanitized hyperlinks and HYPERLINK fields in header stories', async () => {
     const header =
       `<w:hdr xmlns:w="${W}" xmlns:r="${R}"><w:p>` +

@@ -8,10 +8,12 @@
 // those render bidi overrides and zero-width characters faithfully.
 
 /**
- * Windows reserves these device names WITH ANY EXTENSION — `CON.docx` is still `CON`.
- * Saving to one fails or behaves strangely, so the name falls back instead.
+ * Windows reserves these device names WITH ANY EXTENSION — `CON.docx` and `NUL.tar.docx`
+ * are still `CON` and `NUL`. Saving to one fails or behaves strangely, so a bare device
+ * name falls back and a device stem before a dot gets a `_` prefix. The `0` and
+ * superscript digits and the console aliases are reserved too.
  */
-const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])$/i;
 
 /**
  * Characters that must not survive into a filename, in one class:
@@ -64,25 +66,52 @@ function capBytes(value: string, maxBytes: number): string {
 }
 
 /**
+ * Drop trailing dots and spaces, scanning back from the end.
+ *
+ * A loop, not `/[.\s]+$/`: a backtracking engine retries that pattern from every dot or
+ * space in a run that is NOT at the end, so a title of many ". " pairs followed by a
+ * letter costs quadratic time on a string the document supplies. Only U+0020 is checked
+ * because `downloadName` has already collapsed every other whitespace character to it.
+ */
+function stripTrailingDotsAndSpaces(value: string): string {
+  let end = value.length;
+  while (end > 0) {
+    const code = value.charCodeAt(end - 1);
+    if (code !== 0x2e && code !== 0x20) break;
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+/**
+ * Drop a `.docx` suffix and the dots and spaces on both sides of it, so `report.docx `,
+ * `report.docx.` and `report. .docx` all end as `report`.
+ */
+function withoutDocxSuffix(value: string): string {
+  return stripTrailingDotsAndSpaces(stripTrailingDotsAndSpaces(value).replace(/\.docx$/i, ''));
+}
+
+/**
  * A download name from a user-typed title, always ending in `.docx`.
  *
  * Falls back to `document.docx` when nothing usable survives — including for a title that
- * is only separators, only dots, or a reserved device name.
+ * is only separators, only dots, or a bare reserved device name. A title whose stem before
+ * the first dot is a device name keeps its text behind a `_` prefix (`_NUL.tar.docx`).
  */
 export function downloadName(title: string | undefined): string {
-  const base = capBytes(
-    (title ?? '')
-      .replace(/\.docx$/i, '')
-      .replace(UNSAFE_IN_FILENAME, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      // Windows silently drops trailing dots and spaces, and a LEADING dot makes a hidden
-      // file with an empty stem on macOS and Linux (`.docx` from a title of ".").
-      .replace(/^[.\s]+/, '')
-      .replace(/[.\s]+$/, ''),
-    MAX_NAME_BYTES
-  ).trim();
+  const normalized = (title ?? '').replace(UNSAFE_IN_FILENAME, ' ').replace(/\s+/g, ' ').trim();
+  // Windows silently drops trailing dots and spaces, and a LEADING dot makes a hidden
+  // file with an empty stem on macOS and Linux (`.docx` from a title of "."). The suffix
+  // goes before the leading strip, so a title of `.docx` alone falls back.
+  const cleaned = withoutDocxSuffix(normalized).replace(/^[. ]+/, '');
+  // Again after the byte cap, because truncation can end on a dot, a space, or a new
+  // `.docx` suffix. Only then: a typed `notes.docx.docx` keeps its inner suffix.
+  const capped = capBytes(cleaned, MAX_NAME_BYTES);
+  const base = capped === cleaned ? cleaned : withoutDocxSuffix(capped);
   if (!base || RESERVED_DEVICE_NAME.test(base)) return 'document.docx';
+  // Windows resolves a device from the part before the FIRST dot, so `NUL.tar` is `NUL`.
+  // A prefix keeps prose such as "Con. Law outline" rather than discarding the title.
+  if (RESERVED_DEVICE_NAME.test(base.split('.', 1)[0]!.trim())) return `_${base}.docx`;
   return `${base}.docx`;
 }
 

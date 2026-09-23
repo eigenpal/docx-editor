@@ -22,6 +22,14 @@ describe('downloadName', () => {
   test('does not double the extension', () => {
     expect(downloadName('Report.docx')).toBe('Report.docx');
     expect(downloadName('Report.DOCX')).toBe('Report.docx');
+    // A suffix followed by a space, a dot, or an invisible character is still the suffix.
+    expect(downloadName('report.docx ')).toBe('report.docx');
+    expect(downloadName('report.docx.')).toBe('report.docx');
+    expect(downloadName('report.docx\u200b')).toBe('report.docx');
+    expect(downloadName('report.DOCX\n')).toBe('report.docx');
+    expect(downloadName('.docx')).toBe('document.docx');
+    // Only the final suffix goes: a title the user typed with two keeps the inner one.
+    expect(downloadName('notes.docx.docx')).toBe('notes.docx.docx');
   });
 
   test('strips path separators, so a name can never be a path', () => {
@@ -63,11 +71,39 @@ describe('downloadName', () => {
     expect(downloadName('report   ')).toBe('report.docx');
   });
 
+  test('a long run of dots and spaces before the end stays linear', () => {
+    // A trailing `/[.\s]+$/` retried from every position of this run: 200k characters took
+    // about 25 seconds, far past the test timeout. A title can come from `dc:title`, so the
+    // document picks its length.
+    const hostile = `a${'. '.repeat(100_000)}b`;
+    // The byte cap drops `b`, then the trailing strip removes every `. ` pair.
+    expect(downloadName(hostile)).toBe('a.docx');
+    expect(downloadName(`a${'. '.repeat(100_000)}`)).toBe('a.docx');
+  });
+
+  test('truncation that ends on a dot or a space does not leave one', () => {
+    expect(downloadName(`${'a'.repeat(199)}.b`)).toBe(`${'a'.repeat(199)}.docx`);
+    expect(downloadName(`${'a'.repeat(199)} b`)).toBe(`${'a'.repeat(199)}.docx`);
+    // The cap can also cut a longer name down to one that ends in `.docx`.
+    expect(downloadName(`${'a'.repeat(195)}.docxb`)).toBe(`${'a'.repeat(195)}.docx`);
+    expect(downloadName(`${'a'.repeat(193)}. .docxb`)).toBe(`${'a'.repeat(193)}.docx`);
+  });
+
   test('Windows reserved device names fall back, extension or not', () => {
     // `CON.docx` is still the CON device: saving to it fails or behaves strangely.
     for (const device of ['CON', 'con', 'PRN', 'AUX', 'NUL', 'COM1', 'LPT9']) {
       expect(downloadName(device)).toBe('document.docx');
     }
+    for (const device of ['COM\u00b9', 'COM0', 'CONIN$']) {
+      expect(downloadName(device)).toBe('document.docx');
+    }
+    // Windows reads the device from the part before the FIRST dot, so a device stem before
+    // a dot gets a prefix. The title survives: "Con. Law outline" is prose, not a device.
+    expect(downloadName('NUL.tar')).toBe('_NUL.tar.docx');
+    expect(downloadName('aux.a.b')).toBe('_aux.a.b.docx');
+    expect(downloadName('lpt\u00b3.log')).toBe('_lpt\u00b3.log.docx');
+    expect(downloadName('conout$.txt')).toBe('_conout$.txt.docx');
+    expect(downloadName('Con. Law outline')).toBe('_Con. Law outline.docx');
     // A name that merely CONTAINS one is fine.
     expect(downloadName('CONTRACT')).toBe('CONTRACT.docx');
     expect(downloadName('con report')).toBe('con report.docx');

@@ -164,13 +164,14 @@ function trimTokenWhitespace(tokens: readonly MarkdownTextToken[]): {
   for (let index = 0; index < content.length; index += 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
-    const match = /^\s+/.exec(token.sourceText);
-    if (!match) break;
-    leading.push({ ...token, sourceText: match[0] });
+    const kept = token.sourceText.trimStart();
+    const width = token.sourceText.length - kept.length;
+    if (width === 0) break;
+    leading.push({ ...token, sourceText: token.sourceText.slice(0, width) });
     content[index] = {
       ...token,
-      sourceText: token.sourceText.slice(match[0].length),
-      sourceOffset: (token.sourceOffset ?? 0) + match[0].length,
+      sourceText: kept,
+      sourceOffset: (token.sourceOffset ?? 0) + width,
     };
     if (content[index]!.sourceText.length > 0) break;
   }
@@ -178,16 +179,21 @@ function trimTokenWhitespace(tokens: readonly MarkdownTextToken[]): {
   for (let index = content.length - 1; index >= 0; index -= 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
-    const match = /\s+$/.exec(token.sourceText);
-    if (!match) break;
-    trailing.unshift({
+    // `trimEnd`, not `/\s+$/`: the same character set in linear time. The pattern retries
+    // from every position of a whitespace run that does not reach the end.
+    const kept = token.sourceText.trimEnd();
+    if (kept.length === token.sourceText.length) break;
+    trailing.push({
       ...token,
-      sourceText: match[0],
-      sourceOffset: (token.sourceOffset ?? 0) + token.sourceText.length - match[0].length,
+      sourceText: token.sourceText.slice(kept.length),
+      sourceOffset: (token.sourceOffset ?? 0) + kept.length,
     });
-    content[index] = { ...token, sourceText: token.sourceText.slice(0, -match[0].length) };
+    content[index] = { ...token, sourceText: kept };
     if (content[index]!.sourceText.length > 0) break;
   }
+  // Collected back to front; one reverse keeps a long whitespace-only tail linear, where
+  // `unshift` per token would move the whole array each time.
+  trailing.reverse();
   return { leading, content, trailing };
 }
 

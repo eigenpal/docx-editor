@@ -5,6 +5,7 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
@@ -124,7 +125,9 @@ function alignLogicalSpans(
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
   // over-stretches the line. Measured only on that path.
   const contentEndWithoutTrailingWhitespace = (): number => {
-    const visible = last.text.replace(/\s+$/, '');
+    // `trimEnd` strips exactly the `\s` set, in linear time; `/\s+$/` is quadratic on a
+    // long whitespace run that does not reach the end.
+    const visible = last.text.trimEnd();
     const trailing =
       visible === last.text
         ? 0
@@ -143,7 +146,7 @@ function alignLogicalSpans(
     lastContentSpan?.text.endsWith(' ') &&
     !lastContentSpan.lineEndWhitespace
   ) {
-    const visible = lastContentSpan.text.replace(/ +$/, '');
+    const visible = withoutTrailingSpaces(lastContentSpan.text);
     const width = measureDisplayText(
       visible,
       styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
