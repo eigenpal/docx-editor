@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pymupdf
-from worker import RGB_SIZE, compare, evidence, measure, read, write
+from worker import RGB_SIZE, compare, evidence, measure, preview_page, read, write
 
 
 class ProtocolTests(unittest.TestCase):
@@ -184,6 +184,24 @@ class ProtocolTests(unittest.TestCase):
                 measure(path)
         with self.assertRaises(ValueError):
             compare({"protocol": 99}, {"protocol": 1})
+
+
+class PagePreviewTests(unittest.TestCase):
+    def test_rotated_page_coordinates_and_missing_page(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with pymupdf.open() as document:
+                page = document.new_page(width=200, height=300)
+                page.insert_text((20, 30), "Synthetic page")
+                page.set_rotation(90)
+                document.save(root / "page.pdf")
+            result = preview_page(root / "page.pdf", root / "preview", 1)
+            self.assertEqual((result["widthPt"], result["heightPt"]), (300, 200))
+            self.assertEqual(result["rotationMatrix"], [0, 1, -1, 0, 300, 0])
+            self.assertTrue((root / "preview/page.png").is_file())
+            for number in [0, 2, 1001]:
+                with self.assertRaises(ValueError):
+                    preview_page(root / "page.pdf", root / "preview", number)
 
 
 if __name__ == "__main__":

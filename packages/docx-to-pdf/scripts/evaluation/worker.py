@@ -354,9 +354,29 @@ def evidence(left, right, output, pages):
     return {"protocol": PROTOCOL, "pages": report}
 
 
+def preview_page(source, output, number):
+    """Render one page and expose the transform for measured PDF coordinates."""
+    output = Path(output)
+    with pymupdf.open(source) as document:
+        if document.needs_pass or not 1 <= number <= min(len(document), MAX_PAGES):
+            raise ValueError("Page is unavailable")
+        page = document[number - 1]
+        image = image_of(page, 144)
+        output.mkdir(parents=True, exist_ok=True)
+        image.save(output / "page.png")
+        return {
+            "protocol": PROTOCOL,
+            "page": number,
+            "pages": len(document),
+            "widthPt": page.rect.width,
+            "heightPt": page.rect.height,
+            "rotationMatrix": list(page.rotation_matrix),
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["measure", "compare", "evidence"])
+    parser.add_argument("operation", choices=["measure", "compare", "evidence", "page"])
     parser.add_argument("input")
     parser.add_argument("output")
     parser.add_argument("--candidate")
@@ -366,6 +386,10 @@ def main():
         value = measure(args.input)
     elif args.operation == "compare":
         value = compare(read(args.input), read(args.candidate))
+    elif args.operation == "page":
+        value = preview_page(args.input, args.output, int(args.pages))
+        write(Path(args.output) / "report.json", value)
+        return
     else:
         value = evidence(
             args.input,
