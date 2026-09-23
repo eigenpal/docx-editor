@@ -1,4 +1,11 @@
 {
   "title": "DOCX to Markdown",
-  "pages": ["index", "fonts", "images", "api", "integrations"]
+  "pages": [
+    "fonts",
+    "images",
+    "api",
+    "integrations"
+  ],
+  "defaultOpen": false,
+  "pagesIndex": "index"
 }
