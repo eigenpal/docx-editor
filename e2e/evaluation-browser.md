@@ -26,7 +26,7 @@ Each document receives a separate browser process and context. The probe interce
 
 ## Recipe and checks
 
-The `pointer-insert-undo-redo-v1` recipe uses a real pointer click on visible body text. It reads the resulting canonical caret and types `Q` through the keyboard. It checks edit admission before typing. A refused edit produces a blocked recipe with the engine reason. It never disables document protection. It checks the exact text insertion across all main-story paragraphs. Unrelated paragraph text must remain unchanged. It also checks published layout text.
+The `pointer-insert-undo-redo-v1` recipe uses a real pointer click on visible body text. It reads the resulting canonical caret and types `Q` through the keyboard. It checks edit admission before typing. A refused edit produces a blocked recipe with the engine reason. It never disables document protection. It checks the exact text insertion across all main-story paragraphs. Unrelated paragraph text must remain unchanged. It also checks the insertion against the previous layout-text projection. Non-text atoms can have different model and layout representations. Canonical text checks remain exact.
 
 Keyboard undo must restore text and the canonical main-document fingerprint. Keyboard redo must restore the insertion. The probe saves the result and loads those saved bytes. It compares reopened text and the main-document semantic digest. It then compares incremental layout geometry with fresh layout geometry. Geometry includes page, paragraph, line, span, table, header, and footer records. Coordinates use 0.001-point precision. Revision and source identifiers are excluded.
 
@@ -54,4 +54,4 @@ Run the synthetic integration test:
 bun test ./e2e/evaluation-browser.test.ts
 ```
 
-The test checks a successful edit, an empty document, and a protected document. The last two documents produce blocked recipes. It also checks failure evidence and measured coverage.
+The test checks plain text, anchored images, hidden text, an empty document, and a protected document. The last two documents produce blocked recipes. It also checks failure evidence and measured coverage.

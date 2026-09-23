@@ -31,31 +31,12 @@ Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow
 
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
-Measurements include word positions, page dimensions, color signatures, and drawing metadata.
-Comparisons reuse the text movement algorithm in `pdf-visual-diff.py`.
-Object counts alone never establish missing visible content.
-Visual screening uses a 144 by 192 RGB signature with local regions.
-Older 48 by 64 grayscale measurements remain readable.
-Detailed evidence uses 144 DPI and processes at most three pages.
-`firstDivergence` identifies a measured location with explicit confidence and coordinate space.
-Text excerpts are bounded and untrusted.
+Measurements include word positions, page dimensions, color signatures, and drawing metadata. Comparisons reuse the text movement algorithm in `pdf-visual-diff.py`. Object counts alone never establish missing visible content. Visual screening uses a 144 by 192 RGB signature with local regions. Older 48 by 64 grayscale measurements remain readable. Detailed evidence uses 144 DPI and processes at most three pages. `firstDivergence` identifies a measured location with explicit confidence and coordinate space. Text excerpts are bounded and untrusted.
 
-Headless probes check package preservation, deterministic insertion, undo, and save/reopen.
-They compare modeled structure, semantic hashes, relationships, and unchanged binary hashes.
-The retained-layout check uses fixed metrics and body content.
-It excludes production font resolution, styles-part cascades, headers, footers, and actual browser input.
-Unsupported checks remain explicit.
+Headless probes check package preservation, deterministic insertion, undo, and save/reopen. They compare modeled structure, semantic hashes, relationships, and unchanged binary hashes. The retained-layout check uses fixed metrics and body content. It excludes production font resolution, styles-part cascades, headers, footers, and actual browser input. Unsupported checks remain explicit.
 
-Layout traces return up to three nearby records, including source node IDs and resolved geometry.
-They contain no document text and stay below 8,000 characters.
-Use `--kind drawing`, `--kind table`, or `--kind paragraph` to restrict nearby records.
-`baselineOffsetPt` records the baseline offset within its line.
-Reference correspondence remains approximate. Textbox interiors and pagination decision history are not included.
+Layout traces return up to three nearby records, including source node IDs and resolved geometry. They contain no document text and stay below 8,000 characters. Use `--kind drawing`, `--kind table`, or `--kind paragraph` to restrict nearby records. `baselineOffsetPt` records the baseline offset within its line. Reference correspondence remains approximate. Textbox interiors and pagination decision history are not included.
 
-The browser recipe checks pointer placement, keyboard insertion, undo/redo, saved body content, and fresh layout.
-It uses a local demo server and blocks external browser requests.
-Batch mode reuses a browser process. The parent caches results using browser, recipe, font, and engine identities.
-It does not cover drag selection, formatting, or review operations.
-See [Browser eval probe](../../../../e2e/evaluation-browser.md).
+The browser recipe checks pointer placement, keyboard insertion, undo/redo, saved body content, and fresh layout. It uses a local demo server and blocks external browser requests. Batch mode reuses the static server and starts a fresh browser process for each document. The parent caches results using browser, recipe, font, and engine identities. It does not cover drag selection, formatting, or review operations. See [Browser eval probe](../../../../e2e/evaluation-browser.md).
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.

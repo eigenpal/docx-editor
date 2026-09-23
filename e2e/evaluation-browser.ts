@@ -302,6 +302,16 @@ async function runJob(
           ? paragraph.text.slice(0, target!.offset) + 'Q' + paragraph.text.slice(target!.offset)
           : paragraph.text,
     }));
+    // Layout text preserves model offsets but can project fields and non-text atoms.
+    // Compare the edit against that projection, while checking canonical text separately.
+    const beforeVisibleText = await page.evaluate(
+      (id) => window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(id),
+      target.paragraphId
+    );
+    if (beforeVisibleText === null || target.offset > beforeVisibleText.length)
+      throw new Error('The selected position has no layout-text projection');
+    const expectedVisibleText =
+      beforeVisibleText.slice(0, target.offset) + 'Q' + beforeVisibleText.slice(target.offset);
     stage = 'editAdmission';
     const admission = await page.evaluate(() =>
       window.__DOCX_EDITOR_E2E__!.can({ type: 'insertText', text: 'Q' })
@@ -328,10 +338,7 @@ async function runJob(
       (id) => window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(id),
       target.paragraphId
     );
-    assert(
-      'layoutUpdated',
-      visibleText === expected.find((paragraph) => paragraph.id === target!.paragraphId)!.text
-    );
+    assert('layoutUpdated', visibleText === expectedVisibleText);
     timings.insertMs = performance.now() - editStart;
     stage = 'undo';
     await page.keyboard.press('ControlOrMeta+z');

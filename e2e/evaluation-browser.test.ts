@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, zipSync, unzipSync } from 'fflate';
 
 function documentBytes(text: string, protectedDocument = false) {
   const entries: Record<string, Uint8Array> = {
@@ -36,6 +36,54 @@ function documentBytes(text: string, protectedDocument = false) {
   return zipSync(entries);
 }
 
+function projectedDocument(kind: 'image' | 'hidden') {
+  const entries = unzipSync(documentBytes('Synthetic visible text.'));
+  const picture = `<w:r><w:drawing
+    xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+    xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"
+      relativeHeight="0" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1">
+      <wp:simplePos x="0" y="0"/>
+      <wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>
+      <wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>
+      <wp:extent cx="127000" cy="127000"/><wp:wrapNone/>
+      <wp:docPr id="1" name="Synthetic image"/><wp:cNvGraphicFramePr/>
+      <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+        <pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="Synthetic image"/>
+          <pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="image"/>
+          <a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+          <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="127000" cy="127000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+        </pic:pic></a:graphicData></a:graphic>
+    </wp:anchor></w:drawing></w:r>`;
+  const prefix =
+    kind === 'image'
+      ? picture
+      : '<w:r><w:t xml:space="preserve">Visible </w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden</w:t></w:r>';
+  entries['word/document.xml'] = strToU8(
+    new TextDecoder().decode(entries['word/document.xml']).replace('<w:p>', `<w:p>${prefix}`)
+  );
+  if (kind === 'image') {
+    entries['word/_rels/document.xml.rels'] = strToU8(
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="image" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/pixel.png"/></Relationships>'
+    );
+    entries['word/media/pixel.png'] = new Uint8Array(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6N8AAAAASUVORK5CYII=',
+        'base64'
+      )
+    );
+    entries['[Content_Types].xml'] = strToU8(
+      new TextDecoder()
+        .decode(entries['[Content_Types].xml'])
+        .replace('</Types>', '<Default Extension="png" ContentType="image/png"/></Types>')
+    );
+  }
+  return zipSync(entries);
+}
+
 test('browser probe checks real edits and distinguishes unsupported recipes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'docx-evaluation-browser-'));
   const jobs = ['Synthetic browser editing probe.', '', 'Protected synthetic paragraph.'].map(
@@ -45,6 +93,12 @@ test('browser probe checks real edits and distinguishes unsupported recipes', as
       bytes: documentBytes(text, index === 2),
     })
   );
+  for (const kind of ['image', 'hidden'] as const)
+    jobs.push({
+      input: join(directory, `${kind}.docx`),
+      output: join(directory, `${kind}.json`),
+      bytes: projectedDocument(kind),
+    });
   for (const job of jobs) await writeFile(job.input, job.bytes);
   const manifest = join(directory, 'jobs.json');
   await writeFile(manifest, JSON.stringify(jobs.map(({ input, output }) => ({ input, output }))));
@@ -76,4 +130,12 @@ test('browser probe checks real edits and distinguishes unsupported recipes', as
   expect(protectedResult.failure.message).toContain('locked');
   expect(protectedResult.coverage.insert).toBe(false);
   expect(protectedResult.change).toBeNull();
+  for (const job of jobs.slice(3)) {
+    const projected = JSON.parse(await readFile(job.output, 'utf8'));
+    expect(projected.status).toBe('passed');
+    expect(projected.checks.layoutUpdated).toBe(true);
+    expect(projected.checks.intendedTextOnly).toBe(true);
+    expect(projected.checks.complete).toBe(true);
+    expect(projected.geometryHashes.incremental).toBe(projected.geometryHashes.reopened);
+  }
 }, 130_000);
