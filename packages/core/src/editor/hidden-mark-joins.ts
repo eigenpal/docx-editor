@@ -17,7 +17,9 @@
 // mark is hidden makes an empty one, and deleting the last character of one empties it. A
 // break the reader cannot see is not a place they can see either, so a caret there SHOWS at
 // the start of the paragraph that takes the join, and the arrow keys move from there. Typing
-// still lands in the paragraph itself, which then shows again. Backspace and Delete act on
+// still lands in the paragraph itself, which then shows again, and so do the other lanes that
+// insert at the caret. Paragraph and character formatting, and the toolbar state that reports
+// it, read the paragraph where the caret shows. Backspace and Delete act on
 // that paragraph first: both join it into the paragraph before it, which is the exact reverse
 // of the Enter that made it, and only then act from the shown position.
 
@@ -188,6 +190,11 @@ export function createHiddenMarkEditing(deps: {
   shown(position: SemanticPosition): SemanticPosition;
   /** A collapsed selection moved to where it shows; a range is left alone. */
   shownSelection(selection: SemanticSelection): SemanticSelection;
+  /** The same for an ordered range: moved only when it is collapsed. */
+  shownRange(range: { from: SemanticPosition; to: SemanticPosition }): {
+    from: SemanticPosition;
+    to: SemanticPosition;
+  };
   /** See {@link removedCaretParagraphEdit}. */
   removedCaretEdit(
     position: SemanticPosition,
@@ -202,6 +209,12 @@ export function createHiddenMarkEditing(deps: {
     shown,
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
+    shownRange: (range) => {
+      const { from, to } = range;
+      if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return range;
+      const position = shown(from);
+      return position === from ? range : { from: position, to: position };
+    },
     shownSelection: (selection) => {
       const { anchor, head } = selection;
       if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) {

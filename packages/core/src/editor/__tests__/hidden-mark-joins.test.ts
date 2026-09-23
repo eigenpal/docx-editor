@@ -388,6 +388,33 @@ describe('a caret left in a paragraph layout removes', () => {
     ['after Enter', afterEnter],
     ['after emptying one', emptied],
   ] as const) {
+    test(`paragraph formatting and the toolbar read where the caret shows, ${label}`, () => {
+      const control = setup().surface;
+      caret(control, idOf(control, 'Body'), 0);
+      const expected = control.formatting();
+
+      const surface = setup().surface;
+      const removedParagraph = head(surface).paragraphId;
+      expect(surface.formatting().fontSizeHalfPoints).toBe(expected.fontSizeHalfPoints);
+      expect(surface.formatting().fontFamily).toBe(expected.fontFamily);
+      surface.setParagraphProperty('jc', { val: 'center' });
+      expect(surface.state().lastRejection).toBeFalsy();
+      expect(surface.formatting().alignment).toBe('center');
+      // Body took the alignment; the caret stays in the removed paragraph for typing.
+      expect(head(surface).paragraphId).toBe(removedParagraph);
+      caret(surface, idOf(surface, 'Body'), 0);
+      expect(surface.formatting().alignment).toBe('center');
+    });
+
+    test(`a format armed at the caret applies to what is typed next, ${label}`, () => {
+      const surface = setup().surface;
+      surface.setRunProperty('b');
+      surface.type('X');
+      expect(texts(surface)).toContain('X');
+      caret(surface, idOf(surface, 'X'), 1);
+      expect(surface.formatting().bold).toBe(true);
+    });
+
     test(`arrow keys move from where the caret shows, ${label}`, () => {
       const right = setup().surface;
       right.navigate('right');
