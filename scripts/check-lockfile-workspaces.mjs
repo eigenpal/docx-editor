@@ -3,6 +3,8 @@
 // `bun install --frozen-lockfile` still passes when the lockfile lags behind them, because
 // workspace packages resolve locally. So the lockfile drifted silently through two
 // releases. `version-packages` now refreshes it, and this check keeps it honest.
+// It refreshes twice: Bun 1.4.2's first `--lockfile-only` pass after a version bump
+// records the new workspace versions but keeps the old ranges between workspaces.
 //
 //   node scripts/check-lockfile-workspaces.mjs [--lockfile PATH]
 import { existsSync, readFileSync } from 'node:fs';
