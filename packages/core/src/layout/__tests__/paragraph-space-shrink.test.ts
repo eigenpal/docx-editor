@@ -144,3 +144,54 @@ test('modes 16 and 17 justify exactly as mode 15 does', () => {
       modern
     );
 });
+
+// Producers often keep the space after a word in its own run (tracked edits, character
+// spacing), and East Asian break rules split every word from its space. The word before
+// that space is complete, so it borrows inter-word space like a same-run word.
+test('a word whose space sits in the next run borrows inter-word space', () => {
+  for (const runs of [
+    ['aa bb cc', ' dd'],
+    ['aa ', 'bb', ' ', 'cc', ' ', 'dd'],
+  ]) {
+    const result = layoutSemanticDocument(seamSource(runs), 1, {
+      measurer,
+      compatibilityMode: 15,
+    });
+    expect(content(result)).toEqual(['aa bb cc', 'dd']);
+    const line = linesOf(result)[0]!;
+    expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width).toBeLessThanOrEqual(66.001);
+    expect(line.spans.some((s) => (s.style.shaping?.wordSpacingPt ?? 0) < 0)).toBe(true);
+    expect(
+      content(layoutSemanticDocument(seamSource(runs), 1, { measurer, compatibilityMode: 14 }))
+    ).toEqual(['aa bb', 'cc dd']);
+  }
+});
+
+test('an East Asian language paragraph compresses Latin spaces the same way', () => {
+  const body = loadBody(
+    `<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr><w:lang w:eastAsia="zh-CN"/></w:rPr>` +
+      `<w:t>aa bb cc dd</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="2320" w:h="6000"/>` +
+      `<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
+  );
+  expect(content(layoutSemanticDocument(body, 1, { measurer, compatibilityMode: 15 }))).toEqual([
+    'aa bb cc',
+    'dd',
+  ]);
+});
+
+test('a following run that continues the word, or ends the paragraph, gets no shrink', () => {
+  for (const [runs, expected] of [
+    [
+      ['aa bb cc', 'x dd'],
+      ['aa bb', 'ccx dd'],
+    ],
+    [
+      ['aa bb cc', ' '],
+      ['aa bb', 'cc'],
+    ],
+  ] as const) {
+    expect(
+      content(layoutSemanticDocument(seamSource(runs), 1, { measurer, compatibilityMode: 15 }))
+    ).toEqual(expected);
+  }
+});

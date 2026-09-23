@@ -34,6 +34,11 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
  * ends where the word began, so `wordStart`/`wordStartWidth` describe that
  * alternative. Their defaults are the values the caller already holds when the
  * overflowing candidate opens the word, so that path measures exactly as before.
+ *
+ * `spaceFollows` says the next character is a space, in this run or at the start of
+ * the next one. A candidate without its own space is then a complete word: a space in
+ * its own run, or one split off by East Asian break rules, hangs at the line end
+ * exactly as a space inside the candidate would.
  */
 export function fitsWithSpaceShrink(
   spans: readonly StyleSpanRecord[],
@@ -43,14 +48,20 @@ export function fitsWithSpaceShrink(
   lineWidth: number,
   available: number,
   wordStart: number = spans.length,
-  wordStartWidth: number = lineWidth
+  wordStartWidth: number = lineWidth,
+  spaceFollows = false
 ): boolean {
+  const ownSpace = /^[^\s]+ $/u.test(candidate);
   if (
-    !/^[^\s]+ $/u.test(candidate) ||
+    !(ownSpace || (spaceFollows && /^[^\s]+$/u.test(candidate))) ||
     spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
   )
     return false;
-  const visible = measureDisplayText(candidate.slice(0, -1), style, measurer);
+  const visible = measureDisplayText(
+    ownSpace ? candidate.slice(0, -1) : candidate,
+    style,
+    measurer
+  );
   const needed = lineWidth + visible - available;
   const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
   if (needed <= 0 || needed > budget + 0.001) return false;

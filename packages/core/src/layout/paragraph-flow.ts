@@ -1434,6 +1434,8 @@ export function breakParagraph(
       const fitWidth = opticalFit ? width : (colonNaturalWidths.get(piece) ?? width);
       if (
         !hangs &&
+        // A space after a word that borrowed inter-word space hangs on its line.
+        !(lineEndWhitespace && flow?.justifySpaceShrink) &&
         line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         !(
           flow?.justifySpaceShrink &&
@@ -1454,7 +1456,8 @@ export function breakParagraph(
             line.width,
             lineAvailable(),
             opensWord ? line.spans.length : wordStartSpan,
-            opensWord ? line.width : wordStartWidth
+            opensWord ? line.width : wordStartWidth,
+            (piece.text[boundary] ?? pieces[pieceIndex + 1]?.text[0]) === ' '
           )
         ) &&
         (line.spans.length > 0 || line.drawings.length > 0)
