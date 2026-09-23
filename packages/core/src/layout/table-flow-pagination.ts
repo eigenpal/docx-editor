@@ -691,10 +691,14 @@ export function paginateTableInFlow(
       // nothing in `core` catches, on a path the module comment calls a recovery.
       if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
         const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
-        // A row that splits anyway gains no room by leaving a fragment of header rows
-        // alone. Moving would only strand them above an empty band.
-        const belowHeadersOnly = rows.length > 0 && rows.every((placed) => placed.isHeaderRow);
-        if (flow.cursorY > 0 && !movedToFreshPage && !(splitsAnyway && belowHeadersOnly)) {
+        // A row that splits anyway gains no room by leaving header rows that already open
+        // the page: repeats, or the authored group at the page top. Moving would strand them
+        // above an empty band. Header rows that start lower on the page still move with it.
+        const belowTopHeadersOnly =
+          rows.length > 0 &&
+          rows.every((placed) => placed.isHeaderRow) &&
+          (fragmentTop <= 0.001 || rows.every((placed) => placed.isHeaderRepeat));
+        if (flow.cursorY > 0 && !movedToFreshPage && !(splitsAnyway && belowTopHeadersOnly)) {
           breakForContinuation(admitsRepeatedHeaders);
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a

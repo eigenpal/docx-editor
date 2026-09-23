@@ -161,6 +161,31 @@ test('an oversized cantSplit row does not strand the header rows above it', () =
   expectInsideContentBox(layout);
 });
 
+test('an oversized cantSplit row below a mid-page header row moves to a fresh page', () => {
+  const layout = layoutSemanticDocument(
+    source(
+      p('before') +
+        p('more') +
+        table(row(p('head'), '<w:tblHeader/>') + row(lines('x', 12), '<w:cantSplit/>'))
+    ),
+    0,
+    options
+  );
+  expect(pageOfLines(layout).get('x0')).toBe(2);
+  // Page 1 keeps the authored header row alone; the row starts below its repeat on page 2.
+  const firstPageTables = layout.pages[0]!.fragments.filter(
+    (block): block is TableFragmentRecord => block.kind === 'table'
+  );
+  expect(firstPageTables.flatMap((fragment) => fragment.rows.map((r) => r.rowIndex))).toEqual([0]);
+  const fragments = tables(layout);
+  for (const fragment of fragments.slice(1)) {
+    expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
+    expect(fragment.rows[0]!.box.y).toBe(0);
+  }
+  expect(lineTexts(layout).filter((text) => text.startsWith('x'))).toHaveLength(12);
+  expectInsideContentBox(layout);
+});
+
 test('an oversized cantSplit row splits its nested table between nested rows', () => {
   const nested = table(Array.from({ length: 9 }, (_, i) => row(p(`n${i}`))).join(''));
   const layout = layoutSemanticDocument(
