@@ -100,7 +100,8 @@
     "imageWrap": "Quebra de texto automática",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -490,7 +491,9 @@
   "editor": {
     "showDocumentOutline": "Mostrar estrutura do documento",
     "linkCopied": "Link copiado para a área de transferência",
-    "fontSubstitutionNotice": "Algumas fontes deste documento não estão disponíveis, então substitutas estão sendo exibidas: {fonts}"
+    "fontSubstitutionNotice": "Algumas fontes deste documento não estão disponíveis, então substitutas estão sendo exibidas: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",

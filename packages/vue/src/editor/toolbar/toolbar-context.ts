@@ -24,12 +24,12 @@ export function useToolbarContext(): ComputedRef<ToolbarContextValue> {
 /** @public */
 export function useToolbarLabel() {
   const ctx = useToolbarContext();
-  const { t: catalogT } = useTranslation();
-  return (key: string) => ctx.value.t?.(key) ?? catalogT(key as TranslationKey);
+  const translation = useTranslation();
+  return (key: string) => ctx.value.t?.(key) ?? translation.t(key as TranslationKey);
 }
 
 /** @public */
 export function useToolbarLabelFor(t: ToolbarTranslate | undefined) {
-  const { t: catalogT } = useTranslation();
-  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
+  const translation = useTranslation();
+  return (key: string) => t?.(key) ?? translation.t(key as TranslationKey);
 }

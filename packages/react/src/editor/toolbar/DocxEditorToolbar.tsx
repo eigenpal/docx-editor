@@ -458,7 +458,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         <fieldset
           ref={attach}
           disabled={toolbarDisabled}
-          role="toolbar"
+          aria-label={label('formattingBar.label')}
           data-testid="docx-toolbar"
           // `docx-editor` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
           // `Root` renders no DOM — same pattern as `DocxEditorLoading`/`DocxEditorViewport`,

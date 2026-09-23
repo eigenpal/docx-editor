@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import {
   computed,
   defineComponent,
@@ -39,6 +40,7 @@ export const DocxEditorViewport = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
+    const translation = useTranslation();
     provide(ScopedByAncestorContext, true);
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
@@ -84,6 +86,9 @@ export const DocxEditorViewport = defineComponent({
           }
         },
         'data-testid': 'docx-editor-scroll',
+        tabindex: 0,
+        role: 'region',
+        'aria-label': translation.t('editor.documentViewport'),
         onKeydownCapture: onKeyDownCapture,
         class: mergeHostClass(
           `${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container`,

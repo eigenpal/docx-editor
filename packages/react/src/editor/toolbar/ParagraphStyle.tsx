@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The paragraph-style picker: a compound toolbar part plus the hook it is built from.
@@ -173,7 +174,7 @@ function ParagraphStyleTrigger({ asChild, className, children }: ParagraphStyleP
     ...(!context.isEnabled ? { 'data-disabled': '' } : {}),
     'aria-haspopup': 'listbox' as const,
     'aria-expanded': context.open,
-    'aria-label': text,
+
     title: text,
   };
   // No pStyle (the document default) shows the registry's placeholder — "Normal text",
@@ -197,10 +198,13 @@ function ParagraphStyleTrigger({ asChild, className, children }: ParagraphStyleP
 ParagraphStyleTrigger.docxToolbarPart = true as const;
 
 function ParagraphStyleContent({ asChild, className, children }: ParagraphStylePartProps) {
+  const label = useToolbarLabel();
   const context = useParagraphStyleContext();
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
+    tabIndex: 0,
+    'aria-label': label('styles.selectAriaLabel'),
     // Anchoring, layering and colors all come from the core stylesheet — the popup
     // must sit in the overlay band, above ambient chrome like the navigation panel.
     className: `docx-toolbar__menu docx-toolbar__style-content${className ? ` ${className}` : ''}`,
@@ -215,18 +219,21 @@ function ParagraphStyleContent({ asChild, className, children }: ParagraphStyleP
 }
 
 function ParagraphStyleItem({ value, asChild, className, children }: ParagraphStyleItemProps) {
+  const editor = useDocxEditor();
   const context = useParagraphStyleContext();
   if (!context) return null;
   const selected = context.value === value;
   const option = context.options.find((entry) => entry.styleId === value);
   const shared = {
     role: 'option' as const,
+    tabIndex: -1,
     'aria-selected': selected,
     ...(selected ? { 'data-selected': '' } : {}),
     onMouseDown: guardToolbarMousedown,
     onClick: () => {
       context.setValue(value);
       context.setOpen(false);
+      editor?.focus();
     },
     className: `docx-toolbar__style-item${className ? ` ${className}` : ''}`,
   };
@@ -260,6 +267,7 @@ export function ParagraphStyleRoot({ hidden, asChild, className, children }: Par
   const state = useParagraphStyle();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  usePickerKeyboard(rootRef, open, () => setOpen(false));
 
   // Outside mousedown closes the popup — same contract as the FontFamily compound.
   useEffect(() => {

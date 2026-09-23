@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The font-family picker: a compound toolbar part plus the hook it is built from.
@@ -131,7 +132,7 @@ function FontFamilyTrigger({ asChild, className, children }: FontFamilyPartProps
     ...(!context.isEnabled ? { 'data-disabled': '' } : {}),
     'aria-haspopup': 'listbox' as const,
     'aria-expanded': context.open,
-    'aria-label': text,
+    'aria-label': children !== undefined ? undefined : `${text}: ${context.value ?? '—'}`,
     title: text,
   };
   // No agreed family (mixed selection / no document) shows an em-dash — never English.
@@ -183,6 +184,8 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
+    tabIndex: 0,
+    'aria-label': label('font.selectAriaLabel'),
     // Anchoring, layering and colors all come from the core stylesheet — the popup
     // must sit in the overlay band, above ambient chrome like the navigation panel.
     className: `docx-toolbar__menu docx-toolbar__font-family-content${className ? ` ${className}` : ''}`,
@@ -204,7 +207,7 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
     })).filter((group) => group.fonts.length > 0);
     items = grouped.map((group, index) => (
       <div key={group.category} role="group">
-        {index > 0 ? <div className="docx-toolbar__menu-separator" role="separator" /> : null}
+        {index > 0 ? <div className="docx-toolbar__menu-separator" aria-hidden="true" /> : null}
         {group.labelKey ? (
           <div className="docx-toolbar__menu-label">{label(group.labelKey)}</div>
         ) : null}
@@ -226,7 +229,12 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <div role="listbox" className="docx-toolbar__font-options">
+      <div
+        role="listbox"
+        tabIndex={0}
+        aria-label={label('font.selectAriaLabel')}
+        className="docx-toolbar__font-options"
+      >
         {items}
       </div>
     </div>
@@ -240,6 +248,7 @@ function FontFamilyItem({ value, asChild, className, children }: FontFamilyItemP
   const selected = context.value === value;
   const shared = {
     role: 'option' as const,
+    tabIndex: -1,
     'aria-selected': selected,
     ...(selected ? { 'data-selected': '' } : {}),
     onMouseDown: guardToolbarMousedown,
@@ -278,6 +287,7 @@ export function FontFamilyRoot({ hidden, asChild, className, children }: FontFam
   const state = useFontFamily();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  usePickerKeyboard(rootRef, open, () => setOpen(false));
 
   // Outside mousedown closes the popup. Mousedown, not click, so the popup is gone
   // before any click lands — and an INSIDE mousedown stays open (Items handle it).

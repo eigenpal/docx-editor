@@ -128,7 +128,7 @@ export function BrandLogo() {
             gap: '4px',
             fontSize: '11px',
             lineHeight: 1.1,
-            color: 'var(--doc-text-subtle)',
+            color: 'var(--doc-text-muted)',
             whiteSpace: 'nowrap',
           }}
         >

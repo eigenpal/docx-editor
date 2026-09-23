@@ -367,6 +367,8 @@ Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and 
 
 The rulers read page setup and zoom from the editor. A drag creates one undo entry when you release the handle.
 
+Use Tab to focus a vertical ruler margin handle. Arrow Up increases the margin; Arrow Down decreases it. Hold Shift to change one twip. Home and End select the permitted limits. Each change creates one undo entry.
+
 ```vue
 <DocxEditorRoot :document="bytes">
   <DocxEditorHorizontalRuler />

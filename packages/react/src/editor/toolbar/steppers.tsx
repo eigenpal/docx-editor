@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import type { ReactNode } from 'react';
 // The stepper parts: font size and zoom as minus / value / plus clusters.
 //
@@ -12,7 +13,7 @@ import type { ReactNode } from 'react';
 // `snapshot().zoom`); its middle is the "100% ▾" — a caret button opening the
 // preset-level menu — flanked by − / + that walk the same levels.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -132,7 +133,9 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   /** The text being typed, or null when the box is showing the document's own value. */
   const [draft, setDraft] = useState<string | null>(null);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  usePickerKeyboard(rootRef, open, () => setOpen(false));
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId();
 
   const applyHalfPoints = useCallback(
     (halfPoints: number) => {
@@ -216,6 +219,7 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
             aria-expanded={open}
             aria-haspopup="listbox"
             aria-label={label('fontSize.label')}
+            aria-controls={open ? listId : undefined}
             autoComplete="off"
             onChange={(event) => {
               setDraft(event.target.value);
@@ -267,7 +271,9 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
         <div
           className="docx-toolbar__menu docx-toolbar__font-size-menu"
           role="listbox"
+          tabIndex={0}
           aria-label={label('fontSize.listLabel')}
+          id={listId}
         >
           {FONT_SIZE_PRESETS_PT.map((preset) => {
             const selected = selectedPreset === preset;
@@ -276,6 +282,7 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
                 key={preset}
                 type="button"
                 role="option"
+                tabIndex={-1}
                 aria-selected={selected}
                 {...(selected ? { 'data-selected': '' } : {})}
                 className="docx-toolbar__menu-item"
@@ -310,6 +317,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  usePickerKeyboard(rootRef, open, () => setOpen(false));
 
   // Outside mousedown closes the level menu (same pattern as FontFamily.Content).
   useEffect(() => {
@@ -325,6 +333,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
 
   const apply = useCallback(
     (level: number) => {
+      rootRef.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
       setOpen(false);
       setZoom(level);
     },
@@ -332,6 +341,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   );
   const applyMode = useCallback(
     (next: 'auto' | 'fit-width') => {
+      rootRef.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
       setOpen(false);
       setMode(next === 'auto' ? 'auto' : FIT_WIDTH_ZOOM_MODE);
     },
@@ -364,7 +374,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
             disabled={!editor}
             aria-haspopup="listbox"
             aria-expanded={open}
-            aria-label={label('zoom.zoomLevel')}
+            aria-label={`${label('zoom.zoomLevel')}: ${display}`}
             onMouseDown={guardToolbarMousedown}
             onClick={() => setOpen((current) => !current)}
           >
@@ -383,6 +393,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
         <div
           className="docx-toolbar__menu docx-toolbar__zoom-menu"
           role="listbox"
+          tabIndex={0}
           aria-label={label('zoom.zoomLevel')}
         >
           {/* The fits come FIRST and are ticked from the mode, not the percentage. Ticking
@@ -391,6 +402,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
           <button
             type="button"
             role="option"
+            tabIndex={-1}
             aria-selected={autoSelected}
             {...(autoSelected ? { 'data-selected': '' } : {})}
             className="docx-toolbar__menu-item"
@@ -402,6 +414,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
           <button
             type="button"
             role="option"
+            tabIndex={-1}
             aria-selected={fitWidthSelected}
             {...(fitWidthSelected ? { 'data-selected': '' } : {})}
             className="docx-toolbar__menu-item"
@@ -418,6 +431,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
                 key={level}
                 type="button"
                 role="option"
+                tabIndex={-1}
                 aria-selected={selected}
                 {...(selected ? { 'data-selected': '' } : {})}
                 className="docx-toolbar__menu-item"

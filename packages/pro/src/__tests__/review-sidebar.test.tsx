@@ -97,6 +97,21 @@ afterEach(() => {
 });
 
 describe('the review sidebar', () => {
+  test('names the nested review region without adding a complementary landmark', async () => {
+    const view = render(
+      <DocxEditorRoot document={SOURCE} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const region = view.getByRole('region', { name: 'Review' });
+    expect(region.tagName).toBe('ASIDE');
+    expect(view.getByRole('region', { name: 'Document pages' }).contains(region)).toBe(true);
+    expect(view.queryByRole('complementary')).toBeNull();
+  });
+
   test('right-click Add a comment starts a draft instead of only toggling the pane', async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(

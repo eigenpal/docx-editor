@@ -2080,6 +2080,12 @@ a.docx-hyperlink:focus-visible {
 
 /* Scroll container. The host reports scrollTop/scrollLeft to the engine as
  * InteractionHostMetrics.scrollOffset — the engine never reads the DOM. */
+.docx-editor-one-surface__viewport:focus-visible,
+.docx-editor .docx-ruler-marker:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -2px;
+}
+
 .docx-editor-one-surface__viewport {
   position: relative;
   overflow: auto;

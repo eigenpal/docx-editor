@@ -130,7 +130,7 @@
   gap: 4px;
   font-size: 11px;
   line-height: 1.1;
-  color: var(--doc-text-subtle);
+  color: var(--doc-text-muted);
   white-space: nowrap;
 }
 .brand-logo__eigenpal {

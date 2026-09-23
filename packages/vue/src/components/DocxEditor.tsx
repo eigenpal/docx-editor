@@ -362,9 +362,7 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
             rulers.value && chrome.value
-              ? h('div', { style: VERTICAL_RULER_STYLE, 'aria-hidden': 'true' }, [
-                  h(DocxEditorVerticalRuler),
-                ])
+              ? h('div', { style: VERTICAL_RULER_STYLE }, [h(DocxEditorVerticalRuler)])
               : null,
             slots.default?.(),
           ],

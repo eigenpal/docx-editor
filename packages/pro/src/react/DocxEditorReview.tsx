@@ -737,7 +737,7 @@ function ReviewRoot({
     // styling (`:not([data-open])` is the 32px gutter) while the pane itself stays open.
     'data-open': expanded ? '' : undefined,
     'data-compact': compact ? '' : undefined,
-    role: 'complementary' as const,
+    role: 'region' as const,
     'aria-label': t('review.ariaLabel'),
     onMouseDown: guardMousedown,
     // `right: 0` from the stylesheet is the fallback for a host with no painted surface to

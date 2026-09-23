@@ -100,7 +100,8 @@
     "imageWrap": "环绕文字",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -490,7 +491,9 @@
   "editor": {
     "showDocumentOutline": "显示文档大纲",
     "linkCopied": "链接已复制到剪贴板",
-    "fontSubstitutionNotice": "此文档中的某些字体不可用，已显示替代字体：{fonts}"
+    "fontSubstitutionNotice": "此文档中的某些字体不可用，已显示替代字体：{fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "显示文本",

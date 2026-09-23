@@ -647,7 +647,7 @@ const ReviewRoot = defineComponent({
         'data-count': items.value.length,
         'data-open': expanded.value ? '' : undefined,
         'data-compact': compact.value ? '' : undefined,
-        role: 'complementary' as const,
+        role: 'region' as const,
         'aria-label': label('review.ariaLabel'),
         onMousedown: guardMousedown,
         style:

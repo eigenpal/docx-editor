@@ -100,7 +100,8 @@
     "imageWrap": "Habillage du texte",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -493,7 +494,9 @@
   "editor": {
     "showDocumentOutline": "Afficher le plan",
     "linkCopied": "Lien copié dans le presse-papiers",
-    "fontSubstitutionNotice": "Certaines polices de ce document ne sont pas disponibles ; des polices de substitution sont affichées : {fonts}"
+    "fontSubstitutionNotice": "Certaines polices de ce document ne sont pas disponibles ; des polices de substitution sont affichées : {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",

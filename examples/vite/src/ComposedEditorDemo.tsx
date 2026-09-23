@@ -687,7 +687,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
-              <div className="demo-vruler" aria-hidden="true">
+              <div className="demo-vruler">
                 <DocxEditor.VerticalRuler />
               </div>
               {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a

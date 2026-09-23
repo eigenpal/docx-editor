@@ -459,7 +459,7 @@ const DocxEditorToolbarRoot = defineComponent({
         {
           ref: (el: unknown) => attach(el as HTMLFieldSetElement | null),
           disabled: toolbarDisabled.value,
-          role: 'toolbar',
+          'aria-label': props.t?.('formattingBar.label') ?? label('formattingBar.label'),
           'data-testid': 'docx-toolbar',
           class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
           ...(measuring.value ? { 'data-overflow': '' } : {}),

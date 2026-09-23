@@ -100,7 +100,8 @@
     "imageWrap": "Textumbruch",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -490,7 +491,9 @@
   "editor": {
     "showDocumentOutline": "Dokumentgliederung anzeigen",
     "linkCopied": "Link in Zwischenablage kopiert",
-    "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}"
+    "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",

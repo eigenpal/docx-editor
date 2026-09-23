@@ -1553,7 +1553,6 @@ function paintFragment(
     element.classList.add('docx-generated-region');
     element.dataset.docxReadOnly = '';
     element.setAttribute('contenteditable', 'false');
-    element.setAttribute('aria-readonly', 'true');
   }
   if (ctx.emptyTocPlaceholderIds?.has(fragment.paragraphId)) {
     element.classList.add('docx-toc-empty-placeholder');

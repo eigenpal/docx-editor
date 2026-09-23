@@ -100,7 +100,8 @@
     "imageWrap": "גלישת טקסט",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -490,7 +491,9 @@
   "editor": {
     "showDocumentOutline": "הצג מתאר מסמך",
     "linkCopied": "הקישור הועתק ללוח",
-    "fontSubstitutionNotice": "חלק מהגופנים במסמך זה אינם זמינים, ולכן מוצגים גופנים חלופיים: {fonts}"
+    "fontSubstitutionNotice": "חלק מהגופנים במסמך זה אינם זמינים, ולכן מוצגים גופנים חלופיים: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "טקסט לתצוגה",

@@ -91,6 +91,7 @@
     "refreshPageNumbers": "Refresh page numbers"
   },
   "formattingBar": {
+    "label": "Formatting controls",
     "groups": {
       "history": "History",
       "zoom": "Zoom",
@@ -646,6 +647,8 @@
     "description": "Description"
   },
   "editor": {
+    "documentContent": "Document content",
+    "documentViewport": "Document pages",
     "showDocumentOutline": "Show document outline",
     "linkCopied": "Link copied to clipboard",
     "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"

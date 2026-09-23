@@ -52,7 +52,7 @@ export const VerticalRuler = defineComponent({
     style: { type: null as unknown as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { t } = useTranslation();
+    const translation = useTranslation();
     const dragging = ref<MarkerType | null>(null);
     const hoveredMarker = ref<MarkerType | null>(null);
     const rulerRef = ref<HTMLDivElement | null>(null);
@@ -104,6 +104,27 @@ export const VerticalRuler = defineComponent({
       const pageHeightTwips = props.pageSetup?.pageHeightTwips ?? DEFAULT_PAGE_HEIGHT_TWIPS;
       const topMarginTwips = props.pageSetup?.marginsTwips.top ?? DEFAULT_MARGIN_TWIPS;
       const bottomMarginTwips = props.pageSetup?.marginsTwips.bottom ?? DEFAULT_MARGIN_TWIPS;
+      const handleKeyDown = (event: KeyboardEvent, marker: MarkerType) => {
+        if (!props.editable || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const current = marker === 'topMargin' ? topMarginTwips : bottomMarginTwips;
+        const other = marker === 'topMargin' ? bottomMarginTwips : topMarginTwips;
+        const maximum = Math.max(0, pageHeightTwips - other - 720);
+        const step = event.shiftKey
+          ? 1
+          : Math.round(props.unit === 'cm' ? TWIPS_PER_CM / 10 : TWIPS_PER_INCH / 8);
+        const next =
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? maximum
+              : Math.max(0, Math.min(maximum, current + (event.key === 'ArrowUp' ? step : -step)));
+        if (next === current) return;
+        (marker === 'topMargin' ? props.onTopMarginChange : props.onBottomMarginChange)?.(next);
+        props.onMarginDragEnd?.();
+      };
+
       const zoom = props.zoom ?? 1;
       const pageHeightPx = twipsToPixels(pageHeightTwips) * zoom;
       const topMarginPx = twipsToPixels(topMarginTwips) * zoom;
@@ -125,9 +146,8 @@ export const VerticalRuler = defineComponent({
           ref={rulerRef}
           class={`docx-vertical-ruler ${props.className ?? ''}`}
           style={rulerStyle}
-          role="slider"
-          aria-label={t('ruler.vertical')}
-          aria-orientation="vertical"
+          role="group"
+          aria-label={translation.t('ruler.vertical')}
         >
           <div
             style={{
@@ -145,6 +165,11 @@ export const VerticalRuler = defineComponent({
           </div>
           <VerticalMarginMarker
             type="topMargin"
+            value={topMarginTwips}
+            maximum={Math.max(0, pageHeightTwips - bottomMarginTwips - 720)}
+            valueText={topMarginTwips / (props.unit === 'cm' ? TWIPS_PER_CM : TWIPS_PER_INCH)}
+            unit={props.unit}
+            onKeydown={(event) => handleKeyDown(event, 'topMargin')}
             position={topMarginPx}
             editable={props.editable ?? false}
             isDragging={dragging.value === 'topMargin'}
@@ -159,6 +184,11 @@ export const VerticalRuler = defineComponent({
           />
           <VerticalMarginMarker
             type="bottomMargin"
+            value={bottomMarginTwips}
+            maximum={Math.max(0, pageHeightTwips - topMarginTwips - 720)}
+            valueText={bottomMarginTwips / (props.unit === 'cm' ? TWIPS_PER_CM : TWIPS_PER_INCH)}
+            unit={props.unit}
+            onKeydown={(event) => handleKeyDown(event, 'bottomMargin')}
             position={pageHeightPx - bottomMarginPx}
             editable={props.editable ?? false}
             isDragging={dragging.value === 'bottomMargin'}
@@ -213,6 +243,11 @@ function VerticalTick(props: { tick: VerticalTickData }): VNode {
 function VerticalMarginMarker(props: {
   type: 'topMargin' | 'bottomMargin';
   position: number;
+  value: number;
+  maximum: number;
+  valueText: number;
+  unit: 'inch' | 'cm';
+  onKeydown: (event: KeyboardEvent) => void;
   editable: boolean;
   isDragging: boolean;
   isHovered: boolean;
@@ -220,7 +255,7 @@ function VerticalMarginMarker(props: {
   onMouseleave: () => void;
   onMousedown: (event: MouseEvent) => void;
 }): VNode {
-  const { t } = useTranslation();
+  const translation = useTranslation();
   const color = props.isDragging
     ? MARKER_ACTIVE_COLOR
     : props.isHovered
@@ -254,8 +289,18 @@ function VerticalMarginMarker(props: {
       onMouseleave={props.onMouseleave}
       onMousedown={props.onMousedown}
       role="slider"
-      aria-label={props.type === 'topMargin' ? t('ruler.topMargin') : t('ruler.bottomMargin')}
+      aria-label={
+        props.type === 'topMargin'
+          ? translation.t('ruler.topMargin')
+          : translation.t('ruler.bottomMargin')
+      }
       aria-orientation="vertical"
+      aria-valuenow={props.value}
+      aria-valuemin={0}
+      aria-valuemax={props.maximum}
+      aria-valuetext={`${props.valueText.toFixed(2)} ${props.unit === 'cm' ? 'cm' : 'in'}`}
+      aria-disabled={!props.editable}
+      onKeydown={props.onKeydown}
       tabindex={props.editable ? 0 : -1}
     >
       <div style={triangleStyle} />

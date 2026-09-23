@@ -52,3 +52,14 @@ test('focusing an already focused editor does not move the composing caret', () 
   expect(semanticSelectionFromDom(pages, native)).toEqual(before);
   expect(text.textContent).toBe('hello中 world');
 });
+
+test('document content has a localized name without replacing the editing surface', () => {
+  const { surface, pages } = mount();
+  expect(pages.getAttribute('aria-label')).toBe('Document content');
+  surface.setTranslate((key) => (key === 'editor.documentContent' ? 'Treść dokumentu' : key));
+  expect(pages.getAttribute('aria-label')).toBe('Treść dokumentu');
+  expect(container!.querySelector('.docx-pages')).toBe(pages);
+  expect(document.activeElement).toBe(pages);
+  surface.setTranslate(undefined);
+  expect(pages.getAttribute('aria-label')).toBe('Document content');
+});

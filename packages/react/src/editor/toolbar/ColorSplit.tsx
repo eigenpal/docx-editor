@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The split colour controls: font colour and text highlight.
@@ -396,6 +397,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
     const [open, setOpen] = useState(false);
     const [lastValue, setLastValue] = useState(defaultValue);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open, () => setOpen(false));
 
     // The live value at the selection, so the popup marks the current swatch. Hex
     // colours come back as `{ kind: 'hex', value }`; highlights as their name.
@@ -432,6 +434,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
       (value: string) => {
         setOpen(false);
         if (!editor) return;
+        editor.focus();
         const command = commandForSlotValue(slot, value);
         if (!command) return;
         if (editor.can(command).ok) {
@@ -474,7 +477,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
           className="docx-toolbar__colorsplit-caret"
           disabled={!isEnabled}
           {...(!isEnabled ? { 'data-disabled': '' } : {})}
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-expanded={open}
           aria-label={text}
           title={disabledReason ?? text}

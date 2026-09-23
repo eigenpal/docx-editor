@@ -1,3 +1,5 @@
+import { useDocxEditor } from '../context';
+import { usePickerKeyboard } from './usePickerKeyboard';
 import {
   computed,
   defineComponent,
@@ -81,7 +83,7 @@ const ParagraphStyleTrigger = defineComponent({
         ...(!context.isEnabled.value ? { 'data-disabled': '' } : {}),
         'aria-haspopup': 'listbox' as const,
         'aria-expanded': context.open.value,
-        'aria-label': text,
+
         title: text,
       };
       const current = context.options.value.find(
@@ -111,10 +113,13 @@ const ParagraphStyleContent = defineComponent({
   },
   setup(props, { slots }) {
     const context = useParagraphStyleContext();
+    const label = useToolbarLabel();
     return () => {
       if (!context || !context.open.value) return null;
       const shared = {
         role: 'listbox' as const,
+        tabindex: 0,
+        'aria-label': label('styles.selectAriaLabel'),
         // Anchoring, layering and colors all come from the core stylesheet — the popup
         // must sit in the overlay band, above ambient chrome like the navigation panel.
         class: `docx-toolbar__menu docx-toolbar__style-content${props.className ? ` ${props.className}` : ''}`,
@@ -139,18 +144,21 @@ const ParagraphStyleItem = defineComponent({
   },
   setup(props, { slots }) {
     const context = useParagraphStyleContext();
+    const editor = useDocxEditor();
     return () => {
       if (!context) return null;
       const selected = context.value.value === props.value;
       const option = context.options.value.find((entry) => entry.styleId === props.value);
       const shared = {
         role: 'option' as const,
+        tabindex: -1,
         'aria-selected': selected,
         ...(selected ? { 'data-selected': '' } : {}),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           context.setValue(props.value);
           context.setOpen(false);
+          editor.value?.focus();
         },
         class: `docx-toolbar__style-item${props.className ? ` ${props.className}` : ''}`,
       };
@@ -194,6 +202,7 @@ const ParagraphStyleRoot = defineComponent({
     const state = useParagraphStyle();
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;

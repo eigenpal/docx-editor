@@ -1,3 +1,4 @@
+import { en } from '@docx-editor.dev/i18n';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
@@ -443,6 +444,10 @@ export function mountPaginatedSurface(
   pagesLayer.spellcheck = false;
   pagesLayer.setAttribute('role', 'textbox');
   pagesLayer.setAttribute('aria-multiline', 'true');
+  pagesLayer.setAttribute(
+    'aria-label',
+    options.translate?.('editor.documentContent') ?? en.editor.documentContent
+  );
   pagesLayer.style.outline = 'none';
 
   // The one highlight the browser cannot draw. A SIBLING of the pages, never a child: the
@@ -5259,6 +5264,10 @@ export function mountPaginatedSurface(
     setTranslate: (next) => {
       if (translate === next) return;
       translate = next;
+      pagesLayer.setAttribute(
+        'aria-label',
+        next?.('editor.documentContent') ?? en.editor.documentContent
+      );
       textFormInteraction?.update();
     },
     setTocLabels: (labels) => {

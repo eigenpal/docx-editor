@@ -100,7 +100,8 @@
     "imageWrap": "पाठ रैप करें",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -493,7 +494,9 @@
   "editor": {
     "showDocumentOutline": "दस्तावेज़ की रूपरेखा दिखाएं",
     "linkCopied": "लिंक क्लिपबोर्ड पर कॉपी किया गया",
-    "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}"
+    "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "दिखाया जाने वाला टेक्स्ट",

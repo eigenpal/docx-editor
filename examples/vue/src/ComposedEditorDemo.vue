@@ -40,7 +40,7 @@
       <div class="demo-main">
         <DocxEditorNavigation :pane-width="280" />
         <DocxEditorViewport class="demo-viewport">
-          <div class="demo-vruler" aria-hidden="true">
+          <div class="demo-vruler">
             <DocxEditorVerticalRuler />
           </div>
           <DocxEditorHeaderFooterChrome />

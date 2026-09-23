@@ -100,7 +100,8 @@
     "imageWrap": "Zawijaj tekst",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -490,7 +491,9 @@
   "editor": {
     "showDocumentOutline": "Pokaż konspekt dokumentu",
     "linkCopied": "Skopiowano link do schowka",
-    "fontSubstitutionNotice": "Niektóre czcionki w tym dokumencie są niedostępne, dlatego wyświetlane są czcionki zastępcze: {fonts}"
+    "fontSubstitutionNotice": "Niektóre czcionki w tym dokumencie są niedostępne, dlatego wyświetlane są czcionki zastępcze: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Tekst wyświetlany",

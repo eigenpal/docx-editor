@@ -100,7 +100,8 @@
     "imageWrap": "Bungkus teks",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
@@ -543,7 +544,9 @@
   "editor": {
     "showDocumentOutline": "Tampilkan Kerangka Dokumen",
     "linkCopied": "Tautan disalin ke papan klip",
-    "fontSubstitutionNotice": "Beberapa font dalam dokumen ini tidak tersedia, jadi font pengganti ditampilkan: {fonts}"
+    "fontSubstitutionNotice": "Beberapa font dalam dokumen ini tidak tersedia, jadi font pengganti ditampilkan: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Teks yang ditampilkan",

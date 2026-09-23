@@ -389,6 +389,8 @@ The parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and 
 
 `DocxEditor.HorizontalRuler` and `DocxEditor.VerticalRuler` read page setup and zoom from the snapshot. They update after section and zoom changes. A margin drag shows a preview and commits one transaction on release. The transaction creates one undo entry. The handles do not operate in view mode.
 
+Use Tab to focus a vertical ruler margin handle. Arrow Up increases the margin; Arrow Down decreases it. Hold Shift to change one twip. Home and End select the permitted limits. Each change creates one undo entry.
+
 ```tsx
 <DocxEditor.Root document={bytes}>
   <DocxEditor.HorizontalRuler />

@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // The scroll container around the painted pages.
 //
@@ -38,6 +39,7 @@ export interface DocxEditorViewportProps {
  * @public
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
+  const { t } = useTranslation();
   const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
@@ -92,6 +94,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     <div
       ref={attach}
       data-testid="docx-editor-scroll"
+      tabIndex={0}
+      role="region"
+      aria-label={t('editor.documentViewport')}
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
       {...(fitting ? { 'data-zoom-fit': '' } : {})}

@@ -100,7 +100,8 @@
     "imageWrap": "Metni kaydır",
     "formatPainter": null,
     "formatPainterShortcut": null,
-    "paragraphMarks": null
+    "paragraphMarks": null,
+    "label": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -493,7 +494,9 @@
   "editor": {
     "showDocumentOutline": "Belge ana hattını göster",
     "linkCopied": "Bağlantı panoya kopyalandı",
-    "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}"
+    "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}",
+    "documentContent": null,
+    "documentViewport": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",

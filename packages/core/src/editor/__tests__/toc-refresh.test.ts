@@ -88,7 +88,7 @@ describe('TOC refresh editor lane', () => {
       .find((element) => element.textContent?.includes('Introduction'))
       ?.closest<HTMLElement>('.docx-paragraph-fragment');
     expect(row?.getAttribute('contenteditable')).toBe('false');
-    expect(row?.getAttribute('aria-readonly')).toBe('true');
+    expect(row?.getAttribute('aria-readonly')).toBeNull();
 
     // Convergence had no digit to move — the heading is on page 1 either way — and a pass that
     // writes nothing is not a document change, so the insertion is a single undo step. The
@@ -152,7 +152,7 @@ describe('TOC refresh editor lane', () => {
     );
     const rowFragment = row!.closest<HTMLElement>('.docx-paragraph-fragment')!;
     expect(rowFragment.getAttribute('contenteditable')).toBe('false');
-    expect(rowFragment.getAttribute('aria-readonly')).toBe('true');
+    expect(rowFragment.getAttribute('aria-readonly')).toBeNull();
     const rowParagraphId = rowFragment.dataset.paragraphId!;
     editor.surface!.setSelection({
       anchor: { paragraphId: rowParagraphId, offset: 0 },
@@ -302,7 +302,7 @@ describe('TOC refresh editor lane', () => {
     const placeholder = placeholders[0]!;
     expect(placeholder.classList.contains('docx-toc-empty-placeholder')).toBe(true);
     expect(placeholder.getAttribute('contenteditable')).toBe('false');
-    expect(placeholder.getAttribute('aria-readonly')).toBe('true');
+    expect(placeholder.getAttribute('aria-readonly')).toBeNull();
     expect(placeholder.dataset.paragraphId).toBeTruthy();
     // Furniture is empty — no prompt text baked into the document or the painted node text.
     expect(placeholder.textContent?.trim() ?? '').toBe('');

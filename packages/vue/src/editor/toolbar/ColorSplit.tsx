@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import { computed, defineComponent, ref, watch, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
@@ -371,6 +372,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
       const open = ref(false);
       const lastValue = ref(defaultValue);
       const rootRef = ref<HTMLDivElement | null>(null);
+      usePickerKeyboard(rootRef, open);
 
       const current = useEditorState((snapshot: EditorSnapshot) => {
         if (isFontColor) {
@@ -402,6 +404,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
         open.value = false;
         const editor = editorRef.value;
         if (!editor) return;
+        editor.focus();
         const cmd = commandForSlotValue(slot, value);
         if (!cmd) return;
         if (editor.can(cmd).ok) {
@@ -442,7 +445,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
               class="docx-toolbar__colorsplit-caret"
               disabled={!command.isEnabled.value}
               {...(!command.isEnabled.value ? { 'data-disabled': '' } : {})}
-              aria-haspopup="true"
+              aria-haspopup="dialog"
               aria-expanded={open.value}
               aria-label={text}
               title={command.disabledReason.value ?? text}

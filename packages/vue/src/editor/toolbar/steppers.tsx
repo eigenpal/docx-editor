@@ -1,4 +1,5 @@
-import { defineComponent, ref, watch } from 'vue';
+import { usePickerKeyboard } from './usePickerKeyboard';
+import { defineComponent, ref, useId, watch } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   AUTO_ZOOM_MODE,
@@ -107,7 +108,9 @@ export const ToolbarFontSize = defineComponent({
     const open = ref(false);
     const draft = ref<string | null>(null);
     const rootRef = ref<HTMLSpanElement | null>(null);
+    usePickerKeyboard(rootRef, open);
     const inputRef = ref<HTMLInputElement | null>(null);
+    const listId = useId();
 
     const applyHalfPoints = (halfPoints: number) => {
       const editor = editorRef.value;
@@ -185,6 +188,7 @@ export const ToolbarFontSize = defineComponent({
               aria-expanded={open.value}
               aria-haspopup="listbox"
               aria-label={label('fontSize.label')}
+              aria-controls={open.value ? listId : undefined}
               autocomplete="off"
               onInput={(event: Event) => {
                 draft.value = (event.target as HTMLInputElement).value;
@@ -227,7 +231,9 @@ export const ToolbarFontSize = defineComponent({
             <div
               class="docx-toolbar__menu docx-toolbar__font-size-menu"
               role="listbox"
+              tabindex={0}
               aria-label={label('fontSize.listLabel')}
+              id={listId}
             >
               {FONT_SIZE_PRESETS_PT.map((preset) => {
                 const selected = selectedPreset === preset;
@@ -236,6 +242,7 @@ export const ToolbarFontSize = defineComponent({
                     key={preset}
                     type="button"
                     role="option"
+                    tabindex={-1}
                     aria-selected={selected}
                     {...(selected ? { 'data-selected': '' } : {})}
                     class="docx-toolbar__menu-item"
@@ -272,6 +279,7 @@ export const ToolbarZoom = defineComponent({
     const label = useToolbarLabel();
     const open = ref(false);
     const rootRef = ref<HTMLSpanElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
@@ -308,7 +316,7 @@ export const ToolbarZoom = defineComponent({
               disabled={!editorRef.value}
               aria-haspopup="listbox"
               aria-expanded={open.value}
-              aria-label={label('zoom.zoomLevel')}
+              aria-label={`${label('zoom.zoomLevel')}: ${display}`}
               onMousedown={guardToolbarMousedown}
               onClick={() => {
                 open.value = !open.value;
@@ -324,16 +332,19 @@ export const ToolbarZoom = defineComponent({
             <div
               class="docx-toolbar__menu docx-toolbar__zoom-menu"
               role="listbox"
+              tabindex={0}
               aria-label={label('zoom.zoomLevel')}
             >
               <button
                 type="button"
                 role="option"
+                tabindex={-1}
                 aria-selected={autoSelected}
                 {...(autoSelected ? { 'data-selected': '' } : {})}
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
                 onClick={() => {
+                  rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                   open.value = false;
                   zoomState.setMode('auto');
                 }}
@@ -343,11 +354,13 @@ export const ToolbarZoom = defineComponent({
               <button
                 type="button"
                 role="option"
+                tabindex={-1}
                 aria-selected={fitWidthSelected}
                 {...(fitWidthSelected ? { 'data-selected': '' } : {})}
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
                 onClick={() => {
+                  rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                   open.value = false;
                   zoomState.setMode(FIT_WIDTH_ZOOM_MODE);
                 }}
@@ -363,11 +376,13 @@ export const ToolbarZoom = defineComponent({
                     key={level}
                     type="button"
                     role="option"
+                    tabindex={-1}
                     aria-selected={selected}
                     {...(selected ? { 'data-selected': '' } : {})}
                     class="docx-toolbar__menu-item"
                     onMousedown={guardToolbarMousedown}
                     onClick={() => {
+                      rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                       open.value = false;
                       zoomState.setZoom(level);
                     }}

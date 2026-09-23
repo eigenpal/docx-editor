@@ -308,10 +308,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {chrome ? <DocxEditorNotesChrome /> : null}
         <DocxEditorContent />
         {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
-          twin it belongs inside the scroller. aria-hidden: it carries no
-          operable handles, unlike the horizontal one's indent sliders. */}
+          twin it belongs inside the scroller. Its margin handles remain accessible. */}
         {rulers && chrome ? (
-          <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
+          <div style={VERTICAL_RULER_STYLE}>
             <DocxEditorVerticalRuler />
           </div>
         ) : null}

@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import { useDocxEditor } from '../context';
 import {
   computed,
@@ -86,7 +87,7 @@ const FontFamilyTrigger = defineComponent({
         ...(!context.isEnabled.value ? { 'data-disabled': '' } : {}),
         'aria-haspopup': 'listbox' as const,
         'aria-expanded': context.open.value,
-        'aria-label': text,
+        'aria-label': slots.default ? undefined : `${text}: ${context.value.value ?? '—'}`,
         title: text,
       };
       const display = slots.default?.() ?? [<span>{context.value.value ?? '—'}</span>];
@@ -121,6 +122,8 @@ const FontFamilyContent = defineComponent({
       if (!context || !context.open.value) return null;
       const shared = {
         role: 'listbox' as const,
+        tabindex: 0,
+        'aria-label': label('font.selectAriaLabel'),
         // Anchoring, layering and colors all come from the core stylesheet — the popup
         // must sit in the overlay band, above ambient chrome like the navigation panel.
         class: `docx-toolbar__menu docx-toolbar__font-family-content${props.className ? ` ${props.className}` : ''}`,
@@ -140,7 +143,7 @@ const FontFamilyContent = defineComponent({
         items = grouped.flatMap((group, index) => {
           const nodes: VNode[] = [];
           if (index > 0) {
-            nodes.push(<div class="docx-toolbar__menu-separator" role="separator" />);
+            nodes.push(<div class="docx-toolbar__menu-separator" aria-hidden="true" />);
           }
           if (group.labelKey) {
             nodes.push(<div class="docx-toolbar__menu-label">{label(group.labelKey)}</div>);
@@ -165,7 +168,12 @@ const FontFamilyContent = defineComponent({
               query.value = (event.target as HTMLInputElement).value;
             }}
           />
-          <div role="listbox" class="docx-toolbar__font-options">
+          <div
+            role="listbox"
+            tabindex={0}
+            aria-label={label('font.selectAriaLabel')}
+            class="docx-toolbar__font-options"
+          >
             {items}
           </div>
         </div>
@@ -189,6 +197,7 @@ const FontFamilyItem = defineComponent({
       const selected = context.value.value === props.value;
       const shared = {
         role: 'option' as const,
+        tabindex: -1,
         'aria-selected': selected,
         ...(selected ? { 'data-selected': '' } : {}),
         onMousedown: guardToolbarMousedown,
@@ -237,6 +246,7 @@ const FontFamilyRoot = defineComponent({
     const state = useFontFamily();
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
