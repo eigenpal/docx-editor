@@ -429,3 +429,10 @@ export type {
   ClearRefreshHighlightsOptions,
   NavigateToChangeOptions,
 } from './document-refresh.ts';
+
+export { runChromeExport, ChromeExportError } from './chrome-export.ts';
+export type {
+  ChromeExportFormat,
+  ChromeExportHandlers,
+  ChromeExportResult,
+} from './chrome-export.ts';

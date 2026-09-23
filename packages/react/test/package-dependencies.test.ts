@@ -22,6 +22,7 @@ import { join } from 'node:path';
 
 const manifest = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
@@ -66,4 +67,12 @@ describe('how this package asks for the engine', () => {
   test('does not install engine implementation dependencies', () => {
     expect(manifest.dependencies?.['emf-converter']).toBeUndefined();
   });
+});
+
+test('export converters require an explicit application installation', () => {
+  for (const name of ['@docx-editor.dev/docx-to-markdown', '@docx-editor.dev/docx-to-pdf']) {
+    expect(manifest.dependencies?.[name]).toBeUndefined();
+    expect(manifest.optionalDependencies?.[name]).toBeUndefined();
+    expect(manifest.peerDependencies?.[name]).toBeUndefined();
+  }
 });

@@ -63,3 +63,13 @@ export function focusEdge(items: readonly HTMLElement[], edge: 'first' | 'last')
   target.focus();
   return true;
 }
+
+/** Give the export dialog a stable menu trigger to restore focus to. */
+export function restoreExportFocus(root: HTMLElement | null): void {
+  const focused = root?.ownerDocument.activeElement;
+  const menu = focused && root?.contains(focused) ? focused.closest('[data-menu]') : null;
+  const trigger =
+    menu?.querySelector<HTMLElement>(':scope > [role="menuitem"]') ??
+    root?.querySelector<HTMLElement>('.docx-menubar__trigger[aria-expanded="true"]');
+  trigger?.focus({ preventScroll: true });
+}

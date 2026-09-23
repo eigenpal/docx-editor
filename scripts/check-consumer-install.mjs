@@ -159,6 +159,16 @@ function packPackage(packagePath) {
   return path.join(packDir, packed.filename);
 }
 
+function assertNoConverters(appDir) {
+  const lock = JSON.parse(readFileSync(path.join(appDir, 'package-lock.json'), 'utf8'));
+  const installed = Object.keys(lock.packages ?? {}).filter((name) =>
+    /node_modules\/@docx-editor\.dev\/docx-to-(markdown|pdf)$/.test(name)
+  );
+  if (installed.length)
+    throw new Error(`Editor installation includes converters: ${installed.join(', ')}`);
+  console.log('Editor installation contains no Markdown or PDF converter.');
+}
+
 try {
   if (process.env.SKIP_CONSUMER_INSTALL_BUILD !== '1') {
     run('bun', ['run', 'build'], {
@@ -168,16 +178,13 @@ try {
 
   mkdirSync(packDir, { recursive: true });
 
-  // Every published package, including the ones the app below only imports for their
-  // types: an unpublished version of any of them turns into a registry lookup during
-  // install, and the registry has nothing to give.
+  // Install the editors without converters. Conversion packages require a separate opt-in.
   const tarballs = [
     packPackage('packages/i18n'),
     packPackage('packages/core'),
     packPackage('packages/react'),
     packPackage('packages/vue'),
     packPackage('packages/fonts'),
-    packPackage('packages/docx-to-markdown'),
     packPackage('packages/editor-api'),
     packPackage('packages/pro'),
   ];
@@ -289,9 +296,13 @@ export default defineConfig({ plugins: [react()] });
     ],
     { cwd: reactAppDir }
   );
+  assertNoConverters(reactAppDir);
   run('npm', ['run', 'build'], { cwd: reactAppDir });
-  // The Markdown package is deliberately server-only. Exercise a shaped conversion through
-  // both installed runtime entries so missing fonts, WASM, assets, or CJS interop fail here.
+  // Install Markdown only after the editor builds without either converter.
+  run('npm', ['install', '--ignore-scripts', packPackage('packages/docx-to-markdown')], {
+    cwd: reactAppDir,
+  });
+  // Exercise both installed runtime entries and their conversion assets.
   run(
     'node',
     [
@@ -422,6 +433,7 @@ createApp({ render: () => h(DocxEditor) }).mount('#app');
     ],
     { cwd: vueAppDir }
   );
+  assertNoConverters(vueAppDir);
   run('npm', ['run', 'build'], { cwd: vueAppDir });
   console.log('Fresh Vue consumer install/build passed.');
 } finally {

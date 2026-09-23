@@ -48,7 +48,8 @@ export type FeatureCategory =
   | 'review'
   | 'fields'
   | 'structure'
-  | 'collaboration';
+  | 'collaboration'
+  | 'export';
 
 export interface WordFeature {
   /** Stable key, e.g. 'images.wmf'. Never rename; gating may reference it. */
@@ -65,6 +66,7 @@ export interface WordFeature {
 }
 
 export const FEATURE_CATEGORY_LABELS: Record<FeatureCategory, string> = {
+  export: 'Export',
   text: 'Text & formatting',
   paragraphs: 'Paragraphs & styles',
   lists: 'Lists & numbering',
@@ -78,6 +80,30 @@ export const FEATURE_CATEGORY_LABELS: Record<FeatureCategory, string> = {
 };
 
 export const wordFeatures: WordFeature[] = [
+  {
+    id: 'export.markdown',
+    name: 'Markdown export',
+    category: 'export',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'none',
+    tier: 'community',
+    notes:
+      'File > Export downloads continuous Markdown through docx-to-markdown. Configure menu.exporters.markdown. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Export preserves the source document.',
+    docsLink: '/docs/2.x/guides/export',
+  },
+  {
+    id: 'export.pdf',
+    name: 'PDF export',
+    category: 'export',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'none',
+    tier: 'premium',
+    notes:
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License.',
+    docsLink: '/docs/2.x/guides/export',
+  },
   // --- Text & formatting -----------------------------------------------
   {
     id: 'text.basic-formatting',
@@ -627,7 +653,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. The private PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
   },
   {
     id: 'images.effects',

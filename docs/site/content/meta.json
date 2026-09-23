@@ -82,6 +82,7 @@
     "core/index",
     "core/architecture",
     "i18n/index",
-    "i18n/contributing"
+    "i18n/contributing",
+    "guides/export"
   ]
 }

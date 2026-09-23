@@ -501,3 +501,10 @@ export type {
   ClearRefreshHighlightsOptions,
   NavigateToChangeOptions,
 } from '@docx-editor.dev/core/editor';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorExportDialog,
+  type DocxEditorExportDialogProps,
+} from './editor/DocxEditorExportDialog';

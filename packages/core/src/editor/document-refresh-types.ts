@@ -91,7 +91,7 @@ export interface DocumentRefreshState {
     | 'failed';
   readonly result: RefreshResult | null;
   readonly changes: readonly RefreshChange[];
-  /** Whether highlights are requested for available locations. False when any exit fade starts. */
+  /** Whether highlights are requested for available locations. False when the whole set starts dismissal. */
   readonly highlightsVisible: boolean;
   /** Offer restore and download controls when true. */
   readonly recoveryAvailable: boolean;

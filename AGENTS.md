@@ -56,6 +56,8 @@ One engine. Thin chrome on top.
 | `i18n` | Shared strings | published |
 | `editor-api` | `DocxEditor` automation object model, headless/server | published, Pro license |
 | `pro` | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s | published, Pro license |
+| `docx-to-markdown` | DOCX to Markdown conversion with pages and media | published |
+| `docx-to-pdf` | DOCX to PDF conversion on Node.js | release-enabled, EigenPal Pro License |
 | `fonts` | Metric-compatible substitutes for Word's defaults | published |
 | `vue` | The Vue 3 adapter twin, parity-gated against `react` | published |
 | `nuxt` | Nuxt module over the Vue adapter | WIP, private |

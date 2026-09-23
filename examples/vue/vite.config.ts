@@ -1,3 +1,4 @@
+import { pdfExportPlugin } from '../shared/pdf-export-plugin';
 import { defineConfig, type Plugin } from 'vite';
 import { readFile } from 'node:fs/promises';
 import vue from '@vitejs/plugin-vue';
@@ -60,7 +61,7 @@ const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
-  plugins: [vue(), vueJsx(), canonicalFixturePlugin()],
+  plugins: [vue(), vueJsx(), canonicalFixturePlugin(), pdfExportPlugin()],
   define: {
     __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'),
   },
@@ -78,6 +79,14 @@ export default defineConfig({
           },
         ]
       : [
+          {
+            find: /^@docx-editor\.dev\/docx-to-markdown$/,
+            replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/src/index.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core$/,
+            replacement: path.join(monorepoRoot, 'packages/core/src/index.ts'),
+          },
           {
             find: '@docx-editor.dev/vue/styles.css',
             replacement: path.join(monorepoRoot, 'packages/vue/src/styles/editor.css'),
@@ -104,7 +113,7 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/core/src/collaboration/replication.ts'),
           },
           {
-            find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|layout|output|store|sync|clients|server)$/,
+            find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|export|layout|output|store|sync|clients|server)$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
           },
           {

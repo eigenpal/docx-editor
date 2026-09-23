@@ -63,7 +63,20 @@
     "tableOfContents": "Table of contents",
     "watermark": "Watermark",
     "help": "Help",
-    "reportIssue": "Report issue"
+    "reportIssue": "Report issue",
+    "export": "Export",
+    "exportMarkdown": "Markdown (.md)",
+    "exportPdf": "PDF (.pdf)",
+    "exportFailed": "Export failed: {message}",
+    "exportMarkdownMissing": "Install @docx-editor.dev/docx-to-markdown and configure menu.exporters.markdown.",
+    "exportPdfMissing": "Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
+    "exportPdfServerUnavailable": "PDF export is unavailable. Configure a Node.js server with @docx-editor.dev/docx-to-pdf.",
+    "exportingMarkdown": "Exporting Markdown…",
+    "exportingPdf": "Exporting PDF…",
+    "exportMarkdownFailed": "Markdown export failed",
+    "exportPdfFailed": "PDF export failed",
+    "exportDownloadHint": "Your download starts when the file is ready. You can continue editing while the export runs.",
+    "exportContinueEditing": "Continue editing"
   },
   "toc": {
     "refresh": "Refresh table of contents",

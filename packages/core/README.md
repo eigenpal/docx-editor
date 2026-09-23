@@ -13,7 +13,7 @@
 
 # @docx-editor.dev/core
 
-The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. No framework dependency and no UI.
+Use the [docx-editor.dev](https://docx-editor.dev) engine to read, edit, render, and save DOCX files. The engine stores document content in a canonical tree. It has no framework dependency.
 
 Install this package alongside the React or Vue adapter. Both adapters require it as a peer dependency. You can also use its public contracts to build your own adapter.
 
@@ -32,9 +32,9 @@ import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-The root covers most uses: creating an editor, the `Editor` contract it implements, fonts, the chrome registry, and the document model types. Subpaths expose the canonical tree, the layout pass, and the paint step directly.
+The root exports editor creation, contracts, font helpers, control definitions, and document types. Use subpaths to access storage, layout, and rendering.
 
-| Subpath | What's there |
+| Subpath | Exports |
 | --- | --- |
 | `.` | Create an editor, the contract, fonts, the chrome registry, the document model. |
 | `./editor` | Everything the root re-exports, plus the paginated surface and ruler geometry. |
@@ -56,9 +56,9 @@ The root covers most uses: creating an editor, the `Editor` contract it implemen
 
 The engine reads DOCX bytes into a canonical OOXML tree. Layout reads the tree and produces painted pages. Saving serializes the tree back into a DOCX package.
 
-There is one document model. The painted pages are the editable surface: they are `contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed as tree operations, so the browser never invents markup inside your document.
+The document tree holds all editing state. The engine displays editable pages and converts browser input into tree operations.
 
-Nodes are typed where layout needs them and generic everywhere else, preserving the element structure. Content the engine does not model is carried rather than dropped, so a document full of unknown extensions still opens, edits, and saves.
+Typed nodes supply layout properties. Generic nodes preserve other element structures, including unsupported extensions.
 
 Export sessions default to `all-markup`, which shows inserted and deleted text. Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
 

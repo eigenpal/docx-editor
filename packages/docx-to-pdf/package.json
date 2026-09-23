@@ -1,8 +1,8 @@
 {
   "name": "@docx-editor.dev/docx-to-pdf",
   "version": "2.21.0",
-  "private": true,
-  "description": "Server-first DOCX to PDF conversion powered by the shared docx-editor.dev semantic layout engine.",
+  "private": false,
+  "description": "Convert DOCX to PDF on Node.js with searchable text, embedded fonts, and comments.",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -74,5 +74,8 @@
     "type": "git",
     "url": "https://github.com/eigenpal/docx-editor.git",
     "directory": "packages/docx-to-pdf"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

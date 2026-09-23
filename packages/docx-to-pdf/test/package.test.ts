@@ -9,9 +9,10 @@ import { readFileSync } from 'node:fs';
 import { PDFDocument } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
 
-test('package stays private and the encoder does not reshape text', () => {
+test('package supports public releases and the encoder does not reshape text', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  expect(pkg.private).toBe(true);
+  expect(pkg.private).toBe(false);
+  expect(pkg.publishConfig.access).toBe('public');
   expect(pkg.peerDependencies['@docx-editor.dev/core']).toBeDefined();
   expect(pkg.dependencies['@docx-editor.dev/core']).toBeUndefined();
   const source = ['fonts.ts', 'text.ts', 'paint.ts']

@@ -6,7 +6,15 @@ category: Export formats
 
 `@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF using Core's pagination, font resolution, and positioned glyphs. It runs on Node.js. Browser applications send documents to a server for conversion.
 
-The package is private and is not available from the public npm registry. It is distributed under the EigenPal Pro License. Production use requires a commercial agreement.
+The package uses the EigenPal Pro License. Production use requires a commercial agreement.
+
+## Install the package
+
+Use Node.js `^20.16.0 || >=22.3.0`. Install the converter and its required engine peer:
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
 
 ## Convert a document
 
@@ -64,3 +72,7 @@ For supported fonts, resource limits, and error handling, see the [package docum
 Run `bun run dev:pdf` from the repository root and open <http://127.0.0.1:5180>. Edit the sample or select **Open DOCX**, then select **Generate PDF**. The preview appears beside the editor. Use **Download PDF** to save the result.
 
 After editing the document, select **Regenerate PDF** to update the preview. The demo runs conversions on request and does not retain uploaded documents or generated PDFs.
+
+## Export from the editor
+
+For File menu setup in React and Vue, see [Export Markdown and PDF](/docs/2.x/guides/export).

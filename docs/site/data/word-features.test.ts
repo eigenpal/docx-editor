@@ -90,7 +90,7 @@ describe('word-features — images lane honesty', () => {
 
 describe('word-features — lossless round-trip contract', () => {
   test('every tracked construct is full or preserved on round-trip', () => {
-    for (const row of wordFeatures) {
+    for (const row of wordFeatures.filter((item) => item.category !== 'export')) {
       expect(['full', 'preserved']).toContain(row.roundTrip);
     }
   });
@@ -109,4 +109,14 @@ describe('word-features — lossless round-trip contract', () => {
     }
     expect(feature('images.adjustments').roundTrip).toBe('full');
   });
+});
+
+test('export formats declare conversion limits without claiming round-trip support', () => {
+  for (const id of ['export.markdown', 'export.pdf']) {
+    const row = feature(id);
+    expect(row.category).toBe('export');
+    expect(row.rendering).toBe('partial');
+    expect(row.roundTrip).toBe('none');
+    expect(row.notes).toContain('Missing handlers');
+  }
 });

@@ -86,6 +86,8 @@ jobs:
             command: bun run test
           - label: parity
             command: bun run check:parity
+          - label: documentation
+            command: bun run check:docs
           - label: license headers
             command: bun run check:license-headers
           - label: i18n
@@ -160,20 +162,15 @@ jobs:
         env:
           SKIP_CONSUMER_INSTALL_BUILD: '1'
 
-      # Emit `packages/<pkg>/THIRD_PARTY_NOTICES.md` from the build that is about
-      # to be packed. The published bundles inline third-party source (the
-      # private core package drags fast-xml-parser, fflate and prosemirror-* in
-      # with it), and MIT/Apache-2.0 both require the copyright and permission
-      # notice to travel with the copy — minified `dist/` carries neither.
-      #
-      # Must sit AFTER the last build step: the generator reads
-      # `dist/metafile-*.json`. The files it writes are gitignored, so they
-      # exist only inside this workflow run and reach `changeset publish`
-      # through the artifact below and each package's `files` list. The step
-      # hard-fails on a bundled dependency with no license text, which aborts
-      # the run before anything reaches npm.
+      # Generate notices from the final build before packing release artifacts.
       - name: Generate third-party notices
         run: bun run notices:generate
+
+      - name: Check published package artifacts
+        run: bun run check:package-artifacts
+
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
 
       - name: Check collaboration release decisions
         run: bun run collaboration:check --release

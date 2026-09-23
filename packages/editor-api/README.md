@@ -14,7 +14,7 @@
 
 # @docx-editor.dev/editor-api
 
-`@docx-editor.dev/editor-api` edits DOCX files through a supported subset of Word's JavaScript object model, including paragraphs, ranges, comments, and revisions. Use `load()` to queue reads and `sync()` to apply each batch atomically.
+Edit DOCX files through a supported subset of Word's JavaScript object model. The API includes paragraphs, ranges, comments, and revisions. Use `load()` to queue reads and `sync()` to apply each batch atomically.
 
 Run the API on a server over DOCX bytes or in the browser against an open editor. See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for supported members and differences from Word.
 
@@ -71,7 +71,7 @@ try {
 }
 ```
 
-`createServer` finishes its bounded parse before its promise resolves and does not retain the input `Uint8Array`; you may reuse or transfer that buffer afterward. Every `save()` returns a fresh, caller-owned `Uint8Array`, so transferring or mutating one result does not affect the runtime or a later save. Detached edits remain detached until your application explicitly loads the returned bytes into a live editor.
+`createServer` parses the document before resolving and does not retain the input buffer. You can then reuse or transfer that buffer. Each `save()` returns an independent `Uint8Array`. Load the saved bytes into a live editor to display server edits.
 
 ## Create tracked changes on a server
 

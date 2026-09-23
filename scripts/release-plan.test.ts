@@ -56,6 +56,8 @@ test('releases public packages without versioning private workspaces', async () 
     }
   }
 
+  expect(publicPackages).toContain('@docx-editor.dev/docx-to-pdf');
+  expect(config.ignore).not.toContain('@docx-editor.dev/docx-to-pdf');
   expect(config.fixed.flat().sort()).toEqual(publicPackages.sort());
   expect(config.privatePackages.tag).toBe(false);
   writeFileSync(

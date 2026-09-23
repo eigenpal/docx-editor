@@ -208,6 +208,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorExportDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["inheritAttrs", "name", "onClose", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": ["close"]
+    },
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "name", "props", "role"],

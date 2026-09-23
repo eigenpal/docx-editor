@@ -1,5 +1,5 @@
 import { definePopup } from '../src/editor/popup-renderer';
-import { defineComponent } from 'vue';
+import { defineComponent, type PropType } from 'vue';
 import type { DocxEditorPopups } from '../src/editor/popup-config';
 const Compatible = defineComponent({ props: { open: { type: Boolean, required: true } } });
 const Incompatible = defineComponent({
@@ -71,4 +71,23 @@ const NoProps = defineComponent({ render: () => null });
 export const noProps: DocxEditorPopups = {
   equation: definePopup(NoProps),
   pageSetup: definePopup(NoProps),
+};
+
+import { DocxEditorExportDialog } from '../src/editor/DocxEditorExportDialog';
+const WrongExportPending = defineComponent({
+  props: { pending: { type: String, required: true } },
+});
+const NarrowExportFormat = defineComponent({
+  props: { format: { type: String as PropType<'pdf'>, required: true } },
+});
+export const exportPopup: DocxEditorPopups = {
+  export: definePopup(DocxEditorExportDialog),
+};
+export const wrongExportPending: DocxEditorPopups = {
+  // @ts-expect-error Export progress uses a boolean.
+  export: definePopup(WrongExportPending),
+};
+export const narrowExportFormat: DocxEditorPopups = {
+  // @ts-expect-error Export popups must also accept Markdown.
+  export: definePopup(NarrowExportFormat),
 };

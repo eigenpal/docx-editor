@@ -181,3 +181,115 @@ test('false Page Setup configuration suppresses the default and legacy callback'
     container.remove();
   }
 });
+
+test('File > Export reports missing converters after the menu closes', async () => {
+  const view = mountEditorTree(() => h(DocxEditorMenu));
+  try {
+    await flush();
+    for (const [slot, packageName] of [
+      ['file.exportMarkdown', 'docx-to-markdown'],
+      ['file.exportPdf', 'docx-to-pdf'],
+    ]) {
+      (
+        view.container.querySelector(
+          '[data-menu="file"] .docx-menubar__trigger'
+        ) as HTMLButtonElement
+      ).click();
+      await flush();
+      view.container
+        .querySelector('.docx-menubar__submenu')!
+        .dispatchEvent(new MouseEvent('mouseenter'));
+      await flush();
+      (view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement).click();
+      await flush();
+      expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(packageName!);
+      expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
+      (
+        view.container.querySelector('[data-docx-dialog="export"] button') as HTMLButtonElement
+      ).click();
+      await flush();
+    }
+  } finally {
+    view.unmount();
+  }
+});
+
+test('File row overrides reach export submenu slots without duplicate rows', async () => {
+  const view = mountEditorTree(() =>
+    h(DocxEditorMenu, null, {
+      default: () =>
+        h(DocxEditorMenu.File, null, {
+          default: () => [
+            h(DocxEditorMenu.ExportPdf, { hidden: true }),
+            h(DocxEditorMenu.ExportMarkdown, { className: 'custom-export' }),
+          ],
+        }),
+    })
+  );
+  try {
+    await flush();
+    (
+      view.container.querySelector('[data-menu="file"] .docx-menubar__trigger') as HTMLButtonElement
+    ).click();
+    await flush();
+    view.container
+      .querySelector('.docx-menubar__submenu')!
+      .dispatchEvent(new MouseEvent('mouseenter'));
+    await flush();
+    expect(view.container.querySelectorAll('[data-slot="file.exportPdf"]')).toHaveLength(0);
+    const rows = view.container.querySelectorAll('[data-slot="file.exportMarkdown"]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.classList.contains('custom-export')).toBe(true);
+    expect(rows[0]?.closest('.docx-menubar__submenu')).not.toBeNull();
+  } finally {
+    view.unmount();
+  }
+});
+
+test('Markdown export shows a dismissible dialog and reports a later failure', async () => {
+  let fail!: (reason: Error) => void;
+  const conversion = new Promise<never>((_resolve, reject) => {
+    fail = reject;
+  });
+  const view = mountEditorTree(() =>
+    h(DocxEditorMenu, { exporters: { markdown: () => conversion } })
+  );
+  try {
+    await flush();
+    (
+      view.container.querySelector('[data-menu="file"] .docx-menubar__trigger') as HTMLButtonElement
+    ).click();
+    await flush();
+    view.container
+      .querySelector('.docx-menubar__submenu')!
+      .dispatchEvent(new MouseEvent('mouseenter'));
+    await flush();
+    (
+      view.container.querySelector('[data-slot="file.exportMarkdown"]') as HTMLButtonElement
+    ).click();
+    await flush();
+    expect(view.container.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe(
+      'Exporting Markdown…'
+    );
+    (
+      view.container.querySelector('[data-docx-dialog="export"] button') as HTMLButtonElement
+    ).click();
+    await flush();
+    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
+    fail(new Error('Conversion unavailable'));
+    await flush();
+    expect(view.container.querySelector('[role="alertdialog"]')?.getAttribute('aria-label')).toBe(
+      'Markdown export failed'
+    );
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Conversion unavailable'
+    );
+    (
+      view.container.querySelector('[data-docx-dialog="export"] button') as HTMLButtonElement
+    ).click();
+    await flush();
+    expect(view.container.querySelector('[role="alertdialog"]')).toBeNull();
+  } finally {
+    view.unmount();
+  }
+});

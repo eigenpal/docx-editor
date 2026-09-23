@@ -15,6 +15,7 @@
     "images",
     "custom-styles",
     "fonts",
-    "dark-mode"
+    "dark-mode",
+    "export"
   ]
 }

@@ -1,4 +1,9 @@
-import { useDialogHost } from '../dialog-host';
+import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
+import { usePopupConfig } from '../popup-config';
+import { renderPopup } from '../popup-renderer';
+import { useMenuExport } from './useMenuExport';
+import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+import { DialogPortal, useDialogHost } from '../dialog-host';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The compound menu bar: File · Format · Insert · Review · Help, derived FROM the chrome registry.
@@ -42,7 +47,7 @@ import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
 import { download, downloadName } from './download';
-import { barTriggers } from './menu-keyboard';
+import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import {
   Menu,
   MenuEntry,
@@ -56,6 +61,8 @@ import {
   MenuPageSetup,
   MenuRow,
   MenuSave,
+  MenuExportMarkdown,
+  MenuExportPdf,
   MenuGroup,
   MenuSeparator,
   MenuReportIssue,
@@ -77,6 +84,8 @@ const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
 
 /** Props for `DocxEditor.Menu`. @public */
 export interface DocxEditorMenuProps {
+  /** Converter handlers. Markdown requires docx-to-markdown; PDF requires docx-to-pdf on Node.js. Missing handlers show an error. */
+  exporters?: ChromeExportHandlers;
   /** Appended after the base `docx-menubar` class. */
   className?: string;
   /** i18n resolver for row labels; without it the raw keys show (never English). */
@@ -158,12 +167,14 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const dialogs = useDialogHost();
+  const popups = usePopupConfig();
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
   const {
     className,
     t,
     fileName,
+    exporters,
     onOpen,
     onOpenFile,
     onSave,
@@ -182,6 +193,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const [openedName, setOpenedName] = useState<string | null>(null);
   // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
+  const exportState = useMenuExport(editor, exporters, fileName ?? openedName ?? undefined);
+  const { pending: exportPending, execute: executeExport } = exportState;
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
@@ -293,6 +306,13 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       activeMenu,
       onOpen: resolvedOpen,
       onSave: resolvedSave,
+      onExport:
+        editor && !exportPending
+          ? (format) => {
+              restoreExportFocus(rootRef.current);
+              return executeExport(format);
+            }
+          : undefined,
       onPageSetup: resolvedPageSetup,
       onParagraphDialog: () =>
         dialogs
@@ -307,6 +327,9 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       reportIssue,
     }),
     [
+      editor,
+      exportPending,
+      executeExport,
       t,
       openMenu,
       openMenuAndFocus,
@@ -394,6 +417,31 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       >
         {content}
       </div>
+      <DialogPortal>
+        {exportState.visible && popups?.export !== false ? (
+          popups?.export ? (
+            renderPopup(
+              popups.export,
+              {
+                open: true,
+                format: exportState.format,
+                pending: exportState.pending,
+                error: exportState.error,
+                onClose: exportState.dismiss,
+              },
+              exportState.session
+            )
+          ) : (
+            <DocxEditorExportDialog
+              open
+              format={exportState.format}
+              pending={exportState.pending}
+              error={exportState.error}
+              onClose={exportState.dismiss}
+            />
+          )
+        ) : null}
+      </DialogPortal>
       {/* Opening a document is a FILE READ the user drives — never a fetched URL. Mounted
           even when the host overrode `onOpen`, because the input costs nothing and a host
           that later drops the override keeps working. */}
@@ -456,6 +504,8 @@ export interface DocxEditorMenuNamespace {
   readonly Entry: typeof MenuEntry;
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
+  readonly ExportMarkdown: typeof MenuExportMarkdown;
+  readonly ExportPdf: typeof MenuExportPdf;
   readonly PageSetup: typeof MenuPageSetup;
   /** Insert › Image, so a host can hide it or place it elsewhere by name. */
   readonly ImageInsert: typeof MenuImageInsert;
@@ -491,6 +541,8 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Entry: MenuEntry,
   Open: MenuOpen,
   Save: MenuSave,
+  ExportMarkdown: MenuExportMarkdown,
+  ExportPdf: MenuExportPdf,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
   Reviewers: MenuReviewers,

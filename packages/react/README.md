@@ -54,13 +54,13 @@ export function App() {
 }
 ```
 
-`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, context menu, and the painted document. It fills its parent, so give it a box with a real height, and import the stylesheet once.
+`<DocxEditor>` includes the title bar, menu, toolbar, navigation pane, context menu, and document pages. It fills its parent container.
 
 For Next.js and server-side rendering (SSR), load the editor in the browser. Use `dynamic(..., { ssr: false })` inside a Client Component.
 
 ## Build your own UI
 
-The packaged chrome is one arrangement of public parts. Every packaged control uses the same hooks you would; there is no private API behind it.
+Use components and hooks to build your own controls. Packaged controls use the same public API.
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -91,9 +91,9 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`Root` owns the editor instance, `Viewport` is the scroll container, `Content` is where pages are painted. Everything else (toolbar, menu, rulers, navigation, link popover, context menu) is optional and placed by name.
+`Root` owns the editor instance. `Viewport` supplies scrolling, and `Content` displays pages. Add other controls as needed.
 
-The customization ladder, in order: `className` and `data-active` → the `icon` prop → `asChild` (merge behavior onto your own element) → in-place slot override (`hidden`, `preset={false}`) → the hooks.
+Use `className`, `data-active`, and `icon` for appearance changes. Use `asChild` to apply behavior to your own element. Use `hidden` or `preset={false}` to replace controls, or build controls with hooks.
 
 ## Hooks
 
@@ -108,7 +108,7 @@ The customization ladder, in order: `className` and `data-active` → the `icon`
 | `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless |
 | `useContentControl()` | Word content controls at the caret |
 
-Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine. Read `isEnabled` and show `disabledReason`.
+Read `isEnabled` to set the disabled state. Show `disabledReason` when the command is unavailable.
 
 ## Companion packages
 
@@ -122,6 +122,12 @@ Enabled state has exactly one source. A control that hardcodes `disabled` will d
 - [Composition](https://www.docx-editor.dev/docs/2.x/react/composition)
 - [Hooks](https://www.docx-editor.dev/docs/2.x/react/hooks)
 - [Props and ref](https://www.docx-editor.dev/docs/2.x/react/props)
+
+## Export Markdown and PDF
+
+The adapter does not install either converter. Install only the formats your application uses.
+
+Configure `menu.exporters` to enable **File > Export** with the conversion packages. Markdown downloads as one continuous document. PDF conversion requires a Node.js server. Missing converter handlers show an error with setup instructions. See [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export).
 
 ## License
 
