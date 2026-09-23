@@ -1726,10 +1726,44 @@ function resolvedXmlSpace(
   return value === 'preserve' ? true : value === 'default' ? false : inheritedPreserve;
 }
 
+/** Typed WML kinds whose text children are character content. */
+const WML_TEXT_KINDS: ReadonlySet<string> = new Set(['text', 'deletedText', 'instrText']);
+
+/** Typed drawing kinds whose value is their text (`wp:align`, `wp:posOffset`). */
+const DRAWING_TEXT_KINDS: ReadonlySet<string> = new Set([
+  'drawingPositionAlign',
+  'drawingPositionOffset',
+]);
+
+/**
+ * Whether `xml:space="preserve"` can make whitespace between this element's children content.
+ *
+ * `xml:space` is inherited by every descendant, but it only governs character content. Every
+ * other typed kind has an element-only content model, so whitespace between its children is
+ * indentation whatever the inherited value. Kept as a text child, it failed the kind's own
+ * validation: a run written with its `w:t` on an indented line demoted to generic, and its
+ * text left the flow. Unmodeled elements keep the whitespace, because their content model is
+ * not known here.
+ */
+function preserveGovernsChildren(kind: KnownKind | 'generic'): boolean {
+  return kind === 'generic' || WML_TEXT_KINDS.has(kind) || DRAWING_TEXT_KINDS.has(kind);
+}
+
+/** Text that is insignificant between children when no `xml:space="preserve"` is in scope. */
+const BLANK_TEXT = /^\s*$/;
+
+/**
+ * Text that is indentation under an inherited `xml:space="preserve"`: XML whitespace only
+ * (`S` in XML 1.0). `\s` also matches U+00A0, U+3000 and U+FEFF, which are authored
+ * characters here; any of them keeps every text node and the generic fallback.
+ */
+const XML_INDENTATION_TEXT = /^[ \t\r\n]*$/;
+
 function canonicalLegacyChildren(
   children: readonly XmlNode[],
   preserve: boolean,
-  isWmlText: boolean
+  isWmlText: boolean,
+  blank: RegExp = BLANK_TEXT
 ): readonly XmlNode[] {
   // Whitespace stripping and adjacent-text merging only apply to TEXT children; the
   // structural bulk of a part has none, and skipping the filter/merge allocation there
@@ -1737,7 +1771,7 @@ function canonicalLegacyChildren(
   if (!children.some((child) => child.type === 'text')) return children;
   const hasElement = children.some((child) => child.type === 'element');
   const hasNonWhitespaceText = children.some(
-    (child) => child.type === 'text' && !/^\s*$/.test(child.value)
+    (child) => child.type === 'text' && !blank.test(child.value)
   );
   const retained = children.filter(
     (child) =>
@@ -1746,7 +1780,7 @@ function canonicalLegacyChildren(
       isWmlText ||
       !hasElement ||
       hasNonWhitespaceText ||
-      !/^\s*$/.test(child.value)
+      !blank.test(child.value)
   );
   const merged: XmlNode[] = [];
   for (const child of retained) {
@@ -1805,10 +1839,12 @@ function convertElement(
   const drawingKind = resolveElementKind(name.namespaceUri, name.localName, parent);
   const candidateKind =
     drawingKind !== 'generic' && isDrawingKnownKind(drawingKind) ? drawingKind : wmlKind;
+  const preserveGoverns = preserveGovernsChildren(candidateKind);
   const retainedChildren = canonicalLegacyChildren(
     element.children,
-    preserve,
-    candidateKind === 'text' || candidateKind === 'deletedText' || candidateKind === 'instrText'
+    preserve && preserveGoverns,
+    WML_TEXT_KINDS.has(candidateKind),
+    preserve && !preserveGoverns ? XML_INDENTATION_TEXT : BLANK_TEXT
   );
   const childParent: DrawingParentContext = {
     wmlLocalName: isWml ? name.localName : undefined,

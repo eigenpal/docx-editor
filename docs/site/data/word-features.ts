@@ -125,6 +125,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document.',
   },
   {
     id: 'text.format-painter',

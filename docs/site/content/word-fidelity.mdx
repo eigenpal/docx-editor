@@ -145,6 +145,8 @@ A DOCX file is a ZIP package with XML parts and binary payloads.
 
 The contract protects semantic meaning and structure. It does not promise byte identity for rewritten XML parts.
 
+An `xml:space="preserve"` attribute on a run does not turn indentation into document text. Spaces inside text elements remain authored text.
+
 Continuous integration checks real documents with a canonical tree fingerprint and a save-and-reopen semantic digest. Focused tests cover revisions, fields, hyperlinks, content controls, and browser editing.
 
 If untouched content is lost or reinterpreted, report a [round-trip issue](https://github.com/eigenpal/docx-editor/issues/new/choose) with the source document.

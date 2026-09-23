@@ -7,6 +7,11 @@ The system SHALL represent each authored OOXML part as one ordered tree in which
 - **WHEN** a paragraph contains a supported run beside an unsupported namespace-qualified element
 - **THEN** the canonical tree contains both nodes in source order without creating a second preservation model
 
+#### Scenario: Indentation inside a supported container keeps its type
+- **WHEN** a supported container with element-only content, such as a run, paragraph, table, content control, or picture, inherits `xml:space="preserve"` and has only XML whitespace (space, tab, carriage return, or line feed) between its children
+- **THEN** the canonical tree types the container and its content as it types the same XML without that whitespace
+- **AND** whitespace stays significant inside text elements, in unsupported elements, and beside any other character data, including no-break and ideographic spaces
+
 ### Requirement: Generic unknown-node fidelity
 Generic nodes SHALL retain qualified names, namespace bindings, ordered attributes, ordered element/text children, and stable identity subject to bounded parse and trust rules.
 
