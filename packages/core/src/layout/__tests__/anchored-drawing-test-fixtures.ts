@@ -83,11 +83,17 @@ export function squareAnchorAtLeft(options: {
 export function squareAnchorInCell(options: {
   readonly text: string;
   readonly layoutInCell: '0' | '1';
+  /** `w:tblInd` in twips, which moves the cell (and an in-cell anchor) off the margin. */
+  readonly tableIndent?: number;
 }): string {
+  const indent =
+    options.tableIndent === undefined
+      ? ''
+      : `<w:tblInd w:w="${options.tableIndent}" w:type="dxa"/>`;
   return (
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
     '<w:body><w:tbl>' +
-    '<w:tblPr><w:tblW w:w="8800" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    `<w:tblPr><w:tblW w:w="8800" w:type="dxa"/>${indent}<w:tblLayout w:type="fixed"/></w:tblPr>` +
     '<w:tblGrid><w:gridCol w:w="8800"/></w:tblGrid>' +
     '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
     '<w:p><w:r><w:drawing>' +

@@ -466,10 +466,9 @@ function placeCellParagraph(
         deps.paragraphOrderIndex?.(id)
       )
     : rawZones;
-  const pageZones = localizeExclusionZones(filtered, originX, 0, {
-    left: 0,
-    right: indent.left + available + indent.right,
-  });
+  // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
+  const cellBoxWidth = indent.left + available + indent.right;
+  const pageZones = localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
   // paragraph starts. Two cells of the same text and width under the same float would
@@ -514,8 +513,7 @@ function placeCellParagraph(
       firstLineOffset,
       ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
       startOffset,
-      // A cell's own content box is the column a positional tab measures against.
-      marginExtent: { left: 0, right: indent.left + available + indent.right },
+      marginExtent: { left: 0, right: cellBoxWidth },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       showFieldCodes: deps.showFieldCodes,
@@ -532,14 +530,15 @@ function placeCellParagraph(
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
       contentLeft: 0,
-      contentRight: indent.left + available + indent.right,
+      contentRight: cellBoxWidth,
       paragraphStartY: top,
       anchorCellBox: Object.freeze({
         x: 0,
         y: 0,
-        width: indent.left + available + indent.right,
+        width: cellBoxWidth,
         height: Math.max(1, available),
       }),
+      compatibilityMode: deps.compatibilityMode,
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
     },
   });

@@ -199,6 +199,8 @@ export interface ParagraphFlowOptions {
   readonly pageExclusionZones?: readonly ExclusionZone[];
   /** When breaking inside a table cell, the cell content box for anchored frame resolution. */
   readonly anchorCellBox?: LayoutBox | null;
+  /** The document's Word compatibility mode, read by cell anchors' `layoutInCell`. */
+  readonly compatibilityMode?: number;
   /**
    * Instruction-only TOC paragraphs and ending field chrome can carry no measurable text.
    * When set, an otherwise empty break returns no lines. A paragraph mark after a TOC
@@ -547,6 +549,7 @@ export function breakParagraph(
             paragraphStartY: flow.paragraphStartY ?? 0,
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
+            compatibilityMode: flow.compatibilityMode,
             displayMode: anchorDisplayMode,
             ...(flow.revisionAuthorFilter
               ? { revisionAuthorFilter: flow.revisionAuthorFilter }

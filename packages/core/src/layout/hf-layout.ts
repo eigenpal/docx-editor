@@ -337,6 +337,7 @@ export function layoutHeaderFooterStory(
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,
         ownerPartName: part.name,
+        compatibilityMode: inputs?.compatibilityMode,
         storyKind: part.name.includes('ftr') ? 'footer' : 'header',
       });
     };

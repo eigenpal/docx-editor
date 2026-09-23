@@ -7,6 +7,7 @@ import type { DrawingProjection, ImageWrapTarget } from '../store/package/drawin
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
+  effectiveLayoutInCell,
   measureInlineDrawing,
   resolveAnchoredDrawingPosition,
   type AnchoredDrawingLayoutFallback,
@@ -573,6 +574,8 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   readonly anchorLineTopByModelStart: ReadonlyMap<number, number>;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   readonly anchorCellBox?: LayoutBox | null;
+  /** The document's Word compatibility mode; see {@link effectiveLayoutInCell}. */
+  readonly compatibilityMode?: number;
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
@@ -588,11 +591,14 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     // hole either: the original view must not wrap text around an insertion it hides.
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
-    // `w:layoutInCell="0"` positions the object against the page rather than the cell that
-    // encloses its anchor, so it is not part of that cell's flow and carves no hole in it.
-    // A Word control of two identical rows, one flag each, runs the cell's text straight
-    // through the object in the `0` row and wraps around it in the `1` row.
-    if (options.anchorCellBox != null && atom.projection.anchor?.layoutInCell === false) continue;
+    // Out of the cell (`layoutInCell="0"` below mode 15), the object is positioned against
+    // the page, is not part of the cell's flow, and carves no hole in it: Word runs the
+    // cell's text straight through it.
+    if (
+      options.anchorCellBox != null &&
+      !effectiveLayoutInCell(atom.projection.anchor, options.compatibilityMode)
+    )
+      continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
     const modelStart = offsets.get(atom.atomId);

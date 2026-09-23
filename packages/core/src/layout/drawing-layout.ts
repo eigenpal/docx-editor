@@ -520,6 +520,8 @@ export interface DrawingAnchorFrameContext {
   /** Cell text column, excluding padding; the physical cell still owns clipping. */
   readonly cellContentBox?: LayoutBox;
   readonly layoutInCell: boolean;
+  /** The document's Word compatibility mode; see {@link effectiveLayoutInCell}. */
+  readonly compatibilityMode?: number;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
   /**
@@ -566,6 +568,22 @@ export interface AnchoredDrawingRecord extends Omit<
    * did not thread story layout (the record then degrades to the placeholder path).
    */
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
+}
+
+/**
+ * Whether an anchored object in a table cell is laid out in that cell.
+ *
+ * Word honours `wp:anchor/@layoutInCell="0"` only in compatibility mode 14 and below, or
+ * with no mode declared. From mode 15 it ignores the flag and always lays the object out in
+ * the cell: positioned against the cell and wrapping the cell's text, the same as `"1"`.
+ * The projection keeps what the file says; this is the layout's reading of it.
+ */
+export function effectiveLayoutInCell(
+  anchor: { readonly layoutInCell: boolean } | null | undefined,
+  compatibilityMode: number | undefined
+): boolean {
+  if (compatibilityMode !== undefined && compatibilityMode >= 15) return true;
+  return anchor?.layoutInCell ?? true;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -979,6 +997,7 @@ export function buildAnchoredDrawingRecord(options: {
   readonly anchorParagraphId: string;
   readonly start: number;
   readonly resolved: ResolvedAnchoredPosition;
+  readonly layoutInCell: boolean;
   readonly clipRegion?: LayoutBox;
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
@@ -1018,7 +1037,7 @@ export function buildAnchoredDrawingRecord(options: {
     verticalFrameOrigin: options.resolved.verticalFrameOrigin,
     behindDocument: anchorMeta?.behindDocument ?? false,
     allowOverlap: anchorMeta?.allowOverlap ?? true,
-    layoutInCell: anchorMeta?.layoutInCell ?? true,
+    layoutInCell: options.layoutInCell,
     relativeHeight: anchorMeta?.relativeHeight ?? 0,
     wrap: projection.wrap === 'inline' ? 'inFront' : projection.wrap,
     ...(options.sourceOrder !== undefined ? { sourceOrder: options.sourceOrder } : {}),
@@ -1207,7 +1226,10 @@ export function publishAnchoredDrawingsForParagraph(options: {
       (line) => start >= line.range.start && start < line.range.end
     );
     if (!anchorLine) continue;
-    const layoutInCell = projection.anchor?.layoutInCell ?? true;
+    const layoutInCell = effectiveLayoutInCell(
+      projection.anchor,
+      options.frameBase.compatibilityMode
+    );
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;
@@ -1246,6 +1268,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
       anchorParagraphId: options.paragraphId,
       start: characterFrameOffset,
       resolved,
+      layoutInCell,
       clipRegion,
       revisions,
       ...(options.sourceOrderOf
