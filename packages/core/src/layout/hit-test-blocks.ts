@@ -1,4 +1,5 @@
 // Block-level measures the hit test ranks candidate blocks by.
+import { paragraphContentBounds } from './paragraph-content-bounds.ts';
 import type { BlockFragmentRecord, LayoutBox } from './semantic-records.ts';
 
 /** A page-relative point, in points. */
@@ -26,14 +27,19 @@ export function weightedDistance(box: LayoutBox, point: PointPt, verticalWeight:
  * horizontally and the row resolution below picks the cell.
  *
  * Paragraphs keep the plain measure: their boxes start at the left indent, and the indent
- * strip must stay reachable by real proximity.
+ * strip must stay reachable by real proximity. The measure is taken to the paragraph's
+ * painted content, not only its box: a hanging first line — a hanging indent, or a numbered
+ * paragraph whose suffix tab stops before the indent — paints text left of the box (right of
+ * it in a right-to-left paragraph), and a press on that text is on this paragraph.
  */
 export function blockDistance(
   block: BlockFragmentRecord,
   point: PointPt,
   verticalWeight: number
 ): number {
-  if (block.kind !== 'table') return weightedDistance(block.box, point, verticalWeight);
+  if (block.kind !== 'table') {
+    return weightedDistance(paragraphContentBounds(block), point, verticalWeight);
+  }
   const dy = Math.max(block.box.y - point.y, 0, point.y - (block.box.y + block.box.height));
   if (dy > 0) return weightedDistance(block.box, point, verticalWeight);
   return 0;

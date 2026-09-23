@@ -66,6 +66,11 @@ export interface TabStop {
   readonly alignment: TabAlignment;
   /** Legacy `num` stop: positions a numbering suffix, not a tab in ordinary text. */
   readonly numberingOnly?: true;
+  /**
+   * Supplied at a hanging paragraph's text indent, not authored. It positions ordinary text
+   * tabs only: the numbering suffix treats the indent by its own rule.
+   */
+  readonly implied?: true;
   /** Absent for `none` — the schema default and the overwhelming majority of stops. */
   readonly leader?: TabLeader;
 }
@@ -79,6 +84,11 @@ export interface ResolvedTabStops {
   readonly stops: readonly TabStop[];
   /** Default-tab interval in points (always positive and bounded). */
   readonly defaultIntervalPt: number;
+  /**
+   * `w:doNotUseIndentAsNumberingTabStop` (§17.15.3): a numbering suffix tab goes to the
+   * first authored stop past the marker, wherever it is, before it falls back to the indent.
+   */
+  readonly ignoreIndentAsNumberingTabStop?: true;
 }
 
 /** The frozen "no custom stops" value, so a paragraph without tabs mints no object. */
@@ -236,7 +246,7 @@ export function withDefaultTabInterval(
   if (defaultIntervalPt === undefined) return tabs;
   if (!Number.isFinite(defaultIntervalPt) || defaultIntervalPt <= 0) return tabs;
   if (defaultIntervalPt === tabs.defaultIntervalPt) return tabs;
-  return { stops: tabs.stops, defaultIntervalPt };
+  return { ...tabs, defaultIntervalPt };
 }
 
 /**
@@ -282,6 +292,7 @@ export function nextTabDestination(
   const edge = Math.max(currentX, rightEdge);
   for (const stop of tabs.stops) {
     if (stop.numberingOnly && !forNumbering) continue;
+    if (stop.implied && forNumbering) continue;
     if (stop.positionPt > currentX) {
       return {
         positionPt: Math.min(stop.positionPt, edge),
@@ -342,8 +353,11 @@ export function tabStopsFingerprint(tabs: ResolvedTabStops): string {
   const stops = tabs.stops
     .map(
       (stop) =>
-        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.numberingOnly ? '#num' : ''}${stop.leader ? `/${stop.leader}` : ''}`
+        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.numberingOnly ? '#num' : ''}${stop.implied ? '#implied' : ''}${stop.leader ? `/${stop.leader}` : ''}`
     )
     .join(',');
-  return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)})`;
+  // The numbering rule moves a list's first line, so a break cached under the other rule
+  // must not be reused.
+  const rule = tabs.ignoreIndentAsNumberingTabStop ? '|numStop' : '';
+  return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)}${rule})`;
 }

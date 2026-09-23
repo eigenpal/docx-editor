@@ -3,7 +3,12 @@
 // Split out of `list-resolve.ts`: resolving WHICH marker a paragraph has and placing that
 // marker are separate jobs, and only the placement is measured. DOM-free, points everywhere.
 
-import { EMPTY_TAB_STOPS, nextTabDestination, type ResolvedTabStops } from './paragraph-tabs.ts';
+import {
+  EMPTY_TAB_STOPS,
+  nextTabDestination,
+  type ResolvedTabStops,
+  type TabStop,
+} from './paragraph-tabs.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
@@ -65,21 +70,36 @@ export function listMarkerBox(
 }
 
 /**
+ * The first authored stop strictly past `x` that a numbering suffix may use. Legacy `num`
+ * stops count; the implied hanging-indent stop and the default interval do not.
+ */
+function firstNumberingStopPast(tabStops: ResolvedTabStops, x: number): TabStop | undefined {
+  return tabStops.stops.find((stop) => !stop.implied && stop.positionPt > x);
+}
+
+/**
  * Where the FIRST line of a list paragraph starts, relative to `indent.left` (§17.9.30).
  *
  * A list paragraph's hanging indent is the marker's slot, so ordinarily the text starts at
- * `indent.left` and this is 0 — `w:suff="tab"` with a marker that fits is exactly that case.
- * The other three cases are where Word and a forced zero part company:
+ * `indent.left` and this is 0 — `w:suff="tab"` with a marker that fits and no nearer stop
+ * is exactly that case. The other cases move the first line:
  *
  * - `w:suff="space"` — one space after the marker, then the text. Not a tab, not the indent.
  * - `w:suff="nothing"` — the text begins immediately after the marker.
+ * - `w:suff="tab"` with an authored stop between the marker end and the indent — the indent
+ *   is an implicit stop, not the only one, so the nearer stop wins and the first line
+ *   starts LEFT of the indent. With `w:doNotUseIndentAsNumberingTabStop` the indent does
+ *   not compete: the first authored stop past the marker wins wherever it is, and the
+ *   indent is the fallback only when there is none. Default-interval stops never compete
+ *   while the marker fits.
  * - `w:suff="tab"` with a marker WIDER than its slot (`viii.`, `%1.%2.%3.`) — the suffix tab
  *   advances to the next tab stop past the marker, so the first line moves right instead of
  *   the marker being painted over its own first word.
  *
  * A positive-firstLine level's marker ends PAST the text start, so its suffix tab always
  * takes the stop lookup. The paragraph's legacy `num` stops participate in this lookup,
- * even though ordinary text tabs ignore them. Level-only stops are not folded in here.
+ * even though ordinary text tabs ignore them. `tabStops` is the paragraph's full cascade,
+ * numbering-level stops included.
  */
 export function listFirstLineOffset(
   item: ResolvedListItem,
@@ -97,9 +117,15 @@ export function listFirstLineOffset(
   if (item.suffix === 'space') {
     return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
   }
-  // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
-  // to look further along the paragraph's own stops.
-  if (markerEnd <= textLeft) return 0;
+  if (markerEnd <= textLeft) {
+    // `tab` with a marker that fits: the indent is the implicit stop, and an authored stop
+    // can be nearer (or, when the indent is not a numbering stop, simply first).
+    const stop = firstNumberingStopPast(tabStops, markerEnd);
+    if (!stop) return 0;
+    if (stop.positionPt >= textLeft && !tabStops.ignoreIndentAsNumberingTabStop) return 0;
+    return Math.min(stop.positionPt, Math.max(markerEnd, rightEdge)) - textLeft;
+  }
+  // An overflowing marker looks further along the paragraph's own stops.
   return nextTabDestination(tabStops, markerEnd, rightEdge, true).positionPt - textLeft;
 }
 

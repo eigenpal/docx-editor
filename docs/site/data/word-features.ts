@@ -379,7 +379,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up.',
+      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up. The tab after a number stops at the first tab stop past the number when that stop comes before the text indent, so the first line can start left of the indent and fit more text. If the document sets w:doNotUseIndentAsNumberingTabStop, the first tab stop past the number applies wherever it is, and the text indent applies only when no such stop exists.',
   },
   {
     id: 'lists.custom-numbering',

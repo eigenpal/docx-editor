@@ -47,6 +47,7 @@ import {
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
+import { numberingTabSettings, withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import {
@@ -84,6 +85,8 @@ export interface StyleCascadeTable {
   readonly disableOptionalLigatures?: true;
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
+  /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
+  readonly ignoreIndentAsNumberingTabStop?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -443,9 +446,9 @@ export function buildStyleCascadeTable(
   const ligaturesEnabled = optionalLigaturesEnabled(settingsRoot);
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
-  const exactBaseline = preserveExactLineBaseline(settingsRoot)
-    ? { preserveExactLineBaseline: true as const }
-    : {};
+  const settingsCompatibility = preserveExactLineBaseline(settingsRoot)
+    ? { preserveExactLineBaseline: true as const, ...numberingTabSettings(settingsRoot) }
+    : numberingTabSettings(settingsRoot);
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
@@ -460,9 +463,9 @@ export function buildStyleCascadeTable(
         theme,
         typography,
         strictTableHierarchy,
-        ...exactBaseline,
+        ...settingsCompatibility,
       }),
-      ...exactBaseline,
+      ...settingsCompatibility,
       ...ligatureCompatibility,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
@@ -510,7 +513,7 @@ export function buildStyleCascadeTable(
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
-    ...exactBaseline,
+    ...settingsCompatibility,
     ...ligatureCompatibility,
     strictTableHierarchy,
     typography,
@@ -541,7 +544,7 @@ export function buildStyleCascadeTable(
 
   return {
     cacheToken,
-    ...exactBaseline,
+    ...settingsCompatibility,
     ...ligatureCompatibility,
     strictTableStyleHierarchy: strictTableHierarchy,
     typography,
@@ -943,7 +946,7 @@ export function resolveParagraphLayoutInputs(
         firstLine,
       }
     : { left: baseIndent.left, right: baseIndent.right, hanging, firstLine };
-  const tabStops = cascadedTabStops(nodes);
+  const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   let outlineLevel: number | null = null;
   let sawOutlineProperty = false;

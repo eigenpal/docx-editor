@@ -48,6 +48,7 @@ import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layou
 import { pointInDrawingClip } from './drawing-wrap.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { blockDistance, isCollapsedSectionMark, weightedDistance } from './hit-test-blocks.ts';
+import { paragraphContentBounds } from './paragraph-content-bounds.ts';
 import { bottomToTopCaretInLayout, pointInBottomToTopCell } from './table-cell-text-direction.ts';
 
 /** A point in the coordinate space named by the function taking it. */
@@ -550,9 +551,11 @@ function resolveOneBlock(
   context: HitContext,
   cell: TableCellAddress | null
 ): SemanticHit | null {
-  return block.kind === 'paragraph'
-    ? resolveParagraph(block, point, context, cell, contains(block.box, point))
-    : resolveTable(block, point, context, cell);
+  if (block.kind !== 'paragraph') return resolveTable(block, point, context, cell);
+  // A hanging first line paints outside the box, and a press on that text is on the text.
+  // A clipped box hides everything outside it, and its content bounds are the box.
+  const inside = contains(paragraphContentBounds(block), point);
+  return resolveParagraph(block, point, context, cell, inside);
 }
 
 function resolveParagraph(
