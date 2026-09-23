@@ -437,6 +437,24 @@ describe('shift-click', () => {
     mounted.surface.destroy();
   });
 
+  test('from a caret in a paragraph layout removed, extends from where that caret shows', () => {
+    // An empty paragraph with a hidden mark leaves the flow; its caret shows at the start of
+    // the paragraph after it, and the extension has to start there too.
+    const hidden = '<w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr></w:p>';
+    const mounted = mount(hidden + paragraph('hello world'));
+    const [removed, visible] = mounted.surface.session.paragraphIds();
+    mounted.surface.setSelection({
+      anchor: { paragraphId: removed!, offset: 0 },
+      head: { paragraphId: removed!, offset: 0 },
+    });
+    press(mounted, 60, 5, { shiftKey: true });
+    expect(mounted.surface.state().selection).toEqual({
+      anchor: { paragraphId: visible, offset: 0 },
+      head: { paragraphId: visible, offset: 10 },
+    });
+    mounted.surface.destroy();
+  });
+
   test('and pivots around it rather than around the visible start', () => {
     const mounted = mount(paragraph('hello world'));
     press(mounted, 36, 5);

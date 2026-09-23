@@ -329,27 +329,84 @@ describe('a caret left in a paragraph layout removes', () => {
     return opened;
   }
 
-  test('Backspace from an emptied one joins the paragraphs on either side', () => {
+  function afterEnter(): { surface: PaginatedSurface; container: HTMLElement } {
+    const opened = focused(para('Top') + heading('Head') + para('Body') + para('Tail'));
+    caret(opened.surface, idOf(opened.surface, 'Head'), 4);
+    opened.surface.splitParagraph();
+    expect(texts(opened.surface)).toEqual(['Top', 'Head', '', 'Body', 'Tail']);
+    return opened;
+  }
+
+  const head = (surface: PaginatedSurface) => surface.state().selection.head;
+
+  test('Backspace after Enter removes the paragraph Enter made, and nothing else', () => {
+    const { surface } = afterEnter();
+    surface.deleteBackward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['Top', 'Head', 'Body', 'Tail']);
+    expect(head(surface)).toEqual({ paragraphId: idOf(surface, 'Head'), offset: 4 });
+  });
+
+  test('Enter twice then Backspace twice gives back the original paragraphs', () => {
+    const { surface, container } = afterEnter();
+    surface.splitParagraph();
+    expect(texts(surface)).toEqual(['Top', 'Head', '', '', 'Body', 'Tail']);
+    expect(painted(container)).not.toBeNull();
+    surface.deleteBackward();
+    expect(texts(surface)).toEqual(['Top', 'Head', '', 'Body', 'Tail']);
+    surface.deleteBackward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(texts(surface)).toEqual(['Top', 'Head', 'Body', 'Tail']);
+  });
+
+  test('Backspace from an emptied one removes only that paragraph', () => {
     const { surface } = emptied();
     surface.deleteBackward();
     expect(surface.state().lastRejection).toBeFalsy();
-    expect(texts(surface)).toEqual(['TopBody']);
+    expect(texts(surface)).toEqual(['Top', 'Body']);
+    expect(head(surface)).toEqual({ paragraphId: idOf(surface, 'Top'), offset: 3 });
   });
 
   test('word Backspace from an emptied one does the same', () => {
     const { surface } = emptied();
     surface.deleteWordBackward();
     expect(surface.state().lastRejection).toBeFalsy();
-    expect(texts(surface)).toEqual(['TopBody']);
+    expect(texts(surface)).toEqual(['Top', 'Body']);
   });
 
-  test('Delete from an emptied one takes the next visible character', () => {
+  test('Delete from an emptied one removes it and leaves the caret where it showed', () => {
     const { surface, container } = emptied();
+    const before = painted(container);
     surface.deleteForward();
     expect(surface.state().lastRejection).toBeFalsy();
-    expect(texts(surface)).toEqual(['Top', '', 'ody']);
-    expect(painted(container)).not.toBeNull();
+    expect(texts(surface)).toEqual(['Top', 'Body']);
+    expect(head(surface)).toEqual({ paragraphId: idOf(surface, 'Body'), offset: 0 });
+    expect(painted(container)).toEqual(before);
   });
+
+  for (const [label, setup] of [
+    ['after Enter', afterEnter],
+    ['after emptying one', emptied],
+  ] as const) {
+    test(`arrow keys move from where the caret shows, ${label}`, () => {
+      const right = setup().surface;
+      right.navigate('right');
+      expect(head(right)).toEqual({ paragraphId: idOf(right, 'Body'), offset: 1 });
+
+      const up = setup().surface;
+      up.navigate('up');
+      const above = label === 'after Enter' ? 'Head' : 'Top';
+      expect(head(up).paragraphId).toBe(idOf(up, above));
+
+      const extend = setup().surface;
+      extend.navigate('right', true);
+      const body = idOf(extend, 'Body');
+      expect(extend.state().selection).toEqual({
+        anchor: { paragraphId: body, offset: 0 },
+        head: { paragraphId: body, offset: 1 },
+      });
+    });
+  }
 });
 
 describe('hiddenParagraphsBetween', () => {

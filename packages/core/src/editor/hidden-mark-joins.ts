@@ -16,8 +16,10 @@
 // The caret can still come to rest in such a paragraph: Enter at the end of a paragraph whose
 // mark is hidden makes an empty one, and deleting the last character of one empties it. A
 // break the reader cannot see is not a place they can see either, so a caret there SHOWS at
-// the start of the paragraph that takes the join, and Backspace and Delete act from there.
-// Typing still lands in the paragraph itself, which then shows again.
+// the start of the paragraph that takes the join, and the arrow keys move from there. Typing
+// still lands in the paragraph itself, which then shows again. Backspace and Delete act on
+// that paragraph first: both join it into the paragraph before it, which is the exact reverse
+// of the Enter that made it, and only then act from the shown position.
 
 import {
   parentNodeOf,
@@ -31,6 +33,7 @@ import type {
   SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
+import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
@@ -135,6 +138,44 @@ export function shownPosition(
   return position;
 }
 
+/**
+ * Backspace or Delete from a caret in a paragraph layout removed: join that paragraph into the
+ * sibling paragraph before it. Backspace leaves the caret at the end of that sibling; Delete
+ * leaves it where it showed, so nothing visible moves.
+ *
+ * Null when the caret's paragraph is laid out, or when no paragraph directly precedes it in
+ * its container; the keys then act from the shown position.
+ */
+export function removedCaretParagraphEdit(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition,
+  view: RevisionView,
+  direction: 'backward' | 'forward'
+): { readonly ops: TreeDocOp[]; readonly caret: SemanticPosition } | null {
+  if (paragraphLinesIndex(layout).has(position.paragraphId)) return null;
+  const parent = parentNodeOf(part, position.paragraphId);
+  if (parent === null) return null;
+  if (!hiddenMarkRemovedIds(parent.children, view).has(position.paragraphId)) return null;
+  const siblings = parent.children;
+  const index = siblings.findIndex(
+    (child) => child.kind !== 'textValue' && child.id === position.paragraphId
+  );
+  let previous: OoxmlNode | undefined;
+  for (let at = index - 1; at >= 0 && previous === undefined; at -= 1) {
+    if (siblings[at]!.kind !== 'textValue') previous = siblings[at];
+  }
+  if (previous === undefined || previous.kind !== 'paragraph') return null;
+  const caret =
+    direction === 'backward'
+      ? { paragraphId: previous.id, offset: (paragraphTextOf(part, previous.id) ?? '').length }
+      : shownPosition(layout, part, position, view);
+  return {
+    ops: [{ op: 'joinParagraphs', firstId: previous.id, secondId: position.paragraphId }],
+    caret,
+  };
+}
+
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
@@ -147,6 +188,11 @@ export function createHiddenMarkEditing(deps: {
   shown(position: SemanticPosition): SemanticPosition;
   /** A collapsed selection moved to where it shows; a range is left alone. */
   shownSelection(selection: SemanticSelection): SemanticSelection;
+  /** See {@link removedCaretParagraphEdit}. */
+  removedCaretEdit(
+    position: SemanticPosition,
+    direction: 'backward' | 'forward'
+  ): { readonly ops: TreeDocOp[]; readonly caret: SemanticPosition } | null;
 } {
   const shown = (position: SemanticPosition): SemanticPosition =>
     shownPosition(deps.layout(), deps.part(), position, deps.view());
@@ -154,6 +200,8 @@ export function createHiddenMarkEditing(deps: {
     joinOps: (firstId, secondId) =>
       joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
     shown,
+    removedCaretEdit: (position, direction) =>
+      removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownSelection: (selection) => {
       const { anchor, head } = selection;
       if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) {
