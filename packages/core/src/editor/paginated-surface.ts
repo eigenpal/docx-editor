@@ -2,6 +2,8 @@ import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
+import { browserInputPending } from './surface-input-pending.ts';
+import { REPLICABLE_REVIEW_WRITES } from './surface-review-writes.ts';
 import { listParagraphStyleId } from './surface-list-style.ts';
 import { ensureSeparatorStyle } from './list-separator-style.ts';
 import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
@@ -184,7 +186,6 @@ import type {
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
   RemoteCaretLabelHost,
-  ReviewWriteIntent,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -318,27 +319,6 @@ type ScaleMutableSurface = PaginatedSurface & {
     scope?: StoryScope
   ): TreeApplyResult;
 };
-
-/**
- * The review writes a replica admits, and nothing else.
- *
- * FAIL CLOSED, including for an unnamed intent. Review writes reach the store directly instead of
- * through `applyTreeOps`, and the ones that graft a package and swap the shell record no primitive
- * effects, so they replicate as nothing at all — the peer keeps a `commentReference` naming a
- * comment it never got, which is a corrupt document produced silently. A refusal the user can see
- * is the better failure. Add an intent here only with a two-replica test behind it.
- *
- * Every named intent is admitted today. The set stays, and stays fail-closed, because it is what
- * makes the next review write declare itself before a replica carries it.
- */
-const REPLICABLE_REVIEW_WRITES: ReadonlySet<ReviewWriteIntent> = new Set<ReviewWriteIntent>([
-  'comment-add',
-  'comment-delete',
-  'comment-reply',
-  'comment-resolve',
-  'package-scoped',
-  'revision-resolve',
-]);
 
 /**
  * Rescale a mounted surface in place, or report that this one cannot be.
@@ -1381,6 +1361,9 @@ export function mountPaginatedSurface(
   }
 
   let deferredPublishRender: ReturnType<typeof setTimeout> | null = null;
+  /** Nonzero while `commitNow` applies its ops; see `renderPublishedLayout`. */
+  let commitRunDepth = 0;
+  let commitPaintOwed = false;
 
   // Armed once, after the first published render: the derivations a structural edit reads
   // populate their per-node memos in idle tasks instead of inside the first Enter. An edit
@@ -1401,26 +1384,19 @@ export function mountPaginatedSurface(
     });
   }
 
-  /**
-   * `includeContinuous` folds mousemove/wheel into the answer. Paint deferral wants that
-   * (any input beats a repaint); the commit-tail LAYOUT deferral must not — a moving
-   * pointer over a large document would otherwise defer every toolbar op, paste and
-   * programmatic write, so that gate asks for discrete input (keys, clicks) only.
-   */
+  /** See `browserInputPending` for when to pass `includeContinuous`. */
   function hasPendingBrowserInput(includeContinuous = true): boolean {
-    const scheduling = (
-      container.ownerDocument.defaultView?.navigator as
-        | (Navigator & {
-            scheduling?: {
-              isInputPending?: (options?: { includeContinuous?: boolean }) => boolean;
-            };
-          })
-        | undefined
-    )?.scheduling;
-    return scheduling?.isInputPending?.({ includeContinuous }) ?? false;
+    return browserInputPending(container, includeContinuous);
   }
 
   function renderPublishedLayout(): void {
+    // Published from INSIDE a commit's ops: a document-change handler read geometry. Its
+    // selection is still the pre-edit one, and `publishAfterCommit` paints this same layout
+    // against the post-edit caret, so painting here too doubled every structural edit's paint.
+    if (commitRunDepth > 0) {
+      commitPaintOwed = true;
+      return;
+    }
     if (!hasPendingBrowserInput()) {
       // `render()` retires any armed deferred publish render itself.
       render();
@@ -2560,6 +2536,7 @@ export function mountPaginatedSurface(
     // Reading the DOM selection BEFORE the paint replaces the nodes it lives in is what makes
     // a repaint carry a gesture the queued `selectionchange` has not delivered yet, rather
     // than erase it — see `adoptBeforePaint`.
+    commitPaintOwed = false;
     const adopted = selectionSync.adoptBeforePaint();
     const paintBegan = now();
     materializedSet = visiblePages();
@@ -3083,9 +3060,18 @@ export function mountPaginatedSurface(
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
-    const result = commitHistoryGroup.around(surface, run, (r) =>
-      typeof r === 'boolean' ? r : r.committed
-    );
+    let result: ReturnType<typeof run>;
+    commitRunDepth += 1;
+    try {
+      result = commitHistoryGroup.around(surface, run, (r) =>
+        typeof r === 'boolean' ? r : r.committed
+      );
+    } catch (error) {
+      // A throw skips `publishAfterCommit`: paint what a reader inside the ops published.
+      if ((commitRunDepth -= 1) === 0 && commitPaintOwed) render();
+      throw error;
+    }
+    commitRunDepth -= 1;
     const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
     if (rejection) {
       lastRejection = writeRejectionReason(

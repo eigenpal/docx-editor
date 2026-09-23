@@ -34,6 +34,31 @@ describe('canonicalize', () => {
     expect(stableHash({ a: 1 })).not.toBe(stableHash({ a: 2 }));
     expect(stableHash({ a: 1 })).toMatch(/^[0-9a-f]{16}$/);
   });
+  test('stableHash keeps the 64-bit FNV-1a digest of the canonical form', () => {
+    // The BigInt definition the digest was frozen with. Persisted and compared hashes must
+    // not move when the arithmetic does.
+    const reference = (s: string): string => {
+      let hash = 0xcbf29ce484222325n;
+      for (let i = 0; i < s.length; i++) {
+        hash ^= BigInt(s.charCodeAt(i));
+        hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+      }
+      return hash.toString(16).padStart(16, '0');
+    };
+    let seed = 7;
+    const random = (): number => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return seed;
+    };
+    const samples: unknown[] = ['', 'a', '￿', '😀', { a: 1, b: [2, 'x'] }];
+    for (let n = 0; n < 200; n++) {
+      let text = '';
+      const length = random() % 64;
+      for (let i = 0; i < length; i++) text += String.fromCharCode(random() % 0x10000);
+      samples.push(text, { text, n });
+    }
+    for (const value of samples) expect(stableHash(value)).toBe(reference(canonicalize(value)));
+  });
 });
 
 describe('authored-state comparator (canonical-exact, ephemera excluded)', () => {

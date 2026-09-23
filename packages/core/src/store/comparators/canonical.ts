@@ -68,13 +68,26 @@ export function canonicalize(value: unknown, ephemera: ReadonlySet<string> = new
 
 /** 64-bit FNV-1a over the canonical form, returned as a 16-char hex string. */
 export function stableHash(value: unknown, ephemera?: ReadonlySet<string>): string {
-  const s = canonicalize(value, ephemera);
-  let hash = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  const mask = 0xffffffffffffffffn;
+  return fnv1a64Hex(canonicalize(value, ephemera));
+}
+
+/**
+ * 64-bit FNV-1a over UTF-16 code units, as two 32-bit halves.
+ *
+ * The same digest as the BigInt form `hash = ((hash ^ c) * 0x100000001b3) mod 2^64`, without
+ * allocating a BigInt per character: layout keys hash whole documents' worth of text.
+ * The prime is 2^40 + 0x1b3, so the product is `lo * 0x1b3` plus `hi * 0x1b3` and `lo << 8`
+ * in the high word. Every intermediate stays below 2^53, so the double arithmetic is exact.
+ */
+export function fnv1a64Hex(s: string): string {
+  let hi = 0xcbf29ce4;
+  let lo = 0x84222325;
   for (let i = 0; i < s.length; i++) {
-    hash ^= BigInt(s.charCodeAt(i));
-    hash = (hash * prime) & mask;
+    lo = (lo ^ s.charCodeAt(i)) >>> 0;
+    const low = lo * 0x1b3;
+    const carry = Math.floor(low / 0x100000000);
+    hi = (Math.imul(hi, 0x1b3) + Math.imul(lo, 0x100) + carry) >>> 0;
+    lo = low >>> 0;
   }
-  return hash.toString(16).padStart(16, '0');
+  return hi.toString(16).padStart(8, '0') + lo.toString(16).padStart(8, '0');
 }

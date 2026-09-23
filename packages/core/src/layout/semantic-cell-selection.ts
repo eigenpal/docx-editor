@@ -550,32 +550,58 @@ export function tableContextAt(
   layout: SemanticLayout,
   paragraphId: string
 ): TableCellContext | null {
-  let best: TableCellContext | null = null;
-  let bestDepth = -1;
+  return tableContextsOf(layout).get(paragraphId) ?? null;
+}
+
+/** Paragraph ids a painted cell draws, per cell record. Pages reused by a relayout keep them. */
+const cellParagraphsCache = new WeakMap<TableCellFragmentRecord, readonly string[]>();
+
+function paragraphsOfCell(cell: TableCellFragmentRecord): readonly string[] {
+  const cached = cellParagraphsCache.get(cell);
+  if (cached) return cached;
+  const found: string[] = [];
+  for (const block of cell.blocks) collectParagraphs(block, found, new Set());
+  cellParagraphsCache.set(cell, found);
+  return found;
+}
+
+const tableContextsCache = new WeakMap<SemanticLayout, ReadonlyMap<string, TableCellContext>>();
+
+/**
+ * Every table paragraph's context, built once per layout.
+ *
+ * The toolbar, the table chrome and the snapshot each ask for the caret's context on every
+ * commit, and each answer used to scan every cell of every table.
+ */
+function tableContextsOf(layout: SemanticLayout): ReadonlyMap<string, TableCellContext> {
+  const cached = tableContextsCache.get(layout);
+  if (cached) return cached;
+  const contexts = new Map<string, TableCellContext>();
   for (const [tableId, table] of tableIndex(layout)) {
+    let columns: number | undefined;
     for (const entry of table.placed) {
       if (entry.isHeaderRepeat) continue;
-      const found: string[] = [];
-      for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
-      if (!found.includes(paragraphId)) continue;
-      // The INNERMOST table wins. `collectParagraphs` recurses, so an outer table also
-      // "contains" a nested table's paragraphs — and reporting the outer one contradicted
-      // `SemanticHit.cell`, which names the innermost cell, as well as what Word reports.
-      // Nesting depth reads straight off the canonical id: a nested table's id extends its
-      // containing cell's.
-      const depth = tableId.length;
-      if (depth <= bestDepth) continue;
-      bestDepth = depth;
-      best = {
-        tableId,
-        rows: table.rows.size,
-        columns: columnCountOf(table),
-        rowIndex: entry.rowIndex,
-        columnIndex: entry.cell.logicalGridColumn ?? entry.cell.gridColumn,
-      };
+      for (const paragraphId of paragraphsOfCell(entry.cell)) {
+        // The INNERMOST table wins, and among equals the first placement. `collectParagraphs`
+        // recurses, so an outer table also "contains" a nested table's paragraphs — and
+        // reporting the outer one contradicted `SemanticHit.cell`, which names the innermost
+        // cell, as well as what Word reports. Nesting depth reads straight off the canonical
+        // id: a nested table's id extends its containing cell's.
+        const best = contexts.get(paragraphId);
+        if (best && best.tableId.length >= tableId.length) continue;
+        columns ??= columnCountOf(table);
+        contexts.set(paragraphId, {
+          tableId,
+          rows: table.rows.size,
+          columns,
+          rowIndex: entry.rowIndex,
+          columnIndex: entry.cell.logicalGridColumn ?? entry.cell.gridColumn,
+        });
+      }
     }
   }
-  return best;
+  tableContextsCache.set(layout, contexts);
+  return contexts;
 }
 
 /** Canonical table/row/cell ids for a caret or rectangular cell selection. */

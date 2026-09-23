@@ -237,6 +237,52 @@ describe('the painted caret', () => {
     expect(pages.style.caretColor).toBe('');
   });
 
+  test('a geometry read inside a commit paints once, with the post-edit caret', () => {
+    const { surface, container, pages } = mount(paragraph('hello') + paragraph('world'));
+    putCaret(surface, 0, 1);
+    // What the review module's snapshot does from its document-change handler: read layout
+    // while the commit is still applying, before the surface has installed the new caret.
+    const unsubscribe = surface.session.subscribe(() => void surface.layout());
+    const removed: string[] = [];
+    const removeProperty = pages.style.removeProperty.bind(pages.style);
+    pages.style.removeProperty = (name: string) => {
+      removed.push(name);
+      return removeProperty(name);
+    };
+    try {
+      surface.deleteBackward();
+    } finally {
+      unsubscribe();
+    }
+    // Painting from inside the commit mirrored the PRE-edit caret, which named the paragraph
+    // the join had just removed: the caret came down, the native one came back, and the
+    // commit's own paint put both back up — a full-document style recalculation each way.
+    expect(removed).not.toContain('caret-color');
+    expect(caretElement(container)).not.toBeNull();
+    expect(pages.style.caretColor).toBe('transparent');
+    expect(surface.session.paragraphIds()).toHaveLength(1);
+  });
+
+  test('a commit whose listener throws still paints what a reader inside it published', () => {
+    const { surface, pages } = mount(paragraph('hello') + paragraph('world'));
+    putCaret(surface, 0, 1);
+    const unsubscribeReader = surface.session.subscribe(() => void surface.layout());
+    const unsubscribeThrower = surface.session.subscribe(() => {
+      throw new Error('host handler failed');
+    });
+    try {
+      expect(() => surface.deleteBackward()).toThrow('host handler failed');
+    } finally {
+      unsubscribeReader();
+      unsubscribeThrower();
+    }
+    // The reader published the joined paragraph and the commit never reached its own paint;
+    // the pages must not keep showing the two paragraphs the model no longer has.
+    expect(surface.session.paragraphIds()).toHaveLength(1);
+    expect(pages.querySelectorAll('.docx-paragraph-fragment')).toHaveLength(1);
+    expect(pages.textContent).toContain('helloworld');
+  });
+
   test('a range selection draws the browser highlight, never an insertion point', () => {
     const { surface, container } = mount(paragraph('hello world'));
     const paragraphId = surface.session.paragraphIds()[0]!;

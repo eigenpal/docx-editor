@@ -64,8 +64,26 @@ import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
  * Finalize stores projected furniture on each page record, so eviction cannot drop published
  * geometry. The bound only prevents the per-story cache from retaining every historical
  * `(pageNumber, pageCount)` pair across edits.
+ *
+ * When the caller does not pass its own bound, this is the floor, and the bound grows with the
+ * document: see {@link HF_PAGE_CONTEXTS_PER_PAGE}.
  */
 export const DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES = 128;
+
+/**
+ * Contexts the default bound keeps per page of the highest page number the story has served.
+ *
+ * The cache must hold one pass's working set. A footer with PAGE and NUMPAGES asks for two
+ * contexts per page it lands on (the provisional page count while the pass runs, then the final
+ * one), and a shared footer lands on every page. At a fixed 128, a 500-page document evicted
+ * each context before the next keystroke asked for it again, so every keystroke re-laid the
+ * footer hundreds of times. Sizing by page number keeps a short document's cache as small as
+ * before; the third slot per page leaves room for the previous page count after an edit.
+ */
+const HF_PAGE_CONTEXTS_PER_PAGE = 3;
+
+/** The adaptive bound's ceiling, so a hostile page count cannot size the cache. */
+const MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES = 4096;
 
 /** Page geometry for header/footer anchored frame resolution (story-relative layout space). */
 export interface HeaderFooterPageContext {
@@ -147,11 +165,16 @@ export function headerFooterContentKey(part: OoxmlPart): string {
 function createBoundedContextCache(maxEntries: number): {
   get(key: string): HeaderFooterStoryLayout | undefined;
   set(key: string, value: HeaderFooterStoryLayout): void;
+  /** Raise the bound; it never shrinks, so entries already held are never dropped by it. */
+  growTo(size: number): void;
   readonly size: number;
 } {
-  const capacity = Math.max(1, Math.floor(maxEntries));
+  let capacity = Math.max(1, Math.floor(maxEntries));
   const entries = new Map<string, HeaderFooterStoryLayout>();
   return {
+    growTo(size) {
+      if (Number.isFinite(size) && size > capacity) capacity = Math.floor(size);
+    },
     get(key) {
       const value = entries.get(key);
       if (value === undefined) return undefined;
@@ -234,7 +257,7 @@ export function layoutHeaderFooterStory(
   cache?: ParagraphLayoutCache<readonly PendingLine[]>,
   styleCascade?: StyleCascadeTable,
   pageContext?: FieldPageContext,
-  maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
+  maxPageContextEntries?: number,
   defaultTabStopPt?: number,
   displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
@@ -247,7 +270,9 @@ export function layoutHeaderFooterStory(
   if (inputs?.showFieldCodes) producer += '|field-codes';
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const needs = detectStoryPageFields(part.root);
-  const contextCache = createBoundedContextCache(maxPageContextEntries);
+  const contextCache = createBoundedContextCache(
+    maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
+  );
   // WITH the display mode, like every other consumer of this list. The inline flow already
   // received it — a deleted run vanished from a header in `proposed` — while the block list
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
@@ -287,6 +312,11 @@ export function layoutHeaderFooterStory(
     } else {
       const cached = contextCache.get(token);
       if (cached) return cached;
+      if (maxPageContextEntries === undefined) {
+        contextCache.growTo(
+          Math.min(MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES, pageNumber * HF_PAGE_CONTEXTS_PER_PAGE)
+        );
+      }
     }
 
     let lineCounter = 0;

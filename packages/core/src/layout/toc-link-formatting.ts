@@ -1,4 +1,4 @@
-import { stableHash } from '../store/comparators/canonical.ts';
+import { fnv1a64Hex } from '../store/comparators/canonical.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { detectBodyTocs, tocFieldRange } from '../store/package/toc-detect.ts';
@@ -67,7 +67,15 @@ export function tocLinkStyleToken(ranges: TocLinkRanges): string {
   if (ranges.size === 0) return '';
   const held = tokens.get(ranges);
   if (held !== undefined) return held;
-  const token = stableHash([...ranges]);
+  // A layout-cache token, never persisted: hash a direct framing rather than canonicalizing a
+  // copy of every range. Ids are NUL-framed, and XML text cannot carry U+0000.
+  let framed = '';
+  for (const [paragraphId, list] of ranges) {
+    framed += `${paragraphId}\0`;
+    for (const range of list) framed += `${range.start},${range.end};`;
+    framed += '\0';
+  }
+  const token = fnv1a64Hex(framed);
   tokens.set(ranges, token);
   return token;
 }

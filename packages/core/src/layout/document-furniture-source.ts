@@ -82,6 +82,12 @@ function headerFooterOccurrenceOwner(
   return pkg.relationships.get(pkg.mainDocumentPart) ?? pkg.relationships;
 }
 
+/**
+ * Page geometries remembered per header/footer part. A document rarely uses more than two
+ * (portrait and landscape); the bound keeps a file with many page sizes from growing the memo.
+ */
+const MAX_STORY_GEOMETRIES_PER_PART = 8;
+
 /** Build section-aware header/footer layout from a neutral document view. @public */
 export function createDocumentFurnitureSource(
   options: CreateDocumentFurnitureSourceOptions
@@ -106,26 +112,28 @@ export function createDocumentFurnitureSource(
   } = options;
   const background = createBackgroundFurnitureProjection(() => view.stylesRoot());
 
-  const memo = new WeakMap<
-    object,
-    {
-      width: number;
-      pageHeight: number;
-      marginTop: number;
-      marginBottom: number;
-      marginLeft: number;
-      marginRight: number;
-      producer: string;
-      projectionEpoch: string;
-      revisionAuthorFilterKey: string;
-      defaultTabStopPt: number | undefined;
-      compatibilityMode: number | undefined;
-      drawingLayoutToken: string;
-      numberingIndex: NumberingIndex | undefined;
-      styleCascade: StyleCascadeTable | undefined;
-      story: ReturnType<typeof layoutHeaderFooterStory>;
-    }
-  >();
+  interface StoryMemoEntry {
+    width: number;
+    pageHeight: number;
+    marginTop: number;
+    marginBottom: number;
+    marginLeft: number;
+    marginRight: number;
+    producer: string;
+    projectionEpoch: string;
+    revisionAuthorFilterKey: string;
+    defaultTabStopPt: number | undefined;
+    compatibilityMode: number | undefined;
+    drawingLayoutToken: string;
+    numberingIndex: NumberingIndex | undefined;
+    styleCascade: StyleCascadeTable | undefined;
+    story: ReturnType<typeof layoutHeaderFooterStory>;
+  }
+  // Several entries per part, one per page geometry. Sections that alternate portrait and
+  // landscape share their header and footer parts, and a single slot per part evicted the
+  // other geometry's story on every section, so each keystroke re-laid the shared header and
+  // footer once per section.
+  const memo = new WeakMap<object, StoryMemoEntry[]>();
   // Occurrence identity belongs on a cheap wrapper, but that wrapper must itself stay stable:
   // header/footer list and drawing-resource tokens are memoized by story object identity on the
   // editor keystroke path. Partition by the immutable main-relationship snapshot: body-only
@@ -188,15 +196,18 @@ export function createDocumentFurnitureSource(
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
     const projectLink = linkProjectors.projectLinkForPart(part.name);
-    const cached = memo.get(part);
+    const entries = memo.get(part);
+    const cached = entries?.find(
+      (entry) =>
+        entry.width === width &&
+        entry.pageHeight === geometry.height &&
+        entry.marginTop === geometry.margin.top &&
+        entry.marginBottom === geometry.margin.bottom &&
+        entry.marginLeft === geometry.margin.left &&
+        entry.marginRight === geometry.margin.right
+    );
     if (
       cached &&
-      cached.width === width &&
-      cached.pageHeight === geometry.height &&
-      cached.marginTop === geometry.margin.top &&
-      cached.marginBottom === geometry.margin.bottom &&
-      cached.marginLeft === geometry.margin.left &&
-      cached.marginRight === geometry.margin.right &&
       cached.producer === producer &&
       cached.projectionEpoch === projectionEpoch &&
       cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
@@ -249,7 +260,7 @@ export function createDocumentFurnitureSource(
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
       }
     );
-    memo.set(part, {
+    const entry: StoryMemoEntry = {
       width,
       pageHeight: geometry.height,
       marginTop: geometry.margin.top,
@@ -265,7 +276,12 @@ export function createDocumentFurnitureSource(
       numberingIndex: numbering,
       styleCascade: styles,
       story: baseline,
-    });
+    };
+    // A stale entry for the same geometry is replaced; distinct geometries each keep one.
+    const kept = (entries ?? []).filter((other) => other !== cached);
+    kept.push(entry);
+    if (kept.length > MAX_STORY_GEOMETRIES_PER_PART) kept.shift();
+    memo.set(part, kept);
     return baseline;
   };
 

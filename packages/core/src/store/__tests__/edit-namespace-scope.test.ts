@@ -88,3 +88,31 @@ test('does not rewrite explicitly contradictory declarations', () => {
   } as OoxmlElement;
   expect(bindConflictingPrefixes(node, new Map([['w', W]]))).toBe(node);
 });
+test('hands back the same subtree when nothing in it needs a binding', () => {
+  const leaf = {
+    id: 'r',
+    kind: 'run',
+    localName: 'r',
+    namespaceUri: W,
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlElement;
+  const paragraph = { ...leaf, id: 'p', kind: 'paragraph', localName: 'p', children: [leaf] };
+  const body = { ...leaf, id: 'b', kind: 'body', localName: 'body', children: [paragraph] };
+  // Identity all the way down: a structural edit hands this story-sized child lists, so an
+  // unchanged subtree must cost no copy.
+  expect(bindConflictingPrefixes(body as OoxmlElement, new Map([['w', W]]))).toBe(body);
+  // A conflict deep inside copies exactly the path to it and keeps the untouched sibling.
+  const foreign = { ...leaf, id: 'f', namespaceUri: 'urn:foreign' };
+  const mixed = { ...body, children: [paragraph, { ...paragraph, id: 'q', children: [foreign] }] };
+  const rebound = bindConflictingPrefixes(
+    mixed as OoxmlElement,
+    new Map([['w', W]])
+  ) as OoxmlElement;
+  expect(rebound).not.toBe(mixed);
+  expect(rebound.children[0]).toBe(paragraph);
+  const reboundLeaf = (rebound.children[1] as OoxmlElement).children[0] as OoxmlElement;
+  expect(reboundLeaf.namespaceBindings).toEqual([{ prefix: 'w', namespaceUri: 'urn:foreign' }]);
+});

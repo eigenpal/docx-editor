@@ -491,7 +491,13 @@ export function replaceChildren(
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
   const scope = namespaceScopeAt(part, target);
-  children = children.map((child) => bindConflictingPrefixes(child, scope));
+  // A child this node already holds already lives in exactly this scope, so only the
+  // introduced ones can need a binding. Enter and Backspace replace the whole body's child
+  // list; walking every kept paragraph again made each one cost the size of the document.
+  const kept = new Set<OoxmlNode>(target.children);
+  children = children.map((child) =>
+    kept.has(child) ? child : bindConflictingPrefixes(child, scope)
+  );
   const knownIds = knownIdsIfCapturing(part, children);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
   if (result.ok) captureReplaceChildren(target, children, knownIds);

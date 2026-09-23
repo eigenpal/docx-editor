@@ -237,7 +237,10 @@ function commentAnchorsOfStoryWithPolicy(
   const anchors: CommentAnchor[] = [];
   let lastPosition: CommentPosition | null = null;
 
-  for (const paragraph of storyParagraphsOfPartWithPolicy(part, retainAcrossReads)) {
+  // Only a paragraph with markers can move `open`, `anchors` or `lastPosition`, so the
+  // retained path walks just those; the transient export path keeps its memo-free walk.
+  const paragraphs = retainAcrossReads ? markedParagraphsOfPart(part) : storyParagraphsOfPart(part);
+  for (const paragraph of paragraphs) {
     for (const point of markersInParagraphWithPolicy(paragraph, retainAcrossReads)) {
       const position: CommentPosition = { paragraphId: paragraph.id, offset: point.offset };
       lastPosition = position;
@@ -288,17 +291,10 @@ function commentAnchorsOfStoryWithPolicy(
  * provenance therefore scans the whole supplied story part, including normal notes, separators,
  * table cells, content controls, and nested textbox stories.
  */
-function storyParagraphsOfPartWithPolicy(
-  part: OoxmlPart,
-  retainAcrossReads: boolean
-): readonly OoxmlParagraphNode[] {
-  // Memoized on the immutable root: the enumeration is a pure function of the tree, and the
-  // anchor pass runs once per story part per derivation.
-  const cached = retainAcrossReads ? storyParagraphsCache.get(part.root) : undefined;
-  if (cached) return cached;
-  const found: OoxmlNode[] = [];
+function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+  const found: OoxmlParagraphNode[] = [];
   const collect = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return;
     if (node.kind === 'paragraph') found.push(node);
     // Comment ranges can live in a textbox story nested inside a host paragraph. Unlike the
     // editable root-story walk, anchor derivation must descend into that nested story while
@@ -307,17 +303,69 @@ function storyParagraphsOfPartWithPolicy(
     for (const child of node.children) collect(child, depth + 1);
   };
   collect(part.root, 0);
-  const paragraphs = found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
-  if (retainAcrossReads) storyParagraphsCache.set(part.root, paragraphs);
+  return found;
+}
+
+const MAX_STORY_WALK_DEPTH = 64;
+const NO_PARAGRAPHS: readonly OoxmlParagraphNode[] = Object.freeze([]);
+
+/**
+ * The root's answer, bounded to recent roots: the root and the story container are new on every
+ * edit, and the undo history retains old roots by reference, so their answers are kept here
+ * rather than per node.
+ */
+const markedParagraphsByRoot = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
+
+function markedParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+  const cached = markedParagraphsByRoot.get(part.root);
+  if (cached) return cached;
+  const paragraphs = markedParagraphsIn(part.root, 0);
+  markedParagraphsByRoot.set(part.root, paragraphs);
   return paragraphs;
 }
 
 /**
- * Story paragraphs per part root, bounded to recent roots: the undo history retains old
- * roots by reference, and a plain WeakMap would keep one O(document) array alive per
- * retained root.
+ * The root and the body are replaced by every body edit, so they are not memoized per node; see
+ * `markedParagraphsByRoot`. A header, footer or notes part keeps its blocks at depth 1, and
+ * those are walked again each pass, which stays cheap: their own children answer from the memo.
  */
-const storyParagraphsCache = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
+const MIN_MEMOIZED_DEPTH = 2;
+
+/**
+ * The paragraphs under `node` that carry comment markers, in the order
+ * `storyParagraphsOfPart` visits them, memoized per immutable node.
+ *
+ * An edit replaces only the nodes on the path to what it changed, so the next anchor pass
+ * re-walks that path and answers every untouched sibling from here — a keystroke no longer
+ * visits every paragraph of the story. The depth the answer was computed at is part of the
+ * key, because the walk's depth bound depends on where the node sits. Runs are not memoized:
+ * they are only walked when their paragraph is new.
+ */
+const markedParagraphsCache = new WeakMap<
+  OoxmlNode,
+  { readonly depth: number; readonly paragraphs: readonly OoxmlParagraphNode[] }
+>();
+
+function markedParagraphsIn(node: OoxmlNode, depth: number): readonly OoxmlParagraphNode[] {
+  if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return NO_PARAGRAPHS;
+  const cached = markedParagraphsCache.get(node);
+  if (cached && cached.depth === depth) return cached.paragraphs;
+  let found: OoxmlParagraphNode[] | null = null;
+  if (node.kind === 'paragraph' && markersInParagraphWithPolicy(node, true).length > 0) {
+    found = [node];
+  }
+  for (const child of node.children) {
+    const inner = markedParagraphsIn(child, depth + 1);
+    if (inner.length === 0) continue;
+    found ??= [];
+    for (const paragraph of inner) found.push(paragraph);
+  }
+  const paragraphs = found ?? NO_PARAGRAPHS;
+  if (node.kind !== 'run' && depth >= MIN_MEMOIZED_DEPTH) {
+    markedParagraphsCache.set(node, { depth, paragraphs });
+  }
+  return paragraphs;
+}
 
 /**
  * The comments in `word/comments.xml`, in authored order.

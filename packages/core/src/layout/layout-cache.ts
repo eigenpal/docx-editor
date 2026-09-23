@@ -140,14 +140,15 @@ function reusableLayoutTokenDigest(token: string): string {
   if (bytes <= MAX_CACHED_LAYOUT_DIGEST_BYTES) {
     cachedLayoutDigests.set(token, { digest, bytes });
     cachedLayoutDigestBytes += bytes;
-    while (
-      cachedLayoutDigests.size > MAX_CACHED_LAYOUT_DIGESTS ||
-      cachedLayoutDigestBytes > MAX_CACHED_LAYOUT_DIGEST_BYTES
-    ) {
-      const oldest = cachedLayoutDigests.entries().next();
-      if (oldest.done) break;
-      cachedLayoutDigests.delete(oldest.value[0]);
-      cachedLayoutDigestBytes -= oldest.value[1].bytes;
+    // One iterator for the sweep; see the paragraph cache's `set`.
+    for (const [oldestToken, oldest] of cachedLayoutDigests) {
+      if (
+        cachedLayoutDigests.size <= MAX_CACHED_LAYOUT_DIGESTS &&
+        cachedLayoutDigestBytes <= MAX_CACHED_LAYOUT_DIGEST_BYTES
+      )
+        break;
+      cachedLayoutDigests.delete(oldestToken);
+      cachedLayoutDigestBytes -= oldest.bytes;
     }
   }
   return digest;
@@ -223,14 +224,32 @@ export function aggregateParagraphTokensForTableBlock(
 ): string {
   const tokens: string[] = [];
   let any = false;
+  for (const paragraph of tableParagraphsInOrder(table)) {
+    const token = tokenForParagraph(paragraph);
+    if (token) any = true;
+    tokens.push(token);
+  }
+  return any ? framedTokenJoin(tokens) : '';
+}
+
+/**
+ * The paragraphs of a table subtree in document order, not descending into a paragraph
+ * (hosted text-box paragraphs are represented by their host), per immutable table node.
+ *
+ * Callers memoize their tokens on the table AND their own input (the list map, a drawing
+ * epoch), and that input moves with edits far from the table — Enter anywhere in a section
+ * mints a new list map. The walk itself only depends on the table, so it runs once per node.
+ */
+const tableParagraphs = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
+function tableParagraphsInOrder(table: OoxmlNode): readonly OoxmlNode[] {
+  const cached = tableParagraphs.get(table);
+  if (cached) return cached;
+  const paragraphs: OoxmlNode[] = [];
   const stack: OoxmlNode[] = [table];
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (node.kind === 'paragraph') {
-      const token = tokenForParagraph(node);
-      if (token) any = true;
-      tokens.push(token);
-      // Hosted text-box paragraphs are represented by their host paragraph's aggregate token.
+      paragraphs.push(node);
       continue;
     }
     if ('children' in node) {
@@ -239,7 +258,8 @@ export function aggregateParagraphTokensForTableBlock(
       }
     }
   }
-  return any ? framedTokenJoin(tokens) : '';
+  tableParagraphs.set(table, paragraphs);
+  return paragraphs;
 }
 
 /**
@@ -647,16 +667,19 @@ export function createParagraphLayoutCache<T>(
     set(key, value) {
       if (entries.has(key)) entries.delete(key);
       entries.set(key, { value, generation });
-      while (entries.size > maxEntries) {
-        const oldest = entries.entries().next();
-        if (oldest.done) break;
+      if (entries.size <= maxEntries) return;
+      // ONE iterator for the whole sweep. A fresh `entries()` per eviction re-skips every
+      // slot the previous evictions deleted, so dropping a stale generation (a font-load
+      // relayout leaves one the size of the document) cost quadratic time in one keystroke.
+      for (const [oldestKey, oldest] of entries) {
+        if (entries.size <= maxEntries) break;
         // The least recent entry is still part of the current working set: everything
         // after it is too, so the soft cap yields rather than thrash — up to the hard
         // ceiling, past which memory wins over reuse.
-        if (oldest.value[1].generation >= generation && entries.size <= hardMaxEntries) break;
+        if (oldest.generation >= generation && entries.size <= hardMaxEntries) break;
         if (entries.size > hardMaxEntries) hardLimitEvictions += 1;
         else softLimitEvictions += 1;
-        entries.delete(oldest.value[0]);
+        entries.delete(oldestKey);
         evictions += 1;
       }
     },

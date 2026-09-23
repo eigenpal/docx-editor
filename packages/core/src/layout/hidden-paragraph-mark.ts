@@ -48,14 +48,24 @@ function wmlChild(node: OoxmlNode, localName: string): OoxmlElement | undefined 
   return undefined;
 }
 
+/**
+ * Per immutable paragraph node. Every story-block enumeration asks this of every paragraph, and
+ * a keystroke replaces only the edited one, so the rest answer from here.
+ */
+const markHiddenByParagraph = new WeakMap<OoxmlNode, boolean>();
+
 /** `w:pPr/w:rPr` sets `w:vanish` or `w:specVanish` on. */
 export function paragraphMarkHidden(paragraph: OoxmlNode): boolean {
+  const cached = markHiddenByParagraph.get(paragraph);
+  if (cached !== undefined) return cached;
   const properties = wmlChild(paragraph, 'pPr');
   const markRunProperties = properties && wmlChild(properties, 'rPr');
-  if (!markRunProperties) return false;
-  return (
-    readOnOffChild(markRunProperties, 'vanish') || readOnOffChild(markRunProperties, 'specVanish')
-  );
+  const hidden =
+    markRunProperties !== undefined &&
+    (readOnOffChild(markRunProperties, 'vanish') ||
+      readOnOffChild(markRunProperties, 'specVanish'));
+  markHiddenByParagraph.set(paragraph, hidden);
+  return hidden;
 }
 
 function carriesSectionBreak(paragraph: OoxmlNode): boolean {

@@ -84,8 +84,19 @@ function emptyAnchor(block: Block): boolean {
   return true;
 }
 
+/** Per immutable table node: every section prepass asks it of the tables before its anchor. */
+const simpleTables = new WeakMap<OoxmlElement, boolean>();
+
 /** Keep the admission probe and the final placement on the same simple-row path. */
 function simpleTable(table: OoxmlElement): boolean {
+  const cached = simpleTables.get(table);
+  if (cached !== undefined) return cached;
+  const simple = simpleTableUncached(table);
+  simpleTables.set(table, simple);
+  return simple;
+}
+
+function simpleTableUncached(table: OoxmlElement): boolean {
   const pending = [table];
   let visits = 0;
   while (pending.length) {
