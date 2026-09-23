@@ -1,4 +1,5 @@
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
+import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
 import { DocxEditorNotesContextMenu } from '../editor/note-popup-parts';
 import { DocxEditorNotePreview } from '../editor/note-popup-parts';
 import { DocxEditorNotePropertiesDialog } from '../editor/DocxEditorNotes';
@@ -496,6 +497,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Navigation: typeof DocxEditorNavigationCompound;
   /** File export progress and errors, configured through popups.export. */
   readonly ExportDialog: typeof DocxEditorExportDialog;
+  /** File print progress and errors, configured through popups.print. */
+  readonly PrintDialog: typeof DocxEditorPrintDialog;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
@@ -551,6 +554,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigationCompound,
   ExportDialog: DocxEditorExportDialog,
+  PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,

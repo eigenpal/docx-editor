@@ -120,6 +120,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'file.save',
   'file.exportMarkdown',
   'file.exportPdf',
+  'file.print',
   'file.pageSetup',
   'insert.footnote',
   'insert.endnote',
@@ -314,7 +315,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(69);
+    expect(chromeControlCount()).toBe(70);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {
@@ -419,11 +420,13 @@ describe('legacy chrome descriptor', () => {
     for (const menu of CHROME_MENUS) walk(menu.entries);
   });
 
-  test('the File menu offers open, save and page setup — and no print', () => {
+  test('the File menu offers open, save, print and page setup', () => {
     const file = CHROME_MENUS.find((m) => m.id === 'file');
     expect(file).toBeDefined();
     const rows = file!.entries.flatMap((e) => (e.kind === 'item' ? [e.slot] : []));
-    expect(rows).toEqual(['file.open', 'file.save', 'file.pageSetup']);
+    expect(rows).toEqual(['file.open', 'file.save', 'file.print', 'file.pageSetup']);
+    const print = file!.entries.find((e) => e.kind === 'item' && e.slot === 'file.print');
+    expect(print).toMatchObject({ shortcutKey: 'toolbar.printShortcut' });
   });
 
   test('the Insert menu reaches all three break kinds the engine wires', () => {

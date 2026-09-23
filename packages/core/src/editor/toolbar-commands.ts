@@ -544,6 +544,14 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           'export is not a command; run it with runChromeExport(editor, format, handlers)',
       };
     }
+    if (id === 'file.print') {
+      return {
+        id,
+        enabled: false,
+        active: false,
+        disabledReason: 'print is not a command; run it with runChromePrint(editor, handlers)',
+      };
+    }
     if (id === 'file.save') {
       return {
         id,
@@ -802,6 +810,13 @@ export function runToolbarCommand(
         ok: false,
         code: 'unsupported',
         reason: 'export is not a command; run it with runChromeExport(editor, format, handlers)',
+      };
+    }
+    if (id === 'file.print') {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'print is not a command; run it with runChromePrint(editor, handlers)',
       };
     }
     if (id === 'file.save') {

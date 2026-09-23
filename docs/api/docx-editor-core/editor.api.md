@@ -615,6 +615,13 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "export";
         };
     }, {
+        readonly id: "print";
+        readonly labelKey: "toolbar.print";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "export";
+        };
+    }, {
         readonly id: "pageSetup";
         readonly labelKey: "toolbar.pageSetup";
         readonly paths: readonly string[];
@@ -769,7 +776,7 @@ export type ChromeControlState =
 | {
     readonly kind: 'load';
 }
-/** Host conversion through `runChromeExport`; not an editing command. */
+/** Host conversion through `runChromeExport` or `runChromePrint`; not an editing command. */
 | {
     readonly kind: 'export';
 };
@@ -868,10 +875,31 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
+export class ChromePrintError extends Error {
+    constructor(code: ChromePrintErrorCode);
+    readonly code: ChromePrintErrorCode;
+}
+
+// @public
+export type ChromePrintErrorCode = 'pdf-viewer-unavailable' | 'pdf-load-failed' | 'print-refused' | 'print-ended';
+
+// @public
+export interface ChromePrintJob {
+    dispose(): void;
+    print(options?: ChromePrintOptions): Promise<void>;
+    readonly url: string;
+}
+
+// @public
+export interface ChromePrintOptions {
+    readonly beforePrint?: () => void | Promise<void>;
+}
+
+// @public
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1619,6 +1647,9 @@ export interface InvalidTextFormFieldSession {
     // (undocumented)
     readonly type: 'number' | 'date';
 }
+
+// @public
+export function isChromePrintShortcut(event: KeyboardEvent): boolean;
 
 // @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
@@ -2514,6 +2545,9 @@ export type RulerUnit = 'inch' | 'cm';
 
 // @public
 export function runChromeExport(editor: Pick<Editor, 'save'>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
+
+// @public
+export function runChromePrint(editor: Pick<Editor, 'save'>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;

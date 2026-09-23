@@ -832,6 +832,8 @@ export interface DocxEditorMenuNamespace {
     readonly Open: typeof MenuOpen;
     // (undocumented)
     readonly PageSetup: typeof MenuPageSetup;
+    // (undocumented)
+    readonly Print: typeof MenuPrint;
     readonly ReportIssue: typeof MenuReportIssue;
     // (undocumented)
     readonly Review: typeof MenuReview;
@@ -903,6 +905,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+    readonly PrintDialog: typeof DocxEditorPrintDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -1138,8 +1141,24 @@ export interface DocxEditorPopups {
     pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
     // (undocumented)
     paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+    print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+}
+
+// @public
+export function DocxEditorPrintDialog(input: DocxEditorPrintDialogProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorPrintDialogProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    error: string;
+    onClose(): void;
+    open: boolean;
+    pending: boolean;
+    style?: CSSProperties;
+    url: string;
 }
 
 // @public

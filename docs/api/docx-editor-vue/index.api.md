@@ -2959,6 +2959,8 @@ export interface DocxEditorMenuNamespace {
     // (undocumented)
     readonly PageSetup: typeof MenuPageSetup;
     // (undocumented)
+    readonly Print: typeof MenuPrint;
+    // (undocumented)
     readonly ReportIssue: typeof MenuReportIssue;
     // (undocumented)
     readonly Review: typeof MenuReview;
@@ -3055,6 +3057,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+    readonly PrintDialog: typeof DocxEditorPrintDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -3606,8 +3609,72 @@ export interface DocxEditorPopups {
     pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
     // (undocumented)
     paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+    print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+}
+
+// @public
+export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    error: {
+        required: true;
+        type: StringConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    open: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    pending: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    style: PropType<CSSProperties>;
+    url: {
+        required: true;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    error: {
+        required: true;
+        type: StringConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    open: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    pending: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    style: PropType<CSSProperties>;
+    url: {
+        required: true;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorPrintDialogProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    error: string;
+    onClose(): void;
+    open: boolean;
+    pending: boolean;
+    style?: CSSProperties;
+    url: string;
 }
 
 // @public

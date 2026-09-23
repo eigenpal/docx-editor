@@ -84,7 +84,7 @@ export type ChromeControlState =
    * the deleted `parityOnly`, this one IS named by a control (`file.open`).
    */
   | { readonly kind: 'load' }
-  /** Host conversion through `runChromeExport`; not an editing command. */
+  /** Host conversion through `runChromeExport` or `runChromePrint`; not an editing command. */
   | { readonly kind: 'export' };
 
 /**
@@ -754,6 +754,7 @@ export type ChromeSlotId =
   | 'file.save'
   | 'file.exportMarkdown'
   | 'file.exportPdf'
+  | 'file.print'
   | 'paragraph.dialog'
   | 'file.pageSetup'
   | 'insert.footnote'
@@ -946,6 +947,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
           { kind: 'item', slot: 'file.exportPdf' },
         ],
       },
+      { kind: 'item', slot: 'file.print', shortcutKey: 'toolbar.printShortcut' },
       { kind: 'item', slot: 'file.pageSetup' },
     ],
   },

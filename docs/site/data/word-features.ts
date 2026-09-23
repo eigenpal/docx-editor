@@ -104,6 +104,18 @@ export const wordFeatures: WordFeature[] = [
       'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License.',
     docsLink: '/docs/2.x/guides/export',
   },
+  {
+    id: 'export.print',
+    name: 'Printing',
+    category: 'export',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'none',
+    tier: 'premium',
+    notes:
+      'File > Print and Ctrl+P convert the document through menu.exporters.pdf, then open the browser print dialog. A dialog shows progress and errors, and closes when the browser print dialog opens. Customize it with popups.print. Missing handlers show a setup error. Browsers without a PDF viewer get an Open PDF link instead. Printing requires the EigenPal Pro License.',
+    docsLink: '/docs/2.x/guides/print',
+  },
   // --- Text & formatting -----------------------------------------------
   {
     id: 'text.basic-formatting',

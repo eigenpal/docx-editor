@@ -96,6 +96,7 @@ Each entry accepts a `definePopup()` result, render callback, or `false`. Each p
 | Entry                    | Supplied props                             |
 | ------------------------ | ------------------------------------------ |
 | `export`                 | `DocxEditorExportDialogProps`              |
+| `print`                  | `DocxEditorPrintDialogProps`               |
 | `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
 | `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
 | `hyperlink`              | `HyperLinkProps`                           |
@@ -183,6 +184,74 @@ Dismissing feedback leaves conversion running and keeps export actions disabled 
 Set `popups.export` to `false` to suppress export feedback. Conversion still runs. Your conversion handlers must provide any progress and error feedback your application needs.
 
 Popup customization does not install converters. For installation and handler setup, see [Export Markdown and PDF](/docs/2.x/guides/export).
+
+## Customize print feedback
+
+Use `popups.print` to customize progress and errors for **File > Print**. The popup never replaces the browser print dialog: the editor closes it when the browser print dialog opens. It supports `definePopup()`, render callbacks, and `false` in React and Vue. Pass the map to the editor or `Root`.
+
+The editor supplies these properties to your component:
+
+| Property | Meaning |
+| --- | --- |
+| `open` | `true` while the popup is mounted. |
+| `pending` | `true` while the PDF handler converts the document. |
+| `error` | Localized failure text, including missing converter instructions. Empty when no error occurred. |
+| `url` | An object URL for the converted PDF after a print failure, such as in a browser without a PDF viewer. Otherwise empty. |
+| `onClose()` | Closes the popup. While `pending` is `true`, it also cancels printing. |
+
+Forward the properties to `DocxEditorPrintDialog` to retain the default dialog, keyboard handling, and focus restoration. Use `className` and `style` to change its appearance. Replace its contents with React children or the Vue default slot. Provide an accessible title, error text, and a close control when you replace contents.
+
+Use `url` for an **Open PDF** link. It stays valid until the next print or until the menu unmounts.
+
+In React, register a component with `definePopup()`:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPopups, DocxEditorPrintDialogProps } from '@docx-editor.dev/react';
+
+function PrintDialog(props: DocxEditorPrintDialogProps) {
+  return <DocxEditor.PrintDialog {...props} className="app-print" />;
+}
+
+const popups: DocxEditorPopups = {
+  print: definePopup(PrintDialog),
+};
+```
+
+In Vue, create `PrintDialog.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorPrintDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorPrintDialogProps } from '@docx-editor.dev/vue';
+
+const props = defineProps<DocxEditorPrintDialogProps>();
+</script>
+
+<template>
+  <Dialog v-bind="props" class-name="app-print" />
+</template>
+```
+
+Register the Vue component in your popup map:
+
+```ts
+import { definePopup } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
+import PrintDialog from './PrintDialog.vue';
+
+const popups: DocxEditorPopups = {
+  print: definePopup(PrintDialog),
+};
+```
+
+The editor updates the same component when progress changes to an error. A later print starts a separate component instance.
+
+**File > Print** stays unavailable until the popup closes.
+
+Set `popups.print` to `false` to suppress print feedback. The editor still converts the document and opens the browser print dialog. The editor does not show errors. It logs them to the browser console, so your PDF handler must report conversion errors to the user.
+
+For handler setup and browser requirements, see [Print documents](/docs/2.x/guides/print).
 
 ## Arrange parts and custom fields
 

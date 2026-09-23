@@ -16,6 +16,7 @@
     "custom-styles",
     "fonts",
     "dark-mode",
-    "export"
+    "export",
+    "print"
   ]
 }

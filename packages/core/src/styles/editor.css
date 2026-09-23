@@ -7449,6 +7449,14 @@ a.docx-hyperlink:focus-visible {
 .docx-editor.docx-export-dialog--pending .docx-dialog__footer {
   justify-content: center;
 }
+.docx-editor .docx-print-dialog .docx-dialog__footer,
+.docx-editor.docx-print-dialog .docx-dialog__footer {
+  flex-wrap: wrap;
+}
+.docx-editor .docx-print-dialog__open {
+  margin-inline-end: auto;
+  text-decoration: none;
+}
 .docx-editor .docx-export-dialog__message {
   margin: 0;
   color: var(--doc-text-muted);

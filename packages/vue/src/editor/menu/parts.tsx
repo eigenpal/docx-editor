@@ -318,7 +318,8 @@ function defineActionRow(
   slot: ChromeSlotId,
   labelKey: string | undefined,
   shortcutKey: string | undefined,
-  pick: (context: MenuContextValue) => (() => void) | undefined
+  pick: (context: MenuContextValue) => (() => void) | undefined,
+  showShortcut: (context: MenuContextValue) => boolean = () => true
 ) {
   const Part = defineComponent({
     name: `MenuAction_${slot}`,
@@ -335,11 +336,12 @@ function defineActionRow(
         if (props.hidden) return null;
         const control = chromeControlForSlot(slot);
         const text = label(labelKey ?? control?.labelKey ?? slot);
+        const shortcut = shortcutKey && showShortcut(context) ? shortcutKey : undefined;
         return (
           <MenuRow
             {...menuRowSlot(slot)}
             icon={chromeIcon(control?.paths) ?? undefined}
-            {...(shortcutKey ? { shortcut: label(shortcutKey) } : {})}
+            {...(shortcut ? { shortcut: label(shortcut) } : {})}
             disabled={!handler}
             selectHandler={() => {
               handler?.();
@@ -379,6 +381,14 @@ export const MenuExportMarkdown = defineActionRow(
 /** Exports PDF through the menu handler. @public */
 export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
   context.onExport ? () => context.onExport?.('pdf') : undefined
+);
+/** Prints through the menu's PDF handler. @public */
+export const MenuPrint = defineActionRow(
+  'file.print',
+  undefined,
+  'toolbar.printShortcut',
+  (context) => context.onPrint,
+  (context) => context.printShortcut === true
 );
 
 /**
@@ -582,6 +592,7 @@ export const MenuEntry = defineComponent({
       if (entry.slot === 'file.save') return <MenuSave />;
       if (entry.slot === 'file.exportMarkdown') return <MenuExportMarkdown />;
       if (entry.slot === 'file.exportPdf') return <MenuExportPdf />;
+      if (entry.slot === 'file.print') return <MenuPrint />;
       if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
       if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
       if (entry.slot === 'image.insert') return <MenuImageInsert />;

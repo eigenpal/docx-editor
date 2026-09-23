@@ -444,6 +444,7 @@ function EditorChrome({
                 <DocxEditor.Menu.ExportMarkdown />
                 <DocxEditor.Menu.ExportPdf />
               </DocxEditor.Menu.Submenu>
+              <DocxEditor.Menu.Print />
               <DocxEditor.Menu.Separator />
               <DocxEditor.Menu.PageSetup />
             </DocxEditor.Menu.File>

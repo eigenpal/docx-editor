@@ -112,7 +112,7 @@ describe('word-features — lossless round-trip contract', () => {
 });
 
 test('export formats declare conversion limits without claiming round-trip support', () => {
-  for (const id of ['export.markdown', 'export.pdf']) {
+  for (const id of ['export.markdown', 'export.pdf', 'export.print']) {
     const row = feature(id);
     expect(row.category).toBe('export');
     expect(row.rendering).toBe('partial');

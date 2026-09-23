@@ -12,7 +12,7 @@
     "headerFooterLifecycle": 6,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 69,
+    "chromeSlots": 70,
     "chromeCommandWired": 39,
     "chromeProbe": 6,
     "acceptedRunProperties": 19,
@@ -1289,6 +1289,7 @@
       "file.save",
       "file.exportMarkdown",
       "file.exportPdf",
+      "file.print",
       "file.pageSetup",
       "insert.footnote",
       "insert.endnote",
@@ -1373,7 +1374,8 @@
       "file.open",
       "file.save",
       "file.exportMarkdown",
-      "file.exportPdf"
+      "file.exportPdf",
+      "file.print"
     ]
   },
   "unsupportedRows": [

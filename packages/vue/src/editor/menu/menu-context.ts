@@ -9,6 +9,9 @@ export type MenuId = ChromeMenuId | (string & {});
 
 export interface MenuContextValue {
   readonly onExport?: (format: ChromeExportFormat) => void;
+  readonly onPrint?: () => void;
+  /** Whether the print row shows its shortcut: the editor handles it only with a PDF handler. */
+  readonly printShortcut?: boolean;
   readonly t: ToolbarTranslate | undefined;
   readonly openMenu: MenuId | null;
   readonly setOpenMenu: (id: MenuId | null) => void;

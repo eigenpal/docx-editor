@@ -31,6 +31,12 @@ export const FILE_CHROME_GROUP = {
       state: { kind: 'export' },
     },
     {
+      id: 'print',
+      labelKey: 'toolbar.print',
+      paths: GENERATED_ICON_PATHS['print'],
+      state: { kind: 'export' },
+    },
+    {
       id: 'pageSetup',
       labelKey: 'toolbar.pageSetup',
       paths: GENERATED_ICON_PATHS['settings'],

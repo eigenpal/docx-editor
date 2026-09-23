@@ -76,7 +76,16 @@
     "exportMarkdownFailed": "Markdown export failed",
     "exportPdfFailed": "PDF export failed",
     "exportDownloadHint": "Your download starts when the file is ready. You can continue editing while the export runs.",
-    "exportContinueEditing": "Continue editing"
+    "exportContinueEditing": "Continue editing",
+    "printPreparing": "Preparing to print…",
+    "printPreparingHint": "The print dialog opens when the document is ready.",
+    "printOpenPdf": "Open PDF",
+    "printFailed": "Print failed",
+    "printFailedMessage": "Printing failed: {message}",
+    "printLoadFailed": "The PDF did not load for printing. Select Open PDF, then print from the PDF viewer.",
+    "printRefused": "The browser did not allow printing from the page. Select Open PDF, then print from the PDF viewer.",
+    "printNoViewer": "This browser cannot print PDF files from the page. Select Open PDF, then print from the PDF viewer.",
+    "printPdfMissing": "Printing uses PDF conversion. Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf."
   },
   "toc": {
     "refresh": "Refresh table of contents",

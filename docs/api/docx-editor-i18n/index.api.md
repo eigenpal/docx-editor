@@ -34,6 +34,9 @@ export const hi: PartialLocaleStrings;
 export const id: PartialLocaleStrings;
 
 // @public
+export function isApplePlatform(): boolean;
+
+// @public
 export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 // @public

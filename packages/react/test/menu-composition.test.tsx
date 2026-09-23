@@ -171,14 +171,14 @@ describe('the default bar', () => {
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
-  test('the File menu is Open · Save · Page setup, and never Print', () => {
+  test('the File menu is Open · Save · Print · Page setup', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.file');
     const slots = [...view.container.querySelectorAll('[role="menu"] [data-slot]')].map((element) =>
       element.getAttribute('data-slot')
     );
-    expect(slots).toEqual(['file.open', 'file.save', 'file.pageSetup']);
-    expect(view.container.textContent).not.toContain(label('toolbar.print' as TranslationKey));
+    expect(slots).toEqual(['file.open', 'file.save', 'file.print', 'file.pageSetup']);
+    expect(view.container.textContent).toContain(label('toolbar.print' as TranslationKey));
   });
 
   test('a menu child overrides its menu IN PLACE; `hidden` removes it', () => {

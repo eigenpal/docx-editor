@@ -20,8 +20,10 @@ const APPLE_PLATFORM = /mac|iphone|ipad|ipod/i;
  * the answer is `false` and the Windows spelling renders: a shortcut that reads "Ctrl+C" on
  * a Mac is wrong, and one that reads "⌘C" in a server render that then hydrates on Windows
  * is worse, because it is wrong AND it flickers.
+ *
+ * @public
  */
-function isApplePlatform(): boolean {
+export function isApplePlatform(): boolean {
   const agent = globalThis.navigator as
     | (Navigator & { readonly userAgentData?: { readonly platform?: string } })
     | undefined;

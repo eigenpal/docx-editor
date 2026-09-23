@@ -144,6 +144,7 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'file.save': { parity: 'same' },
   'file.exportMarkdown': { parity: 'same' },
   'file.exportPdf': { parity: 'same' },
+  'file.print': { parity: 'same' },
   'file.pageSetup': { parity: 'same' },
 
   // A note reference is a body-story concept: `w:footnoteReference` lives in the main document

@@ -1,4 +1,5 @@
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
+import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
 import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
 import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvalidTextFormFieldDialog';
 import { DocxEditorImageAltTextPopup } from '../editor/images/ImageAltText';
@@ -180,6 +181,8 @@ export interface DocxEditorNamespace {
   readonly Navigation: typeof Navigation;
   /** File export progress and errors, configured through popups.export. */
   readonly ExportDialog: typeof DocxEditorExportDialog;
+  /** File print progress and errors, configured through popups.print. */
+  readonly PrintDialog: typeof DocxEditorPrintDialog;
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
@@ -569,6 +572,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigation,
   ExportDialog: DocxEditorExportDialog,
+  PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   PageNumber: DocxEditorPageNumber,

@@ -47,7 +47,16 @@
     "exportMarkdownFailed": null,
     "exportPdfFailed": null,
     "exportingMarkdown": null,
-    "exportingPdf": null
+    "exportingPdf": null,
+    "printFailed": null,
+    "printFailedMessage": null,
+    "printOpenPdf": null,
+    "printPdfMissing": null,
+    "printPreparing": null,
+    "printPreparingHint": null,
+    "printNoViewer": null,
+    "printLoadFailed": null,
+    "printRefused": null
   },
   "formattingBar": {
     "groups": {

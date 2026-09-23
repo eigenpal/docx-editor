@@ -522,3 +522,8 @@ export {
   DocxEditorExportDialog,
   type DocxEditorExportDialogProps,
 } from './editor/DocxEditorExportDialog';
+
+export {
+  DocxEditorPrintDialog,
+  type DocxEditorPrintDialogProps,
+} from './editor/DocxEditorPrintDialog';

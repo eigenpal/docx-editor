@@ -270,7 +270,7 @@ function formatMessage(
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 export { localizeDisabledReason } from './disabled-reasons';
-export { platformShortcut } from './platform-shortcuts';
+export { isApplePlatform, platformShortcut } from './platform-shortcuts';
 
 /**
  * Build a typed `t(key, vars?)` function from a merged locale.

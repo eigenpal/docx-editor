@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The File menu exports saved document bytes to Markdown and PDF.",
+  "after": "The File menu also prints saved document bytes through the configured PDF converter.",
+  "reason": "Printing reads a saved snapshot, runs the host PDF handler, and prints the result from a local frame. It does not change document operations, shared state, or synchronization.",
+  "tests": [
+    "packages/core/src/editor/__tests__/chrome-print.test.ts",
+    "packages/react/test/print-popup.test.tsx",
+    "packages/vue/test/print-popup.test.ts",
+    "e2e/file-print.interaction.spec.ts"
+  ],
+  "changeset": "file-menu-print",
+  "migration": null
+}

@@ -83,6 +83,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'file.save': 'file_download',
   'file.exportMarkdown': 'file_download',
   'file.exportPdf': 'file_download',
+  'file.print': 'print',
   'paragraph.dialog': 'format_line_spacing',
   'file.pageSetup': 'settings',
   'insert.pageBreak': 'page_break',

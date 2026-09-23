@@ -436,3 +436,5 @@ export type {
   ChromeExportHandlers,
   ChromeExportResult,
 } from './chrome-export.ts';
+export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
+export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';

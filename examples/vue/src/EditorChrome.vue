@@ -32,6 +32,7 @@
               <DocxEditorMenuExportMarkdown />
               <DocxEditorMenuExportPdf />
             </DocxEditorMenuSubmenu>
+            <DocxEditorMenuPrint />
             <DocxEditorMenuSeparator />
             <DocxEditorMenuPageSetup />
           </DocxEditorMenuFile>
@@ -144,6 +145,7 @@ const DocxEditorMenuSave = DocxEditorMenu.Save;
 const DocxEditorMenuSubmenu = DocxEditorMenu.Submenu;
 const DocxEditorMenuExportMarkdown = DocxEditorMenu.ExportMarkdown;
 const DocxEditorMenuExportPdf = DocxEditorMenu.ExportPdf;
+const DocxEditorMenuPrint = DocxEditorMenu.Print;
 const DocxEditorMenuSeparator = DocxEditorMenu.Separator;
 const DocxEditorMenuPageSetup = DocxEditorMenu.PageSetup;
 const DocxEditorMenuInsert = DocxEditorMenu.Insert;
