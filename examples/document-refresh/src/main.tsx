@@ -33,6 +33,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [sampleEdited, setSampleEdited] = useState(false);
+  const sampleEditedRef = useRef(false);
   const [scrollToChange, setScrollToChange] = useState(false);
   const [message, setMessage] = useState(t('documentRefresh.idle'));
 
@@ -49,6 +50,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
     () =>
       editor.on('change', (change) => {
         if (change.source) return;
+        sampleEditedRef.current = true;
         setSampleEdited(true);
         if (!request.current) setMessage(t('documentRefresh.sampleEdited'));
       }),
@@ -56,7 +58,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   );
 
   async function update() {
-    if (request.current || sampleEdited) return;
+    if (request.current || sampleEditedRef.current) return;
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -64,6 +66,10 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
     try {
       submission = await refresh.capture();
       if (controller.signal.aborted) return;
+      if (sampleEditedRef.current) {
+        setMessage(t('documentRefresh.sampleEdited'));
+        return;
+      }
       setMessage(t('documentRefresh.processing'));
       const response = await fetch('/api/update', {
         method: 'POST',

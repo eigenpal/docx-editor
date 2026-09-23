@@ -102,6 +102,29 @@ async function save() {
 </script>
 ```
 
+For an external paragraph reference, call `scrollToAnchor` on the ref's value:
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const props = defineProps<{ paraId: string }>();
+const editor = useDocxEditor();
+
+function showReference() {
+  if (!editor.value?.scrollToAnchor({ paraId: props.paraId })) {
+    // Show an unavailable-reference state in your application.
+  }
+}
+</script>
+
+<template>
+  <button :disabled="!editor" @click="showReference">Show reference</button>
+</template>
+```
+
+Place this component inside `DocxEditor.Root`. Scrolling preserves selection and focus. See [Scroll to an external paragraph reference](/docs/2.x/core#scroll-to-an-external-paragraph-reference) for text matching, return values, and supported document regions.
+
 Use the instance for actions and one-time reads. A direct `snapshot()` call does not create a Vue subscription. Use `useEditorState` for reactive state.
 
 ## `useEditorEvent`

@@ -1107,6 +1107,18 @@ export const wordFeatures: WordFeature[] = [
       'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing; the content remains read-only.',
   },
   {
+    id: 'collab.anchor-navigation',
+    name: 'Scroll to an external paragraph reference',
+    category: 'collaboration',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    docsLink: '/docs/2.x/core#scroll-to-an-external-paragraph-reference',
+    notes:
+      'The browser Editor accepts DocAnchor values through scrollToAnchor. Paragraph IDs resolve without internal block IDs. Optional search and occurrence locate text within a paragraph. Scrolling preserves selection, focus, editing scope, content, and undo history. Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes are supported. Repeated headers and footers use their first laid-out occurrence. Text boxes and targets without layout positions return false. Invalid, missing, and ambiguous anchors also return false. React and Vue use the same core method.',
+  },
+  {
     id: 'collab.clipboard',
     name: 'Rich copy/paste (HTML clipboard)',
     category: 'collaboration',

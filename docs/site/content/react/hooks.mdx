@@ -120,6 +120,30 @@ function SaveButton() {
 }
 ```
 
+For an external paragraph reference, call `scrollToAnchor` on this same instance:
+
+```tsx
+import { useDocxEditor } from '@docx-editor.dev/react';
+
+function ReferenceButton({ paraId }: { paraId: string }) {
+  const editor = useDocxEditor();
+  return (
+    <button
+      disabled={!editor}
+      onClick={() => {
+        if (!editor?.scrollToAnchor({ paraId })) {
+          // Show an unavailable-reference state in your application.
+        }
+      }}
+    >
+      Show reference
+    </button>
+  );
+}
+```
+
+Place this component inside `DocxEditor.Root`. Scrolling preserves selection and focus. See [Scroll to an external paragraph reference](/docs/2.x/core#scroll-to-an-external-paragraph-reference) for text matching, return values, and supported document regions.
+
 Calling `editor.snapshot()` during render does not subscribe your component. Use `useEditorState` for reactive state.
 
 ## `useEditorEvent`

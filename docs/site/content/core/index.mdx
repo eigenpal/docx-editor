@@ -58,6 +58,55 @@ function pageLabel(editor: Editor): string {
 
 `snapshot()` is version-cached: it returns the same reference until editor state changes, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every store notification.
 
+### Scroll to an external paragraph reference
+
+Use `editor.scrollToAnchor(anchor)` when your application stores a paragraph's `w14:paraId`, such as a reference from a review card or server response. You do not need an internal block ID.
+
+Pass a `DocAnchor` and check the boolean result:
+
+```ts
+import type { DocAnchor, Editor } from '@docx-editor.dev/core';
+
+function revealReference(editor: Editor, anchor: DocAnchor): boolean {
+  return editor.scrollToAnchor(anchor);
+}
+
+const revealed = revealReference(editor, { paraId: '1B4C77A2' });
+if (!revealed) {
+  // Show an unavailable-reference state in your application.
+}
+```
+
+The method preserves selection, focus, editing scope, document content, and undo history. It also works in viewing mode. It scrolls vertically to center an offscreen target and leaves an already visible target in place. It does not highlight text.
+
+To reveal a phrase within a paragraph, include `search`:
+
+```ts
+const revealed = editor.scrollToAnchor({
+  paraId: '1B4C77A2',
+  search: 'Acme GmbH',
+  occurrence: 2,
+});
+```
+
+Paragraph IDs match without case sensitivity. Search text matches exactly, with case sensitivity. Without `occurrence`, the phrase must appear exactly once. `occurrence` is a positive, one-based match number. The method reveals the start of the matched text, including when the paragraph spans pages.
+
+Use paragraph IDs from the document open in the editor. The method commits pending typing, then resolves the anchor against that document on each call. After fetching document bytes, call `editor.load(bytes)` before scrolling. A pending local document mount completes before anchor resolution.
+
+| Result  | Meaning                                                                            |
+| ------- | ---------------------------------------------------------------------------------- |
+| `true`  | The target is already visible, or the editor scrolls to it.                        |
+| `false` | The anchor is invalid, missing, ambiguous, unsupported, or has no layout position. |
+| `false` | The editor has no mounted document or measurable scroll container.                 |
+
+A `false` result does not select another paragraph or use a partial text match. Check the return value instead of assuming every stored reference remains valid.
+
+Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes support anchor scrolling. A repeated header or footer uses its first laid-out occurrence. Text-box content and document regions without layout positions return `false`.
+
+Use `editor.exec({ type: 'setSelection', anchor })` when you also want to move the caret. Use `scrollToBlock(blockId)` when you already have an internal block ID, such as an outline entry. `scrollToAnchor` belongs to the browser `Editor` API; it does not extend the Office.js-shaped document model.
+
+React and Vue expose this method through `useDocxEditor`. See the [React hook](/docs/2.x/react/hooks#usedocxeditor) and [Vue composable](/docs/2.x/vue/composables#usedocxeditor).
+
 ### Group one gesture into one undo step
 
 If your app applies a value on every slider movement or color-picker input, group those writes into one user gesture. Each value renders and replicates immediately. One undo action restores the formatting before the gesture, including a mixed selection. A redo action restores the final value.
