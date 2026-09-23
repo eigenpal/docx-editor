@@ -16,7 +16,7 @@ type SpacingBlock =
   | { readonly kind: 'table' };
 
 /**
- * Word suppresses automatic spacing inside a list, but keeps its outer margins.
+ * Automatic spacing is suppressed inside a list, but its outer margins remain.
  *
  * Contextual spacing compares against the neighbour `flowNeighbourStyle` names, so a
  * paragraph a hidden mark removed from the flow still counts; `styles` resolves its style.
