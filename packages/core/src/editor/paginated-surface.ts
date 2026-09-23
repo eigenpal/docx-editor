@@ -95,6 +95,7 @@ import {
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { joinAcrossHiddenMarks } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -3008,18 +3009,20 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * Whether two paragraphs are siblings in the same container, so a join is even expressible.
+   * The ops joining two neighbours in `paragraphOrder()`, or null when no join can reach.
    *
    * `paragraphOrder()` is flat document order: the paragraph before the one after a table is
    * inside the table's last cell, and the paragraph before the first cell's is outside it.
    * Neither pair can be joined, and the store says so — but only after the op is built and
-   * the whole transaction refused.
+   * the whole transaction refused. Paragraphs a hidden mark removed from the flow may sit
+   * between two neighbours; the join absorbs them (see `hidden-mark-joins.ts`).
    */
-  function joinableSiblings(firstId: string, secondId: string): boolean {
-    const part = session.partFor(storyScope()) ?? session.part();
-    const firstParent = parentNodeOf(part, firstId);
-    const secondParent = parentNodeOf(part, secondId);
-    return firstParent !== null && secondParent !== null && firstParent.id === secondParent.id;
+  function joinOps(firstId: string, secondId: string): TreeDocOp[] | null {
+    return joinAcrossHiddenMarks(
+      session.partFor(storyScope()) ?? session.part(),
+      firstId,
+      secondId
+    );
   }
 
   function caretMark(position: { paragraphId: string; offset: number }): {
@@ -4539,18 +4542,15 @@ export function mountPaginatedSurface(
         // the surface, where a host that surfaces refusals reported an error for an ordinary
         // Backspace. Word moves the caret into the last cell instead; doing nothing is the
         // half of that this lane can honestly promise.
-        if (!joinableSiblings(previous, position.paragraphId)) {
+        const joins = joinOps(previous, position.paragraphId);
+        if (!joins) {
           setSelection(collapsedAt({ paragraphId: previous, offset: textOf(previous).length }));
           return;
         }
         const joinAt = textOf(previous).length;
         commit(
           () =>
-            applyOps(
-              [{ op: 'joinParagraphs', firstId: previous, secondId: position.paragraphId }],
-              selectionMark(),
-              caretMark({ paragraphId: previous, offset: joinAt })
-            ),
+            applyOps(joins, selectionMark(), caretMark({ paragraphId: previous, offset: joinAt })),
           () => collapsedAt({ paragraphId: previous, offset: joinAt }),
           { rearmPending: armed }
         );
@@ -4936,7 +4936,9 @@ export function mountPaginatedSurface(
       commit(
         () =>
           applyOps(
-            [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
+            joinOps(position.paragraphId, next) ?? [
+              { op: 'joinParagraphs', firstId: position.paragraphId, secondId: next },
+            ],
             selectionMark()
           ),
         () => collapsedAt(position),

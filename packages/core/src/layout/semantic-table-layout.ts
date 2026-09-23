@@ -1,6 +1,6 @@
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
-import { cellContextualSpacing } from './contextual-paragraph-spacing.ts';
+import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
 import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
@@ -417,7 +417,7 @@ function placeCellParagraph(
     edgeSpacing,
     layoutInputs.contextualSpacing,
     styleId,
-    options?.borderNeighbours,
+    contextualCellNeighbours(paragraph, options?.borderNeighbours),
     deps.styleCascade,
     options?.tableCellStyle
   );

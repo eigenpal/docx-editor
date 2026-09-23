@@ -205,7 +205,13 @@ export function mergedFlowBlocks(
   const accepted = withMergedParagraphs(blocks, displayMode, authorFilter).filter((entry) =>
     acceptStoryBlock(entry.block, displayMode, authorFilter)
   );
-  return withoutHiddenMarkParagraphs(accepted, displayMode, authorFilter);
+  // A merged paragraph's identity keys its merge group, so it is never copied.
+  return withoutHiddenMarkParagraphs(
+    accepted,
+    displayMode,
+    authorFilter,
+    (block) => !mergeGroups.has(block)
+  );
 }
 
 /**

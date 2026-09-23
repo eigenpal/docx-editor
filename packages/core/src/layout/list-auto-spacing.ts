@@ -1,5 +1,7 @@
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
 import { paragraphSpacing, type ParagraphSpacing } from './paragraph-style.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
 
 type SpacingBlock =
   | {
@@ -9,20 +11,40 @@ type SpacingBlock =
       readonly contextualSpacing: boolean;
       readonly styleId: string | null;
       readonly listItem?: { readonly numId: string };
+      readonly paragraph?: OoxmlElement;
     }
   | { readonly kind: 'table' };
 
-/** Word suppresses automatic spacing inside a list, but keeps its outer margins. */
+/**
+ * Word suppresses automatic spacing inside a list, but keeps its outer margins.
+ *
+ * Contextual spacing compares against the neighbour `flowNeighbourStyle` names, so a
+ * paragraph a hidden mark removed from the flow still counts; `styles` resolves its style.
+ */
 export function resolveListAutoSpacing<T extends SpacingBlock>(
   blocks: readonly T[],
-  lineUnitPt = 12
+  lineUnitPt = 12,
+  styles?: StyleCascadeTable
 ): T[] {
   return blocks.map((block, index) => {
     if (block.kind !== 'paragraph' || (!block.listItem && !block.contextualSpacing)) return block;
-    const suppressesAuto = (neighbor: SpacingBlock | undefined): boolean =>
-      neighbor?.kind === 'paragraph' &&
-      ((block.listItem !== undefined && neighbor.listItem?.numId === block.listItem.numId) ||
-        (block.contextualSpacing && neighbor.styleId === block.styleId));
+    const sameStyle = (side: -1 | 1): boolean => {
+      const adjacent = blocks[index + side];
+      const style = block.paragraph
+        ? flowNeighbourStyle(block.paragraph, side, adjacent, styles)
+        : adjacent?.kind === 'paragraph'
+          ? adjacent.styleId
+          : undefined;
+      return style !== undefined && style === block.styleId;
+    };
+    const suppressesAuto = (side: -1 | 1): boolean => {
+      const neighbor = blocks[index + side];
+      const sameList =
+        neighbor?.kind === 'paragraph' &&
+        block.listItem !== undefined &&
+        neighbor.listItem?.numId === block.listItem.numId;
+      return sameList || (block.contextualSpacing && sameStyle(side));
+    };
     // Recompute both answers from properties: a reused prepass entry may have been the
     // last item before Enter, or an interior item before the next paragraph was deleted.
     // Include contextual suppression here so keep-with-next prices the same margins
@@ -34,15 +56,11 @@ export function resolveListAutoSpacing<T extends SpacingBlock>(
     });
     // Word also suppresses automatic before-spacing at the start of a story/section.
     let before =
-      (block.listItem && index === 0) || suppressesAuto(blocks[index - 1])
-        ? inner.before
-        : outer.before;
-    let after = suppressesAuto(blocks[index + 1]) ? inner.after : outer.after;
+      (block.listItem && index === 0) || suppressesAuto(-1) ? inner.before : outer.before;
+    let after = suppressesAuto(1) ? inner.after : outer.after;
     if (block.contextualSpacing) {
-      const previous = blocks[index - 1];
-      const next = blocks[index + 1];
-      if (previous?.kind === 'paragraph' && previous.styleId === block.styleId) before = 0;
-      if (next?.kind === 'paragraph' && next.styleId === block.styleId) after = 0;
+      if (sameStyle(-1)) before = 0;
+      if (sameStyle(1)) after = 0;
     }
     if (before === block.spacing.before && after === block.spacing.after) return block;
     return { ...block, spacing: { before, after } };

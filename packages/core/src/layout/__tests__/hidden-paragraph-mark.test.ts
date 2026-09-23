@@ -10,6 +10,7 @@ import { buildNumberingIndex } from '../numbering-index.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf, type PageGeometry } from '../semantic-records.ts';
 import { storyBlocks } from '../story-roots.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -205,5 +206,81 @@ describe('pagination', () => {
     const result = layout(`${visible}${hidden}${para(text('d'))}`);
     expect(result.pages).toHaveLength(1);
     expect(lineTexts(result)).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
+describe('contextual spacing still sees a removed paragraph as the neighbour', () => {
+  const styleCascade = buildStyleCascadeTable(
+    read(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>` +
+        `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>` +
+        `<w:style w:type="paragraph" w:styleId="ListParagraph"><w:basedOn w:val="Normal"/><w:pPr><w:contextualSpacing/></w:pPr></w:style></w:styles>`,
+      '/word/styles.xml'
+    ).root
+  );
+  const TALL: PageGeometry = {
+    width: 200,
+    height: 400,
+    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+  const styled = (value: string, style: string, spacing: string, extra = '') =>
+    para(
+      value ? text(value) : '',
+      `${style ? `<w:pStyle w:val="${style}"/>` : ''}<w:spacing ${spacing}/>${extra}`
+    );
+  const hiddenIn = (style: string) =>
+    styled('', style, 'w:before="240" w:after="240"', `<w:rPr>${HIDDEN}</w:rPr>`);
+
+  /**
+   * Space between the bottom of the line `first` and the top of the line `second`. Adjacent
+   * space after and space before collapse to the larger of the two.
+   */
+  function gap(body: string): number {
+    const result = layoutSemanticDocument(load(body), 1, {
+      measurer,
+      geometry: TALL,
+      styleCascade,
+    });
+    const lines = linesOf(result);
+    const line = (value: string) => {
+      const found = lines.find(
+        (candidate) => candidate.spans.map((span) => span.text).join('') === value
+      );
+      if (!found) throw new Error(`no line ${value}`);
+      return found.box;
+    };
+    const first = line('first');
+    return Math.round((line('second').y - (first.y + first.height)) * 100) / 100;
+  }
+
+  test('a same-style removed paragraph drops the space before of the paragraph after it', () => {
+    const first = styled('first', '', 'w:after="200"');
+    const second = styled('second', 'ListParagraph', 'w:before="240"');
+    expect(gap(first + second)).toBe(12);
+    expect(gap(first + hiddenIn('ListParagraph') + second)).toBe(10);
+    expect(gap(first + hiddenIn('ListParagraph') + hiddenIn('ListParagraph') + second)).toBe(10);
+  });
+
+  test('a removed paragraph of another style keeps the space the visible neighbour would drop', () => {
+    const first = styled('first', 'ListParagraph', 'w:after="0"');
+    const second = styled('second', 'ListParagraph', 'w:before="240"');
+    expect(gap(first + second)).toBe(0);
+    expect(gap(first + hiddenIn('') + second)).toBe(12);
+  });
+
+  test('a same-style removed paragraph drops the space after of the paragraph before it', () => {
+    const first = styled('first', 'ListParagraph', 'w:after="200"');
+    const second = styled('second', '', 'w:before="0"');
+    expect(gap(first + second)).toBe(10);
+    expect(gap(first + hiddenIn('ListParagraph') + second)).toBe(0);
+  });
+
+  test('inside a table cell', () => {
+    const cell = (content: string) =>
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${content}</w:tc></w:tr></w:tbl>`;
+    const first = styled('first', '', 'w:after="200"');
+    const second = styled('second', 'ListParagraph', 'w:before="240"');
+    expect(gap(cell(first + second))).toBe(12);
+    expect(gap(cell(first + hiddenIn('ListParagraph') + second))).toBe(10);
   });
 });

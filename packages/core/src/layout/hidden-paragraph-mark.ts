@@ -20,6 +20,12 @@
 // The paragraph stays in the tree and still advances list counters: numbering is a property
 // of the document, not of what the page shows. {@link numberingFlowBlocks} gives list
 // resolution the block list with those paragraphs put back.
+//
+// It also stays the neighbour that `w:contextualSpacing` (17.3.1.9) compares against. A
+// paragraph after a removed run keeps or drops its space before by the style of the removed
+// paragraph next to it, not by the visible paragraph beyond the run; the same holds for the
+// space after of the paragraph before the run. The removed paragraph adds no spacing itself.
+// {@link hiddenMarkNeighboursOf} carries those neighbours on the kept paragraphs.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { readOnOffChild } from '../store/package/ooxml-shared.ts';
@@ -57,19 +63,88 @@ function carriesSectionBreak(paragraph: OoxmlNode): boolean {
   return properties !== undefined && wmlChild(properties, 'sectPr') !== undefined;
 }
 
+/**
+ * Would every display mode remove this paragraph from the flow, given a paragraph after it?
+ *
+ * The layout rule read without a display mode: `all-markup` shows every tracked change, so
+ * a paragraph that renders nothing there renders nothing in any view. Editing uses this to
+ * join across such paragraphs; layout itself asks with the mode it lays out in.
+ */
+export function hiddenMarkParagraphAlwaysRemoved(paragraph: OoxmlNode): boolean {
+  return (
+    paragraph.kind === 'paragraph' &&
+    paragraphMarkHidden(paragraph) &&
+    !carriesSectionBreak(paragraph) &&
+    paragraphRendersNothingVisible(paragraph, 'all-markup')
+  );
+}
+
+/** The removed paragraphs directly beside a kept one. */
+export interface HiddenMarkNeighbours {
+  /** The removed paragraph directly before, the last of its run. */
+  readonly before?: OoxmlElement;
+  /** The removed paragraph directly after, the first of its run. */
+  readonly after?: OoxmlElement;
+}
+
 /** Laid-out block list → the same list with the removed paragraphs back in document order. */
 const numberingFlows = new WeakMap<readonly OoxmlElement[], readonly OoxmlElement[]>();
+
+/** A kept paragraph's stand-in → the removed paragraphs beside it. */
+const neighboursOfStandIn = new WeakMap<OoxmlElement, HiddenMarkNeighbours>();
+
+/** A kept paragraph → its current stand-in, reused while its neighbours stay the same nodes. */
+const standIns = new WeakMap<
+  OoxmlElement,
+  { readonly neighbours: HiddenMarkNeighbours; readonly standIn: OoxmlElement }
+>();
+
+/**
+ * The removed paragraphs beside this laid-out paragraph, if any.
+ *
+ * Only the blocks {@link withoutHiddenMarkParagraphs} returns carry them.
+ */
+export function hiddenMarkNeighboursOf(block: OoxmlElement): HiddenMarkNeighbours | undefined {
+  return neighboursOfStandIn.get(block);
+}
+
+/**
+ * The kept paragraph as a shallow copy that remembers its removed neighbours.
+ *
+ * A copy, not the tree node, so the block's IDENTITY changes exactly when its neighbours do:
+ * incremental layout reuses prepared blocks and section prepasses by identity, and a
+ * neighbour deleted from the tree changes this paragraph's spacing without changing the
+ * paragraph. Memoized, so an unrelated edit keeps the same copy.
+ */
+function standInFor(block: OoxmlElement, neighbours: HiddenMarkNeighbours): OoxmlElement {
+  const cached = standIns.get(block);
+  if (
+    cached &&
+    cached.neighbours.before === neighbours.before &&
+    cached.neighbours.after === neighbours.after
+  ) {
+    return cached.standIn;
+  }
+  const standIn = { ...block } as OoxmlElement;
+  neighboursOfStandIn.set(standIn, neighbours);
+  standIns.set(block, { neighbours, standIn });
+  return standIn;
+}
 
 /**
  * The blocks that lay out, without the paragraphs a hidden mark removes.
  *
  * Walks backwards so a run of such paragraphs all find the paragraph that finally takes the
  * join. Returns the entries' blocks unchanged in the common case of no hidden marks.
+ *
+ * `canStandIn` refuses a copy for a block whose identity something else is keyed on; that
+ * block keeps its own neighbours for contextual spacing.
  */
 export function withoutHiddenMarkParagraphs(
   entries: readonly HiddenMarkFlowEntry[],
   displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  canStandIn: (block: OoxmlElement) => boolean = () => true
 ): OoxmlElement[] {
   let removed: Set<number> | null = null;
   let next: HiddenMarkFlowEntry | undefined;
@@ -89,9 +164,26 @@ export function withoutHiddenMarkParagraphs(
     }
     next = entry;
   }
-  const all = entries.map((entry) => entry.block);
-  if (removed === null) return all;
+  if (removed === null) return entries.map((entry) => entry.block);
   const removedIndexes = removed;
+  // A removed paragraph is a neighbour only inside its own container, the same rule that
+  // decided the removal.
+  const removedBeside = (index: number, side: -1 | 1): OoxmlElement | undefined => {
+    const other = entries[index + side];
+    return other &&
+      removedIndexes.has(index + side) &&
+      other.parentKey === entries[index]!.parentKey
+      ? other.block
+      : undefined;
+  };
+  const all = entries.map((entry, index) => {
+    const { block } = entry;
+    if (removedIndexes.has(index) || block.kind !== 'paragraph' || !canStandIn(block)) return block;
+    const before = removedBeside(index, -1);
+    const after = removedBeside(index, 1);
+    if (!before && !after) return block;
+    return standInFor(block, { ...(before ? { before } : {}), ...(after ? { after } : {}) });
+  });
   const kept = all.filter((_block, index) => !removedIndexes.has(index));
   numberingFlows.set(kept, all);
   return kept;

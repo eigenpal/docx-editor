@@ -1,4 +1,8 @@
-import { contextualParagraphSpacing } from './contextual-paragraph-spacing.ts';
+import {
+  contextualFlowInputs,
+  contextualParagraphSpacing,
+  flowNeighbourStyle,
+} from './contextual-paragraph-spacing.ts';
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
@@ -1191,7 +1195,8 @@ function layoutBlocksPass(
       sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
         prepareBlock(block, contentWidth)
       ),
-      options.paragraphLineUnitPt
+      options.paragraphLineUnitPt,
+      styleCascade
     );
     const keys = prepared.map((entry) => entry.key);
     const terminalTextTables = terminalTables.terminalTextTableGroup(
@@ -1205,14 +1210,6 @@ function layoutBlocksPass(
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
       entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
-    );
-    // The two inputs `w:contextualSpacing` reads from the blocks on either side. A table
-    // answers null, which is what `sameStyleAs` means by "not a paragraph of this style".
-    const contextualSpacings = prepared.map(
-      (entry) => entry.kind === 'paragraph' && entry.contextualSpacing
-    );
-    const styleIds = prepared.map((entry) =>
-      entry.kind === 'paragraph' ? (entry.styleId ?? '') : null
     );
     // A paragraph's bottom edge belongs to its border GROUP, which the block after it can
     // join or leave. A table never groups, and neither does a paragraph with no borders.
@@ -1236,8 +1233,7 @@ function layoutBlocksPass(
       listAutoSpacingFlowKeys(paragraphFrameFlowKeys(keys, prepared), prepared),
       {
         terminalTableGroup: terminalTextTables,
-        contextualSpacingAt: (index) => contextualSpacings[index]!,
-        styleIdAt: (index) => styleIds[index] ?? null,
+        ...contextualFlowInputs(prepared, styleCascade),
         borderGroupKeyAt: (index) => borderGroupKeys[index]!,
         tocVerdicts,
         markerTextAt: (index) => markerTexts[index],
@@ -1734,9 +1730,8 @@ function layoutBlocksPass(
     if (placedParagraphStartY === undefined && startOffset === 0 && !entry.frame) {
       const previous = prepared[entryIndex - 1];
       const sameStyle =
-        previous?.kind === 'paragraph' &&
         entry.styleId !== null &&
-        previous.styleId === entry.styleId;
+        flowNeighbourStyle(entry.paragraph, -1, previous, styleCascade) === entry.styleId;
       const before = entry.contextualSpacing && sameStyle ? 0 : entry.spacing.before;
       const continuesBorder =
         entry.borderGroupKey !== '' &&
@@ -2125,8 +2120,8 @@ function layoutBlocksPass(
       authoredSpacing,
       contextualSpacing,
       styleId,
-      previousEntry?.kind === 'paragraph' ? previousEntry.styleId : undefined,
-      nextEntry?.kind === 'paragraph' ? nextEntry.styleId : undefined
+      flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
+      flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
     );
     const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
     // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.

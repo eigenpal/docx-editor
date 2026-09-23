@@ -267,15 +267,17 @@ export function listMarkerFlowKeys(
 export function contextualSpacingFlowKeys(
   keys: string[],
   contextualAt: (index: number) => boolean,
-  styleAt: (index: number) => string | null
+  styleAt: (index: number) => string | null,
+  neighbourStyleAt: (index: number, side: -1 | 1) => string | null = (index, side) =>
+    index + side >= 0 && index + side < keys.length ? styleAt(index + side) : null
 ): string[] {
   let flow = keys;
   for (let index = 0; index < keys.length; index += 1) {
     if (!contextualAt(index)) continue;
     const style = styleAt(index);
     if (style === null) continue;
-    const before = index > 0 && styleAt(index - 1) === style;
-    const after = index + 1 < keys.length && styleAt(index + 1) === style;
+    const before = neighbourStyleAt(index, -1) === style;
+    const after = neighbourStyleAt(index, 1) === style;
     if (flow === keys) flow = [...keys];
     flow[index] = `${flow[index]}~cs~${before ? 1 : 0}${after ? 1 : 0}`;
   }
@@ -401,6 +403,11 @@ export interface FlowKeyFoldInputs {
   readonly contextualSpacingAt: (index: number) => boolean;
   /** `null` for a block that can never match a neighbour — a table, or an unstyled paragraph. */
   readonly styleIdAt: (index: number) => string | null;
+  /**
+   * The style a block's contextual spacing compares against on one side, when that is not
+   * simply the adjacent block's: a paragraph a hidden mark removed from the flow still counts.
+   */
+  readonly neighbourStyleAt?: (index: number, side: -1 | 1) => string | null;
   /** `''` for a block outside every border group. */
   readonly borderGroupKeyAt: (index: number) => string;
   /** Empty when the part has no TOC; the fold is then skipped outright. */
@@ -440,7 +447,12 @@ export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[]
           : key
       )
     : keys;
-  let flow = contextualSpacingFlowKeys(grouped, at.contextualSpacingAt, at.styleIdAt);
+  let flow = contextualSpacingFlowKeys(
+    grouped,
+    at.contextualSpacingAt,
+    at.styleIdAt,
+    at.neighbourStyleAt
+  );
   flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);
