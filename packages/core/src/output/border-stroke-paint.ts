@@ -67,18 +67,12 @@ export function applyParagraphBorderStyle(
     case 'thinThickLargeGap':
     case 'thickThinLargeGap':
     case 'thinThickThinLargeGap': {
-      // Two hairlines inside the published box — layout owns the band (incl. thin-double floor).
-      // Triple and thinThick* compound vals approximate as double; decorative art stays solid.
-      const line = Math.max(1, thicknessPx / 3);
+      // Fill the published band without CSS border-width snapping. A subpixel
+      // stroke must not grow to a whole CSS pixel at small zoom levels.
+      // Triple and thinThick* retain their existing double approximation.
+      const line = thicknessPx / 3;
       rule.style.backgroundColor = 'transparent';
-      if (vertical) {
-        rule.style.borderLeft = `${line}px solid #${color}`;
-        rule.style.borderRight = `${line}px solid #${color}`;
-      } else {
-        rule.style.borderTop = `${line}px solid #${color}`;
-        rule.style.borderBottom = `${line}px solid #${color}`;
-      }
-      rule.style.boxSizing = 'border-box';
+      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'right' : 'bottom'}, #${color} 0px, #${color} ${line}px, transparent ${line}px, transparent ${line * 2}px, #${color} ${line * 2}px)`;
       return;
     }
     case 'threeDEmboss':

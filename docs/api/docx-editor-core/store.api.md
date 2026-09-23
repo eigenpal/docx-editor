@@ -1207,6 +1207,7 @@ export interface DrawingImageEffects {
     readonly contrast: number;
     // (undocumented)
     readonly grayscale: boolean;
+    readonly opacity?: number;
 }
 
 // @public

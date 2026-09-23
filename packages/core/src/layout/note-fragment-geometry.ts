@@ -8,6 +8,7 @@ import type {
   ParagraphFragmentRecord,
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { paragraphKeeps } from './pagination-keeps.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -42,6 +43,15 @@ export function shiftParagraphFragment(
           marker: {
             ...fragment.marker,
             box: { ...fragment.marker.box, y: fragment.marker.box.y + dy },
+            // The picture bullet shares the marker's coordinate space and moves with it.
+            ...(fragment.marker.picture
+              ? {
+                  picture: {
+                    ...fragment.marker.picture,
+                    box: { ...fragment.marker.picture.box, y: fragment.marker.picture.box.y + dy },
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -130,7 +140,9 @@ export function firstBodyContentTopPt(page: PageRecord): number {
  * The body band (content-relative pt) of the line on `page` that carries `ref`.
  *
  * `bottom` is the band body text must KEEP for this reference when its footnote reserve is
- * measured. Word's rule: a footnote STARTS on the page that references it. A reserve capped
+ * measured. Normally a footnote starts on its reference page; the bounded orphan-pair
+ * refinement below permits a whole note to continue instead of leaving one opening line.
+ * A reserve capped
  * only by the minimum body band (`MIN_FOOTNOTE_BODY_BAND_PT`) can exceed the room below the
  * referencing line, which evicts that line — and with it the reference — to the next page.
  * The next reserve pass then follows the reference forward, the reflow loop oscillates
@@ -162,6 +174,8 @@ export interface NoteReferenceLineBand {
   readonly blockTop: number;
   /** Whether the reserve may claim the line itself to move the reference forward. */
   readonly evictable: boolean;
+  /** Retain the opening orphan pair even when its second line's note must start later. */
+  readonly preserveOrphanLine?: boolean;
 }
 
 /**
@@ -191,6 +205,24 @@ export function noteReferenceLineBandPt(
   return band;
 }
 
+/**
+ * Does any of `refs` sit on an opening orphan pair on `page`?
+ *
+ * The reflow loop asks this to decide whether its orphan-refinement phase can move this
+ * document at all. A document with no such reference must not pay a second full reserve
+ * pass to discover that — cold or on every keystroke. Reads through the band memo, so it
+ * is a map lookup wherever the bands were needed anyway.
+ */
+export function anyOrphanPairBand(
+  page: PageRecord,
+  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
+): boolean {
+  for (const ref of refs) {
+    if (noteReferenceLineBandPt(page, ref).preserveOrphanLine === true) return true;
+  }
+  return false;
+}
+
 function computeReferenceLineBand(
   page: PageRecord,
   ref: { readonly paragraphId: string; readonly atomOffset: number }
@@ -199,6 +231,7 @@ function computeReferenceLineBand(
   let bottom = 0;
   let blockTop = 0;
   let evictable = false;
+  let preserveOrphanLine = false;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
       if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
@@ -212,6 +245,17 @@ function computeReferenceLineBand(
         // Only a located LINE may be evicted; an ownership match without a line segment
         // (merged/projected offsets) falls back to the fragment band and stays put.
         evictable = line !== null && !isOutOfFlowFragment(block);
+        const keeps = paragraphKeeps(block.props);
+        // A split-capable paragraph needs two opening lines on this page. Its note
+        // may continue before sacrificing that pair; explicit keepLines and short
+        // unsplittable paragraphs still move together with their references.
+        preserveOrphanLine =
+          evictable &&
+          line?.index === 1 &&
+          block.fragmentIndex === 0 &&
+          (block.lines.length >= 4 || !block.paragraphEnd) &&
+          keeps.widowControl &&
+          !keeps.keepLines;
       }
       continue;
     }
@@ -221,6 +265,7 @@ function computeReferenceLineBand(
         top = block.box.y;
         bottom = blockBottom;
         evictable = false;
+        preserveOrphanLine = false;
       }
     }
   }
@@ -235,6 +280,7 @@ function computeReferenceLineBand(
     // body pass tolerated) must not evict: the eviction reserve computed from its top
     // would be zero, and the reference's note would be neither placed nor carried.
     evictable: evictable && clampedBottom > clampedTop,
+    ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
   };
 }
 
@@ -242,11 +288,11 @@ function computeReferenceLineBand(
 function referenceLineBand(
   fragment: ParagraphFragmentRecord,
   ref: { readonly paragraphId: string; readonly atomOffset: number }
-): { readonly top: number; readonly bottom: number } | null {
-  for (const line of fragment.lines) {
+): { readonly top: number; readonly bottom: number; readonly index: number } | null {
+  for (const [index, line] of fragment.lines.entries()) {
     for (const segment of lineSegments(line)) {
       if (!segmentOwnsAtomOffset(segment, ref.paragraphId, ref.atomOffset)) continue;
-      return { top: line.box.y, bottom: line.box.y + line.box.height };
+      return { top: line.box.y, bottom: line.box.y + line.box.height, index };
     }
   }
   return null;

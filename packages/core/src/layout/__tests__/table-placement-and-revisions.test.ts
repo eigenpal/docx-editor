@@ -110,12 +110,12 @@ describe('w:tblInd and w:jc place the table in the text column', () => {
     ).toBe('right');
   });
 
-  test('a table wider than the column stays flush rather than being centred off the page', () => {
+  test('a wider centered table keeps its center relative to the text column', () => {
     const wide = `${grid(7200, 7200)}<w:tr>${cell()}${cell()}</w:tr>`;
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:jc w:val="center"/><w:tblLayout w:type="fixed"/></w:tblPr>${wide}</w:tbl>`
     );
-    expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBe(0);
+    expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBe((CONTENT_WIDTH_PT - 720) / 2);
   });
 
   test('an indent wider than the slack cannot push the table off the column', () => {

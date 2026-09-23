@@ -1,10 +1,10 @@
+import { markerMeasureToken } from './list-marker-measure-key.ts';
 import {
   numberingParagraphProperties,
   numberingParagraphToken,
   withNumberingParagraphProperties,
 } from './numbering-paragraph-properties.ts';
-// Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
-// layout inputs (marker text, effective indent, marker face) for one story walk.
+// Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { flattenContentControls } from '@docx-editor.dev/core/store';
@@ -16,6 +16,7 @@ import {
   expandCountersOf,
   type FullContextNumberSource,
 } from './list-counters.ts';
+import { resolvePictureBullet, type ResolvedPictureBullet } from './numbering-picture-bullet.ts';
 import {
   EMPTY_NUMBERING_INDEX,
   MAX_LEVEL_INDENT_PT,
@@ -32,11 +33,11 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { EMPTY_TAB_STOPS, nextTabDestination, type ResolvedTabStops } from './paragraph-tabs.ts';
-import { mapSymbolPuaText } from './symbol-encoding.ts';
+import { hasSymbolPua, mapSymbolPuaText } from './symbol-encoding.ts';
+import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
-import type { TextMeasurer } from './semantic-records.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
@@ -98,23 +99,6 @@ function consumeListResolveChangeEvidence(
   return evidence;
 }
 
-/** Fields of {@link ResolvedRunStyle} that change a marker's measured width. */
-function markerMeasureToken(style: ResolvedRunStyle): string {
-  return [
-    style.fontFamily ?? '',
-    style.fontSizePt,
-    style.bold ? 1 : 0,
-    style.italic ? 1 : 0,
-    style.characterSpacingPt,
-    style.horizontalScalePercent,
-    style.verticalAlign,
-    style.hidden ? 1 : 0,
-    style.kerningMinPt,
-    style.caps ? 1 : 0,
-    style.smallCaps ? 1 : 0,
-  ].join(',');
-}
-
 /**
  * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
  *
@@ -135,6 +119,17 @@ export interface ResolvedListItem {
   /** Effective indent after merging level + paragraph indents, in points. */
   readonly indent: NumberingLevelIndent;
   readonly markerStyle: ResolvedRunStyle;
+  /**
+   * The image marker a `w:lvlPicBulletId` level resolved to, absent on every other item.
+   *
+   * Present means the marker is an IMAGE: it occupies `width` x `height` points in the
+   * hanging slot and `markerText` is only what a sink that cannot draw the image falls back
+   * to. The extent is the AUTHORED `v:shape` size scaled by the marker font size — see
+   * {@link resolvePictureBullet}, which also decides when the answer is no picture at all.
+   * Absent means the level declared none, named one the part does not declare, declared one
+   * this projection could not read, or resolved to a size nothing can paint.
+   */
+  readonly picBullet?: ResolvedPictureBullet;
   /** Fingerprint for layout cache keys (indent, marker text, marker face). */
   readonly cacheToken: string;
 }
@@ -536,16 +531,34 @@ export function resolveStoryListItems(
       };
       prelude.perLevel.set(advanced.level, levelDerived);
     }
-    const { indent, markerStyle } = levelDerived;
+    const { indent, markerStyle: authoredMarkerStyle } = levelDerived;
     // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same
     // string; doing it in the painter would size the marker box for a glyph nobody draws.
     const markerText = mapSymbolPuaText(
       advanced.markerText,
-      markerStyle.fontFamily,
+      authoredMarkerStyle.fontFamily,
       isFontAvailable
     );
+    // A translated marker needs a Unicode face, not the unavailable byte-encoded face.
+    // Resolve the substrate's default in both measurement and painting. Preserve the
+    // authored face when any unknown private-use character remains, or when the host
+    // explicitly admits the original font. Never mutate the cached level style.
+    const markerStyle =
+      markerText !== advanced.markerText && !hasSymbolPua(markerText)
+        ? { ...authoredMarkerStyle, fontFamily: null, fontFamilyEastAsia: null }
+        : authoredMarkerStyle;
+    // `w:lvlPicBulletId` names a `w:numPicBullet` of the SAME part. A level naming one the
+    // part never declared, or one whose VML this projection could not read, keeps its
+    // `w:lvlText` — a missing image must never cost the reader the marker entirely.
+    const authoredPicBullet =
+      advanced.level.picBulletId === undefined
+        ? undefined
+        : linked.pictureBullets?.get(advanced.level.picBulletId);
+    const picBullet = authoredPicBullet
+      ? (resolvePictureBullet(authoredPicBullet, markerStyle.fontSizePt) ?? undefined)
+      : undefined;
     // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
     // carry any printable separator, so a separator join lets two different level
     // geometries serialize to one token and share a break-cache entry.
@@ -571,6 +584,9 @@ export function resolveStoryListItems(
         // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
         // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
         markerMeasureToken(markerStyle),
+        // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
+        // it decides both the first line's start and the first line's height.
+        picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
       ].map(String)
     );
 
@@ -587,6 +603,7 @@ export function resolveStoryListItems(
       suffix: advanced.level.suff,
       indent,
       markerStyle,
+      ...(picBullet ? { picBullet } : {}),
       cacheToken,
     };
     withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
@@ -627,10 +644,27 @@ type WithResolvedListItemsOptions = {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   readonly styleCascade?: StyleCascadeTable;
   readonly isFontAvailable?: (family: string) => boolean;
+  /**
+   * The pass's measurer, read ONLY to learn which legacy symbol faces were admitted.
+   *
+   * A caller may still pass {@link isFontAvailable} explicitly and it wins; absent one, the
+   * measurer answers, because it is the only input that already knows the admitted faces and
+   * is already folded into every layout cache key. A caller with no measurer (the REF-refresh
+   * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
+   */
+  readonly measurer?: TextMeasurer;
 };
+
+/** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
+function listFontAvailability(
+  options: WithResolvedListItemsOptions
+): ((family: string) => boolean) | undefined {
+  return options.isFontAvailable ?? markerSymbolFontAvailability(options.measurer);
+}
 
 function resolvedListItemsMemoHit(
   options: WithResolvedListItemsOptions,
+  isFontAvailable: ((family: string) => boolean) | undefined,
   blocks: readonly OoxmlElement[],
   memoOwner: LayoutSession | undefined
 ): ResolvedListItemsMemoEntry | undefined {
@@ -641,7 +675,7 @@ function resolvedListItemsMemoHit(
     memo &&
     memo.rawIndex === options.numberingIndex &&
     memo.styleCascade === options.styleCascade &&
-    memo.isFontAvailable === options.isFontAvailable
+    memo.isFontAvailable === isFontAvailable
   ) {
     return memo;
   }
@@ -665,8 +699,9 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
+  const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined) {
-    const memo = resolvedListItemsMemoHit(options, blocks, memoOwner);
+    const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
     if (memo && memoOwner === undefined) {
       return {
         ...options,
@@ -677,13 +712,13 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   }
   const memoBeforeResolve =
     options.listItems === undefined
-      ? resolvedListItemsMemoHit(options, blocks, memoOwner)
+      ? resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner)
       : undefined;
   const numberingIndex =
     memoBeforeResolve &&
     memoBeforeResolve.rawIndex === options.numberingIndex &&
     memoBeforeResolve.styleCascade === options.styleCascade &&
-    memoBeforeResolve.isFontAvailable === options.isFontAvailable
+    memoBeforeResolve.isFontAvailable === isFontAvailable
       ? memoBeforeResolve.linkedIndex
       : withNumberingStyleLinks(
           options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
@@ -697,7 +732,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
           options.numberingIndex,
           numberingIndex,
           options.styleCascade,
-          options.isFontAvailable,
+          isFontAvailable,
           memoOwner
         )
       : undefined);
@@ -705,7 +740,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
     rememberResolvedListItemsMemo(blocks, memoOwner, {
       rawIndex: options.numberingIndex,
       styleCascade: options.styleCascade,
-      isFontAvailable: options.isFontAvailable,
+      isFontAvailable,
       linkedIndex: numberingIndex,
       listItems,
     });
@@ -729,6 +764,7 @@ export function withResolvedListItems<
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly styleCascade?: StyleCascadeTable;
     readonly isFontAvailable?: (family: string) => boolean;
+    readonly measurer?: TextMeasurer;
   },
 >(
   options: T,
@@ -887,112 +923,9 @@ function resolveStoryListItemsStable(
   return listItems;
 }
 
-/**
- * Horizontal marker box inside the first-line indent slot.
- *
- * Coordinates are relative to the same origin as paragraph content (`indent.left` is the
- * text start). Returns null when there is nothing to paint.
- *
- * `w:hanging` and a positive `w:firstLine` are one mutually exclusive slot
- * (§17.3.1.10, §17.3.1.12), so the marker has two placements, not an interaction:
- * a hanging level puts the marker BEFORE the text start (`left - hanging`); a
- * positive-firstLine level puts it AFTER (`left + firstLine`) — the standard legal
- * shape `w:ind w:left="0" w:firstLine="720"` numbers at 0.5" while continuation
- * lines return to the margin. Reading only the hanging model painted every such
- * marker at the left margin.
- */
-export function listMarkerBox(
-  item: ResolvedListItem,
-  markerWidth: number,
-  lineY: number,
-  lineHeight: number
-): { x: number; y: number; width: number; height: number } | null {
-  if (!item.markerText || (item.indent.hanging <= 0 && markerWidth <= 0)) {
-    if (!item.markerText) return null;
-  }
-  if (!item.markerText) return null;
-
-  const textLeft = item.indent.left;
-  const hanging = item.indent.hanging;
-  // The hanging spelling wins when a hostile file states both (Word's collapse); a
-  // NEGATIVE firstLine is the hang spelled the other way and stays on the hanging model.
-  const firstLine = hanging > 0 ? 0 : Math.max(0, item.indent.firstLine);
-  // Markers stop at the content origin — except for a paragraph the author pulled INTO the
-  // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
-  // the number to the RIGHT of the text it numbers.
-  const floor = Math.min(0, textLeft);
-  const slotLeft = firstLine > 0 ? textLeft + firstLine : Math.max(floor, textLeft - hanging);
-  const slotWidth = Math.max(hanging, markerWidth);
-  let x = slotLeft;
-  if (item.markerAlign === 'right') {
-    // The alignment anchor is the slot's right edge: the text start for a hanging level,
-    // the shifted slot's end for a first-line level.
-    x = firstLine > 0 ? slotLeft + slotWidth - markerWidth : textLeft - markerWidth;
-  } else if (item.markerAlign === 'center') {
-    x = slotLeft + (slotWidth - markerWidth) / 2;
-  }
-  if (x < floor) x = floor;
-  return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
-}
-
-/**
- * Where the FIRST line of a list paragraph starts, relative to `indent.left` (§17.9.30).
- *
- * A list paragraph's hanging indent is the marker's slot, so ordinarily the text starts at
- * `indent.left` and this is 0 — `w:suff="tab"` with a marker that fits is exactly that case.
- * The other three cases are where Word and a forced zero part company:
- *
- * - `w:suff="space"` — one space after the marker, then the text. Not a tab, not the indent.
- * - `w:suff="nothing"` — the text begins immediately after the marker.
- * - `w:suff="tab"` with a marker WIDER than its slot (`viii.`, `%1.%2.%3.`) — the suffix tab
- *   advances to the next tab stop past the marker, so the first line moves right instead of
- *   the marker being painted over its own first word.
- *
- * A positive-firstLine level's marker ends PAST the text start, so its suffix tab always
- * takes the stop lookup. `tabStops` is the PARAGRAPH's resolved stops: a `w:tab` the level
- * itself states (`w:num` at the next grid stop is the shape Word writes) is not folded in,
- * and the default half-inch grid lands on the same destination.
- */
-export function listFirstLineOffset(
-  item: ResolvedListItem,
-  measurer: TextMeasurer,
-  tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
-  rightEdge = Number.POSITIVE_INFINITY
-): number {
-  if (!item.markerText) return 0;
-  const markerWidth = measurer.measure(item.markerText, item.markerStyle);
-  const box = listMarkerBox(item, markerWidth, 0, 0);
-  if (!box) return 0;
-  const textLeft = item.indent.left;
-  const markerEnd = box.x + box.width;
-  if (item.suffix === 'nothing') return markerEnd - textLeft;
-  if (item.suffix === 'space') {
-    return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
-  }
-  // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
-  // to look further along the paragraph's own stops.
-  if (markerEnd <= textLeft) return 0;
-  return nextTabDestination(tabStops, markerEnd, rightEdge).positionPt - textLeft;
-}
-
-/**
- * First-line offset for ANY paragraph: `w:firstLine` right, `w:hanging` left — except a list
- * item, whose first line is placed by its marker and `w:suff` ({@link listFirstLineOffset}).
- */
-export function firstLineShift(
-  item: ResolvedListItem | undefined,
-  indent: { readonly left: number; readonly hanging: number; readonly firstLine: number },
-  measurer: TextMeasurer,
-  tabStops?: ResolvedTabStops,
-  available?: number
-): number {
-  if (item) {
-    return listFirstLineOffset(
-      item,
-      measurer,
-      tabStops,
-      available === undefined ? undefined : indent.left + available
-    );
-  }
-  return indent.hanging > 0 ? -indent.hanging : indent.firstLine;
-}
+export {
+  firstLineShift,
+  listFirstLineOffset,
+  listMarkerBox,
+  listMarkerWidth,
+} from './list-marker-geometry.ts';

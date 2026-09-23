@@ -67,6 +67,19 @@ const SYMBOL_FAMILIES: ReadonlyMap<string, ReadonlyMap<number, string>> = new Ma
 /** Longest family name we will even look up — the value is file-derived. */
 const MAX_FAMILY_LENGTH = 64;
 
+/**
+ * Every legacy symbol-encoded family, case-folded.
+ *
+ * This is the CLOSED set an availability oracle can ever be asked about, because
+ * {@link mapSymbolPuaText} consults its oracle only after {@link isSymbolEncodedFamily}
+ * passes. A caller probing these names therefore probes a fixed list of five, never a
+ * file-derived one. Derived from the table so the two cannot drift; font requests fold
+ * case, so the folded spelling reaches the same face as the document's own.
+ */
+export const SYMBOL_ENCODED_FAMILIES: readonly string[] = Object.freeze([
+  ...SYMBOL_FAMILIES.keys(),
+]);
+
 /** True when the family is one of the legacy symbol-encoded fonts. */
 export function isSymbolEncodedFamily(fontFamily: string | null | undefined): boolean {
   if (!fontFamily || fontFamily.length > MAX_FAMILY_LENGTH) return false;
@@ -94,6 +107,13 @@ export function hasSymbolPua(text: string): boolean {
  * should return true, and the file's own codepoint is kept so the real typeface draws it.
  * Absent, the fallback applies, because an unmapped PUA codepoint renders as a tofu box in
  * every font that is not the symbol-encoded original.
+ *
+ * Called without the oracle it is also the EXTRACTION answer: the text a symbol glyph should
+ * read as when the drawn glyph stays the authored one. A PDF exporter maps the drawn private
+ * codepoint back through this for its `ToUnicode` table, so copying a Word bullet out of the
+ * page yields a bullet rather than a private-use character.
+ *
+ * @public
  */
 export function mapSymbolPuaText(
   text: string,

@@ -3,20 +3,28 @@ import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tre
 import { contentInsets } from '../table-cell-geometry.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 
-test.each([0.5, 3, 12])('cell borders reserve their full painted extent (%s pt)', (widthPt) => {
-  const margins = { top: 0, right: 5, bottom: 0, left: 5 };
-  const edge = { state: 'edge' as const, style: 'single' as const, widthPt, color: '000000' };
-  const borders = {
-    top: edge,
-    bottom: edge,
-    left: { state: 'omitted' as const },
-    right: { state: 'omitted' as const },
-  };
-  expect(contentInsets(margins, borders).top).toBe(widthPt);
-  expect(contentInsets(margins, borders).bottom).toBe(widthPt);
-});
+// A captured reference charges a collapsed horizontal band ENTIRELY to the row below it:
+// that row reserves its own top rule at full width and the row above reserves nothing.
+// See `.cache/pdf/claude-row-clearance/FINDING.md`, whose 4pt control excludes a half share
+// outright (+4.08 measured against the +2.0 a half model predicts).
+test.each([0.5, 3, 12])(
+  'a collapsed horizontal band is charged to the row below it (%s pt)',
+  (widthPt) => {
+    const margins = { top: 0, right: 5, bottom: 0, left: 5 };
+    const edge = { state: 'edge' as const, style: 'single' as const, widthPt, color: '000000' };
+    const borders = {
+      top: edge,
+      bottom: edge,
+      left: { state: 'omitted' as const },
+      right: { state: 'omitted' as const },
+    };
+    const insets = contentInsets(margins, borders, false, true, false, false, widthPt);
+    expect(insets.top).toBe(widthPt);
+    expect(insets.bottom).toBe(0);
+  }
+);
 
-test('twenty exact-height lines reserve full border insets', () => {
+test('twenty exact-height lines reserve shared border insets', () => {
   const rule = '<w:top w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/>';
   const row = (index: number) => `<w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/>
     <w:tcBorders>${rule}</w:tcBorders></w:tcPr><w:p><w:pPr>
@@ -39,6 +47,18 @@ test('twenty exact-height lines reserve full border insets', () => {
     page.fragments.flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []))
   );
   expect(rows).toHaveLength(20);
-  for (const item of rows) expect(item.box.height).toBeCloseTo(16.6, 7);
+  for (const [index, item] of rows.entries())
+    expect(item.box.height).toBeCloseTo(index === 19 ? 16.6 : 16.1, 7);
+  const cell = rows[0]!.cells[0]!;
+  expect(cell.blocks[0]!.box.y - cell.box.y).toBeCloseTo(0.5, 7);
+  const topStroke = cell.borders.strokes!.find((stroke) => stroke.side === 'top')!;
+  expect(topStroke.y).toBe(0);
+  expect(topStroke.height).toBe(0.5);
+  const last = rows[19]!.cells[0]!;
+  const bottomStroke = last.borders.strokes!.find((stroke) => stroke.side === 'bottom')!;
+  expect(bottomStroke.y + bottomStroke.height).toBeCloseTo(last.box.height, 7);
+  expect(
+    last.box.y + last.box.height - last.blocks[0]!.box.y - last.blocks[0]!.box.height
+  ).toBeCloseTo(0.5, 7);
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
 });

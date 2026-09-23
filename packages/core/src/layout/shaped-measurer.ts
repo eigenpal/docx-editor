@@ -1,3 +1,6 @@
+import { isRunKerningEnabled } from './run-kerning.ts';
+import { runLigatureFeatureKey } from './run-ligatures.ts';
+import { createShapedLineMetrics } from './shaped-line-metrics.ts';
 import {
   countAsciiSpaces,
   fallbackCaretAdvances,
@@ -24,7 +27,8 @@ import type { FontResourceSnapshot, ResolvedFont } from './font-resource.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { shapedClusterInkBounds } from './glyph-ink-bounds.ts';
 import { segmentGraphemes } from './grapheme.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
+import { sfntStrikeoutStrokeEm, type StrikeoutStrokeEm } from './sfnt-strikeout-metrics.ts';
 import type { OperationSnapshot } from './resolved-cache.ts';
 import {
   layoutFaceHasSmallCaps,
@@ -135,10 +139,6 @@ const MAX_FACE_BOX_EM = 4;
 // the hot working set while giving every session a hard retention bound.
 const MAX_CACHED_SHAPED_WIDTHS = 4_096;
 
-/** Super and subscript draw at three quarters, so they measure at three quarters. */
-const sizeFactorOf = (style: ResolvedRunStyle): number =>
-  style.verticalAlign === 'baseline' ? 1 : 0.75;
-
 /**
  * A {@link TextMeasurer} that measures through the shaper rather than through a canvas.
  *
@@ -177,10 +177,13 @@ export function createShapedMeasurer(
   // `smcp`, so a plain run must not reuse a small-cap run's shaped width or the reverse.
   const widthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
   const smallCapsWidthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
-  const linesByFont = new WeakMap<
-    ResolvedFont,
-    Map<number, { height: number; baseline: number }>
-  >();
+  const faceLineMetrics = createShapedLineMetrics(
+    shaper,
+    baseEnvironment,
+    fallback,
+    MAX_FACE_BOX_EM,
+    MAX_LINE_GAP_FACE_BOXES
+  );
   // Style objects live inside cached broken lines, so one resolution per style OBJECT
   // amortizes the family/weight lookup across every probe of the runs that share it.
   const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
@@ -271,16 +274,38 @@ export function createShapedMeasurer(
     });
   };
 
+  // Static face numbers, so one read per face serves every size: the em fractions scale.
+  const strikeoutByFont = new WeakMap<ResolvedFont, StrikeoutStrokeEm | null>();
+
   return {
+    hasResolvedFont(style) {
+      return resolveFontCached(style) !== null;
+    },
+    strikeoutMetrics(style) {
+      const font = resolveFontCached(style);
+      if (!font) return undefined;
+      let stroke = strikeoutByFont.get(font);
+      if (stroke === undefined) {
+        stroke = sfntStrikeoutStrokeEm(font.bytes, font.faceIndex);
+        strikeoutByFont.set(font, stroke);
+      }
+      if (!stroke) return undefined;
+      const sizePt = (layoutRunHalfPointsOf(style) / 2) * glyphSizeFactorOf(style);
+      return {
+        offsetPt: stroke.offsetEm * sizePt,
+        thicknessPt: stroke.thicknessEm * sizePt,
+      };
+    },
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = resolveFontCached(style);
       if (!font) return fallbackWidth(text, style);
 
       const byText = widthsFor(font, layoutRunHalfPointsOf(style), style.smallCaps);
-      const widthKey = style.shaping
+      const shapingKey = style.shaping
         ? `1:${JSON.stringify([style.shaping.script, style.shaping.direction, text])}`
         : `0:${text}`;
+      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
       let advance = byText.get(widthKey);
       if (advance === undefined) {
         let total = 0;
@@ -307,7 +332,7 @@ export function createShapedMeasurer(
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.
       return (
-        advance * sizeFactorOf(style) * (style.horizontalScalePercent / 100) +
+        advance * glyphSizeFactorOf(style) * (style.horizontalScalePercent / 100) +
         text.length * style.characterSpacingPt +
         wordSpacingAdvance(text, style)
       );
@@ -334,7 +359,7 @@ export function createShapedMeasurer(
           run,
           layoutRunHalfPointsOf(style) / 2,
           baseEnvironment.fixedPointScale,
-          (sizeFactorOf(style) * style.horizontalScalePercent) / 100
+          (glyphSizeFactorOf(style) * style.horizontalScalePercent) / 100
         );
       } catch {
         return undefined;
@@ -355,7 +380,7 @@ export function createShapedMeasurer(
           shapedCaretAdvances(
             text,
             run,
-            (sizeFactorOf(style) * (style.horizontalScalePercent / 100)) /
+            (glyphSizeFactorOf(style) * (style.horizontalScalePercent / 100)) /
               baseEnvironment.fixedPointScale,
             style.characterSpacingPt,
             style.shaping?.wordSpacingPt ?? 0
@@ -363,7 +388,7 @@ export function createShapedMeasurer(
           fallbackCaretAdvances(
             text,
             (run.glyphs.reduce((sum, glyph) => sum + glyph.advanceX, 0) *
-              sizeFactorOf(style) *
+              glyphSizeFactorOf(style) *
               (style.horizontalScalePercent / 100)) /
               baseEnvironment.fixedPointScale +
               text.length * style.characterSpacingPt +
@@ -375,88 +400,26 @@ export function createShapedMeasurer(
       }
     },
 
-    lineMetrics(style) {
+    lineMetrics(style, text) {
       const font = resolveFontCached(style);
-      if (!font) return fallback.lineMetrics(style);
-
-      const factor = sizeFactorOf(style);
-      let bySize = linesByFont.get(font);
-      if (!bySize) {
-        bySize = new Map();
-        linesByFont.set(font, bySize);
-      }
-      const halfPoints = layoutRunHalfPointsOf(style);
-      const cached = bySize.get(halfPoints);
-      if (cached) {
-        return factor === 1
-          ? cached
-          : { height: cached.height * factor, baseline: cached.baseline * factor };
-      }
-
-      let metrics: { height: number; baseline: number };
-      let scalable = true;
-      const substitutionMetrics = font.substitution?.lineMetrics;
-      if (substitutionMetrics) {
-        const baseSizePt = halfPoints / 2;
-        metrics = {
-          height: substitutionMetrics.heightEm * baseSizePt,
-          baseline: substitutionMetrics.baselineEm * baseSizePt,
-        };
-      } else {
-        try {
-          // Vertical metrics are a property of the FACE, not of the text, so any string
-          // yields them; a single space is the cheapest to shape.
-          const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, ' ');
-          const ascent = shaped.metrics.ascent / baseEnvironment.fixedPointScale;
-          const descent = shaped.metrics.descent / baseEnvironment.fixedPointScale;
-          // Word's single-spaced line box is ascent + descent + lineGap, and the leading sits
-          // BELOW the descent — the same total GDI reports as `tmHeight + tmExternalLeading`.
-          // Dropping the gap is what made a 10 pt Arial line 11.17 pt where Word draws 11.50
-          // (Liberation Sans and Liberation Serif both carry Arial's and Times New Roman's own
-          // gap, so both land on Word's 1.1499 em). Faces with no gap — Carlito, Caladea,
-          // Liberation Mono — are unaffected, which is why the error only showed on the two
-          // faces that have one.
-          //
-          // BOUNDED IN THE EM, because all three numbers are `hhea` int16 read from a font a
-          // DOCX can embed and nothing downstream bounds a line box. The shaper admits any
-          // safe integer over any `upem > 0`, so `ascender = 32767` over `upem = 16` is a face
-          // box of ~2048 em on its own — bounding the gap against the face box alone would
-          // have clamped one attacker-controlled number against another.
-          //
-          // The face box is clamped first, absolutely, against the drawn size. Ascent and
-          // descent scale together so the baseline stays where it sits inside the box. Then
-          // the gap: non-negative, because external leading is non-negative on Windows and in
-          // GDI and a face declaring `lineGap = -(ascender - descender) + 1` would otherwise
-          // give every run in that family a one-unit line that the `height > 0` guard does not
-          // catch; and at most half a face box above.
-          const baseSizePt = halfPoints / 2;
-          const rawFaceBox = ascent + descent;
-          const faceBoxCeiling = baseSizePt * MAX_FACE_BOX_EM;
-          const squeeze = rawFaceBox > faceBoxCeiling ? faceBoxCeiling / rawFaceBox : 1;
-          const faceBox = rawFaceBox * squeeze;
-          const lineGap = Math.min(
-            Math.max(0, shaped.metrics.lineGap / baseEnvironment.fixedPointScale),
-            faceBox * MAX_LINE_GAP_FACE_BOXES
-          );
-          const height = faceBox + lineGap;
-          if (height > 0) {
-            metrics = { height, baseline: ascent * squeeze };
-          } else {
-            metrics = fallback.lineMetrics(style);
-            scalable = false;
-          }
-        } catch {
-          metrics = fallback.lineMetrics(style);
-          scalable = false;
+      if (!font) return fallback.lineMetrics(style, text);
+      if (!text || /^[\t\n\r\f ]*$/.test(text)) return faceLineMetrics(font, style);
+      try {
+        // Width and paint can select a fallback face. The same face must set the
+        // line's ascent/descent, otherwise tall fallback glyphs overlap later lines.
+        const run = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
+        let baseline = 0;
+        let descent = 0;
+        for (const span of run.fontSpans) {
+          const metrics = faceLineMetrics(span.font, style);
+          baseline = Math.max(baseline, metrics.baseline);
+          descent = Math.max(descent, metrics.height - metrics.baseline);
         }
+        if (baseline + descent > 0) return { height: baseline + descent, baseline };
+      } catch {
+        // Font/shaping failures retain the bounded primary-face fallback.
       }
-      // Fallback answers are already at the drawn size; only face metrics shaped at the base
-      // size are cached and rescaled.
-      if (!scalable) return metrics;
-      bySize.set(halfPoints, metrics);
-      return factor === 1
-        ? metrics
-        : { height: metrics.height * factor, baseline: metrics.baseline * factor };
+      return faceLineMetrics(font, style);
     },
   };
 }

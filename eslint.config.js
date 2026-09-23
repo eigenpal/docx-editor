@@ -163,6 +163,8 @@ export default [
       '*.config.js',
       '*.config.ts',
       'packages/editor-api/compat/generated/**',
+      // Third-party vendored code (Extend UI PDF viewer + shadcn primitives, MIT), not ours to lint.
+      'examples/docx-to-pdf/src/vendor/**',
     ],
   },
 

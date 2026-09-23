@@ -313,6 +313,16 @@ export function buildTocEntryParagraph(
   } as unknown as OoxmlNode;
 }
 
+/** Splice the field opening in after a paragraph's properties, where Word puts it. */
+function withOpeningRun(paragraph: OoxmlNode, opening: OoxmlNode): OoxmlNode {
+  const children = (paragraph as unknown as { children: readonly OoxmlNode[] }).children;
+  const at = children[0]?.kind === 'paragraphProperties' ? 1 : 0;
+  return {
+    ...paragraph,
+    children: [...children.slice(0, at), opening, ...children.slice(at)],
+  } as unknown as OoxmlNode;
+}
+
 /** Build an SDT-wrapped complex TOC field with an already planned cached result. */
 export function buildTocContentControl(
   mint: () => string,
@@ -320,13 +330,22 @@ export function buildTocContentControl(
   instruction: TocInstruction,
   alias: string
 ): OoxmlNode {
-  const begin = paragraphWithChildren(mint, [
-    runWithChildren(mint, [
-      fieldChar(mint, 'begin'),
-      instructionText(mint, instruction.raw),
-      fieldChar(mint, 'separate'),
-    ]),
+  // Word opens the field INSIDE the first entry's paragraph, not in one of its own: begin,
+  // the instruction and the separator are followed by that entry's hyperlink in the same
+  // `w:p`. A paragraph holding only the opening has an empty field result, and its mark
+  // still occupies a line, so emitting one put a blank row above every inserted TOC.
+  // An empty TOC has no entry to open inside and keeps the standalone paragraph.
+  const opening = runWithChildren(mint, [
+    fieldChar(mint, 'begin'),
+    instructionText(mint, instruction.raw),
+    fieldChar(mint, 'separate'),
   ]);
+  const entryParagraphs = entries.map((entry) => buildTocEntryParagraph(mint, entry, instruction));
+  const first = entryParagraphs[0];
+  const opened: readonly OoxmlNode[] =
+    first === undefined
+      ? [paragraphWithChildren(mint, [opening])]
+      : [withOpeningRun(first, opening), ...entryParagraphs.slice(1)];
   const end = paragraphWithChildren(mint, [runWithChildren(mint, [fieldChar(mint, 'end')])]);
   const properties: OoxmlNode = {
     id: mint(),
@@ -388,11 +407,7 @@ export function buildTocContentControl(
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: [
-      begin,
-      ...entries.map((entry) => buildTocEntryParagraph(mint, entry, instruction)),
-      end,
-    ],
+    children: [...opened, end],
   } as unknown as OoxmlNode;
   return {
     id: mint(),

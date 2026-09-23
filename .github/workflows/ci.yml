@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           fetch-depth: "${{ (matrix.check == 'api-changeset' || matrix.check == 'build') && '0' || '1' }}"
       - name: Setup Node.js
@@ -102,9 +102,14 @@ jobs:
       - name: Install Chromium for Markdown preview checks
         if: "matrix.check == 'browser'"
         run: bunx playwright install --with-deps chromium
-      - name: Check table revision grouping in the editor
+      - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
-        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts
+        run: bun run build:pdf
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+      - name: Check table revision grouping and file exports in the editor
+        if: "matrix.check == 'browser'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts e2e/file-export.interaction.spec.ts
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"
@@ -133,6 +138,14 @@ jobs:
         if: "matrix.check == 'build'"
       - name: Server agent lifecycle integration
         run: "bun run --filter './examples/server-agent-review' test:lifecycle"
+        if: "matrix.check == 'build'"
+      # The PDF demo worker imports the built package, so its integration test can only run
+      # where `dist/` exists. In the unit shards it skips itself with a message.
+      - name: PDF demo worker integration
+        run: node --test examples/docx-to-pdf/server.node.test.mjs
+        if: "matrix.check == 'build'"
+      - name: PDF conversion function contract
+        run: node --test api/convert.node.test.mjs
         if: "matrix.check == 'build'"
       - name: Editor API public consumer workflows
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
@@ -190,6 +203,9 @@ jobs:
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
         if: "matrix.check == 'build'"
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
+        if: "matrix.check == 'build'"
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size
         if: "matrix.check == 'build'"
@@ -206,14 +222,8 @@ jobs:
       - name: Docs JSON generation (smoke test)
         run: bun run docs:json
         if: "matrix.check == 'build'"
-      - name: Docs MDX check
-        run: bun run check:docs-mdx
-        if: "matrix.check == 'build'"
-      - name: Docs chrome slot coverage
-        run: bun run check:docs-chrome-slots
-        if: "matrix.check == 'build'"
-      - name: Docs Vue ref check
-        run: bun run check:docs-vue-refs
+      - name: Documentation checks
+        run: bun run check:docs
         if: "matrix.check == 'build'"
       - name: Shipped dependency advisories
         run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
@@ -243,7 +253,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -273,7 +283,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -320,7 +330,7 @@ jobs:
       pull-requests: write # sticky size comment
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -393,7 +403,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
       - name: Download advisory report
         uses: actions/download-artifact@v8
         with:

@@ -1,3 +1,4 @@
+import { paragraphAlignment } from './paragraph-alignment.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 /** Internal contract shared by body flow and bounded/table stories. */
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
@@ -45,7 +46,7 @@ export function prepareParagraphBreakInputs(
   if (
     (hanging > 0 || firstLine < 0) &&
     left > 0 &&
-    !tabStops.stops.some((stop) => stop.positionPt === left)
+    !tabStops.stops.some((stop) => stop.positionPt === left && !stop.numberingOnly)
   ) {
     tabStops = {
       ...tabStops,
@@ -96,6 +97,7 @@ export function bodyParagraphBreakKey(
   placement: {
     readonly exclusionToken: string;
     readonly paragraphStartY: number;
+    readonly anchorParagraphStartY?: number;
     readonly columnIndex: number;
     readonly startOffset: number;
   }
@@ -106,6 +108,11 @@ export function bodyParagraphBreakKey(
   );
   let key = baseKey;
   if (positioned) key += `\0excl:${placement.columnIndex}|${positioned}`;
+  if (
+    placement.anchorParagraphStartY !== undefined &&
+    placement.anchorParagraphStartY !== placement.paragraphStartY
+  )
+    key += `\0anchor:${placement.anchorParagraphStartY}`;
   if (placement.startOffset > 0) key += `\0from:${placement.startOffset}`;
   return key;
 }
@@ -126,6 +133,7 @@ export interface ParagraphBreakRequest {
     readonly lineSpacing: ParagraphLayoutInputs['lineSpacing'];
   };
   readonly producer: string;
+  readonly compatibilityMode?: number;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly tabStops: ResolvedTabStops;
   readonly pageContext?: FieldPageContext;
@@ -154,6 +162,12 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),
+      // Modern justification is mode 15 and everything after it: Word 2019 and Microsoft 365
+      // author `compatibilityMode` 16. An absent mode stays legacy, as the table lane treats it.
+      justifySpaceShrink:
+        request.compatibilityMode !== undefined &&
+        request.compatibilityMode >= 15 &&
+        paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
       equationCacheToken: request.producer,
@@ -161,4 +175,30 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
       markRunProperties: formatting.markRunProperties,
     }
   );
+}
+
+/** Track releasable one-shot break entries until their paragraph has been placed. */
+export function createParagraphBreakRetention(
+  cache: ParagraphLayoutCache<readonly PendingLine[]> | undefined
+) {
+  // A one-shot cache releases a paragraph only after its final placement. This preserves
+  // keep-with-next lookahead hits without retaining a second document-sized line tree beside
+  // the published layout. Live caches implement `release` as a no-op.
+  const breakKeysByParagraph = new Map<string, Set<string>>();
+  const rememberBreakKey = (paragraphId: string, key: string): void => {
+    let keys = breakKeysByParagraph.get(paragraphId);
+    if (!keys) {
+      keys = new Set();
+      breakKeysByParagraph.set(paragraphId, keys);
+    }
+    keys.add(key);
+  };
+  const releasePlacedBreaks = (paragraphId: string): void => {
+    const keys = breakKeysByParagraph.get(paragraphId);
+    if (!keys || !cache) return;
+    for (const key of keys) cache.release?.(key);
+    breakKeysByParagraph.delete(paragraphId);
+  };
+
+  return { rememberBreakKey, releasePlacedBreaks };
 }

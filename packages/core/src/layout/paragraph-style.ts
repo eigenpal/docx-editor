@@ -87,14 +87,24 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
  * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
- * This resolves the interior list-item or table-cell value. Body layout restores each
- * outer list margin in `resolveListAutoSpacing`, where neighboring blocks are available.
- * A caller that says nothing gets the body answer.
+ * This resolves the interior list-item value. Body layout restores each outer list margin
+ * in `resolveListAutoSpacing`, where neighboring blocks are available. A caller that says
+ * nothing gets the body answer.
+ *
+ * A TABLE CELL is not such a context. Measured on a captured control at 10pt, where the
+ * line pitch is 11.52pt: the reference puts 26.16pt between two paragraphs in the body with
+ * auto spacing on, and the SAME 26.16pt between two paragraphs inside a cell. With an empty
+ * paragraph between them it is 52.32, exactly twice. Reading it as 0 in a cell lays every
+ * such paragraph 13.92pt tight, which is enough to pull a signature block back onto the
+ * previous page. See `.cache/pdf/claude-autospacing/`.
  */
 export interface ParagraphAutoSpacingContext {
   /** The paragraph participates in numbering (`w:numPr`), i.e. it is a list item. */
   readonly inList?: boolean;
-  /** The paragraph lives in a table cell. */
+  /**
+   * The paragraph lives in a table cell. Kept because callers describe position with it and
+   * list resolution reads it; it does NOT zero auto spacing.
+   */
   readonly inTableCell?: boolean;
   /** Section grid pitch in points; no grid uses Word's fixed 12pt line unit. */
   readonly lineUnitPt?: number;
@@ -123,6 +133,8 @@ export interface ParagraphLineSpacing {
   readonly rule: LineSpacingRule;
   /** `auto`: the 240ths-of-a-line multiplier numerator. Otherwise points. */
   readonly value: number;
+  /** Legacy noExtraLineSpacing: retain the natural baseline within an exact-height box. */
+  readonly preserveExactBaseline?: true;
 }
 
 /** Single spacing: what a paragraph that says nothing gets. */
@@ -230,10 +242,6 @@ function hexColor(raw: string | undefined): string | null {
   return HEX_COLOR.test(raw) ? raw.toUpperCase() : null;
 }
 
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
-}
-
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
     if (child.kind !== 'textValue' && child.localName === localName) return child;
@@ -269,6 +277,29 @@ export function cascadedParagraphAttributes(
     merged = { ...(merged ?? {}), ...(property.attributes ?? {}) };
   }
   return merged;
+}
+
+/**
+ * Which sides of a paragraph's spacing came from `w:beforeAutospacing` / `w:afterAutospacing`
+ * rather than an authored measurement.
+ *
+ * Callers that know a paragraph sits at a container edge need this: the auto value is
+ * suppressed there, an authored one is not.
+ */
+export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+  readonly before: boolean;
+  readonly after: boolean;
+} {
+  let before = false;
+  let after = false;
+  for (const property of props) {
+    if (property.localName !== 'spacing') continue;
+    const authoredBefore = property.attributes?.beforeAutospacing;
+    const authoredAfter = property.attributes?.afterAutospacing;
+    if (authoredBefore !== undefined) before = isOn(authoredBefore);
+    if (authoredAfter !== undefined) after = isOn(authoredAfter);
+  }
+  return { before, after };
 }
 
 /**
@@ -325,7 +356,7 @@ export function paragraphSpacing(
       MAX_PARAGRAPH_SPACING_PT
     );
   if (beforeAuto || afterAuto) {
-    const auto = context?.inList || context?.inTableCell ? 0 : AUTO_PARAGRAPH_SPACING_PT;
+    const auto = context?.inList ? 0 : AUTO_PARAGRAPH_SPACING_PT;
     if (beforeAuto) before = auto;
     if (afterAuto) after = auto;
   }
@@ -372,12 +403,20 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 /**
  * Apply resolved line spacing to a line's natural (glyph-derived) box.
  *
- * Word places `auto` / `atLeast` extras BELOW the line (the last line's multiple spacing
- * still separates it from the next paragraph). Putting that delta above inverted cover-page
- * rhythm: `w:line="460"` on "between" opened a large gap above the word and almost none
- * before "MERIDIAN". `exact` taller than the glyphs centers the text (ECMA-376 17.3.1.33).
- * An `exact` box smaller than the glyphs keeps the baseline inside so clipped text still
- * sits on it.
+ * `auto` places its extra BELOW the line — the last line's multiple spacing still separates
+ * it from the next paragraph. Putting that delta above inverted cover-page rhythm:
+ * `w:line="460"` on "between" opened a large gap above the word and almost none before
+ * "MERIDIAN".
+ *
+ * `atLeast` does the OPPOSITE: the box grows upward and the glyphs sit on its floor. A
+ * captured control settles it — Times New Roman 12 pt at `w:line="360" w:lineRule="atLeast"`
+ * puts the reference's baseline at 15.36 pt, which is `18 - descent` snapped to the device
+ * grid, where treating it like `auto` leaves the baseline at 11.28 and the text 4.08 pt too
+ * high. `w:line="240" atLeast` is below the natural line, falls through to the natural
+ * height, and is unaffected. See `.cache/pdf/claude-linerule/`.
+ *
+ * Exact-height boxes place their baseline at 80% of the height; the legacy
+ * noExtraLineSpacing switch instead preserves the face baseline within the box.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
@@ -390,14 +429,23 @@ export function applyLineSpacing(
       : spacing.rule === 'exact'
         ? spacing.value
         : Math.max(naturalHeight, spacing.value);
+  // Exact-height lines use a fixed 80/20 baseline split, independent of the face.
+  // Legacy noExtraLineSpacing retains the natural baseline (clamped to the box).
+  if (spacing.rule === 'exact') {
+    return {
+      height,
+      baseline: spacing.preserveExactBaseline
+        ? Math.max(0, Math.min(naturalBaseline, height))
+        : height * 0.8,
+    };
+  }
   const delta = height - naturalHeight;
   if (delta < 0) {
     return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
   }
-  if (spacing.rule === 'exact') {
-    return { height, baseline: naturalBaseline + delta / 2 };
-  }
-  // auto / atLeast: grow the box downward; baseline stays put.
+  // atLeast: grow the box UPWARD, so the glyph band keeps its depth below the baseline.
+  if (spacing.rule === 'atLeast') return { height, baseline: naturalBaseline + delta };
+  // auto: grow the box downward; baseline stays put.
   return { height, baseline: naturalBaseline };
 }
 
@@ -425,25 +473,34 @@ export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boo
  */
 export function borderEdgeOf(node: OoxmlElement | undefined): ParagraphBorderEdge | undefined {
   if (!node) return undefined;
-  const val = attributeValue(node, 'val');
+  return borderEdgeFromAttributes(
+    Object.fromEntries(node.attributes.map((attribute) => [attribute.localName, attribute.value]))
+  );
+}
+
+/** Shared CT_Border reader for tree edges and flattened character properties. @internal */
+export function borderEdgeFromAttributes(
+  attributes: Readonly<Record<string, string>> | undefined
+): ParagraphBorderEdge | undefined {
+  const val = attributes?.val;
   if (!val || NO_BORDER.has(val)) return undefined;
 
   // `w:sz` is eighths of a point. Missing size yields a hairline so a border that declares
   // a style but no thickness still paints — matching Word's default of ½pt for bare edges.
-  const eighths = integer(attributeValue(node, 'sz'));
+  const eighths = integer(attributes?.sz);
   const widthPt =
     eighths === null ? 0.5 : clampNonNegative(eighths / 8, MAX_BORDER_WIDTH_PT) || 0.5;
 
-  const spaceRaw = integer(attributeValue(node, 'space'));
+  const spaceRaw = integer(attributes?.space);
   const spacePt = spaceRaw === null ? 0 : clampNonNegative(spaceRaw, MAX_BORDER_SPACE_PT);
 
-  const shadow = attributeValue(node, 'shadow');
+  const shadow = attributes?.shadow;
   const hasShadow =
     shadow !== undefined && shadow !== '0' && shadow !== 'false' && shadow !== 'off';
 
   return {
     val,
-    color: hexColor(attributeValue(node, 'color')),
+    color: hexColor(attributes?.color),
     widthPt,
     spacePt,
     ...(hasShadow ? { shadow: true as const } : {}),
@@ -569,16 +626,17 @@ export function collapsedSpaceBefore(before: number, previousAfter: number): num
  * Applied before-spacing for placement (Word 2013+ / compat mode 15).
  *
  * Adjacent before/after still collapse to the larger gap, but before is dropped entirely when
- * the paragraph begins at the top of a page mid-section. The first paragraph of a document or
- * section retains before. Callers publish this applied value on the fragment so shading, borders,
+ * the paragraph naturally moves to the top of a page mid-section. An explicit page-break-before
+ * paragraph, or the first paragraph of a document/section, retains before. Callers publish this
+ * applied value on the fragment so shading, borders,
  * selection, and paint share one geometry.
  */
 export function appliedSpaceBefore(
   before: number,
   previousAfter: number,
   atTopOfPage: boolean,
-  firstParagraphOfSection: boolean
+  preserveAtPageStart: boolean
 ): number {
-  if (atTopOfPage && !firstParagraphOfSection) return 0;
+  if (atTopOfPage && !preserveAtPageStart) return 0;
   return collapsedSpaceBefore(before, previousAfter);
 }

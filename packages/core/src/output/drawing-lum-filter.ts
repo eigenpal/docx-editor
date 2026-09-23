@@ -78,5 +78,10 @@ export function drawingFilterStyle(effects: DrawingImageEffects): string | undef
   if (effects.grayscale) parts.push('grayscale(1)');
   const transfer = lumTransfer(effects.brightness, effects.contrast);
   if (transfer) parts.push(lumFilterFunctions(transfer));
+  // `a:alphaModFix` is a fixed alpha the record publishes for every sink. The PDF writer
+  // applies it as a graphics-state alpha; the same picture must not paint opaque here.
+  const { opacity } = effects;
+  if (opacity !== undefined && Number.isFinite(opacity) && opacity >= 0 && opacity < 1)
+    parts.push(`opacity(${Math.round(opacity * 1000) / 1000})`);
   return parts.length > 0 ? parts.join(' ') : undefined;
 }

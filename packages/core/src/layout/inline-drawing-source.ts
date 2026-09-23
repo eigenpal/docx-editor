@@ -36,6 +36,7 @@ import {
   type ValidatedImageBytesReleaseToken,
 } from '../store/package/validated-image-bytes.ts';
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
+import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
@@ -503,6 +504,7 @@ function createPartDrawingContextSlot(options: {
   readonly onResourceSettled: (ownerPartName: string) => void;
   readonly rememberReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly forgetReadyHandle: (handle: ValidatedImageBytesHandle) => void;
+  readonly pictureBulletResource: NonNullable<InlineDrawingLayoutContext['pictureBulletResource']>;
 }): PartDrawingContextSlot {
   const {
     ownerPartName,
@@ -602,6 +604,7 @@ function createPartDrawingContextSlot(options: {
     projectionForAtom,
     project: (drawing: OoxmlDrawingNode) => projectionForAtom(drawing.id),
     resourceOf,
+    pictureBulletResource: options.pictureBulletResource,
   });
 
   /**
@@ -759,6 +762,13 @@ export function createInlineDrawingLayoutBundle(
     }
   };
 
+  const pictureBullets = createPictureBulletResourceResolver({
+    currentPackage: () => pkgSnapshot,
+    lookup: () => lookup,
+    rememberReadyHandle,
+    onResourcesChanged: () => options.onResourcesChanged(),
+  });
+
   const resolvePart = (ownerPartName: string, reader: InlineDrawingPackageReader): OoxmlPart => {
     const pkg = reader.currentPackage();
     const existing = pkg.parts.get(ownerPartName) ?? partByName.get(ownerPartName);
@@ -787,6 +797,7 @@ export function createInlineDrawingLayoutBundle(
       onResourceSettled: () => options.onResourcesChanged(),
       rememberReadyHandle,
       forgetReadyHandle,
+      pictureBulletResource: pictureBullets.resolve,
     });
     slots.set(ownerPartName, slot);
     slotMintCounter += 1;
@@ -801,6 +812,7 @@ export function createInlineDrawingLayoutBundle(
       nextPkg.relationships === pkgSnapshot.relationships &&
       nextPkg.contentTypes === pkgSnapshot.contentTypes;
     if (resourceSubstrateUnchanged) {
+      // The numbering part's bytes and rels are unchanged too, so resolved bullets stand.
       for (const [ownerPartName, slot] of slots) {
         const nextPart =
           nextPkg.parts.get(ownerPartName) ??
@@ -823,6 +835,7 @@ export function createInlineDrawingLayoutBundle(
     for (const token of releaseTokensByKey.values()) releaseValidatedImageBytesToken(token);
     releaseTokensByKey.clear();
     handlesByKey.clear();
+    pictureBullets.reset();
     if (!options.resourceLookup) lookup.dispose();
     pkgRevision = reader.packageRevision();
     pkgSnapshot = nextPkg;
@@ -842,17 +855,19 @@ export function createInlineDrawingLayoutBundle(
     },
     cacheTokenForPart(ownerPartName: string) {
       const slot = slotFor(ownerPartName, options.session);
-      return `${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
+      return `${pictureBullets.epoch()}|${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
     },
     drawingTokenForParagraph(paragraph: OoxmlNode, ownerPartName: string) {
       const slot = slotFor(ownerPartName, options.session);
       // Slot mint belongs in the token: a package swap recreates the slot and
       // drops handle tracking, and a token that only names resource state would
       // reuse cached line records whose ready handles the new registry cannot mint.
-      return `${slotMintBySlot.get(slot) ?? 0}|${slot.drawingTokenForParagraph(paragraph)}`;
+      return `${pictureBullets.epoch()}|${slotMintBySlot.get(slot) ?? 0}|${slot.drawingTokenForParagraph(paragraph)}`;
     },
     pendingResourceCount() {
-      let count = 0;
+      // Picture bullets settle on the same loop drawings do: a caller that waits for
+      // quiescence must not be told zero while a marker image is still decoding.
+      let count = pictureBullets.pendingCount();
       for (const slot of slots.values()) count += slot.pendingResourceCount();
       return count;
     },
@@ -869,6 +884,7 @@ export function createInlineDrawingLayoutBundle(
       resetPackage(reader);
     },
     dispose() {
+      pictureBullets.reset();
       for (const slot of slots.values()) slot.dispose();
       slots.clear();
       partByName.clear();

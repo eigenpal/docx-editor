@@ -8,6 +8,8 @@
  * @public
  */
 
+import type { ZoomMode } from './editor-zoom.ts';
+export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { EditorEvents } from './editor-events.ts';
 export type { EditorEvents } from './editor-events.ts';
 import type { ResolveReviewChangesOptions } from './editor-review.ts';
@@ -254,39 +256,6 @@ export interface DocumentChange {
   readonly deleted?: readonly string[];
   readonly dirty?: readonly string[];
 }
-
-/**
- * What a fit mode fits the page to.
- *
- * One member today. It is a union rather than a boolean because Word's other two — the whole
- * sheet including its height, and the text column inside the margins — are the same
- * computation with a different numerator, and a later change adds one without breaking the
- * shape a host already stores.
- */
-export type ZoomFitTarget = 'pageWidth';
-
-/**
- * Where the display scale comes from.
- *
- * `fixed` is a number the engine holds until someone changes it. `fit` is a number the engine
- * recomputes whenever the room beside the page changes — a resized window, an opened comments
- * rail, a docked navigation pane — bounded by `minZoom`/`maxZoom`.
- *
- * The bounds are what make one mode serve both cases. The default, `'auto'`, is this fit
- * bounded at both ends: it leaves a page that fits at 100%, shrinks one that does not, and
- * stops at 50% — past which it would be trading a scrollbar nobody minds for a page nobody
- * can read.
- */
-export type ZoomMode =
-  | { readonly type: 'fixed' }
-  | {
-      readonly type: 'fit';
-      readonly fit: ZoomFitTarget;
-      /** Never shrink past this. Defaults to the contract floor, 0.1. */
-      readonly minZoom?: number;
-      /** Never grow past this. `1` is the "shrink only" rule. Defaults to the ceiling, 5. */
-      readonly maxZoom?: number;
-    };
 
 /**
  * A selection endpoint, in either vocabulary the engine resolves.
@@ -739,6 +708,25 @@ export interface Editor {
    */
   scrollToPage(pageNumber: number): boolean;
   scrollToBlock(blockId: string): boolean;
+
+  /**
+   * Reveal a paragraph by its `w14:paraId` without changing selection, focus, or editing scope.
+   * With `search`, reveal the start of the matched text. Matching follows {@link DocAnchor}.
+   * An offscreen target is centered; an already visible target does not move the viewport.
+   *
+   * Supports laid-out body, table, header, footer, footnote, and endnote paragraphs.
+   * Repeated headers and footers use their first laid-out occurrence. Text boxes are unsupported.
+   * Returns true when the target is visible or scrolling succeeds. Returns false for invalid,
+   * missing, ambiguous, or unlaid-out targets, or without a mounted, measurable scroll container.
+   * Works in viewing mode. Does not change document content or undo history.
+   *
+   * @example
+   * ```ts
+   * const revealed = editor.scrollToAnchor({ paraId: '1B4C77A2' });
+   * ```
+   * @public
+   */
+  scrollToAnchor(anchor: DocAnchor): boolean;
 
   getZoom(): number;
   /**

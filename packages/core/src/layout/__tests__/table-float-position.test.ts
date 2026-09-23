@@ -100,14 +100,31 @@ describe('w:tblpPr is read off the table', () => {
     expect(structureOf(floatingTable('')).float).toBeUndefined();
   });
 
-  test('anchors default to text and offsets convert to points', () => {
+  test('numeric offsets remove the one-twip storage bias', () => {
     const float = structureOf(floatingTable('<w:tblpPr w:tblpX="720" w:tblpY="200"/>')).float;
-    expect(float).toEqual({ horzAnchor: 'text', vertAnchor: 'text', xPt: 36, yPt: 10 });
+    expect(float).toEqual({ horzAnchor: 'text', vertAnchor: 'text', xPt: 35.95, yPt: 9.95 });
+  });
+
+  test('encoded zero positions differ from absent or malformed offsets; clearances are unbiased', () => {
+    const float = structureOf(
+      floatingTable('<w:tblpPr w:tblpX="1" w:tblpY="1" w:leftFromText="1" w:topFromText="200"/>')
+    ).float!;
+    expect(float.xPt).toBe(0);
+    expect(float.yPt).toBe(0);
+    expect(float.distances).toEqual({ left: 0.05, top: 10, right: 0, bottom: 0 });
+    for (const attributes of ['', 'w:tblpX="NaN" w:tblpY="1.5"']) {
+      const missing = structureOf(floatingTable(`<w:tblpPr ${attributes}/>`)).float!;
+      expect(missing.xPt).toBe(0);
+      expect(missing.yPt).toBe(0);
+    }
+    const zero = structureOf(floatingTable('<w:tblpPr w:tblpX="0" w:tblpY="0"/>')).float!;
+    expect(zero.xPt).toBe(-0.05);
+    expect(zero.yPt).toBe(-0.05);
   });
 
   test('a negative offset survives — Word pulls a table into the margin with one', () => {
     const float = structureOf(floatingTable('<w:tblpPr w:tblpX="-720"/>')).float;
-    expect(float?.xPt).toBe(-36);
+    expect(float?.xPt).toBe(-36.05);
   });
 
   test('an unrecognised spec is dropped, leaving the offset to place the table', () => {
@@ -115,7 +132,7 @@ describe('w:tblpPr is read off the table', () => {
       floatingTable('<w:tblpPr w:tblpXSpec="sideways" w:tblpX="720"/>')
     ).float;
     expect(float?.xSpec).toBeUndefined();
-    expect(float?.xPt).toBe(36);
+    expect(float?.xPt).toBe(35.95);
   });
 
   test('a nested table stays in flow — Word floats only the top-level one', () => {
@@ -150,7 +167,7 @@ describe('tableFloatOriginX places the table against its anchor', () => {
 
   test('the page anchor measures from the sheet edge, not the margin', () => {
     // 1" from the sheet edge is 1" left of the text column, whose x is 0.
-    expect(originOf('<w:tblpPr w:horzAnchor="page" w:tblpX="1440"/>')).toBe(0);
+    expect(originOf('<w:tblpPr w:horzAnchor="page" w:tblpX="1441"/>')).toBe(0);
     expect(originOf('<w:tblpPr w:horzAnchor="page" w:tblpXSpec="left"/>')).toBe(-72);
   });
 
@@ -167,11 +184,11 @@ describe('tableFloatOriginY places the table against its anchor', () => {
   };
 
   test('tblpY is measured from the physical sheet for a page anchor', () => {
-    expect(originOf('<w:tblpPr w:vertAnchor="page" w:tblpY="1700"/>')).toBe(13);
+    expect(originOf('<w:tblpPr w:vertAnchor="page" w:tblpY="1701"/>')).toBe(13);
   });
 
   test('tblpY is measured from the body margin for a margin anchor', () => {
-    expect(originOf('<w:tblpPr w:vertAnchor="margin" w:tblpY="200"/>')).toBe(10);
+    expect(originOf('<w:tblpPr w:vertAnchor="margin" w:tblpY="201"/>')).toBe(10);
   });
 
   test('tblpYSpec supersedes tblpY and uses the resolved table height', () => {
@@ -214,7 +231,7 @@ describe('a floated table lays out at its anchored position', () => {
 
   test('tblpY against the text anchor moves the table down the flow', () => {
     const inFlow = firstTable(paragraph + floatingTable('')).box.y;
-    const floated = firstTable(paragraph + floatingTable('<w:tblpPr w:tblpY="200"/>')).box.y;
+    const floated = firstTable(paragraph + floatingTable('<w:tblpPr w:tblpY="201"/>')).box.y;
     expect(floated - inFlow).toBeCloseTo(10, 3);
   });
 
@@ -254,7 +271,7 @@ describe('a floated table lays out at its anchored position', () => {
     const tail = '<w:p><w:r><w:t>tail</w:t></w:r></w:p>';
     const bare = layoutOf(paragraph + tail);
     const positioned = layoutOf(
-      paragraph + floatingTable('<w:tblpPr w:vertAnchor="page" w:tblpY="2880"/>') + tail
+      paragraph + floatingTable('<w:tblpPr w:vertAnchor="page" w:tblpY="2881"/>') + tail
     );
     const table = positioned.pages[0]!.fragments.find(
       (fragment): fragment is TableFragmentRecord => fragment.kind === 'table'
@@ -334,7 +351,7 @@ describe('a floated table lays out at its anchored position', () => {
     const layout = layoutOf(
       paragraph +
         floatingTable('<w:tblpPr w:vertAnchor="page" w:tblpY="1440"/>') +
-        floatingTable('<w:tblpPr w:vertAnchor="page" w:tblpY="2880"/>') +
+        floatingTable('<w:tblpPr w:vertAnchor="page" w:tblpY="2881"/>') +
         anchor
     );
     expect(layout.pages[0]!.fragments.filter((fragment) => fragment.kind === 'table')).toHaveLength(
@@ -492,7 +509,7 @@ describe('a floated table lays out at its anchored position', () => {
       (fragment): fragment is TableFragmentRecord => fragment.kind === 'table'
     )!;
     expect(layout.pages).toHaveLength(1);
-    expect(table.box.y).toBeCloseTo(13, 3);
+    expect(table.box.y).toBeCloseTo(12.95, 3);
     expect(table.box.height).toBeCloseTo(538.55, 2);
     expect(paragraphNamed(layout, 'exam title').box.y).toBeCloseTo(0, 3);
   });

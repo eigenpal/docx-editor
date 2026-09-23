@@ -1,9 +1,16 @@
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 // A repeated header and its first complete body row share one measured boundary.
 // These insets belong to one page occurrence. The authored borders never change.
 
-import type { OoxmlNode } from '@docx-editor.dev/core/store';
-import { borderExtentPt, resolveTableCellBorderGrid } from './table-borders.ts';
-import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import { resolveTableCellBorderGrid, type ResolvedTableBorderEdge } from './table-borders.ts';
+import {
+  borderContentInset,
+  cellContentInsets,
+  ownTopBandWidthPt,
+  simpleBandWidthPt,
+  type CellContentInsets,
+} from './table-cell-geometry.ts';
+import { canProbeBorderRows, hasTableMerge, physicalCells } from './table-border-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
@@ -12,91 +19,7 @@ import {
   type SemanticTableStructure,
 } from './semantic-table.ts';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const MAX_CANDIDATE_NODES = 8192;
-const MAX_CANDIDATE_DEPTH = 32;
 const MAX_HEADER_ROWS = 64;
-// Resolved structures are immutable. Do not scan a large table again on every page.
-const mergePresence = new WeakMap<SemanticTableStructure, boolean>();
-function hasMerge(structure: SemanticTableStructure): boolean {
-  const known = mergePresence.get(structure);
-  if (known !== undefined) return known;
-  const present = structure.rows.some((row) => row.cells.some((cell) => cell.vMergeContinue));
-  mergePresence.set(structure, present);
-  return present;
-}
-const CONTENT_ELEMENTS = new Set([
-  'p',
-  'r',
-  't',
-  'tab',
-  'br',
-  'cr',
-  'noBreakHyphen',
-  'softHyphen',
-  'hyperlink',
-  'fldSimple',
-  'fldChar',
-  'instrText',
-  'bookmarkStart',
-  'bookmarkEnd',
-  'proofErr',
-  'pPr',
-  'rPr',
-]);
-
-// Boundary sweeps run in physical grid order; RTL row arrays retain document order.
-function physicalCells(row: SemanticTableRow): SemanticTableRow['cells'] {
-  return row.cells[0]?.logicalGridColumn === undefined ? row.cells : [...row.cells].reverse();
-}
-
-/** Text-only rows keep the candidate probe independent of drawing and note publication. */
-function simpleRows(rows: readonly SemanticTableRow[], columns: number): boolean {
-  let visited = 0;
-  for (const row of rows) {
-    let end = 0;
-    for (const cell of physicalCells(row)) {
-      if (cell.vMergeContinue || cell.textDirection !== 'horizontal' || cell.gridColumn !== end)
-        return false;
-      end += cell.gridSpan;
-      if (end > columns) return false;
-      for (const block of cell.blocks) {
-        if (block.kind !== 'paragraph') return false;
-        const stack: { node: OoxmlNode; depth: number; properties: boolean }[] = [
-          { node: block, depth: 0, properties: false },
-        ];
-        while (stack.length > 0) {
-          const { node, depth, properties } = stack.pop()!;
-          if (++visited > MAX_CANDIDATE_NODES || depth > MAX_CANDIDATE_DEPTH) return false;
-          if (node.kind === 'textValue') continue;
-          if (node.namespaceUri !== W || (!properties && !CONTENT_ELEMENTS.has(node.localName)))
-            return false;
-          if (
-            node.localName === 'br' &&
-            node.attributes.some(
-              (attribute) => attribute.localName === 'type' && attribute.value !== 'textWrapping'
-            )
-          )
-            return false;
-          // Drawing, nested story and merge markup are not paragraph/run formatting.
-          if (
-            ['drawing', 'pict', 'object', 'txbxContent', 'tbl', 'vMerge', 'framePr'].includes(
-              node.localName
-            )
-          )
-            return false;
-          if (visited + stack.length + node.children.length > MAX_CANDIDATE_NODES) return false;
-          const childProperties =
-            properties || node.localName === 'pPr' || node.localName === 'rPr';
-          for (const child of node.children)
-            stack.push({ node: child, depth: depth + 1, properties: childProperties });
-        }
-      }
-    }
-    if (end !== columns) return false;
-  }
-  return true;
-}
 
 export interface RepeatedHeaderBorderPlan {
   readonly bodyRowId: string;
@@ -127,9 +50,9 @@ export function prepareRepeatedHeaderBorderPlan(
     headers.length > MAX_HEADER_ROWS ||
     structure.columnWidthsPt.length > MAX_TABLE_COLUMNS ||
     ![left, top, bottom, baselineHeaderHeight, baselineBodyHeight].every(Number.isFinite) ||
-    hasMerge(structure) ||
+    hasTableMerge(structure) ||
     (deps.pageExclusionZones?.().length ?? 0) > 0 ||
-    !simpleRows([...headers, body], structure.columnWidthsPt.length)
+    !canProbeBorderRows([...headers, body], structure.columnWidthsPt.length)
   )
     return undefined;
   const boundaryCells = headers.reduce((sum, row) => sum + row.cells.length, body.cells.length);
@@ -155,23 +78,55 @@ export function prepareRepeatedHeaderBorderPlan(
     structure.columnWidthsPt.length
   )[0]!;
   const insets = new Map<string, CellContentInsets>();
-  const intervals: { start: number; end: number; extent: number }[] = [];
-  for (const [index, cell] of headerCells.entries()) {
-    let extent = 0;
+  const intervals: { start: number; end: number; edge: ResolvedTableBorderEdge }[] = [];
+  // One shared boundary, charged by the captured band rule: the body row reserves its OWN
+  // top rule at full width and the header reserves nothing. Compound strokes keep their own
+  // extent geometry on both sides.
+  for (let index = 0; index < headerCells.length; index += 1) {
     for (const segment of resolved[index]!.edgeSegments ?? []) {
       if (segment.side !== 'bottom') continue;
-      const width = borderExtentPt(segment.edge);
-      extent = Math.max(extent, width);
-      intervals.push({ start: segment.gridStart, end: segment.gridEnd, extent: width });
+      intervals.push({ start: segment.gridStart, end: segment.gridEnd, edge: segment.edge });
     }
-    insets.set(cell.id, {
-      ...contentInsets(cell.margins, cell.borders, cell.legacyContentAlignment === true),
-      bottom: cell.margins.bottom + extent,
-    });
   }
+  for (const [index, cell] of headerCells.entries()) {
+    let inset = cell.margins.bottom;
+    for (const segment of resolved[index]!.edgeSegments ?? []) {
+      if (segment.side !== 'bottom' || simpleBandWidthPt(segment.edge) > 0) continue;
+      inset = Math.max(
+        inset,
+        borderContentInset(cell.margins.bottom, { state: 'edge', ...segment.edge }, true)
+      );
+    }
+    insets.set(cell.id, { ...cellContentInsets(cell, true), bottom: inset });
+  }
+  // `canProbeBorderRows` already refused sparse ownership, so one header cell covers each
+  // body column and an explicit `nil` on either side suppresses the whole band.
   let intervalIndex = 0;
+  // One boundary carries one content band: the widest reserve in the body row sets it.
+  let widestOwnPt = 0;
+  for (const cell of bodyCells)
+    for (const above of headerCells) {
+      if (above.gridColumn + above.gridSpan <= cell.gridColumn) continue;
+      if (above.gridColumn >= cell.gridColumn + cell.gridSpan) continue;
+      let band = 0;
+      for (const interval of intervals) {
+        if (interval.end <= above.gridColumn || interval.start >= above.gridColumn + above.gridSpan)
+          continue;
+        band = Math.max(band, simpleBandWidthPt(interval.edge));
+      }
+      widestOwnPt = Math.max(
+        widestOwnPt,
+        ownTopBandWidthPt(
+          cell.borders.top,
+          above.borders.bottom,
+          structure.tableBorders.insideH,
+          band,
+          cell.suppressesTopBand
+        )
+      );
+    }
   for (const cell of bodyCells) {
-    let extent = 0;
+    let inset = cell.margins.top + widestOwnPt;
     const end = cell.gridColumn + cell.gridSpan;
     while (intervalIndex < intervals.length && intervals[intervalIndex]!.end <= cell.gridColumn)
       intervalIndex++;
@@ -180,27 +135,34 @@ export function prepareRepeatedHeaderBorderPlan(
       index < intervals.length && intervals[index]!.start < end;
       index++
     ) {
-      extent = Math.max(extent, intervals[index]!.extent);
+      if (simpleBandWidthPt(intervals[index]!.edge) > 0) continue;
+      inset = Math.max(
+        inset,
+        borderContentInset(
+          cell.margins.top,
+          { state: 'edge', ...intervals[index]!.edge },
+          true,
+          false,
+          true
+        )
+      );
     }
-    insets.set(cell.id, {
-      ...contentInsets(cell.margins, cell.borders, cell.legacyContentAlignment === true),
-      top: cell.margins.top + extent,
-    });
+    insets.set(cell.id, { ...cellContentInsets(cell, true), top: inset });
   }
   if (
     [lastHeader, body].every((row) =>
       row.cells.every((cell) => {
-        const before = contentInsets(
-          cell.margins,
-          cell.borders,
-          cell.legacyContentAlignment === true
-        );
+        const before = cellContentInsets(cell, true);
         const after = insets.get(cell.id)!;
         return before.top === after.top && before.bottom === after.bottom;
       })
     )
   )
     return undefined;
+  const occurrenceDeps = firstRowContentDeps(structure, headers[0]!, {
+    ...deps,
+    cellContentInsets: insets,
+  });
   let line = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
@@ -208,7 +170,7 @@ export function prepareRepeatedHeaderBorderPlan(
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,
-    cellContentInsets: insets,
+    cellContentInsets: occurrenceDeps.cellContentInsets,
     nextLineId: () => `probe-header-border-${line++}`,
   };
   let cursor = top;
@@ -240,6 +202,6 @@ export function prepareRepeatedHeaderBorderPlan(
     bodyRowId: body.id,
     headerHeight,
     bodyHeight: placed.bottom - cursor,
-    deps: { ...deps, cellContentInsets: insets },
+    deps: occurrenceDeps,
   };
 }

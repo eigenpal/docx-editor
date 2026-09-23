@@ -61,6 +61,7 @@ import {
 export { notesReserveContextKey };
 import {
   bodyFitBottomPt,
+  anyOrphanPairBand,
   bodyOnlyPage,
   firstBodyContentTopPt,
   fragmentFlowBottom,
@@ -298,6 +299,8 @@ interface NotesPageAttachEntry {
  * page whose refs moved re-laid its paragraph anyway, so its page identity is new too.
  */
 interface NotesPassMemo {
+  /** Body state whose same-page reserve search reached the orphan-refinement phase. */
+  orphanPolicyPart?: OoxmlPart;
   hitsFingerprint: string;
   /** {@link fingerprintHitsIdentity} of {@link allHits} — offsets excluded. */
   readonly identityFingerprint: string;
@@ -335,6 +338,7 @@ interface NotesPassMemo {
       /** The page's own footnote refs at compute time (content-compared on reuse). */
       readonly pageRefs: readonly PageRefHit[];
       readonly marks: NoteMarkContext;
+      readonly allowOrphanDeferral: boolean;
       readonly reserve: number;
       /** The raw note-area height (hold-out's `existingAreaHeight` input). */
       readonly areaHeight: number;
@@ -1005,6 +1009,7 @@ function buildFootnoteArea(
      * so an eviction there could never reach its fixed point — split instead.
      */
     readonly evictionAllowed?: boolean;
+    readonly allowOrphanDeferral?: boolean;
   }
 ): {
   area: NoteAreaRecord | undefined;
@@ -1192,6 +1197,7 @@ function buildFootnoteArea(
       band &&
       band.evictable &&
       options?.evictionAllowed !== false &&
+      !(options?.allowOrphanDeferral && band.preserveOrphanLine) &&
       laid.flowHeight > room + 0.001 &&
       laid.flowHeight <= keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
       band.top > firstContentTop + 0.001 &&
@@ -1297,6 +1303,7 @@ function buildFootnoteArea(
       fragments: separator.fragments,
       synthetic: separator.synthetic,
       ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+      ...(separator.ruleColor !== undefined ? { ruleColor: separator.ruleColor } : {}),
     },
     notes: placedNotes,
   };
@@ -1824,6 +1831,7 @@ function buildEndnoteArea(
         fragments: separator.fragments,
         synthetic: separator.synthetic,
         ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+        ...(separator.ruleColor !== undefined ? { ruleColor: separator.ruleColor } : {}),
       },
       notes: placedNotes,
     },
@@ -2075,6 +2083,11 @@ function placeEndnotesFromPage(
  * from slack makes `stable` true on the first pass and never shrinks the body — references and
  * notes then compete for the same band. Oversized notes still split/continue within the budget;
  * {@link MIN_FOOTNOTE_BODY_BAND_PT} keeps a body band so reflow cannot chase blank sheets.
+ *
+ * Answers under the STRICT co-location policy: every footnote starts on the page that
+ * references it. The bounded orphan-pair refinement is a second phase of the internal
+ * reflow loop, which owns the strict fixed point the refinement needs as its starting
+ * point and as its fallback, so a single call from outside that loop cannot reach it.
  */
 export function computeFootnoteReserves(
   layout: SemanticLayout,
@@ -2095,9 +2108,36 @@ export function computeFootnoteReserves(
   readonly stable: boolean;
   readonly reasons: readonly NotePaginationFallbackReason[];
 } {
+  return computeFootnoteReservesWithPolicy(
+    layout,
+    allRefs,
+    input,
+    noteMarks,
+    passMemo,
+    previousReserves,
+    false
+  );
+}
+
+function computeFootnoteReservesWithPolicy(
+  layout: SemanticLayout,
+  allRefs: readonly PageRefHit[],
+  input: NotesLayoutInput,
+  noteMarks: NoteMarkContext,
+  passMemo: unknown,
+  previousReserves: ReadonlyMap<number, number> | undefined,
+  allowOrphanDeferral: boolean
+): {
+  readonly reserves: ReadonlyMap<number, number>;
+  readonly stable: boolean;
+  readonly reasons: readonly NotePaginationFallbackReason[];
+  /** Any reference sits on an orphan pair, so the refinement phase is worth running. */
+  readonly orphanCandidates: boolean;
+} {
   const memo = (passMemo ?? null) as NotesPassMemo | null;
   const reserves = new Map<number, number>();
   const reasons: NotePaginationFallbackReason[] = [];
+  let orphanCandidates = false;
   let carry: NoteCarryMap = new Map();
   const refIndex = buildPageRefIndex(allRefs);
   const separatorCache = createNoteSeparatorCache();
@@ -2124,6 +2164,10 @@ export function computeFootnoteReserves(
     const pageRefs = filterRefsOnPage(bodyPage, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     const pageBottomRefs = fnRefs.filter(isPageBottomFootnoteRef);
+    // BEFORE the page-local cache short-circuit below, so a cached page still answers it.
+    // Every reference the refinement can reach is some page's own page-bottom ref (the
+    // hold-out's frontier is the next page's, and that page is visited here too).
+    orphanCandidates = orphanCandidates || anyOrphanPairBand(bodyPage, pageBottomRefs);
     // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
     const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
@@ -2140,6 +2184,7 @@ export function computeFootnoteReserves(
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
+            allowOrphanDeferral,
             existingAreaHeight,
             usedReservePt,
             pageBottomRefsOf,
@@ -2172,7 +2217,12 @@ export function computeFootnoteReserves(
     // neighbour-reading hold-out is recomputed below either way.
     if (memo && carry.size === 0) {
       const cached = memo.pageReserve.get(page);
-      if (cached && cached.marks === noteMarks && pageRefsEqual(fnRefs, cached.pageRefs)) {
+      if (
+        cached &&
+        cached.marks === noteMarks &&
+        cached.allowOrphanDeferral === allowOrphanDeferral &&
+        pageRefsEqual(fnRefs, cached.pageRefs)
+      ) {
         for (const reason of cached.reasons) reasons.push(reason);
         recordReserve(page.index, Math.max(cached.reserve, holdOutFor(cached.areaHeight)), maxArea);
         continue;
@@ -2198,6 +2248,7 @@ export function computeFootnoteReserves(
       reasons,
       {
         reserveColumnBudget: true,
+        allowOrphanDeferral,
         reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref),
         separatorCache,
         noteLayoutCache,
@@ -2223,6 +2274,7 @@ export function computeFootnoteReserves(
     const localNeeded = Math.min(Math.max(areaHeight, evictionNeed), maxArea);
     if (memo && carryWasEmpty && carry.size === 0) {
       memo.pageReserve.set(page, {
+        allowOrphanDeferral,
         pageRefs: fnRefs,
         marks: noteMarks,
         reserve: localNeeded,
@@ -2245,7 +2297,7 @@ export function computeFootnoteReserves(
       break;
     }
   }
-  return { reserves, stable, reasons };
+  return { reserves, stable, reasons, orphanCandidates };
 }
 
 /**
@@ -2619,6 +2671,7 @@ export function layoutSemanticDocumentWithNotes<
     noteMarks,
     pageBottomReserves: usedReserves,
   });
+  let allowOrphanDeferral = notesMemo?.orphanPolicyPart === part;
   const seedFingerprint = footnoteReservesFingerprint(usedReserves);
   // An unchanged document seeded with the answer it settled on republishes it: the loop
   // below exists to find reserves for a NEW document state, and re-running it on the same
@@ -2655,6 +2708,11 @@ export function layoutSemanticDocumentWithNotes<
     // near-blank sheet per round on a shape none of the guards recognized); the fingerprint
     // exits never fire on it because every round's map is new. Cut it off early rather
     // than paying the full attempt cap for a degraded answer.
+    // The strict fixed point, held from the flip so an unsettled refinement phase can
+    // never cost this pass the converged answer it already proved. Null until the flip.
+    let strictReserves: ReadonlyMap<number, number> | null = null;
+    let strictReasons: NotePaginationFallbackReason[] = [];
+    let converged = false;
     let previousPageCount = bodyLayout.pages.length;
     // Scaled with the document: legitimate cold convergence of a large document can grow
     // the page count for more consecutive rounds than a small one (the settled prefix
@@ -2662,17 +2720,36 @@ export function layoutSemanticDocumentWithNotes<
     const growthCutoff = Math.max(8, Math.ceil(previousPageCount / 16));
     let consecutiveGrowth = 0;
     for (let attempt = 0; attempt < attemptCap; attempt += 1) {
-      const computed = computeFootnoteReserves(
+      const computed = computeFootnoteReservesWithPolicy(
         bodyLayout,
         allHits,
         notesInput,
         noteMarks,
         notesMemo,
-        usedReserves
+        usedReserves,
+        allowOrphanDeferral
       );
       fallbackReasons = [...computed.reasons];
       // Published pages must reflect the reserves used to produce them — not a later map.
       if (computed.stable && footnoteReservesEqual(computed.reserves, usedReserves)) {
+        // First settle same-page reference/note reservations. Relaxing orphan pairs
+        // while that prefix is still moving creates competing reserve cycles, and the
+        // cycle envelope can freeze earlier pages with unnecessary holds. Once settled,
+        // allow a second-line reference to stay with its opening line while its whole
+        // note continues. Both phases share the existing attempt/adoption limits.
+        // Only when some reference actually reports an orphan pair: the phase cannot move
+        // a document without one, and running it regardless doubled the per-page reserve
+        // scan on EVERY footnoted document, cold and on every keystroke.
+        if (!allowOrphanDeferral && computed.orphanCandidates) {
+          strictReserves = usedReserves;
+          strictReasons = [...computed.reasons];
+          allowOrphanDeferral = true;
+          if (notesMemo) notesMemo.orphanPolicyPart = part;
+          appliedFingerprints.clear();
+          appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
+          continue;
+        }
+        converged = true;
         break;
       }
       if (spent.adopted >= MAX_NOTE_REFLOW_ADOPTIONS_PER_STATE) {
@@ -2728,6 +2805,33 @@ export function layoutSemanticDocumentWithNotes<
       previousPageCount = bodyLayout.pages.length;
       if (attempt === attemptCap - 1) {
         fallbackReasons.push('note-reflow-exhausted');
+      }
+    }
+
+    // The refinement phase spent its budget without reaching a fixed point of its own.
+    // Republish the strict one it started from: that map IS converged, and a phase that
+    // failed to beat it must not cost the document a layout no pass agreed on. One extra
+    // body pass, only here, and only when the maps actually differ.
+    if (!converged && strictReserves) {
+      const refinementMoved = !footnoteReservesEqual(strictReserves, usedReserves);
+      usedReserves = strictReserves;
+      fallbackReasons = [...strictReasons];
+      if (refinementMoved) {
+        bodyLayout = runBody({
+          ...optionsWithLists,
+          noteMarks,
+          pageBottomReserves: usedReserves,
+        });
+      }
+      // Settled for this part identity: the refinement had its budget and did not beat the
+      // strict answer, so later passes republish instead of re-spending it. An edit
+      // replaces the part and the refinement is tried again.
+      if (notesMemo) {
+        notesMemo.settledReserves = {
+          part,
+          fingerprint: footnoteReservesFingerprint(usedReserves),
+          reasons: [...fallbackReasons],
+        };
       }
     }
 

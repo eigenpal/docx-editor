@@ -854,3 +854,41 @@ test('a family catalog beyond the safe resolver bound truncates instead of refus
   expect(request!.families.length).toBeLessThanOrEqual(64);
   expect(request!.families).toContain('Body Priority Face');
 });
+
+test('explicit glyph fallback families reach demand-driven resolvers within the catalog bound', async () => {
+  let request: FontResolutionRequest | undefined;
+  const resolver = defineFontResolver((next: FontResolutionRequest) => {
+    request = next;
+    return fontFragment();
+  });
+  const fallback = { family: 'Explicit Fallback', weight: 400, style: 'normal' as const };
+  const opened = await openFontBackedDocumentForExport(priorityDocx(), {
+    fonts: resolver,
+    glyphFallbacks: [fallback, fallback],
+  });
+  expect(opened.ok).toBe(true);
+  if (opened.ok) opened.session.dispose();
+  expect(request!.families.filter((family) => family === fallback.family)).toHaveLength(1);
+  expect(request!.families).toContain('Body Priority Face');
+  expect(request!.families.length).toBeLessThanOrEqual(64);
+});
+
+test('excess glyph fallback requests fail before font origins allocate bytes', async () => {
+  const parsed = openHeadlessDocument(minimalDocx('<w:p/>'));
+  if (!parsed.ok) throw new Error(parsed.reason);
+  let called = false;
+  const resolver = defineFontResolver(() => {
+    called = true;
+    return fontFragment();
+  });
+  await expect(
+    acquireDocumentExportShaping(parsed.view, [resolver], {
+      glyphFallbacks: Array.from({ length: 17 }, (_, i) => ({
+        family: `Fallback ${i}`,
+        weight: 400,
+        style: 'normal' as const,
+      })),
+    })
+  ).rejects.toThrow('At most 16 glyph fallback faces');
+  expect(called).toBe(false);
+});

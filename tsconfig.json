@@ -42,6 +42,7 @@
   // shipped: a matrix nothing typechecks is documentation with extra syntax.
   "include": [
     "src",
+    "api",
     "packages/react/src",
     "examples/shared",
     "examples/vite",

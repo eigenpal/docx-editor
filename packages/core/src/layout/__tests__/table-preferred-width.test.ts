@@ -4,9 +4,9 @@
 // by MAXIMUM. Anything still unstated shares what the content width has left.
 //
 // `w:tblW` (17.4.63) then bounds the total, and `w:tblLayout` (17.4.52 — 17.4.53 is the
-// `w:tblPrEx` variant) decides whether the PAGE also bounds it: 17.18.87 puts "override the
-// preferred table width until the table reaches the page width" in the autofit chain only,
-// so a fixed table with no `w:tblW` renders past the right margin the way Word renders it.
+// `w:tblPrEx` variant) limits unstated autofit widths to the text column. An authored
+// positive preferred width can retain a wider grid; the autofit content-growth limit
+// does not first shrink that authored width. Fixed tables also retain unstated wider grids.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -316,11 +316,11 @@ describe('w:tblW bounds the total', () => {
     expect(total(structure.columnWidthsPt)).toBeCloseTo(144, 6);
   });
 
-  test('a dxa table width wider than the page still cannot exceed the page', () => {
+  test('a positive dxa table width can retain a grid wider than the text column', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblW w:w="20000" w:type="dxa"/></w:tblPr>${wide}</w:tbl>`
     );
-    expect(total(structure.columnWidthsPt)).toBeCloseTo(CONTENT_WIDTH_PT, 6);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(720, 6);
   });
 
   test('a hostile w:tblW cannot crush every column to nothing', () => {
@@ -550,5 +550,67 @@ describe('structure memoization over immutable table nodes', () => {
     const cascade = buildStyleCascadeTable(styles.root);
     const cascaded = readTableStructure(table, CONTENT_WIDTH_PT, 0, cascade);
     expect(cascaded).not.toBe(bare);
+  });
+});
+
+describe('a stated w:tblW makes the authored grid the settled layout', () => {
+  // `template-with-hf-rule.docx`, the four-column "HISTÓRICO DE REVISÕES" table. Both the
+  // grid and the cell preferences total the stated 9026 twips, and they disagree column by
+  // column. Taking the maximum of the two and rescaling gave 87.38 / 85.90 / 173.04 / 104.99,
+  // which is narrow enough that `{revision_number}` broke mid-word. The reference renders the
+  // authored grid.
+  const REVISION_HISTORY =
+    '<w:tbl><w:tblPr><w:tblW w:w="9026" w:type="dxa"/></w:tblPr>' +
+    `${grid(1831, 1770, 3321, 2104)}<w:tr>` +
+    `${cell(tcW('1400'))}${cell(tcW('1800'))}${cell(tcW('3626'))}${cell(tcW('2200'))}` +
+    '</w:tr></w:tbl>';
+
+  test('a dxa cell preference does not restate a column the grid already settled', () => {
+    const structure = structureOf(REVISION_HISTORY);
+    expect(structure.columnWidthsPt).toEqual([91.55, 88.5, 166.05, 105.2]);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(451.3, 6);
+  });
+
+  test('the grid still scales to the stated total when the two disagree', () => {
+    // `footer-page-number.docx`: a seven-column grid totalling 12330 twips in a table that
+    // states 9746. The grid keeps its proportions and the cell preferences change nothing.
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblW w:w="9746" w:type="dxa"/></w:tblPr>' +
+        `${grid(2332, 1411, 1521, 1411, 1742, 1671, 2242)}<w:tr>` +
+        `${cell(tcW('1500'))}${cell(tcW('1700'))}${cell(tcW('700'))}${cell(tcW('820'))}` +
+        `${cell(tcW('900'))}${cell(tcW('1200'))}${cell(tcW('2926'))}` +
+        '</w:tr></w:tbl>',
+      487.3
+    );
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(487.3, 6);
+    expect(structure.columnWidthsPt[0]).toBeCloseTo(92.164, 3);
+    expect(structure.columnWidthsPt[6]).toBeCloseTo(88.607, 3);
+  });
+
+  test('a column the grid leaves open is still settled by the cell preference', () => {
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblW w:w="4320" w:type="dxa"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="1440"/><w:gridCol/></w:tblGrid>' +
+        `<w:tr>${cell(tcW('2880'))}${cell(tcW('2880'))}</w:tr></w:tbl>`
+    );
+    expect(structure.columnWidthsPt).toEqual([72, 144]);
+  });
+
+  test('a pct cell preference keeps the older reconciliation, rounding and all', () => {
+    // A `pct` preference cannot state an exact twip, so it disagrees with the grid it was
+    // computed from by a rounding rather than by intent. 50% of 234pt is 117pt against the
+    // grid's 108pt, and the maximum still wins.
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblW w:w="4680" w:type="dxa"/></w:tblPr>' +
+        `${grid(2160, 2520)}<w:tr>${cell(tcW('2500', 'pct'))}${cell()}</w:tr></w:tbl>`
+    );
+    expect(structure.columnWidthsPt[0]!).toBeGreaterThan(108);
+  });
+
+  test('without a stated w:tblW the grid is still only a seed', () => {
+    const structure = structureOf(
+      `<w:tbl><w:tblPr/>${grid(1440, 1440)}<w:tr>${cell(tcW('2880'))}${cell(tcW('2880'))}</w:tr></w:tbl>`
+    );
+    expect(structure.columnWidthsPt).toEqual([144, 144]);
   });
 });

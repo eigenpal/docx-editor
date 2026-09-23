@@ -34,7 +34,20 @@
     "insertFootnote": "Wstaw przypis dolny",
     "insertEndnote": "Wstaw przypis końcowy",
     "insertTable": null,
-    "review": null
+    "review": null,
+    "export": null,
+    "exportFailed": null,
+    "exportMarkdown": null,
+    "exportMarkdownMissing": null,
+    "exportPdf": null,
+    "exportPdfMissing": null,
+    "exportPdfServerUnavailable": null,
+    "exportContinueEditing": null,
+    "exportDownloadHint": null,
+    "exportMarkdownFailed": null,
+    "exportPdfFailed": null,
+    "exportingMarkdown": null,
+    "exportingPdf": null
   },
   "formattingBar": {
     "groups": {

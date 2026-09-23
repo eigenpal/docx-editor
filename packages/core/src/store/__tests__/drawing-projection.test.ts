@@ -259,6 +259,33 @@ describe('projectDrawing', () => {
     expect(projection!.picture!.fillMode).toBe('tile');
   });
 
+  test('reads anchor flags as xsd:boolean: words as well as digits, whitespace collapsed', () => {
+    const part = parse(
+      anchoredPictureDrawing({
+        wrap: '<wp:wrapNone/>',
+        anchorAttrs:
+          'distT="0" distB="0" distL="0" distR="0" simplePos="false" behindDoc=" true " ' +
+          'locked="false" layoutInCell="true" allowOverlap="\tfalse" relativeHeight="2" hidden=" 0"',
+      })
+    );
+    const drawing = drawingOf(part);
+    expect(drawing.children[0]?.kind).toBe('anchoredDrawing');
+    const projection = projectDrawing(drawing, {
+      ownerPartName: part.name,
+      supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    });
+    expect(projection!.anchor).toMatchObject({
+      simplePos: false,
+      behindDocument: true,
+      layoutInCell: true,
+      allowOverlap: false,
+    });
+    expect(projection!.hidden).toBe(false);
+    // wrapNone behind the text is the 'behind' paint layer, not 'inFront'.
+    expect(projection!.wrap).toBe('behind');
+  });
+
   test('maps wrap none to behind and inFront by behindDoc', () => {
     const behind = parse(
       anchoredPictureDrawing({

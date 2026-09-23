@@ -1,3 +1,4 @@
+import type { ChromeExportFormat } from '@docx-editor.dev/core/editor';
 // Menu-scoped context: the translate function and the three host actions the menu bar's
 // File rows need, published by the root to its parts.
 //
@@ -30,6 +31,7 @@ import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 export type MenuId = ChromeMenuId | (string & {});
 
 export interface MenuContextValue {
+  readonly onExport?: (format: ChromeExportFormat) => void;
   readonly t: ToolbarTranslate | undefined;
   /** Which menu is open, or null. Owned by the root so only one panel shows at a time. */
   readonly openMenu: MenuId | null;

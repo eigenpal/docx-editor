@@ -25,27 +25,27 @@ const margins = (left = 5.4, right = left) => ({ top: 1, bottom: 2, left, right 
 
 describe('narrow legacy collapsed-cell horizontal inset policy', () => {
   for (const [name, calculate] of [['geometry', contentInsets]] as const) {
-    test(`${name}: the ordinary border-box path is unchanged`, () => {
+    test(`${name}: ordinary collapsed side margins start at the stroke middle`, () => {
       expect(calculate(margins(), borders())).toEqual({
-        top: 1.5,
-        bottom: 2.5,
-        left: 5.9,
-        right: 5.9,
+        top: 1.25,
+        bottom: 2.25,
+        left: 5.65,
+        right: 5.65,
       });
     });
     test(`${name}: covered painted strokes do not add a second horizontal charge`, () => {
       expect(calculate(margins(), borders(), true)).toEqual({
-        top: 1.5,
-        bottom: 2.5,
+        top: 1.25,
+        bottom: 2.25,
         left: 5.4,
         right: 5.4,
       });
       expect(calculate(margins(1, 2), borders(), true).left).toBe(1);
       expect(calculate(margins(1, 2), borders(), true).right).toBe(2);
-      expect(calculate(margins(0.25), borders(), true).left).toBe(0.75);
-      expect(calculate(margins(), borders(edge(6, 'thick')), true).left).toBe(11.4);
+      expect(calculate(margins(0.25), borders(), true).left).toBe(0.5);
+      expect(calculate(margins(), borders(edge(6, 'thick')), true).left).toBe(8.4);
     });
-    test(`${name}: uncovered thick, zero, asymmetric and compound margins keep the old path`, () => {
+    test(`${name}: uncovered thick, zero, asymmetric and compound margins use ordinary collapsed clearance`, () => {
       for (const [pad, rules] of [
         [margins(), borders(edge(12))],
         [margins(0), borders()],
@@ -58,7 +58,7 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
     });
     test(`${name}: omitted and explicitly absent rules do not invent an inset`, () => {
       expect(calculate(margins(0), borders({ state: 'omitted' }, { state: 'none' }), true)).toEqual(
-        { top: 1.5, bottom: 2.5, left: 0, right: 0 }
+        { top: 1.25, bottom: 2.25, left: 0, right: 0 }
       );
     });
   }
@@ -114,7 +114,7 @@ test('an admitted 45.5 pt grid cell keeps seven digits on one line, including ex
     expect(structure.legacyContentAlignment).toBe(true);
     expect(structure.rows[0]!.cells[0]!.legacyContentAlignment).toBe(true);
     const correct = renderStructure(structure, tableId);
-    const oldInsets = renderStructure(
+    const ordinaryInsets = renderStructure(
       {
         ...structure,
         rows: structure.rows.map((row) => ({
@@ -126,10 +126,10 @@ test('an admitted 45.5 pt grid cell keeps seven digits on one line, including ex
     );
     expect(correct.rows[0]!.cells[0]!.box.width).toBeCloseTo(45.5, 6);
     expect(firstParagraph(correct).lines[0]!.box.width).toBeCloseTo(34.7, 6);
-    expect(firstParagraph(oldInsets).lines[0]!.box.width).toBeCloseTo(33.7, 6);
+    expect(firstParagraph(ordinaryInsets).lines[0]!.box.width).toBeCloseTo(34.2, 6);
     expect(firstParagraph(correct).lines).toHaveLength(1);
-    expect(firstParagraph(oldInsets).lines).toHaveLength(2);
-    expect(correct.rows[0]!.box.height * 2).toBeCloseTo(oldInsets.rows[0]!.box.height, 6);
+    expect(firstParagraph(ordinaryInsets).lines).toHaveLength(2);
+    expect(correct.rows[0]!.box.height * 2).toBeCloseTo(ordinaryInsets.rows[0]!.box.height, 6);
     expect(
       firstParagraph(correct)
         .lines[0]!.spans.map((span) => span.text)

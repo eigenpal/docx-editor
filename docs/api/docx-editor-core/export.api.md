@@ -148,6 +148,7 @@ export interface ExportLaidOutText {
     readonly fixedPointScale: number;
     // (undocumented)
     readonly font: ExportAdmittedFontIdentity;
+    readonly fonts?: readonly ExportAdmittedFontIdentity[];
     // (undocumented)
     readonly run: ShapedRun;
 }
@@ -180,7 +181,7 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
-    validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+    validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
 // @public
@@ -268,9 +269,12 @@ export function openFontBackedDocumentForExport(source: Uint8Array, options: Ope
 
 // @public
 export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumentForExportOptions, 'measurer' | 'reuseAcrossRevisions'> {
+    readonly documentLigatures?: boolean;
     readonly fontPolicy?: 'best-effort' | 'strict';
     readonly fontResolutionTimeoutMs?: number;
     readonly fonts: FontOrigin | readonly FontOrigin[];
+    readonly glyphFallbacks?: readonly FontRequest[];
+    readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
     readonly reuseAcrossRevisions?: false;
 }

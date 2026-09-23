@@ -797,3 +797,65 @@ describe('chrome contracts', () => {
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 });
+
+test('File > Export reports missing converters after the menu closes', async () => {
+  const { view } = mountMenu(<DocxEditorMenu />);
+  for (const [slot, packageName] of [
+    ['file.exportMarkdown', 'docx-to-markdown'],
+    ['file.exportPdf', 'docx-to-pdf'],
+  ]) {
+    openMenu(view, 'toolbar.file');
+    openSubmenu(view, 'toolbar.export');
+    await act(async () => {
+      fireEvent.click(row(view, slot!));
+    });
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(packageName!);
+    expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
+    act(() => fireEvent.click(view.container.querySelector('[data-docx-dialog="export"] button')!));
+  }
+});
+
+test('File row overrides reach export submenu slots without duplicate rows', () => {
+  const { view } = mountMenu(
+    <DocxEditorMenu>
+      <DocxEditorMenu.File>
+        <DocxEditorMenu.ExportPdf hidden />
+        <DocxEditorMenu.ExportMarkdown className="custom-export" />
+      </DocxEditorMenu.File>
+    </DocxEditorMenu>
+  );
+  openMenu(view, 'toolbar.file');
+  openSubmenu(view, 'toolbar.export');
+  expect(view.container.querySelectorAll('[data-slot="file.exportPdf"]')).toHaveLength(0);
+  const rows = view.container.querySelectorAll('[data-slot="file.exportMarkdown"]');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.classList.contains('custom-export')).toBe(true);
+  expect(rows[0]?.closest('.docx-menubar__submenu')).not.toBeNull();
+});
+
+test('Markdown export shows a dismissible dialog and reports a later failure', async () => {
+  let fail!: (reason: Error) => void;
+  const conversion = new Promise<never>((_resolve, reject) => {
+    fail = reject;
+  });
+  const { view } = mountMenu(<DocxEditorMenu exporters={{ markdown: () => conversion }} />);
+  openMenu(view, 'toolbar.file');
+  openSubmenu(view, 'toolbar.export');
+  await act(async () => {
+    fireEvent.click(row(view, 'file.exportMarkdown'));
+  });
+  expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Exporting Markdown…');
+  act(() => {
+    fireEvent.click(view.getByRole('button', { name: 'Continue editing' }));
+  });
+  expect(view.queryByRole('dialog')).toBeNull();
+  await act(async () => {
+    fail(new Error('Conversion unavailable'));
+  });
+  expect(view.getByRole('alertdialog').getAttribute('aria-label')).toBe('Markdown export failed');
+  expect(view.getByRole('alert').textContent).toContain('Conversion unavailable');
+  act(() => {
+    fireEvent.click(view.getByRole('button', { name: 'Close' }));
+  });
+  expect(view.queryByRole('alertdialog')).toBeNull();
+});

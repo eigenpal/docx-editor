@@ -1,3 +1,4 @@
+import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -64,7 +65,8 @@ function alignLogicalSpans(
   available: number,
   alignment: Alignment,
   isLastLine: boolean,
-  lineUsedWidth?: number
+  lineUsedWidth: number | undefined,
+  paragraphRtl: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   if (alignment === 'left') return spans;
@@ -130,8 +132,32 @@ function alignLogicalSpans(
           measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
     return last.box.x - indentLeft + last.box.width - trailing;
   };
-  const used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
+  let used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
+  let rtlTrailingAdvance = 0;
+  // A space retained at a natural wrap still owns its model/caret advance, but Word
+  // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
+  // tabs or nonbreaking spaces: only a text span reaching the measured line end qualifies.
+  if (
+    (alignment === 'center' || alignment === 'right') &&
+    spansReachLineEnd &&
+    lastContentSpan?.text.endsWith(' ') &&
+    !lastContentSpan.lineEndWhitespace
+  ) {
+    const visible = lastContentSpan.text.replace(/ +$/, '');
+    const width = measureDisplayText(
+      visible,
+      styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
+      measurer
+    );
+    const trailing = Math.max(0, lastContentSpan.box.width - width);
+    used -= trailing;
+    // Bidi puts these spaces before the visible text. Move the full line back by
+    // their advance, so right/center alignment still anchors the visible glyphs.
+    if (paragraphRtl) rtlTrailingAdvance = trailing;
+  }
   const slack = available - used;
+  if (slack < -0.001 && alignment === 'both' && !isLastLine)
+    return shrinkJustifiedSpans(spans, -slack, measurer);
   if (slack <= 0) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.
@@ -157,7 +183,7 @@ function alignLogicalSpans(
     });
   }
 
-  const offset = alignment === 'center' ? slack / 2 : slack;
+  const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
 }
 
@@ -180,8 +206,37 @@ export function alignSpans(
       available,
       effective,
       isLastLine,
-      lineUsedWidth
+      lineUsedWidth,
+      paragraphRtl
     ),
     paragraphRtl
   );
+}
+
+/**
+ * The horizontal box a line aligns inside: the passage a float left it, or the paragraph's
+ * own measure when no float shortens the line.
+ *
+ * `used` is the line's content extent measured from that box's left edge, so the snap advance
+ * a float forced before the first glyph is not mistaken for content and does not push a
+ * centred line off toward the far margin.
+ */
+export function lineAlignmentMeasure(
+  line: {
+    readonly width: number;
+    readonly wrapSegment?: { readonly start: number; readonly end: number };
+  },
+  columnX: number,
+  lineIndent: number,
+  lineAvailableWidth: number
+): { readonly indent: number; readonly available: number; readonly used: number } {
+  const segment = line.wrapSegment;
+  if (!segment) {
+    return { indent: lineIndent, available: lineAvailableWidth, used: line.width };
+  }
+  return {
+    indent: columnX + segment.start,
+    available: Math.max(1, segment.end - segment.start),
+    used: lineIndent - columnX + line.width - segment.start,
+  };
 }

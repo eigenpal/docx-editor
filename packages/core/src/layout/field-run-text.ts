@@ -7,6 +7,7 @@
 
 import { hardBreakText, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { runTextOutlineProperty } from './run-text-outline.ts';
+import { runLigaturesValue } from './run-ligatures.ts';
 
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
@@ -34,6 +35,11 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    if (child.localName === 'ligatures') {
+      const value = runLigaturesValue(child);
+      if (value !== undefined) props.push({ localName: 'ligatures', attributes: { val: value } });
+      continue;
+    }
     if (child.localName === 'textOutline') {
       const outline = runTextOutlineProperty(child);
       if (outline) props.push(outline);

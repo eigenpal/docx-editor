@@ -8,10 +8,16 @@ const apps = [
   ['vue', '/vue/', ['sample.docx']],
   ['igloo', '/igloo/', ['sample.docx', 'sample-igloo.docx']],
   ['docx-to-markdown', '/docx-to-markdown/', ['sample.docx']],
+  [
+    'docx-to-pdf',
+    '/docx-to-pdf/',
+    ['sample.docx', 'icon0.svg', 'icon.png', 'apple-icon.png', 'robots.txt', 'sitemap.xml'],
+  ],
 ];
 const hosts = [
   ['igloo.docx-editor.dev', '/igloo/index.html'],
   ['docx-to-markdown.docx-editor.dev', '/docx-to-markdown/index.html'],
+  ['docx-to-pdf.docx-editor.dev', '/docx-to-pdf/index.html'],
 ];
 
 function invariant(condition, message) {
@@ -78,6 +84,13 @@ export function firstRewriteDestination(rewrites, pathname, host) {
 }
 
 export function assertRoutingContract(rewrites) {
+  for (const file of ['robots.txt', 'sitemap.xml']) {
+    invariant(
+      firstRewriteDestination(rewrites, `/${file}`, 'docx-to-pdf.docx-editor.dev') ===
+        `/docx-to-pdf/${file}`,
+      `The PDF host must serve /${file} before its SPA fallback`
+    );
+  }
   const crossAppPaths = apps.map(([directory]) => `/${directory}/deep/link`);
   for (const [host, destination] of hosts) {
     for (const pathname of ['/', '/case/deep-link', ...crossAppPaths]) {
@@ -139,7 +152,9 @@ async function checkCombinedDeployment() {
   );
   assertRoutingContract(rewrites);
 
-  console.log('✓ combined demo deployment: 4 apps, base-safe assets, fixtures, and host fallbacks');
+  console.log(
+    `✓ combined demo deployment: ${apps.length} apps, base-safe assets, fixtures, and host fallbacks`
+  );
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

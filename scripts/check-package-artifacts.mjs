@@ -3,17 +3,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-// Nuxt remains private and has no publishable dist artifact.
-const packageDirs = [
-  'core',
-  'react',
-  'vue',
-  'editor-api',
-  'i18n',
-  'pro',
-  'fonts',
-  'docx-to-markdown',
-];
+// Discover publishable packages so new packages cannot bypass artifact checks.
+const packageDirs = readdirSync(path.join(root, 'packages')).filter((directory) => {
+  const manifest = path.join(root, 'packages', directory, 'package.json');
+  return existsSync(manifest) && JSON.parse(readFileSync(manifest, 'utf8')).private !== true;
+});
 const errors = [];
 
 // What a published artifact may name when it reaches for the engine: exactly the

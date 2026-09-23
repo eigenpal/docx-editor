@@ -207,7 +207,7 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(metrics).toEqual({ height: 12, baseline: 9.5 });
   });
 
-  test('hhea lineGap is part of the Word line box, below the descent', () => {
+  test('hhea lineGap precedes the baseline inside the Word line box', () => {
     const withExternalGap = createShapedMeasurer({
       shaper: {
         shape(input) {
@@ -232,7 +232,7 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     // Word's single-spaced line box is ascent + descent + lineGap. Measured against Word's
     // own PDF: an Arial 10 pt line pitch is 11.50 pt, which is (1854 + 434 + 67) / 2048 em,
     // not the 11.17 pt that dropping the gap gives.
-    expect(withExternalGap.lineMetrics(style())).toEqual({ height: 11.5, baseline: 9 });
+    expect(withExternalGap.lineMetrics(style())).toEqual({ height: 11.5, baseline: 9.5 });
   });
 
   test('Liberation Sans measures Word\u2019s Arial line box, gap included', () => {
@@ -255,9 +255,9 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     if (resolved instanceof FontResolutionError) throw resolved;
     const metrics = measurer(() => resolved).lineMetrics(style({ fontSizePt: 10 }));
     expect(metrics.height).toBeCloseTo(11.5, 2);
-    // Ascent alone is 9.05 pt; the difference is descent plus the external leading Word
-    // keeps in the box.
-    expect(metrics.baseline).toBeCloseTo(9.053, 2);
+    // The saved Word sample places Arial 36pt 1.2pt below its hhea ascent alone.
+    // Arial/Liberation Sans external leading is 67/2048 em: 1.178pt at 36pt.
+    expect(metrics.baseline).toBeCloseTo(9.38, 2);
   });
 
   test('a negative hhea lineGap cannot crush the line box', () => {
@@ -315,7 +315,7 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     });
     // Face box 11, so the gap is admitted up to 5.5 and the line box stops at 16.5 — 1.5x
     // the face, against the largest real gap among the shipped faces of 0.038 face boxes.
-    expect(enormous.lineMetrics(style())).toEqual({ height: 16.5, baseline: 9 });
+    expect(enormous.lineMetrics(style())).toEqual({ height: 16.5, baseline: 14.5 });
   });
 
   test('a face box far larger than the em is clamped, baseline with it', () => {
@@ -363,19 +363,19 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(large.height).toBeGreaterThan(small.height * 2);
   });
 
-  test('superscript measures at three quarters, so it does not inflate its line', () => {
+  test('superscript measures at 65%, so it does not inflate its line', () => {
     const baseline = measurer().lineMetrics(style());
     const raised = measurer().lineMetrics(style({ verticalAlign: 'superscript' }));
     expect(raised.height).toBeLessThan(baseline.height);
   });
 
-  test('superscript line metrics are EXACTLY three quarters of the baseline metrics', () => {
-    // 11pt × 0.75 = 8.25pt = 16.5 half-points. Shaping at a rounded 17 half-points made
-    // super/subscript 3% taller and wider than paint draws them.
+  test('superscript line metrics are EXACTLY 65% of the baseline metrics', () => {
+    // 11pt × 0.65 = 7.15pt = 14.3 half-points. Do not round the scaled size
+    // before shaping: advances must match the fractional size used by paint.
     const baseline = measurer().lineMetrics(style());
     const raised = measurer().lineMetrics(style({ verticalAlign: 'superscript' }));
-    expect(raised.height).toBeCloseTo(baseline.height * 0.75, 6);
-    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.75, 6);
+    expect(raised.height).toBeCloseTo(baseline.height * 0.65, 6);
+    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.65, 6);
   });
 });
 
@@ -602,20 +602,19 @@ describe('advances are summed glyph advances (task 7.7)', () => {
     expect(calls).toBe(afterFirst);
   });
 
-  test('super/subscript advances are EXACTLY three quarters of the baseline advance', () => {
-    // Paint draws super/subscript at 0.75 of the run size, so measurement must be 0.75 of
+  test('super/subscript advances are EXACTLY 65% of the baseline advance', () => {
+    // Paint draws super/subscript at 0.65 of the run size, so measurement must be 0.65 of
     // the baseline advance — not the advance at the nearest whole half-point. At 11pt the
-    // scaled size is 16.5 half-points; shaping at a rounded 17 measured every character 3%
-    // wide, which pushed each following span's published x right of its painted glyphs and
-    // drew the caret mid-glyph for the rest of the line.
+    // scaled size is 14.3 half-points. Rounding before shaping shifts following spans
+    // and caret positions away from the painted glyphs.
     const measure = measurer();
     const plain = measure.measure('Superscript', style());
     expect(measure.measure('Superscript', style({ verticalAlign: 'superscript' }))).toBeCloseTo(
-      plain * 0.75,
+      plain * 0.65,
       6
     );
     expect(measure.measure('Superscript', style({ verticalAlign: 'subscript' }))).toBeCloseTo(
-      plain * 0.75,
+      plain * 0.65,
       6
     );
   });
@@ -803,9 +802,106 @@ test('single-glyph ink bounds use the admitted outline and preserve tracking', (
   expect(scaled.left).toBeCloseTo(natural.left / 2, 5);
   expect(scaled.right).toBeCloseTo(natural.right / 2, 5);
   const raised = measure.inkBounds!('(', style({ verticalAlign: 'superscript' }))!;
-  expect(raised.right).toBeCloseTo(natural.right * 0.75, 5);
+  expect(raised.right).toBeCloseTo(natural.right * 0.65, 5);
   expect(measure.inkBounds!('word', style())).toBeUndefined();
   expect(
     measure.inkBounds!('(', style({ shaping: { script: 'Arab', direction: 'rtl' } }))
   ).toBeUndefined();
+});
+
+test('resolved-face availability distinguishes admitted metrics from fallback metrics', () => {
+  expect(measurer().hasResolvedFont?.(style())).toBe(true);
+  expect(measurer(() => null).hasResolvedFont?.(style())).toBe(false);
+});
+
+test('fallback glyph faces own line metrics without contaminating primary-face cache entries', () => {
+  const primary = resolvedFixture();
+  const alternate = resolvedFixture();
+  const m = createShapedMeasurer({
+    shaper: {
+      shape(input) {
+        const fonts = input.text.includes('#') ? [primary, alternate] : [input.environment.font];
+        return {
+          text: input.text,
+          direction: 'ltr',
+          bidiLevel: 0,
+          glyphs: [],
+          clusters: [],
+          fontSpans: fonts.map((font) => ({
+            font,
+            glyphStart: 0,
+            glyphEnd: 0,
+            fallbackIndex: null,
+          })),
+          metrics:
+            input.environment.font === alternate
+              ? { ascent: 7_000, descent: 6_000, lineGap: 0 }
+              : { ascent: 10_000, descent: 2_000, lineGap: 0 },
+        };
+      },
+    },
+    resolveFont: () => primary,
+    fallback: createFixedMeasurer(),
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '15.1',
+    fixedPointScale: 1_000,
+  });
+  const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 12 };
+  expect(m.lineMetrics(style, 'abc')).toEqual({ height: 12, baseline: 10 });
+  expect(m.lineMetrics(style, 'a#')).toEqual({ height: 16, baseline: 10 });
+  expect(m.lineMetrics(style, '#')).toEqual({ height: 16, baseline: 10 });
+  expect(m.lineMetrics(style)).toEqual({ height: 12, baseline: 10 });
+  expect(m.lineMetrics(style, 'abc')).toEqual({ height: 12, baseline: 10 });
+});
+
+test('a face that cannot draw a space still reports its own vertical metrics', () => {
+  // The exporter's glyph fallback replaces the face for text it cannot draw, so a probe
+  // string is never neutral. A legacy symbol face is the real case: its cmap need not carry
+  // U+0020 at all, and probing with a space made every Symbol and Wingdings line take the
+  // metrics of whichever fallback face drew the space.
+  const primary = resolvedFixture();
+  const substitute = resolvedFixture();
+  const m = createShapedMeasurer({
+    shaper: {
+      shape(input) {
+        const font = input.text.length > 0 ? substitute : input.environment.font;
+        return {
+          text: input.text,
+          direction: 'ltr',
+          bidiLevel: 0,
+          glyphs: [],
+          clusters: [],
+          fontSpans: [{ font, glyphStart: 0, glyphEnd: 0, fallbackIndex: null }],
+          metrics:
+            font === substitute
+              ? { ascent: 13_000, descent: 3_000, lineGap: 0 }
+              : { ascent: 10_000, descent: 2_000, lineGap: 0 },
+        };
+      },
+    },
+    resolveFont: () => primary,
+    fallback: createFixedMeasurer(),
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '15.1',
+    fixedPointScale: 1_000,
+  });
+  const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 12 };
+  expect(m.lineMetrics(style)).toEqual({ height: 12, baseline: 10 });
+  // Text the face really cannot draw still reports the substitute, because that face is the
+  // one paint will use for it.
+  expect(m.lineMetrics(style, 'x')).toEqual({ height: 16, baseline: 13 });
+});
+
+test('kerning follows the run threshold and cannot reuse unkerned width-cache entries', () => {
+  const m = measurer();
+  const off = style({ fontSizePt: 12 });
+  const atThreshold = style({ fontSizePt: 12, kerningMinPt: 12 });
+  const belowThreshold = style({ fontSizePt: 12, kerningMinPt: 14 });
+  const unkerned = m.measure('AV', off);
+  expect(unkerned).toBeCloseTo(m.measure('A', off) + m.measure('V', off), 3);
+  expect(m.measure('AV', atThreshold)).toBeLessThan(unkerned);
+  expect(m.measure('AV', belowThreshold)).toBe(unkerned);
+  expect(m.measure('AV', off)).toBe(unkerned);
+  expect(m.measure('AV', style({ fontSizePt: 12, kerningEnabled: true }))).toBe(unkerned);
+  expect(m.caretAdvances!('AV', atThreshold)!.at(-1)).toBeCloseTo(m.measure('AV', atThreshold), 6);
 });

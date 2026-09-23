@@ -1,0 +1,78 @@
+---
+title: DOCX to PDF
+description: Convert DOCX documents to PDF on Node.js with searchable text and native comments.
+category: Export formats
+---
+
+`@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF using Core's pagination, font resolution, and positioned glyphs. It runs on Node.js. Browser applications send documents to a server for conversion.
+
+The package uses the EigenPal Pro License. Production use requires a commercial agreement.
+
+## Install the package
+
+Use Node.js `^20.16.0 || >=22.3.0`. Install the converter and its required engine peer:
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
+
+## Convert a document
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+const source = await readFile('document.docx');
+const result = await exportPdf(source, {
+  displayMode: 'proposed',
+  comments: true,
+});
+
+await writeFile('document.pdf', result.bytes);
+```
+
+## Configure conversion
+
+By default, export includes proposed revisions and preserves comments as native PDF annotations. Set `comments: false` to omit annotations. Set `displayMode` to `'original'` or `'all-markup'` to change how revisions appear. Conversion preserves the source DOCX.
+
+The default `fidelityPolicy: 'strict'` rejects unsupported or approximate output. Use `'best-effort'` to receive available output with `result.diagnostics`.
+
+Core's `fontPolicy` controls failed font sources and incomplete face coverage. Inspect `result.fontResolution` for the fonts used in the PDF.
+
+## Handle limits and failures
+
+Set `maxPages`, `maxOutputBytes`, and `timeoutMs` for your conversion workload. `maxPages` checks completed layout before painting. `maxOutputBytes` checks encoded output; neither option limits process memory. Pass `signal` to cancel conversion between processing batches.
+
+`PdfPageLimitError` and `PdfOutputLimitError` include `limit`, `actual`, and stable `code` fields. `PdfFidelityError.diagnostics` explains a strict refusal. `PdfDocumentOpenError.reason` identifies rejected input.
+
+A `font-origin-failed` diagnostic identifies source failures that fallback sources can recover from. Inspect `fontResolution.originFailures` for causes. Set `fontPolicy: 'strict'` when source failures must reject conversion.
+
+## Configure server fonts
+
+Set `useSystemFonts: false` for consistent font selection across hosts. Supply `fonts` to override packaged sources. Supply `lastResortFonts` to resolve missing faces after embedded fonts and before generic substitutes. Import `createFontSource` and `defineFontResolver` from the converter package.
+
+For examples, see [Configure PDF fonts](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/fonts.md). For response handlers and deployment, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md). For all options and errors, see [PDF export API](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/api.md).
+
+For shared options and defaults, see [Compare PDF and Markdown conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/markdown-contract.md).
+
+## Reuse a conversion session
+
+Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and layout. Pass the same session to Markdown's `exportMarkdownFrom` when you need both formats. Dispose the session in `finally` after all exports. An export failure does not dispose a caller-owned session.
+
+Page diagnostics include one-based `pageNumber`, consistent with Markdown warnings. The existing zero-based `pageIndex` remains available.
+
+## Supported content
+
+The exporter supports searchable multilingual text, tables, images, notes, textboxes, structured equations, links, and comments. Charts, rotated table-cell text, and advanced image effects produce diagnostics.
+
+For supported fonts, resource limits, and error handling, see the [package documentation](https://github.com/eigenpal/docx-editor/tree/main/packages/docx-to-pdf).
+
+## Try the demo
+
+Run `bun run dev:pdf` from the repository root and open <http://127.0.0.1:5180>. Edit the sample or select **Open DOCX**, then select **Generate PDF**. The preview appears beside the editor. Use **Download PDF** to save the result.
+
+After editing the document, select **Regenerate PDF** to update the preview. The demo runs conversions on request and does not retain uploaded documents or generated PDFs.
+
+## Export from the editor
+
+For File menu setup in React and Vue, see [Export Markdown and PDF](/docs/2.x/guides/export).

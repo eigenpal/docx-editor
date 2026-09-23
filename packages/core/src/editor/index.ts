@@ -412,3 +412,10 @@ export {
   type ToolbarValueSlot,
   type ToolbarSlotValue,
 } from './toolbar-values.ts';
+
+export { runChromeExport, ChromeExportError } from './chrome-export.ts';
+export type {
+  ChromeExportFormat,
+  ChromeExportHandlers,
+  ChromeExportResult,
+} from './chrome-export.ts';

@@ -1,3 +1,4 @@
+import { withExportGlyphFallbacks } from './export-glyph-fallback.ts';
 // Process-wide shaped measurement shared by Node exporters.
 
 import {
@@ -108,17 +109,23 @@ function shapedMeasurer(shaping: LayoutShapingOptions): TextMeasurer {
  */
 export async function createSessionExportShaping(
   prepared: PreparedLayoutFontConfiguration,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  glyphFallbacks: readonly FontRequest[] = [],
+  documentLigatures = false
 ): Promise<SessionExportShaping> {
   if (!isPreparedLayoutFontConfiguration(prepared)) {
     throw new TypeError('Session exporter shaping requires a prepared font handle');
   }
   const shaper = await acquireProcessWideExportShaper();
-  const shaping = await createLayoutShapingWithTextShaper(
-    prepared,
-    shaper,
-    LAYOUT_HARFBUZZ_SHAPER_POLICY,
-    instrumentation
+  const shaping = withExportGlyphFallbacks(
+    await createLayoutShapingWithTextShaper(
+      prepared,
+      shaper,
+      LAYOUT_HARFBUZZ_SHAPER_POLICY,
+      instrumentation,
+      documentLigatures
+    ),
+    glyphFallbacks
   );
   return Object.freeze({
     createMeasurer: () => shapedMeasurer(shaping),
@@ -126,6 +133,7 @@ export async function createSessionExportShaping(
     shapeLaidOutText: bindExportLaidOutText(shaping),
     producer: [
       'node-export-session',
+      JSON.stringify(glyphFallbacks),
       prepared.fingerprint,
       shaping.operation.shapingHash,
       `producer:${shaping.operation.producerVersion}`,

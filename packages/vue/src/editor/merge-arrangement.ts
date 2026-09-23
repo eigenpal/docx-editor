@@ -50,7 +50,9 @@ export interface MergeArrangementInput<Entry> {
   readonly preset: boolean;
   readonly keyOfEntry: (entry: Entry, index: number) => string;
   readonly keyOfChild: KeyOfChild;
-  readonly renderEntry: (entry: Entry, index: number) => DocxEditorChildren;
+  readonly renderEntry: (entry: Entry, index: number, children?: VNode[]) => DocxEditorChildren;
+  /** Nested registry entries use the same slot overrides as their parent panel. */
+  readonly childrenOfEntry?: (entry: Entry) => readonly Entry[] | undefined;
 }
 
 /**
@@ -64,6 +66,7 @@ export function mergeArrangement<Entry>({
   keyOfEntry,
   keyOfChild,
   renderEntry,
+  childrenOfEntry,
 }: MergeArrangementInput<Entry>): VNodeArrayChildren {
   if (!preset) return children;
   const overrides = new Map<string, VNode>();
@@ -74,13 +77,16 @@ export function mergeArrangement<Entry>({
     if (key) overrides.set(key, child);
     else appended.push(child);
   }
-  const base: VNode[] = entries.map((entry, index) => {
-    const key = keyOfEntry(entry, index);
-    const override = overrides.get(key);
-    if (override) return override;
-    return renderEntry(entry, index);
-  });
-  const known = new Set(entries.map(keyOfEntry));
+  const known = new Set<string>();
+  const renderEntries = (items: readonly Entry[]): VNode[] =>
+    items.map((entry, index) => {
+      const key = keyOfEntry(entry, index);
+      known.add(key);
+      const nested = childrenOfEntry?.(entry);
+      const content = nested ? renderEntries(nested) : undefined;
+      return overrides.get(key) ?? renderEntry(entry, index, content);
+    });
+  const base = renderEntries(entries);
   const unmatched = [...overrides.entries()]
     .filter(([key]) => !known.has(key))
     .map(([, vnode]) => vnode);

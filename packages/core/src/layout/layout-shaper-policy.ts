@@ -19,6 +19,7 @@ const HARFBUZZ_OPTION_ROLES = {
   maxCodepoints: 'execution-refusal',
   maxGlyphs: 'execution-refusal',
   maxCachedFaces: 'cache-retention',
+  maxCachedFontBytes: 'cache-retention',
   maxCachedShapes: 'cache-retention',
   maxOutlineBytes: 'execution-refusal',
   maxCachedOutlineBytes: 'cache-retention',
@@ -55,7 +56,9 @@ export const LAYOUT_HARFBUZZ_SHAPER_POLICY = Object.freeze({
   maxInputUtf16: 1_000_000,
   maxCodepoints: 1_000_000,
   maxGlyphs: 1_000_000,
-  maxCachedFaces: 4,
+  // Keep mixed-document faces warm without exceeding the old 4 × 16 MiB byte bound.
+  maxCachedFaces: 32,
+  maxCachedFontBytes: 64 * 1024 * 1024,
   maxCachedShapes: 512,
   maxOutlineBytes: 1024 * 1024,
   maxCachedOutlineBytes: 16 * 1024 * 1024,

@@ -88,8 +88,13 @@ function appendStroke(
   seg.style.width = `${stroke.width * scale}px`;
   seg.style.height = `${stroke.height * scale}px`;
   seg.style.pointerEvents = 'none';
-  seg.style.backgroundColor = `#${hexColor(stroke.color)}`;
-  if (stroke.cssStyle !== 'solid') seg.dataset.cssStyle = stroke.cssStyle;
+  if (stroke.cssStyle === 'solid') seg.style.backgroundColor = `#${hexColor(stroke.color)}`;
+  else {
+    const horizontal = stroke.side === 'top' || stroke.side === 'bottom';
+    seg.style.boxSizing = 'border-box';
+    seg.style[horizontal ? 'borderTop' : 'borderLeft'] =
+      `${(horizontal ? stroke.height : stroke.width) * scale}px ${stroke.cssStyle} #${hexColor(stroke.color)}`;
+  }
   host.append(seg);
 }
 
@@ -115,6 +120,10 @@ function paintPublishedStrokes(
   const doubleHost = createTableBorderOverlay(document, 'docx-table-border-double');
   const tripleHost = createTableBorderOverlay(document, 'docx-table-border-triple');
   const edgeHost = createTableBorderOverlay(document, 'docx-table-border-edge');
+  // A shared horizontal band runs DOWNWARD out of the cell that owns it, into the row below.
+  // Painted cells are positioned siblings, so without a z-index the next row's `w:shd`
+  // background would cover the rule it is supposed to sit under.
+  for (const host of [doubleHost, tripleHost, edgeHost]) host.style.zIndex = '1';
   let hasDouble = false;
   let hasTriple = false;
   let hasEdge = false;
@@ -151,10 +160,15 @@ export function applyCellBorders(
   borders: ResolvedCellBorders | undefined,
   scale: number
 ): void {
-  applyCssEdge(element, 'Top', borders?.top, scale);
-  applyCssEdge(element, 'Right', borders?.right, scale);
-  applyCssEdge(element, 'Bottom', borders?.bottom, scale);
-  applyCssEdge(element, 'Left', borders?.left, scale);
+  const publishedSides = new Set((borders?.strokes ?? []).map((stroke) => stroke.side));
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    const cssSide = `${side[0]!.toUpperCase()}${side.slice(1)}` as TableBorderSide;
+    applyCssEdge(element, cssSide, borders?.[side], scale);
+    // Convenience edge metadata must not add a second inward stroke beneath the
+    // authoritative layout rectangle (including centered and partial edges).
+    if (publishedSides.has(side))
+      element.style[`border${cssSide}Style` as 'borderTopStyle'] = 'none';
+  }
   if (borders?.strokes && borders.strokes.length > 0) {
     paintPublishedStrokes(document, element, borders.strokes, scale);
   }

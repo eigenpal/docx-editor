@@ -16,23 +16,17 @@ function settings(body: string, namespace = W) {
 const setting = (mode: string) =>
   `<w:compatSetting w:name="compatibilityMode" w:uri="${URI}" w:val="${mode}"/>`;
 
-test('projects only supported explicitly authored Word compatibility modes', () => {
-  for (const mode of ['11', '12', '14', '15']) {
+test('projects every explicitly authored Word compatibility mode', () => {
+  // Including the ones no lane branches on. A document declaring 16 is modern; one declaring
+  // nothing is legacy. Reporting both as `undefined` made those indistinguishable and put
+  // legacy table geometry on every Word 2019 and Microsoft 365 document.
+  for (const mode of ['11', '12', '14', '15', '16', '13', '17', '9999']) {
     expect(compatibilityModeFromSettings(settings(`<w:compat>${setting(mode)}</w:compat>`))).toBe(
       Number(mode)
     );
   }
-  for (const mode of [
-    '13',
-    '16',
-    '0',
-    '-1',
-    '12.0',
-    '+12',
-    ' 12 ',
-    'NaN',
-    '9999999999999999999999',
-  ]) {
+  // Absent, malformed, or below Word's first mode: not a mode, so indistinguishable from absent.
+  for (const mode of ['0', '10', '-1', '12.0', '+12', ' 12 ', 'NaN', '9999999999999999999999']) {
     expect(
       compatibilityModeFromSettings(settings(`<w:compat>${setting(mode)}</w:compat>`))
     ).toBeUndefined();

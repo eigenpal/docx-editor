@@ -1,8 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "export NODE_OPTIONS=\"--max-old-space-size=4096${NODE_OPTIONS:+ $NODE_OPTIONS}\"; bun run build:preview",
+  "buildCommand": "export NODE_OPTIONS=\"--max-old-space-size=8192${NODE_OPTIONS:+ $NODE_OPTIONS}\"; bun run build:pdf && bun run build:preview",
   "outputDirectory": "examples/parity/dist",
   "installCommand": "HUSKY=0 bun install --frozen-lockfile",
+  "functions": {
+    "api/convert.ts": {
+      "maxDuration": 90,
+      "memory": 3008,
+      "includeFiles": "packages/{docx-to-pdf,fonts}/assets/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/",
@@ -24,6 +31,26 @@
       "has": [{ "type": "host", "value": "docx-to-markdown.docx-editor.dev" }],
       "destination": "/docx-to-markdown/index.html"
     },
+    {
+      "source": "/robots.txt",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/sitemap.xml"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/index.html"
+    },
     { "source": "/react/(.*)", "destination": "/react/index.html" },
     { "source": "/vue/(.*)", "destination": "/vue/index.html" },
     { "source": "/igloo/(.*)", "destination": "/igloo/index.html" },
@@ -31,6 +58,7 @@
       "source": "/docx-to-markdown/(.*)",
       "destination": "/docx-to-markdown/index.html"
     },
+    { "source": "/docx-to-pdf/(.*)", "destination": "/docx-to-pdf/index.html" },
     { "source": "/", "destination": "/react/index.html" }
   ]
 }

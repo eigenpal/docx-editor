@@ -69,7 +69,13 @@ test('browser and byte-export hosts share explicitly authored compatibility geom
     try {
       const browser = table(mounted.surface.layout());
       const headless = table(await exported.session.layout());
-      const expected = mode === 11 || mode === 12 || mode === 14 ? 478.8 : 468;
+      // An ABSENT `compatibilityMode` resolves to the legacy content box, not the modern
+      // one. A captured control settles it: this same fixture saved with no
+      // `w:compatSetting` at all and saved with `w:val="14"` render identically in the
+      // reference, both starting the first cell's text at x = 72.000, the text margin.
+      // See `.cache/pdf/claude-compatmode/`.
+      const expected =
+        mode === undefined || mode === 11 || mode === 12 || mode === 14 ? 478.8 : 468;
       expect(browser.box.width).toBeCloseTo(expected, 8);
       expect(headless.box.width).toBeCloseTo(expected, 8);
       expect(headless.columnEdges).toEqual(browser.columnEdges);
@@ -112,7 +118,8 @@ test('switching compatibility mode invalidates prepared tables and retained layo
   expect(session.stats.placed).toBeGreaterThan(0);
   expect(table(layout(14)).box.width).toBeCloseTo(478.8, 8);
   expect(session.keys).toEqual(initialKeys);
-  expect(table(layout(undefined)).box.width).toBeCloseTo(468, 8);
+  // Absent resolves to the legacy box, as above.
+  expect(table(layout(undefined)).box.width).toBeCloseTo(478.8, 8);
 });
 
 function storyBytes(mode: number) {

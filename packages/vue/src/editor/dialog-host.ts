@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 import { renderPopup } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
@@ -137,5 +138,20 @@ export const DialogHost = defineComponent({
           ])
         : null,
     ];
+  },
+});
+
+/** Keep triggered popups outside menu containers that hosts can hide or clip. */
+export const DialogPortal = defineComponent({
+  name: 'DocxDialogPortal',
+  props: {
+    content: { type: Function as PropType<() => DocxEditorChildren | null>, required: true },
+  },
+  setup(props) {
+    const host = useDialogHost();
+    return () =>
+      host?.target.value
+        ? h(Teleport, { to: host.target.value }, [props.content()])
+        : props.content();
   },
 });

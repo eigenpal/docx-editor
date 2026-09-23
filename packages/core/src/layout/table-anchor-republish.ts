@@ -89,6 +89,7 @@ export function publishDeferredRowAnchors(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
         cellBox,
+        cellContentBox: { ...cellBox, x: pending.cellOriginX, width: pending.cellContentWidth },
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
@@ -102,7 +103,8 @@ export function republishAnchoredParagraphsInBlocks(
   blocks: readonly BlockFragmentRecord[],
   authoredBlocks: readonly OoxmlElement[],
   cellBox: LayoutBox,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellContentBox: LayoutBox = cellBox
 ): void {
   if (
     !deps.onAnchorRepublish ||
@@ -131,6 +133,7 @@ export function republishAnchoredParagraphsInBlocks(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
         cellBox,
+        cellContentBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),

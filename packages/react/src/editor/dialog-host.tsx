@@ -11,6 +11,7 @@ import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 
 interface DialogHost {
+  readonly container: HTMLElement | null;
   readonly ownsPageSetup: boolean;
   open(kind: 'pageSetup' | 'paragraph', returnFocusTo?: HTMLElement | null): void;
   setContainer(container: HTMLElement | null): void;
@@ -72,6 +73,7 @@ export function DialogProvider({
   }, [popups, active]);
   const host = useMemo<DialogHost>(
     () => ({
+      container,
       setContainer,
       ownsPageSetup: popups?.pageSetup !== undefined,
       open(kind, returnFocusTo) {
@@ -116,4 +118,10 @@ export function DialogProvider({
 export function DialogMount() {
   const host = useDialogHost();
   return <div className="docx-dialog-mount" ref={host?.setContainer} />;
+}
+
+/** Keep triggered popups outside menu containers that hosts can hide or clip. */
+export function DialogPortal({ children }: { children: ReactNode }) {
+  const host = useDialogHost();
+  return host?.container ? createPortal(children, host.container) : children;
 }

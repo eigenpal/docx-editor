@@ -22,6 +22,7 @@ export interface StyleDefinition {
   readonly paragraphPropertiesNode: OoxmlElement | undefined;
   readonly tablePropertiesNode: OoxmlElement | undefined;
   readonly tableRowPropertiesNode: OoxmlElement | undefined;
+  readonly tableCellPropertiesNode?: OoxmlElement;
   readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
 }
 
@@ -139,6 +140,7 @@ export function readStyleDefinition(
     paragraphPropertiesNode,
     tablePropertiesNode: childNamed(node, 'tblPr'),
     tableRowPropertiesNode: childNamed(node, 'trPr'),
+    tableCellPropertiesNode: childNamed(node, 'tcPr'),
     conditionalTableFormats,
   };
 }

@@ -67,8 +67,10 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     projected: 'layout-only',
     equation: 'represented',
     noteNav: 'represented',
+    noteSeparator: 'layout-only',
     fontSlot: 'layout-only',
     glyphOffsetPt: 'layout-only',
+    borderBaselinePt: 'layout-only',
   } satisfies Record<keyof StyleSpanRecord, MarkdownFieldPolicy>,
   sourceRange: {
     paragraphId: 'represented',
@@ -95,6 +97,9 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     characterSpacingPt: 'layout-only',
     horizontalScalePercent: 'layout-only',
     kerningMinPt: 'layout-only',
+    kerningEnabled: 'layout-only',
+    ligatures: 'layout-only',
+    border: 'explicitly-omitted',
     hidden: 'layout-only',
     textOutline: 'layout-only',
   } satisfies Record<keyof ResolvedRunStyle, MarkdownFieldPolicy>,
@@ -164,6 +169,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     numId: 'represented',
     numFmt: 'represented',
     ordinal: 'represented',
+    picture: 'layout-only',
   } satisfies Record<keyof ListMarkerRecord, MarkdownFieldPolicy>,
   table: {
     kind: 'represented',
@@ -339,6 +345,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     fragments: 'explicitly-omitted',
     synthetic: 'explicitly-omitted',
     ruleStyle: 'explicitly-omitted',
+    ruleColor: 'explicitly-omitted',
   } satisfies Record<keyof NonNullable<NoteAreaRecord['separator']>, MarkdownFieldPolicy>,
   noteArea: {
     kind: 'layout-only',

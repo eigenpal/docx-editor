@@ -422,9 +422,14 @@ describe('a press always resolves, whatever the table holds', () => {
   // A click has to put the caret somewhere. Every case here produced NO position at all,
   // which the pointer lane turns into a dead press: no caret, no focus, nothing.
   test('a page of nothing but vertical-merge continuations is still clickable', () => {
-    const rows = Array.from({ length: 120 }, () => tr(tc('', '<w:tcPr><w:vMerge/></w:tcPr>'))).join(
-      ''
-    );
+    // Continuation-only rows have no implicit text height. Author a row height so this
+    // hit-test fixture still exercises pages containing only continuation cells.
+    const rows = Array.from({ length: 120 }, () =>
+      tr(
+        tc('', '<w:tcPr><w:vMerge/></w:tcPr>'),
+        '<w:trPr><w:trHeight w:val="280" w:hRule="exact"/></w:trPr>'
+      )
+    ).join('');
     const layout = lay(
       `<w:tbl>${tr(tc(p('origin'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>'))}${rows}</w:tbl>`
     );

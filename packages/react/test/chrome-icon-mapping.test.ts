@@ -81,6 +81,8 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'contentControl.remove': 'delete',
   'file.open': 'file_upload',
   'file.save': 'file_download',
+  'file.exportMarkdown': 'file_download',
+  'file.exportPdf': 'file_download',
   'paragraph.dialog': 'format_line_spacing',
   'file.pageSetup': 'settings',
   'insert.pageBreak': 'page_break',

@@ -29,6 +29,46 @@ describe('table cell border paint', () => {
   const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
   const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
+  // A vertical rule straddles its grid line, so an interior rule lands half inside the NEXT
+  // cell's box and the outer left rule starts half a width outside the table. Neither fits
+  // CSS border-box, which draws inside its own element, so both leave CSS for a stroke.
+  // Painted cells are positioned siblings, so the stroke overlay needs its own z-index or
+  // the next cell's `w:shd` background covers the rule it is supposed to sit under.
+  // Captured in `.cache/pdf/claude-vertical-rules/FINDING.md` and `.cache/pdf/claude-vrule/`.
+  test('a vertical rule straddles its line, above the next cell background', () => {
+    const shaded = '<w:tcPr><w:shd w:val="clear" w:fill="FFDD88"/></w:tcPr>';
+    const body =
+      '<w:tbl><w:tblPr><w:tblBorders>' +
+      ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+        .map((side) => `<w:${side} w:val="single" w:sz="8"/>`)
+        .join('') +
+      '</w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+      tr(tc(p('L'), shaded) + tc(p('R'), shaded)) +
+      '</w:tbl>';
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
+    const cells = [...container.querySelectorAll<HTMLElement>('.docx-table-cell')];
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.style.backgroundColor).toBe('#FFDD88');
+      expect(cell.style.borderRightStyle).toBe('none');
+      const right = cell.querySelector<HTMLElement>(
+        '.docx-table-border-edge-stroke[data-edge="right"]'
+      )!;
+      expect(right).not.toBeNull();
+      // Half a width left of the boundary, and lifted over every sibling cell background.
+      expect(parsePx(right.style.left)).toBe(parsePx(cell.style.width) - 0.5);
+      expect((right.parentElement as HTMLElement).style.zIndex).toBe('1');
+    }
+    // Only the first column owns a left rule. It straddles its line too, so it starts half
+    // a width outside the cell and cannot stay on CSS border-box.
+    expect(cells[0]!.style.borderLeftStyle).toBe('none');
+    const left = cells[0]!.querySelector<HTMLElement>('[data-edge="left"]')!;
+    expect(left).not.toBeNull();
+    expect(parsePx(left.style.left)).toBe(-0.5);
+    expect(cells[1]!.style.borderLeftStyle).toBe('none');
+  });
+
   test('does not hardcode a black grid; paints resolved styles and skips continue cells', () => {
     const body =
       '<w:tbl>' +
@@ -85,8 +125,11 @@ describe('table cell border paint', () => {
     expect(restart.style.borderTopStyle).toBe('none');
     expect(restart.style.borderTopColor).toBe('#2E75B6');
     expect(restart.querySelector('.docx-table-border-double')).not.toBeNull();
-    expect(restart.style.borderRightStyle).toBe('dashed');
-    expect(restart.style.borderRightColor).toBe('#CC3333');
+    expect(restart.style.borderRightStyle).toBe('none');
+    const restartRight = rightRule(restart);
+    expect(restartRight.style.borderLeft).toContain('dashed');
+    expect(restartRight.style.borderLeft).toContain('#CC3333');
+    expect(parsePx(restartRight.style.left)).toBe(parsePx(restart.style.width));
     expect(restart.dataset.rowSpan).toBe('2');
 
     const continueCell = cells[2]!;
@@ -96,7 +139,10 @@ describe('table cell border paint', () => {
     expect(continueCell.children.length).toBe(0);
 
     const topRight = cells[1]!;
-    expect(topRight.style.borderTopStyle).toBe('dotted');
+    expect(topRight.style.borderTopStyle).toBe('none');
+    expect(
+      topRight.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!.style.borderTopStyle
+    ).toBe('dotted');
     expect(topRight.style.borderTopColor).toBe('#339933');
     // Triple uses an inert overlay.
     const bottomRight = cells[3]!;
@@ -177,6 +223,16 @@ describe('table cell border paint', () => {
     );
   }
 
+  /** A vertical rule starts at its grid line and runs right, which CSS border-box cannot
+   *  draw for a right edge, so it is published as stroke geometry with its authored style. */
+  function rightRule(cell: HTMLElement): HTMLElement {
+    const found = cell.querySelector<HTMLElement>(
+      '.docx-table-border-edge-stroke[data-edge="right"]'
+    );
+    expect(found).not.toBeNull();
+    return found!;
+  }
+
   function seg(segs: StrokeSeg[], edge: string, which: 'outer' | 'inner'): StrokeSeg {
     const found = segs.find((s) => s.edge === edge && s.which === which);
     expect(found).toBeDefined();
@@ -213,19 +269,19 @@ describe('table cell border paint', () => {
       expect(outer.color.replace(/^#/, '').toLowerCase()).toBe('2e75b6');
       expect(inner.color.replace(/^#/, '').toLowerCase()).toBe('2e75b6');
       if (side === 'top' || side === 'bottom') {
-        expect(outer.height).toBe(1);
-        expect(inner.height).toBe(1);
-        // 1px authored band → extent 3 centered with inset -1.
+        expect(outer.height).toBe(0.375);
+        expect(inner.height).toBe(0.375);
+        // 0.375pt strokes and gap → 1.125pt band with inset -0.375.
         if (side === 'top') {
-          expect(outer.top).toBe(-1);
-          expect(inner.top).toBe(1);
+          expect(outer.top).toBe(-0.375);
+          expect(inner.top).toBe(0.375);
         }
       } else {
-        expect(outer.width).toBe(1);
-        expect(inner.width).toBe(1);
+        expect(outer.width).toBe(0.375);
+        expect(inner.width).toBe(0.375);
         if (side === 'left') {
-          expect(outer.left).toBe(-1);
-          expect(inner.left).toBe(1);
+          expect(outer.left).toBe(-0.375);
+          expect(inner.left).toBe(0.375);
         }
       }
     }
@@ -240,16 +296,16 @@ describe('table cell border paint', () => {
     const leftInner = seg(segs, 'left', 'inner');
 
     // Horizontal owns the corner; vertical starts after the owned band.
-    expect(topOuter.left).toBe(-1);
-    expect(topOuter.top).toBe(-1);
-    expect(leftOuter.left).toBe(-1);
-    expect(leftOuter.top).toBe(0); // -1 + 1 stroke
+    expect(topOuter.left).toBe(-0.375);
+    expect(topOuter.top).toBe(-0.375);
+    expect(leftOuter.left).toBe(-0.375);
+    expect(leftOuter.top).toBe(0); // -0.375 + 0.375 stroke
     expect(rectsOverlap(topOuter, leftOuter)).toBe(false);
 
-    expect(topInner.left).toBe(1); // left inset + stroke + gap
-    expect(topInner.top).toBe(1);
-    expect(leftInner.left).toBe(1);
-    expect(leftInner.top).toBe(2); // below top's full extent
+    expect(topInner.left).toBe(0.375); // left inset + stroke + gap
+    expect(topInner.top).toBe(0.375);
+    expect(leftInner.left).toBe(0.375);
+    expect(leftInner.top).toBe(0.75); // below top's full extent
     expect(rectsOverlap(topInner, leftInner)).toBe(false);
 
     // No stroke protrudes past the opposite (absent) edge as a cap.
@@ -274,8 +330,10 @@ describe('table cell border paint', () => {
     paintSemanticLayout(container, layoutOf(body), { scale: 1 });
     const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
     expect(cell.style.borderTopStyle).toBe('none');
-    expect(cell.style.borderRightStyle).toBe('dashed');
-    expect(cell.style.borderRightColor).toBe('#CC3333');
+    expect(cell.style.borderRightStyle).toBe('none');
+    const dashedRight = rightRule(cell);
+    expect(dashedRight.style.borderLeft).toContain('dashed');
+    expect(parsePx(dashedRight.style.left)).toBe(parsePx(cell.style.width));
     expect(cell.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     expect(cell.querySelector('.docx-table-border-triple')).toBeNull();
     const segs = strokeSegs(cell);
@@ -290,7 +348,7 @@ describe('table cell border paint', () => {
     expect(topInner.left + topInner.width).toBe(cellW);
   });
 
-  test('double+single keeps single CSS and flush double ends', () => {
+  test('double+single paints the outer single stroke inside the cell and flush double ends', () => {
     const body =
       '<w:tbl>' +
       tr(
@@ -306,7 +364,11 @@ describe('table cell border paint', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layoutOf(body), { scale: 1 });
     const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
-    expect(cell.style.borderBottomStyle).toBe('solid');
+    expect(cell.style.borderBottomStyle).toBe('none');
+    const bottomStroke = cell.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!;
+    expect(bottomStroke.style.backgroundColor).toBe('#000000');
+    expect(bottomStroke.style.height).toBe('1px');
+    expect(parsePx(bottomStroke.style.top)).toBeCloseTo(parsePx(cell.style.height) - 1, 6);
     expect(cell.style.borderBottomColor).toBe('#000000');
     const segs = strokeSegs(cell);
     const cellH = parsePx(cell.style.height);
@@ -328,8 +390,8 @@ describe('table cell border paint', () => {
     expect(topOuter.left + topOuter.width).toBe(cellW);
     expect(topInner.left).toBe(0);
     expect(topInner.left + topInner.width).toBe(cellW);
-    // Only extends on the authored axis (inset -1), not laterally.
-    expect(topOuter.top).toBe(-1);
+    // Only extends on the authored axis (inset -0.375), not laterally.
+    expect(topOuter.top).toBe(-0.375);
   });
 
   test('double edges scale stroke thickness at thicker sz', () => {
@@ -337,10 +399,10 @@ describe('table cell border paint', () => {
     const segs = strokeSegs(cell);
     const topOuter = seg(segs, 'top', 'outer');
     const topInner = seg(segs, 'top', 'inner');
-    expect(topOuter.height).toBe(1);
-    expect(topInner.height).toBe(1);
-    expect(topOuter.top).toBe(0);
-    expect(topInner.top).toBe(2); // stroke + gap
+    expect(topOuter.height).toBe(3);
+    expect(topInner.height).toBe(3);
+    expect(topOuter.top).toBe(-3);
+    expect(topInner.top).toBe(3); // stroke + gap
   });
 
   test('double overlays respect scale factor', () => {
@@ -348,10 +410,10 @@ describe('table cell border paint', () => {
     const segs = strokeSegs(cell);
     const leftOuter = seg(segs, 'left', 'outer');
     const leftInner = seg(segs, 'left', 'inner');
-    expect(leftOuter.width).toBe(2);
-    expect(leftInner.width).toBe(2);
-    expect(leftOuter.left).toBe(0);
-    expect(leftInner.left).toBe(4); // 2 stroke + 2 gap
+    expect(leftOuter.width).toBe(6);
+    expect(leftInner.width).toBe(6);
+    expect(leftOuter.left).toBe(-6);
+    expect(leftInner.left).toBe(6); // scaled inset + stroke + gap
   });
 
   test('triple overlay regression after double refactor', () => {
@@ -477,7 +539,8 @@ describe('table cell border paint', () => {
     expect(doubleBlue!.style.borderTopStyle).toBe('none');
     expect(doubleBlue!.style.borderLeftStyle).toBe('none');
     expect(doubleBlue!.style.borderBottomStyle).toBe('none');
-    expect(doubleBlue!.style.borderRightStyle).toBe('dashed');
+    expect(doubleBlue!.style.borderRightStyle).toBe('none');
+    expect(rightRule(doubleBlue!).style.borderLeft).toContain('dashed');
     expect(doubleBlue!.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     const segs = strokeSegs(doubleBlue!);
     expect(segs).toHaveLength(6); // top/left/bottom × outer+inner

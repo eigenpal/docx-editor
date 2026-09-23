@@ -8,19 +8,20 @@
 // A fixture that authors no size therefore measures every box at 10/11 of the round numbers
 // the assertions were written for. Rather than restate that ratio in each expectation, these
 // fixtures carry the docDefaults a real document carries, so an unstyled run is 11pt and one
-// line is exactly `lineHeight`.
+// line is exactly `lineHeight`. An explicit empty paragraph default keeps this
+// geometry fixture independent of application-defined omitted spacing.
 
 import { readOoxmlPart } from '../../../store/package/ooxml-tree.ts';
 import { buildStyleCascadeTable } from '../../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
-/** A style cascade whose only claim is `w:sz="22"` on `w:docDefaults`. */
+/** Eleven-point runs with explicit single-line, zero-gap paragraph defaults. */
 export function elevenPointDefaults(): ReturnType<typeof buildStyleCascadeTable> {
   const styles = readOoxmlPart(
     `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
       '<w:sz w:val="22"/>' +
-      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+      '</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults></w:styles>',
     { name: '/word/styles.xml', contentType: 'app/xml' }
   );
   if (!styles.ok) throw new Error(styles.reason);

@@ -220,11 +220,30 @@ function writeDurations(durations) {
   }
 }
 
+/**
+ * A file that must run on Node rather than Bun, by name.
+ *
+ * Almost everything here is a Bun test. A few are integration tests for Node servers and
+ * Node workers — `node:worker_threads` fed a `data:` URL, for one — which hang or refuse
+ * under Bun, and whose failure would say nothing about the code under test. The suffix
+ * makes the runtime a property of the file instead of a list somewhere else.
+ */
+const NODE_TEST_FILE = /\.node\.test\.(mjs|cjs|js)$/;
+
 /** Bun's tallies: ` 71 pass`, ` 1 skip`, ` 0 fail`, ` 3 todo`. */
 function tally(output) {
   const counts = { pass: 0, fail: 0, skip: 0, todo: 0 };
   for (const [, count, kind] of output.matchAll(/^\s*(\d+) (pass|fail|skip|todo)\s*$/gm)) {
     counts[kind] += Number(count);
+  }
+  // `node --test` reports `# pass 2` / `ℹ pass 2` instead. Only consulted when Bun's own
+  // shape found nothing, so a Bun run never double-counts.
+  if (counts.pass + counts.fail + counts.skip + counts.todo === 0) {
+    for (const [, kind, count] of output.matchAll(
+      /^[#\u2139]\s+(pass|fail|skipped|todo)\s+(\d+)\s*$/gm
+    )) {
+      counts[kind === 'skipped' ? 'skip' : kind] += Number(count);
+    }
   }
   return counts;
 }
@@ -304,11 +323,13 @@ function runFile(file, passthrough, failFast, onRss) {
     // `./` matters: a bare relative path is a FILTER that bun matches against the files its
     // own scan finds, and that scan does not reach everything this one does. With the
     // prefix it is a path, and the file runs whether or not bun would have discovered it.
-    const args = ['test', `./${file}`];
-    if (!passthrough.some((argument) => argument.startsWith('--timeout'))) {
+    const node = NODE_TEST_FILE.test(file);
+    const args = node ? ['--test', `./${file}`] : ['test', `./${file}`];
+    if (!node && !passthrough.some((argument) => argument.startsWith('--timeout'))) {
       args.push('--timeout', String(DEFAULT_TIMEOUT_MS));
     }
-    const child = spawn('bun', [...args, ...passthrough], {
+    // Bun's flags are not Node's, so a passthrough like `-t` is not forwarded to a Node file.
+    const child = spawn(node ? 'node' : 'bun', [...args, ...(node ? [] : passthrough)], {
       cwd: ROOT,
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -327,7 +348,7 @@ function runFile(file, passthrough, failFast, onRss) {
     child.on('error', (error) => {
       children.delete(child);
       clearInterval(sampler);
-      settle({ file, output: `failed to spawn bun: ${error.message}`, code: 1, ms: 0, peak: 0 });
+      settle({ file, output: `failed to spawn ${node ? 'node' : 'bun'}: ${error.message}`, code: 1, ms: 0, peak: 0 });
     });
     child.on('exit', (code) => {
       // Descendants can inherit the worker's output pipes. Stop them on failure

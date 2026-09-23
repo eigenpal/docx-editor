@@ -484,3 +484,10 @@ export {
 export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
 
 export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorExportDialog,
+  type DocxEditorExportDialogProps,
+} from './editor/DocxEditorExportDialog';

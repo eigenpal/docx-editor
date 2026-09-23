@@ -1,3 +1,4 @@
+import { pdfExportPlugin } from '../shared/pdf-export-plugin';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
@@ -94,7 +95,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
 
   return {
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react(), canonicalFixturePlugin()],
+    plugins: [react(), canonicalFixturePlugin(), pdfExportPlugin()],
     root: __dirname,
     resolve: {
       alias: usePublished
@@ -106,6 +107,14 @@ export default defineConfig(async (): Promise<UserConfig> => {
             { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
           ]
         : [
+            {
+              find: /^@docx-editor\.dev\/docx-to-markdown$/,
+              replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/src/index.ts'),
+            },
+            {
+              find: /^@docx-editor\.dev\/core$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/index.ts'),
+            },
             {
               find: '@docx-editor.dev/editor-api/browser',
               replacement: path.join(monorepoRoot, 'packages/editor-api/src/browser.ts'),
@@ -141,7 +150,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|export|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {

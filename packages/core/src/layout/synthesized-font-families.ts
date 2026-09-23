@@ -122,6 +122,19 @@ function boundedTextContent(root: OoxmlElement): string {
   return text;
 }
 
+/**
+ * A marker's AUTHORED face is what a resolver must be asked for, whether or not it turns
+ * out to be available — asking is how availability becomes known. Resolving with this
+ * oracle keeps `w:rFonts w:ascii="Symbol"` on the marker style instead of translating the
+ * bullet to Unicode and dropping the face, which would make the one family a private-use
+ * glyph needs the one family nobody ever requests.
+ *
+ * It answers the enumeration only. Layout resolves the same markers against what was really
+ * admitted (`markerSymbolFontAvailability`), so a face the resolver could not supply still
+ * falls back to the Unicode twin in both measurement and paint.
+ */
+const ASSUME_AVAILABLE = (): boolean => true;
+
 export function usedNumberingFontFamilies(
   storyRoots: readonly OoxmlElement[],
   numberingRoot: OoxmlElement | null,
@@ -166,7 +179,7 @@ export function usedNumberingFontFamilies(
           }
         }
       };
-      noteItems(resolveStoryListItems(blocks, numbering, styles));
+      noteItems(resolveStoryListItems(blocks, numbering, styles, ASSUME_AVAILABLE));
       for (const block of blocks) {
         const hosted = hostedTextboxContents(block);
         for (const content of hosted.contents) {

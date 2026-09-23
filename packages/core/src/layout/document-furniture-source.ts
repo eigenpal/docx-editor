@@ -23,6 +23,7 @@ import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { createBackgroundFurnitureProjection, hasPageBackground } from './background-furniture.ts';
 
 /** Page furniture supplied to semantic layout. @public */
 export interface DocumentFurnitureSource {
@@ -103,6 +104,7 @@ export function createDocumentFurnitureSource(
     projectFieldLink,
     showFieldCodes,
   } = options;
+  const background = createBackgroundFurnitureProjection(() => view.stylesRoot());
 
   const memo = new WeakMap<
     object,
@@ -181,7 +183,8 @@ export function createDocumentFurnitureSource(
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
     const currentCompatibilityMode = compatibilityMode?.();
-    const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
+    const authoredPart = !background.isImplicitPart(part);
+    const drawingLayoutToken = authoredPart ? (drawingLayoutTokenForPart?.(part.name) ?? '') : '';
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
     const projectLink = linkProjectors.projectLinkForPart(part.name);
@@ -217,8 +220,8 @@ export function createDocumentFurnitureSource(
       undefined,
       currentDefaultTabStopPt,
       displayMode,
-      inlineDrawingLayoutForPart?.(part.name),
-      drawingTokenForParagraphForPart
+      authoredPart ? inlineDrawingLayoutForPart?.(part.name) : undefined,
+      authoredPart && drawingTokenForParagraphForPart
         ? (paragraph) => drawingTokenForParagraphForPart(part.name, paragraph)
         : undefined,
       undefined,
@@ -273,24 +276,34 @@ export function createDocumentFurnitureSource(
     resolution: HeaderFooterSectionResolution | undefined,
     geometry: ReturnType<typeof geometryOfSection>
   ): PageFurniture | undefined => {
-    if (!parts || (parts.headers.size === 0 && parts.footers.size === 0)) return undefined;
+    const reserveBackground = hasPageBackground(view.part());
+    if (!parts || (!reserveBackground && parts.headers.size === 0 && parts.footers.size === 0))
+      return undefined;
     const width = geometry.width - geometry.margin.left - geometry.margin.right;
     const map = (
       source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>,
-      slots: HeaderFooterSectionResolution['headers'] | undefined
+      slots: HeaderFooterSectionResolution['headers'] | undefined,
+      kind: 'header' | 'footer'
     ) => {
       const stories = new Map<
         HeaderFooterVariantName,
         ReturnType<typeof layoutHeaderFooterStory>
       >();
-      for (const [variant, part] of source) {
+      const variants: readonly HeaderFooterVariantName[] = reserveBackground
+        ? ['default', 'first', 'even']
+        : [...source.keys()];
+      for (const variant of variants) {
+        const authored = source.get(variant);
+        const part = reserveBackground
+          ? background.variantPart(authored, kind, variant)
+          : authored!;
         const slot = slots?.get(variant);
         // Relationship ids identify an occurrence, not a part. Several section/variant slots may
         // legally target one shared part through distinct rIds, so keep the expensive baseline
         // part-memoized and stamp only this cheap occurrence wrapper with its exact slot identity.
         const rId =
           slot?.partName === part.name ? slot.rId : rIdOf(packageOwner, occurrenceOwner, part.name);
-        const baseline = storyOf(part, width, geometry);
+        const baseline = background.authoredStory(storyOf(part, width, geometry));
         stories.set(variant, rId ? stampStoryRId(occurrenceOwner, baseline, rId) : baseline);
       }
       return stories;
@@ -298,8 +311,8 @@ export function createDocumentFurnitureSource(
     return {
       titlePage: parts.titlePage,
       evenAndOddHeaders: parts.evenAndOddHeaders,
-      headers: map(parts.headers, resolution?.headers),
-      footers: map(parts.footers, resolution?.footers),
+      headers: map(parts.headers, resolution?.headers, 'header'),
+      footers: map(parts.footers, resolution?.footers, 'footer'),
     };
   };
 

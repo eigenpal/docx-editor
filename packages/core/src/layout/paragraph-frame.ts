@@ -13,6 +13,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 /** Numeric, auto-height text frames. Other frame variants retain ordinary flow. */
 export interface ParagraphFrame {
+  /** Explicit-size drop cap aligned against this many lines of its anchor paragraph. */
+  readonly dropCapLines?: number;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -94,8 +96,10 @@ export function readParagraphFrame(properties: readonly OoxmlProperty[]): Paragr
     !['0', '1', 'true', 'false', 'on', 'off'].includes(attributes.anchorLock)
   )
     return null;
-  const x = coordinate(attributes.x),
-    y = coordinate(attributes.y),
+  // `w:x` and `w:y` are optional and default to zero (ECMA-376 17.3.1.11); a heading framed
+  // at the text anchor's own left edge is written without them.
+  const x = coordinate(attributes.x ?? '0'),
+    y = coordinate(attributes.y ?? '0'),
     width = coordinate(attributes.w);
   if (x === null || y === null || width === null || width <= 0) return null;
   // Word defaults both anchors to text (MS-OE376 2.1.48).
@@ -153,7 +157,18 @@ export function positionParagraphFrame(
     ...(fragment.borders
       ? { borders: fragment.borders.map((border) => ({ ...border, box: move(border.box) })) }
       : {}),
-    ...(fragment.marker ? { marker: { ...fragment.marker, box: move(fragment.marker.box) } } : {}),
+    // The picture bullet shares the marker's coordinate space, so it moves with the marker.
+    ...(fragment.marker
+      ? {
+          marker: {
+            ...fragment.marker,
+            box: move(fragment.marker.box),
+            ...(fragment.marker.picture
+              ? { picture: { ...fragment.marker.picture, box: move(fragment.marker.picture.box) } }
+              : {}),
+          },
+        }
+      : {}),
     lines: fragment.lines.map((line) => ({
       ...line,
       box: move(line.box),

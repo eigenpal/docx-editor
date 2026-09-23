@@ -15,7 +15,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p = (text: string, props = '') =>
   `<w:p><w:pPr><w:widowControl w:val="0"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/>${props}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const table = (width = 80, offset = 0, extra = '') =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="0" w:tblpY="${offset * 20}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="${offset * 20 + 1}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
 const part = (body: string) => {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
@@ -38,6 +38,43 @@ const paragraphs = (layout: ReturnType<typeof render>) =>
   layout.pages
     .flatMap((page) => page.fragments)
     .filter((f): f is ParagraphFragmentRecord => f.kind === 'paragraph');
+
+test('an earlier page float does not turn subsequent page floats into inline tables', () => {
+  const source = part(
+    Array.from(
+      { length: 3 },
+      (_, index) =>
+        p(`Page ${index}`, index ? '<w:pageBreakBefore/>' : '') + table(60) + p(`After ${index}`)
+    ).join('')
+  );
+  const config = {
+    ...options,
+    inlineDrawingLayout: {
+      ownerPartName: '/word/document.xml',
+      project: () => null,
+      resourceOf: () => {
+        throw new Error('no picture resources');
+      },
+    },
+  };
+  const session = createLayoutSession();
+  const cold = layoutSemanticDocument(source, 0, config);
+  expect(cold.pages).toHaveLength(3);
+  expect(tables(cold)).toHaveLength(3);
+  expect(tables(cold).every(isOutOfFlowTableFragment)).toBe(true);
+  for (const page of cold.pages) {
+    const floated = page.fragments.find((block) => block.kind === 'table')!;
+    const anchor = page.fragments.find(
+      (block) => block.kind === 'paragraph' && block.paragraphId === floated.floatingWrap?.anchorId
+    ) as ParagraphFragmentRecord;
+    expect(anchor.lines[0]!.box.y).toBe(floated.box.y);
+    expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(
+      floated.box.x + floated.box.width
+    );
+  }
+  expect(layoutSemanticDocument(source, 0, { ...config, session }).pages).toEqual(cold.pages);
+  expect(layoutSemanticDocument(source, 1, { ...config, session }).pages).toEqual(cold.pages);
+});
 
 test('text wraps beside a floating table without an image layout port', () => {
   const layout = render(part(p('Lead') + table() + p('word '.repeat(30)) + p('Tail')));
@@ -62,7 +99,7 @@ test('near-full-width floating tables keep their caption and heading below the t
   for (const rtl of [false, true]) {
     const source = part(
       p('Lead') +
-        table(184).replace('w:tblpX="0"', 'w:tblpXSpec="center"') +
+        table(184).replace('w:tblpX="1"', 'w:tblpXSpec="center"') +
         p('Source caption') +
         p(rtl ? 'ما يقرب من سبعين بالمئة' : 'A complete heading', rtl ? '<w:bidi/>' : '')
     );
@@ -131,7 +168,7 @@ test('moves a floating table with its anchor when its band cannot fit the page r
 
 test('preserves a negative offset beside earlier ink and displaces collisions below it', () => {
   const clear = render(
-    part(p('Lead') + table(80, -6).replace('w:tblpX="0"', 'w:tblpX="2000"') + p('Anchor'))
+    part(p('Lead') + table(80, -6).replace('w:tblpX="1"', 'w:tblpX="2001"') + p('Anchor'))
   );
   expect(tables(clear)[0]!.box.y).toBe(6);
   const colliding = render(part(p('Lead') + table(80, -6) + p('Anchor')));
@@ -153,9 +190,13 @@ test('wraps in the anchor column without narrowing another column', () => {
   const anchor = paragraphs(layout).find(
     (fragment) => fragment.paragraphId === floating.floatingWrap?.anchorId
   )!;
-  expect(floating.box.x).toBe(105);
+  // The legacy text anchor aligns the cell content; its omitted-margin 0.5pt inset
+  // extends the outer table edge into the column gutter.
+  expect(floating.box.x).toBeCloseTo(105 - 0.5, 6);
   expect(floating.floatingWrap?.columnIndex).toBe(1);
-  expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(145);
+  expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(
+    floating.box.x + floating.box.width
+  );
 });
 
 test('distance-only table edits invalidate wrapping while preserving warm/cold geometry', () => {
@@ -324,4 +365,69 @@ test('tables whose cells wrap around earlier drawings retain safe row pagination
       .join('');
     expect(cellText).toBe(text);
   }
+});
+
+test('a sole no-overlap table still wraps its surrounding paragraph', () => {
+  const source = part(
+    p('Lead') +
+      table().replace('<w:tblPr>', '<w:tblPr><w:tblOverlap w:val="never"/>') +
+      p('word '.repeat(30))
+  );
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+  for (let revision = 0; revision < 2; revision++) {
+    const layout = layoutSemanticDocument(source, revision, { ...options, session, cache });
+    expect(layout.pages).toEqual(render(source).pages);
+    const floating = tables(layout)[0]!;
+    const anchor = paragraphs(layout)[1]!;
+    expect(isOutOfFlowTableFragment(floating)).toBe(true);
+    expect(floating.box.y).toBe(12);
+    expect(anchor.lines[0]!.box.y).toBe(12);
+    expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
+    expect(anchor.lines.find((line) => line.box.y >= 52)!.spans[0]!.box.x).toBe(0);
+  }
+});
+
+// Word clears text beside a floating table at the GRID edge plus the table's own authored
+// outer border width plus `w:rightFromText`. Captured from a six-case control whose grid
+// runs 72..222pt: a 1pt border with a 9.35pt distance starts text at 232.35 and a 4pt
+// border with the same distance at 235.35, both exact. A zero distance and an unbordered
+// table are NOT explained by that control and stay on the plain grid-plus-distance edge.
+const borderedFloat = (sz: number, rightFromText: number) =>
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="1" w:leftFromText="0" w:rightFromText="${rightFromText}"/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="2000"/>${
+    sz === 0
+      ? ''
+      : `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+          .map((side) => `<w:${side} w:val="single" w:sz="${sz}" w:space="0" w:color="auto"/>`)
+          .join('')}</w:tblBorders>`
+  }<w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+
+const wrapEdgeOf = (sz: number, rightFromText: number) => {
+  const layout = render(part(p('Lead') + borderedFloat(sz, rightFromText) + p('word '.repeat(40))));
+  const floating = tables(layout)[0]!;
+  const anchor = paragraphs(layout)[1]!;
+  expect(isOutOfFlowTableFragment(floating)).toBe(true);
+  return {
+    gridRight: floating.box.x + floating.box.width,
+    textStart: anchor.lines[0]!.spans[0]!.box.x,
+  };
+};
+
+test('text beside a bordered floating table clears the grid, the border and the distance', () => {
+  const thin = wrapEdgeOf(8, 187);
+  expect(thin.textStart).toBeCloseTo(thin.gridRight + 1 + 9.35, 6);
+
+  const thick = wrapEdgeOf(32, 187);
+  expect(thick.textStart).toBeCloseTo(thick.gridRight + 4 + 9.35, 6);
+
+  const far = wrapEdgeOf(8, 720);
+  expect(far.textStart).toBeCloseTo(far.gridRight + 1 + 36, 6);
+});
+
+test('an unbordered float and a zero wrap distance keep the plain grid edge', () => {
+  const unbordered = wrapEdgeOf(0, 187);
+  expect(unbordered.textStart).toBeCloseTo(unbordered.gridRight + 9.35, 6);
+
+  const touching = wrapEdgeOf(8, 0);
+  expect(touching.textStart).toBeCloseTo(touching.gridRight, 6);
 });

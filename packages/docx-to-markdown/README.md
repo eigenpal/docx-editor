@@ -1,6 +1,6 @@
 # DOCX to Markdown
 
-Use `@docx-editor.dev/docx-to-markdown` to convert DOCX files to Markdown. The result includes the document body, individual pages, and separate headers, footers, comments, and tracked changes.
+Use `@docx-editor.dev/docx-to-markdown` to convert DOCX files to Markdown. The result includes the body, pages, headers, footers, comments, and tracked changes.
 
 [Try the DOCX to Markdown demo](https://docx-to-markdown.docx-editor.dev/) or read the [Markdown export guide](https://www.docx-editor.dev/docs/2.x/export/markdown).
 
@@ -41,7 +41,9 @@ const result = await exportMarkdown(docxBytes, { images: true });
 
 ### Preserve displayed image sizes
 
-Use `images: { syntax: 'html' }` to include each image's displayed width and height in generated `<img>` tags. Dimensions use whole CSS pixels. Configure your Markdown renderer to allow sanitized HTML and retain `width` and `height`. The default `images: true` uses standard Markdown image syntax, which has no size attributes. For custom previews, use each occurrence's `displayWidthPx` and `displayHeightPx`. Asset `pixelWidth` and `pixelHeight` describe the image file's dimensions. Crop, rotation, and floating text wrapping are not reproduced. See [displayed image sizes and custom previews](docs/images.md#preserve-displayed-image-sizes).
+Use `images: { syntax: 'html' }` to include displayed sizes in generated `<img>` tags. Dimensions use whole CSS pixels. Configure your renderer to allow sanitized HTML and retain `width` and `height`. The default Markdown syntax has no size attributes.
+
+For custom previews, use `displayWidthPx` and `displayHeightPx`. Asset `pixelWidth` and `pixelHeight` describe the image file. The converter omits crop, rotation, and floating text wrapping. See [Preserve displayed image sizes](docs/images.md#preserve-displayed-image-sizes).
 
 ## Read page output
 
@@ -54,7 +56,7 @@ for (const page of result.pages) {
 }
 ```
 
-`result.markdown` joins the body into one document. Headers and footers stay in `result.pages`.
+`result.markdown` contains continuous document text without page separators. Use it for an unpaged `.md` download. Headers and footers stay in `result.pages`.
 
 For search and AI ingestion, use `{ displayMode: 'proposed' }` to show pending insertions and hide pending deletions. The default, `'all-markup'`, shows both.
 

@@ -5,6 +5,8 @@ import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts
  * @public
  */
 export interface DrawingImageEffects {
+  /** Fixed alpha multiplier for raster painting; omitted means opaque. */
+  readonly opacity?: number;
   readonly grayscale: boolean;
   readonly brightness: number;
   readonly contrast: number;
@@ -21,13 +23,18 @@ function parseLumPercent(value: string | undefined): number | null {
 
 /** Bounded picture colour modes; projection never rewrites source media. */
 export function readBlipEffects(blip: OoxmlElement): DrawingImageEffects {
+  let opacity: number | undefined;
   let grayscale = false;
   let brightness = 0;
   let contrast = 0;
   let bilevel: number | undefined;
   for (const child of blip.children) {
     if (child.kind !== 'generic' || child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
-    if (child.localName === 'biLevel') {
+    if (child.localName === 'alphaModFix') {
+      const raw = schemaAttributeValue(child.attributes, 'amt');
+      const value = raw !== undefined && /^\d{1,6}$/.test(raw) ? Number(raw) : NaN;
+      if (Number.isInteger(value) && value >= 0 && value <= 100_000) opacity = value / 100_000;
+    } else if (child.localName === 'biLevel') {
       const raw = schemaAttributeValue(child.attributes, 'thresh');
       const value = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : NaN;
       if (Number.isInteger(value) && value >= 0 && value <= 100_000) bilevel = value / 100_000;
@@ -41,6 +48,7 @@ export function readBlipEffects(blip: OoxmlElement): DrawingImageEffects {
     }
   }
   return Object.freeze({
+    ...(opacity === undefined ? {} : { opacity }),
     grayscale,
     brightness,
     contrast,

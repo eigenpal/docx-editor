@@ -26,7 +26,18 @@ function load(body: string): OoxmlPart {
   return result.part;
 }
 
+// Word's own shape: begin, the instruction and the separator open the field INSIDE the first
+// entry's paragraph, followed by that entry's text. Verified against the TOC in the saved
+// `demo.docx`, whose opening paragraph carries a `w:hyperlink` with the first heading, a tab
+// and its PAGEREF. A paragraph holding ONLY the opening is a different shape, covered below.
 const TOC_FIELD =
+  '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>' +
+  '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-2" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:t>Introduction</w:t></w:r></w:p>' +
+  '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+
+/** The opening alone in its own paragraph: no result of its own, so no row. */
+const CHROME_ONLY_OPENING =
   '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-2" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
   '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>' +
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
@@ -36,23 +47,53 @@ const EMPTY_TOC_FIELD =
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
 
 describe('TOC field chrome layout', () => {
-  test('begin and end chrome paragraphs reserve no vertical flow', () => {
+  test('an opening that carries the first entry keeps its row while ending chrome stays suppressed', () => {
     const part = load(`<w:sdt><w:sdtPr/><w:sdtContent>${TOC_FIELD}</w:sdtContent></w:sdt>`);
+    const toc = detectBodyTocs(part)[0]!;
+    const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
+    const fragments = layout.pages.flatMap((page) => paragraphFragmentsOf(page));
+    const opening = fragments.find((fragment) => fragment.paragraphId === toc.beginParagraphId);
+    // The opening paragraph IS the first entry, so suppressing it would delete a real row and
+    // shift every following entry up a line.
+    expect(opening).toBeDefined();
+    expect(opening!.box.y).toBe(0);
+    expect(
+      opening!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')
+    ).toContain('Introduction');
+    expect(
+      fragments.find((fragment) => fragment.paragraphId === toc.endParagraphId)
+    ).toBeUndefined();
+  });
+
+  test('an opening holding only field chrome contributes no row', () => {
+    const part = load(
+      `<w:sdt><w:sdtPr/><w:sdtContent>${CHROME_ONLY_OPENING}</w:sdtContent></w:sdt>`
+    );
     const toc = detectBodyTocs(part)[0]!;
     const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
     const fragments = layout.pages.flatMap((page) => paragraphFragmentsOf(page));
     expect(
       fragments.find((fragment) => fragment.paragraphId === toc.beginParagraphId)
     ).toBeUndefined();
-    expect(
-      fragments.find((fragment) => fragment.paragraphId === toc.endParagraphId)
-    ).toBeUndefined();
     const entry = fragments.find((fragment) => fragment.paragraphId === toc.resultParagraphIds[0]);
     expect(entry).toBeDefined();
+    // No blank row above it.
     expect(entry!.box.y).toBe(0);
-    expect(entry!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
-      'Introduction'
+  });
+
+  test('instruction-only opening stays suppressed when the separator starts the first entry', () => {
+    // Opening paragraph keeps begin and the instruction; the separator moves to the entry.
+    const field = CHROME_ONLY_OPENING.replace('<w:fldChar w:fldCharType="separate"/>', '').replace(
+      '<w:t>Introduction</w:t>',
+      '<w:fldChar w:fldCharType="separate"/><w:t>Introduction</w:t>'
     );
+    const part = load(field);
+    const toc = detectBodyTocs(part)[0]!;
+    const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
+    const fragments = layout.pages.flatMap((page) => paragraphFragmentsOf(page));
+    expect(fragments.some((fragment) => fragment.paragraphId === toc.beginParagraphId)).toBe(false);
+    const entry = fragments.find((fragment) => fragment.paragraphId === toc.resultParagraphIds[0])!;
+    expect(entry.box.y).toBe(0);
   });
 
   test('empty TOC keeps one begin-paragraph placeholder line', () => {
@@ -69,7 +110,7 @@ describe('TOC field chrome layout', () => {
     ).toBeUndefined();
   });
 
-  test('replaceTocResult still leaves the first entry flush with the block top', () => {
+  test('replaceTocResult keeps an entry sharing the opening paragraph flush with the block top', () => {
     const stale =
       '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC </w:instrText><w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
       '<w:p></w:p>' +
@@ -103,6 +144,7 @@ describe('TOC field chrome layout', () => {
     const entry = fragments.find(
       (fragment) => fragment.paragraphId === tocAfter.resultParagraphIds[0]
     );
+    expect(tocAfter.resultParagraphIds[0]).toBe(tocAfter.beginParagraphId);
     expect(entry!.box.y).toBe(0);
     expect(entry!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
       'Fresh entry'

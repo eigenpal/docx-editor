@@ -15,7 +15,9 @@ function isUseExport(name) {
 }
 
 function publicComposableExports(entry) {
-  return [...collectNamedExports(resolve(root, `packages/${entry}/src/index.ts`))].filter(isUseExport);
+  return [...collectNamedExports(resolve(root, `packages/${entry}/src/index.ts`))].filter(
+    isUseExport
+  );
 }
 
 function documentedComposables(mdxPath) {
@@ -29,6 +31,8 @@ function documentedComposables(mdxPath) {
 }
 
 const entries = {
+  markdown: collectNamedExports(resolve(root, 'packages/docx-to-markdown/src/index.ts')),
+  pdf: collectNamedExports(resolve(root, 'packages/docx-to-pdf/src/index.ts')),
   react: collectNamedExports(resolve(root, 'packages/react/src/index.ts')),
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
   automation: collectNamedExports(resolve(root, 'packages/editor-api/src/index.ts')),
@@ -36,6 +40,36 @@ const entries = {
 };
 
 const required = {
+  'Markdown conversion': {
+    entries: ['markdown'],
+    names: [
+      'exportMarkdown',
+      'exportMarkdownFrom',
+      'openDocumentForExport',
+      'createFontSource',
+      'defineFontResolver',
+      'ExportResourceError',
+      'MarkdownExportOptions',
+      'MarkdownExportResult',
+    ],
+  },
+  'PDF conversion': {
+    entries: ['pdf'],
+    names: [
+      'exportPdf',
+      'exportPdfFrom',
+      'openDocumentForExport',
+      'createFontSource',
+      'defineFontResolver',
+      'ExportResourceError',
+      'PdfExportOptions',
+      'PdfExportResult',
+      'PdfFidelityError',
+      'PdfDocumentOpenError',
+      'PdfOutputLimitError',
+      'PdfPageLimitError',
+    ],
+  },
   'shared adapter root contract': {
     entries: ['react', 'vue'],
     names: ['DocxEditor', 'DocxEditorProps', 'DocxEditorRef', 'EditorMode'],
@@ -249,7 +283,9 @@ const reactOnly = composableDocs.react.exports.filter((name) => !vueDocumented.h
 const vueOnly = composableDocs.vue.exports.filter((name) => !reactDocumented.has(name));
 if (reactOnly.length > 0 || vueOnly.length > 0) {
   failed = true;
-  console.error('Public docs surface drift: composable docs must cover the same names in both adapters:');
+  console.error(
+    'Public docs surface drift: composable docs must cover the same names in both adapters:'
+  );
   for (const name of reactOnly) console.error(`  - missing from vue/composables.mdx: ${name}`);
   for (const name of vueOnly) console.error(`  - missing from react/hooks.mdx: ${name}`);
 }

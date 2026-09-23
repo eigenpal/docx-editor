@@ -228,6 +228,18 @@ const WIDTH_EPSILON_PT = 0.001;
  * Claims are applied narrowest-span-first so single-column statements land before the spans
  * that contain them; a span then distributes only the width its settled columns have not
  * already accounted for.
+ *
+ * That maximum settles rows that disagree with EACH OTHER. It does not settle a cell that
+ * disagrees with the grid of a table that states its own total width: there the producer has
+ * already reconciled `w:tblGrid` against `w:tblW`, so widening one column only forces the
+ * whole table to be scaled back down and redistributes width across columns nobody restated.
+ * Both reference engines render the authored grid in that case. So when `w:tblW` states a
+ * positive total, an ABSOLUTE `w:tcW` settles only the columns `w:tblGrid` leaves open.
+ *
+ * Absolute is the operative word. A `dxa` preference is stated in the grid's own unit, so
+ * disagreeing with the grid is a real disagreement. A `pct` preference cannot express an
+ * exact twip, so it disagrees with the grid it was computed from by a rounding — which is
+ * `legacyRoundedCellClaims`' subject, and which keeps its own reconciliation here.
  */
 function applyWidthClaims(
   seed: readonly (number | undefined)[],
@@ -235,6 +247,8 @@ function applyWidthClaims(
   columnCount: number,
   tableWidthPt: number
 ): (number | undefined)[] {
+  // A stated total is what makes the authored grid a settled layout rather than a seed.
+  const gridIsSettled = tableWidthPt > 0;
   const settled: (number | undefined)[] = [];
   for (let index = 0; index < columnCount; index += 1) settled.push(seed[index]);
 
@@ -259,7 +273,10 @@ function applyWidthClaims(
     if (!Number.isFinite(stated) || stated <= 0) continue;
 
     if (last - claim.start === 1) {
-      // A single-column claim states that column outright; maximum wins across rows.
+      // A single-column claim states that column outright; maximum wins across rows. It does
+      // not get to restate a column an already-reconciled grid settled.
+      if (gridIsSettled && claim.preferred.type === 'dxa' && seed[claim.start] !== undefined)
+        continue;
       const current = settled[claim.start];
       settled[claim.start] = current === undefined ? stated : Math.max(current, stated);
       continue;
@@ -285,16 +302,14 @@ function applyWidthClaims(
  *
  * `w:tblGrid` seeds the columns, the authored `w:tcW`/`w:wBefore` preferences are laid over
  * it (see {@link applyWidthClaims}), and anything still unstated shares what the content
- * width has left. Columns never resolve to zero.
+ * width has left. Columns never resolve to zero. Where `w:tblW` states a positive total the
+ * grid is already reconciled against it, so an absolute preference fills its gaps rather
+ * than restating its columns.
  *
- * Fit is then applied per 17.18.87. The table's total is measured against `w:tblW`, and
- * "if at any stage, the preferred width requested for the cells exceeds the preferred width
- * of the table, then each grid column is proportionally reduced in size to fit" — that
- * reduction belongs to BOTH layout algorithms, so a fixed table is still held to a stated
- * `w:tblW`. What is autofit-only is the PAGE clamp: 17.18.87 ends the autofit override chain
- * with "override the preferred table width until the table reaches the page width", and says
- * nothing of the sort for fixed. A fixed table with no `w:tblW` therefore renders past the
- * right margin, which is what Word does; an autofit table never exceeds the text column.
+ * A stated preferred width bounds the initial grid. The text column bounds an autofit
+ * table only when no positive table width is authored. A requested width may extend into
+ * the margins; clamping it to the text column changes both alignment and cell wrapping.
+ * The AutoFit content-growth limit does not shrink an already-authored wider table.
  *
  * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
  * table narrower than its stated percentage is stretched up to it as well as shrunk down.
@@ -362,7 +377,7 @@ export function resolveColumnWidthsPt(input: {
   const floor = columnCount * MIN_DERIVED_COLUMN_PT;
   const pageCap = input.layoutFixed || !hasPage ? Number.POSITIVE_INFINITY : available;
   const target = Math.max(
-    statedTableWidth > 0 ? Math.min(statedTableWidth, pageCap) : Math.min(total, pageCap),
+    statedTableWidth > 0 ? statedTableWidth : Math.min(total, pageCap),
     floor
   );
 

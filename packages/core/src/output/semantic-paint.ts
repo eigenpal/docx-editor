@@ -1,3 +1,7 @@
+import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts';
+import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
+import { paintRunBorders } from './semantic-paint-run-borders.ts';
+import { isRunKerningEnabled } from '../layout/run-kerning.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
@@ -19,7 +23,11 @@ import {
 
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
-import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
+import {
+  baselineShiftPtOf,
+  glyphSizeFactorOf,
+  TAB_LEADER_GLYPH,
+} from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
@@ -99,6 +107,8 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
  */
 export interface PaintContext {
   readonly scale: number;
+  /** Story's horizontal origin relative to its paper or containing textbox frame. */
+  readonly tabLeaderOriginXPt?: number;
   /** Generated paragraphs that paint as non-editable navigation surfaces. */
   readonly readOnlyParagraphIds?: ReadonlySet<string>;
   /**
@@ -333,7 +343,7 @@ function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintCont
 
 function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
   // Textbox stories are furniture wherever they paint: links inert, no editable bindings.
-  const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true };
+  const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true, tabLeaderOriginXPt: 0 };
   return Object.freeze({
     scale: ctx.scale,
     strings: ctx.drawingStrings,
@@ -702,10 +712,10 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   const css = element.style;
   const scale = ctx.scale;
   applyTextOutline(css, style, scale);
-  // Super/subscript draw at three quarters — the same reduction the measurer applies, so
+  // Super/subscript draw at the shared reduced size — the same reduction the measurer applies, so
   // the painted glyphs match the advance layout reserved. Painting them full size while
   // measuring them small made every line containing one slightly too wide.
-  const sizeFactor = style.verticalAlign === 'baseline' ? 1 : 0.75;
+  const sizeFactor = glyphSizeFactorOf(style);
   css.fontSize = `${style.fontSizePt * sizeFactor * scale}px`;
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
@@ -744,6 +754,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     css.backgroundColor = `#${style.shading}`;
   }
   if (style.caps) css.textTransform = 'uppercase';
+  css.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
   if (style.smallCaps) css.fontVariant = 'small-caps';
   // Super/subscript shift with a RELATIVE offset, not `vertical-align`. Vertical alignment
   // grows the line box to contain the raised glyph, which pushes a line's selection band
@@ -1349,7 +1360,9 @@ function paintLine(
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
     if (!bidi) appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
-    const painted = paintSpan(document, span, ctx, band, leading);
+    const painted = span.noteSeparator
+      ? paintNoteSeparatorSpan(document, span, line, scale)
+      : paintSpan(document, span, ctx, band, leading);
     if (bidi) {
       painted.style.position = 'relative';
       painted.style.left = `${(span.box.x - line.contentX - logicalAdvance) * scale}px`;
@@ -1428,6 +1441,7 @@ function paintLine(
     width: line.box.width,
     height: line.box.height,
   });
+  paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
     element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles, paragraphRtl));
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
@@ -1634,6 +1648,8 @@ function paintListMarker(
 ): HTMLElement {
   const marker = fragment.marker!;
   const scale = ctx.scale;
+  const picture = paintListMarkerPicture(document, fragment, asResolvedPaintContext(ctx));
+  if (picture) return picture;
   // The marker belongs to the paragraph's FIRST line, which is the line it is drawn beside.
   const leading = fragment.lines[0]?.leading ?? 0;
   const element = positioned(document, 'span', marker.box, scale);
@@ -1679,24 +1695,6 @@ function paintListMarker(
   element.append(glyph);
   return element;
 }
-
-/**
- * ST_TabTlc (ECMA-376 §17.3.1.38) to the glyph Word repeats across the tab.
- *
- * A Map, not an object literal, for the same reason as the decoration tables: the key comes
- * out of a document and an object literal answers `constructor` with a function.
- * `heavy` has no separate character — Word draws a thicker rule, approximated by the
- * underscore in the run's own face at bold weight rather than by inventing a font.
- */
-
-/**
- * Ceiling on repeated leader glyphs for one tab.
- *
- * The repeat count is derived from a layout width and a resolved font size — both bounded —
- * but this is still a `.repeat()` bound, so it gets an explicit cap rather than trusting the
- * arithmetic upstream of it. `overflow: hidden` trims whatever the cap leaves over.
- */
-const MAX_TAB_LEADER_GLYPHS = 512;
 
 /**
  * Paint the leader of one tab across the advance layout already reserved for it.
@@ -1783,14 +1781,13 @@ function paintTabLeader(
     span.tabLeaderAdvancePt && span.tabLeaderAdvancePt > 0
       ? span.tabLeaderAdvancePt
       : Math.max(0.5, span.style.fontSizePt * 0.2);
-  // Two glyphs of margin over the measured fit: the browser resolves its own face and its
-  // advance may run a shade narrower than the measurer's, which would stop the leader short
-  // of the stop. The layer clips, so the spare glyphs cost nothing.
-  const count = Math.min(
-    MAX_TAB_LEADER_GLYPHS,
-    Math.max(1, Math.floor(span.box.width / advancePt) + 2)
+  const pattern = tabLeaderPattern(
+    (ctx.tabLeaderOriginXPt ?? 0) + span.box.x,
+    span.box.width,
+    advancePt
   );
-  glyphs.textContent = glyph.repeat(count); // SAFE: textContent, never innerHTML
+  glyphs.style.marginLeft = `${pattern.offsetPt * scale}px`;
+  glyphs.textContent = glyph.repeat(pattern.count); // SAFE: textContent, never innerHTML
   // No tracking on top of the glyph's own advance — the leader is plain repeated
   // punctuation, and inherited letter-spacing would re-space it.
   glyphs.style.letterSpacing = '0';
@@ -1986,7 +1983,11 @@ function paintPage(
   // Every drawing painted below carries this page's instance key, so a repaint of the
   // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
   // ever stealing a repeated header image from a sibling page.
-  const options = { ...baseOptions, paintInstance: `p${page.index}` };
+  const options = {
+    ...baseOptions,
+    paintInstance: `p${page.index}`,
+    tabLeaderOriginXPt: page.contentBox.x - page.box.x,
+  };
   const element = positioned(document, 'div', page.box, options.scale);
   // The FRAME is never lightness-inverted — flipping it would flip the paper itself. The
   // sheet keeps the canvas colour its token names and only `.docx-page-content` below is
@@ -2192,6 +2193,7 @@ function paintPage(
     const furnitureCtx: ResolvedPaintContext = {
       ...options,
       inertLinks: true,
+      tabLeaderOriginXPt: story.box.x - page.box.x,
     };
     for (const fragment of story.fragments) {
       container.append(
@@ -2398,7 +2400,11 @@ function adoptPageBlocks(
   const content = retained.content;
   const previousBlocks = retained.blocks;
   if (!content || !previousBlocks || content.parentElement !== retained.element) return null;
-  const blockOptions = { ...options, paintInstance: `p${page.index}` };
+  const blockOptions = {
+    ...options,
+    paintInstance: `p${page.index}`,
+    tabLeaderOriginXPt: page.contentBox.x - page.box.x,
+  };
   const blocks = new Map<BlockFragmentRecord, HTMLElement>();
   const elements: HTMLElement[] = [];
   for (const fragment of page.fragments) {
@@ -2651,3 +2657,4 @@ export function paintSemanticLayoutWithAuthorSlots(
   }
   applyHeaderFooterPaintChrome(pages, resolved);
 }
+import { tabLeaderPattern } from '../layout/tab-leader-pattern.ts';

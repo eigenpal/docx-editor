@@ -13,7 +13,7 @@ import {
   type FontOriginFailure,
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
-import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
+import { HARD_MAX_AGGREGATE_FONT_BYTES, type FontRequest } from '../layout/font-resource.ts';
 import {
   complexSymbolFieldFonts,
   usedNumberingFontFamilies,
@@ -92,6 +92,11 @@ export interface DocumentExportShaping extends SessionExportShaping {
 
 /** Cancellation and deadline controls for document-specific font resolution. @internal */
 export interface DocumentExportShapingOptions extends DocumentExportFontResolutionOptions {
+  /** Host supports document optional ligatures in measurement and glyph output. */
+  readonly documentLigatures?: boolean;
+  readonly glyphFallbacks?: readonly FontRequest[];
+  /** Origins composed after the document-embedded font origin. */
+  readonly lastResortFonts?: readonly FontOrigin[];
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
@@ -126,12 +131,22 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   OpenDocumentForExportOptions,
   'measurer' | 'reuseAcrossRevisions'
 > {
+  /** Apply document optional ligatures to both layout measurement and exported glyphs. */
+  readonly documentLigatures?: boolean;
   /** Immutable font-backed byte sessions reject incremental revision reuse. */
   readonly reuseAcrossRevisions?: false;
   /** Ordered first-wins font origins resolved against this immutable DOCX. */
   readonly fonts: FontOrigin | readonly FontOrigin[];
+  /**
+   * Origins composed AFTER the document's own embedded fonts, for faces nothing else covers.
+   * An origin here sees every face the explicit origins and the embedded fonts can paint in
+   * `resolvedFaces`, so a stand-in it offers cannot shadow a face the document carries.
+   */
+  readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
   readonly fontResolutionTimeoutMs?: number;
+  /** Ordered admitted faces used when a complete text span lacks glyph coverage. Maximum 16. */
+  readonly glyphFallbacks?: readonly FontRequest[];
   /** `strict` refuses incomplete face coverage or any failed origin. Default: `best-effort`. */
   readonly fontPolicy?: 'best-effort' | 'strict';
   /** Fire-and-forget diagnostics; returned promises are observed but do not delay export. */
@@ -223,9 +238,23 @@ export async function openFontBackedDocumentForExport(
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
-  const { fonts, fontResolutionTimeoutMs, fontPolicy, onFontResolution, ...sessionOptions } =
-    options;
+  const {
+    fonts,
+    lastResortFonts,
+    fontResolutionTimeoutMs,
+    fontPolicy,
+    onFontResolution,
+    glyphFallbacks,
+    documentLigatures,
+    ...sessionOptions
+  } = options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
+  const lastResort =
+    lastResortFonts === undefined
+      ? []
+      : Array.isArray(lastResortFonts)
+        ? lastResortFonts
+        : [lastResortFonts as FontOrigin];
   let fontResolution: ExportFontResolutionReport | undefined;
   let shaping: DocumentExportShaping | undefined;
   try {
@@ -233,6 +262,9 @@ export async function openFontBackedDocumentForExport(
       signal: options.signal,
       timeoutMs: fontResolutionTimeoutMs ?? options.resourceTimeoutMs,
       fontPolicy,
+      glyphFallbacks,
+      documentLigatures,
+      lastResortFonts: lastResort,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -333,6 +365,8 @@ export async function acquireDocumentExportShaping(
   origins: readonly FontOrigin[],
   options: DocumentExportShapingOptions = {}
 ): Promise<DocumentExportShaping | undefined> {
+  if ((options.glyphFallbacks?.length ?? 0) > 16)
+    throw new RangeError('At most 16 glyph fallback faces are supported');
   const timeoutMs = normalizedTimeout(options.timeoutMs);
   const controller = new AbortController();
   const abortFromHost = (): void => controller.abort(options.signal?.reason);
@@ -353,11 +387,22 @@ export async function acquireDocumentExportShaping(
         const originFailures: FontOriginFailure[] = [];
         const embeddedFontDiagnostics: DocumentEmbeddedFontDiagnostics = { dropped: [] };
         const embeddedOrigin = documentEmbeddedFontOrigin(view, embeddedFontDiagnostics);
-        const resolvedOrigins = embeddedOrigin ? [...origins, embeddedOrigin] : origins;
+        const resolvedOrigins = [
+          ...origins,
+          ...(embeddedOrigin ? [embeddedOrigin] : []),
+          ...(options.lastResortFonts ?? []),
+        ];
         const resolved = await composePreparedFontOrigins(
           resolvedOrigins,
           {
-            families,
+            // Explicit fallback requests must reach demand-driven resolvers. Reserve their
+            // bounded slots before the body-first document catalog; keep the total cap.
+            families: [
+              ...new Set([
+                ...(options.glyphFallbacks ?? []).map((face) => face.family),
+                ...families,
+              ]),
+            ].slice(0, MAX_RESOLVER_FAMILIES),
             defaultFamily: WORD_DEFAULT_FONT.family,
             signal: controller.signal,
           },
@@ -381,7 +426,10 @@ export async function acquireDocumentExportShaping(
           return undefined;
         }
         const shaping = await createSessionExportShaping(
-          prepareOwnedLayoutFontConfiguration(configuration)
+          prepareOwnedLayoutFontConfiguration(configuration),
+          undefined,
+          options.glyphFallbacks,
+          options.documentLigatures
         );
         throwIfAborted(controller.signal);
         const report = fontResolutionReport(

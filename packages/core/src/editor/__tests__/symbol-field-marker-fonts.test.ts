@@ -95,6 +95,30 @@ test('requests the font of a used numbering bullet', async () => {
   );
   expect(result.families).toContain('Wingdings');
   expect(result.declared).not.toContain('Wingdings');
+  expect(result.notice).not.toContain('Wingdings');
+});
+
+test('a private-use bullet asks for its face without naming it in the picker or the notice', async () => {
+  // Word's default bullet: `w:lvlText` U+F0B7 with `w:rFonts w:ascii="Symbol"`. The face is
+  // what a resolver must be asked for AND what sizes the marker's line, but the document
+  // never declares Symbol for text, so neither the picker's document half nor the
+  // substitution notice may gain it.
+  const files = unzipSync(
+    withNumbering(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>Report item</w:t></w:r></w:p>'
+    )
+  );
+  files['word/numbering.xml'] = strToU8(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">` +
+      `<w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="&#xF0B7;"/>` +
+      `<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/></w:rPr>` +
+      `</w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`
+  );
+  const result = await requested(zipSync(files));
+  expect(result.families).toContain('Symbol');
+  expect(result.declared).not.toContain('Symbol');
+  expect(result.notice).not.toContain('Symbol');
 });
 
 test('does not request an unused numbering font', async () => {

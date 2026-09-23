@@ -30,7 +30,9 @@ const GRID =
   ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
     .map((side) => `<w:${side} w:val="single" w:sz="8" w:color="000000"/>`)
     .join('') +
-  '</w:tblBorders></w:tblPr>';
+  // Preserve the authored content width that makes the float intersect these lines.
+  '</w:tblBorders><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
+  '<w:right w:type="dxa" w:w="108"/></w:tblCellMar></w:tblPr>';
 
 /** Four words in the merged head: wrappable, and short enough to be planned unwrapped. */
 const HEAD_TEXT = 'h0 h1 h2 h3';

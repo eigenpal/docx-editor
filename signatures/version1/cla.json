@@ -251,6 +251,12 @@
       "id": 40540733,
       "signed_at": "2026-09-16T09:05:31Z",
       "pull_request_no": 839
+    },
+    {
+      "name": "waigel",
+      "id": 25115243,
+      "signed_at": "2026-09-22T15:32:32Z",
+      "pull_request_no": 954
     }
   ]
 }

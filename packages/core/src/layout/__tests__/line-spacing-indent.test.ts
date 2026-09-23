@@ -100,18 +100,29 @@ describe('applyLineSpacing places auto extras below the text', () => {
     });
   });
 
-  test('atLeast is a floor, never a ceiling, and grows downward', () => {
+  // atLeast grows UPWARD, unlike auto. A captured control settles it: Times New Roman 12 pt
+  // at `w:line="360" w:lineRule="atLeast"` puts the reference's baseline at 15.36 pt, which
+  // is `18 - descent` on the device grid, not the 11.28 that treating it like `auto` gives.
+  // See `.cache/pdf/claude-linerule/`.
+  test('atLeast is a floor, never a ceiling, and grows upward', () => {
     expect(applyLineSpacing({ rule: 'atLeast', value: 10 }, 14, 11).height).toBe(14);
     expect(applyLineSpacing({ rule: 'atLeast', value: 20 }, 14, 11)).toEqual({
       height: 20,
+      baseline: 17,
+    });
+  });
+
+  test('atLeast below the natural height leaves the baseline alone', () => {
+    expect(applyLineSpacing({ rule: 'atLeast', value: 10 }, 14, 11)).toEqual({
+      height: 14,
       baseline: 11,
     });
   });
 
-  test('exact taller than the glyphs centers the text', () => {
+  test('exact taller than the glyphs uses the fixed baseline fraction', () => {
     expect(applyLineSpacing({ rule: 'exact', value: 20 }, 14, 11)).toEqual({
       height: 20,
-      baseline: 14,
+      baseline: 16,
     });
   });
 

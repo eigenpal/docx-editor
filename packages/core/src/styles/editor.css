@@ -7424,3 +7424,46 @@ a.docx-hyperlink:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
+
+.docx-editor .docx-export-dialog,
+.docx-editor.docx-export-dialog {
+  max-width: 380px;
+}
+.docx-editor .docx-export-dialog__progress {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 16px;
+}
+.docx-editor .docx-export-dialog--pending,
+.docx-editor.docx-export-dialog--pending {
+  text-align: center;
+}
+.docx-editor .docx-export-dialog--pending .docx-dialog__footer,
+.docx-editor.docx-export-dialog--pending .docx-dialog__footer {
+  justify-content: center;
+}
+.docx-editor .docx-export-dialog__message {
+  margin: 0;
+  color: var(--doc-text-muted);
+  overflow-wrap: anywhere;
+}
+.docx-editor .docx-export-dialog__spinner {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 2px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
+  border-radius: 50%;
+  animation: docx-export-spin 0.8s linear infinite;
+}
+@keyframes docx-export-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-export-dialog__spinner {
+    animation: none;
+  }
+}

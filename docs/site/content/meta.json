@@ -50,6 +50,7 @@
     "export/markdown/images",
     "export/markdown/api",
     "export/markdown/integrations",
+    "export/pdf",
     "---Pro---",
     "pro/index",
     "pro/tracked-changes",
@@ -80,6 +81,7 @@
     "core/index",
     "core/architecture",
     "i18n/index",
-    "i18n/contributing"
+    "i18n/contributing",
+    "guides/export"
   ]
 }

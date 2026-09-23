@@ -120,9 +120,15 @@ describe('paragraphSpacing resolves w:beforeAutospacing / w:afterAutospacing', (
     }
   });
 
-  test('list items and table cells resolve auto to 0, the way HTML collapses li/td margins', () => {
+  test('a list item resolves auto to 0, the way HTML collapses li margins', () => {
     expect(paragraphSpacing([AUTO], { inList: true })).toEqual({ before: 0, after: 0 });
-    expect(paragraphSpacing([AUTO], { inTableCell: true })).toEqual({ before: 0, after: 0 });
+    // A TABLE CELL does not. A captured control at 10pt, line pitch 11.52pt, puts 26.16pt
+    // between two auto-spaced paragraphs in the body and the SAME 26.16pt between two in a
+    // cell; with an empty paragraph between them, exactly twice that.
+    expect(paragraphSpacing([AUTO], { inTableCell: true })).toEqual({
+      before: AUTO_PARAGRAPH_SPACING_PT,
+      after: AUTO_PARAGRAPH_SPACING_PT,
+    });
     // Suppression is about the auto value only — an authored measurement still applies.
     expect(
       paragraphSpacing([{ localName: 'spacing', attributes: { before: '240' } }], { inList: true })
@@ -159,7 +165,7 @@ describe('layout applies Word’s auto spacing, not the twips beside the flag', 
     expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + AUTO_PARAGRAPH_SPACING_PT);
   });
 
-  test('the same paragraphs in a table cell get no auto spacing at all', () => {
+  test('the same paragraphs in a table cell get the same auto spacing as in the body', () => {
     const cell = `<w:tc>${paragraph('one', AUTO_PPR)}${paragraph('two', AUTO_PPR)}</w:tc>`;
     const layout = lay(load(`<w:tbl><w:tr>${cell}</w:tr></w:tbl>`));
     const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
@@ -168,10 +174,18 @@ describe('layout applies Word’s auto spacing, not the twips beside the flag', 
       (block) => block.kind === 'paragraph'
     );
     expect(paragraphs).toHaveLength(2);
-    for (const fragment of paragraphs) {
-      if (fragment.kind !== 'paragraph') continue;
-      expect(fragment.spacing).toEqual({ before: 0, after: 0 });
-    }
+    // Adjacent margins collapse: the follower's `before` is dropped so the pair contributes
+    // ONE gap, not two. The gap is therefore the full auto value, which is what the reference
+    // draws — 26.16pt between two auto-spaced paragraphs at a 11.52pt line pitch, in a cell
+    // exactly as in the body.
+    const spacings = paragraphs.map((fragment) =>
+      fragment.kind === 'paragraph' ? fragment.spacing : undefined
+    );
+    // The cell's own edges eat the auto gap — the reference adds nothing across a row
+    // boundary — so only the interior boundary keeps it. `after` on the first paragraph is
+    // the whole gap; the follower's `before` is dropped by the ordinary margin collapse.
+    expect(spacings[0]).toEqual({ before: 0, after: AUTO_PARAGRAPH_SPACING_PT });
+    expect(spacings[1]).toEqual({ before: 0, after: 0 });
   });
 });
 
@@ -351,7 +365,7 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(heading.lines[0]!.box.y).toBe(0);
   });
 
-  test('pageBreakBefore suppresses before at the top of the new page', () => {
+  test('pageBreakBefore retains before at the top of the new page', () => {
     const layout = lay(
       load(
         paragraph('first') + paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
@@ -360,8 +374,8 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(layout.pages.length).toBeGreaterThanOrEqual(2);
     const second = firstParagraphOnPage(layout, 1);
     expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
-    expect(second.spacing.before).toBe(0);
-    expect(second.lines[0]!.box.y).toBe(0);
+    expect(second.spacing.before).toBe(10);
+    expect(second.lines[0]!.box.y).toBe(10);
   });
 
   test('natural pagination suppresses before when a paragraph moves to the next page', () => {

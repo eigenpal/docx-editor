@@ -8,6 +8,10 @@ import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
+import {
+  readNumberingPictureBullets,
+  type NumberingPictureBullet,
+} from './numbering-picture-bullet.ts';
 
 /** Soft ceiling on abstractNum / num entries read from one part. */
 export const MAX_NUMBERING_DEFINITIONS = 512;
@@ -88,6 +92,11 @@ export interface NumberingLevel {
    * decimal, whatever number format those levels declare for themselves.
    */
   readonly isLgl: boolean;
+  /**
+   * `w:lvlPicBulletId` (§17.9.12): this level's marker is the `w:numPicBullet` of that id,
+   * drawn INSTEAD of `w:lvlText`. Absent on every ordinary level.
+   */
+  readonly picBulletId?: string;
   /** Level `w:rPr` as flat properties (for marker face / vanish). */
   readonly runProperties: readonly OoxmlProperty[];
   /** True when level run props request vanish — marker must not paint. */
@@ -148,6 +157,13 @@ export interface NumDefinition {
 export interface NumberingIndex {
   readonly abstractNums: ReadonlyMap<string, AbstractNumDefinition>;
   readonly nums: ReadonlyMap<string, NumDefinition>;
+  /**
+   * `w:numPicBullet` declarations keyed by `w:numPicBulletId` (§17.9.20).
+   *
+   * Optional so a hand-built index stays valid; absent reads as "this part declares none",
+   * which is what a level's `w:lvlPicBulletId` then falls back from.
+   */
+  readonly pictureBullets?: ReadonlyMap<string, NumberingPictureBullet>;
 }
 
 function isWml(node: OoxmlNode, localName: string): node is OoxmlElement {
@@ -302,6 +318,13 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
     if (parsed !== null && parsed >= 0 && parsed <= 9) lvlRestart = parsed;
   }
 
+  const picBulletNode = child(lvl, 'lvlPicBulletId');
+  const picBulletRaw = picBulletNode ? attr(picBulletNode, 'val') : undefined;
+  const picBulletId =
+    picBulletRaw !== undefined && picBulletRaw.length > 0 && picBulletRaw.length <= 64
+      ? picBulletRaw
+      : undefined;
+
   const pPr = child(lvl, 'pPr');
   const rPr = child(lvl, 'rPr');
   const runProperties = rPr ? propertiesOfRunContainer(rPr) : [];
@@ -316,6 +339,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
       suff,
       indent: parseIndent(pPr),
       ...(lvlRestart !== undefined ? { lvlRestart } : {}),
+      ...(picBulletId !== undefined ? { picBulletId } : {}),
       isLgl: onOffChild(lvl, 'isLgl'),
       runProperties,
       vanish: toggleOn(runProperties, 'vanish'),
@@ -425,7 +449,8 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
     }
   }
 
-  return { abstractNums, nums };
+  const pictureBullets = readNumberingPictureBullets(root);
+  return pictureBullets.size > 0 ? { abstractNums, nums, pictureBullets } : { abstractNums, nums };
 }
 
 /**
@@ -488,7 +513,10 @@ export function resolveNumberingStyleLinks(
     abstractNums.set(id, { ...definition, levels: target.levels });
     changed = true;
   }
-  return changed ? { abstractNums, nums: index.nums } : index;
+  if (!changed) return index;
+  return index.pictureBullets
+    ? { abstractNums, nums: index.nums, pictureBullets: index.pictureBullets }
+    : { abstractNums, nums: index.nums };
 }
 
 /** Resolve the effective level for a `numId` + `ilvl`, applying overrides. */

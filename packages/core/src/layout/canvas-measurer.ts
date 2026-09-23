@@ -1,3 +1,4 @@
+import { isRunKerningEnabled } from './run-kerning.ts';
 // Browser/canvas-backed text measurement for the semantic layout lane.
 //
 // Layout itself stays DOM-free: this module is an optional adapter of the `TextMeasurer`
@@ -47,7 +48,7 @@
 // is why the face box alone wanders at small sizes.
 
 import type { TextMeasurer } from './semantic-records.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
 import { segmentGraphemes } from './grapheme.ts';
 
@@ -166,6 +167,8 @@ export interface CanvasTextMetrics {
  */
 export interface CanvasTextContext {
   font: string;
+  /** Optional browser kerning control; older contexts retain their native behavior. */
+  fontKerning?: 'auto' | 'normal' | 'none';
   textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
   direction?: 'ltr' | 'rtl' | 'inherit';
   measureText(text: string): CanvasTextMetrics;
@@ -283,7 +286,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     const weight = style.bold ? 'bold' : 'normal';
     const slant = style.italic ? 'italic' : 'normal';
     const variant = style.smallCaps ? 'small-caps' : 'normal';
-    const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75) * scale;
+    const size = style.fontSizePt * glyphSizeFactorOf(style) * scale;
     return `${slant} ${variant} ${weight} ${size}px ${family}`;
   };
 
@@ -295,10 +298,11 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = fontOf(style);
-      const key = `${font}\0${text}`;
+      const key = `${font}\0${isRunKerningEnabled(style)}\0${text}`;
       const cached = widthCache.get(key);
       if (cached !== undefined) return scaled(cached, text, style);
       ctx.font = font;
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
       const width = ctx.measureText(text).width;
       widthCache.set(key, width);
       return scaled(width, text, style);
@@ -312,6 +316,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       )
         return undefined;
       ctx.font = fontOf(style);
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
       // Canvas bearings are relative to textAlign. Paint uses a left glyph origin.
       const alignment = ctx.textAlign;
       const direction = ctx.direction;
@@ -337,7 +342,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       return { left: -left * factor, right: right * factor };
     },
     lineMetrics(style) {
-      const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75);
+      const size = style.fontSizePt * glyphSizeFactorOf(style);
       const font = fontOf(style);
       const cached = metricsCache.get(font);
       if (cached) return cached;
@@ -348,6 +353,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       let baseline = size * 0.8;
 
       ctx.font = font;
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
       const metrics = ctx.measureText('Hxg');
       const ascent = metrics.fontBoundingBoxAscent;
       const descent = metrics.fontBoundingBoxDescent;

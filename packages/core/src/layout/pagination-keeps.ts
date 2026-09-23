@@ -14,14 +14,10 @@
 // because Word does the same: a paragraph taller than a page still prints, and a keep chain
 // that cannot fit is abandoned rather than looped over.
 //
-// TABLES — these apply to the BODY flow only, never to paragraphs inside a cell. Row
-// pagination is the authority there: `w:cantSplit` (§17.4.6) decides whether a row may be cut,
-// and a row moves or splits as ONE unit across all its cells. A cell paragraph asking to keep
-// with the next cannot be honoured without moving the whole row, which is a decision
-// `w:cantSplit` already owns, and honouring it per cell would tear a row's columns apart at
-// different heights. A `w:keepNext` chain that reaches a table therefore stops there
-// (unpriceable → the keep is abandoned), which is also what Word does with a heading kept with
-// a table it cannot fit beside.
+// Modern-mode table paragraphs also use widow/orphan control when a row crosses pages. The
+// table placer decides the cut before publishing lines; exact-height rows still clip.
+// Cross-paragraph keep chains remain body-flow decisions, while row atomicity is owned
+// by `w:cantSplit`. A body keep-next chain cannot price a table and stops there.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './layout-cache.ts';

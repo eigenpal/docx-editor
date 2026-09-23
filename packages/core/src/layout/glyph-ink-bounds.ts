@@ -55,8 +55,8 @@ export function shapedClusterInkBounds(
     const units = glyph.outline.unitsPerEm;
     if (!bounds || !(units > 0)) return undefined;
     const origin = (glyph.originX + glyph.offsetX) / fixedPointScale;
-    left = Math.min(left, origin + (bounds.left * pointSize) / units);
-    right = Math.max(right, origin + (bounds.right * pointSize) / units);
+    left = Math.min(left, origin + (bounds.left * pointSize * (glyph.drawScale ?? 1)) / units);
+    right = Math.max(right, origin + (bounds.right * pointSize * (glyph.drawScale ?? 1)) / units);
   }
   const bounds = { left: left * horizontalScale, right: right * horizontalScale };
   return Number.isFinite(bounds.left) && Number.isFinite(bounds.right) ? bounds : undefined;

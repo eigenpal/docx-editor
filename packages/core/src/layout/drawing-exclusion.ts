@@ -14,6 +14,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
+import { topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   revisionsVisible,
@@ -41,8 +42,21 @@ export const MAX_OVERLAP_DISPLACEMENT_ATTEMPTS = 256;
 /** Maximum page-to-page deferrals before publishing with {@link AnchoredDrawingLayoutFallback}. */
 export const MAX_ANCHOR_PAGE_DEFERRALS = 8;
 
-/** Maximum full-document reflow passes while wrap exclusions converge. */
-export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 8;
+/**
+ * Maximum full-document reflow passes while wrap exclusions converge.
+ *
+ * The loop already ends the moment it revisits a zone state, so this budget bounds a LONG
+ * NON-REPEATING drift, not an oscillation — and exhausting it refuses the document outright.
+ * Eight was too tight to be that guard: `float-wrap-comprehensive-test.docx` with only its
+ * font family changed, so the floats and anchors are identical and only the line metrics
+ * differ, needs TWELVE passes and then settles. At eight it exported nothing at all.
+ *
+ * Measured: that document converges at 12, 16, 24 and 64 and fails at 8. Sixteen keeps the
+ * guard against genuinely pathological input with headroom over the worst case seen. A pass
+ * costs a full layout, but the loop only runs again while the zone map actually changed,
+ * which for ordinary documents is once or twice.
+ */
+export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 16;
 
 /** Raised when wrap-exclusion reflow does not converge within {@link MAX_DRAWING_EXCLUSION_REFLOW_PASSES}. */
 export class DrawingExclusionConvergenceError extends Error {
@@ -52,13 +66,28 @@ export class DrawingExclusionConvergenceError extends Error {
   }
 }
 
+export {
+  MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS,
+  topAndBottomSkipBeforeLine,
+} from './top-and-bottom-clearance.ts';
+
 export interface ExclusionZone {
-  /** Non-drawing objects publish their anchor exclusion directly instead of synthesizing it. */
-  readonly sourceKind?: 'table' | 'frame';
+  /** Objects outside body drawing flow publish their exclusion directly instead of synthesizing it. */
+  readonly sourceKind?: 'table' | 'frame' | 'furniture';
   readonly drawingNodeId: string;
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
   readonly anchorModelStart: number;
+  /**
+   * The band's vertical position is resolved against the page or a margin, not against the
+   * anchor's own flow position, so it cannot move when the text beside it reflows.
+   *
+   * Such a band excludes every line it crosses on its page, including lines that PRECEDE the
+   * anchor — a picture pinned to the top of the margin wraps the paragraphs above its anchor
+   * exactly as it wraps the ones below. Flow-relative bands (`paragraph`, `line`) stay
+   * forward-only: reaching back would move the anchor that positions them.
+   */
+  readonly pageFramedBand?: boolean;
   readonly sourceOrder: number;
   readonly paintLayer: DrawingPaintLayer;
   readonly relativeHeight: number;
@@ -197,6 +226,11 @@ export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
   });
 }
 
+/** Vertical frames whose resolved origin does not depend on where the anchor flows. */
+function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
+  return frame !== 'paragraph' && frame !== 'line';
+}
+
 export function exclusionZoneFromAnchoredDrawing(options: {
   readonly drawing: AnchoredDrawingRecord;
   readonly projection: DrawingProjection;
@@ -222,6 +256,7 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     drawingNodeId: options.drawing.drawingNodeId,
     anchorParagraphId: options.drawing.anchorParagraphId,
     anchorModelStart: options.drawing.start,
+    ...(pageFramedVertically(options.drawing.verticalFrame) ? { pageFramedBand: true } : {}),
     sourceOrder: options.sourceOrder,
     paintLayer: paintLayerOf(options.drawing),
     relativeHeight: options.drawing.relativeHeight,
@@ -295,6 +330,13 @@ export function shiftAnchoredDrawingY(
       transformedCorners: geometry.transformedCorners.map((point) =>
         Object.freeze({ x: point.x, y: point.y + dy })
       ),
+      ...(geometry.imageTransformCorners
+        ? {
+            imageTransformCorners: geometry.imageTransformCorners.map((point) =>
+              Object.freeze({ x: point.x, y: point.y + dy })
+            ),
+          }
+        : {}),
       clipPolygon: geometry.clipPolygon
         ? geometry.clipPolygon.map((point) => Object.freeze({ x: point.x, y: point.y + dy }))
         : null,
@@ -368,14 +410,20 @@ export function mergeAvailableIntervalsAtY(
   y: number,
   zones: readonly ExclusionZone[],
   contentLeft: number,
-  contentRight: number
+  contentRight: number,
+  lineHeight = 0
 ): readonly ScanlineInterval[] {
   let available: ScanlineInterval[] = [{ start: contentLeft, end: contentRight }];
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    if (y < band.y || y >= band.y + band.height) continue;
-    const atY = availableTextIntervalsOnScanline(y, zone.input);
+    // Rectangular wrapping excludes the whole glyph band, including objects whose top
+    // lies below the line's top scanline. Polygon wrapping retains its contour probe.
+    const rectangular = zone.input.mode === 'square' && lineHeight > 0;
+    if (y >= band.y + band.height || (rectangular ? y + lineHeight <= band.y + 0.001 : y < band.y))
+      continue;
+    const probeY = rectangular ? Math.max(y, band.y) : y;
+    const atY = availableTextIntervalsOnScanline(probeY, zone.input);
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
@@ -506,6 +554,7 @@ export function filterExclusionZonesForParagraphOrder(
 ): readonly ExclusionZone[] {
   return Object.freeze(
     zones.filter((zone) => {
+      if (zone.sourceKind === 'furniture') return true;
       const anchorOrder = orderOfParagraph(zone.anchorParagraphId);
       if (anchorOrder === undefined) return zone.sourceOrder <= paragraphOrder;
       return anchorOrder <= paragraphOrder;
@@ -539,6 +588,11 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     // hole either: the original view must not wrap text around an insertion it hides.
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
+    // `w:layoutInCell="0"` positions the object against the page rather than the cell that
+    // encloses its anchor, so it is not part of that cell's flow and carves no hole in it.
+    // A Word control of two identical rows, one flag each, runs the cell's text straight
+    // through the object in the `0` row and wraps around it in the `1` row.
+    if (options.anchorCellBox != null && atom.projection.anchor?.layoutInCell === false) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
     const modelStart = offsets.get(atom.atomId);
@@ -643,7 +697,10 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
     if (lineTop === undefined) continue;
-    const anchorY = options.paragraphStartY + lineTop;
+    const anchorY = topAndBottomBandAnchorY(
+      options.paragraphStartY + lineTop,
+      atom.projection.position?.vertical ?? null
+    );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({
       projection: atom.projection,
@@ -682,56 +739,6 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   }
   zones.sort((left, right) => left.sourceOrder - right.sourceOrder);
   return Object.freeze(zones);
-}
-
-/** Maximum rechecks when clearing a line below overlapping topAndBottom bands. */
-export const MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS = 8;
-
-function lineIntervalIntersectsTopAndBottomBand(
-  lineTop: number,
-  lineBottom: number,
-  bandTop: number,
-  bandBottom: number
-): boolean {
-  return lineTop < bandBottom && lineBottom > bandTop;
-}
-
-/**
- * Vertical skip before placing a line whose [top, bottom] interval intersects a topAndBottom band.
- *
- * Uses the full final line height, unions overlapping band bottoms, and rechecks until clear or
- * {@link MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS} — pre-placement may pass a minimum height; callers
- * must re-run at line close with the styled/drawing final height.
- */
-export function topAndBottomSkipBeforeLine(
-  lineTopY: number,
-  lineHeight: number,
-  zones: readonly ExclusionZone[]
-): number {
-  if (lineHeight <= 0 || zones.length === 0) return 0;
-  let skip = 0;
-  for (let attempt = 0; attempt < MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS; attempt += 1) {
-    const intervalTop = lineTopY + skip;
-    const intervalBottom = intervalTop + lineHeight;
-    let unionBottom = intervalTop;
-    let intersects = false;
-    for (const zone of zones) {
-      if (zone.input.mode !== 'topAndBottom') continue;
-      const bandTop = zone.verticalBand.y;
-      const bandBottom = bandTop + zone.verticalBand.height;
-      if (
-        lineIntervalIntersectsTopAndBottomBand(intervalTop, intervalBottom, bandTop, bandBottom)
-      ) {
-        intersects = true;
-        unionBottom = Math.max(unionBottom, bandBottom);
-      }
-    }
-    if (!intersects) break;
-    const nextSkip = unionBottom - lineTopY;
-    if (nextSkip <= skip + 0.001) break;
-    skip = nextSkip;
-  }
-  return skip;
 }
 
 function intervalToken(intervals: readonly ScanlineInterval[]): string {

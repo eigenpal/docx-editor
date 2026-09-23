@@ -1,3 +1,5 @@
+import { withCentredSideRulePaint, withLegacyTableSideRules } from './legacy-table-side-rules.ts';
+import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
 // Reads `w:tbl`/`w:tr`/`w:tc` into the bounded structure consumed by table layout. All widths
@@ -15,7 +17,13 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
-import { readTableFloatPosition } from './table-float-properties.ts';
+import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
+export type {
+  TableFloatAnchor,
+  TableFloatPosition,
+  TableFloatXSpec,
+  TableFloatYSpec,
+} from './table-float-properties.ts';
 import {
   revisionNodeIncluded,
   revisionNodeProjectionMode,
@@ -63,6 +71,7 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
+import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
 import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
@@ -144,43 +153,6 @@ function readTableAlignment(container: OoxmlElement | undefined): TableAlignment
   return undefined;
 }
 
-/**
- * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
- * table's offsets are measured from. Absent means `text` for both.
- */
-export type TableFloatAnchor = 'text' | 'margin' | 'page';
-
-/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
-export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
-
-/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
-export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
-
-/**
- * `w:tblPr/w:tblpPr` (17.4.57) — a table positioned against an anchor box rather than at
- * the point in the text where it was authored.
- *
- * A spec (`tblpXSpec`/`tblpYSpec`) supersedes the matching offset when both are present:
- * 17.4.57 states the alignment outright, and the offset only answers "how far from the
- * anchor" for the case where no alignment was stated.
- */
-export interface TableFloatPosition {
-  readonly horzAnchor: TableFloatAnchor;
-  readonly vertAnchor: TableFloatAnchor;
-  readonly xSpec?: TableFloatXSpec;
-  /** `w:tblpX` in points; signed, so a table can be pulled into the margin. */
-  readonly xPt: number;
-  readonly ySpec?: TableFloatYSpec;
-  /** `w:tblpY` in points; signed. */
-  readonly yPt: number;
-  readonly distances?: {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  };
-}
-
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
 export interface TableAnchorFrame {
   readonly left: number;
@@ -205,8 +177,12 @@ export interface TableAnchorFrames {
  */
 export interface SemanticTableCell {
   readonly id: string;
-  /** Derived content-edge geometry for a verified legacy full-width parent table. */
+  /** Derived content-edge geometry for a verified legacy percentage-width parent table. */
   readonly legacyContentAlignment?: true;
+  /** Resolved simple side rules centered on a legacy absolute-width table grid. */
+  readonly centeredSideRules?: true;
+  /** Simple side rules painted centered on the grid line, without moving the content edge. */
+  readonly centeredSidePaint?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
   /** Physical grid column after width/style resolution and the bidiVisual projection. */
@@ -217,6 +193,8 @@ export interface SemanticTableCell {
   readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
+  /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
+  readonly hideEndMark?: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
   /** `w:textDirection`; unsupported values keep horizontal layout. */
@@ -225,6 +203,16 @@ export interface SemanticTableCell {
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
   readonly borders: CellBorderBox;
+  /** Resolved incident edges used for content clearance, preserving authored border provenance. */
+  readonly contentBorders?: CellBorderBox;
+  /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
+  readonly contentBottomIsOuter?: boolean;
+  /** Clearance this AUTHORED ROW reserves above its content for its own top rule, in points. */
+  readonly topBandClearancePt?: number;
+  /** The CELL declares `w:tcBorders/w:top` as `nil`, rather than a table style doing so. */
+  readonly suppressesTopBand?: true;
+  /** Row-local clearance in points for authored minima, before vMerge combines content boxes. */
+  readonly minimumContentInsets?: { readonly top: number; readonly bottom: number };
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**
@@ -285,7 +273,7 @@ export interface SemanticTableStructure {
   readonly bidiVisual?: true;
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
-  /** Verified pre-2013 content-aligned full-width inline table; derived, never serialized. */
+  /** Verified pre-2013 percentage-width inline table; derived, never serialized. */
   readonly legacyContentAlignment?: true;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
@@ -713,7 +701,11 @@ function readTableStructureUncached(
   }
   if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
-  let styleMargins = DEFAULT_CELL_MARGINS;
+  // A missing margin resolves to 10 twips, including legacy documents. The
+  // familiar 108-twip inset belongs to the authored default table style, not
+  // this application fallback. Styles, table properties and cells override
+  // each side independently, including explicit zero.
+  let styleMargins: CellMarginsPt = { top: 0, right: 0.5, bottom: 0, left: 0.5 };
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
     styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
@@ -933,19 +925,19 @@ function readTableStructureUncached(
       // Through the shared collector: a cell is a story like any other, so a tracked mark
       // merges inside it and a paragraph a revision removed leaves no blank line behind.
       const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter);
+      const ownBorders = cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX;
       cells.push({
         id: cellNode.id,
         gridSpan,
         gridColumn,
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
+        hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
-        borders: mergeCellBorders(
-          conditionalBorders,
-          cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
-        ),
+        borders: mergeCellBorders(conditionalBorders, ownBorders),
+        ...(ownBorders.top.state === 'none' ? { suppressesTopBand: true as const } : {}),
         ...(shading === undefined ? {} : { shading }),
         preferredWidth,
         styleFormatting: styleFormattingFor(conditions),
@@ -1036,33 +1028,49 @@ function readTableStructureUncached(
   const columnWidthsPt = resolveColumnWidthsPt({
     gridCols,
     claims:
-      legacyWidth === undefined ? claims : legacyRoundedCellClaims(claims, gridCols, legacyWidth),
+      legacyWidth === undefined
+        ? claims
+        : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
     columnCount,
     contentWidthPt: legacyWidth ?? contentWidthPt,
     tableWidth,
     layoutFixed,
   });
-  // Resolve widths and conditional styles in stored order, then project the grid only.
-  // Cell arrays keep document order so keyboard traversal and text never reverse.
-  const visualRows = bidiVisual
-    ? rows.map((row) => ({
-        ...row,
-        cells: row.cells.map((cell) => ({
-          ...cell,
-          margins: { ...cell.margins, left: cell.margins.right, right: cell.margins.left },
-          borders: { ...cell.borders, left: cell.borders.right, right: cell.borders.left },
-          logicalGridColumn: cell.gridColumn,
-          gridColumn: Math.max(0, columnWidthsPt.length - cell.gridColumn - cell.gridSpan),
-        })),
-      }))
-    : rows;
+  // Project the grid visually; cell arrays retain document order for keyboard traversal.
+  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
+  let contentRows = withTableContentBorders(
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
+  contentRows = withRowMinimumContentInsets(
+    contentRows,
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
+  const sharedGridLineRules =
+    (compatibilityMode === undefined || [11, 12, 14].includes(compatibilityMode)) &&
+    depth === 0 &&
+    !bidiVisual &&
+    !float &&
+    cellSpacingPt === 0;
+  if (sharedGridLineRules) contentRows = withCentredSideRulePaint(contentRows);
+  if (sharedGridLineRules && tableWidth.type === 'dxa')
+    contentRows = withLegacyTableSideRules(contentRows);
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
     rows:
       legacyWidth === undefined
-        ? visualRows
-        : visualRows.map((row) => ({
+        ? contentRows
+        : contentRows.map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
           })),
@@ -1087,3 +1095,4 @@ function readTableStructureUncached(
       : defaultMargins,
   };
 }
+import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';

@@ -32,8 +32,7 @@ export const CELL_PAD = 3;
  * Word's default left and right cell margin: 108 twips, which its UI rounds to 0.08".
  *
  * This is what `TableNormal` states, and `TableNormal` is what every Word-authored table
- * ultimately derives from. The constant is the fallback for a document that ships no
- * default table style at all.
+ * ultimately derives from. It is not the fallback for an omitted margin.
  */
 const DEFAULT_CELL_MARGIN_SIDE_PT = 108 / 20;
 
@@ -49,13 +48,10 @@ export interface CellMarginsPt {
 }
 
 /**
- * Word's own default cell padding, for a document whose styles part states none.
+ * Traditional default table-style padding: 0 vertical, 108 twips horizontal.
  *
- * 0 top, 0 bottom, 108 twips left and right — the values `TableNormal` carries. A uniform
- * 3 pt on all four sides made every row of every table that authored no `w:tblCellMar` 6 pt
- * taller than Word's, and that error compounds down a table until it paginates a page early.
- * A document that DOES ship a default table style resolves against that instead; this is the
- * floor beneath it.
+ * Kept as a published constant. Authored styles can supply these values; omitted
+ * margins instead resolve to a 10-twip horizontal application fallback.
  */
 export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
   top: 0,

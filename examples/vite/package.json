@@ -19,7 +19,8 @@
     "react-dom": "^19.0.0",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.32",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@docx-editor.dev/docx-to-markdown": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

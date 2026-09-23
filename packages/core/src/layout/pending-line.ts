@@ -42,10 +42,32 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /**
+   * The horizontal passage a float left this line, when that passage is narrower than the
+   * paragraph's measure and holds the whole line.
+   *
+   * `start` is where the line's content begins (after any first-line indent) and `end` is the
+   * passage's right edge, both in paragraph-local coordinates. Centring, right alignment and
+   * justification align INSIDE this passage: Word centres a heading between the two pictures
+   * beside it, not between the page margins, and stretches a justified line to the float's
+   * near edge rather than through it. Absent when no float shortens the line, when the line
+   * steps over a float into a later passage, or when the passage is the whole measure.
+   */
+  wrapSegment?: { readonly start: number; readonly end: number };
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
   /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
   changeSites?: readonly RevisionAttribution[];
+}
+
+/** Merge baseline-aligned face boxes, preserving both ascent and descent. */
+export function growLineMetrics(
+  line: { height: number; baseline: number },
+  metrics: { readonly height: number; readonly baseline: number }
+): void {
+  const descent = Math.max(line.height - line.baseline, metrics.height - metrics.baseline);
+  line.baseline = Math.max(line.baseline, metrics.baseline);
+  line.height = line.baseline + descent;
 }
 
 /**
@@ -58,6 +80,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   style: true,
   fontSlot: true,
   glyphOffsetPt: true,
+  borderBaselinePt: true,
   caretEdges: true,
   tabLeader: true,
   tabLeaderAdvancePt: true,
@@ -69,6 +92,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   projected: true,
   equation: true,
   noteNav: true,
+  noteSeparator: true,
   lineEndWhitespace: true,
 };
 
@@ -224,6 +248,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.wrapSegment ? { wrapSegment: Object.freeze({ ...line.wrapSegment }) } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
   }) as PendingLine;
@@ -236,4 +261,33 @@ export function alignDrawings(
 ): readonly InlineDrawingRecord[] {
   if (offset === 0 || drawings.length === 0) return drawings;
   return drawings.map((drawing) => shiftInlineDrawingRecord(drawing, offset, 0));
+}
+
+/**
+ * Record the jumps a float's wrap zone forced between this line's spans.
+ *
+ * Spans are laid contiguously as the pen advances, so at close time the ONLY horizontal
+ * gaps between them are advances the pen skipped: an inline drawing's own reserved slot,
+ * which paint already fills, and a wrap exclusion the line stepped over to resume in the
+ * next passage. Justification has not run yet, so nothing here can be confused with slack.
+ */
+export function markPendingLineWrapAdvances(line: PendingLine): void {
+  if (line.spans.length < 2) return;
+  for (let index = 1; index < line.spans.length; index += 1) {
+    const previous = line.spans[index - 1]!;
+    const current = line.spans[index]!;
+    const gap = current.box.x - (previous.box.x + previous.box.width);
+    if (gap <= 0.001) continue;
+    const drawingFillsGap = line.drawings.some(
+      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+    );
+    if (drawingFillsGap) continue;
+    line.spans[index] = { ...current, wrapAdvanceBefore: gap };
+  }
+}
+
+/** Include each inline drawing's final baseline-adjusted extent in its line. */
+export function growPendingLineDrawingExtent(line: PendingLine): void {
+  for (const drawing of line.drawings)
+    line.height = Math.max(line.height, drawing.y + drawing.height + drawing.distB);
 }

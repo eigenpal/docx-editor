@@ -17,6 +17,7 @@
 // Resolved caches, dependency closure, shaping, convergent pagination, and the anchored
 // DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
 
+export { mapSymbolPuaText } from './symbol-encoding.ts';
 export {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,
@@ -176,6 +177,7 @@ export {
   type PageBorderZOrder,
   type PageGeometry,
   type PageRecord,
+  type ListMarkerPictureRecord,
   type ListMarkerRecord,
   type NoteAreaRecord,
   type NoteStoryRecord,
@@ -356,6 +358,7 @@ export {
   type NumberingLevel,
   type NumberingLevelIndent,
 } from './numbering-index.ts';
+export type { NumberingPictureBullet, ResolvedPictureBullet } from './numbering-picture-bullet.ts';
 export {
   MAX_LVL_TEXT_LENGTH,
   MAX_MARKER_TEXT_LENGTH,
@@ -598,6 +601,7 @@ export {
 export {
   DEFAULT_RUN_STYLE,
   baselineShiftPtOf,
+  glyphSizeFactorOf,
   displayText,
   measureDisplayText,
   resolveRunStyle,
@@ -606,6 +610,7 @@ export {
   type ResolvedUnderline,
   type VerticalAlign,
 } from './run-style.ts';
+export { runBorderStrokesForLine } from './run-border-strokes.ts';
 export {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,
@@ -732,3 +737,7 @@ export {
   type TableBorderStyle,
 } from './table-borders.ts';
 export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
+export { tabLeaderPattern } from './tab-leader-pattern.ts';
+
+export { noteSeparatorRuleBox } from './note-separator-rule.ts';
+export type { StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';

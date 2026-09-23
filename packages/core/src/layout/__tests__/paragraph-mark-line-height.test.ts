@@ -54,7 +54,7 @@ describe('auto line spacing and paragraph-mark height', () => {
     // style. The style still sizes an empty paragraph's caret line.
     const styles = readOoxmlPart(
       `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
-        '<w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+        '<w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults></w:styles>',
       { name: '/word/styles.xml', contentType: 'app/xml' }
     );
     if (!styles.ok) throw new Error(styles.reason);
@@ -95,6 +95,30 @@ describe('auto line spacing and paragraph-mark height', () => {
     expect(markTall.leading).toBeCloseTo(0, 5);
   });
 
+  // Adapted from PR #707, cac0249b7. Approximate missing-face metrics are not a mark floor.
+  test('unavailable mark metrics do not enlarge text, but still size empty paragraphs', () => {
+    const fontAwareMeasurer: TextMeasurer = {
+      ...measurer,
+      hasResolvedFont(style) {
+        return style.fontFamily !== 'Unavailable Mark Face';
+      },
+    };
+    const mark =
+      '<w:pPr><w:rPr><w:rFonts w:ascii="Unavailable Mark Face"/>' +
+      '<w:sz w:val="32"/></w:rPr></w:pPr>';
+    const visible =
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="20"/></w:rPr>' +
+      '<w:t>visible</w:t></w:r>';
+    const layout = layoutSemanticDocument(
+      load('<w:p>' + mark + visible + '</w:p><w:p>' + mark + '</w:p>'),
+      1,
+      { measurer: fontAwareMeasurer }
+    );
+    const lines = linesOf(layout);
+    expect(lines[0]!.box.height).toBeCloseTo(RUN_H, 5);
+    expect(lines[1]!.box.height).toBeCloseTo(16 * 1.15, 5);
+  });
+
   test('title-block inter-glyph gaps match Word arithmetic line-by-line', () => {
     // Verbatim spacing from shapes-and-page-breaks.docx title region.
     // "as Borrower and" keeps the authored left/right indents so it wraps; every wrap line
@@ -118,7 +142,7 @@ describe('auto line spacing and paragraph-mark height', () => {
 
     const styles = readOoxmlPart(
       `<w:styles xmlns:w="${W}">` +
-        '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
         '<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/>' +
         '<w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="20"/></w:rPr></w:style>' +
         '<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>' +
@@ -222,4 +246,30 @@ describe('second case: BodyText line=336 extras stay below (same fixture family)
     const extra336 = RUN_H * (336 / 240) - RUN_H;
     expect(gap).toBeCloseTo(extra336, 5);
   });
+});
+
+test('small table text does not inherit a taller implicit cell-end mark', () => {
+  const cell = (mark: string) =>
+    '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p><w:pPr>' +
+    mark +
+    '</w:pPr><w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t>Small cell text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const implicit = linesOf(lay(cell('')))[0]!;
+  const explicitLayout = lay(cell('<w:rPr><w:sz w:val="32"/></w:rPr>'));
+  const explicit = linesOf(explicitLayout)[0]!;
+  const table = explicitLayout.pages[0]!.fragments.find((block) => block.kind === 'table')!;
+  expect(table.rows[0]!.box.height).toBeCloseTo(MARK_H, 5);
+  expect(implicit.box.height).toBeCloseTo(6 * 1.15, 5);
+  expect(explicit.box.height).toBeCloseTo(6 * 1.15, 5);
+  expect(explicit.baseline).toBeCloseTo(implicit.baseline, 5);
+});
+
+test('small body text uses its visible font unless the paragraph mark is explicitly formatted', () => {
+  const run = '<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>Small text</w:t></w:r>';
+  const body = linesOf(lay(`<w:p>${run}</w:p>`))[0]!;
+  expect(body.box.height).toBeCloseTo(RUN_H, 6);
+  const explicit = linesOf(
+    lay(`<w:p><w:pPr><w:rPr><w:sz w:val="32"/></w:rPr></w:pPr>${run}</w:p>`)
+  )[0]!;
+  expect(explicit.box.height).toBeCloseTo(MARK_H, 6);
+  expect(explicit.baseline).toBeCloseTo(body.baseline, 6);
 });

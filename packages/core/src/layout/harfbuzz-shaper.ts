@@ -179,6 +179,8 @@ export interface HarfBuzzTextShaperOptions {
   readonly maxCodepoints?: number;
   readonly maxGlyphs?: number;
   readonly maxCachedFaces?: number;
+  /** Aggregate retained native font bytes; oversized faces are shaped without retention. */
+  readonly maxCachedFontBytes?: number;
   readonly maxCachedShapes?: number;
   readonly maxOutlineBytes?: number;
   readonly maxCachedOutlineBytes?: number;
@@ -377,6 +379,23 @@ const fontUnitsConverter = (
   return (value) => roundFontUnitToFixedPoint(value, denominator, numerator, mode);
 };
 
+/**
+ * The same rational the fixed-point converter applies, with the rounding step left out.
+ *
+ * One IEEE division of two exactly representable integers, so it is deterministic and
+ * reproducible — the same guarantee the fixed-point path gives, at the precision a painter
+ * that sums advances needs.
+ */
+const exactFontUnitsConverter = (
+  unitsPerEm: number,
+  fontSizeHalfPoints: number,
+  fixedPointScale: number
+): ((value: number) => number) => {
+  const numerator = fontSizeHalfPoints * fixedPointScale;
+  const denominator = unitsPerEm * 2;
+  return (value) => (value * numerator) / denominator;
+};
+
 const clustersFromGlyphs = (
   text: string,
   glyphs: readonly ShapedGlyph[]
@@ -420,6 +439,7 @@ interface ActiveHarfBuzzFont {
   readonly face: HarfBuzzFace;
   readonly font: HarfBuzzFont;
   readonly unitsPerEm: number;
+  readonly byteLength: number;
 }
 
 const OBJECT_OVERHEAD_BYTES = 64;
@@ -470,6 +490,9 @@ const shapedRunStorageBytes = (run: ShapedRun): number => {
     run.clusters.reduce((sum, cluster) => sum + arrayStorageBytes(cluster.caretEdges.length), 0) +
     arrayStorageBytes(run.fontSpans.length) +
     run.fontSpans.length * FONT_SPAN_OBJECT_BYTES +
+    (run.exactAdvancesX === undefined
+      ? 0
+      : ARRAY_OVERHEAD_BYTES + run.exactAdvancesX.length * NUMBER_STORAGE_BYTES) +
     METRICS_OBJECT_BYTES +
     [...uniqueOutlines].reduce((sum, outline) => sum + outlineStorageBytes(outline.path), 0)
   );
@@ -498,6 +521,8 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   readonly #maxCodepoints: number;
   readonly #maxGlyphs: number;
   readonly #maxCachedFaces: number;
+  readonly #maxCachedFontBytes: number;
+  #fontBytes = 0;
   readonly #maxCachedShapes: number;
   readonly #maxOutlineBytes: number;
   readonly #maxCachedOutlineBytes: number;
@@ -533,6 +558,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       options.maxGlyphs ?? DEFAULT_MAX_GLYPHS,
       'maximum shaped glyphs',
       HARD_MAX_GLYPHS
+    );
+    this.#maxCachedFontBytes = assertPositiveLimit(
+      options.maxCachedFontBytes ?? 64 * 1024 * 1024,
+      'maximum cached font bytes',
+      64 * 1024 * 1024
     );
     this.#maxCachedFaces = assertPositiveLimit(
       options.maxCachedFaces ?? DEFAULT_MAX_CACHED_FACES,
@@ -571,6 +601,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
 
   dispose(): void {
     this.#faces.clear();
+    this.#fontBytes = 0;
     this.#outlines.clear();
     this.#shapeResults.clear();
     this.#outlineBytes = 0;
@@ -617,15 +648,28 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     font.setScale(face.upem, face.upem);
-    if (this.#faces.size >= this.#maxCachedFaces) {
-      const oldest = this.#faces.keys().next().value;
-      if (oldest !== undefined) {
+    const active = {
+      identity: fontResource.identity,
+      blob,
+      face,
+      font,
+      unitsPerEm: face.upem,
+      byteLength: bytes.byteLength,
+    };
+    if (bytes.byteLength <= this.#maxCachedFontBytes) {
+      while (
+        this.#faces.size >= this.#maxCachedFaces ||
+        this.#fontBytes + bytes.byteLength > this.#maxCachedFontBytes
+      ) {
+        const oldest = this.#faces.keys().next().value;
+        if (oldest === undefined) break;
+        this.#fontBytes -= this.#faces.get(oldest)!.byteLength;
         this.#faces.delete(oldest);
         this.#onFaceCacheEvent?.(Object.freeze({ kind: 'evicted', identity: oldest }));
       }
+      this.#faces.set(fontResource.identity, active);
+      this.#fontBytes += bytes.byteLength;
     }
-    const active = { identity: fontResource.identity, blob, face, font, unitsPerEm: face.upem };
-    this.#faces.set(fontResource.identity, active);
     this.#onFaceCacheEvent?.(Object.freeze({ kind: 'created', identity: fontResource.identity }));
     return active;
   }
@@ -762,7 +806,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
     }
     const bytes = trustedFontBytes(environment.font);
     const tags = trustedFontTableTags(environment.font);
-    if ([...COLOR_TABLES].some((tag) => tags.has(tag))) {
+    // A color face shapes like any other when it also carries outlines: the export writer
+    // paints its COLR layers itself, and a browser draws them from the same face. A face
+    // whose color glyphs are bitmaps or SVG alone, with no outline table, has no ink this
+    // engine can measure or embed, and stays refused.
+    if ([...COLOR_TABLES].some((tag) => tags.has(tag)) && !tags.has('glyf') && !tags.has('CFF ')) {
       throw new HarfBuzzShapingError('unsupportedColorFont');
     }
 
@@ -802,6 +850,12 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         environment.fixedPointScale,
         environment.roundingMode
       );
+      const exactAdvance = exactFontUnitsConverter(
+        face.upem,
+        input.fontSizeHalfPoints,
+        environment.fixedPointScale
+      );
+      const exactAdvancesX: number[] = [];
       let originX = fixedPoint(0);
       let originY = fixedPoint(0);
       const runOutlines = new Map<number, GlyphOutline>();
@@ -811,6 +865,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         )
       );
       const glyphs: ShapedGlyph[] = shaped.map((glyph) => {
+        exactAdvancesX.push(exactAdvance(glyph.xAdvance ?? 0));
         const advanceX = convert(glyph.xAdvance ?? 0);
         const advanceY = convert(glyph.yAdvance ?? 0);
         const positioned = {
@@ -841,6 +896,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           direction: environment.direction,
           bidiLevel: input.bidiLevel,
           glyphs,
+          exactAdvancesX,
           clusters: clustersFromGlyphs(text, glyphs),
           fontSpans:
             glyphs.length === 0

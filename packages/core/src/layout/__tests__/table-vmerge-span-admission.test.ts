@@ -1,3 +1,5 @@
+import { readTableStructure } from '../semantic-table.ts';
+import { vMergePlanFor } from '../semantic-table-layout.ts';
 // When a vertical merge is allowed to size its span, and what happens when it is not.
 //
 // Giving the span its own height is only safe while every row of it lands on one page and
@@ -133,10 +135,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // Two pages rather than three, because Word's cell margins make every row 12.73pt where
-    // it used to be 18.73pt. The shape this test needs is unchanged, and verified: the merge
-    // still does not fit the band it is offered, it still moves to a fresh page, and that
-    // page still re-emits the `w:tblHeader` row above it.
+    // The one-point table grid reserves clearance even when tcBorders omits it.
+    // The shared half-strokes fit on two pages; the repeated header must still
+    // reduce the merge's admission band and every fragment must remain contained.
     expect(layout.pages).toHaveLength(2);
     expect(headerRepeatsOn(layout, 1)).toBe(true);
     expectContentInsideItsTable(layout);
@@ -197,12 +198,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
-  test('a merge over a row that heads another merge is left alone', () => {
-    // Column 0 merges rows 0-1 and column 1 restarts at row 1. Row 1 therefore sizes itself
-    // around the second head whenever that one is not planned, which is a height the first
-    // span never measured, and the row can then take the whole-row move and leave the first
-    // span's content on the page above with no table under it. Nothing revokes a span once
-    // its head content has been placed, so the first span is not taken at all.
+  test('overlapping merges keep their content contained when the second head splits', () => {
+    // Column 0 merges rows 0-1 and column 1 restarts at row 1. The second head can
+    // start in the remaining band; both fragments must still bound their own content.
     const layout = layoutTiny(
       loadPart(
         `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
@@ -213,13 +211,13 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The two-line head sizes its own row, so its content has a cell around it.
+    // The first merge covers the partial second row on this page.
     const first = tablesOf(layout, 0)[0]!;
     const head = first.rows[0]!.cells[0]!;
-    expect(head.rowSpan).toBe(1);
+    expect(head.rowSpan).toBe(2);
     expect(contentBottomOf(head)).toBeGreaterThan(first.box.y + 18);
     expectContentInsideItsTable(layout);
-    // The merge that starts BELOW it is still planned, on the page it moves to.
+    // The second merge continues into the following row on the next page.
     const carried = tablesOf(layout, 1)[0]!;
     expect(carried.rows[0]!.cells[1]!.rowSpan).toBe(2);
     for (const pageIndex of layout.pages.keys()) {
@@ -396,9 +394,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The first row still uses the room left on the page it was reached on.
-    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(1);
-    // The second merge is kept whole on the page it moved to, and its content fits it.
+    // Both the first row and the start of the second use the remaining page band.
+    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(2);
+    // The continued merge covers the remaining rows, with its content inside its box.
     const carried = tablesOf(layout, 1)[0]!;
     const merged = carried.rows[0]!.cells[1]!;
     expect(merged.rowSpan).toBe(2);
@@ -408,4 +406,45 @@ describe('a merge is only sized as a span where the span can hold it', () => {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
     }
   });
+});
+
+// Every row reserves the rule its OWN top resolves to, so an interior row only measures
+// differently as a fragment's first row when the table's outer `w:top` differs from its
+// `w:insideH`. Here they are 4pt and 1pt, and the merge starts at the second row.
+const OUTER_TOP_GRID =
+  '<w:tblPr><w:tblBorders>' +
+  ['left', 'bottom', 'right', 'insideH', 'insideV']
+    .map((side) => `<w:${side} w:val="single" w:sz="8" w:color="000000"/>`)
+    .join('') +
+  '<w:top w:val="single" w:sz="32" w:color="000000"/></w:tblBorders></w:tblPr>';
+test('merge preflight remeasures the outer top inset after an occurrence changes', () => {
+  const part = loadPart(`<w:tbl>${OUTER_TOP_GRID}<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>
+    <w:tr>${tc(p('Lead'))}</w:tr>
+    <w:tr>${tc(MERGED_CONTENT, RESTART)}</w:tr><w:tr>${tc(p(''), CONTINUE)}</w:tr></w:tbl>`);
+  const body = part.root.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'body'
+  );
+  if (!body || body.kind === 'textValue') throw new Error('body expected');
+  const table = body.children.find((node) => node.kind === 'table')!;
+  const structure = readTableStructure(table, 180, 0)!;
+  let first = false;
+  const plan = vMergePlanFor(
+    structure,
+    0,
+    0,
+    {
+      measurer: createFixedMeasurer(),
+      producer: 'probe',
+      nextLineId: () => 'probe',
+    },
+    undefined,
+    (row) => first && row.id === structure.rows[1]!.id
+  )!;
+  const span = plan.spansAt(1)[0]!;
+  const interior = plan.heightOf(span, 0);
+  first = true;
+  const outer = plan.heightOf(span, 0);
+  expect(outer - interior).toBeCloseTo(3, 8);
+  first = false;
+  expect(plan.heightOf(span, 0)).toBe(interior);
 });

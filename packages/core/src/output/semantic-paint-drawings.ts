@@ -19,7 +19,11 @@ import type {
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
-import { forEachPageStory, forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
+import {
+  forEachPageStory,
+  forEachStoryDrawing,
+  forEachStoryParagraphFragment,
+} from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 import {
@@ -864,6 +868,15 @@ function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
     if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
     elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
   });
+  // A picture-bullet marker mints a blob URL from the same registry, so its resource has to
+  // be reported used here too. Left out, the next reconcile revoked the URL and every list
+  // image went blank on the following repaint.
+  forEachPageStory(page, ({ host }) =>
+    forEachStoryParagraphFragment(host, (fragment) => {
+      const picture = fragment.marker?.picture;
+      if (picture?.resource.kind === 'ready') resourceKeys.push(picture.resource.resourceKey);
+    })
+  );
   const keys: PageDrawingKeys = Object.freeze({
     resourceKeys: Object.freeze(resourceKeys),
     elementKeys: Object.freeze(elementKeys),

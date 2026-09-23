@@ -164,3 +164,46 @@ test('column-origin changes invalidate local wrapping without changing paragraph
   expect(starts[0]).not.toBe(starts[1]);
   expect(starts[0]).toBe(starts[2]);
 });
+
+// A float that shortens a line moves the paragraph's own horizontal geometry with it: Word
+// measures a first-line indent from the start of the usable segment, and centres between the
+// pictures beside the line rather than between the page margins.
+function beside(properties: string, zones: readonly { left: number; width: number }[]) {
+  const source = loadBody(paragraph(properties));
+  const target = source.root.children
+    .flatMap((child) => ('children' in child ? child.children : []))
+    .filter((child) => child.kind === 'paragraph')
+    .at(-1)!;
+  const built = zones.map((zone, index) => ({
+    ...squareWrapZone({
+      anchorParagraphId: target.id,
+      top: 0,
+      height: 40,
+      left: zone.left,
+      width: zone.width,
+      contentWidth: 180,
+      drawingNodeId: `float-${index}`,
+    }),
+    sourceKind: 'table' as const,
+  }));
+  return linesOf(layoutUnderFloat(source, new Map([[0, built]])))
+    .filter((line) => line.range.paragraphId === target.id)
+    .map((line) => line.spans[0]!.box.x);
+}
+
+test('a first-line indent is measured from the float-shortened left edge', () => {
+  // Without the float the first line starts at 12pt; the float moves the whole measure.
+  expect(beside('<w:ind w:firstLine="240"/>', [{ left: 0, width: 60 }])[0]).toBe(72);
+  expect(beside('<w:ind w:firstLine="240"/>', [])[0]).toBe(12);
+});
+
+test('a centred line centres inside the passage the floats leave it', () => {
+  const between = beside('<w:jc w:val="center"/>', [
+    { left: 0, width: 40 },
+    { left: 140, width: 40 },
+  ]);
+  const full = beside('<w:jc w:val="center"/>', []);
+  // The passage [40, 140) shares its midpoint with the 180pt measure, so a centred line does
+  // not move — proving the snap advance is not counted as content.
+  expect(between[0]).toBe(full[0]!);
+});

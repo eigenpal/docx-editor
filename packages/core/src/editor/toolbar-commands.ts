@@ -535,6 +535,15 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     // command" told a host the capability is missing when what is actually missing is a
     // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching
     // on the registry's `kind: 'save'`. Say which of the two it is.
+    if (id === 'file.exportMarkdown' || id === 'file.exportPdf') {
+      return {
+        id,
+        enabled: false,
+        active: false,
+        disabledReason:
+          'export is not a command; run it with runChromeExport(editor, format, handlers)',
+      };
+    }
     if (id === 'file.save') {
       return {
         id,
@@ -787,6 +796,13 @@ export function runToolbarCommand(
   if (!command) {
     if (value !== undefined) {
       return { ok: false, code: 'unsupported', reason: 'invalid value for toolbar command' };
+    }
+    if (id === 'file.exportMarkdown' || id === 'file.exportPdf') {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'export is not a command; run it with runChromeExport(editor, format, handlers)',
+      };
     }
     if (id === 'file.save') {
       return {

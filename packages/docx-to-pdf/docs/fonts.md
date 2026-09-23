@@ -1,0 +1,93 @@
+# Configure PDF fonts
+
+Fonts determine line breaks, page counts, and the glyphs embedded in PDF output. The converter uses installed fonts and packaged substitutes by default.
+
+## Choose a source
+
+| Need | Configuration |
+| --- | --- |
+| Use default font sources | Omit font options. |
+| Keep font selection consistent across hosts | Set `useSystemFonts: false` and pin package versions. |
+| Override an installed or packaged face | Supply `fonts`. |
+| Supply faces absent from packaged sources | Supply `fallbackFonts`. |
+| Keep embedded faces before your final fallback | Supply `lastResortFonts`. |
+
+Sources resolve in this order:
+
+1. Your `fonts` sources.
+2. Installed fonts, unless `useSystemFonts` is `false`.
+3. Packaged substitutes.
+4. Your `fallbackFonts` sources.
+5. Supplemental packaged faces.
+6. Document-embedded fonts.
+7. Your `lastResortFonts` sources.
+8. Generic substitutes for unresolved families.
+
+Earlier sources take priority. Each option accepts one source or an ordered array of sources. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
+
+The default sources need no network access. A resolver that you supply can make network requests.
+
+## Supply a font file
+
+Use `createFontSource` from the converter package to validate your font bytes. This example expects your licensed regular font file and a document that requests `Application Sans`:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { createFontSource, exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+const fontBytes = new Uint8Array(await readFile('ApplicationSans.ttf'));
+const admitted = createFontSource(fontBytes, {
+  family: 'Application Sans',
+  weight: 400,
+  style: 'normal',
+});
+if ('failure' in admitted) {
+  throw new Error(admitted.failure.diagnostic ?? admitted.failure.reason);
+}
+
+const source = await readFile('document.docx');
+const result = await exportPdf(source, {
+  useSystemFonts: false,
+  fonts: { sources: [admitted.source] },
+});
+await writeFile('document.pdf', result.bytes);
+```
+
+Register bold, italic, and bold-italic files separately when the document needs those faces. Use weights `400` and `700`, with styles `'normal'` and `'italic'`. Check your font license before embedding its bytes. The writer rejects prohibited embedding, prohibited subsetting, variable fonts, and unsupported font containers.
+
+## Separate font policy from PDF policy
+
+`fontPolicy: 'strict'` rejects failed sources and incomplete face coverage. It can reject an export when another source recovers from a source failure. Complete coverage can include substitutions; it does not prove original font selection.
+
+`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy.
+
+To require both checks, set both policies:
+
+```ts
+const result = await exportPdf(source, {
+  fontPolicy: 'strict',
+  fidelityPolicy: 'strict',
+  useSystemFonts: false,
+  onFontResolution(report) {
+    console.table(report.families);
+  },
+});
+```
+
+The callback runs before a strict font refusal. Returned callback promises do not delay conversion.
+
+## Inspect font evidence
+
+`result.fontResolution.families` records each family's coverage and selected faces. Inspect each face's `sourceFamily`, `via`, and `substitution` fields. `originFailures` retains source failures and their causes. `droppedEmbeddedFonts` identifies embedded faces rejected during font admission.
+
+Each `font-origin-failed` diagnostic provides the source index, optional source name, and a guarded cause message. The `incomplete-font` diagnostic reports partial coverage and substituted variants within a family. It remains informational when `fontPolicy` permits recovery.
+
+| Symptom | Action |
+| --- | --- |
+| Pages differ across hosts | Disable system fonts and use identical font bytes and package versions. |
+| `font-substitution` diagnostic | Supply the requested family through `fonts` or review best-effort output. |
+| Strict font policy rejects conversion | Inspect the callback report for failed sources and missing face variants. |
+| Missing font assets after bundling | Keep converter packages external and copy their assets with deployment output. |
+| Missing glyphs | Supply a face that contains the requested characters. |
+
+For server setup, see [Integrate PDF conversion](integrations.md).

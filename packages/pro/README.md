@@ -13,7 +13,7 @@
 
 # @docx-editor.dev/pro
 
-Four capabilities for the [docx-editor.dev](https://docx-editor.dev) React and Vue editors:
+Add review, collaboration, and custom content to the [docx-editor.dev](https://docx-editor.dev) React and Vue editors. The package provides these capabilities:
 
 - Tracked changes: Suggesting mode, markup rendering, accept, and reject.
 - Comments: Threads anchored to a range, with replies.
@@ -52,7 +52,7 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 
 Set `author` to the name stored in `w:author`. The engine requires an author to create comments or replies.
 
-Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched. It renders revisions in their final state and offers no review UI; the module is what makes them visible and actionable.
+Without a review module, the editor preserves revisions and comments when saving. It displays final revision content. Add the review module to display markup and review controls.
 
 ## Collaboration
 
@@ -69,7 +69,7 @@ Start with the [real-time collaboration quickstart](https://www.docx-editor.dev/
 
 ## Chrome or hooks
 
-Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for Word-like cards out of the box, or the hook to render your own markup.
+Use the packaged sidebar to display review cards. Use `useReview()` to build your own review interface.
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';

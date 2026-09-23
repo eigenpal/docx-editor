@@ -8,11 +8,7 @@ import type { ReactNode } from 'react';
 // (icon, label, right-aligned shortcut, submenu caret) and the fact that selecting a row
 // closes the menu.
 //
-// THREE ROWS DO NOT DISPATCH A COMMAND. Open and save move BYTES across the host
-// boundary, and page setup needs a dialog's values; the engine has no command for any of
-// them (`toolbarCommandState` says so in those words). Those rows read their handler from
-// the menu context, which the root resolves once — host override, else the packaged
-// default — so the row itself holds no policy.
+// Host actions read their handlers from the menu context. Editing rows use engine commands.
 
 import { isValidElement, useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
@@ -331,6 +327,18 @@ export const MenuSave = defineActionRow(
   'toolbar.save',
   'toolbar.saveShortcut',
   (context) => context.onSave
+);
+
+/** Exports continuous Markdown through the menu handler. @public */
+export const MenuExportMarkdown = defineActionRow(
+  'file.exportMarkdown',
+  undefined,
+  undefined,
+  (context) => (context.onExport ? () => context.onExport?.('markdown') : undefined)
+);
+/** Exports PDF through the menu handler. @public */
+export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
+  context.onExport ? () => context.onExport?.('pdf') : undefined
 );
 
 /**
@@ -796,23 +804,21 @@ export function MenuSeparator({ className }: MenuSeparatorProps) {
 /**
  * One registry entry as its row.
  *
- * The three host-boundary slots route to their pinned parts rather than to the generic
- * `MenuItem`, because a command-driven row would render them permanently disabled — the
- * engine reports, correctly, that neither open nor save is a command.
+ * Host actions use their pinned parts because they are not editing commands.
  */
-export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
+export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; children?: ReactNode }) {
   if (entry.kind === 'separator') return <MenuSeparator />;
   if (entry.kind === 'submenu') {
     return (
       <MenuSubmenu labelKey={entry.labelKey} paths={entry.paths}>
-        {entry.items.map((item, index) => (
-          <MenuEntry key={index} entry={item} />
-        ))}
+        {children ?? entry.items.map((item, index) => <MenuEntry key={index} entry={item} />)}
       </MenuSubmenu>
     );
   }
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
+  if (entry.slot === 'file.exportMarkdown') return <MenuExportMarkdown />;
+  if (entry.slot === 'file.exportPdf') return <MenuExportPdf />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
   if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
@@ -879,7 +885,8 @@ function mergePanel(
     preset,
     keyOfEntry: rowKeyOfEntry,
     keyOfChild: rowKeyOfChild,
-    renderEntry: (entry) => <MenuEntry entry={entry} />,
+    childrenOfEntry: (entry) => (entry.kind === 'submenu' ? entry.items : undefined),
+    renderEntry: (entry, _index, nested) => <MenuEntry entry={entry}>{nested}</MenuEntry>,
   });
 }
 

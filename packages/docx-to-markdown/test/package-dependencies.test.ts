@@ -93,9 +93,11 @@ describe('engine dependency integrity', () => {
       (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
     );
     expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
-    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual(
-      markdownNavigation.pages.map((page: string) => `export/markdown/${page}`)
-    );
+    // The Markdown pages, then the PDF page, and nothing else before the next section.
+    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
+      ...markdownNavigation.pages.map((page: string) => `export/markdown/${page}`),
+      'export/pdf',
+    ]);
     expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');
     expect(exportNavigation.pages).toContain('markdown');

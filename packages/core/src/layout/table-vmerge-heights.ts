@@ -239,7 +239,9 @@ function collectHeads(rows: readonly SemanticTableRow[]): {
  */
 export function planVMergeRowHeights(
   rows: readonly SemanticTableRow[],
-  probeRowHeightPt: RowHeightProbe
+  probeRowHeightPt: RowHeightProbe,
+  /** Include occurrence-dependent insets in height-cache keys (outer versus shared top). */
+  probeContext?: (row: SemanticTableRow) => string
 ): VMergeRowHeights | null {
   if (rows.length === 0) return null;
   // Most tables have no vertical merge, and this runs from inside a row PROBE as well as
@@ -295,7 +297,7 @@ export function planVMergeRowHeights(
       if (acceptedHeadIds.has(id) || id === pending) emptied.add(id);
     }
     const at = atYPt === undefined ? '' : `@${atYPt.toFixed(2)}`;
-    const key = `${rowIndex}${at}\u0000${[...emptied].sort().join('\u0000')}`;
+    const key = `${rowIndex}${at}\u0000${probeContext?.(rows[rowIndex]!) ?? ''}\u0000${[...emptied].sort().join('\u0000')}`;
     const known = basePt.get(key);
     if (known !== undefined) return known;
     const measured = probeRowHeightPt(rows[rowIndex]!, emptied, atYPt);
@@ -311,7 +313,11 @@ export function planVMergeRowHeights(
    * defect, so the measurement is the thing to get right rather than the fallout.
    */
   const contentOf = (span: VMergeSpan, atYPt?: number): number => {
-    const key = atYPt === undefined ? span : `${span.headCellId}@${atYPt.toFixed(2)}`;
+    const context = probeContext?.(rows[span.headRow]!);
+    const key =
+      atYPt === undefined && context === undefined
+        ? span
+        : `${span.headCellId}@${atYPt?.toFixed(2) ?? ''}:${context ?? ''}`;
     const known = contentPt.get(key);
     if (known !== undefined) return known;
     const head = headBySpan.get(span)!;
@@ -516,27 +522,32 @@ export function planTableVMergeHeights<Deps>(
     cellSpacingPt?: number,
     vMerge?: RowVMergeLayoutOptions,
     atYPt?: number
-  ) => number
+  ) => number,
+  /** Include occurrence-dependent insets in height-cache keys (outer versus shared top). */
+  probeContext?: (row: SemanticTableRow) => string
 ): VMergeRowHeights | null {
-  return planVMergeRowHeights(structure.rows, (row, detached, atYPt) =>
-    measure(
-      row,
-      structure.columnWidthsPt,
-      typeof left === 'function' ? left() : left,
-      depth,
-      deps,
-      structure.cellSpacingPt,
-      // A probe only needs to know WHICH cells are out: the span it measures towards has
-      // no height of its own yet, and being unbounded is the point of a probe.
-      detached
-        ? {
-            detachedSpanHeightPtByCellId: new Map(
-              [...detached].map((id) => [id, Number.POSITIVE_INFINITY])
-            ),
-          }
-        : undefined,
-      atYPt
-    )
+  return planVMergeRowHeights(
+    structure.rows,
+    (row, detached, atYPt) =>
+      measure(
+        row,
+        structure.columnWidthsPt,
+        typeof left === 'function' ? left() : left,
+        depth,
+        deps,
+        structure.cellSpacingPt,
+        // A probe only needs to know WHICH cells are out: the span it measures towards has
+        // no height of its own yet, and being unbounded is the point of a probe.
+        detached
+          ? {
+              detachedSpanHeightPtByCellId: new Map(
+                [...detached].map((id) => [id, Number.POSITIVE_INFINITY])
+              ),
+            }
+          : undefined,
+        atYPt
+      ),
+    probeContext
   );
 }
 

@@ -32,6 +32,7 @@ import type { PendingLine } from './paragraph-flow.ts';
 import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { withResolvedListItems } from './list-resolve.ts';
+import { noteSeparatorRuleBox } from './note-separator-rule.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
@@ -50,7 +51,7 @@ export const MAX_NOTE_FRAGMENTS = 512;
 /** Default separator rule height when the document supplies no separator note. */
 export const DEFAULT_NOTE_SEPARATOR_HEIGHT_PT = 6;
 
-/** Default separator rule width as a fraction of content width. */
+/** Legacy proportional separator width. @deprecated Rules use a 144pt width, capped by the content band. */
 export const DEFAULT_NOTE_SEPARATOR_WIDTH_RATIO = 1 / 3;
 
 /**
@@ -111,6 +112,10 @@ export interface NoteSeparatorLayout {
    * story has real paragraph/run/border content that paint should render as fragments.
    */
   readonly ruleStyle?: NoteSeparatorRuleStyle;
+  /** Marker rule geometry inside the measured separator story. */
+  readonly ruleBox?: LayoutBox;
+  /** Resolved marker-run color; null/absent uses automatic black. */
+  readonly ruleColor?: string | null;
   /** Set when an oversize authored separator was replaced with a synthetic rule. */
   readonly fallbackReason?: NoteLayoutFallbackReason;
 }
@@ -255,9 +260,13 @@ export function layoutNoteStory(
   const maxHeight = options.maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
 
   // noteRef atoms have no @w:id — bind display marks to this story's scope.
-  const noteMarks: NoteMarkContext | undefined = options.noteMarks
-    ? { ...options.noteMarks, activeNoteKey: scopeId }
-    : { marks: new Map(), activeNoteKey: scopeId };
+  const measureSeparatorMarkers =
+    noteTypeOf(note) === 'separator' || noteTypeOf(note) === 'continuationSeparator';
+  const noteMarks: NoteMarkContext = {
+    ...(options.noteMarks ?? { marks: new Map() }),
+    activeNoteKey: scopeId,
+    ...(measureSeparatorMarkers ? { measureSeparatorMarkers: true as const } : {}),
+  };
 
   // INLINE pictures only. An anchored drawing in a note would need frame and exclusion
   // semantics against a story that has no page of its own until pagination places it.
@@ -272,7 +281,11 @@ export function layoutNoteStory(
     options.projectLink;
 
   const listItems = withResolvedListItems(
-    { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
+    {
+      numberingIndex: options.numberingIndex,
+      styleCascade: options.styleCascade,
+      measurer: options.measurer,
+    },
     blocks
   ).listItems;
 
@@ -284,6 +297,7 @@ export function layoutNoteStory(
     // that produced them. Keep the unfiltered default key stable, matching furniture.
     producer:
       options.producer +
+      (measureSeparatorMarkers ? '|separator-metrics' : '') +
       (options.showFieldCodes ? '|field-codes' : '') +
       (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
       (options.revisionAuthorFilter ? `|reviewers:${options.revisionAuthorFilter.cacheKey}` : '') +
@@ -473,9 +487,10 @@ function runIsMarkerOnly(run: OoxmlElement): boolean {
 /**
  * Layout the document's separator note, or synthesize a short horizontal rule.
  *
- * Marker-only / missing separators emit no paragraph fragments — paint draws the rule
+ * Single-marker / missing separators emit no paragraph fragments — paint draws the rule
  * from {@link NoteSeparatorLayout.ruleStyle} + box geometry. Authored separators with
  * real paragraph/run/border content keep their fragment story (including `w:pBdr`).
+ * Explicitly empty stories and hidden markers do not acquire a default rule.
  *
  * When `maxFlowHeightPt` is set and an authored separator exceeds it, the engine fails
  * closed to a short synthetic rule ({@link note-separator-height-cap}) so note pagination
@@ -492,22 +507,62 @@ export function layoutNoteSeparator(
   const ruleStyle = defaultNoteSeparatorRuleStyle(noteKind, kind);
   const authored = findSeparatorNote(part, kind);
   if (authored) {
-    if (isMarkerOnlySeparatorNote(authored, options.displayMode, options.revisionAuthorFilter)) {
-      return {
-        kind,
-        fragments: [],
-        flowHeight: DEFAULT_NOTE_SEPARATOR_HEIGHT_PT,
-        synthetic: false,
-        ruleStyle,
-      };
-    }
     const laid = layoutNoteStory(authored, contentWidth, {
       ...options,
       ...(part ? { ownerPartName: part.name } : {}),
     });
-    if (laid && laid.flowHeight > 0) {
+    if (laid) {
+      const markerOnly = isMarkerOnlySeparatorNote(
+        authored,
+        options.displayMode,
+        options.revisionAuthorFilter
+      );
+      let flowHeight = laid.flowHeight;
+      let ruleBox: LayoutBox | undefined;
+      let ruleColor: string | null | undefined;
+      let singleRule = false;
+      if (markerOnly) {
+        const paragraphs = laid.fragments.filter((fragment) => fragment.kind === 'paragraph');
+        const markers = paragraphs.flatMap((paragraph) =>
+          paragraph.lines.flatMap((line) =>
+            line.spans.filter((span) => span.noteSeparator).map((span) => ({ line, span }))
+          )
+        );
+        singleRule = markers.length === 1;
+        const last = paragraphs.at(-1);
+        const authoredBlocks = noteStoryBlocks(
+          authored,
+          options.displayMode,
+          options.revisionAuthorFilter
+        );
+        const lastBlock = authoredBlocks.at(-1);
+        const properties =
+          lastBlock?.kind === 'paragraph'
+            ? lastBlock.children.find((child) => child.kind === 'paragraphProperties')
+            : undefined;
+        // Plain separators do not acquire the body's implicit trailing paragraph space.
+        // Explicit paragraph spacing and named styles remain part of their story geometry.
+        const hasAuthoredSpacing =
+          properties?.kind === 'paragraphProperties' &&
+          properties.children.some(
+            (child) =>
+              child.localName === 'pStyle' ||
+              (child.localName === 'spacing' &&
+                child.attributes.some((attribute) => attribute.localName === 'after'))
+          );
+        flowHeight -= hasAuthoredSpacing ? 0 : (last?.spacing.after ?? 0);
+        const marker = markers[0];
+        if (marker) {
+          ruleColor = marker.span.style.color;
+          ruleBox = noteSeparatorRuleBox(
+            marker.span,
+            marker.line,
+            options.measurer.strikeoutMetrics?.(marker.span.style)
+          );
+        }
+      }
       const cap = maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
-      if (laid.flowHeight > cap + 0.001) {
+      if (flowHeight > cap + 0.001) {
         return {
           kind,
           fragments: [],
@@ -519,9 +574,16 @@ export function layoutNoteSeparator(
       }
       return {
         kind,
-        fragments: laid.fragments,
-        flowHeight: laid.flowHeight,
+        fragments: markerOnly && singleRule ? [] : laid.fragments,
+        flowHeight,
         synthetic: false,
+        ...(markerOnly && singleRule
+          ? {
+              ruleStyle,
+              ...(ruleBox ? { ruleBox } : {}),
+              ...(ruleColor !== undefined ? { ruleColor } : {}),
+            }
+          : {}),
       };
     }
   }
@@ -535,13 +597,20 @@ export function layoutNoteSeparator(
 }
 
 /** Default rule geometry for a synthetic / marker-only separator, story-relative. */
-export function syntheticSeparatorBox(contentWidth: number, flowHeight: number): LayoutBox {
-  const width = Math.max(1, contentWidth * DEFAULT_NOTE_SEPARATOR_WIDTH_RATIO);
+export function syntheticSeparatorBox(
+  contentWidth: number,
+  flowHeight: number,
+  kind: 'separator' | 'continuationSeparator' = 'separator'
+): LayoutBox {
+  const width = Math.max(
+    1,
+    Math.min(contentWidth, kind === 'continuationSeparator' ? contentWidth : 144)
+  );
   return {
     x: 0,
-    y: Math.max(0, (flowHeight - 0.75) / 2),
+    y: Math.max(0, (flowHeight - 0.5) / 2),
     width,
-    height: 0.75,
+    height: 0.5,
   };
 }
 
@@ -553,12 +622,17 @@ export function noteSeparatorAreaBox(
   areaTop: number
 ): LayoutBox {
   if (separator.ruleStyle !== undefined || separator.synthetic) {
-    const relative = syntheticSeparatorBox(contentWidth, separator.flowHeight);
+    const relative =
+      separator.ruleBox ??
+      syntheticSeparatorBox(contentWidth, separator.flowHeight, separator.kind);
+    // A measured face stroke IS the thickness Word paints, so only a synthetic rule takes the
+    // visibility floor. A `double` rule keeps its two-stroke minimum either way.
+    const floor = separator.ruleStyle === 'double' ? 2.25 : separator.ruleBox ? 0 : 0.5;
     return {
       x: contentX + relative.x,
       y: areaTop + relative.y,
       width: relative.width,
-      height: Math.max(relative.height, separator.ruleStyle === 'double' ? 2.25 : 0.75),
+      height: Math.max(relative.height, floor),
     };
   }
   return {

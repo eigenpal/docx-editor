@@ -1,0 +1,69 @@
+{
+  "NotoEmoji.variable.ttf": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
+    "sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551"
+  },
+  "NotoEmoji-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notoemoji/OFL.txt",
+    "sha256": "500bb1ccf43df7bbb522112f9133a52b16e1c35e809632f5d8609b179152de5b"
+  },
+  "NotoSansMath-Regular.ttf": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmath/NotoSansMath-Regular.ttf",
+    "sha256": "3f495fe933c06786e4d5f6d86b8ee70b6753a68ee3b9d87528726de0f6e2c47d",
+    "installedSha256": "3f495fe933c06786e4d5f6d86b8ee70b6753a68ee3b9d87528726de0f6e2c47d"
+  },
+  "NotoSansMath-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmath/OFL.txt",
+    "sha256": "403a95275b469061b7d4371c328e0ada3bc7d63328abe2e88aad5cd243b2fe21"
+  },
+  "NotoSansArabic.variable.ttf": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth,wght%5D.ttf",
+    "sha256": "63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e"
+  },
+  "NotoSansArabic-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/OFL.txt",
+    "sha256": "07fc70bfeb985cc1a87a8587d0a0c80bab11c86c9dc3fd95b6f0cb332f983e96"
+  },
+  "NotoSansCJKjp-Regular.otf": {
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+    "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+    "installedSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
+  },
+  "NotoSansCJK-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/LICENSE",
+    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  "NotoSansSymbols2-Regular.ttf": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "sha256": "7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21",
+    "installedSha256": "7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21"
+  },
+  "NotoSansSymbols2-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/OFL.txt",
+    "sha256": "b118dd41337806a5d4797052c77caf3bd096aed783e5eb21b4d11154351e1ac0"
+  },
+  "NotoEmoji-Regular.ttf": {
+    "derivedFrom": "NotoEmoji.variable.ttf",
+    "axes": {
+      "wght": 400
+    },
+    "installedSha256": "8db3470f6990515b6c3303667c133d41c94a6465797ff27b88a07595378d5f07"
+  },
+  "NotoSansArabic-Regular.ttf": {
+    "derivedFrom": "NotoSansArabic.variable.ttf",
+    "axes": {
+      "wght": 400,
+      "wdth": 100
+    },
+    "installedSha256": "97ad7c9db540d795730cda54885e1e5741a0494ef13681d78a73f8a0fbc60b9f"
+  },
+  "TwemojiMozilla.ttf": {
+    "url": "https://github.com/mozilla/twemoji-colr/releases/download/v0.7.0/Twemoji.Mozilla.ttf",
+    "sha256": "6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e",
+    "installedSha256": "6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e"
+  },
+  "TwemojiMozilla-LICENSE.md": {
+    "url": "https://raw.githubusercontent.com/mozilla/twemoji-colr/master/LICENSE.md",
+    "sha256": "64419edc28e9163204c3be73f835a8dfc34cd6c9b8f7d067bb685f119f839a99"
+  }
+}

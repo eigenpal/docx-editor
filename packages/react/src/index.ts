@@ -498,3 +498,10 @@ export {
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
 
 export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorExportDialog,
+  type DocxEditorExportDialogProps,
+} from './editor/DocxEditorExportDialog';

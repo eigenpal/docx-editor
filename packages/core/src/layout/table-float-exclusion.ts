@@ -1,7 +1,7 @@
 // Floating tables use the same scanline geometry and convergence keys as anchored drawings.
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
-import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
+import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
 import { positionedTablesByAnchor, type PositionedTableAnchor } from './table-float-position.ts';
 import {
   createTableBorderOwnershipBudget,
@@ -10,7 +10,8 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
-import { readTableStructure, tableFloatOriginX, type TableAnchorFrames } from './semantic-table.ts';
+import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
+import { positionedTableOriginX } from './table-origin.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -37,6 +38,41 @@ export function hasFloatingTables(
   });
 }
 
+/**
+ * How far a floating table's own outer rules reach past its grid, per side.
+ *
+ * Word clears text beside a floating table at the grid edge PLUS the table's authored outer
+ * border width PLUS `w:leftFromText`/`w:rightFromText`. The fragment box IS the grid
+ * (`columnEdges` run from 0 to `box.width`), so the rule adds a term rather than replacing
+ * one, and a table with no authored outer rule adds nothing.
+ *
+ * Captured against a six-case control over an 8x range of border width: the term is the
+ * FULL authored width, not the half a collapsed grid line paints on this side.
+ */
+function outerRuleWidths(fragment: TableFragmentRecord): {
+  readonly left: number;
+  readonly right: number;
+} {
+  const columnCount = Math.max(0, fragment.columnEdges.length - 1);
+  let left = 0;
+  let right = 0;
+  for (const row of fragment.rows) {
+    for (const cell of row.cells) {
+      const borders = cell.borders;
+      if (!borders) continue;
+      const first = cell.gridColumn <= 0;
+      const last = cell.gridColumn + cell.gridSpan >= columnCount;
+      if (first) left = Math.max(left, borders.left?.widthPt ?? 0);
+      if (last) right = Math.max(right, borders.right?.widthPt ?? 0);
+      for (const segment of borders.edgeSegments ?? []) {
+        if (first && segment.side === 'left') left = Math.max(left, segment.edge.widthPt);
+        if (last && segment.side === 'right') right = Math.max(right, segment.edge.widthPt);
+      }
+    }
+  }
+  return { left, right };
+}
+
 export function addFloatingTableExclusions(
   pages: readonly PageRecord[],
   drawingZones: ReadonlyMap<number, readonly ExclusionZone[]>,
@@ -49,8 +85,19 @@ export function addFloatingTableExclusions(
       if (block.kind !== 'table') continue;
       const metadata = block.floatingWrap;
       if (!metadata) continue;
-      const box = block.box;
+      const grid = block.box;
       const distances = metadata.float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+      // A zero authored distance is the one case the control leaves unexplained, so the
+      // border term stays off there rather than guessing at Word's minimum separation.
+      const rules = outerRuleWidths(block);
+      const ruleLeft = distances.left > 0 ? rules.left : 0;
+      const ruleRight = distances.right > 0 ? rules.right : 0;
+      const box = {
+        x: grid.x - ruleLeft,
+        y: grid.y,
+        width: grid.width + ruleLeft + ruleRight,
+        height: grid.height,
+      };
       const column = metadata.columnIndex;
       const left = columns.columnLefts?.[column] ?? 0;
       const width = columns.columnWidths?.[column] ?? columns.contentWidth;
@@ -124,7 +171,10 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
   if (structure.float.ySpec) return Infinity;
   const properties = table.children.find((node) => node.kind === 'tableProperties');
+  // No-overlap constrains other tables, not the surrounding paragraph text. Multiple
+  // positioned tables retain row flow until their collision displacement is supported.
   if (
+    deps.isolatedFloatingTableId !== table.id &&
     properties &&
     properties.kind !== 'textValue' &&
     properties.children.some(
@@ -205,7 +255,7 @@ export function clearEarlierText(
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
-  const left = tableFloatOriginX(float, tableWidth, frames) - distances.left;
+  const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier
@@ -246,7 +296,7 @@ const earliestExclusions = new WeakMap<
   TableFlowDeps,
   {
     readonly zones: ReadonlyMap<number, readonly ExclusionZone[]>;
-    readonly order: number;
+    readonly remainingOrders: readonly (readonly [page: number, order: number])[];
   }
 >();
 
@@ -254,28 +304,50 @@ const earliestExclusions = new WeakMap<
 export function hasEarlierCellExclusions(
   table: OoxmlElement,
   zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  firstPage = 0
 ): boolean {
   if (!deps.pageExclusionZones || !zones?.size) return false;
   let memo = earliestExclusions.get(deps);
   if (memo?.zones !== zones) {
-    let order = Infinity;
-    for (const page of zones.values())
+    const remainingOrders: [number, number][] = [];
+    for (const [pageIndex, page] of zones) {
+      let order = Infinity;
       for (const zone of page)
         order = Math.min(
           order,
           deps.paragraphOrderIndex?.(zone.anchorParagraphId) ?? zone.sourceOrder
         );
-    memo = { zones, order };
+      remainingOrders.push([pageIndex, order]);
+    }
+    remainingOrders.sort((a, b) => a[0] - b[0]);
+    for (let index = remainingOrders.length - 2; index >= 0; index--)
+      remainingOrders[index]![1] = Math.min(
+        remainingOrders[index]![1],
+        remainingOrders[index + 1]![1]
+      );
+    memo = { zones, remainingOrders };
     earliestExclusions.set(deps, memo);
   }
+  // Completed pages cannot wrap this table's cells. Retain later-page exclusions
+  // because an inline table can continue there; query the suffix without rescanning
+  // all pages for every table in a long document.
+  let low = 0;
+  let high = memo.remainingOrders.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (memo.remainingOrders[middle]![0] < firstPage) low = middle + 1;
+    else high = middle;
+  }
+  const earliestOrder = memo.remainingOrders[low]?.[1];
+  if (earliestOrder === undefined || earliestOrder === Infinity) return false;
   const pending = [table];
   let visits = 0;
   while (pending.length) {
     const node = pending.pop()!;
     if (++visits > 10000) return true;
     if (node.kind === 'paragraph') {
-      if (memo.order <= (deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER))
+      if (earliestOrder <= (deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER))
         return true;
       continue;
     }

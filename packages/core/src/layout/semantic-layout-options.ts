@@ -189,8 +189,9 @@ export interface SemanticLayoutOptions {
   /** Canonical drawing traversal order within the owner story part. */
   readonly drawingSourceOrder?: ReadonlyMap<string, number>;
   /**
-   * Cross-paragraph TOC field begin/end paragraph ids. Empty chrome on these ids suppresses
-   * the caret placeholder line in layout while the tree nodes stay intact for refresh/save.
+   * TOC instruction-only opening and ending chrome paragraph ids. Empty chrome suppresses
+   * its placeholder line; opening paragraph marks after a separator remain visible result lines.
+   * Tree nodes stay intact for refresh/save.
    */
   readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
   /**

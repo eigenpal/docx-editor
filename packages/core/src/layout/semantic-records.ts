@@ -22,6 +22,7 @@ import type {
 import type { ResolvedTabStops, TabLeader } from './paragraph-tabs.ts';
 import type { FieldAtomMarker, ModelRange } from './field-pieces.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
+import type { ImageResourceState } from '../store/package/image-resources.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { FontSlot } from './script-itemization.ts';
@@ -169,6 +170,8 @@ export interface StyleSpanRecord {
    * ink displacement. Exporters must apply this offset to the ink origin.
    */
   readonly glyphOffsetPt?: number;
+  /** Measured face baseline for character-border geometry; span boxes remain selection bands. */
+  readonly borderBaselinePt?: number;
   readonly range: SourceRange;
   readonly text: string;
   /** The run's authored properties, retained as evidence. */
@@ -273,6 +276,8 @@ export interface StyleSpanRecord {
    * and selection mapping refuses them the way it refuses markers.
    */
   readonly projected?: boolean;
+  /** Authored inline separator rule; its advance belongs to one note atom. */
+  readonly noteSeparator?: 'separator' | 'continuationSeparator';
   /** Paint-ready geometry for one atomic Office Math equation. */
   readonly equation?: EquationSpanRecord;
   /**
@@ -419,6 +424,7 @@ export interface ParagraphFragmentRecord {
   readonly outOfFlow?: true;
   /** Placement and wrapping of one authored text-frame group, in page-content coordinates. */
   readonly positionedFrame?: {
+    readonly dropCapLines?: number;
     readonly anchorId: string;
     readonly columnIndex: number;
     readonly groupId: string;
@@ -585,6 +591,41 @@ export interface ListMarkerRecord {
   readonly numFmt: string;
   /** Resolved counter at this marker's own level; absent for bullets. */
   readonly ordinal?: number;
+  /**
+   * The IMAGE this marker draws instead of {@link ListMarkerRecord.text}, when the resolved
+   * level carries `w:lvlPicBulletId` (§17.9.12) and the referenced `w:numPicBullet` resolved.
+   *
+   * Absent on every ordinary marker, and absent when the picture bullet is missing, external,
+   * malformed or oversized — in which case `text` stands and the marker paints as the level's
+   * `w:lvlText` did before. A sink that cannot draw the resource paints `text` too, which is
+   * why both are published rather than one replacing the other.
+   */
+  readonly picture?: ListMarkerPictureRecord;
+}
+
+/**
+ * The picture a `w:lvlPicBulletId` marker paints, with its geometry already decided.
+ *
+ * Geometry is in the same coordinate space as {@link ListMarkerRecord.box}: paint positions
+ * from `box` and MUST NOT rescale it, neither from the resource's intrinsic pixels nor from
+ * the authored `v:shape` extent, which the marker font size has already scaled. The image
+ * sits with its BOTTOM on the first line's baseline, which is what makes the line tall
+ * enough for it.
+ *
+ * `resource` is the same validated-image projection an inline drawing carries, resolved
+ * through the numbering part's OWN relationships. A `ready` resource is the only one that
+ * can be drawn; every other state is a clean fall back to the marker text.
+ * @public
+ */
+export interface ListMarkerPictureRecord {
+  /** The part whose relationships `relationshipId` belongs to — the numbering part. */
+  readonly ownerPartName: string;
+  /** `v:imagedata/@r:id` of the `w:numPicBullet` shape. */
+  readonly relationshipId: string;
+  /** Where the image paints, authored extent, in the marker's coordinate space. */
+  readonly box: LayoutBox;
+  /** Validated image state, or why there is none. */
+  readonly resource: ImageResourceState;
 }
 
 /**
@@ -797,6 +838,8 @@ export interface NoteAreaRecord {
     readonly synthetic: boolean;
     /** Layout-owned single/double rule when marker-only or synthetic; absent for authored stories. */
     readonly ruleStyle?: 'single' | 'double';
+    /** Resolved marker-run color; null/absent uses automatic black. */
+    readonly ruleColor?: string | null;
   };
   readonly notes: readonly NoteStoryRecord[];
   readonly fallbackReason?: string;
@@ -1018,8 +1061,18 @@ export interface TextMeasurer {
    * Undefined keeps layout on the advance-only path.
    */
   inkBounds?(text: string, style: ResolvedRunStyle): { left: number; right: number } | undefined;
-  /** Line height and baseline for the resolved style. */
-  lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
+  /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
+  hasResolvedFont?(style: ResolvedRunStyle): boolean;
+  /**
+   * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
+   * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
+   * than assuming one face's numbers. Undefined keeps the caller's own default.
+   */
+  strikeoutMetrics?(
+    style: ResolvedRunStyle
+  ): import('./sfnt-strikeout-metrics.ts').StrikeoutStrokePt | undefined;
+  /** Line metrics for the actual text faces; omitted text measures the primary face. */
+  lineMetrics(style: ResolvedRunStyle, text?: string): { height: number; baseline: number };
 }
 
 export {

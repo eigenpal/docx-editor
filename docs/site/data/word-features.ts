@@ -48,7 +48,8 @@ export type FeatureCategory =
   | 'review'
   | 'fields'
   | 'structure'
-  | 'collaboration';
+  | 'collaboration'
+  | 'export';
 
 export interface WordFeature {
   /** Stable key, e.g. 'images.wmf'. Never rename; gating may reference it. */
@@ -65,6 +66,7 @@ export interface WordFeature {
 }
 
 export const FEATURE_CATEGORY_LABELS: Record<FeatureCategory, string> = {
+  export: 'Export',
   text: 'Text & formatting',
   paragraphs: 'Paragraphs & styles',
   lists: 'Lists & numbering',
@@ -78,6 +80,30 @@ export const FEATURE_CATEGORY_LABELS: Record<FeatureCategory, string> = {
 };
 
 export const wordFeatures: WordFeature[] = [
+  {
+    id: 'export.markdown',
+    name: 'Markdown export',
+    category: 'export',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'none',
+    tier: 'community',
+    notes:
+      'File > Export downloads continuous Markdown through docx-to-markdown. Configure menu.exporters.markdown. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Export preserves the source document.',
+    docsLink: '/docs/2.x/guides/export',
+  },
+  {
+    id: 'export.pdf',
+    name: 'PDF export',
+    category: 'export',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'none',
+    tier: 'premium',
+    notes:
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License.',
+    docsLink: '/docs/2.x/guides/export',
+  },
   // --- Text & formatting -----------------------------------------------
   {
     id: 'text.basic-formatting',
@@ -118,7 +144,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Configure font sources with the fonts prop; customFonts() loads your own files under private editor font names. Search standard, configured, and provider fonts in the picker, including in blank documents. Selecting a font loads it without resetting selection or undo history. The editor validates downloaded files and hashes and resolves theme fonts from the document. Word-compatible wrapping requires font bytes. The fonts package supplies six substitutes: the five default families match covered glyph advance widths, while Century Gothic differs by less than 1% in measured samples. Kerning and glyph differences can still change line breaks. packagedFonts() loads requested families and the default face from packaged assets. googleFonts() adds a pinned remote catalog. Compose sources in priority order with useFonts or useDocxSource; later resolvers can skip faces already loaded. Unmatched families keep fallback measurement.',
+      'Configure font sources with the fonts prop; customFonts() loads your own files under private editor font names. Search standard, configured, and provider fonts in the picker, including in blank documents. Selecting a font loads it without resetting selection or undo history. The editor validates downloaded files and hashes and resolves theme fonts from the document. Word-compatible wrapping requires font bytes. The fonts package supplies six substitutes: the five default families match covered glyph advance widths, while Century Gothic differs by less than 1% in measured samples. Kerning and glyph differences can still change line breaks. packagedFonts() loads requested families and the default face from packaged assets. googleFonts() adds a pinned remote catalog. Compose sources in priority order with useFonts or useDocxSource; later resolvers can skip faces already loaded. Unmatched families keep fallback measurement. PDF export reports failed font sources and supports custom fallback sources after embedded fonts.',
     docsLink: '/docs/2.x/guides/fonts',
   },
   {
@@ -367,11 +393,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Picture bullets (numPicBullet)',
     category: 'lists',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Not rendered and not editable. The numPicBullet definition and its markup are preserved on save.',
+      'A numPicBullet marker renders as its image, scaled by the marker run font size, in the editor and in PDF export. The level bullet text renders instead when the image is missing or is a media type the editor does not decode. You cannot choose or change a picture bullet in the editor. The numPicBullet definition and its markup are preserved on save.',
   },
 
   // --- Tables -------------------------------------------------------------
@@ -417,7 +443,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip.',
+      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them.',
   },
   {
     id: 'tables.merge',
@@ -627,7 +653,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. PDF export does not apply these adjustments.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
   },
   {
     id: 'images.effects',
@@ -730,7 +756,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Suggesting mode tracks an inserted reference and requires reference deletion to propose note removal. Notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages, and a note paragraph that splits follows w:widowControl. The w:separator rule takes its thickness and its offset above the baseline from the strikeout metrics of the run font. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Suggesting mode tracks an inserted reference and requires reference deletion to propose note removal. Notes in headers and footers are out of scope.',
     docsLink: '/docs/2.x/guides/footnotes-and-endnotes',
   },
   {
@@ -1079,6 +1105,18 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing; the content remains read-only.',
+  },
+  {
+    id: 'collab.anchor-navigation',
+    name: 'Scroll to an external paragraph reference',
+    category: 'collaboration',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    docsLink: '/docs/2.x/core#scroll-to-an-external-paragraph-reference',
+    notes:
+      'The browser Editor accepts DocAnchor values through scrollToAnchor. Paragraph IDs resolve without internal block IDs. Optional search and occurrence locate text within a paragraph. Scrolling preserves selection, focus, editing scope, content, and undo history. Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes are supported. Repeated headers and footers use their first laid-out occurrence. Text boxes and targets without layout positions return false. Invalid, missing, and ambiguous anchors also return false. React and Vue use the same core method.',
   },
   {
     id: 'collab.clipboard',

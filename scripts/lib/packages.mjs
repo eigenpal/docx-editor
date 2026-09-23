@@ -12,6 +12,30 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
+    name: '@docx-editor.dev/docx-to-pdf',
+    root: 'packages/docx-to-pdf',
+    pkgSlug: 'docx-editor-docx-to-pdf',
+    tsconfigPath: 'packages/docx-to-pdf/tsconfig.api.json',
+    // These nested types belong to Core. Package-owned types must remain exported.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        index: [
+          'FontBackedExportCapabilities',
+          'FontFaceRequest',
+          'FontLoadFailure',
+          'FontOrigin',
+          'FontResolver',
+          'FontSource',
+          'MarkedFontResolver',
+          'OoxmlPackageRejection',
+          'OpenFontBackedDocumentForExportOptions',
+          'OpenFontBackedDocumentForExportResult',
+        ],
+      },
+    },
+  },
+  {
     name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',
@@ -259,6 +283,7 @@ export const PACKAGES = [
           'HeaderFooterSectionResolution',
           'HeadlessThemeFonts',
           'ImageResourceLimits',
+          'ListMarkerPictureRecord',
           'NoteAreaRecord',
           'OoxmlElement',
           'OoxmlPackage',
@@ -274,6 +299,7 @@ export const PACKAGES = [
           'SemanticStoryKind',
           'SemanticStoryVisit',
           'StoryDrawingContext',
+          'StrikeoutStrokePt',
           'SupportedImageMime',
           'TextboxStoryFallbackReason',
           'ValidatedImageBytesHandle',

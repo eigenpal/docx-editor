@@ -59,13 +59,28 @@ const chromeIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 const placeholderIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 const suppressedIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
 
-/** Paragraph ids for TOC field begin/end chrome that must not reserve vertical flow when empty. */
+/** TOC boundary paragraphs whose empty instruction/chrome lines are suppressed. */
 export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string> {
   const cached = chromeIdsByPart.get(part);
   if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
-    ids.add(toc.beginParagraphId);
+    // Word opens the field inside the FIRST ENTRY's paragraph: begin, the instruction and
+    // the separator are followed by that entry's hyperlink in the same `w:p`. Suppressing
+    // that paragraph deletes a real row, which shifted every cached entry upward and moved
+    // the page break.
+    //
+    // So the question is not where the separator sits, it is whether this paragraph carries
+    // any result of its own. One holding only field chrome contributes no row and is
+    // suppressed; one holding an entry is that entry and is kept. `paragraphHasVisibleText`
+    // already ignores `w:instrText` and `w:fldChar`, so it answers exactly that.
+    const begin = findNode(part, toc.beginParagraphId);
+    const beginCarriesResult =
+      begin !== null &&
+      begin.kind !== 'textValue' &&
+      begin.kind === 'paragraph' &&
+      paragraphHasVisibleText(begin);
+    if (!beginCarriesResult) ids.add(toc.beginParagraphId);
     ids.add(toc.endParagraphId);
   }
   chromeIdsByPart.set(part, ids);

@@ -50,6 +50,10 @@ const LICENSE_FILE =
 const NOTICE_FILE = /^notice(?:\.(?:md|txt|rst))?$/i;
 
 const check = process.argv.includes('--check');
+// Explicit selection also supports private, locally distributed exporters.
+const selectedArg = process.argv.find((arg) => arg.startsWith('--package='));
+const selectedPackage = selectedArg?.slice('--package='.length);
+if (selectedArg && !selectedPackage) throw new Error('--package requires a package name');
 const problems = [];
 
 /** Publishable packages, in a stable order. */
@@ -62,7 +66,13 @@ function publishablePackages() {
       const manifestPath = path.join(dir, 'package.json');
       if (!existsSync(manifestPath)) return null;
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-      return manifest.private === true ? null : { dir, entry, manifest };
+      return selectedPackage
+        ? manifest.name === selectedPackage
+          ? { dir, entry, manifest }
+          : null
+        : manifest.private === true
+          ? null
+          : { dir, entry, manifest };
     })
     .filter(Boolean);
 }
@@ -339,6 +349,9 @@ function renderNotices(pkg, dependencies) {
 }
 
 const renders = [];
+if (selectedPackage && publishablePackages().length === 0)
+  throw new Error(`Unknown package: ${selectedPackage}`);
+
 for (const pkg of publishablePackages()) {
   // npm silently packs a tarball without a `files` entry that doesn't exist, so
   // a package that generates a notice but never lists it ships exactly the way

@@ -218,7 +218,7 @@ export function DialogFrame({
   sessionSignal,
   restoreFocus = true,
 }: {
-  kind: 'pageSetup' | 'paragraph' | 'textFormField' | 'invalidTextFormField';
+  kind: 'pageSetup' | 'paragraph' | 'textFormField' | 'invalidTextFormField' | 'export';
   role?: 'dialog' | 'alertdialog';
   className?: string;
   style?: CSSProperties;

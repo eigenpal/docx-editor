@@ -13,7 +13,12 @@ import {
   publishAnchoredDrawingsForParagraph,
   shiftInlineDrawingRecord,
 } from './drawing-layout.ts';
-import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import {
+  borderContentInset,
+  cellContentInsets,
+  type CellContentInsets,
+} from './table-cell-geometry.ts';
+import { effectiveBorderSide } from './table-border-cascade.ts';
 import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
@@ -38,6 +43,7 @@ function republishAnchoredParagraphsInBlocks(
   blocks: readonly BlockFragmentRecord[],
   authoredBlocks: readonly OoxmlElement[],
   cellBox: LayoutBox,
+  cellContentBox: LayoutBox,
   deps: TableFlowDeps
 ): void {
   if (
@@ -67,6 +73,7 @@ function republishAnchoredParagraphsInBlocks(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
         cellBox,
+        cellContentBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
@@ -126,6 +133,16 @@ export function shiftBlocks(
             marker: {
               ...block.marker,
               box: { ...block.marker.box, y: block.marker.box.y + dy },
+              // The picture bullet shares the marker's coordinate space and moves with it, or
+              // a bullet in a bottom-aligned cell paints at the pre-shift origin.
+              ...(block.marker.picture
+                ? {
+                    picture: {
+                      ...block.marker.picture,
+                      box: { ...block.marker.picture.box, y: block.marker.picture.box.y + dy },
+                    },
+                  }
+                : {}),
             },
           }
         : {}),
@@ -199,11 +216,7 @@ export function finalizeTableRows(
       if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
         const insets =
           occurrenceInsets?.get(row)?.get(cell.id) ??
-          contentInsets(
-            authored.margins,
-            authored.borders,
-            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0
-          );
+          cellContentInsets(authored, structure.cellSpacingPt === 0);
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
         let contentBottom = Number.NEGATIVE_INFINITY;
@@ -243,7 +256,21 @@ export function finalizeTableRows(
         anchorDeps &&
         (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
       ) {
-        republishAnchoredParagraphsInBlocks(blocks, authored.blocks, finalizedCellBox, anchorDeps);
+        const insets =
+          occurrenceInsets?.get(row)?.get(cell.id) ??
+          cellContentInsets(authored, structure.cellSpacingPt === 0);
+        const cellContentBox = {
+          ...finalizedCellBox,
+          x: finalizedCellBox.x + insets.left,
+          width: Math.max(1, finalizedCellBox.width - insets.left - insets.right),
+        };
+        republishAnchoredParagraphsInBlocks(
+          blocks,
+          authored.blocks,
+          finalizedCellBox,
+          cellContentBox,
+          anchorDeps
+        );
       }
       return {
         ...cell,
@@ -278,10 +305,35 @@ export function finalizeTableRows(
   const columnCount = structure.columnWidthsPt.length;
   const tableBorders: TableBorderBox = structure.tableBorders;
   const geometry: BorderGridGeometry = {
+    collapsedHorizontal: structure.cellSpacingPt === 0,
     columnWidthsPt: structure.columnWidthsPt,
     rowBands: expanded.map((row) => ({ y: row.box.y, height: row.box.height })),
-    cellBoxes: expanded.map((row) =>
-      row.cells.map((cell) => ({ width: cell.box.width, height: cell.box.height }))
+    cellBoxes: expanded.map((row, rowIndex) =>
+      row.cells.map((cell) => {
+        const authored = authoredById.get(cell.id);
+        const insets =
+          authored &&
+          (occurrenceInsets?.get(rows[rowIndex]!)?.get(cell.id) ??
+            cellContentInsets(authored, structure.cellSpacingPt === 0));
+        // Split/merged occurrences can decline the terminal re-probe. Do not move their
+        // stroke into content until admission has reserved the complete outer inset.
+        const outerBottomInsetReserved =
+          authored && insets
+            ? insets.bottom >=
+              borderContentInset(
+                authored.margins.bottom,
+                effectiveBorderSide(authored.borders.bottom, structure.tableBorders.bottom)
+              ) -
+                0.001
+            : false;
+        return {
+          width: cell.box.width,
+          height: cell.box.height,
+          outerBottomInsetReserved,
+          centeredSideRules: authored?.centeredSideRules === true && structure.cellSpacingPt === 0,
+          centeredSidePaint: authored?.centeredSidePaint === true && structure.cellSpacingPt === 0,
+        };
+      })
     ),
   };
   const resolved = resolveTableCellBorderGrid(

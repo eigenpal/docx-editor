@@ -66,6 +66,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
           COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
           # Always-allowlisted: bots, plus named maintainer handles as a
           # safety net (in case the org-membership lookup fails for any
           # reason — private membership, transient API error, etc.).

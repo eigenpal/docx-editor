@@ -122,8 +122,16 @@ function candidate(
   );
 }
 
+// A captured reference charges a collapsed horizontal band ENTIRELY to the row below it:
+// that row reserves the rule its own top resolves to, at full width, and the row above
+// reserves nothing. Every column's stroke then starts at the shared boundary and runs
+// downward by its own width. Controls: `.cache/pdf/claude-row-clearance/FINDING.md` and
+// `.cache/pdf/claude-band-mixed/`. One boundary carries one content band, so the widest
+// reserve in the receiving row sets it for every cell in that row.
+const bandSplit = (ownTopPt: number) => ({ bottom: 0, top: ownTopPt });
+
 describe('repeated-header shared horizontal border measurement', () => {
-  test('both cells use the winning header edge before row sizing', () => {
+  test('each row reserves its own authored edge across the repeated boundary', () => {
     const part = fixture();
     const before = serializeOoxmlPart(part);
     const result = layout(part);
@@ -131,9 +139,14 @@ describe('repeated-header shared horizontal border measurement', () => {
     for (const fragment of repeated(result)) {
       const header = fragment.rows[0]!;
       const body = fragment.rows[1]!;
-      expect(band(header.cells[0]!).bottom).toBeCloseTo(2, 6);
-      expect(band(body.cells[0]!).top).toBeCloseTo(2, 6);
-      expect(body.box.height).toBeCloseTo(14.5, 6);
+      expect(band(header.cells[0]!).top).toBeCloseTo(0.5, 6);
+      const top = header.cells[0]!.borders.strokes!.find((stroke) => stroke.side === 'top')!;
+      expect(top.y).toBe(0);
+      // Header bottom 2pt over a body top of 0.5pt: the body reserves its own 0.5, all of
+      // which the boundary offset already holds, so its own inset is zero.
+      expect(band(header.cells[0]!).bottom).toBeCloseTo(bandSplit(0.5).bottom, 6);
+      expect(band(body.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+      expect(body.box.height).toBeCloseTo(12 + bandSplit(0.5).top + bandSplit(0.5).bottom, 6);
     }
     expect(
       fragments(result).flatMap((fragment) =>
@@ -143,12 +156,12 @@ describe('repeated-header shared horizontal border measurement', () => {
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 
-  test('a winning body edge also grows the preceding repeated header', () => {
+  test('a winning body edge is charged to the body row alone', () => {
     const result = layout(fixture({ headerBottom: 0.5, bodyTop: 2 }));
     for (const fragment of repeated(result)) {
-      expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(2, 6);
-      expect(fragment.rows[0]!.box.height).toBeCloseTo(14.5, 6);
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(2, 6);
+      expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(2).bottom, 6);
+      expect(fragment.rows[0]!.box.height).toBeCloseTo(12.5, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(2).top, 6);
     }
   });
 
@@ -164,11 +177,19 @@ describe('repeated-header shared horizontal border measurement', () => {
         ).join('');
         for (const fragment of repeated(layout(fixture({ body })))) {
           const target = fragment.rows[1]!.cells[0]!;
-          const spare = rule === 'auto' ? 0 : 25 - 12 - 2 - 0.5;
+          const incoming = bandSplit(0.5).top;
+          const outgoing = bandSplit(0.5).bottom;
+          const rowHeight =
+            rule === 'auto'
+              ? 12 + incoming + outgoing
+              : rule === 'atLeast'
+                ? 25 + incoming + outgoing
+                : 25;
+          const spare = rowHeight - 12 - incoming - outgoing;
           const offset = align === 'center' ? spare / 2 : align === 'bottom' ? spare : 0;
-          expect(target.box.height).toBeCloseTo(rule === 'auto' ? 14.5 : 25, 6);
-          expect(band(target).top).toBeCloseTo(2 + offset, 6);
-          expect(band(target).bottom).toBeCloseTo(0.5 + spare - offset, 6);
+          expect(target.box.height).toBeCloseTo(rowHeight, 6);
+          expect(band(target).top).toBeCloseTo(incoming + offset, 6);
+          expect(band(target).bottom).toBeCloseTo(outgoing + spare - offset, 6);
         }
       });
     }
@@ -181,17 +202,19 @@ describe('repeated-header shared horizontal border measurement', () => {
     }
   });
 
-  test('one spanning body cell uses the maximum of its own shared intervals', () => {
+  test('one spanning body cell reserves its own top rule across every shared interval', () => {
     const header = row(cell('H0', 0.5, 2) + cell('H1', 0.5, 0.5), '<w:tblHeader/>');
     const body = Array.from({ length: 18 }, (_, index) =>
       row(cell(`B${index}`, 0.5, 0.5, '<w:gridSpan w:val="2"/>'))
     ).join('');
     for (const fragment of repeated(layout(fixture({ header, body, columns: 2 })))) {
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(2, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
     }
   });
 
   test('the shared winner follows table fallback and explicit nil provenance', () => {
+    // An omitted body top inherits the rule the grid resolves for it, the cell's own `nil`
+    // above suppresses the band, and an authored body top reserves its own width.
     for (const [headerBottom, bodyTop, expected] of [
       ['omit', 'omit', 2],
       ['nil', 'omit', 0],
@@ -205,8 +228,8 @@ describe('repeated-header shared horizontal border measurement', () => {
         })
       );
       for (const fragment of repeated(result)) {
-        expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(expected, 6);
-        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(expected, 6);
+        expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(expected).bottom, 6);
+        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(expected).top, 6);
       }
     }
   });
@@ -231,9 +254,10 @@ describe('repeated-header shared horizontal border measurement', () => {
           .flatMap((line) => line.spans)
           .map((span) => span.text)
           .join('');
-        const expected = Math.max(1, Number(text.slice(1)) % 2 === 0 ? top : 2);
-        expect(band(target).top).toBeCloseTo(expected, 6);
-        expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(expected, 6);
+        const own = Number(text.slice(1)) % 2 === 0 ? top : 2;
+        const split = bandSplit(own);
+        expect(band(target).top).toBeCloseTo(split.top, 6);
+        expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(split.bottom, 6);
       }
     }
   });
@@ -243,7 +267,9 @@ describe('repeated-header shared horizontal border measurement', () => {
     [0.5, 2],
   ]) {
     test(`joint preflight omits a repeat when ${headerBottom}/${bodyTop} leaves no complete body room`, () => {
-      const result = layout(fixture({ headerBottom, bodyTop }), 48);
+      // 44 less two 10pt margins leaves 24pt, under the 25pt a repeat plus one complete body
+      // row now needs. The old half-model needed 26.75pt and fitted in the 26 this had.
+      const result = layout(fixture({ headerBottom, bodyTop }), 44);
       expect(fragments(result).length).toBeGreaterThan(1);
       expect(repeated(result)).toHaveLength(0);
       for (const fragment of fragments(result).slice(1)) {
@@ -258,9 +284,9 @@ describe('repeated-header shared horizontal border measurement', () => {
       row(cell('H0', 0.5, 0.5), '<w:tblHeader/>') + row(cell('H1', 0.5, 2), '<w:tblHeader/>');
     for (const fragment of repeated(layout(fixture({ header })))) {
       expect(fragment.rows[1]!.isHeaderRepeat).toBe(true);
-      expect(fragment.rows[0]!.box.height).toBeCloseTo(13, 6);
-      expect(band(fragment.rows[1]!.cells[0]!).bottom).toBeCloseTo(2, 6);
-      expect(band(fragment.rows[2]!.cells[0]!).top).toBeCloseTo(2, 6);
+      expect(fragment.rows[0]!.box.height).toBeCloseTo(12 + bandSplit(0.5).top, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).bottom).toBeCloseTo(bandSplit(0.5).bottom, 6);
+      expect(band(fragment.rows[2]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
     }
   });
 
@@ -277,8 +303,9 @@ describe('repeated-header shared horizontal border measurement', () => {
       for (const fragment of repeated(
         layout(fixture({ header, body, columns: 3, tableProperties }))
       )) {
-        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(1, 6);
-        expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(6, 6);
+        // Every body cell authors the same 0.5pt top, so the 6pt column enlarges neither.
+        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+        expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
       }
     }
   );
@@ -292,10 +319,9 @@ describe('repeated-header shared horizontal border measurement', () => {
       for (const fragment of repeated(layout(fixture({ header, bodyTop: 2 })))) {
         const target = fragment.rows[0]!.cells[0]!;
         expect(target.box.height).toBe(25);
-        expect(band(target).bottom).toBeCloseTo(
-          align === 'center' ? 2 + (25 - 12 - 2 - 0.5) / 2 : 2,
-          6
-        );
+        // The body's 2pt top is charged to the body row, so the header keeps only its own
+        // `w:vAlign` slack over a zero band.
+        expect(band(target).bottom).toBeCloseTo(align === 'center' ? (25 - 12 - 0.5) / 2 : 0, 6);
       }
     });
   }
@@ -323,8 +349,15 @@ describe('repeated-header shared horizontal border measurement', () => {
       const warm = layoutSemanticDocument(part, version, { geometry, measurer, cache, session });
       const cold = layoutSemanticDocument(part, version, { geometry, measurer });
       expect(JSON.parse(JSON.stringify(warm))).toEqual(JSON.parse(JSON.stringify(cold)));
-      for (const fragment of repeated(warm))
-        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(part === original ? 2 : 4, 6);
+      // Widening the header's own bottom rule changes what it PAINTS. It cannot change what
+      // the body row reserves, which is the body row's own top rule.
+      for (const fragment of repeated(warm)) {
+        expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+        const rule = fragment.rows[0]!.cells[0]!.borders.strokes!.find(
+          (stroke) => stroke.side === 'bottom'
+        )!;
+        expect(rule.height).toBeCloseTo(part === original ? 2 : 4, 6);
+      }
     }
   });
 
@@ -334,7 +367,7 @@ describe('repeated-header shared horizontal border measurement', () => {
     const part = fixture({ header: row(cell('H', 0.5, 2, '', field), '<w:tblHeader/>') });
     const before = serializeOoxmlPart(part);
     for (const fragment of repeated(layout(part)))
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(2, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
     expect(serializeOoxmlPart(part)).toBe(before);
     const reparsed = readOoxmlPart(before, { name: part.name, contentType: part.contentType });
     expect(reparsed.ok).toBe(true);
@@ -364,17 +397,27 @@ describe('repeated-header shared horizontal border measurement', () => {
       borderOwnershipBudget: budget,
       vMergeResolveBudget: merges,
     };
-    const { structure } = structureOf(fixture());
+    // A body row that AUTHORS its own top reserves the same band beside a repeat as beside
+    // its authored neighbour, and the plan then declines outright. This candidate has to
+    // differ from the ordinary boundary before admission can reject it, so its body top is
+    // omitted and inherits a 0.5pt `insideH` against the header's 6pt rule.
+    const { structure } = structureOf(
+      fixture({
+        headerBottom: 6,
+        bodyTop: 'omit',
+        tableProperties: '<w:tblBorders><w:insideH w:val="single" w:sz="4"/></w:tblBorders>',
+      })
+    );
     expect(
       prepareRepeatedHeaderBorderPlan(
         structure,
         [structure.rows[0]!],
-        structure.rows[1]!,
+        structure.rows[2]!,
         0,
         0,
-        28,
-        14.5,
-        13,
+        26,
+        12.5,
+        18,
         deps
       )
     ).toBeNull();
@@ -445,7 +488,7 @@ describe('repeated-header shared horizontal border measurement', () => {
     const result = layout(fixture({ bodyProperties: '' }));
     expect(repeated(result).length).toBeGreaterThan(0);
     for (const fragment of repeated(result)) {
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(2, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
       expect(fragment.rows[1]!.isContinuation).toBeUndefined();
     }
   });
@@ -458,9 +501,11 @@ describe('repeated-header shared horizontal border measurement', () => {
     const result = layout(fixture({ header, body, columns: 2 }));
     expect(repeated(result).length).toBeGreaterThan(0);
     for (const fragment of repeated(result)) {
-      expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(3, 6);
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(1, 6);
-      expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(3, 6);
+      // One boundary carries one content band, so the row's widest reserve sets it for both
+      // columns: the captured `m3` and `m6` cases charge a row by its single 4pt column.
+      expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(3).bottom, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(3).top, 6);
+      expect(band(fragment.rows[1]!.cells[1]!).top).toBeCloseTo(bandSplit(3).top, 6);
     }
   });
 
@@ -474,7 +519,7 @@ describe('repeated-header shared horizontal border measurement', () => {
     expect(tables[1]!.rows[0]!.isHeaderRepeat).toBe(false);
     expect(band(tables[1]!.rows[0]!.cells[0]!).top).toBeCloseTo(0.5, 6);
     expect(tables[2]!.rows[0]!.isHeaderRepeat).toBe(true);
-    expect(band(tables[2]!.rows[1]!.cells[0]!).top).toBeCloseTo(2, 6);
+    expect(band(tables[2]!.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
   });
 
   test('bounded candidate inspection rejects large, deep, sparse and foreign markup', () => {
@@ -504,16 +549,16 @@ describe('repeated-header shared horizontal border measurement', () => {
     ).toBeUndefined();
   });
 
-  test('first authored headers and tables without headers keep their existing insets', () => {
+  test('first authored headers reserve the same band as a repeat', () => {
     const original = fragments(layout(fixture()))[0]!;
     expect(original.rows[0]!.isHeaderRepeat).toBe(false);
-    expect(band(original.rows[1]!.cells[0]!).top).toBeCloseTo(0.5, 6);
+    expect(band(original.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
     for (const fragment of fragments(layout(fixture({ header: '' })))) {
       expect(band(fragment.rows[0]!.cells[0]!).top).toBeCloseTo(0.5, 6);
     }
   });
 
-  test('split body fragments keep their authored text and existing boundary path', () => {
+  test('split body fragments retain text and clear the repeated header rule', () => {
     const body = row(
       cell(
         'long',
@@ -527,7 +572,7 @@ describe('repeated-header shared horizontal border measurement', () => {
     const result = layout(fixture({ body }));
     expect(repeated(result).length).toBeGreaterThan(0);
     for (const fragment of repeated(result))
-      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(0.5, 6);
+      expect(band(fragment.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
     const text = fragments(result)
       .flatMap((fragment) => fragment.rows.filter((item) => !item.isHeaderRow))
       .flatMap((item) => item.cells)
@@ -537,4 +582,22 @@ describe('repeated-header shared horizontal border measurement', () => {
       .map((span) => span.text);
     expect(text).toEqual(Array.from({ length: 20 }, (_, index) => `L${index}`));
   });
+});
+
+test('repeated double header border reserves its receiving band only once', () => {
+  const header = row(
+    cell('H', 0.5, 0.75).replace('<w:bottom w:val="single"', '<w:bottom w:val="double"'),
+    '<w:tblHeader/>'
+  );
+  const result = layout(fixture({ header }));
+  expect(repeated(result).length).toBeGreaterThan(0);
+  for (const fragment of repeated(result)) {
+    const previous = fragment.rows[0]!.cells[0]!;
+    const body = fragment.rows[1]!.cells[0]!;
+    const rules = previous.borders.strokes!.filter((stroke) => stroke.side === 'bottom');
+    expect(rules).toHaveLength(2);
+    const bottom = previous.box.y + Math.max(...rules.map((stroke) => stroke.y + stroke.height));
+    expect(body.blocks[0]!.box.y).toBeCloseTo(bottom, 6);
+    expect(band(body).top).toBe(0.75);
+  }
 });
