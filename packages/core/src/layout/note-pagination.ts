@@ -91,6 +91,7 @@ import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts
 import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { finalizePageFieldProjection } from './field-projection.ts';
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
+import { resettleParitySheets } from './page-parity-sheet.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   type RevisionAuthorFilter,
@@ -954,7 +955,7 @@ function footnoteReservedTop(page: PageRecord): number {
  * body fragments are empty and look like unused column space.
  */
 export function isEndnoteHostEligible(page: PageRecord): boolean {
-  if (page.noteStream === 'footnote-drain') return false;
+  if (page.noteStream === 'footnote-drain' || page.parityBlank) return false;
   // Untagged safety net: empty body + footnote stories is a drain/continuation sheet.
   if (page.fragments.length === 0 && (page.footnotes?.notes.length ?? 0) > 0) return false;
   return true;
@@ -1579,6 +1580,8 @@ function sectionEndInsertBound(
   const last = lastPageIndexForSection(pages, sectionIndex, paragraphSectionIndex);
   for (let i = last + 1; i < pages.length; i += 1) {
     const page = pages[i]!;
+    // A blank parity sheet opens the next section: section-end notes stay in front of it.
+    if (page.parityBlank) return i;
     // Footnote drain / endnote overflow sheets still belong to the preceding note stream.
     if (page.noteStream === 'footnote-drain' || page.noteStream === 'endnote-overflow') {
       continue;
@@ -1922,10 +1925,15 @@ function patchSectionFieldSources(
   const next = [...pages];
   for (let i = start; i < end; i += 1) {
     const page = next[i]!;
+    // A body sheet keeps the number layout gave it: a continuous section's first sheet is a
+    // host that carries an earlier section's number. Inserted sheets count on from the sheet
+    // in front of them.
+    const own = page.noteStream === undefined ? page.pageFieldSource?.pageNumber : undefined;
+    const previous = i > start ? next[i - 1]!.pageFieldSource?.pageNumber : undefined;
     next[i] = {
       ...page,
       pageFieldSource: {
-        pageNumber: displayedStart + (i - start),
+        pageNumber: own ?? (previous !== undefined ? previous + 1 : displayedStart + (i - start)),
         sectionPageCount: count,
         ...(format ? { format } : {}),
       },
@@ -2159,6 +2167,8 @@ function computeFootnoteReservesWithPolicy(
 
   for (let pageAt = 0; pageAt < layout.pages.length; pageAt += 1) {
     const page = layout.pages[pageAt]!;
+    // A blank parity sheet holds no notes; a continuation carries on past it.
+    if (page.parityBlank) continue;
     // Strip any prior note-pass output so reserve height is body-only.
     const bodyPage = bodyOnlyPage(page);
     const pageRefs = filterRefsOnPage(bodyPage, allRefs, refIndex);
@@ -2171,7 +2181,7 @@ function computeFootnoteReservesWithPolicy(
     // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
     const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
-    const nextPage = layout.pages[pageAt + 1];
+    const nextPage = layout.pages[pageAt + (layout.pages[pageAt + 1]?.parityBlank ? 2 : 1)];
     const usedReservePt = previousReserves ? (previousReserves.get(page.index) ?? 0) : undefined;
     // The reserve ceiling: the note column beside the minimum body band.
     const maxArea = noteColumnBudgetPt(bodyPage.contentBox.height, 0);
@@ -2370,6 +2380,7 @@ export function attachNotesToLayout(
   const endnotesDoc: PageRefHit[] = [];
 
   let pages: PageRecord[] = layout.pages.map((page) => {
+    if (page.parityBlank) return page;
     const pageRefs = filterRefsOnPage(page, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     const enRefs = pageRefs.filter((r) => r.noteKind === 'endnote');
@@ -2544,6 +2555,8 @@ export function attachNotesToLayout(
   }
 
   if (pages.length !== pageCountBeforeOverflow) {
+    // Inserted sheets move the sections after them: decide their parity sheets again first.
+    pages = [...resettleParitySheets(pages, layout)];
     // Every insertion is done, so a minted sheet's array position is the page index it keeps.
     pages = resettleMintedSheets(pages, layout);
     pages = reindexAndFinalizeFields(pages, layout.revision);

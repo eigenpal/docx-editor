@@ -192,6 +192,7 @@ const PAGE_RECORD_FIELD_ROLES = {
   footnotes: 'story',
   endnotes: 'story',
   noteStream: 'metadata',
+  parityBlank: 'metadata',
   pageFieldSource: 'metadata',
   hasBodyPageFields: 'metadata',
   contentControls: 'metadata',

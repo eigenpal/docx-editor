@@ -498,6 +498,8 @@ export function findEmptyFurnitureBandAtSheetPoint(
   pageOffsetX: (pageIndex: number) => number
 ): { pageIndex: number; kind: 'header' | 'footer' } | null {
   for (const page of layout.pages) {
+    // A blank parity sheet belongs to no section, so it has no header or footer to create.
+    if (page.parityBlank) continue;
     const ox = pageOffsetX(page.index);
     for (const kind of ['header', 'footer'] as const) {
       if (page[kind]) continue;

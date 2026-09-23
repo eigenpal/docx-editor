@@ -88,6 +88,12 @@ export interface SemanticLayoutOptions {
    * OOXML inheritance). `furniture` remains the single-section / last-section fallback.
    */
   readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
+  /**
+   * `w:evenAndOddHeaders` from settings.xml. A section that restarts its page numbering then
+   * starts on a sheet whose position has the parity of the restarted number. When absent,
+   * layout reads the flag from the section furniture.
+   */
+  readonly evenAndOddHeaders?: boolean;
   /** Authored column count/gap for anchored `relativeFrom="column"` frame resolution. */
   readonly sectionColumns?: SectionColumns;
   /** Section grid pitch used for line-unit paragraph margins. */

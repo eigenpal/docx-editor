@@ -78,9 +78,8 @@ export type {
 /**
  * Where the section after an inserted break begins — Word's Layout > Breaks menu.
  *
- * The two the engine paginates. `evenPage` / `oddPage` are readable in a file but not
- * offered here, because layout does not skip the blank sheet they need yet, and a menu
- * entry that silently behaves like `nextPage` is the lie this vocabulary exists to avoid.
+ * `evenPage` / `oddPage` sections from a file paginate with their blank parity sheet, but
+ * inserting one is not offered here.
  *
  * @public
  */

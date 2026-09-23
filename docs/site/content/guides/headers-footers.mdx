@@ -46,7 +46,7 @@ The OOXML model attaches header and footer references to sections, and the edito
 
 - Each section can reference `default`, `first`, and `even` header and footer parts (`w:headerReference` / `w:footerReference`).
 - **Different first page** (`w:titlePg`) shows the `first` variant on a section's first page. Typical use: no header on a title page.
-- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants, as in book-style layouts.
+- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants, as in book-style layouts. If a section restarts its page numbering and the next sheet has the other parity, an empty sheet with no header or footer comes first.
 - Sections without their own references inherit from earlier sections, matching Word's "link to previous" behavior.
 - A page whose variant has no reference shows no header or footer, and its body starts at the page margin. A title page in a section that references only a `default` header is the common case.
 

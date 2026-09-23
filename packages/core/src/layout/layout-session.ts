@@ -77,6 +77,8 @@ export interface SectionStackSpan {
    * section just returned.
    */
   readonly sourcePages: readonly PageRecord[];
+  /** The blank parity sheet published in front of the section, kept for identity reuse. */
+  readonly paritySheet?: PageRecord;
 }
 
 /** Orchestrator state for multi-section incremental layout. */

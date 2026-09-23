@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Odd-page and even-page sections, and restarted numbering under different odd and even pages, start on the next sheet without a parity sheet.",
+  "after": "Layout inserts one empty parity sheet before such a section when the next sheet has the wrong parity, and decides again after note sheets are inserted. Body layout, the notes pass and the parity resettle use one running page number: continuous sections continue it from their host sheet, restarts set it, and inserted note sheets move only the unrestarted numbers after them. A press on the empty sheet resolves to the sheet boundary. NUMPAGES counts the parity sheet; SECTIONPAGES does not. A w:evenAndOddHeaders value of off is read as off.",
+  "reason": "The parity sheet is derived from layout on every pass. It never enters shared state, operations, snapshots, or protocol messages, and field updates still write ordinary field results through existing operations.",
+  "tests": [
+    "packages/core/src/editor/__tests__/page-parity-sheets-editing.test.ts",
+    "packages/core/src/export/__tests__/page-parity-export.test.ts",
+    "packages/core/src/layout/__tests__/page-parity-sheets.test.ts"
+  ],
+  "changeset": "section-page-parity-sheets",
+  "migration": null
+}

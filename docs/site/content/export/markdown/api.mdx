@@ -76,7 +76,7 @@ The following response excerpt shows a one-page agreement. IDs and the layout re
 
 DOCX stores content and formatting; physical page boundaries depend on layout. Saved `w:lastRenderedPageBreak` markers describe a previous application's pagination, rather than calculating it for the current document view. See Microsoft's [page-break definition](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.lastrenderedpagebreak?view=openxml-3.0.1).
 
-The exporter calculates pages with its layout engine. `page.number` is a one-based physical position, not a printed page label, which can restart in a section or use Roman numerals. `page.id` is valid within this result. Page Markdown includes local note definitions or labeled continuations; use `result.markdown` when you need split paragraphs and tables joined into continuous content.
+The exporter calculates pages with its layout engine. `page.number` is a one-based physical position, not a printed page label, which can restart in a section or use Roman numerals. An empty sheet that gives a section its odd or even page parity is a page with empty Markdown. `page.id` is valid within this result. Page Markdown includes local note definitions or labeled continuations; use `result.markdown` when you need split paragraphs and tables joined into continuous content.
 
 Store your source identifier, document version or hash, and an application-owned export ID with page citations. Retain the result, package versions, font configuration, and `displayMode` under that export ID. `pagination.layoutRevision` is a Core revision, not your file or package version.
 

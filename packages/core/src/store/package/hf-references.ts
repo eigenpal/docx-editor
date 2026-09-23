@@ -21,6 +21,7 @@ import type { OoxmlPart } from './ooxml-tree.ts';
 import { walkStoryBlocks } from './content-control-walk.ts';
 import { readOnOffChild } from './ooxml-shared.ts';
 import { resolveRelationship, type RelationshipRecord } from './relationships.ts';
+import { isSettingsElement, settingsOnOff } from './settings-onoff.ts';
 
 const HEADER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
@@ -417,11 +418,7 @@ function readEvenAndOddHeaders(
   const resolved = resolveRelationship(settingsRel);
   if (resolved.mode !== 'Internal' || !resolved.target.ok) return false;
   const settings = pkg.parts.get(resolved.target.partName);
-  if (!settings) return false;
-  for (const child of elementChildren(settings.root)) {
-    if (child.kind === 'textValue' || child.localName !== 'evenAndOddHeaders') continue;
-    const value = attributeValue(child, 'val');
-    return value !== '0' && value !== 'false';
-  }
-  return false;
+  if (!settings || !isSettingsElement(settings.root)) return false;
+  // ST_OnOff: `0`, `false` and `off` all turn it off, and it also adds blank parity sheets.
+  return settingsOnOff(settings.root, 'evenAndOddHeaders');
 }

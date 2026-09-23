@@ -358,6 +358,20 @@ export function hitTestPage(
   if (behindHit) return { ...behindHit, contentControlId };
   if (textHit) return { ...textHit, contentControlId };
 
+  // A blank parity sheet shares no geometry with its neighbours: the upper half lands at the
+  // end of the text before it, the lower half at the start of the text after it.
+  if (page.parityBlank) {
+    const step = point.y + page.contentBox.y - page.box.y < page.box.height / 2 ? -1 : 1;
+    for (let index = pageIndex + step; layout.pages[index]; index += step) {
+      const other = layout.pages[index]!;
+      const { width, height } = step < 0 ? other.contentBox : { width: 0, height: 0 };
+      const at = { ...context, pageIndex: other.index };
+      const edge = resolveBlocks(other.fragments, { x: width, y: height }, at, null);
+      const found = bottomToTopHit(layout, edge);
+      if (found) return { ...found, contentControlId: null };
+    }
+  }
+
   // This page paints no reachable text — a run of vertical-merge continuations whose origin
   // is pages back, or a table fragment carrying nothing at all. A press still has to land
   // somewhere, so walk outward to the nearest page that does hold text. Only ever reached on

@@ -1,3 +1,4 @@
+import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
 import {
   bidiDirectionOfStop,
@@ -833,11 +834,11 @@ export function moveCaret(
       return { position: stops[stops.length - 1]!.position, desiredX: null };
     case 'pageUp':
     case 'pageDown': {
-      // A page IS a unit here — the layout knows which sheet every caret stop is on — so
-      // this moves one sheet rather than guessing a line count. Word keeps the column
-      // position across the jump, like an arrow key does.
+      // A page IS a unit here: this moves to the next sheet with text rather than guessing a
+      // line count, and keeps the column position across the jump, like an arrow key does.
       const targetX = desiredX ?? current.x;
-      const targetPage = current.pageIndex + (command === 'pageUp' ? -1 : 1);
+      const step = command === 'pageUp' ? -1 : 1;
+      const targetPage = nearestPageWithStops(stops, current.pageIndex, step);
       const onTarget = stops.filter((stop) => stop.pageIndex === targetPage);
       if (onTarget.length === 0) {
         // Off the first or last sheet: the document edge, which is what every editor does

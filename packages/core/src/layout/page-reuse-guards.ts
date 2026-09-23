@@ -87,6 +87,8 @@ export const PAGE_REUSE_GUARDS = {
   footnotes: 'rebuilt',
   endnotes: 'rebuilt',
   noteStream: 'rebuilt',
+  // Minted by the multi-section loop from the section-start parity it re-derives every pass.
+  parityBlank: 'rebuilt',
   // Every reuse path revalidates the stamped numbering before returning a prior record: the
   // publish memo keys on (pageNumber, sectionPageCount, format), and the span-identity branch
   // checks the same values against its first page — so a PAGE or SECTIONPAGES move always

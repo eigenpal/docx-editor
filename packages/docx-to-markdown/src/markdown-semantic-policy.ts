@@ -315,6 +315,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     footnotes: 'represented',
     endnotes: 'represented',
     noteStream: 'layout-only',
+    parityBlank: 'layout-only',
     pageFieldSource: 'layout-only',
     hasBodyPageFields: 'layout-only',
     contentControls: 'explicitly-omitted',

@@ -35,6 +35,12 @@ import {
   type PageContentInsets,
 } from './page-furniture-insets.ts';
 import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
+import {
+  paritySheetAt,
+  registerParityPlan,
+  sectionNeedsParitySheet,
+  type SectionSheetStart,
+} from './page-parity-sheet.ts';
 
 type MultiSectionLayoutFieldRole = 'constructed' | 'post-processed';
 
@@ -216,9 +222,10 @@ function ensureMultiState(
 /**
  * Whether an empty section still needs its own sheet.
  *
- * Default/`nextPage` (and deferred-parity `evenPage`/`oddPage`) start on a new page even with
- * no body blocks — Word keeps that blank sheet for geometry and furniture. `continuous`
- * shares the previous sheet, so an empty continuous section must not manufacture a page.
+ * Default/`nextPage`/`evenPage`/`oddPage` start on a new page even with no body blocks: that
+ * sheet carries the section's geometry and furniture, after any parity sheet in front of it.
+ * `continuous` shares the previous sheet, so an empty continuous section must not manufacture
+ * a page.
  */
 export function emptySectionNeedsBlankPage(
   breakType: DocumentSection['properties']['breakType']
@@ -362,7 +369,8 @@ function publishSectionPage(
  * `w:type` on a section (default `nextPage`) controls whether that section starts on a new
  * sheet relative to the previous one. Continuous sections keep flowing on the current sheet
  * only when the previous section left no open page — after a normal flush they still start
- * cleanly. Odd/even page types currently behave like nextPage (blank-page skipping deferred).
+ * cleanly. A section that needs a page parity gets one blank sheet in front of it first
+ * (`page-parity-sheet.ts`).
  *
  * An empty final section is still laid out when its break type requires a new sheet: that
  * materializes the blank page Word keeps for the section's geometry and furniture.
@@ -408,17 +416,51 @@ export function layoutMultiSectionDocument(
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
-  /** Next displayed PAGE value if the following section does not author `w:start`. */
+  /**
+   * The running displayed number: the PAGE value the next new sheet gets when its section
+   * does not author `w:start`. A continuous section shares its host sheet, so this can move
+   * past the host's own stamped number (a restart that ends on the shared sheet). The parity
+   * rule and the notes-pass resettle read this value, never a stamp.
+   */
   let nextDisplayed = 1;
+  /** Each section's first own sheet, for the notes pass to decide parity again. */
+  const sheetStarts: SectionSheetStart[] = [];
+  /** The running number after a sheet, where it is not that sheet's stamped number + 1. */
+  const runningAfter = new Map<number, number>();
+  // A settings.xml flag. Without the document value, every section's furniture carries it.
+  const evenAndOddHeaders =
+    options.evenAndOddHeaders ??
+    sections.some(
+      (_, index) => furnitureForSection(options, index, sections.length)?.evenAndOddHeaders === true
+    );
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     const slice = blocks.slice(section.blockStart, section.blockEndExclusive);
     const geometry = geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, sectionIndex, sections.length);
+    const prevSpan = multi?.spans[sectionIndex];
+
+    const restart = section.properties.pageNumbering?.start;
+    const runningBefore = nextDisplayed;
+    const paritySheet = sectionNeedsParitySheet({
+      breakType: section.properties.breakType,
+      restart,
+      nextDisplayed,
+      sheetIndex: pages.length,
+      evenAndOddHeaders,
+    })
+      ? paritySheetAt(pages.length, sheetY, geometry, prevSpan?.paritySheet)
+      : undefined;
+    if (paritySheet) {
+      pages.push(paritySheet);
+      remappedAll.push(paritySheet);
+      sheetY = paritySheet.box.y + paritySheet.box.height + SHEET_GUTTER_PT;
+      // An unrestarted number counts the blank sheet, which is how it reaches the parity.
+      if (restart === undefined) nextDisplayed += 1;
+    }
     const startIndex = pages.length;
     const startSheetY = sheetY;
-    const prevSpan = multi?.spans[sectionIndex];
 
     const furnitureKey = furnitureGeometryFingerprint(furniture);
 
@@ -597,15 +639,19 @@ export function layoutMultiSectionDocument(
         built.push(next);
         sheetY = next.box.y + next.box.height + SHEET_GUTTER_PT;
       }
-      // Local page 0 lived on the host; overflow pages start at displayedStart + 1.
+      // Local page 0 lived on the host. Its running number is the restart, or the running
+      // number of the host sheet, which is one before the next new sheet's. The host's stamp
+      // is not used: an earlier restarted continuous section can have moved the running
+      // number past it. Overflow pages count on from the host's running number.
       // SECTIONPAGES counts the host contribution plus overflow sheets.
+      const hostNumber = numbering?.start ?? nextDisplayed - 1;
       const sectionPageCount = built.length + 1;
-      remapped = withPageFieldSources(built, displayedStart + 1, sectionPageCount, format);
+      remapped = withPageFieldSources(built, hostNumber + 1, sectionPageCount, format);
       for (const page of remapped) {
         pages.push(page);
         remappedAll.push(page);
       }
-      nextDisplayed = displayedStart + sectionPageCount;
+      nextDisplayed = hostNumber + sectionPageCount;
     } else if (localUnchanged && stackUnchanged && numberingUnchanged) {
       remapped = prevSpan.remappedPages;
       reusedPages += remapped.length;
@@ -643,7 +689,23 @@ export function layoutMultiSectionDocument(
       sheetY: startSheetY,
       remappedPages: remapped,
       sourcePages: laid.pages,
+      ...(paritySheet ? { paritySheet } : {}),
     });
+    if (remapped.length > 0) {
+      sheetStarts.push({
+        pageIndex: startIndex,
+        breakType: section.properties.breakType,
+        restart,
+        runningBefore,
+        geometry,
+      });
+    }
+    const lastStamp = pages[pages.length - 1]?.pageFieldSource?.pageNumber;
+    if (lastStamp !== undefined && lastStamp + 1 !== nextDisplayed) {
+      runningAfter.set(pages.length - 1, nextDisplayed);
+    } else {
+      runningAfter.delete(pages.length - 1);
+    }
   }
 
   if (pages.length === 0) {
@@ -737,6 +799,7 @@ export function layoutMultiSectionDocument(
     const owner = chosen ?? sectionShells[sectionShells.length - 1];
     return owner?.at(documentPageIndex, box);
   });
+  registerParityPlan(finalized, evenAndOddHeaders, sheetStarts, runningAfter);
 
   retainOnce();
   return finalized;

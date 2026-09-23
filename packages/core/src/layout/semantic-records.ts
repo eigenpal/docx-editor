@@ -960,6 +960,8 @@ export interface PageRecord {
    * pages as free body space.
    */
   readonly noteStream?: PageNoteStream;
+  /** An empty sheet that gives the next section its page parity; SECTIONPAGES skips it. */
+  readonly parityBlank?: true;
   /**
    * Section-local PAGE/SECTIONPAGES inputs for finalize. Absent → physical page index and
    * document-wide section count (empty `w:pgNumType` behaviour).

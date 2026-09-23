@@ -2407,6 +2407,7 @@ export interface PageRecord {
         readonly pageNumber: number;
         readonly sectionPageCount: number;
     };
+    readonly parityBlank?: true;
 }
 
 // @public
@@ -3561,6 +3562,7 @@ export interface SemanticLayoutOptions {
     readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
     readonly emptyTocPlaceholderParagraphIds?: ReadonlySet<string>;
     readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
+    readonly evenAndOddHeaders?: boolean;
     // @internal (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
     readonly furniture?: PageFurniture;

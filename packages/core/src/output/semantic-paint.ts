@@ -2103,9 +2103,9 @@ function paintPage(
   // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
   // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
   // click can create the story. Geometry mirrors the pointer's activation band: the full
-  // margin strip at content width. Never printed (CSS hides it), never editable.
+  // margin strip at content width. Never printed or editable; absent on blank parity sheets.
   for (const kind of ['header', 'footer'] as const) {
-    if (page[kind]) continue;
+    if (page[kind] || page.parityBlank) continue;
     const band = document.createElement('div');
     band.className = 'docx-hf docx-hf--placeholder';
     band.dataset.docxHf = kind;

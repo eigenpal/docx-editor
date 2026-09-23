@@ -42,6 +42,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   displayMode: 'document-coordinator',
   revisionAuthorFilter: 'document-coordinator',
   sectionFurniture: 'document-coordinator',
+  evenAndOddHeaders: 'document-coordinator',
   sectionColumns: 'layout-internal',
   paragraphLineUnitPt: 'layout-internal',
   sectionPageBorders: 'layout-internal',
@@ -209,6 +210,9 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     numberingIndex: semanticInputs.numberingIndex?.(),
     sectionFurniture: semanticInputs.furniture.sectionFurniture(),
     furniture: semanticInputs.furniture.furniture(),
+    // A settings.xml flag: every section's resolved parts carry the same value.
+    evenAndOddHeaders:
+      semanticInputs.view.headerFooterPartsBySection()[0]?.evenAndOddHeaders === true,
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
     showFieldCodes: semanticInputs.showFieldCodes,
