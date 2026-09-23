@@ -111,6 +111,8 @@ The editor calculates document layout without browser flow layout. It uses docum
 
 The layout result controls line and page breaks. The editor paints that result as DOM text, not a canvas bitmap.
 
+No-break spaces (U+00A0, U+2007, and U+202F) retain their line-break behavior across formatting runs. This also applies to word joiners (U+2060 and U+FEFF). Ordinary spaces can still provide break positions. Oversized groups retain the existing overflow rules.
+
 Usable font bytes are required for Word-accurate text measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 
 The configured font resolver also receives faces used by SYMBOL fields and numbering markers. Your host must supply usable font bytes for those faces when they are unavailable locally. Unused numbering definitions do not add font requests.

@@ -7,6 +7,7 @@ import {
   CJK_NO_BREAK_BEFORE,
   isIdeographicForLineBreak,
   lastCodePointOf,
+  NO_BREAK_CHARACTER,
   wordBoundaries,
   type LineOpenDecision,
 } from './cjk-line-break.ts';
@@ -132,7 +133,7 @@ export function cjkParagraphBreaks(
     }
     // Glue is independent of language and kinsoku. Neither character wrapping
     // nor emergency chopping may separate a non-breaking character's neighbours.
-    if (/[\u00a0\u202f\u2060\ufeff]/u.test(left.text + right.text)) {
+    if (NO_BREAK_CHARACTER.test(left.text + right.text)) {
       decisions.set(at, 'forbidden');
       continue;
     }

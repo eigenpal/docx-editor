@@ -95,6 +95,17 @@ export function lastCodePointOf(text: string): number | undefined {
  */
 export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–', '—']);
 
+/**
+ * Characters that normally join adjacent text. Run-boundary whitespace tests exclude
+ * these characters. Ordinary spaces and oversized groups keep their existing behavior.
+ */
+export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
+
+// Whitespace that ends a word at a seam: every JavaScript `\s` except the no-break
+// characters above, which `\s` also matches (U+2060 is not `\s`).
+const ENDS_WITH_BREAKING_SPACE = /[^\S\u00a0\u2007\u202f\ufeff]$/;
+const STARTS_WITH_BREAKING_SPACE = /^[^\S\u00a0\u2007\u202f\ufeff]/;
+
 /** Every kinsoku member and every ideographic range sits at or above this code unit. */
 const FIRST_IDEOGRAPHIC_UNIT = 0x2e80;
 
@@ -259,7 +270,8 @@ export type LineOpenDecision =
  *
  * A candidate is a break opportunity at any `wordBoundaries` cut inside its piece
  * (`afterIntraPieceCut`). The FIRST candidate of a piece continues whatever the previous
- * piece ended with, so it is one only if that ended in whitespace — or in a dash or an
+ * piece ended with, so it is one only if that ended in breaking whitespace (never a
+ * `NO_BREAK_CHARACTER`, on either side of the seam) — or in a dash or an
  * ideograph, which stay break opportunities across run boundaries (a tracked change can
  * split "ALPHA-" and "PRIME" into different runs without gluing them, and a CJK clause
  * split across runs must not wrap at the seam instead of the margin, #526). The kinsoku
@@ -283,8 +295,8 @@ export function lineOpenDecisionAt(
   const opportunity =
     afterIntraPieceCut ||
     lastEmitted === '' ||
-    /[\s ]$/.test(lastEmitted) ||
-    /^[\s ]/.test(candidate) ||
+    ENDS_WITH_BREAKING_SPACE.test(lastEmitted) ||
+    STARTS_WITH_BREAKING_SPACE.test(candidate) ||
     (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
       !BREAK_AFTER_DASH.has(candidate[0]!));
   // Both seam units below the first ideographic range: no CJK rule can observe the seam,
