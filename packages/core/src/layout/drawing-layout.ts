@@ -6,7 +6,7 @@
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import {
   anchorLaidOutInCell,
-  cellAnchorScope,
+  LEGACY_CELL_ANCHOR_SCOPE,
   type CellAnchorScope,
 } from './cell-anchor-layout.ts';
 import {
@@ -1229,7 +1229,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
         ? (projection.anchor?.layoutInCell ?? true)
         : anchorLaidOutInCell(
             projection.anchor,
-            options.cellAnchorScope ?? cellAnchorScope(true, undefined)
+            options.cellAnchorScope ?? LEGACY_CELL_ANCHOR_SCOPE
           );
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =

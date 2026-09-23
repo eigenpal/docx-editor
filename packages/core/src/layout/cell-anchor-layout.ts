@@ -17,6 +17,16 @@ export interface CellAnchorScope {
   readonly compatibilityMode: number | undefined;
 }
 
+/**
+ * The scope a cell-flow consumer assumes when its host passes none: a table cell with no
+ * declared mode, which reads the authored flag exactly as the engine always has. Both
+ * consumers default to this one value so they cannot disagree about an unscoped anchor.
+ */
+export const LEGACY_CELL_ANCHOR_SCOPE: CellAnchorScope = Object.freeze({
+  inTableCell: true,
+  compatibilityMode: undefined,
+});
+
 export function cellAnchorScope(
   inTableCell: boolean | undefined,
   compatibilityMode: number | undefined
@@ -60,8 +70,7 @@ export function anchoredOutOfCell(
 ): boolean {
   return (
     options.anchorCellBox != null &&
-    options.cellAnchorScope !== undefined &&
-    !anchorLaidOutInCell(projection.anchor, options.cellAnchorScope)
+    !anchorLaidOutInCell(projection.anchor, options.cellAnchorScope ?? LEGACY_CELL_ANCHOR_SCOPE)
   );
 }
 
