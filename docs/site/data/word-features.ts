@@ -535,7 +535,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Authored anchor text distances are preserved. Text clears rectangular gaps narrower than the next glyph. In a table cell, an object with layoutInCell off is placed against the page in compatibility mode 14 or earlier, or when the document declares no mode. In Word 2013 mode and later it stays in the cell, as in Word. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Authored anchor text distances are preserved. Text clears rectangular gaps narrower than the next glyph. In a table cell, an object with layoutInCell off is placed against the page in compatibility mode 14 or earlier, or when the document declares no mode, and the table rows it touches move below it. In Word 2013 mode and later it stays in the cell, as in Word. Objects that must not overlap move beside each other before they move down. Before Word 2013 mode, header and footer text does not wrap around the objects in that header or footer. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
