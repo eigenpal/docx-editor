@@ -97,6 +97,7 @@ import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
 import * as frameWrap from './paragraph-frame-exclusion.ts';
 import { bodyAnchorFrameBase, paragraphPaintsNothing } from './body-flow-helpers.ts';
+import { resolveOverlapDisplacement, shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -126,8 +127,6 @@ import {
   exclusionMapsEqual,
   exclusionMapsToken,
   MAX_ANCHOR_PAGE_DEFERRALS,
-  resolveOverlapDisplacement,
-  shiftAnchoredDrawingY,
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
   withAnchoredDrawingLayoutFallback,
@@ -1527,9 +1526,7 @@ function layoutBlocksPass(
       );
     }
     if (!options.inlineDrawingLayout) return;
-    const resolved = resolveOverlapDisplacement(pendingAnchoredDrawings, {
-      pageBottom: contentHeight(),
-    });
+    const resolved = resolveOverlapDisplacement(pendingAnchoredDrawings, anchorFrameBase());
     pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length, ...resolved.drawings);
     if (resolved.deferred.length > 0) {
       for (const drawing of resolved.deferred) {

@@ -27,10 +27,10 @@ import {
   mergeAvailableIntervalsAtY,
   paintLayerOf,
   remainingWidthAtX,
-  resolveOverlapDisplacement,
   sortDrawingsForPaint,
   wrapExclusionInputForProjection,
 } from '../drawing-exclusion.ts';
+import { resolveOverlapDisplacement } from '../drawing-overlap.ts';
 import { availableTextIntervalsOnScanline } from '../drawing-wrap.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -270,7 +270,7 @@ describe('paint order and overlap displacement', () => {
       paintBounds: Object.freeze({ ...first.paintBounds }),
       hitBounds: Object.freeze({ ...first.hitBounds }),
     });
-    const resolved = resolveOverlapDisplacement([first, second], { pageBottom: 648 });
+    const resolved = resolveOverlapDisplacement([first, second], { contentHeight: 648 });
     expect(resolved.drawings).toHaveLength(2);
     expect(resolved.drawings[1]!.y).toBeGreaterThan(first.y);
   });

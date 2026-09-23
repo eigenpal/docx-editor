@@ -572,7 +572,8 @@ describe('paint order on page record (OpenSpec 4.5)', () => {
     const initialAnchors = initial.pages[0]!.anchoredDrawings ?? [];
     expect(initialAnchors.map((drawing) => drawing.drawingNodeId)).toEqual(initialIds);
     expect(initialAnchors.map((drawing) => drawing.sourceOrder)).toEqual([0, 1]);
-    expect(initialAnchors[1]!.y).toBeGreaterThan(initialAnchors[0]!.y);
+    // allowOverlap="0": the later picture in collision order moves flush right, as Word does.
+    expect(initialAnchors[1]!.x).toBeCloseTo(initialAnchors[0]!.x + initialAnchors[0]!.width, 3);
 
     const reordered = layoutSemanticDocument(reorderedPart, 2, stableOptions);
     const reorderedAnchors = reordered.pages[0]!.anchoredDrawings ?? [];
@@ -581,12 +582,17 @@ describe('paint order on page record (OpenSpec 4.5)', () => {
       initialIds[0],
     ]);
     expect(reorderedAnchors.map((drawing) => drawing.sourceOrder)).toEqual([0, 1]);
-    expect(reorderedAnchors[1]!.y).toBeGreaterThan(reorderedAnchors[0]!.y);
+    expect(reorderedAnchors[1]!.x).toBeCloseTo(
+      reorderedAnchors[0]!.x + reorderedAnchors[0]!.width,
+      3
+    );
 
     const zones = collectExclusionZonesByPage(reordered.pages, context, CONTENT_WIDTH_PT).get(0);
     expect(zones?.map((zone) => zone.drawingNodeId)).toEqual([initialIds[1], initialIds[0]]);
     expect(zones?.map((zone) => zone.sourceOrder)).toEqual([0, 1]);
-    expect(zones?.[1]!.y).toBeGreaterThan(zones?.[0]!.y ?? Number.POSITIVE_INFINITY);
+    expect(zones?.[1]!.verticalBand.x).toBeGreaterThan(
+      zones?.[0]!.verticalBand.x ?? Number.POSITIVE_INFINITY
+    );
   });
 });
 

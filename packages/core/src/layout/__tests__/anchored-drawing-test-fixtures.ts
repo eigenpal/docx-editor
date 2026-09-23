@@ -75,6 +75,38 @@ export function squareAnchorAtLeft(options: {
   );
 }
 
+/** Two square-wrapped pictures in one paragraph, positions and size in points. */
+export function anchorPairInParagraph(options: {
+  readonly first: { readonly x: number; readonly y: number };
+  readonly second: { readonly x: number; readonly y: number };
+  readonly width: number;
+  readonly height: number;
+  readonly allowOverlap: '0' | '1';
+  readonly text: string;
+}): string {
+  const emu = (pt: number) => Math.round(pt * 12_700);
+  const anchor = (id: number, at: { readonly x: number; readonly y: number }) =>
+    '<w:r><w:drawing>' +
+    `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="${options.allowOverlap}" layoutInCell="1" relativeHeight="${id}">` +
+    '<wp:simplePos x="0" y="0"/>' +
+    `<wp:positionH relativeFrom="column"><wp:posOffset>${emu(at.x)}</wp:posOffset></wp:positionH>` +
+    `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${emu(at.y)}</wp:posOffset></wp:positionV>` +
+    `<wp:extent cx="${emu(options.width)}" cy="${emu(options.height)}"/>` +
+    '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+    `<wp:docPr id="${id}" name="pic${id}"/>` +
+    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:ext cx="${emu(options.width)}" cy="${emu(options.height)}"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>` +
+    '</wp:anchor></w:drawing></w:r>';
+  return (
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    '<w:body><w:p>' +
+    anchor(1, options.first) +
+    anchor(2, options.second) +
+    `<w:r><w:t>${options.text}</w:t></w:r></w:p>` +
+    '</w:body></w:document>'
+  );
+}
+
 /**
  * The same square anchor, inside a one-cell table, with `w:layoutInCell` under the caller's
  * control. `"0"` positions the object against the page rather than the cell, so it is not part
