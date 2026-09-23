@@ -6,7 +6,7 @@
 // selection and part, so every function is a plain input-to-output computation.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import { hiddenMarkParagraphAlwaysRemoved } from '../layout/hidden-paragraph-mark.ts';
+import { hiddenMarkRemovedIds, type RevisionView } from './hidden-mark-joins.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   parentNodeOf,
@@ -399,7 +399,8 @@ export function planRangeDeletion(
   part: OoxmlPart,
   from: SemanticPosition,
   to: SemanticPosition,
-  order?: readonly string[]
+  order?: readonly string[],
+  view: RevisionView = { displayMode: layout.displayMode ?? 'all-markup', authorFilter: undefined }
 ): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
   if (from.paragraphId === to.paragraphId) {
@@ -508,8 +509,14 @@ export function planRangeDeletion(
    * while `joinParagraphs` still requires true child-index adjacency, which vetoed the whole
    * atomic delete (`not-adjacent-siblings`) and left every table standing.
    */
-  // Paragraphs a hidden mark removed from the flow: invisible, so a join may absorb them.
-  const hiddenParagraphIds = new Set<string>();
+  // Paragraphs a hidden mark removed from the flow in this view, per host: invisible, so a
+  // join may absorb them. Layout's own answer, asked only where something lies between.
+  const removedUnder = new Map<string, ReadonlySet<string>>();
+  const hiddenUnder = (host: OoxmlElement): ReadonlySet<string> => {
+    let ids = removedUnder.get(host.id);
+    if (!ids) removedUnder.set(host.id, (ids = hiddenMarkRemovedIds(host.children, view)));
+    return ids;
+  };
   const eventualParagraphsUnder = (host: OoxmlElement): string[] => {
     const ids: string[] = [];
     const visit = (nodes: readonly OoxmlNode[]): void => {
@@ -523,7 +530,6 @@ export function planRangeDeletion(
         }
         if (child.kind === 'paragraph') {
           ids.push(child.id);
-          if (hiddenMarkParagraphAlwaysRemoved(child)) hiddenParagraphIds.add(child.id);
           continue;
         }
         // Opaque sibling or wrapper: do not bridge joins across it, and do not lift its
@@ -545,7 +551,9 @@ export function planRangeDeletion(
     const end = sequence.indexOf(after);
     if (start === -1 || end <= start) return null;
     const between = sequence.slice(start + 1, end);
-    return between.every((id) => hiddenParagraphIds.has(id)) ? between : null;
+    if (between.length === 0) return between;
+    const removed = hiddenUnder(host);
+    return between.every((id) => removed.has(id)) ? between : null;
   };
 
   let groupHead = survivorId;

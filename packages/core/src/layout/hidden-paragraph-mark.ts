@@ -63,22 +63,6 @@ function carriesSectionBreak(paragraph: OoxmlNode): boolean {
   return properties !== undefined && wmlChild(properties, 'sectPr') !== undefined;
 }
 
-/**
- * Would every display mode remove this paragraph from the flow, given a paragraph after it?
- *
- * The layout rule read without a display mode: `all-markup` shows every tracked change, so
- * a paragraph that renders nothing there renders nothing in any view. Editing uses this to
- * join across such paragraphs; layout itself asks with the mode it lays out in.
- */
-export function hiddenMarkParagraphAlwaysRemoved(paragraph: OoxmlNode): boolean {
-  return (
-    paragraph.kind === 'paragraph' &&
-    paragraphMarkHidden(paragraph) &&
-    !carriesSectionBreak(paragraph) &&
-    paragraphRendersNothingVisible(paragraph, 'all-markup')
-  );
-}
-
 /** The removed paragraphs directly beside a kept one. */
 export interface HiddenMarkNeighbours {
   /** The removed paragraph directly before, the last of its run. */

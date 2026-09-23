@@ -95,7 +95,7 @@ import {
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
-import { joinAcrossHiddenMarks } from './hidden-mark-joins.ts';
+import { joinAcrossHiddenMarks, type RevisionView } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -3018,11 +3018,11 @@ export function mountPaginatedSurface(
    * between two neighbours; the join absorbs them (see `hidden-mark-joins.ts`).
    */
   function joinOps(firstId: string, secondId: string): TreeDocOp[] | null {
-    return joinAcrossHiddenMarks(
-      session.partFor(storyScope()) ?? session.part(),
-      firstId,
-      secondId
-    );
+    const part = session.partFor(storyScope()) ?? session.part();
+    return joinAcrossHiddenMarks(part, firstId, secondId, revisionView());
+  }
+  function revisionView(): RevisionView {
+    return { displayMode: revisionDisplayMode(), authorFilter: revisionFilter() };
   }
 
   function caretMark(position: { paragraphId: string; offset: number }): {
@@ -4299,6 +4299,7 @@ export function mountPaginatedSurface(
     flushPendingInputAndLayout,
     trackedAuthorOrNone,
     atParagraphEnd: (paragraphId, offset) => nextStyle.atParagraphEnd(paragraphId, offset),
+    revisionView,
   });
 
   // Clipboard glue over the payload builder and the paste router. Also above the surface

@@ -47,6 +47,7 @@ import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacenc
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import { findContentControl } from '../store/store/tree-op-nodes.ts';
+import type { RevisionView } from './hidden-mark-joins.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
   orderedRangeOf,
@@ -83,6 +84,8 @@ export interface SurfaceRangeEditDeps {
   trackedAuthorOrNone(): string | undefined;
   /** `w:next` lane: whether an offset sits at the end of a paragraph's MODEL text. */
   atParagraphEnd(paragraphId: string, offset: number): boolean;
+  /** The revision view the page is laid out in, which decides what a join may absorb. */
+  revisionView(): RevisionView;
 }
 
 export interface SurfaceRangeEditOps {
@@ -265,7 +268,8 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       session.partFor(deps.storyScope()) ?? session.part(),
       from,
       to,
-      deps.paragraphOrder()
+      deps.paragraphOrder(),
+      deps.revisionView()
     );
   }
 
