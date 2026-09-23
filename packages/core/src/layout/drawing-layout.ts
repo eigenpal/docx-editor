@@ -1232,7 +1232,7 @@ export function publishAnchoredDrawingsForParagraph(
     const layoutInCell =
       options.cellBox === null
         ? (projection.anchor?.layoutInCell ?? true)
-        : anchorLaidOutInCell(projection.anchor, options.cellAnchorScope);
+        : anchorLaidOutInCell(projection, options.cellAnchorScope);
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;

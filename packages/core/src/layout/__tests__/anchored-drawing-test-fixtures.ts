@@ -87,6 +87,9 @@ export function squareAnchorInCell(options: {
   readonly tableIndent?: number;
   /** A tall row with `w:vAlign="center"`, which moves the cell's content after it flows. */
   readonly centred?: boolean;
+  readonly horizontalFrame?: 'column' | 'character';
+  readonly verticalFrame?: 'paragraph' | 'line';
+  readonly wrap?: 'square' | 'topAndBottom';
 }): string {
   const indent =
     options.tableIndent === undefined
@@ -105,10 +108,12 @@ export function squareAnchorInCell(options: {
     '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0"' +
     ` allowOverlap="1" layoutInCell="${options.layoutInCell}" relativeHeight="1">` +
     '<wp:simplePos x="0" y="0"/>' +
-    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
-    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    `<wp:positionH relativeFrom="${options.horizontalFrame ?? 'column'}"><wp:posOffset>0</wp:posOffset></wp:positionH>` +
+    `<wp:positionV relativeFrom="${options.verticalFrame ?? 'paragraph'}"><wp:posOffset>0</wp:posOffset></wp:positionV>` +
     '<wp:extent cx="1828800" cy="914400"/>' +
-    '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+    (options.wrap === 'topAndBottom'
+      ? '<wp:wrapTopAndBottom distT="0" distB="0"/>'
+      : '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>') +
     '<wp:docPr id="1" name="pic"/>' +
     `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
     '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +

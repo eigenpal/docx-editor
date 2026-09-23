@@ -1,20 +1,27 @@
 // How an anchored object flowing inside a cell box relates to that box.
 //
 // Cell flow lays out more than table cells: header, footer, note and text-box stories reuse
-// it, so "has a cell box" does not mean "is in a table". The compatibility-mode rule below
-// is Word's for an anchor in a real `w:tc`. Every consumer (break-time wrap synthesis, record
-// publication) asks {@link anchorLaidOutInCell}, so the wrap hole and the published object
-// cannot disagree about where the object is.
+// it, so "has a cell box" does not mean "is in a table". Every consumer (break-time wrap
+// synthesis, record publication) reads one {@link CellAnchorScope} through
+// {@link anchorLaidOutInCell}, so the wrap hole and the published object cannot disagree
+// about where the object is. Each rule below was printed from Word 16.113 under modes
+// absent, 12, 14, 15 and 16.
 
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
-/** What decides `layoutInCell` for the anchors of one cell-flow paragraph. */
+/** What decides how the anchors of one cell-flow paragraph lay out. */
 export interface CellAnchorScope {
   /** A real table cell, as opposed to a story box that reuses cell flow. */
   readonly inTableCell: boolean;
   readonly compatibilityMode: number | undefined;
+  /**
+   * False where Word lays the story's text out as if its anchored objects had no wrap: a
+   * header or footer before mode 15 runs its text straight under every logo, whatever the
+   * wrap type. The objects still paint where they are anchored.
+   */
+  readonly anchorsWrapText: boolean;
 }
 
 /**
@@ -25,33 +32,39 @@ export interface CellAnchorScope {
 export const LEGACY_CELL_ANCHOR_SCOPE: CellAnchorScope = Object.freeze({
   inTableCell: true,
   compatibilityMode: undefined,
+  anchorsWrapText: true,
 });
 
 export function cellAnchorScope(
   inTableCell: boolean | undefined,
-  compatibilityMode: number | undefined
+  story: { readonly compatibilityMode?: number; readonly anchorsWrapText?: boolean }
 ): CellAnchorScope {
-  return Object.freeze({ inTableCell: inTableCell === true, compatibilityMode });
+  return Object.freeze({
+    inTableCell: inTableCell === true,
+    compatibilityMode: story.compatibilityMode,
+    anchorsWrapText: story.anchorsWrapText !== false,
+  });
 }
 
 /**
  * Whether an anchored object that flows in a cell box is laid out in it.
  *
- * In a table cell, Word honours `layoutInCell="0"` in compatibility mode 14 and below or with
- * no mode declared: the object is then positioned against the page. From mode 15 Word ignores
- * the flag and lays the object out in the cell, positioned against it and wrapping its text,
- * the same as `"1"`. The projection keeps what the file says; this is the layout's reading.
- *
- * Outside a table the authored flag is read as it always was, in every mode. Word ignores it
- * there too, but it also runs header text under a square-wrapped logo that the engine wraps
- * around; reading `"0"` as `"1"` there would move those headers further from Word, not nearer.
+ * Word reads `layoutInCell="0"` only in a real table cell, and only in compatibility mode 14
+ * and below or with no mode declared: the object is then positioned against the page. Even
+ * there, an object positioned against its own character or line stays in the cell. From
+ * mode 15, and in every header, footer, note or text box, Word ignores the flag and lays the
+ * object out in its box, the same as `"1"`. The projection keeps what the file says; this is
+ * the layout's reading of it.
  */
 export function anchorLaidOutInCell(
-  anchor: { readonly layoutInCell: boolean } | null | undefined,
+  projection: Pick<DrawingProjection, 'anchor' | 'position'>,
   scope: CellAnchorScope
 ): boolean {
-  if (scope.inTableCell && isWord2013OrLaterMode(scope.compatibilityMode)) return true;
-  return anchor?.layoutInCell ?? true;
+  if (!scope.inTableCell || isWord2013OrLaterMode(scope.compatibilityMode)) return true;
+  const position = projection.position;
+  if (position?.horizontal.relativeFrom === 'character') return true;
+  if (position?.vertical.relativeFrom === 'line') return true;
+  return projection.anchor?.layoutInCell ?? true;
 }
 
 /**
@@ -70,7 +83,7 @@ export function anchoredOutOfCell(
 ): boolean {
   return (
     options.anchorCellBox != null &&
-    !anchorLaidOutInCell(projection.anchor, options.cellAnchorScope ?? LEGACY_CELL_ANCHOR_SCOPE)
+    !anchorLaidOutInCell(projection, options.cellAnchorScope ?? LEGACY_CELL_ANCHOR_SCOPE)
   );
 }
 

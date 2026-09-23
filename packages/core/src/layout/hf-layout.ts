@@ -16,6 +16,7 @@
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
+import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
@@ -389,6 +390,8 @@ export function layoutHeaderFooterStory(
 
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
+    // Before mode 15 Word runs header and footer text straight under their own logos.
+    const anchorsWrapText = isWord2013OrLaterMode(inputs?.compatibilityMode);
 
     if (inlineDrawingLayout) {
       let converged = false;
@@ -410,6 +413,7 @@ export function layoutHeaderFooterStory(
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           compatibilityMode: inputs?.compatibilityMode,
+          anchorsWrapText,
           tableNestingOffset: 1,
           displayMode,
           ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
@@ -459,12 +463,14 @@ export function layoutHeaderFooterStory(
             ? { projectionTokenForTable: inputs.projectionTokenForTable }
             : {}),
         });
-        const nextZones = collectExclusionZonesFromDrawings(
-          pendingAnchoredDrawings,
-          inlineDrawingLayout,
-          0,
-          contentWidth
-        );
+        const nextZones = anchorsWrapText
+          ? collectExclusionZonesFromDrawings(
+              pendingAnchoredDrawings,
+              inlineDrawingLayout,
+              0,
+              contentWidth
+            )
+          : Object.freeze([]);
         if (nextZones.length === 0) {
           converged = true;
           exclusionZones = nextZones;

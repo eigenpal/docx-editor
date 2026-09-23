@@ -109,47 +109,81 @@ describe('w:layoutInCell and a float anchored inside a table cell', () => {
     expect(drawingOf('0', 14).layoutInCell).toBe(false);
   });
 
-  // Headers, footers, notes and text boxes reuse cell flow but are not tables: the mode rule
-  // is a table-cell rule, so a header anchor reads the same in every mode.
-  for (const mode of [undefined, 14, 15]) {
-    test(`a header anchor reads layoutInCell="0" as authored in mode ${mode ?? 'absent'}`, () => {
-      const cell = squareAnchorInCell({ text: TEXT, layoutInCell: '0' });
-      const paragraph = cell.slice(cell.indexOf('<w:p>'), cell.lastIndexOf('</w:p>') + 6);
-      const xml =
-        cell.slice(0, cell.indexOf('>') + 1).replace('<w:document', '<w:hdr') +
-        paragraph +
-        '</w:hdr>';
-      const part = load(xml, '/word/header1.xml');
-      const story = layoutHeaderFooterStory(
-        part,
-        468,
-        measurer,
-        'test',
-        undefined,
-        undefined,
-        undefined,
-        128,
-        undefined,
-        undefined,
-        layoutContext(part, '/word/header1.xml'),
-        undefined,
-        undefined,
-        {
-          pageNumber: 1,
-          pageWidth: 612,
-          pageHeight: 792,
-          marginLeft: 72,
-          marginRight: 72,
-          marginTop: 72,
-          marginBottom: 72,
-        },
-        undefined,
-        mode === undefined ? undefined : { compatibilityMode: mode }
-      );
-      expect(story.anchoredDrawings?.[0]?.layoutInCell).toBe(false);
-      const lines = (story.fragments[0] as { lines: readonly { contentX: number }[] }).lines;
+  test('an object positioned against its character or line stays in the cell in mode 14', () => {
+    for (const frames of [
+      { horizontalFrame: 'character' as const },
+      { verticalFrame: 'line' as const },
+    ]) {
+      const xml = squareAnchorInCell({ text: TEXT, layoutInCell: '0', ...frames });
+      expect(layout(xml, 14).pages[0]!.anchoredDrawings?.[0]?.layoutInCell).toBe(true);
+      const lines = cellLines(xml, 14);
       expect(lines.length).toBeGreaterThan(1);
-      for (const line of lines) expect(line.contentX).toBeLessThan(1);
+      expect(lines[0]!.contentX).toBeGreaterThan(100);
+    }
+  });
+
+  // Headers, footers, notes and text boxes reuse cell flow but are not tables. Word ignores
+  // `layoutInCell` there, and before mode 15 runs header text straight under every logo.
+  const headerStory = (
+    layoutInCell: '0' | '1',
+    mode: number | undefined,
+    wrap?: 'topAndBottom'
+  ) => {
+    const cell = squareAnchorInCell({ text: TEXT, layoutInCell, ...(wrap ? { wrap } : {}) });
+    const paragraph = cell.slice(cell.indexOf('<w:p>'), cell.lastIndexOf('</w:p>') + 6);
+    const xml =
+      cell.slice(0, cell.indexOf('>') + 1).replace('<w:document', '<w:hdr') +
+      paragraph +
+      '</w:hdr>';
+    const part = load(xml, '/word/header1.xml');
+    const story = layoutHeaderFooterStory(
+      part,
+      468,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      128,
+      undefined,
+      undefined,
+      layoutContext(part, '/word/header1.xml'),
+      undefined,
+      undefined,
+      {
+        pageNumber: 1,
+        pageWidth: 612,
+        pageHeight: 792,
+        marginLeft: 72,
+        marginRight: 72,
+        marginTop: 72,
+        marginBottom: 72,
+      },
+      undefined,
+      mode === undefined ? undefined : { compatibilityMode: mode }
+    );
+    const lines = (
+      story.fragments[0] as { lines: readonly { contentX: number; box: { y: number } }[] }
+    ).lines;
+    return { drawing: story.anchoredDrawings?.[0], lines };
+  };
+
+  for (const layoutInCell of ['0', '1'] as const) {
+    for (const mode of [undefined, 14]) {
+      test(`a header runs its text under a logo (layoutInCell=${layoutInCell}, mode ${mode ?? 'absent'})`, () => {
+        const square = headerStory(layoutInCell, mode);
+        expect(square.drawing?.layoutInCell).toBe(true);
+        expect(square.lines.length).toBeGreaterThan(1);
+        for (const line of square.lines) expect(line.contentX).toBeLessThan(1);
+        expect(headerStory(layoutInCell, mode, 'topAndBottom').lines[0]!.box.y).toBeLessThan(1);
+      });
+    }
+    test(`a header wraps its text around a logo in mode 15 (layoutInCell=${layoutInCell})`, () => {
+      const square = headerStory(layoutInCell, 15);
+      expect(square.drawing?.layoutInCell).toBe(true);
+      expect(square.lines.length).toBeGreaterThan(1);
+      expect(square.lines[0]!.contentX).toBeGreaterThan(100);
+      expect(headerStory(layoutInCell, 15, 'topAndBottom').lines[0]!.box.y).toBeGreaterThan(70);
     });
   }
 });

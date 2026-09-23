@@ -539,8 +539,13 @@ export function breakParagraph(
         }
         return true;
       }) ?? [];
+    // A story whose text ignores its anchors' wrap (a header before mode 15) carves nothing.
+    const anchorsWrap = flow?.cellAnchorScope?.anchorsWrapText !== false;
     const synthesizedWrap =
-      flow?.inlineDrawingLayout && flow.anchorCellBox != null && anchorLineTopByModelStart.size > 0
+      anchorsWrap &&
+      flow?.inlineDrawingLayout &&
+      flow.anchorCellBox != null &&
+      anchorLineTopByModelStart.size > 0
         ? synthesizeParagraphWrapExclusionZones({
             paragraph,
             paragraphId,
@@ -558,7 +563,7 @@ export function breakParagraph(
           })
         : Object.freeze([]);
     const synthesized =
-      flow?.inlineDrawingLayout && anchorLineTopByModelStart.size > 0
+      anchorsWrap && flow?.inlineDrawingLayout && anchorLineTopByModelStart.size > 0
         ? synthesizeParagraphTopAndBottomZones({
             paragraph,
             paragraphId,
