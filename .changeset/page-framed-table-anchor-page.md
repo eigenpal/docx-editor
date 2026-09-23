@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Page- and margin-anchored floating tables no longer paint over earlier text on their page. When that text cannot clear the table, the table moves to the next page with its following paragraph.
+A page- or margin-anchored floating table that spans the text column now moves to the next page with its following paragraph when earlier text on the page would leave no room for that paragraph below the table.
