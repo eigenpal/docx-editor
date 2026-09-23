@@ -9,6 +9,12 @@ Call each composable during `setup()` inside `DocxEditor.Root`. The packaged `<D
 
 These composables return a ref, or a plain object that holds refs. A template unwraps a ref only when the ref is a top-level binding. A ref that is a property of a returned object stays a ref, so read it with `.value` in the template and in script code.
 
+## Connect controls to reactive state
+
+Connect custom buttons with `useEditorCommand` and read selected state with `useEditorState`. The preview runs Vue composables and displays their live values.
+
+<VueComposablesDemo />
+
 ## `useEditorCommand`
 
 Pass a chrome slot ID to get its action and reactive command state. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every available ID and its named toolbar part:

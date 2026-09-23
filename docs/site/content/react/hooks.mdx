@@ -9,6 +9,12 @@ Call these hooks inside `<DocxEditor.Root>`. You can also call them inside `<Doc
 
 The packaged toolbar, menu, and navigation pane use the same hooks.
 
+## Connect controls to editor state
+
+Use command hooks to connect custom buttons. Read selected state with `useEditorState`. Switch editing modes to inspect command availability and refusal reasons.
+
+<ReactHooksDemo />
+
 ## `useEditorCommand`
 
 Pass a chrome slot ID to `useEditorCommand`. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every available ID and its named toolbar part. The hook returns the state and action for a control:
