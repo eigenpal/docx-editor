@@ -28,6 +28,7 @@ import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
+import { withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
 import { projectRevisionFormatting } from './revision-formatting-projection.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
@@ -112,17 +113,19 @@ function withMergedParagraphs(
   parented: readonly ParentedBlock[],
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
-): OoxmlElement[] {
-  if (displayMode === 'all-markup' && !authorFilter) return parented.map((entry) => entry.block);
-  const out: OoxmlElement[] = [];
+): readonly ParentedBlock[] {
+  if (displayMode === 'all-markup' && !authorFilter) return parented;
+  const out: ParentedBlock[] = [];
   let pendingMembers: OoxmlElement[] = [];
   let pendingParent: string | null = null;
   const endRun = (): void => {
-    out.push(...mergedTrailingRun(pendingMembers));
+    const parentKey = pendingParent ?? '';
+    for (const block of mergedTrailingRun(pendingMembers)) out.push({ block, parentKey });
     pendingMembers = [];
     pendingParent = null;
   };
-  for (const { block, parentKey } of parented) {
+  for (const entry of parented) {
+    const { block, parentKey } = entry;
     // A content control flattens into the flow, so its paragraphs are neighbours on the page
     // without being siblings in the tree. The store rebuilds one children array at a time and
     // never merges out of `w:sdtContent`; matching that keeps the two answers the same.
@@ -130,7 +133,7 @@ function withMergedParagraphs(
     if (block.kind !== 'paragraph') {
       // A table between two mark-removed paragraphs is a container boundary too.
       endRun();
-      out.push(block);
+      out.push(entry);
       continue;
     }
     const removed = markRemovedInMode(block, displayMode, authorFilter);
@@ -145,7 +148,7 @@ function withMergedParagraphs(
       // Cannot be measured, so cannot be merged INTO either: a survivor whose own offsets do
       // not line up would take the previous members' characters at the wrong index.
       endRun();
-      out.push(block);
+      out.push(entry);
       continue;
     }
     if (removed) {
@@ -154,18 +157,18 @@ function withMergedParagraphs(
       continue;
     }
     if (pendingMembers.length === 0) {
-      out.push(block);
+      out.push(entry);
       continue;
     }
     const members = [...pendingMembers, block];
     pendingMembers = [];
     pendingParent = null;
-    out.push(mergedParagraph(members, block));
+    out.push({ block: mergedParagraph(members, block), parentKey });
   }
   // A TRAILING run, with no unmarked paragraph after it. Word cannot delete the last mark of a
   // story, so the last member keeps its own break and the ones before it still merge into it —
   // which is what `resolveRevisions` does, one member at a time, for the same reason.
-  out.push(...mergedTrailingRun(pendingMembers));
+  endRun();
   return out;
 }
 
@@ -187,6 +190,8 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  * Every story collects its blocks through here — body, note, textbox and table cell — so a
  * container is a merge boundary by construction: a paragraph can only merge with one that
  * shares its parent, which is the same rule the store applies.
+ *
+ * Last, an empty paragraph whose mark is hidden leaves the flow; see `hidden-paragraph-mark.ts`.
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
@@ -197,8 +202,10 @@ export function mergedFlowBlocks(
     ...entry,
     block: projectRevisionFormatting(entry.block, displayMode, authorFilter),
   }));
-  const merged = withMergedParagraphs(blocks, displayMode, authorFilter);
-  return merged.filter((block) => acceptStoryBlock(block, displayMode, authorFilter));
+  const accepted = withMergedParagraphs(blocks, displayMode, authorFilter).filter((entry) =>
+    acceptStoryBlock(entry.block, displayMode, authorFilter)
+  );
+  return withoutHiddenMarkParagraphs(accepted, displayMode, authorFilter);
 }
 
 /**

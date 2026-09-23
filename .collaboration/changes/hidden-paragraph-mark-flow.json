@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The body paragraph section index covered only paragraphs that layout placed in the flow.",
+  "after": "The index also covers empty paragraphs whose hidden mark removes them from the flow, and maps each one to the section of the paragraph that follows it.",
+  "reason": "The index is a local, derived lookup rebuilt from the canonical tree. The change adds no stored field, operation, or update, and it does not change how any shared node or identity is represented or interpreted.",
+  "tests": [
+    "packages/core/src/editor/__tests__/body-paragraph-section-index.test.ts",
+    "packages/core/src/layout/__tests__/hidden-paragraph-mark.test.ts"
+  ],
+  "changeset": "hidden-paragraph-mark-flow",
+  "migration": null
+}

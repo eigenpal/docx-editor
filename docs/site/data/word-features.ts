@@ -209,7 +209,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The editor does not draw w:vanish runs and gives them no space, so pages break where Word breaks them. The text survives a round trip. There is no "show hidden text" option. A paragraph with a vanished mark still occupies a line.',
+      'The editor does not draw w:vanish runs and gives them no space, so pages break where Word breaks them. The text survives a round trip. There is no "show hidden text" option. A paragraph that shows nothing and whose mark is directly hidden takes no space when another paragraph follows it in the same container, and it still counts in list numbering. A mark hidden only through a style still occupies a line.',
   },
   {
     id: 'text.math',

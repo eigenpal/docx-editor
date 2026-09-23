@@ -42,6 +42,7 @@ import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
+import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
 
 interface ListResolveChangeEvidence {
   readonly preservesNumberedSequence: boolean;
@@ -693,12 +694,14 @@ function rememberResolvedListItemsMemo(
 
 function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   options: T,
-  blocks: readonly OoxmlElement[],
+  flowBlocks: readonly OoxmlElement[],
   memoOwner: LayoutSession | undefined
 ): T & {
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
+  // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
+  const blocks = numberingFlowBlocks(flowBlocks);
   const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined) {
     const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);

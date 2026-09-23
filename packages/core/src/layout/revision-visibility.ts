@@ -16,8 +16,12 @@
 // has to keep its box, because that content is visible and Word merely merges it forward —
 // dropping it would lose text. Only the intersection is removed.
 
-import type { OoxmlNode } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  readOnOffChild,
+} from '../store/package/ooxml-shared.ts';
 import {
   contentControlContentOf,
   isContentControl,
@@ -96,20 +100,27 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
  * Descending into insertions is load-bearing: a paragraph whose mark is struck and whose
  * content is an insertion is Word's shape for "this line was added, then merged upward", and
  * treating its content as unrendered dropped the added words from every mode.
+ *
+ * `skipHiddenRuns` also treats a run whose DIRECT `w:rPr` sets `w:vanish` as rendering nothing.
+ * Direct formatting decides the toggle outright, so that answer needs no style cascade; a run
+ * hidden only through a style still counts as rendering, which keeps its line.
  */
 function rendersNoText(
   node: OoxmlNode,
   depth: number,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  revisions: readonly RevisionAttribution[] = []
+  revisions: readonly RevisionAttribution[] = [],
+  skipHiddenRuns = false
 ): boolean {
   if (node.kind === 'textValue') return true;
-  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return true;
+  // Past the cap the strict walk cannot see the content, so it assumes some is there.
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return !skipHiddenRuns;
   const walkChildren = (children: readonly OoxmlNode[], childDepth: number): boolean => {
     for (const child of children) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'run') {
+        if (skipHiddenRuns && runDirectlyHidden(child)) continue;
         for (const grand of child.children) {
           if (grand.kind === 'text') {
             for (const value of grand.children) {
@@ -125,26 +136,85 @@ function rendersNoText(
         continue;
       }
       if (isContentControl(child)) {
-        if (childDepth + 1 >= MAX_INLINE_CONTAINER_DEPTH) continue;
+        if (childDepth + 1 >= MAX_INLINE_CONTAINER_DEPTH) {
+          if (skipHiddenRuns) return false;
+          continue;
+        }
         const content = contentControlContentOf(child);
         if (content && !walkChildren(content, childDepth + 1)) return false;
         continue;
       }
       if (isInlineRunContainer(child) && !isRevisionWrapper(child)) {
-        if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, revisions))
+        if (
+          !rendersNoText(
+            child,
+            childDepth + 1,
+            displayMode,
+            authorFilter,
+            revisions,
+            skipHiddenRuns
+          )
+        )
           return false;
         continue;
       }
-      if (!isRevisionWrapper(child)) continue;
+      if (!isRevisionWrapper(child)) {
+        // The strict walk refuses to call an unknown element empty: math, a field wrapper it
+        // does not descend, or anything a later schema adds may well draw something.
+        if (skipHiddenRuns && !isInertParagraphChild(child)) return false;
+        continue;
+      }
       const attribution = revisionAttributionOf(child);
       if (!attribution) continue;
       const local = withRevision(revisions, attribution);
       if (!revisionsVisible(local, displayMode, authorFilter)) continue;
-      if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, local)) return false;
+      if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, local, skipHiddenRuns))
+        return false;
     }
     return true;
   };
   return walkChildren(node.children, depth);
+}
+
+/** Paragraph children that never draw anything: properties, and range and proofing markers. */
+const INERT_PARAGRAPH_CHILDREN = new Set([
+  'pPr',
+  'bookmarkStart',
+  'bookmarkEnd',
+  'commentRangeStart',
+  'commentRangeEnd',
+  'moveFromRangeStart',
+  'moveFromRangeEnd',
+  'moveToRangeStart',
+  'moveToRangeEnd',
+  'permStart',
+  'permEnd',
+  'proofErr',
+]);
+
+function isInertParagraphChild(node: OoxmlElement): boolean {
+  if (node.kind === 'paragraphProperties') return true;
+  return node.namespaceUri === WML_NAMESPACE_URI && INERT_PARAGRAPH_CHILDREN.has(node.localName);
+}
+
+/** A run whose own `w:rPr` sets `w:vanish` on. */
+function runDirectlyHidden(run: OoxmlElement): boolean {
+  const properties = run.children.find((child) => child.kind === 'runProperties');
+  return properties !== undefined && readOnOffChild(properties, 'vanish');
+}
+
+/**
+ * Would this paragraph put anything visible on the page in this display mode?
+ *
+ * The {@link revisionRemovesParagraph} walk, with directly hidden runs counted as rendering
+ * nothing too. Unrecognised content still counts as rendering.
+ */
+export function paragraphRendersNothingVisible(
+  paragraph: OoxmlNode,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  return rendersNoText(paragraph, 0, displayMode, authorFilter, [], true);
 }
 
 /**

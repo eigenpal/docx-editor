@@ -46,6 +46,7 @@ import {
   type RefNoteParts,
 } from './field-ref.ts';
 import { walkStoryParagraphs, withResolvedListItems } from './list-resolve.ts';
+import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
@@ -208,7 +209,7 @@ export function planRefFieldResultRefresh(
   // (notes have no substitute pass), and a save must carry what the pages paint.
   collectStaleResultUpdates(
     part,
-    walkStoryParagraphs(blocks),
+    walkStoryParagraphs(numberingFlowBlocks(blocks)),
     context,
     updates,
     options.pageRefPageNumberOf
@@ -246,7 +247,12 @@ export function planNoteRefFieldResultRefreshes(
       options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE
     )) {
       if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
-      collectStaleResultUpdates(notesPart, walkStoryParagraphs(story), context, updates);
+      collectStaleResultUpdates(
+        notesPart,
+        walkStoryParagraphs(numberingFlowBlocks(story)),
+        context,
+        updates
+      );
     }
     if (updates.length > 0) plans.push({ noteKind, op: { op: 'refreshFieldResults', updates } });
   }
