@@ -1,7 +1,7 @@
 name: Performance benchmark
 
-# Runs two benchmarks on the PR head and on its baseline, then upserts one
-# sticky PR comment with the before/after tables:
+# Runs two benchmarks for PRs and each main push. PRs receive one
+# sticky comment with the before/after tables. Main runs retain artifacts:
 #   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
 #     UX number: keystroke handler and frame latency through the real editor;
 #   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
@@ -23,6 +23,8 @@ name: Performance benchmark
 # BASELINE run only degrades the comment.
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -30,18 +32,18 @@ on:
 permissions:
   contents: read
 
-# A new push supersedes the previous run's numbers and its pending comment.
+# PR pushes supersede their previous run. Each main commit keeps its own run.
 concurrency:
-  group: bench-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: bench-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   bench:
-    if: github.actor != 'dependabot[bot]'
+    if: github.event_name == 'push' || github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     # Sized for the three-fixture browser pass (plain + tracked + the generated
     # ~1,000-page stress document) on both sides.
-    timeout-minutes: 35
+    timeout-minutes: ${{ github.event_name == 'push' && 45 || 35 }}
     permissions:
       contents: read # checkout + merge-base worktree
       pull-requests: write # upsert the single sticky benchmark comment
@@ -72,12 +74,25 @@ jobs:
 
       - name: Prepare baseline worktree
         id: baseline
+        env:
+          BENCH_EVENT: ${{ github.event_name }}
+          BENCH_BASE_REF: ${{ github.base_ref }}
+          BENCH_PREVIOUS_SHA: ${{ github.event.before }}
         run: |
           mkdir -p bench-out
           # HEAD is the PR merge ref, so this resolves to the main tip the merge
           # ref was built against — the delta isolates exactly what merging this
           # PR changes. Do not "fix" this to the branch fork point.
-          BASE=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+          if [ "$BENCH_EVENT" = "push" ]; then
+            # Compare the merged main state with the main state before this push.
+            BASE="$BENCH_PREVIOUS_SHA"
+            if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+              echo "Previous main commit is unavailable; report head measurements only."
+              exit 0
+            fi
+          else
+            BASE=$(git merge-base HEAD "origin/$BENCH_BASE_REF")
+          fi
           echo "baseline commit: $BASE"
           git worktree add "$RUNNER_TEMP/base" "$BASE"
           if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
@@ -182,22 +197,46 @@ jobs:
       - name: Engine round 4 — PR head
         run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-4.json
 
+      - name: Additional engine rounds on main
+        if: github.event_name == 'push' && steps.baseline.outputs.engine == 'true'
+        run: |
+          # Twelve paired engine rounds support uncertainty estimates without
+          # multiplying the expensive browser passes. Preserve ABBA ordering.
+          engine_round() {
+            side="$1"
+            round="$2"
+            if [ "$side" = "head" ]; then
+              bun scripts/bench/edit-bench.ts --runs 3 --json > "bench-out/head-$round.json"
+            else
+              (cd "$RUNNER_TEMP/base" && bun scripts/bench/edit-bench.ts --runs 3 --json) \
+                > "bench-out/base-$round.json" \
+                || { rm -f "bench-out/base-$round.json"; echo "Baseline round $round failed"; }
+            fi
+          }
+          for first in 5 7 9 11; do
+            second=$((first + 1))
+            engine_round head "$first"
+            engine_round base "$first"
+            engine_round base "$second"
+            engine_round head "$second"
+          done
+
       - name: Render comment
         run: |
-          ARGS="--out bench-out/comment.md"
-          for f in bench-out/head-1.json bench-out/head-2.json bench-out/head-3.json bench-out/head-4.json; do
-            [ -f "$f" ] && ARGS="$ARGS --head $f"
+          ARGS=(--out bench-out/comment.md)
+          for f in bench-out/head-[0-9]*.json; do
+            [ -f "$f" ] && ARGS+=(--head "$f")
           done
-          for f in bench-out/base-1.json bench-out/base-2.json bench-out/base-3.json bench-out/base-4.json; do
-            [ -f "$f" ] && ARGS="$ARGS --base $f"
+          for f in bench-out/base-[0-9]*.json; do
+            [ -f "$f" ] && ARGS+=(--base "$f")
           done
           for f in bench-out/head-ux-1.json bench-out/head-ux-2.json; do
-            [ -f "$f" ] && ARGS="$ARGS --head-ux $f"
+            [ -f "$f" ] && ARGS+=(--head-ux "$f")
           done
           for f in bench-out/base-ux-1.json bench-out/base-ux-2.json; do
-            [ -f "$f" ] && ARGS="$ARGS --base-ux $f"
+            [ -f "$f" ] && ARGS+=(--base-ux "$f")
           done
-          node scripts/bench/edit-bench-comment.mjs $ARGS
+          node scripts/bench/edit-bench-comment.mjs "${ARGS[@]}"
 
       - name: Upload benchmark artifacts
         if: always()
@@ -209,7 +248,7 @@ jobs:
 
       - name: Upsert PR comment
         # Fork PRs get a read-only token; their numbers live in the artifact.
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v9
         with:
           script: |
