@@ -81,4 +81,56 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
       expect(table.rows[0]!.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
     }
   });
+
+  const withRows = (
+    options: Parameters<typeof squareAnchorInCell>[0],
+    edit: (xml: string, anchorRow: string) => string
+  ) => {
+    const single = squareAnchorInCell(options);
+    const anchorRow = single.slice(single.indexOf('<w:tr>'), single.indexOf('</w:tr>') + 7);
+    const part = load(edit(single, anchorRow));
+    return layoutSemanticDocument(part, 1, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      compatibilityMode: 14,
+    });
+  };
+
+  test('a header row that touches the float moves below it with the body', () => {
+    const header =
+      '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>header</w:t></w:r></w:p></w:tc></w:tr>';
+    const page = withRows({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' }, (xml, row) =>
+      xml.replace(row, header + row)
+    ).pages[0]!;
+    const table = page.fragments[0] as TableFragmentRecord;
+    const drawing = page.anchoredDrawings![0]!;
+    expect(drawing.y).toBeLessThan(20);
+    expect(table.rows[0]!.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
+  });
+
+  test('a row pushed onto the next page takes its float with it', () => {
+    const filler = '<w:p><w:r><w:t>line</w:t></w:r></w:p>'.repeat(45);
+    const layout = withRows({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' }, (xml) =>
+      xml.replace('<w:body>', `<w:body>${filler}`)
+    );
+    const drawings = layout.pages.flatMap((page) => page.anchoredDrawings ?? []);
+    expect(drawings).toHaveLength(1);
+    // Never pinned up off its sheet by a push that the page break superseded.
+    expect(drawings[0]!.y).toBeGreaterThanOrEqual(0);
+  });
+
+  test('a vertically aligned cell keeps the cell-flow handling', () => {
+    const page = withRows(
+      { text: TEXT, layoutInCell: '0', wrap: 'topAndBottom', centred: true },
+      (xml) => xml
+    ).pages[0]!;
+    const table = page.fragments[0] as TableFragmentRecord;
+    // Not pushed: the table stays at the top, and the cell text still clears the float.
+    expect(table.box.y).toBeCloseTo(0, 3);
+    const drawing = page.anchoredDrawings![0]!;
+    const firstLine = (table.rows[0]!.cells[0]!.blocks[0] as { lines: { box: { y: number } }[] })
+      .lines[0]!;
+    expect(firstLine.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
+  });
 });

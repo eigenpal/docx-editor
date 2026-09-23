@@ -42,12 +42,7 @@ import {
 } from './semantic-table.ts';
 import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
 import { shiftBlocks } from './table-fragment-finalize.ts';
-import {
-  outOfCellFloatParagraphs,
-  probeOutOfCellBands,
-  rowTopClearOfBands,
-  type OutOfCellBand,
-} from './table-out-of-cell-floats.ts';
+import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type {
@@ -137,7 +132,7 @@ export function paginateTableInFlow(
     styleCascade,
     displayMode,
     revisionAuthorFilter,
-    deps: tableDeps,
+    deps: flowDeps,
     shiftAnchor,
     publishFragment,
   } = flow;
@@ -184,13 +179,17 @@ export function paginateTableInFlow(
     flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
   }
   /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
-  const rowHeightOf = (probeRow: SemanticTableRow, top = flow.cursorY, deps = tableDeps): number =>
+  const rowHeightOf = (
+    probeRow: SemanticTableRow,
+    top = flow.cursorY,
+    deps?: TableFlowDeps
+  ): number =>
     measureRowHeight(
       probeRow,
       structure.columnWidthsPt,
       tableLeft,
       0,
-      deps,
+      deps ?? tableDeps,
       structure.cellSpacingPt,
       undefined,
       tableDeps.pageExclusionZones?.().length ? top : undefined
@@ -198,21 +197,13 @@ export function paginateTableInFlow(
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
-  const floatParagraphs =
-    outOfFlow || structure.float ? undefined : outOfCellFloatParagraphs(structure, tableDeps);
-  let floatBands: readonly OutOfCellBand[] =
-    floatParagraphs && floatParagraphs.size > 0
-      ? probeOutOfCellBands(
-          structure,
-          table.id,
-          tableLeft,
-          flow.cursorY,
-          floatParagraphs,
-          tableDeps
-        )
-      : [];
-  let floatPush = 0;
-  const floatPushByParagraph = new Map<string, number>();
+  // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
+  // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`.
+  const floats =
+    outOfFlow || structure.float
+      ? null
+      : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, flowDeps);
+  const tableDeps = floats?.deps ?? flowDeps;
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
     if (row.isHeader) headerRows.push(row);
@@ -245,6 +236,8 @@ export function paginateTableInFlow(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   const closeTableFragment = (): void => {
+    // Every close is a break or the table's end: rows past it are on another sheet.
+    floats?.end();
     if (rows.length === 0) return;
     const index = rows.length - 1;
     const record = rows[index]!;
@@ -332,10 +325,6 @@ export function paginateTableInFlow(
       }
     }
     publishFragment(positionedFragment);
-    // The rows moved below their out-of-cell floats; the floats stay where Word keeps them.
-    for (const [paragraphId, dy] of floatPushByParagraph) shiftAnchor(paragraphId, -dy);
-    floatPushByParagraph.clear();
-    floatBands = [];
     fragmentIndex += 1;
     rows = [];
     sourceRows = [];
@@ -426,7 +415,13 @@ export function paginateTableInFlow(
   };
 
   // Initial authored header group (not repeats) — atomic with body-row pagination below.
-  if (!initialHeaderGroupDegraded) placeHeaderGroup(false);
+  if (!initialHeaderGroupDegraded) {
+    if (floats) {
+      flow.cursorY = floats.clear(flow.cursorY, () => headerGroupHeight, headerRows);
+      fragmentTop = flow.cursorY;
+    }
+    placeHeaderGroup(false);
+  }
 
   // `w:vMerge` heights, planned over the BODY rows: a merged cell is as tall as the rows
   // it covers, so its own row must not swallow the whole merged height.
@@ -471,16 +466,12 @@ export function paginateTableInFlow(
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
     const forceBreak = forceNextFragment;
     forceNextFragment = false;
-    if (floatBands.length > 0) {
-      const top = rowTopClearOfBands(flow.cursorY, (y) => rowHeightOf(row, y), floatBands);
-      floatPush += top - flow.cursorY;
-      flow.cursorY = top;
+    if (floats) {
+      const firstDeps =
+        rows.length === 0 ? firstRowContentDeps(structure, row, tableDeps) : undefined;
+      flow.cursorY = floats.clear(flow.cursorY, (y) => rowHeightOf(row, y, firstDeps), [row]);
       // A table pushed before its first row starts where that row now does.
-      if (rows.length === 0) fragmentTop = top;
-      if (floatPush > 0.001)
-        for (const cell of row.cells)
-          for (const block of cell.blocks)
-            if (floatParagraphs?.has(block.id)) floatPushByParagraph.set(block.id, floatPush);
+      if (rows.length === 0) fragmentTop = flow.cursorY;
     }
     admitSpans(bodyRowIndex, row);
     let terminalDeps: TableFlowDeps | undefined;

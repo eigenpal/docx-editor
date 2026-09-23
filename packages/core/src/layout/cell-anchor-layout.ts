@@ -22,6 +22,11 @@ export interface CellAnchorScope {
    * wrap type. The objects still paint where they are anchored.
    */
   readonly anchorsWrapText: boolean;
+  /**
+   * True for a paragraph whose out-of-cell floats the table's rows clear instead (see
+   * `table-out-of-cell-floats.ts`), so the cell carves no top-and-bottom band for them.
+   */
+  readonly rowsClearOutOfCellFloats: boolean;
 }
 
 /**
@@ -33,16 +38,24 @@ export const LEGACY_CELL_ANCHOR_SCOPE: CellAnchorScope = Object.freeze({
   inTableCell: true,
   compatibilityMode: undefined,
   anchorsWrapText: true,
+  rowsClearOutOfCellFloats: false,
 });
 
 export function cellAnchorScope(
   inTableCell: boolean | undefined,
-  story: { readonly compatibilityMode?: number; readonly anchorsWrapText?: boolean }
+  story: {
+    readonly compatibilityMode?: number;
+    readonly anchorsWrapText?: boolean;
+    readonly outOfCellFloatParagraphs?: ReadonlySet<string>;
+  },
+  paragraphId?: string
 ): CellAnchorScope {
   return Object.freeze({
     inTableCell: inTableCell === true,
     compatibilityMode: story.compatibilityMode,
     anchorsWrapText: story.anchorsWrapText !== false,
+    rowsClearOutOfCellFloats:
+      paragraphId !== undefined && story.outOfCellFloatParagraphs?.has(paragraphId) === true,
   });
 }
 
@@ -69,8 +82,10 @@ export function anchorLaidOutInCell(
 
 /**
  * An anchor in a table cell that Word lays out against the page instead. It is not part of
- * the cell's flow and carves no hole in it, of any wrap: Word moves the table's rows below
- * such an object instead (see `table-out-of-cell-floats.ts`), so the cell text never meets it.
+ * the cell's flow and carves no side hole in it: Word runs the cell's text straight through
+ * it. A top-and-bottom one is skipped only where the table's rows clear it instead (see
+ * {@link CellAnchorScope.rowsClearOutOfCellFloats}); elsewhere pushing the cell's text down
+ * is the nearer approximation of Word moving the whole table below it.
  */
 export function anchoredOutOfCell(
   projection: DrawingProjection,

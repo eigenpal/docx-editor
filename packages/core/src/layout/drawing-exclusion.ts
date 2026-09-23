@@ -136,7 +136,7 @@ export function paintLayerOf(drawing: AnchoredDrawingRecord): DrawingPaintLayer 
   return drawing.behindDocument ? 'behind' : 'inFront';
 }
 
-function wrapProducesExclusion(wrap: ImageWrapTarget): boolean {
+export function wrapProducesExclusion(wrap: ImageWrapTarget): boolean {
   return wrap !== 'inline' && wrap !== 'behind' && wrap !== 'inFront';
 }
 
@@ -573,8 +573,12 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (atom.projection.wrap !== 'topAndBottom') continue;
-    // The table moves below an out-of-cell float instead; see `table-out-of-cell-floats.ts`.
-    if (anchoredOutOfCell(atom.projection, options)) continue;
+    // The table's rows move below this out-of-cell float instead of the cell text.
+    if (
+      options.cellAnchorScope?.rowsClearOutOfCellFloats &&
+      anchoredOutOfCell(atom.projection, options)
+    )
+      continue;
     const modelStart = offsets.get(atom.atomId);
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
