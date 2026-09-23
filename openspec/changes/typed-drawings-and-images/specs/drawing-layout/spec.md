@@ -54,6 +54,7 @@ An anchored drawing SHALL resolve `wp:positionH` against its `ST_RelFromH` frame
 - **THEN** its frames resolve against the cell
 - **AND** with `@layoutInCell="0"` they resolve against the page or margin as declared, and the object carves no wrap hole in the cell, only when the document's compatibility mode is 14 or lower or absent
 - **AND** in compatibility mode 15 or higher `@layoutInCell="0"` is ignored and the object lays out in the cell as for `"1"`, as Word does
+- **AND** outside a real table cell (a header, footer, note or text-box story) the compatibility mode does not change how `@layoutInCell` is read
 
 #### Scenario: Unsupported frame falls back visibly
 

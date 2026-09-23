@@ -3,6 +3,8 @@ import type { TableCellStyleFormatting } from './style-cascade.ts';
 
 /** Placement context for a cell paragraph, including its structural end marker. */
 export interface CellParagraphPlacementOptions {
+  /** A real `w:tc`, not a header, footer, note or text-box story reusing cell flow. */
+  readonly inTableCell?: boolean;
   readonly cellEndMark?: boolean;
   readonly hideEndMark?: boolean;
   /** Final-line admission also reserves the cell marker minimum, excluding bottom padding. */

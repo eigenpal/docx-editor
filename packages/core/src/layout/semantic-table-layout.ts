@@ -115,6 +115,7 @@ import { cellContentInsets, type CellContentInsets } from './table-cell-geometry
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import { blockInlineRight } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
+import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
@@ -468,6 +469,7 @@ function placeCellParagraph(
     : rawZones;
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
+  const anchorScope = cellAnchorScope(options?.inTableCell, deps.compatibilityMode);
   const pageZones = localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
@@ -532,13 +534,7 @@ function placeCellParagraph(
       contentLeft: 0,
       contentRight: cellBoxWidth,
       paragraphStartY: top,
-      anchorCellBox: Object.freeze({
-        x: 0,
-        y: 0,
-        width: cellBoxWidth,
-        height: Math.max(1, available),
-      }),
-      compatibilityMode: deps.compatibilityMode,
+      ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
     },
   });
@@ -972,7 +968,7 @@ function placeCellParagraph(
           cellBox,
           cellContentBox: cellBox,
           pageClip: deps.pageContentClip(),
-          compatibilityMode: deps.compatibilityMode,
+          cellAnchorScope: anchorScope,
           measurer: deps.measurer,
           ...(deps.hostedStory
             ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor }
@@ -1132,6 +1128,7 @@ function flowBlocksInBoxBounded(
       deps,
       previousSpaceAfter,
       {
+        inTableCell,
         lineStart: lineIndex,
         startOffset,
         applyWidowControl,

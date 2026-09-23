@@ -10,6 +10,7 @@
 // file is at its line ceiling.
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { cellAnchorScope } from './cell-anchor-layout.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   publishAnchoredDrawingsForParagraph,
@@ -91,7 +92,7 @@ export function publishDeferredRowAnchors(
         cellBox,
         cellContentBox: { ...cellBox, x: pending.cellOriginX, width: pending.cellContentWidth },
         pageClip: deps.pageContentClip(),
-        compatibilityMode: deps.compatibilityMode,
+        cellAnchorScope: cellAnchorScope(true, deps.compatibilityMode),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
@@ -106,7 +107,7 @@ export function republishAnchoredParagraphsInBlocks(
   authoredBlocks: readonly OoxmlElement[],
   cellBox: LayoutBox,
   deps: TableFlowDeps,
-  cellContentBox: LayoutBox = cellBox
+  cellContentBox: LayoutBox
 ): void {
   if (
     !deps.onAnchorRepublish ||
@@ -137,7 +138,7 @@ export function republishAnchoredParagraphsInBlocks(
         cellBox,
         cellContentBox,
         pageClip: deps.pageContentClip(),
-        compatibilityMode: deps.compatibilityMode,
+        cellAnchorScope: cellAnchorScope(true, deps.compatibilityMode),
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),

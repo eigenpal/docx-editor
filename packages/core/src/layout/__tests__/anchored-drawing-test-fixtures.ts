@@ -85,6 +85,8 @@ export function squareAnchorInCell(options: {
   readonly layoutInCell: '0' | '1';
   /** `w:tblInd` in twips, which moves the cell (and an in-cell anchor) off the margin. */
   readonly tableIndent?: number;
+  /** A tall row with `w:vAlign="center"`, which moves the cell's content after it flows. */
+  readonly centred?: boolean;
 }): string {
   const indent =
     options.tableIndent === undefined
@@ -95,7 +97,10 @@ export function squareAnchorInCell(options: {
     '<w:body><w:tbl>' +
     `<w:tblPr><w:tblW w:w="8800" w:type="dxa"/>${indent}<w:tblLayout w:type="fixed"/></w:tblPr>` +
     '<w:tblGrid><w:gridCol w:w="8800"/></w:tblGrid>' +
-    '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+    (options.centred ? '<w:tr><w:trPr><w:trHeight w:val="6000"/></w:trPr>' : '<w:tr>') +
+    '<w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/>' +
+    (options.centred ? '<w:vAlign w:val="center"/>' : '') +
+    '</w:tcPr>' +
     '<w:p><w:r><w:drawing>' +
     '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0"' +
     ` allowOverlap="1" layoutInCell="${options.layoutInCell}" relativeHeight="1">` +

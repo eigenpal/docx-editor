@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { load, layoutContext, squareAnchorInCell } from './anchored-drawing-test-fixtures.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 
 const measurer = createFixedMeasurer(6, 14);
 
@@ -85,4 +86,70 @@ describe('w:layoutInCell and a float anchored inside a table cell', () => {
     expect(honoured.layoutInCell).toBe(false);
     expect(honoured.x).toBeCloseTo(0, 3);
   });
+
+  test('a vertically centred cell republishes the object where the mode lays it out', () => {
+    const drawingOf = (layoutInCell: '0' | '1', mode: number) => {
+      const xml = squareAnchorInCell({
+        text: 'word',
+        layoutInCell,
+        tableIndent: 2880,
+        centred: true,
+      });
+      const drawings = layout(xml, mode).pages[0]!.anchoredDrawings ?? [];
+      expect(drawings).toHaveLength(1);
+      return drawings[0]!;
+    };
+    const inCell = drawingOf('1', 15);
+    // Centring moved the content, and the object with it, well below the row top.
+    expect(inCell.y).toBeGreaterThan(50);
+    const ignored = drawingOf('0', 15);
+    expect(ignored.layoutInCell).toBe(true);
+    expect(ignored.x).toBeCloseTo(inCell.x, 3);
+    expect(ignored.y).toBeCloseTo(inCell.y, 3);
+    expect(drawingOf('0', 14).layoutInCell).toBe(false);
+  });
+
+  // Headers, footers, notes and text boxes reuse cell flow but are not tables: the mode rule
+  // is a table-cell rule, so a header anchor reads the same in every mode.
+  for (const mode of [undefined, 14, 15]) {
+    test(`a header anchor reads layoutInCell="0" as authored in mode ${mode ?? 'absent'}`, () => {
+      const cell = squareAnchorInCell({ text: TEXT, layoutInCell: '0' });
+      const paragraph = cell.slice(cell.indexOf('<w:p>'), cell.lastIndexOf('</w:p>') + 6);
+      const xml =
+        cell.slice(0, cell.indexOf('>') + 1).replace('<w:document', '<w:hdr') +
+        paragraph +
+        '</w:hdr>';
+      const part = load(xml, '/word/header1.xml');
+      const story = layoutHeaderFooterStory(
+        part,
+        468,
+        measurer,
+        'test',
+        undefined,
+        undefined,
+        undefined,
+        128,
+        undefined,
+        undefined,
+        layoutContext(part, '/word/header1.xml'),
+        undefined,
+        undefined,
+        {
+          pageNumber: 1,
+          pageWidth: 612,
+          pageHeight: 792,
+          marginLeft: 72,
+          marginRight: 72,
+          marginTop: 72,
+          marginBottom: 72,
+        },
+        undefined,
+        mode === undefined ? undefined : { compatibilityMode: mode }
+      );
+      expect(story.anchoredDrawings?.[0]?.layoutInCell).toBe(false);
+      const lines = (story.fragments[0] as { lines: readonly { contentX: number }[] }).lines;
+      expect(lines.length).toBeGreaterThan(1);
+      for (const line of lines) expect(line.contentX).toBeLessThan(1);
+    });
+  }
 });

@@ -4,7 +4,11 @@
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
-import { effectiveLayoutInCell } from './cell-anchor-layout.ts';
+import {
+  anchorLaidOutInCell,
+  cellAnchorScope,
+  type CellAnchorScope,
+} from './cell-anchor-layout.ts';
 import {
   drawingAccessibility,
   type DrawingAccessibility,
@@ -556,9 +560,9 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly behindDocument: boolean;
   readonly allowOverlap: boolean;
   /**
-   * Whether the object is laid out in its table cell. For an anchor in a cell this is the
-   * layout's reading: from compatibility mode 15 Word ignores `layoutInCell="0"`, so it is
-   * `true`. Outside a table it is the authored `wp:anchor/@layoutInCell`.
+   * Whether the object is laid out in the box it flows in. For an anchor in a table cell this
+   * is the layout's reading: `true` from compatibility mode 15, which ignores
+   * `layoutInCell="0"`. Everywhere else it is the authored `wp:anchor/@layoutInCell`.
    */
   readonly layoutInCell: boolean;
   readonly relativeHeight: number;
@@ -1175,10 +1179,10 @@ export function publishAnchoredDrawingsForParagraph(options: {
   readonly cellBox: LayoutBox | null;
   readonly cellContentBox?: LayoutBox;
   /**
-   * The document's Word compatibility mode, read by in-cell anchors' `layoutInCell`.
-   * Required (not optional) so a publisher cannot forget it and fall back to legacy layout.
+   * With a {@link cellBox}: what decides the anchors' `layoutInCell`; `null` without one.
+   * Required so a publisher cannot forget it and fall back to reading the flag as authored.
    */
-  readonly compatibilityMode: number | undefined;
+  readonly cellAnchorScope: CellAnchorScope | null;
   readonly pageClip: LayoutBox;
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
@@ -1219,11 +1223,14 @@ export function publishAnchoredDrawingsForParagraph(options: {
       (line) => start >= line.range.start && start < line.range.end
     );
     if (!anchorLine) continue;
-    // Outside a table the authored flag is only recorded; no mode reinterprets it.
+    // Outside any cell box the authored flag is only recorded; nothing reads it.
     const layoutInCell =
       options.cellBox === null
         ? (projection.anchor?.layoutInCell ?? true)
-        : effectiveLayoutInCell(projection.anchor, options.compatibilityMode);
+        : anchorLaidOutInCell(
+            projection.anchor,
+            options.cellAnchorScope ?? cellAnchorScope(true, undefined)
+          );
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;

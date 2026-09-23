@@ -13,7 +13,7 @@ import {
   type AnchoredDrawingRecord,
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
-import { anchoredOutOfCell } from './cell-anchor-layout.ts';
+import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import { topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
@@ -574,8 +574,8 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   readonly anchorLineTopByModelStart: ReadonlyMap<number, number>;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   readonly anchorCellBox?: LayoutBox | null;
-  /** The document's Word compatibility mode; see {@link effectiveLayoutInCell}. */
-  readonly compatibilityMode?: number;
+  /** With {@link anchorCellBox}: what decides the cell's anchors' `layoutInCell`. */
+  readonly cellAnchorScope?: CellAnchorScope;
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
