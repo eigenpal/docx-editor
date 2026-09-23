@@ -2,11 +2,11 @@ import { DocumentRefreshError } from './document-refresh-types.ts';
 export { DocumentRefreshError } from './document-refresh-types.ts';
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
+import { createRefreshHighlights } from './document-refresh-highlights.ts';
 import { refreshHostFor } from './document-refresh-host.ts';
 import { refreshCompositionActive } from './refresh-write-guard.ts';
 import { pendingSurfaceCommit } from './surface-commit-state.ts';
 import {
-  createRefreshHighlights,
   resolveRefreshChanges,
   revisionChangeKeys,
   type LocatedChange,
@@ -356,11 +356,11 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
         (entry) =>
           entry.change.status === 'available' && (options?.includePrevious || entry.change.isNew)
       );
-      highlights.show(selected);
+      highlights.show(selected, options);
       notify({ highlightsVisible: selected.length > 0 });
     },
-    clearHighlights() {
-      highlights.clear();
+    clearHighlights(options) {
+      highlights.hide(options);
       notify({ highlightsVisible: false });
     },
     navigateToChange(id, options) {

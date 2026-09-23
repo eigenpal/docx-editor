@@ -36,7 +36,9 @@ export const refreshPreview = String.raw`<!doctype html>
   #viewport { height: 230px; overflow: auto; border: 1px solid var(--line); border-radius: 5px; padding: 20px; background: var(--muted); }
   article { max-width: 460px; margin: auto; padding: 24px; background: var(--bg); }
   article p { position: relative; margin: 0 0 34px; padding: 6px; }
-  article p[data-mark] { outline: 2px solid var(--accent); background: var(--muted); }
+  :root { --highlight-color: #3b82f6; --highlight-opacity: .14; --highlight-padding: 4px; --highlight-radius: 6px; --highlight-duration: 180ms; }
+  article p::after { content: ''; position: absolute; inset: calc(-1 * var(--highlight-padding)); border-radius: var(--highlight-radius); background: var(--highlight-color); opacity: 0; pointer-events: none; transition: opacity var(--highlight-duration) cubic-bezier(.23,1,.32,1); }
+  article p[data-mark]::after { opacity: var(--highlight-opacity); }
   article p[data-mark]::before { content: 'Changed'; position: absolute; top: -18px; left: 0; font: 600 11px system-ui, sans-serif; color: var(--accent); }
   #code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 44px; font-size: 11px; padding-top: 12px; }
   #position { font-size: 11px; margin: 5px 0 0; }
@@ -65,6 +67,11 @@ export const refreshPreview = String.raw`<!doctype html>
   <button id="recent" disabled>Recent only</button><button id="all" disabled>All changes</button>
   <button id="clear" disabled>Clear highlights</button><button id="next" disabled>Next change</button>
   <button id="focus" disabled>Next and focus</button>
+</div>
+<div class="row">
+  <label for="color">Color</label><select id="color"><option value="#3b82f6">Light blue</option><option value="#8b5cf6">Violet</option><option value="#10b981">Green</option></select>
+  <label for="motion">Fade</label><select id="motion"><option value="180">180ms</option><option value="250">250ms</option><option value="0">None</option></select>
+  <label for="shape">Corners</label><select id="shape"><option value="6">Rounded</option><option value="0">Square</option><option value="12">More rounded</option></select>
 </div>
 <div id="viewport" tabindex="0" role="region" aria-label="Sample document"><article id="document"></article></div>
 <p id="position"></p><code id="code">const refresh = createDocumentRefresh(editor);</code>
@@ -137,7 +144,21 @@ export const refreshPreview = String.raw`<!doctype html>
       effect === 'cumulative' ? 'Two cumulative changes. Only the second change is recent.' : 'File accepted. Scroll stays at ' + top + 'px. One recent change.';
     message(text, 'const result = await refresh.apply({ submission, sequence, bytes, changes });' + (changes.length ? '\nif (result.ok) refresh.highlightChanges();' : ''));
   };
-  viewport.addEventListener('scroll', position); render(); controls();
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  function stylePreview(announce = true) {
+    const duration = Number(get('motion').value);
+    const options = { color: get('color').value, opacity: .14, padding: 4, borderRadius: Number(get('shape').value), animation: duration ? { durationMs: duration } : false };
+    document.documentElement.style.setProperty('--highlight-color', options.color);
+    document.documentElement.style.setProperty('--highlight-radius', options.borderRadius + 'px');
+    document.documentElement.style.setProperty('--highlight-duration', (reducedMotion.matches ? Math.min(duration, 125) : duration) + 'ms');
+    if (announce) {
+      highlight();
+      message('Highlight style updated. Text and scroll stay still.', 'refresh.highlightChanges(' + JSON.stringify(options, null, 2) + ');');
+    }
+  }
+  ['color', 'motion', 'shape'].forEach(id => { get(id).onchange = () => stylePreview(); });
+  reducedMotion.addEventListener('change', () => stylePreview(false));
+  viewport.addEventListener('scroll', position); stylePreview(false); render(); controls();
 </script>
 </html>`;
 
@@ -145,7 +166,7 @@ export const refreshPreview = String.raw`<!doctype html>
   title="Interactive document refresh effects"
   sandbox="allow-scripts"
   srcDoc={refreshPreview}
-  style={{ width: '100%', height: 650, border: 0, borderRadius: 8 }}
+  style={{ width: '100%', height: 850, border: 0, borderRadius: 8 }}
 />
 
 ## Accept an updated file
@@ -280,6 +301,61 @@ if (available.length) {
 
 Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
 
+## Customize highlights and motion
+
+The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It never moves text, changes scroll, or steals focus.
+
+Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling:
+
+```ts
+import type { RefreshHighlightOptions } from '@docx-editor.dev/react';
+
+const highlights: RefreshHighlightOptions = {
+  color: 'var(--doc-refresh-highlight-color)',
+  opacity: 0.14,
+  padding: 4,
+  borderRadius: 6,
+  animation: { durationMs: 180 },
+};
+
+refresh.highlightChanges(highlights);
+refresh.highlightChanges({ ...highlights, includePrevious: true });
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `color` | `var(--doc-refresh-highlight-color)` | A CSS color or a CSS variable. The theme token defaults to blue. |
+| `opacity` | `0.14` | Fill opacity between `0` and `1`. |
+| `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
+| `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
+| `animation` | `true` | A 180ms opacity fade. Use `false` for immediate changes. |
+| `animation.durationMs` | `180` | Fade duration from `0` to `10000` milliseconds. Use short durations for normal interaction. |
+
+All numeric settings must be finite. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
+
+Repeated calls with unchanged settings do not replay the entrance. Caret changes, zoom, and scrolling do not replay existing highlights. Changed opacity transitions from its current value. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
+
+Switching from all changes to recent changes fades out the excluded boxes.
+
+`clearHighlights()` uses the last requested fade duration. Showing highlights during dismissal reverses the fade without adding duplicate boxes. `snapshot().highlightsVisible` becomes `false` when dismissal starts. Local edits, document replacement, and editor teardown remove stale highlights immediately.
+
+Disable motion for frequent updates or keyboard actions:
+
+```ts
+refresh.highlightChanges({ animation: false });
+refresh.clearHighlights({ animation: false });
+```
+
+You can also choose a different dismissal duration:
+
+```ts
+refresh.clearHighlights({ animation: { durationMs: 125 } });
+```
+
+Reduced-motion preferences cap fades at 125 milliseconds. Switching that preference on finishes active fades immediately. Unsupported animation environments show or remove highlights immediately. Navigation remains immediate and does not animate document movement.
+
+For frequent server results, highlight only recent changes and keep previous changes available through explicit controls. Avoid repeatedly clearing and showing unchanged highlights. Keep a text count or change list beside the document; color alone does not explain what changed.
+
 ## Handle a completely different document
 
 A valid DOCX can contain unrelated content. `apply()` accepts it when the submission, sequence, and local revision checks pass. It replaces the whole document. It does not measure similarity or reject large changes.
@@ -361,7 +437,7 @@ function cancelProcessing() {
 
 `subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `apply()` completion, including refused results. Both subscriptions return an unsubscribe function.
 
-The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. The demo uses no motion, including when reduced motion is enabled.
+The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. Highlight fades respect reduced-motion preferences. Navigation does not animate scrolling.
 
 The controller validates returned bytes before replacement. It retains recovery bytes until loading succeeds. If mounting fails, it reloads the previous document and reports `load-failed`. If recovery also fails, it reports `recovery-failed`. Offer `recover()` and a download of `recoveryBytes()` in that state. Recovery also resets selection and undo history. A document switch invalidates recovery, so it cannot overwrite a later document.
 

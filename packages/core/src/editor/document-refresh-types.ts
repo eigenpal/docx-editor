@@ -91,10 +91,38 @@ export interface DocumentRefreshState {
     | 'failed';
   readonly result: RefreshResult | null;
   readonly changes: readonly RefreshChange[];
-  /** Whether at least one available location has a temporary paragraph highlight. */
+  /** Whether highlights are requested for available locations. False during an explicit exit fade. */
   readonly highlightsVisible: boolean;
   /** Offer restore and download controls when true. */
   readonly recoveryAvailable: boolean;
+}
+
+/** Opacity fade settings. Reduced motion caps fades at 125ms. @public */
+export interface RefreshHighlightAnimation {
+  /** Fade duration in milliseconds. Default: 180. Must be finite and between 0 and 10000. */
+  readonly durationMs?: number;
+}
+
+/** Presentation for temporary paragraph highlights. Each call starts from these defaults. @public */
+export interface RefreshHighlightOptions {
+  /** Include earlier changes from the latest cumulative result. Default: false. */
+  readonly includePrevious?: boolean;
+  /** CSS color, including var(). Default: var(--doc-refresh-highlight-color), a light blue. */
+  readonly color?: string;
+  /** Fill opacity, from 0 to 1. Default: 0.14. Does not change document text opacity. */
+  readonly opacity?: number;
+  /** Extra space on each edge, in CSS pixels at 100% zoom. Default: 4. Must be finite and nonnegative. */
+  readonly padding?: number;
+  /** Corner radius in CSS pixels at 100% zoom. Default: 6. Must be finite and nonnegative. */
+  readonly borderRadius?: number;
+  /** Default: true, a 180ms fade. False disables motion. Repeated calls do not replay the entrance. */
+  readonly animation?: boolean | RefreshHighlightAnimation;
+}
+
+/** Explicit highlight dismissal. Document edits always remove stale highlights immediately. @public */
+export interface ClearRefreshHighlightsOptions {
+  /** Defaults to the last highlightChanges() animation. False removes highlights immediately. */
+  readonly animation?: boolean | RefreshHighlightAnimation;
 }
 
 /** External file transport stays in your application. Reload resets selection and undo history. @public */
@@ -114,9 +142,9 @@ export interface DocumentRefresh {
   /** Completion notification for every apply call, including a refused result. */
   onResult(listener: (result: RefreshResult) => void): () => void;
   /** Highlight paragraphs containing available changes. Defaults to new changes from the latest accepted result. */
-  highlightChanges(options?: { readonly includePrevious?: boolean }): void;
+  highlightChanges(options?: RefreshHighlightOptions): void;
   /** Remove temporary paragraph highlights without changing document content or history. */
-  clearHighlights(): void;
+  clearHighlights(options?: ClearRefreshHighlightsOptions): void;
   /** Explicit navigation. Does not focus unless requested. Returns false for unavailable locations. */
   navigateToChange(id: string, options?: { readonly focus?: boolean }): boolean;
   /** Return a copy for download after recovery fails. */

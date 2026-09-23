@@ -424,4 +424,7 @@ export type {
   RefreshChange,
   RefreshChangeInput,
   RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
 } from './document-refresh.ts';

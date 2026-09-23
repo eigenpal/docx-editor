@@ -833,6 +833,11 @@ export function chromeSlotId(group: {
 // @public
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
 
+// @public
+export interface ClearRefreshHighlightsOptions {
+    readonly animation?: boolean | RefreshHighlightAnimation;
+}
+
 // @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
 
@@ -1038,11 +1043,9 @@ export interface DocumentRefresh {
     apply(update: RefreshUpdate): Promise<RefreshResult>;
     cancel(): void;
     capture(): Promise<RefreshSubmission>;
-    clearHighlights(): void;
+    clearHighlights(options?: ClearRefreshHighlightsOptions): void;
     finish(submission: RefreshSubmission): void;
-    highlightChanges(options?: {
-        readonly includePrevious?: boolean;
-    }): void;
+    highlightChanges(options?: RefreshHighlightOptions): void;
     navigateToChange(id: string, options?: {
         readonly focus?: boolean;
     }): boolean;
@@ -2235,6 +2238,21 @@ export interface RefreshChangeInput {
 
 // @public
 export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
+
+// @public
+export interface RefreshHighlightAnimation {
+    readonly durationMs?: number;
+}
+
+// @public
+export interface RefreshHighlightOptions {
+    readonly animation?: boolean | RefreshHighlightAnimation;
+    readonly borderRadius?: number;
+    readonly color?: string;
+    readonly includePrevious?: boolean;
+    readonly opacity?: number;
+    readonly padding?: number;
+}
 
 // @public
 export interface RefreshLocation {

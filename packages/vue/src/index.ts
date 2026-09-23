@@ -496,4 +496,7 @@ export type {
   RefreshChange,
   RefreshChangeInput,
   RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
 } from '@docx-editor.dev/core/editor';

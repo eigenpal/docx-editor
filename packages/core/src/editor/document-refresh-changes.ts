@@ -1,8 +1,6 @@
 import { paragraphTextOf, type ReviewRevisionItem } from '../store/index.ts';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphFragmentsOf } from '../layout/semantic-record-queries.ts';
-import { paragraphContentBounds } from '../layout/paragraph-content-bounds.ts';
-import type { DocxEditorInstance } from './docx-editor-types.ts';
 import type {
   RefreshChange,
   RefreshChangeInput,
@@ -138,69 +136,4 @@ export function resolveRefreshChanges(
     return resolve({ id: item.id, location }, fingerprint);
   });
   return { located, available: revisions.length > 0 };
-}
-
-/** Temporary paragraph bands. Geometry follows layout, including virtualized pages. */
-export function createRefreshHighlights(editor: DocxEditorInstance, host: RefreshHost) {
-  let selected: readonly LocatedChange[] = [];
-  let elements: HTMLElement[] = [];
-  let observer: MutationObserver | null = null;
-  let observing: HTMLElement | null = null;
-  const remove = () => {
-    for (const element of elements) element.remove();
-    elements = [];
-  };
-  const paint = () => {
-    observer?.disconnect();
-    remove();
-    const surface = host.surface();
-    const container = host.container();
-    if (!surface || !container || selected.length === 0) return;
-    const ids = new Set(selected.map((entry) => entry.paragraphId));
-    const scale = editor.getRenderScale();
-    for (const page of surface.layout().pages) {
-      const parent = container.querySelector<HTMLElement>(
-        `[data-page-index="${page.index}"] > .docx-page-content`
-      );
-      if (!parent) continue;
-      for (const paragraph of paragraphFragmentsOf(page)) {
-        if (!ids.has(paragraph.paragraphId)) continue;
-        const box = paragraphContentBounds(paragraph);
-        const band = container.ownerDocument.createElement('div');
-        band.setAttribute('data-docx-marker', '');
-        band.setAttribute('data-docx-refresh-highlight', '');
-        band.setAttribute('contenteditable', 'false');
-        band.setAttribute('aria-hidden', 'true');
-        band.style.cssText =
-          'position:absolute;pointer-events:none;background:var(--doc-selection);outline:1px solid var(--doc-primary);';
-        band.style.left = `${box.x * scale}px`;
-        band.style.top = `${box.y * scale}px`;
-        band.style.width = `${box.width * scale}px`;
-        band.style.height = `${box.height * scale}px`;
-        parent.append(band);
-        elements.push(band);
-      }
-    }
-    observing = container;
-    observer ??= new MutationObserver(paint);
-    observer.observe(container, { childList: true, subtree: true });
-  };
-  editor.on('selectionChange', () => {
-    if (selected.length) paint();
-  });
-  return {
-    show(changes: readonly LocatedChange[]) {
-      selected = changes;
-      paint();
-    },
-    clear() {
-      selected = [];
-      observer?.disconnect();
-      observing = null;
-      remove();
-    },
-    repaint() {
-      if (observing) paint();
-    },
-  };
 }

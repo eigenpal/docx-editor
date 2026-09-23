@@ -17,6 +17,7 @@ import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
@@ -101,6 +102,8 @@ import { Ref } from 'vue';
 import { RefreshChange } from '@docx-editor.dev/core/editor';
 import { RefreshChangeInput } from '@docx-editor.dev/core/editor';
 import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
+import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
+import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
 import { RefreshLocation } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
@@ -161,6 +164,8 @@ export { ChromeSlotId }
 
 // @public (undocumented)
 export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
+export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
 
@@ -5441,6 +5446,10 @@ export { RefreshChange }
 export { RefreshChangeInput }
 
 export { RefreshFailureCode }
+
+export { RefreshHighlightAnimation }
+
+export { RefreshHighlightOptions }
 
 export { RefreshLocation }
 
