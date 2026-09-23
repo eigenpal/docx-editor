@@ -133,4 +133,23 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
       .lines[0]!;
     expect(firstLine.box.y).toBeGreaterThanOrEqual(drawing.y + drawing.height - 0.001);
   });
+
+  test('a repeated header row does not take the first page push', () => {
+    const single = squareAnchorInCell({ text: 'word', layoutInCell: '0', wrap: 'topAndBottom' });
+    const anchorRow = single.slice(single.indexOf('<w:tr>'), single.indexOf('</w:tr>') + 7);
+    const headerRow = anchorRow.replace('<w:tr>', '<w:tr><w:trPr><w:tblHeader/></w:trPr>');
+    const bodyRow =
+      '<w:tr><w:tc><w:tcPr><w:tcW w:w="8800" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>body</w:t></w:r></w:p></w:tc></w:tr>';
+    const part = load(single.replace(anchorRow, headerRow + bodyRow.repeat(80)));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      compatibilityMode: 14,
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const drawings = layout.pages.flatMap((page) => page.anchoredDrawings ?? []);
+    expect(drawings.length).toBeGreaterThan(0);
+    for (const drawing of drawings) expect(drawing.y).toBeGreaterThanOrEqual(0);
+  });
 });

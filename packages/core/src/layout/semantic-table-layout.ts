@@ -495,7 +495,7 @@ function placeCellParagraph(
       deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
       deps.inlineDrawingLayout !== undefined
     ),
-    projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|cellEndMark:${options?.cellEndMark === true}|from:${startOffset}`,
+    projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|cellEndMark:${options?.cellEndMark === true}|from:${startOffset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   if (deps.cache) deps.onCellBreakKey?.(key);

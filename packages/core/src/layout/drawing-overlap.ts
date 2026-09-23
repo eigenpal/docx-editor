@@ -154,6 +154,9 @@ export function resolveOverlapDisplacement(
     const pastPageBottom =
       candidate.paintBounds.y + candidate.paintBounds.height > options.contentHeight + EPSILON;
     if (stillOverlaps || pastPageBottom) {
+      // The next page has none of this page's blockers: carry the authored x there.
+      if (candidate.x !== drawing.x)
+        candidate = shiftAnchoredDrawing(candidate, drawing.x - candidate.x, 0);
       deferred.push(candidate);
       deferredNodeIds.push(candidate.drawingNodeId);
       continue;

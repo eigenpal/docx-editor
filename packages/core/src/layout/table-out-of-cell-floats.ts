@@ -13,10 +13,9 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { anchorLaidOutInCell, cellAnchorScope } from './cell-anchor-layout.ts';
-import { wrapProducesExclusion } from './drawing-exclusion.ts';
+import { exclusionZoneFromAnchoredDrawing, wrapProducesExclusion } from './drawing-exclusion.ts';
 import {
   anchoredDrawingAtomsInParagraph,
-  emuToPoints,
   type AnchoredDrawingRecord,
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
@@ -48,9 +47,13 @@ export interface OutOfCellFloatPlan {
   readonly clear: (
     top: number,
     heightAt: (top: number) => number,
-    rows: readonly SemanticTableRow[]
+    rows: readonly SemanticTableRow[],
+    pageBottom: number
   ) => number;
-  /** The table left the sheet its floats are on: stop pushing, and pin nothing unplaced. */
+  /**
+   * The first fragment is published: stop pushing and pinning, and hand every float back to
+   * the cell flow, which is all a later sheet or a repeated header row has.
+   */
   readonly end: () => void;
 }
 
@@ -70,18 +73,20 @@ export function planOutOfCellFloats(
 ): OutOfCellFloatPlan | null {
   const layout = deps.inlineDrawingLayout;
   if (!layout) return null;
-  const paragraphs = outOfCellFloatParagraphs(structure, layout, deps);
+  // Live: cells read it as they break, and `end` empties it.
+  const paragraphs = new Set(outOfCellFloatParagraphs(structure, layout, deps));
   if (paragraphs.size === 0) return null;
-  let bands = probeBands(structure, tableId, left, top, paragraphs, layout, deps);
+  // The probe skips the cell band exactly as the real rows do, so both break the same way.
+  let bands = probeBands(structure, tableId, left, top, layout, {
+    ...deps,
+    outOfCellFloatParagraphs: paragraphs,
+  });
   let push = 0;
   const pushByParagraph = new Map<string, number>();
-  const published = new Set<string>();
   const pin = (drawings: readonly AnchoredDrawingRecord[]): readonly AnchoredDrawingRecord[] =>
     drawings.map((drawing) => {
       const dy = pushByParagraph.get(drawing.anchorParagraphId);
-      if (dy === undefined) return drawing;
-      published.add(drawing.anchorParagraphId);
-      return shiftAnchoredDrawing(drawing, 0, -dy);
+      return dy === undefined ? drawing : shiftAnchoredDrawing(drawing, 0, -dy);
     });
   const sink = (target: ((drawings: readonly AnchoredDrawingRecord[]) => void) | undefined) =>
     target && ((drawings: readonly AnchoredDrawingRecord[]) => target(pin(drawings)));
@@ -96,10 +101,11 @@ export function planOutOfCellFloats(
         : {}),
       outOfCellFloatParagraphs: paragraphs,
     },
-    clear: (from, heightAt, rows) => {
-      bands = bands.filter((band) => band.bottom > from + EPSILON);
+    clear: (from, heightAt, rows, pageBottom) => {
+      // A band past the page bottom belongs to rows the page break will carry away.
+      bands = bands.filter((band) => band.bottom > from + EPSILON && band.top < pageBottom);
       let current = from;
-      for (let moves = 0; moves <= bands.length; moves += 1) {
+      for (let moves = 0; bands.length > 0 && moves <= bands.length; moves += 1) {
         const bottom = current + heightAt(current);
         const hit = bands.find(
           (band) => band.top <= bottom + EPSILON && band.bottom > current + EPSILON
@@ -117,7 +123,9 @@ export function planOutOfCellFloats(
     },
     end: () => {
       bands = [];
-      for (const id of pushByParagraph.keys()) if (!published.has(id)) pushByParagraph.delete(id);
+      push = 0;
+      pushByParagraph.clear();
+      paragraphs.clear();
     },
   };
 }
@@ -170,10 +178,10 @@ function probeBands(
   tableId: string,
   left: number,
   top: number,
-  paragraphs: ReadonlySet<string>,
   layout: InlineDrawingLayoutContext,
-  deps: TableFlowDeps
+  deps: TableFlowDeps & { readonly outOfCellFloatParagraphs: ReadonlySet<string> }
 ): readonly OutOfCellBand[] {
+  const paragraphs = deps.outOfCellFloatParagraphs;
   const captured: AnchoredDrawingRecord[] = [];
   const capture = (drawings: readonly AnchoredDrawingRecord[]): void => {
     for (const drawing of drawings) captured.push(drawing);
@@ -202,17 +210,26 @@ function probeBands(
   const bands: OutOfCellBand[] = [];
   for (const drawing of captured) {
     if (!paragraphs.has(drawing.anchorParagraphId)) continue;
-    const distances = layout.projectionForAtom?.(drawing.drawingNodeId)?.wrapGeometry?.distancesEmu;
-    const bottom =
-      drawing.paintBounds.y +
-      drawing.paintBounds.height +
-      (distances ? emuToPoints(distances.bottom) : 0);
-    let bandTop = drawing.paintBounds.y - (distances ? emuToPoints(distances.top) : 0);
+    const projection = layout.projectionForAtom?.(drawing.drawingNodeId);
+    // The same band the float gives the body flow, wrap distances and polygons included.
+    const zone = projection
+      ? exclusionZoneFromAnchoredDrawing({
+          drawing,
+          projection,
+          sourceOrder: 0,
+          contentLeft: -1_000_000,
+          contentRight: 1_000_000,
+        })
+      : null;
+    if (!zone) continue;
+    let bandTop = zone.verticalBand.y;
+    const bottom = zone.verticalBand.y + zone.verticalBand.height;
     // Word resolves a float at the top of its row ON the row edge, where the engine resolves
     // it at the cell's content top, inside the rule between the rows. Measured from the edge,
     // the row above ends exactly where the float begins, and moves with it, as in Word.
     const row = rowTops.get(drawing.anchorParagraphId);
-    if (row && bandTop <= row.contentTop + EPSILON) bandTop = Math.min(bandTop, row.top);
+    if (row && drawing.paintBounds.y <= row.contentTop + EPSILON)
+      bandTop = Math.min(bandTop, row.top);
     if (bottom > bandTop + EPSILON) bands.push(Object.freeze({ top: bandTop, bottom }));
   }
   return bands;

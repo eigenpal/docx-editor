@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { anchorPairInParagraph, layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { resolveOverlapDisplacement } from '../drawing-overlap.ts';
 
 const measurer = createFixedMeasurer(6, 14);
 
@@ -78,5 +79,21 @@ describe('allowOverlap="0" displacement', () => {
       second: { x: 94, y: 22 },
     });
     expect(second.x).toBeCloseTo(first.x + 72, 3);
+  });
+
+  test('a picture deferred to the next page carries its authored x, not the sideways move', () => {
+    const { first, second } = pair({
+      ...SIZE,
+      allowOverlap: '1',
+      first: { x: 22, y: 0 },
+      second: { x: 94, y: 22 },
+    });
+    const later = Object.freeze({ ...second, allowOverlap: false });
+    const resolved = resolveOverlapDisplacement([first, later], {
+      contentHeight: later.y + later.height - 1,
+      contentWidth: 468,
+    });
+    expect(resolved.deferred).toHaveLength(1);
+    expect(resolved.deferred[0]!.x).toBeCloseTo(second.x, 3);
   });
 });

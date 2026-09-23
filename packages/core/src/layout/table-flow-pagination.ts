@@ -197,8 +197,6 @@ export function paginateTableInFlow(
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
-  // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
-  // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`.
   const floats =
     outOfFlow || structure.float
       ? null
@@ -236,9 +234,12 @@ export function paginateTableInFlow(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   const closeTableFragment = (): void => {
-    // Every close is a break or the table's end: rows past it are on another sheet.
-    floats?.end();
-    if (rows.length === 0) return;
+    // Every close is a break or the table's end: rows past it are on another sheet. The end
+    // waits for this fragment's finalize, which republishes its floats through the pin.
+    if (rows.length === 0) {
+      floats?.end();
+      return;
+    }
     const index = rows.length - 1;
     const record = rows[index]!;
     const source = sourceRows[index]!;
@@ -325,6 +326,7 @@ export function paginateTableInFlow(
       }
     }
     publishFragment(positionedFragment);
+    floats?.end();
     fragmentIndex += 1;
     rows = [];
     sourceRows = [];
@@ -417,7 +419,12 @@ export function paginateTableInFlow(
   // Initial authored header group (not repeats) — atomic with body-row pagination below.
   if (!initialHeaderGroupDegraded) {
     if (floats) {
-      flow.cursorY = floats.clear(flow.cursorY, () => headerGroupHeight, headerRows);
+      flow.cursorY = floats.clear(
+        flow.cursorY,
+        () => headerGroupHeight,
+        headerRows,
+        contentHeight()
+      );
       fragmentTop = flow.cursorY;
     }
     placeHeaderGroup(false);
@@ -469,7 +476,8 @@ export function paginateTableInFlow(
     if (floats) {
       const firstDeps =
         rows.length === 0 ? firstRowContentDeps(structure, row, tableDeps) : undefined;
-      flow.cursorY = floats.clear(flow.cursorY, (y) => rowHeightOf(row, y, firstDeps), [row]);
+      const heightAt = (y: number) => rowHeightOf(row, y, firstDeps);
+      flow.cursorY = floats.clear(flow.cursorY, heightAt, [row], contentHeight());
       // A table pushed before its first row starts where that row now does.
       if (rows.length === 0) fragmentTop = flow.cursorY;
     }
