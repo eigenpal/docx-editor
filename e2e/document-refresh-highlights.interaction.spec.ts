@@ -157,3 +157,66 @@ test('custom settings survive zoom without replay and reduced motion limits fade
   });
   await expect(page.locator('[data-docx-refresh-highlight]')).toHaveCount(0);
 });
+
+test('highlights expire after three seconds, reset their timer, and support explicit persistence', async ({
+  page,
+}) => {
+  await open(page);
+  await page.clock.install({ time: new Date(2026, 8, 23) });
+  await page.clock.pauseAt(new Date(2026, 8, 23, 0, 0, 1));
+  const bands = page.locator('[data-docx-refresh-highlight]');
+  await page.evaluate(() => window.__refreshMotion.refresh.highlightChanges({ animation: false }));
+  await page.clock.fastForward(2999);
+  await expect(bands).toHaveCount(2);
+  await page.clock.fastForward(1);
+  await expect(bands).toHaveCount(0);
+  expect(
+    await page.evaluate(() => window.__refreshMotion.refresh.snapshot().highlightsVisible)
+  ).toBe(false);
+  expect(await page.evaluate(() => window.__refreshMotion.refresh.snapshot().changes.length)).toBe(
+    2
+  );
+
+  expect(
+    await page.evaluate(() => window.__refreshMotion.refresh.navigateToChange('delivery-date'))
+  ).toBe(true);
+
+  await page.evaluate(() =>
+    window.__refreshMotion.refresh.highlightChanges({ timeoutMs: 1000, animation: false })
+  );
+  await page.clock.fastForward(600);
+  await page.evaluate(() =>
+    window.__refreshMotion.refresh.highlightChanges({ timeoutMs: 2000, animation: false })
+  );
+  await page.clock.fastForward(1000);
+  await expect(bands).toHaveCount(2);
+  await page.clock.fastForward(1000);
+  await expect(bands).toHaveCount(0);
+
+  await page.evaluate(() =>
+    window.__refreshMotion.refresh.highlightChanges({ timeoutMs: null, animation: false })
+  );
+  await page.clock.fastForward(60000);
+  await expect(bands).toHaveCount(2);
+  await page.evaluate(() => window.__refreshMotion.refresh.clearHighlights({ animation: false }));
+  await expect(bands).toHaveCount(0);
+
+  await page.evaluate(() =>
+    window.__refreshMotion.refresh.highlightChanges({
+      timeoutMs: 100,
+      animation: { durationMs: 220 },
+    })
+  );
+  await page.clock.fastForward(100);
+  const exit = await page.evaluate(() => {
+    const band = window.__refreshMotion.scroll.querySelector<HTMLElement>(
+      '[data-docx-refresh-highlight]'
+    )!;
+    return {
+      visible: window.__refreshMotion.refresh.snapshot().highlightsVisible,
+      opacity: band.style.opacity,
+      duration: band.getAnimations()[0]!.effect!.getTiming().duration,
+    };
+  });
+  expect(exit).toEqual({ visible: false, opacity: '0', duration: 220 });
+});

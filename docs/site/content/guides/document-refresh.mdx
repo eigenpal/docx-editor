@@ -71,6 +71,7 @@ export const refreshPreview = String.raw`<!doctype html>
 <div class="row">
   <label for="color">Color</label><select id="color"><option value="#3b82f6">Light blue</option><option value="#8b5cf6">Violet</option><option value="#10b981">Green</option></select>
   <label for="motion">Fade</label><select id="motion"><option value="180">180ms</option><option value="250">250ms</option><option value="0">None</option></select>
+  <label for="hold">Visible for</label><select id="hold"><option value="3000">3 seconds</option><option value="1000">1 second</option><option value="6000">6 seconds</option><option value="persist">Until cleared</option></select>
   <label for="shape">Corners</label><select id="shape"><option value="6">Rounded</option><option value="0">Square</option><option value="12">More rounded</option></select>
 </div>
 <div id="viewport" tabindex="0" role="region" aria-label="Sample document"><article id="document"></article></div>
@@ -78,7 +79,8 @@ export const refreshPreview = String.raw`<!doctype html>
 <script>
   const get = id => document.getElementById(id);
   const viewport = get('viewport'), article = get('document');
-  let changes = [], cursor = -1, version = 0;
+  let changes = [], cursor = -1, version = 0, expiry;
+  const stopExpiry = () => clearTimeout(expiry);
   function message(text, code) { get('status').textContent = text; get('code').textContent = code; }
   function position() { get('position').textContent = 'Scroll offset: ' + Math.round(viewport.scrollTop) + 'px'; }
   function render(short = false) {
@@ -98,9 +100,17 @@ export const refreshPreview = String.raw`<!doctype html>
     get('clear').disabled = !article.querySelector('[data-mark]');
   }
   function highlight(all = false) {
+    stopExpiry();
     Array.from(article.children).forEach(p => p.removeAttribute('data-mark'));
     changes.filter(c => all || c.recent).forEach(c => article.children[c.index].setAttribute('data-mark', ''));
     controls();
+    if (article.querySelector('[data-mark]') && get('hold').value !== 'persist') {
+      expiry = setTimeout(() => {
+        Array.from(article.children).forEach(p => p.removeAttribute('data-mark'));
+        controls();
+        get('status').textContent = 'Highlights expired. Change information and navigation remain available.';
+      }, Number(get('hold').value));
+    }
   }
   function navigate(focus) {
     if (!changes.length) return;
@@ -113,9 +123,9 @@ export const refreshPreview = String.raw`<!doctype html>
   }
   get('recent').onclick = () => { highlight(); message('Only recent changes have paragraph highlights.', 'refresh.highlightChanges();'); };
   get('all').onclick = () => { highlight(true); message('All available changes have paragraph highlights.', 'refresh.highlightChanges({ includePrevious: true });'); };
-  get('clear').onclick = () => { Array.from(article.children).forEach(p => p.removeAttribute('data-mark')); controls(); message('Highlights cleared. Document text stays unchanged.', 'refresh.clearHighlights();'); };
+  get('clear').onclick = () => { stopExpiry(); Array.from(article.children).forEach(p => p.removeAttribute('data-mark')); controls(); message('Highlights cleared. Document text stays unchanged.', 'refresh.clearHighlights();'); };
   get('next').onclick = () => navigate(false); get('focus').onclick = () => navigate(true);
-  get('reset').onclick = () => { version = 0; changes = []; cursor = -1; render(); viewport.scrollTop = 0; position(); controls(); message('Sample restored. Scroll, then run an effect.', 'const refresh = createDocumentRefresh(editor);'); };
+  get('reset').onclick = () => { stopExpiry(); version = 0; changes = []; cursor = -1; render(); viewport.scrollTop = 0; position(); controls(); message('Sample restored. Scroll, then run an effect.', 'const refresh = createDocumentRefresh(editor);'); };
   get('run').onclick = () => {
     const effect = get('effect').value; cursor = -1;
     if (effect === 'local') {
@@ -147,7 +157,7 @@ export const refreshPreview = String.raw`<!doctype html>
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   function stylePreview(announce = true) {
     const duration = Number(get('motion').value);
-    const options = { color: get('color').value, opacity: .14, padding: 4, borderRadius: Number(get('shape').value), animation: duration ? { durationMs: duration } : false };
+    const options = { color: get('color').value, opacity: .14, padding: 4, borderRadius: Number(get('shape').value), timeoutMs: get('hold').value === 'persist' ? null : Number(get('hold').value), animation: duration ? { durationMs: duration } : false };
     document.documentElement.style.setProperty('--highlight-color', options.color);
     document.documentElement.style.setProperty('--highlight-radius', options.borderRadius + 'px');
     document.documentElement.style.setProperty('--highlight-duration', (reducedMotion.matches ? Math.min(duration, 125) : duration) + 'ms');
@@ -156,7 +166,7 @@ export const refreshPreview = String.raw`<!doctype html>
       message('Highlight style updated. Text and scroll stay still.', 'refresh.highlightChanges(' + JSON.stringify(options, null, 2) + ');');
     }
   }
-  ['color', 'motion', 'shape'].forEach(id => { get(id).onchange = () => stylePreview(); });
+  ['color', 'motion', 'shape', 'hold'].forEach(id => { get(id).onchange = () => stylePreview(); });
   reducedMotion.addEventListener('change', () => stylePreview(false));
   viewport.addEventListener('scroll', position); stylePreview(false); render(); controls();
 </script>
@@ -303,7 +313,7 @@ Highlights mark the paragraphs that contain the validated ranges. They do not ch
 
 ## Customize highlights and motion
 
-The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It never moves text, changes scroll, or steals focus.
+The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It starts fading out after three seconds. It never moves text, changes scroll, or steals focus.
 
 Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling:
 
@@ -315,6 +325,7 @@ const highlights: RefreshHighlightOptions = {
   opacity: 0.14,
   padding: 4,
   borderRadius: 6,
+  timeoutMs: 3000,
   animation: { durationMs: 180 },
 };
 
@@ -328,16 +339,31 @@ refresh.highlightChanges({ ...highlights, includePrevious: true });
 | `opacity` | `0.14` | Fill opacity between `0` and `1`. |
 | `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
 | `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
+| `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep highlights until cleared. |
 | `animation` | `true` | A 180ms opacity fade. Use `false` for immediate changes. |
 | `animation.durationMs` | `180` | Fade duration from `0` to `10000` milliseconds. Use short durations for normal interaction. |
 
-All numeric settings must be finite. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
+All numeric settings must be finite. `timeoutMs` accepts `0` through `2147483647`, or `null`. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
 
-Repeated calls with unchanged settings do not replay the entrance. Caret changes, zoom, and scrolling do not replay existing highlights. Changed opacity transitions from its current value. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
+Repeated calls reset the timeout without replaying the entrance. Expiration removes styling; change metadata and navigation remain available. Caret changes, zoom, and scrolling do not replay existing highlights. Changed opacity transitions from its current value. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
 
 Switching from all changes to recent changes fades out the excluded boxes.
 
 `clearHighlights()` uses the last requested fade duration. Showing highlights during dismissal reverses the fade without adding duplicate boxes. `snapshot().highlightsVisible` becomes `false` when dismissal starts. Local edits, document replacement, and editor teardown remove stale highlights immediately.
+
+Control the display time separately from the fade duration:
+
+```ts
+refresh.highlightChanges({
+  timeoutMs: 5000,
+  animation: { durationMs: 180 },
+});
+
+// Keep highlights until the user dismisses them.
+refresh.highlightChanges({ timeoutMs: null });
+```
+
+The timeout starts after each `highlightChanges()` call. A timeout of `0` starts dismissal on the next timer task. An older timeout cannot clear highlights from a newer call. Edits, document replacement, explicit clearing, and editor teardown cancel the timer.
 
 Disable motion for frequent updates or keyboard actions:
 

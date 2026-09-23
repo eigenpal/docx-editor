@@ -50,7 +50,6 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
   let acceptedRevision: number | null = null;
   const listeners = new Set<() => void>();
   const resultListeners = new Set<(result: RefreshResult) => void>();
-  const highlights = createRefreshHighlights(editor, host);
   let state: DocumentRefreshState = Object.freeze({
     phase: 'idle',
     result: null,
@@ -68,6 +67,9 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
       }
     }
   };
+  const highlights = createRefreshHighlights(editor, host, () => {
+    if (state.highlightsVisible) notify({ highlightsVisible: false });
+  });
   const publish = (result: RefreshResult, phase?: DocumentRefreshState['phase']): RefreshResult => {
     if (phase) notify({ phase, result, recoveryAvailable: recovery !== null });
     for (const listener of resultListeners) {

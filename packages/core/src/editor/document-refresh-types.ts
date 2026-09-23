@@ -115,6 +115,8 @@ export interface RefreshHighlightOptions {
   readonly padding?: number;
   /** Corner radius in CSS pixels at 100% zoom. Default: 6. Must be finite and nonnegative. */
   readonly borderRadius?: number;
+  /** Milliseconds before dismissal starts. Default: 3000. Null keeps highlights until cleared. Maximum: 2147483647. */
+  readonly timeoutMs?: number | null;
   /** Default: true, a 180ms fade. False disables motion. Repeated calls do not replay the entrance. */
   readonly animation?: boolean | RefreshHighlightAnimation;
 }

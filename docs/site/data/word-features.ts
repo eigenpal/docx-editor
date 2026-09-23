@@ -1131,7 +1131,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Accept complete DOCX results in React and Vue without replacing the editor instance. Preserve scroll by default. Reject local edits, stale results, and collaborative sessions. Present temporary paragraph highlights with configurable color, opacity, padding, rounded corners, and opacity fades. Respect reduced motion. Navigate using validated body locations or a registered review module. Reload resets selection and undo history. Arbitrary file comparison and merging are outside this API.',
+      'Accept complete DOCX results in React and Vue without replacing the editor instance. Preserve scroll by default. Reject local edits, stale results, and collaborative sessions. Present temporary paragraph highlights with configurable color, opacity, padding, rounded corners, and opacity fades. Auto-dismiss highlights after a configurable timeout and respect reduced motion. Navigate using validated body locations or a registered review module. Reload resets selection and undo history. Arbitrary file comparison and merging are outside this API.',
     docsLink: '/docs/2.x/guides/document-refresh',
   },
   {

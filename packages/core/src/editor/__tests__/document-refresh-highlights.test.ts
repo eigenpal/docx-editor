@@ -114,6 +114,9 @@ test('custom presentation changes no saved bytes and rejects invalid settings at
     { opacity: 2 },
     { padding: -1 },
     { borderRadius: NaN },
+    { timeoutMs: -1 },
+    { timeoutMs: Infinity },
+    { timeoutMs: 2147483648 },
     { animation: { durationMs: Infinity } },
   ])
     expect(() => refresh.highlightChanges(options)).toThrow(RangeError);
@@ -223,4 +226,22 @@ test('switching from all changes to recent changes fades only the excluded boxes
   );
   expect(bands()).toHaveLength(1);
   expect(bands()[0] === recent).toBe(true);
+});
+
+test('expiration clears styling and notifies subscribers while retaining change locations', async () => {
+  const { refresh, bands } = await open();
+  refresh.highlightChanges({ timeoutMs: 0, animation: false });
+  expect(refresh.snapshot().highlightsVisible).toBe(true);
+  let notifications = 0;
+  const unsubscribe = refresh.subscribe(() => {
+    notifications++;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(bands()).toHaveLength(0);
+  expect(refresh.snapshot().highlightsVisible).toBe(false);
+  expect(refresh.snapshot().phase).toBe('complete');
+  expect(refresh.snapshot().changes).toHaveLength(2);
+  expect(notifications).toBe(1);
+  expect(refresh.snapshot().changes.every((change) => change.status === 'available')).toBe(true);
+  unsubscribe();
 });

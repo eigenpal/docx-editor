@@ -48,7 +48,11 @@ interface Band {
 }
 
 /** Keyed presentation nodes survive selection, zoom, and virtualization without replaying motion. */
-export function createRefreshHighlights(editor: DocxEditorInstance, host: RefreshHost) {
+export function createRefreshHighlights(
+  editor: DocxEditorInstance,
+  host: RefreshHost,
+  onTimeout: () => void
+) {
   let selected: readonly LocatedChange[] = [];
   const bands = new Map<string, Band>();
   let seen = new Set<string>();
@@ -60,6 +64,13 @@ export function createRefreshHighlights(editor: DocxEditorInstance, host: Refres
   let radius = 6;
   let duration = 180;
   let easing = DEFAULT_EASING;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timerVersion = 0;
+  const stopTimer = () => {
+    timerVersion++;
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
 
   const stop = (band: Band) => {
     if (band.animation) {
@@ -227,11 +238,25 @@ export function createRefreshHighlights(editor: DocxEditorInstance, host: Refres
     observer.observe(container, { childList: true, subtree: true });
   };
   const clear = () => {
+    stopTimer();
     selected = [];
     seen.clear();
     observer?.disconnect();
     for (const [key, band] of bands) remove(key, band);
     releaseMedia();
+  };
+  const hide = (options: ClearRefreshHighlightsOptions = {}) => {
+    const milliseconds = durationOf(options.animation, duration);
+    stopTimer();
+    selected = [];
+    seen.clear();
+    observer?.disconnect();
+    for (const [key, band] of bands) {
+      if (band.exiting && milliseconds > 0) continue;
+      band.exiting = true;
+      fade(key, band, 0, milliseconds);
+    }
+    if (!bands.size) releaseMedia();
   };
   editor.on('selectionChange', () => {
     if (selected.length) paint();
@@ -243,6 +268,10 @@ export function createRefreshHighlights(editor: DocxEditorInstance, host: Refres
       const nextPadding = numberOption(options.padding, 4, 'padding');
       const nextRadius = numberOption(options.borderRadius, 6, 'borderRadius');
       const nextDuration = durationOf(options.animation);
+      const nextTimeout =
+        options.timeoutMs === null
+          ? null
+          : numberOption(options.timeoutMs, 3000, 'timeoutMs', 2147483647);
       const nextColor = options.color ?? DEFAULT_COLOR;
       const css = host.container()?.ownerDocument.defaultView?.CSS;
       if (
@@ -265,19 +294,18 @@ export function createRefreshHighlights(editor: DocxEditorInstance, host: Refres
         return;
       }
       paint();
-    },
-    hide(options: ClearRefreshHighlightsOptions = {}) {
-      const milliseconds = durationOf(options.animation, duration);
-      selected = [];
-      seen.clear();
-      observer?.disconnect();
-      for (const [key, band] of bands) {
-        if (band.exiting && milliseconds > 0) continue;
-        band.exiting = true;
-        fade(key, band, 0, milliseconds);
+      stopTimer();
+      if (nextTimeout !== null) {
+        const version = timerVersion;
+        timer = setTimeout(() => {
+          if (version !== timerVersion) return;
+          timer = undefined;
+          hide();
+          onTimeout();
+        }, nextTimeout);
       }
-      if (!bands.size) releaseMedia();
     },
+    hide,
     clear,
     repaint: paint,
   };

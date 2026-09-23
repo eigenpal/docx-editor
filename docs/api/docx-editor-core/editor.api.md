@@ -2252,6 +2252,7 @@ export interface RefreshHighlightOptions {
     readonly includePrevious?: boolean;
     readonly opacity?: number;
     readonly padding?: number;
+    readonly timeoutMs?: number | null;
 }
 
 // @public
