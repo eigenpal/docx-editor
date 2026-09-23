@@ -17,8 +17,8 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 //     vAlign shifts content, and collapsed borders resolve onto layout-owned edges;
 //   - top-level table rows paginate with a real-height preflight: an unsplit row that does
 //     not fit moves to the next page; a row taller than a fresh page fragments at
-//     paragraph/line boundaries when splittable, or fails closed under w:cantSplit /
-//     unsupported nested cuts;
+//     paragraph/line boundaries (a w:cantSplit row first moves to a fresh page), or fails
+//     closed under hRule=exact / unsupported nested cuts;
 //   - nested tables retain their own geometry and may continue at ordinary row boundaries;
 //     cuts through nested rows, vertical merges and repeated headers remain atomic.
 //

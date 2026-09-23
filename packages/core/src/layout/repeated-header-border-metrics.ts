@@ -59,13 +59,11 @@ export function prepareRepeatedHeaderBorderPlan(
   if (deps.borderOwnershipBudget && deps.borderOwnershipBudget.intervalsRemaining < boundaryCells)
     return undefined;
   // This lane does not change existing split-row pagination. Only an atomic row, or
-  // a row that previously fit complete, takes the shared-boundary transaction.
-  if (
-    !body.cantSplit &&
-    body.height.rule !== 'exact' &&
-    baselineBodyHeight > bottom - top - baselineHeaderHeight + 0.001
-  )
-    return undefined;
+  // a row that previously fit complete, takes the shared-boundary transaction. A
+  // `w:cantSplit` row taller than the page splits, so it is not atomic here.
+  const atomic =
+    body.height.rule === 'exact' || (body.cantSplit && baselineBodyHeight <= bottom + 0.001);
+  if (!atomic && baselineBodyHeight > bottom - top - baselineHeaderHeight + 0.001) return undefined;
 
   const lastHeader = headers[headers.length - 1]!;
   const headerCells = physicalCells(lastHeader);

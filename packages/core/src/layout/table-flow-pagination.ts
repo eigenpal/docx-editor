@@ -111,8 +111,9 @@ const POSITIONED_TABLE_LAYOUT_BOTTOM_PT = Number.MAX_SAFE_INTEGER / 1024;
  *
  * Preflights the real unsplit row height (not a one-line estimate). Splittable rows use
  * the current remainder, even when they could fit whole on a fresh page. Atomic rows
- * move whole; `w:cantSplit` and unsafe nested
- * cuts fail closed via {@link TablePaginationError} instead of overflowing contentHeight().
+ * move whole; a `w:cantSplit` row taller than a page moves to a fresh page and splits there.
+ * Exact rows taller than a page and unsafe nested cuts fail closed via
+ * {@link TablePaginationError} instead of overflowing contentHeight().
  * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
  * placed together, moved whole when the remainder is too short, re-emitted complete atop
  * each continuation page where the pending row can advance, and treated as ordinary rows
@@ -514,6 +515,12 @@ export function paginateTableInFlow(
             tableDeps
           );
 
+    // `w:cantSplit` keeps a row whole only when a page can hold it. The full band counts,
+    // because a note reserve yields to a keep-together row on a fresh page (see below).
+    // A taller row starts on a fresh page and then splits like an ordinary row.
+    const pageHoldsRow = (): boolean =>
+      naturalHeight <= Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) + 0.001;
+
     // A row an accepted span covers does not take the whole-row MOVE: alone among the
     // breaks below, that one is an optimization rather than a recovery, and it ends the
     // fragment above merged content already flowed against this page. See the break-site
@@ -535,7 +542,7 @@ export function paginateTableInFlow(
       // authored box is structural progress even though it places no text. Mirror that path before
       // asking the bounded probe, whose `fitted` flag deliberately means content progress.
       if (!isContinuation && naturalHeight <= remaining + 0.001) return true;
-      if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
+      if (!isContinuation && (row.height.rule === 'exact' || (row.cantSplit && pageHoldsRow()))) {
         return false;
       }
       return probeRowFragmentProgress(
@@ -683,7 +690,11 @@ export function paginateTableInFlow(
       // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
       // nothing in `core` catches, on a path the module comment calls a recovery.
       if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
-        if (flow.cursorY > 0 && !movedToFreshPage) {
+        const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
+        // A row that splits anyway gains no room by leaving a fragment of header rows
+        // alone. Moving would only strand them above an empty band.
+        const belowHeadersOnly = rows.length > 0 && rows.every((placed) => placed.isHeaderRow);
+        if (flow.cursorY > 0 && !movedToFreshPage && !(splitsAnyway && belowHeadersOnly)) {
           breakForContinuation(admitsRepeatedHeaders);
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a
@@ -723,12 +734,17 @@ export function paginateTableInFlow(
             break;
           }
         }
-        throw new TablePaginationError(
-          'table-row-overheight',
-          row.height.rule === 'exact'
-            ? `Table row ${row.id} has w:trHeight hRule=exact taller than the available page content`
-            : `Table row ${row.id} has w:cantSplit and is taller than the available page content`
-        );
+        // `w:cantSplit` cannot keep a row whole when no page can hold it. The row is now
+        // on a fresh page or below header rows only, so it splits from here like an
+        // ordinary row instead of discarding the document. An exact height cannot split.
+        if (!splitsAnyway) {
+          throw new TablePaginationError(
+            'table-row-overheight',
+            row.height.rule === 'exact'
+              ? `Table row ${row.id} has w:trHeight hRule=exact taller than the available page content`
+              : `Table row ${row.id} has w:cantSplit and is taller than the available page content`
+          );
+        }
       }
 
       const placementDeps = rowDeps();

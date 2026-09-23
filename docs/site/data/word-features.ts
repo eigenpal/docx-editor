@@ -465,7 +465,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rows split mid-content with correct cut borders. Vertically merged cells repaint on continuation pages, like Word. Repeated headers and bounded complete text rows reserve their shared horizontal border before pagination. This boundary adjustment excludes spaced cells, vertical merges, split rows, positioned tables, drawings, nested tables, and vertical text.',
+      'Rows split mid-content with correct cut borders. A row that cannot break across pages moves to the next page, and a row of that kind taller than a page starts on a new page and then splits. Vertically merged cells repaint on continuation pages, like Word. Repeated headers and bounded complete text rows reserve their shared horizontal border before pagination. This boundary adjustment excludes spaced cells, vertical merges, split rows, positioned tables, drawings, nested tables, and vertical text.',
   },
   {
     id: 'tables.nested',

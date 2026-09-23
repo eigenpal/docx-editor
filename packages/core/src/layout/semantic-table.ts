@@ -253,8 +253,8 @@ export interface SemanticTableRow {
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
-   * `w:trPr/w:cantSplit` — the row must stay on one page. When it cannot fit a fresh page,
-   * layout fails closed rather than fragmenting or overflowing the content box.
+   * `w:trPr/w:cantSplit` — the row must stay on one page. When no page can hold it, the
+   * row starts on a fresh page and splits there, so its content is kept.
    */
   readonly cantSplit: boolean;
   /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */

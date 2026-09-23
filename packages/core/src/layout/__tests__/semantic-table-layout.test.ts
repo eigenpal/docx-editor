@@ -17,7 +17,6 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { MAX_TABLE_COLUMNS } from '../semantic-table.ts';
-import { TablePaginationError } from '../semantic-table-layout.ts';
 import {
   paragraphFragmentsOf,
   type PageGeometry,
@@ -628,16 +627,15 @@ describe('table row pagination (tiny page)', () => {
     }
   });
 
-  test('w:cantSplit overheight fails closed instead of overflowing', () => {
+  test('w:cantSplit taller than a page splits instead of overflowing', () => {
     const paras = Array.from({ length: 30 }, (_, i) => p(`X${i}`)).join('');
     const part = loadPart(`<w:tbl>${tr(tc(paras), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`);
-    expect(() => layoutTiny(part)).toThrow(TablePaginationError);
-    try {
-      layoutTiny(part);
-    } catch (error) {
-      expect(error).toBeInstanceOf(TablePaginationError);
-      expect((error as TablePaginationError).code).toBe('table-row-overheight');
-    }
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+    const bodyRows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(new Set(bodyRows.map((row) => row.id)).size).toBe(1);
+    expect(bodyRows.slice(1).every((row) => row.isContinuation)).toBe(true);
   });
 
   test('w:cantSplit that fits a fresh page moves whole rather than splitting', () => {
