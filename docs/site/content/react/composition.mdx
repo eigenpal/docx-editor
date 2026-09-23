@@ -5,15 +5,15 @@ category: 'React'
 order: 32
 ---
 
-`<DocxEditor>` arranges public components into a packaged editor. Use the same components to build custom chrome.
-
-The packaged toolbar uses the hooks and primitives on this page. Your controls can use the same command and state APIs.
+`<DocxEditor>` combines public components into a packaged editor. Arrange these components yourself, or connect your own controls to the same commands and state.
 
 ## Arrange editor components
 
-Choose toolbar controls, placement, labels, spacing, and a visual style. Add optional document controls. The source code includes the selected components and CSS.
+Choose toolbar controls, placement, labels, spacing, and styles. Add optional document controls, then copy the selected components and CSS.
 
-These example layouts use the composition API; they are not packaged toolbar presets. The demo shows a subset of the available components and options. Use your own React components and TSX for toolbars, menus, and panels. Connect them with [React hooks](/docs/2.x/react/hooks), or combine them with packaged parts.
+The demo shows a subset of the available components and options. These layouts demonstrate composition; they are not packaged toolbar presets.
+
+Use your own React components and TSX for toolbars, menus, and panels. Connect them with [React hooks](/docs/2.x/react/hooks), combine them with packaged parts, and supply your own CSS.
 
 <ReactCompositionDemo />
 
@@ -116,7 +116,7 @@ For composed chrome, call `useChromeTranslate()` inside the locale provider and 
 
 ## Customization options
 
-Use the first option that meets your requirements:
+Choose the amount of customization you need:
 
 1. Override CSS custom properties from the `--doc-*` palette.
 2. Use the `icon` prop to replace a glyph.
@@ -152,9 +152,9 @@ A compound child replaces the slot with the same name. Other default slots remai
 
 ## Custom toolbar
 
-Set `preset={false}` to remove the registry's default arrangement. The JSX order then controls the visual order. Packaged parts still get enabled state, active state, and commands from the engine.
+Set `preset={false}` to include only your chosen parts. Their JSX order sets the toolbar order. Each part gets enabled state, active state, and commands from the engine.
 
-This example builds a custom toolbar from packaged parts:
+This example combines selected packaged parts with custom icons and styles:
 
 ```tsx
 <DocxEditor.Toolbar preset={false} className="my-toolbar">
@@ -242,7 +242,7 @@ function HighlightAction() {
 }
 ```
 
-Share one hook across each surface that exposes the action. This practice keeps enabled-state rules consistent. The chrome registry applies the same rule to packaged toolbar and menu controls.
+Reuse one hook wherever you expose the action. This keeps its enabled-state rules consistent. Packaged toolbar and menu controls share these rules through the chrome registry.
 
 ## Custom context menu
 

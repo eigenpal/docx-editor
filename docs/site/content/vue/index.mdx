@@ -1,6 +1,6 @@
 ---
 title: '@docx-editor.dev/vue'
-description: 'Vue 3 adapter for the DOCX editor: the packaged root component, composition primitives, shared composables, and compound chrome, all from the package root.'
+description: 'Use the Vue 3 DOCX editor, arrange packaged components, or build custom controls with composables.'
 category: 'Vue'
 order: 35
 seoTitle: 'DOCX editor for Vue 3'
@@ -8,13 +8,15 @@ seoTitle: 'DOCX editor for Vue 3'
 
 <PackageStats name="@docx-editor.dev/vue" />
 
+Use `<DocxEditor>` for the packaged editor. Use [composition](/docs/2.x/vue/composition) to arrange its parts or build your own Vue components.
+
 ## Install
 
 ```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core vue
 ```
 
-`@docx-editor.dev/core` and Vue 3 are peer dependencies of the adapter. Install both with the adapter. The adapter includes `@docx-editor.dev/i18n`.
+The adapter requires Vue 3 and one shared copy of `@docx-editor.dev/core`. It includes `@docx-editor.dev/i18n`.
 
 Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes and comments. Add [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the open document.
 
@@ -24,7 +26,7 @@ Import the editor stylesheet once from your application entry:
 import '@docx-editor.dev/vue/styles.css';
 ```
 
-The stylesheet contains the editor chrome and layout classes. Your application must load it before you mount an editor.
+The stylesheet styles the editor controls and document layout. Load it before you mount an editor.
 
 ## Quickstart
 
@@ -52,13 +54,13 @@ The editor has no server-rendered output. On Nuxt, render it inside `<ClientOnly
 
 The compound includes `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, and `DocxEditor.ContextMenu`.
 
-The review module and sidebar require a Pro license. Import the Vue review compound and composables from `@docx-editor.dev/pro/vue`.
+The review module and sidebar use the EigenPal Pro License. Import the Vue review compound and composables from `@docx-editor.dev/pro/vue`.
 
-Components, composables, and engine helpers use the package root. The package does not provide `/ui`, `/composables`, or `/dialogs` subpaths. The stylesheet is the only separate export.
+Import components, composables, and engine helpers from the package root. The package does not provide `/ui`, `/composables`, or `/dialogs` subpaths. The stylesheet is the only separate export.
 
 ## Composition primitives
 
-Use the composition primitives when you need custom chrome:
+Use the composition primitives to arrange toolbars, menus, and document controls:
 
 ```vue
 <script setup lang="ts">
@@ -82,7 +84,7 @@ Keep `DocxEditor.Content` inside `DocxEditor.Viewport`. Place navigation and ove
 
 ## Toolbar
 
-The package exports the toolbar as `DocxEditorToolbar`. The host also exposes it as `DocxEditor.Toolbar`:
+Use `DocxEditorToolbar` or its `DocxEditor.Toolbar` alias for packaged controls. Use a composable to connect your own button:
 
 ```vue
 <script setup lang="ts">
@@ -104,7 +106,9 @@ const bold = useEditorCommand('text.bold');
 </template>
 ```
 
-Render this button as a descendant of `DocxEditor.Root`, such as inside `DocxEditor.Toolbar`.
+Render this button inside `DocxEditor.Root`, such as inside `DocxEditor.Toolbar`.
+
+To choose a subset of packaged controls, set `:preset="false"` and include the named parts you need. For examples, see [Custom toolbar](/docs/2.x/vue/composition#custom-toolbar).
 
 Use `@mousedown.prevent` on custom chrome buttons. This keeps the document caret in place.
 

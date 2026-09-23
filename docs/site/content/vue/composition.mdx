@@ -1,17 +1,19 @@
 ---
 title: 'Composition'
-description: 'Build a Vue DOCX editor from root, viewport, content, chrome, and review primitives.'
+description: 'Build a Vue DOCX editor with packaged parts, selected toolbar controls, and your own components.'
 category: 'Vue'
 order: 37
 ---
 
-`<DocxEditor>` supplies one arrangement of public parts. Use the parts when you need a different interface.
+`<DocxEditor>` combines public components into a packaged editor. Arrange these components yourself, or connect your own controls to the same commands and state.
 
 ## Arrange editor components
 
-Choose toolbar controls, placement, labels, spacing, and a visual style. Add optional document controls. The preview runs the Vue adapter and includes the selected components and CSS.
+Choose toolbar controls, placement, labels, spacing, and styles. Add optional document controls, then copy the selected Vue components and CSS.
 
-These example layouts use the composition API; they are not packaged toolbar presets. The demo shows a subset of the available components and options. Use your own Vue components for toolbars, menus, and panels. Connect them with [Vue composables](/docs/2.x/vue/composables), or combine them with packaged parts.
+The demo shows a subset of the available components and options. These layouts demonstrate composition; they are not packaged toolbar presets.
+
+Use your own Vue components for toolbars, menus, and panels. Connect them with [Vue composables](/docs/2.x/vue/composables), combine them with packaged parts, and supply your own CSS.
 
 <VueCompositionDemo />
 
@@ -140,7 +142,7 @@ For composed chrome, call `useChromeTranslate()` inside the locale provider and 
 
 ## Customization options
 
-Use the first option that meets your requirements:
+Choose the amount of customization you need:
 
 1. Set a class or a `--doc-*` color token.
 2. Replace a part's `icon` prop.
@@ -174,7 +176,9 @@ A named part replaces the matching part in the preset. The `hidden` prop removes
 
 ## Custom toolbar
 
-Set `:preset="false"` to use template order. Packaged parts still read command state and disabled reasons from the editor.
+Set `:preset="false"` to include only your chosen parts. Their template order sets the toolbar order. Each part reads command state and disabled reasons from the editor.
+
+This example combines selected packaged parts:
 
 ```vue
 <DocxEditorToolbar :preset="false" class-name="my-toolbar">

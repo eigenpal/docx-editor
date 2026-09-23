@@ -4,17 +4,17 @@ description: Connect conversion packages to the File menu in React and Vue.
 category: Guides
 ---
 
-Select **File > Export > Markdown (.md)** or **File > Export > PDF (.pdf)**. Each export uses the editor's saved document bytes. Export does not change the document or its undo history.
+Connect conversion handlers to **File > Export** for Markdown and PDF downloads. Each export uses saved DOCX bytes without changing the document or undo history.
 
 ## Try document export
 
-Edit the sample, then download DOCX bytes or convert them to Markdown. Inspect the Markdown output before downloading it. The PDF example shows the required server integration.
+The example converts the edited document to Markdown in the browser. Its PDF example shows server integration code.
 
 <ExportGuideDemo />
 
 ## Install the converters
 
-The editor packages do not install either converter. Install only the formats you enable. Opening the editor or its menu does not load a converter.
+Install the converter for each format your application enables. Editor packages do not include converters. Opening the editor or menu does not load them.
 
 For Markdown export, install the converter in your browser application:
 
@@ -32,9 +32,9 @@ PDF conversion requires the EigenPal Pro License. The PDF package does not run i
 
 ## Configure the menu
 
-Configure only the conversion handlers your application uses. Pass them through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
+Pass conversion handlers through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
 
-The Markdown handler returns `result.markdown`. The menu downloads that continuous text, without page separators, page headers, or page footers. It does not join `result.pages`.
+The menu downloads `result.markdown` as continuous text without page separators, page headers, or page footers. It does not join `result.pages`.
 
 Create `exporters.ts` with browser Markdown conversion and a PDF endpoint:
 
@@ -97,7 +97,7 @@ The editor checks the PDF header before downloading. If conversion fails or retu
 
 If a converter handler is missing, the error names the required package and configuration. A missing converter never falls back to another format.
 
-Use `popups.export` to replace progress and error feedback through the shared popup API. For examples, see [Customize export feedback](/docs/2.x/guides/customize-dialogs#customize-export-feedback).
+Use `popups.export` to replace progress and error feedback. See [Customize export feedback](/docs/2.x/guides/customize-dialogs#customize-export-feedback).
 
 ## Convert PDF on the server
 
@@ -150,14 +150,12 @@ For a custom download interface, call `runChromeExport(editor, format, exporters
 
 ## Demo behavior
 
-The demos enable both export formats explicitly. Their frontend packages install Markdown; the shared server installs PDF.
+The React and Vue example applications enable both formats with `displayMode: 'proposed'`. Exports include tracked insertions and omit tracked deletions.
 
-The demos use `displayMode: 'proposed'` for both formats. Exports include tracked insertions and omit tracked deletions.
-
-The React and Vue demos convert Markdown in the browser. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
+Their frontend packages install Markdown for browser conversion. Their shared server installs PDF. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
 
 For local PDF export, run `bun run build:pdf` before `bun run dev`. The development server uses the same conversion handler as the deployed demo.
 
 **File > Print** uses the same PDF handler. For more information, see [Print documents](/docs/2.x/guides/print).
 
-For conversion options and limits, see [DOCX to Markdown](/docs/2.x/export/markdown) and [DOCX to PDF](/docs/2.x/export/pdf).
+For conversion options and limits, see [DOCX to Markdown](/docs/2.x/export/markdown) and [DOCX to PDF](/docs/2.x/export/pdf). For DOCX downloads, see [Loading and saving](/docs/2.x/guides/loading-and-saving#save-a-document).

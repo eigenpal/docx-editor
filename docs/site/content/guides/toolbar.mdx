@@ -5,13 +5,13 @@ category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The editor provides a title bar, menu, and formatting toolbar. Keep the packaged controls, replace selected controls, or build your own arrangement. Import components and hooks from your adapter package.
+Keep the packaged toolbar, replace individual controls, or compose your own interface. Import components and hooks from your React or Vue adapter.
 
 ## Build a toolbar with the composition API
 
-Choose individual controls, labels, spacing, and a visual style. The source panel includes the selected toolbar parts and CSS. Hidden controls remain available through the editor API; command availability still depends on the document state.
+Compose named toolbar parts and style them with CSS. These examples show selected controls and application styles, not packaged presets. The source includes the selected composition and CSS.
 
-These example toolbars use the composition API; they are not packaged toolbar presets. The demo includes selected controls and styles. You can use other toolbar parts and connect your own components to editor commands.
+Hiding a control does not remove its editor API operation. The document state determines whether each command is available.
 
 <ToolbarCustomDemo />
 
@@ -25,7 +25,7 @@ Choose an approach for your application:
 | Use your own buttons          | `useEditorCommand(slotId)`               |
 | Change interface colors       | `--doc-*` CSS properties                 |
 
-For complete layouts, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
+For toolbar placement and optional components, see [React composition](/docs/2.x/react/composition#arrange-editor-components) or [Vue composition](/docs/2.x/vue/composition#arrange-editor-components).
 
 ## Use the packaged chrome
 
@@ -87,7 +87,9 @@ Use these root props to configure the packaged frame:
 
 ## Use the provider primitives
 
-Use the provider primitives to build your own frame. Import the editor stylesheet once and give the container a height. Packaged controls and the viewport apply their own `.docx-editor` scope. Add that class to a wrapper if custom controls need editor styles and tokens. For a complete wrapper, see [React composition](/docs/2.x/react/composition#primitives) or [Vue composition](/docs/2.x/vue/composition#primitives).
+Use provider primitives when your application owns the editor frame. Import the editor stylesheet once and give the container a height. Packaged controls and the viewport apply their own `.docx-editor` scope. Add that class to a wrapper when custom controls need editor styles and tokens.
+
+For complete wrappers, see [React composition](/docs/2.x/react/composition#primitives) or [Vue composition](/docs/2.x/vue/composition#primitives).
 
 <FrameworkTabs>
 <Framework value="react">
@@ -146,11 +148,11 @@ const t = useChromeTranslate();
 
 If you use a locale provider, mount this component inside it so `useChromeTranslate()` reads its catalog.
 
-The root owns the editor instance. The viewport provides scrolling, and the content part displays the editable pages. Other parts use the same provider.
+`Root` owns the editor instance. `Viewport` provides scrolling. `Content` displays editable pages. Other parts use the same provider.
 
 ## Add root-level command buttons
 
-For small custom controls, call the shared command API from the package root:
+Use `useEditorCommand()` to connect a custom button to command availability, active state, and execution:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -203,25 +205,25 @@ const bold = useEditorCommand('text.bold');
 </Framework>
 </FrameworkTabs>
 
-See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for every slot, its packaged surface, and the matching React and Vue toolbar part.
+The [Chrome slot reference](/docs/2.x/guides/chrome-slots) lists each slot and its React and Vue toolbar parts.
 
 ## Format painter
 
-The `format.painter` slot copies the formatting at the selection and applies it somewhere else. The text never moves.
+The `format.painter` slot copies formatting from the selection and applies it to another location. It leaves the text unchanged.
 
 - Click the control once to arm it for a single application, then select the text to format.
 - Double-click the control to keep it on for repeated applications, and press `Esc` to release it.
 - Press `Ctrl+Alt+C` to copy the formatting and `Ctrl+Alt+V` to apply it. On macOS, use `Command` in place of `Ctrl`.
 
-On macOS, browsers bind `Command+Option+C` to their own element inspector, and a web page can't override a browser shortcut. To copy formatting there, use the control or the right-click menu. `Command+Option+V` applies the formatting as expected.
+On macOS, browsers reserve `Command+Option+C` for their element inspector. Web pages cannot override that shortcut. Use the control or right-click menu to copy formatting. `Command+Option+V` applies formatting.
 
-On Windows and Linux keyboard layouts that put characters on the `AltGr` level of `C` — for example Polish — `Ctrl+Alt+C` types that character instead. Use the control or the right-click menu.
+Some Windows and Linux keyboard layouts assign a character to `AltGr+C`, including Polish. On those layouts, `Ctrl+Alt+C` types that character. Use the control or right-click menu.
 
 - Right-click the document and choose **Copy formatting** or **Paste formatting**.
 
-What the painter copies follows the selection. A selection inside one paragraph copies character formatting: font, size, color, and the character marks. A selection that covers the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
+The selection determines which formatting the painter copies. A selection inside one paragraph copies character formatting: font, size, color, and character marks. Including the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
 
-The painter reads the formatting the reader sees, not only what the text states directly. Copying from a paragraph that takes its face from a style carries that face to the target. Three things stay on the target: paragraph borders (`w:pBdr`), a run's character style (`w:rStyle`), and character shading (`w:shd` on a run).
+The painter copies resolved formatting, including fonts inherited from styles. It preserves the target paragraph borders (`w:pBdr`), run character style (`w:rStyle`), and run shading (`w:shd`).
 
 To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting` commands. `pasteFormatting` reports a disabled reason until something is copied.
 
@@ -229,17 +231,18 @@ To drive the painter from your own chrome, use the `copyFormatting` and `pasteFo
 
 When the caret or a rectangular cell selection is inside a table, the formatting toolbar shows contextual table controls:
 
-- **Resize**: hover a column divider or the table's right edge; drag to commit Word-compatible twip widths (inner divider resize preserves total table width; outer-right resize changes table width).
-- **Insert rows/columns**: hover the row band or column header band and click the `+` control, or use the table rows on the right-click menu.
-- **Borders and fill**: with one or more cells selected, choose a border target, style, width, and color, then pick a cell fill (clear fill removes direct shading).
+- **Resize**: drag a column divider or the table's right edge to set Word-compatible twip widths. Inner dividers preserve total width. The right edge changes total width.
+- **Insert rows/columns**: hover the row or column header band, then click `+`. You can also use the right-click menu.
+- **Borders and fill**: select cells, then choose a border target, style, width, color, and cell fill. Clearing fill removes direct shading.
 
-These controls target the **innermost** nested table under the pointer or selection. Merge and split remain unsupported; tables with merged cells refuse column resize/insert/delete with an explicit disabled reason.
+These controls target the innermost table under the pointer or selection. Merge and split operations are unsupported. Tables with merged cells refuse column resizing, insertion, and deletion with an explicit disabled reason.
 
 The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order, custom icons, and two host actions. See the [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
 
 ## Next steps
 
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots)
+- [Custom styles and branding](/docs/2.x/guides/custom-styles)
 - [React package overview](/docs/2.x/react) and [Vue package overview](/docs/2.x/vue)
 - [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props)
 - [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples)

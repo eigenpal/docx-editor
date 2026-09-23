@@ -1,17 +1,19 @@
 ---
 title: 'Composables'
-description: 'Vue composables used by the packaged chrome: subscribe to editor state, run commands, read the document outline, search, and drive page setup.'
+description: 'Use Vue composables to read editor state, run commands, and build your own controls.'
 category: 'Vue'
 order: 38
 ---
 
-Call each composable during `setup()` inside `DocxEditor.Root`. The packaged `<DocxEditor>` also renders this root.
+Call composables during `setup()` in components inside `DocxEditor.Root`. The packaged `<DocxEditor>` provides this root for its children.
 
-These composables return a ref, or a plain object that holds refs. A template unwraps a ref only when the ref is a top-level binding. A ref that is a property of a returned object stays a ref, so read it with `.value` in the template and in script code.
+Composables return refs or plain objects that contain refs. Templates unwrap top-level refs. Read refs inside returned objects with `.value`, in templates and script code.
 
 ## Connect controls to reactive state
 
-Connect your own buttons with `useEditorCommand` and read selected state with `useEditorState`. Change button appearance and visibility. The preview runs Vue composables and displays their live values.
+Build buttons with your own Vue components. Use `useEditorCommand` for actions and `useEditorState` for selected state.
+
+Choose visible buttons, icons, and CSS in this example. Hiding a button does not change command availability. The preview displays the command state returned by Vue composables.
 
 <VueComposablesDemo />
 
@@ -41,7 +43,7 @@ const bold = useEditorCommand('text.bold');
 
 `execute()` returns `true` when the editor applies the command. `isActive`, `isEnabled`, and `disabledReason` are computed refs on a plain object. The template does not unwrap them, so read each one with `.value`.
 
-The engine is the only source for enabled state. Show `disabledReason` when a control cannot run.
+Use `isEnabled.value` to enable each control. Show `disabledReason.value` when the command cannot run.
 
 You can also pass a reactive slot ID or an `EditorCommand`:
 
@@ -93,7 +95,7 @@ Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `forma
 
 ## `useDocxEditor`
 
-This composable returns a shallow ref to the editor instance. Its value is `null` before the `DocxEditor.Root` mount effect creates the instance, and outside a `DocxEditor.Root`.
+This composable returns a shallow ref to the editor instance. Its value is `null` before `DocxEditor.Root` creates the instance. Its value is also `null` outside `DocxEditor.Root`.
 
 ```vue
 <script setup lang="ts">

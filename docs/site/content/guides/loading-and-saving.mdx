@@ -1,15 +1,15 @@
 ---
 title: 'Loading and saving'
-description: 'Load DOCX bytes into the editor root, swap documents through the shared ref, and serialize the current state back out to a .docx file on demand.'
+description: 'Load DOCX bytes, replace documents, and save edits through the React and Vue editor APIs.'
 category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
 ---
 
-The editor accepts `.docx` data and serializes the edited document to `.docx`. Load and save run in the browser. The editor does not upload or convert through a service.
+Pass DOCX bytes to load a document. Call `save()` to serialize edits as DOCX bytes. Loading and saving run in the browser; your application owns storage and network requests.
 
 ## Input formats
 
-The editor takes the document through the `document` prop. The most common value is `Uint8Array` DOCX bytes:
+Pass `Uint8Array` DOCX bytes through the `document` prop:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -30,7 +30,7 @@ The editor takes the document through the `document` prop. The most common value
 
 ### Start with an empty document
 
-To open the editor on an empty page, pass `'blank'`. It uses Calibri at 11 points. It also carries Word's built-in style gallery: Heading 1 through Heading 9, Title, Subtitle, Quote, No Spacing, and List Paragraph.
+Pass `'blank'` to start with an empty page using Calibri at 11 points. It includes Word's built-in styles: Heading 1–9, Title, Subtitle, Quote, No Spacing, and List Paragraph.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -49,9 +49,9 @@ To open the editor on an empty page, pass `'blank'`. It uses Calibri at 11 point
 </Framework>
 </FrameworkTabs>
 
-Omitting `document` differs from `'blank'`. It means no document at all, so the editor shows its loading screen and every control stays disabled. Use `undefined` only while your own fetch is still running.
+Omitting `document` shows the loading screen and disables every control. Use `undefined` while fetching bytes, or `'blank'` for an empty document.
 
-For a **File > New** command that a user can run more than once, call `blankDocumentBytes()` instead. `'blank'` is a constant, so the editor treats a second `'blank'` as the same document and keeps what the user typed. Fresh bytes replace it:
+Use `blankDocumentBytes()` for a repeatable **File > New** command. Repeating `'blank'` keeps the existing document because its value does not change. Fresh bytes replace it:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -83,7 +83,7 @@ const editorRef = ref<DocxEditorRef | null>(null);
 </Framework>
 </FrameworkTabs>
 
-Call `blankDocumentBytes()` inside an event handler or into state, never inline in the `document` prop. It returns a new array each time, so an inline call rebuilds the editor on every render.
+Call `blankDocumentBytes()` in an event handler or store its result in state. Each call returns a new array. Calling it inline in `document` rebuilds the editor on every render.
 
 ### From a URL
 
@@ -143,7 +143,7 @@ const { document, isLoading, error } = useDocxSource(() => props.url);
 </template>
 ```
 
-`useDocxSource()` fetches the bytes and tracks the request, so a changing URL never applies a stale response.
+`useDocxSource()` fetches bytes and ignores stale responses when the URL changes.
 
 </Framework>
 </FrameworkTabs>
@@ -206,7 +206,7 @@ async function pick(event: Event) {
 </template>
 ```
 
-`useDocxSource()` takes a URL string, a `URL`, a `Uint8Array`, or an `ArrayBuffer`. For a picked file, read the bytes first, as this sample does.
+`useDocxSource()` accepts a URL string, `URL`, `Uint8Array`, or `ArrayBuffer`. Read a selected file into bytes first.
 
 </Framework>
 </FrameworkTabs>
@@ -264,7 +264,7 @@ Use one of these save paths:
 
 ### Field result refresh
 
-Save validates pending protected form input and applies the field's format using the locale active when you entered the value. Invalid input rejects with code `invalidArgs`. The editor keeps the input and does not open an alert. Collaborative sessions reject saves that require form-field formatting.
+Save validates pending protected form input. It applies the field format using the locale active when you entered the value. Invalid input rejects with code `invalidArgs`. The editor keeps the input without opening an alert. Collaborative sessions reject saves that require form-field formatting.
 
 Save updates stale, calibrated `REF` and `NOTEREF` results in the body, footnotes, and endnotes. The editor commits all updated parts as one undo step.
 
@@ -274,7 +274,7 @@ See [Fields and cross-references](/docs/2.x/guides/fields) for supported switche
 
 ## Download helper
 
-The serialized buffer downloads like any other binary. This helper is the same in both adapters, because both export the `DocxEditorRef` type:
+Create a download from the saved buffer. This helper works with either adapter's `DocxEditorRef`:
 
 ```ts
 async function downloadDocx(ref: DocxEditorRef, fileName: string) {
@@ -383,12 +383,14 @@ Choose a debounce interval that matches your API's write limits. For overlapping
 
 ## Accept server updates
 
-Use `createDocumentRefresh(editor)` when a server returns an updated DOCX file. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
+Use `createDocumentRefresh(editor)` when a server returns an updated DOCX file. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. The controller refuses results after local edits and during collaborative sessions.
 
 For integration steps and change presentation, see [Document refresh API](/docs/2.x/guides/document-refresh).
 
 ## Next steps
 
 - [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for `document`, the save action, and the shared ref
+- [Document refresh API](/docs/2.x/guides/document-refresh) for complete files returned by a server
+- [Export Markdown and PDF](/docs/2.x/guides/export) for document conversion
 - [Editing API](/docs/2.x/editor-api) to read and write a document without mounting an editor
 - [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples) for more loading, saving, and editor state patterns

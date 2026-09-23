@@ -4,7 +4,9 @@ description: Return PDF responses, configure Node.js deployments, and convert ba
 category: Export formats
 ---
 
-The converter runs on Node.js and returns PDF bytes. Keep conversion on the server for browser applications. The package uses the EigenPal Pro License. Install the converter and its engine peer before using these examples:
+The converter runs on Node.js and returns PDF bytes. Keep conversion on the server for browser applications. The package uses the EigenPal Pro License.
+
+Install the converter and its engine peer:
 
 ```sh
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
@@ -59,7 +61,9 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-Configure your server's request size limit before `request.arrayBuffer()` reads the body. The output byte limit does not limit uploaded bytes. Set a concurrency limit appropriate for your available memory.
+Configure your server's request size limit before `request.arrayBuffer()` reads the body. The output byte limit does not limit uploaded bytes.
+
+Limit concurrent conversions to fit your available memory.
 
 ## Next.js
 
@@ -95,4 +99,9 @@ for (const name of ['first', 'second']) {
 }
 ```
 
-The exporter disposes its document session after each call, including failed calls. For repeated exports or both formats from one layout, use [a reusable PDF session](/docs/2.x/export/pdf/markdown-contract#reuse-one-session).
+The exporter disposes its document session after each call, including failed calls.
+
+## Next steps
+
+- Export both formats with [Compare PDF and Markdown conversion](/docs/2.x/export/pdf/markdown-contract#reuse-one-session).
+- Configure deadlines and memory isolation with [PDF export API](/docs/2.x/export/pdf/api#resource-boundaries).

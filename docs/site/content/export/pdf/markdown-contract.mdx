@@ -4,7 +4,9 @@ description: Share conversion settings and reuse one document session for PDF an
 category: Export formats
 ---
 
-Use `exportPdf(source, options)` and `exportMarkdown(source, options)` for one-shot conversion. Both functions accept DOCX bytes, preserve the source, and dispose their document session after success or failure. PDF and Markdown share font-source types, font helpers, font reports, and resource-error codes.
+Use `exportPdf(source, options)` and `exportMarkdown(source, options)` to convert each format separately. Both functions accept DOCX bytes, preserve the source, and dispose their document session after success or failure.
+
+PDF and Markdown share font-source types, font helpers, font reports, and resource-error codes.
 
 ## Share conversion settings
 
@@ -41,7 +43,9 @@ export async function convertBoth(source: Uint8Array, fonts: PdfFontsSource, sig
 }
 ```
 
-Both packages export the same `createFontSource` and `defineFontResolver` helpers. For font registration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts). These settings align common controls; they do not guarantee identical pagination for every document. Missing glyphs, fallback faces, and unsupported features can still affect output.
+Both packages export the same `createFontSource` and `defineFontResolver` helpers. For font registration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
+
+These settings align common controls; they do not guarantee identical pagination for every document. Missing glyphs, fallback faces, and unsupported features can still affect output.
 
 ## Shared controls
 
@@ -78,9 +82,9 @@ Strict font policy checks coverage and source failures. It does not prove that t
 | Reuse | Public export sessions and detached layouts | Public font-backed export sessions |
 | Result delivery | Markdown text, JSON projection, or media bundles | PDF bytes for storage or an HTTP response |
 
-PDF also exposes encoding limits, `fidelityPolicy`, and a whole-conversion `timeoutMs`. It needs the admitted font bytes that produced the layout to encode searchable text. It accepts font-backed sessions and rejects arbitrary sessions or detached layouts.
+PDF also exposes encoding limits, `fidelityPolicy`, and a whole-conversion `timeoutMs`. It requires the admitted font bytes that produced the layout to encode searchable text. It accepts font-backed sessions and rejects arbitrary sessions or detached layouts.
 
-Handle notices using each format's public fields. Do not treat a PDF `pageIndex` as a Markdown `pageNumber` without adding one. Store the input version with page references; layout revisions are not persistent document identifiers.
+Handle notices using each format's public fields. Do not treat a PDF `pageIndex` as a Markdown `pageNumber` without adding one. Store the input version with page references. Layout revisions are not persistent document identifiers.
 
 ## Reuse one session
 
@@ -108,4 +112,11 @@ try {
 }
 ```
 
-Both exporters consume the same cached layout and font evidence. `exportPdfFrom` also accepts `displayMode` to encode another cached revision projection. The default session mode does not change when you request another projection. This workflow retains PDF's font and shaping policy for both outputs.
+Both exporters consume the same cached layout and font evidence. This workflow retains PDF's font and shaping policy for both outputs.
+
+`exportPdfFrom` also accepts `displayMode` to encode another cached revision projection. The default session mode does not change when you request another projection.
+
+## Next steps
+
+- Review PDF session ownership and cancellation in [PDF export API](/docs/2.x/export/pdf/api#reusable-sessions).
+- Configure Markdown output with [DOCX to Markdown](/docs/2.x/export/markdown).

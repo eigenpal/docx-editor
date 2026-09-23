@@ -27,7 +27,9 @@ Sources resolve in this order:
 7. Your `lastResortFonts` sources.
 8. Generic substitutes for unresolved families.
 
-Earlier sources take priority. Each option accepts one source or an ordered array of sources. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
+Earlier sources take priority. Each option accepts one source or an ordered array of sources.
+
+Use `defineFontResolver` to read the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe font inputs.
 
 The default sources need no network access. A resolver that you supply can make network requests.
 
@@ -57,11 +59,13 @@ const result = await exportPdf(source, {
 await writeFile('document.pdf', result.bytes);
 ```
 
-Register bold, italic, and bold-italic files separately when the document needs those faces. Use weights `400` and `700`, with styles `'normal'` and `'italic'`. Check your font license before embedding its bytes. The writer rejects prohibited embedding, prohibited subsetting, variable fonts, and unsupported font containers.
+Register bold, italic, and bold-italic files separately when the document needs those faces. Use weights `400` and `700`, with styles `'normal'` and `'italic'`.
+
+Check your font license before embedding its bytes. The writer rejects prohibited embedding, prohibited subsetting, variable fonts, and unsupported font containers.
 
 ## Separate font policy from PDF policy
 
-`fontPolicy: 'strict'` rejects failed sources and incomplete face coverage. It can reject an export when another source recovers from a source failure. Complete coverage can include substitutions; it does not prove original font selection.
+`fontPolicy: 'strict'` rejects failed sources and incomplete face coverage. It rejects source failures even when another source supplies the font. Complete coverage can include substitutions; it does not prove original font selection.
 
 `fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy.
 
@@ -82,7 +86,9 @@ The callback runs before a strict font refusal. Returned callback promises do no
 
 ## Inspect font evidence
 
-`result.fontResolution.families` records each family's coverage and selected faces. Inspect each face's `sourceFamily`, `via`, and `substitution` fields. `originFailures` retains source failures and their causes. `droppedEmbeddedFonts` identifies embedded faces rejected during font admission.
+`result.fontResolution.families` records each family's coverage and selected faces. Inspect each face's `sourceFamily`, `via`, and `substitution` fields.
+
+`originFailures` retains source failures and their causes. `droppedEmbeddedFonts` identifies embedded faces rejected during font admission.
 
 Each `font-origin-failed` diagnostic provides the source index, optional source name, and a guarded cause message. The `incomplete-font` diagnostic reports partial coverage and substituted variants within a family. It remains informational when `fontPolicy` permits recovery.
 
@@ -94,4 +100,7 @@ Each `font-origin-failed` diagnostic provides the source index, optional source 
 | Missing font assets after bundling | Keep converter packages external and copy their assets with deployment output. |
 | Missing glyphs | Supply a face that contains the requested characters. |
 
-For server setup, see [Integrate PDF conversion](/docs/2.x/export/pdf/integrations).
+## Next steps
+
+- Deploy font assets with [Integrate PDF conversion](/docs/2.x/export/pdf/integrations).
+- Review font diagnostics and errors in [PDF export API](/docs/2.x/export/pdf/api#diagnostics).

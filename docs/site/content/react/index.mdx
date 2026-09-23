@@ -1,12 +1,14 @@
 ---
 title: '@docx-editor.dev/react'
-description: 'React adapter for the DOCX editor: the packaged editor component, composition primitives, hooks, and compound chrome.'
+description: 'Use the React DOCX editor, arrange packaged components, or build custom controls with hooks.'
 category: 'React'
 order: 30
 seoTitle: 'DOCX editor for React'
 ---
 
 <PackageStats name="@docx-editor.dev/react" />
+
+Use `<DocxEditor>` for the packaged editor. Use [composition](/docs/2.x/react/composition) to arrange its parts or connect your own React components.
 
 ## Install
 
@@ -16,16 +18,17 @@ Install the React adapter and its peer dependency:
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-The adapter uses `@docx-editor.dev/core` as a peer dependency. The package includes the string catalog.
+The adapter requires one shared copy of `@docx-editor.dev/core`. It includes the string catalog.
 
 Install [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes. Install [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate documents from code.
 
 ## Quickstart
 
-Render `<DocxEditor>` with DOCX bytes:
+Import the editor stylesheet once from your application entry. Render `<DocxEditor>` with DOCX bytes:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export default function App() {
   return <DocxEditor document={docxBytes} />;
@@ -34,7 +37,7 @@ export default function App() {
 
 `<DocxEditor>` renders the title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and editable document.
 
-With the Next.js App Router, render the editor inside a `"use client"` component. The editor requires browser APIs and does not support server rendering.
+With the Next.js App Router, render the editor inside a `"use client"` component. The editor uses browser APIs and does not support server rendering.
 
 <ReactEditorDemo />
 
@@ -44,13 +47,13 @@ With the Next.js App Router, render the editor inside a `"use client"` component
 - Hooks include `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, and `useFontFamily`.
 - Top-level components include `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, and `DocxEditorPageSetupDialog`.
 
-[`@docx-editor.dev/pro`](/docs/2.x/pro) provides the licensed review module and sidebar. The React adapter does not export these features.
+[`@docx-editor.dev/pro`](/docs/2.x/pro) provides the review module and sidebar under the EigenPal Pro License. The React adapter does not export these features.
 
 Import components, hooks, and engine helpers from the package root. The package does not provide `/ui`, `/hooks`, or `/dialogs` subpaths.
 
 ## Provider primitives
 
-Use the provider primitives when you need custom chrome:
+Use the provider primitives to arrange toolbars, menus, and document controls:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -72,7 +75,7 @@ export function CustomFrame({ bytes }: { bytes: Uint8Array }) {
 
 ## Toolbar
 
-Use `DocxEditorToolbar` or its `DocxEditor.Toolbar` compound alias. This example adds a custom **Bold** button:
+Use `DocxEditorToolbar` or its `DocxEditor.Toolbar` alias. This example adds your own **Bold** button alongside the packaged controls:
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -105,11 +108,11 @@ export function ToolbarOnly({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-Import `useEditorCommand`, `useEditorState`, and `useFontFamily` from the package root.
+To choose a subset of packaged controls, set `preset={false}` and include the named parts you need. For examples, see [Custom toolbar](/docs/2.x/react/composition#custom-toolbar).
 
 ## Editing API
 
-Use `@docx-editor.dev/editor-api/browser` to control the open document. Pass the React adapter's editor instance to the Office.js-compatible API:
+Use `@docx-editor.dev/editor-api/browser` to control the open document. Pass the React adapter's editor instance to the API, which follows the supported Office.js subset:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';

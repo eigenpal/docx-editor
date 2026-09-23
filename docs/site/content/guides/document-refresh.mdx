@@ -10,7 +10,7 @@ Each accepted file resets selection, undo history, and some review state. The co
 
 The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
 
-For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.applyUpdate()`.
+Your application receives updates and calls `refresh.applyUpdate()`; the editor does not watch files or URLs. The [DOCX document refresh example](/examples/document-refresh) includes a React app and mock server.
 
 ## API overview
 
@@ -30,13 +30,11 @@ Call `createDocumentRefresh(editor)` after the editor mounts. Repeated calls for
 
 The update flow is `capture()` → your server job → `applyUpdate()` → `finish()`. Call presentation methods after a successful `applyUpdate()`. Scroll preservation is automatic; highlighting and navigation are opt-in.
 
-Try the [interactive effects preview](#try-the-effects), then follow [Accept an updated file](#accept-an-updated-file).
+For integration code, see [Accept an updated file](#accept-an-updated-file).
 
 ## Try the effects
 
-This interactive mock shows the presentation and refusal states. It uses sample text, without loading the editor or contacting a server. The runnable examples use actual DOCX files and the public API.
-
-Choose an **Example**, then select **Run preview**. Each example shows one behavior and its API source. Expand **Source code** to inspect the calls. Select **Replay** to run the example again.
+This simulation demonstrates highlights, navigation, and refused updates with sample text. It does not load the editor or contact a server. The runnable examples use DOCX files and the public API.
 
 <DocumentRefreshDemo />
 
@@ -44,7 +42,7 @@ Choose an **Example**, then select **Run preview**. Each example shows one behav
 
 Import the controller from your adapter or `@docx-editor.dev/core/editor`. Get the editor through `useDocxEditor()` inside the editor root. React returns an instance or `null`; Vue returns a shallow ref. Call the controller after the document mounts.
 
-This example sends the captured document to your backend:
+Capture the document before sending it to your backend:
 
 ```ts
 import { createDocumentRefresh } from '@docx-editor.dev/react';
@@ -84,7 +82,7 @@ Keep the returned `submission` object in the browser. Pass that same object to `
 
 Assign each result a nonnegative integer `sequence` at the processor. Each file must contain the complete cumulative output for that submission. Use processor order, never network arrival order. The controller serializes replacement and rejects duplicate or older accepted sequences. It advances its baseline only after successful loading.
 
-This example receives cumulative files in processor order:
+Apply each complete file with its processor-assigned sequence:
 
 ```ts
 const submission = await refresh.capture();
@@ -123,7 +121,7 @@ editor.on('change', (change) => {
 
 ## Provide reliable change locations
 
-A plain replacement file does not identify its changes. Without metadata or returned tracked revisions, the result reports `changeInformation: 'unavailable'`. The controller does not invent a document comparison.
+A plain replacement file does not identify its changes. Without metadata or returned tracked revisions, the result reports `changeInformation: 'unavailable'`. The controller does not infer change locations by comparing the two files.
 
 Supply metadata for the returned file, using stable change IDs across cumulative results:
 
@@ -157,7 +155,7 @@ If you omit `changes`, a registered review module supplies tracked revision loca
 
 `result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs and changed text within an existing change ID. It compares cumulative results within one submission, plus tracked revisions present at capture. Plain metadata IDs do not form a history across independent captures. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
 
-Highlights are opt-in. Call `highlightChanges()` after a successful `applyUpdate()` when your interface needs them. These calls change presentation only:
+Call `highlightChanges()` after a successful `applyUpdate()` to display highlights. These calls change presentation only:
 
 ```ts
 refresh.highlightChanges(); // New available changes from the latest result.
@@ -190,11 +188,11 @@ if (target && refresh.navigateToChange(target.id, { block: 'centerIfNeeded' })) 
 }
 ```
 
-The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll and fade** in the preview to try it.
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action because it changes the scroll position.
 
 ## Customize highlights and motion
 
-The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It starts fading out after three seconds. It never moves text, changes scroll, or steals focus.
+The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. It fades in over 180 milliseconds and starts fading out after three seconds. It does not move text, change scroll, or take focus.
 
 `highlightChanges()` returns the number of selected, available changes, including offscreen locations. A zero result means no locations were selected. Options are validated even when locations are stale or unavailable. During document replacement, highlighting returns zero and navigation returns `false`. Completion listeners can present the accepted locations.
 
@@ -456,10 +454,10 @@ Recovery bytes contain the document from before the failed replacement. They are
 
 ## Run the example
 
-The [DOCX document refresh example](/examples/document-refresh) includes a mock server and a React client. Run `bun run dev:refresh` after the setup steps in its README. Try scroll preservation, navigation with temporary highlights, and refusal after a local edit.
+Follow the setup in the [DOCX document refresh example](/examples/document-refresh), then run `bun run dev:refresh`. The React client and mock server demonstrate scroll preservation, change navigation, temporary highlights, and refusal after local edits.
 
 ## See also
 
 - [Connect an agent to a document](/docs/2.x/build-a-docx-agent): choose browser tools, shared execution, or complete file refresh
-- [Load and save documents](/docs/2.x/guides/loading-and-saving)
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): document input, downloads, and autosave
 - [Document automation reference](/docs/2.x/editor-api/reference)
