@@ -384,6 +384,59 @@ describe('a caret left in a paragraph layout removes', () => {
     expect(painted(container)).toEqual(before);
   });
 
+  // Whatever sits between the removed paragraph and the one that takes its join, the caret
+  // shows at, and moves from, the start of the paragraph layout actually keeps.
+  for (const [label, between, view] of [
+    ['a body-level marker', '<w:bookmarkEnd w:id="7"/>', 'all-markup'],
+    [
+      'a paragraph the proposed view removes',
+      '<w:p><w:pPr><w:rPr><w:del w:id="5" w:author="X" w:date="2024-01-01T00:00:00Z"/></w:rPr></w:pPr></w:p>',
+      'proposed',
+    ],
+  ] as const) {
+    test(`Enter shows the caret at the next kept paragraph across ${label}`, () => {
+      const open = () => {
+        const opened = focused(para('Top') + heading('Head') + between + para('Body'));
+        opened.surface.setRevisionDisplayMode(view);
+        return opened;
+      };
+      const control = open();
+      caret(control.surface, idOf(control.surface, 'Body'), 0);
+      const atBody = painted(control.container);
+      expect(atBody).not.toBeNull();
+
+      const { surface, container } = open();
+      caret(surface, idOf(surface, 'Head'), 4);
+      surface.splitParagraph();
+      expect(lineTexts(surface)).toEqual(['Top', 'Head', 'Body']);
+      expect(painted(container)).toEqual(atBody);
+      surface.navigate('right');
+      expect(head(surface)).toEqual({ paragraphId: idOf(surface, 'Body'), offset: 1 });
+    });
+  }
+
+  test('a marker before an emptied one: the caret shows, moves, and Backspace is not refused', () => {
+    const open = () => {
+      const opened = focused(
+        para('Top') + '<w:bookmarkStart w:id="7" w:name="m"/>' + heading('Hd') + para('Body')
+      );
+      caret(opened.surface, idOf(opened.surface, 'Hd'), 2);
+      opened.surface.deleteBackward();
+      opened.surface.deleteBackward();
+      expect(lineTexts(opened.surface)).toEqual(['Top', 'Body']);
+      expect(painted(opened.container)).not.toBeNull();
+      return opened;
+    };
+    const moving = open().surface;
+    moving.navigate('right');
+    expect(head(moving)).toEqual({ paragraphId: idOf(moving, 'Body'), offset: 1 });
+
+    const { surface, container } = open();
+    surface.deleteBackward();
+    expect(surface.state().lastRejection).toBeFalsy();
+    expect(painted(container)).not.toBeNull();
+  });
+
   for (const [label, setup] of [
     ['after Enter', afterEnter],
     ['after emptying one', emptied],

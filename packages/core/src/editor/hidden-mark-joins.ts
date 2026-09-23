@@ -65,6 +65,28 @@ export function hiddenMarkRemovedIds(
 }
 
 /**
+ * The laid-out paragraph that takes the join of a removed paragraph, read from layout's own
+ * block list for the container: the next block after it that layout keeps. Markers between
+ * blocks (a body-level `w:bookmarkEnd`) are not blocks at all, and a paragraph a revision view
+ * removes is not kept, so neither can stand in for it. Null when the paragraph is not removed.
+ */
+function joinTargetOf(
+  children: readonly OoxmlNode[],
+  paragraphId: string,
+  view: RevisionView
+): string | null {
+  const flow = mergedFlowBlocks(children, view.displayMode, view.authorFilter);
+  const all = numberingFlowBlocks(flow);
+  if (all === flow) return null;
+  const laidOut = new Set(flow.map((block) => block.id));
+  if (laidOut.has(paragraphId)) return null;
+  const index = all.findIndex((block) => block.id === paragraphId);
+  if (index === -1) return null;
+  const next = all.slice(index + 1).find((block) => laidOut.has(block.id));
+  return next?.kind === 'paragraph' ? next.id : null;
+}
+
+/**
  * Ids of the siblings strictly between two paragraphs, in order: `[]` when the two are
  * adjacent, `null` when they are not in that order. `removed` is asked only when there is
  * something between; the answer is `null` unless every sibling between is removed.
@@ -126,18 +148,8 @@ export function shownPosition(
   if (paragraphLinesIndex(layout).has(position.paragraphId)) return position;
   const parent = parentNodeOf(part, position.paragraphId);
   if (parent === null) return position;
-  const removed = hiddenMarkRemovedIds(parent.children, view);
-  if (!removed.has(position.paragraphId)) return position;
-  const siblings = parent.children;
-  const start = siblings.findIndex(
-    (child) => child.kind !== 'textValue' && child.id === position.paragraphId
-  );
-  for (let index = start + 1; index < siblings.length; index += 1) {
-    const child = siblings[index]!;
-    if (child.kind === 'textValue' || removed.has(child.id)) continue;
-    return child.kind === 'paragraph' ? { paragraphId: child.id, offset: 0 } : position;
-  }
-  return position;
+  const target = joinTargetOf(parent.children, position.paragraphId, view);
+  return target === null ? position : { paragraphId: target, offset: 0 };
 }
 
 /**
@@ -146,7 +158,9 @@ export function shownPosition(
  * leaves it where it showed, so nothing visible moves.
  *
  * Null when the caret's paragraph is laid out, or when no paragraph directly precedes it in
- * its container; the keys then act from the shown position.
+ * its container; the keys then act from the shown position. A body-level marker such as
+ * `w:bookmarkStart` directly before it counts as no paragraph: a join needs adjacent siblings,
+ * and the store refuses one across a marker.
  */
 export function removedCaretParagraphEdit(
   layout: SemanticLayout,
