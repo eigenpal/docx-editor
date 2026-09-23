@@ -190,7 +190,10 @@ function furnitureWithDrawings(
               drawingLayoutFor(hfPart),
               undefined,
               undefined,
-              pageContext
+              pageContext,
+              undefined,
+              // Word 2013 mode: before it, header text does not wrap around header objects.
+              { compatibilityMode: 15 }
             ),
             'rId1'
           )
