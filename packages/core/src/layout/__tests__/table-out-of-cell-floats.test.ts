@@ -213,4 +213,25 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
     expect(drawings).toHaveLength(1);
     expect(drawings[0]!.y).toBeGreaterThanOrEqual(0);
   });
+
+  test('two floats at a row top near the page bottom leave no gap in the rows', () => {
+    const layout = withRows(
+      { text: 'word', layoutInCell: '0', wrap: 'topAndBottom' },
+      (xml, row) => {
+        const run = row.slice(
+          row.indexOf('<w:r><w:drawing>'),
+          row.indexOf('</w:drawing></w:r>') + 18
+        );
+        // Both floats sit at the row top; the second is taller and overflows the page.
+        const lower = run.replace(/id="1"/g, 'id="2"').replace(/cy="914400"/g, 'cy="1397000"');
+        return xml.replace(row, fillerRow.repeat(42) + row.replace(run, run + lower));
+      }
+    );
+    const rows = (layout.pages[0]!.fragments[0] as TableFragmentRecord).rows;
+    for (let index = 1; index < rows.length; index += 1)
+      expect(rows[index]!.box.y).toBeCloseTo(
+        rows[index - 1]!.box.y + rows[index - 1]!.box.height,
+        3
+      );
+  });
 });

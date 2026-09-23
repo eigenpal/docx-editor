@@ -130,14 +130,18 @@ export function planOutOfCellFloats(
       outOfCellFloatParagraphs: paragraphs,
     },
     clear: (from, heightAt, rows, pageBottom) => {
-      bands = bands.filter((band) => {
-        if (band.bottom <= from + EPSILON || band.top >= pageBottom) return false;
-        if (placedAnchors.has(band.paragraphId) || anchorRowFits(band, pageBottom)) return true;
-        // The page break carries this float's row, pushed, to a later sheet: it pushes
-        // nothing here, and there its cell handles it as the cell flow always has.
-        paragraphs.delete(band.paragraphId);
-        return false;
-      });
+      // A float whose unplaced row the page break will carry, pushed, to a later sheet, or
+      // whose band starts past this sheet, pushes nothing here: its cell handles it as the
+      // cell flow always has. Every band of such a paragraph goes, not only the failing one.
+      for (const band of bands) {
+        if (placedAnchors.has(band.paragraphId)) continue;
+        if (band.top >= pageBottom || !anchorRowFits(band, pageBottom))
+          paragraphs.delete(band.paragraphId);
+      }
+      bands = bands.filter(
+        (band) =>
+          paragraphs.has(band.paragraphId) && band.bottom > from + EPSILON && band.top < pageBottom
+      );
       let current = from;
       for (let moves = 0; bands.length > 0 && moves <= bands.length; moves += 1) {
         const bottom = current + heightAt(current);
