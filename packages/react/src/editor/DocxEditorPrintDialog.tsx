@@ -73,11 +73,13 @@ export function DocxEditorPrintDialog({
             )}
             <h2 className="docx-dialog__title">{title}</h2>
           </header>
-          <div className="docx-dialog__body">
-            <p className="docx-export-dialog__message" role={error ? 'alert' : 'status'}>
-              {error || t('toolbar.printPreparingHint')}
-            </p>
-          </div>
+          {error && (
+            <div className="docx-dialog__body">
+              <p className="docx-export-dialog__message" role="alert">
+                {error}
+              </p>
+            </div>
+          )}
           <footer className="docx-dialog__footer">
             {error && openUrl && (
               <a

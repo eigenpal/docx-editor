@@ -78,7 +78,6 @@
     "exportDownloadHint": "Your download starts when the file is ready. You can continue editing while the export runs.",
     "exportContinueEditing": "Continue editing",
     "printPreparing": "Preparing to print…",
-    "printPreparingHint": "The print dialog opens when the document is ready.",
     "printOpenPdf": "Open PDF",
     "printFailed": "Print failed",
     "printFailedMessage": "Printing failed: {message}",

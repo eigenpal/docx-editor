@@ -85,11 +85,13 @@ export const DocxEditorPrintDialog = defineComponent({
                   )}
                   <h2 class="docx-dialog__title">{title}</h2>
                 </header>
-                <div class="docx-dialog__body">
-                  <p class="docx-export-dialog__message" role={props.error ? 'alert' : 'status'}>
-                    {props.error || t('toolbar.printPreparingHint')}
-                  </p>
-                </div>
+                {props.error && (
+                  <div class="docx-dialog__body">
+                    <p class="docx-export-dialog__message" role="alert">
+                      {props.error}
+                    </p>
+                  </div>
+                )}
                 <footer class="docx-dialog__footer">
                   {props.error && openUrl && (
                     <a
