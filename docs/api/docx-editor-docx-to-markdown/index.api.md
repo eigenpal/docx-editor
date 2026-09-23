@@ -28,7 +28,6 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly kind: 'anchoredDrawing';
     // (undocumented)
     readonly layoutFallback?: AnchoredDrawingLayoutFallback;
-    // (undocumented)
     readonly layoutInCell: boolean;
     // (undocumented)
     readonly relativeHeight: number;
