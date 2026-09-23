@@ -1,258 +1,58 @@
 ---
-title: 'Build a DOCX agent'
-description: 'Give a model document tools that read, draft, comment, and redline a DOCX file. Validate each call, run it through the editing API, and return a typed result.'
+title: 'Connect an agent to a document'
+description: 'Choose how an agent edits a DOCX and how readers see its updates: browser tools, shared server edits, or complete file refresh.'
 category: 'Getting started'
-seoTitle: 'Build a DOCX agent that edits and redlines Word documents'
+seoTitle: 'Connect an agent to a DOCX and stream document updates'
 ---
 
-This page connects a tool-calling model to a DOCX file. You expose a small catalog of document tools. Each tool validates its input and calls [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). The model does not generate Office Open XML (OOXML).
+You can show agent updates in three ways. Choose based on where document edits execute and what your agent returns. Your model can run on a backend with any approach.
 
-## Try the writer agent
-
-Open the [writer agent demo](/#writer-agent) on the homepage. Choose **Draft a mutual NDA.** After the draft finishes, choose **Redline for clarity**.
-
-The demo uses the Vercel AI SDK. The document tools work with any tool-calling framework.
-
-For an agent that continues working after the browser closes, run the [server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review). Its worker joins a shared Hocuspocus room and publishes suggestions for browser peers to accept or reject. Scripted review works without a model API key.
-
-## Before you start
-
-- You need `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`.
-- If you show the document in a page, install `@docx-editor.dev/react` or `@docx-editor.dev/vue`.
-- For comments or tracked changes, pass a non-empty `author`. Browser review also requires `@docx-editor.dev/pro` and its review module. The server runtime provides these writes without a browser review module.
-
-<Steps>
-
-<Step>
-
-### Install the packages
-
-Install the editing API and the engine:
-
-```bash
-npm install @docx-editor.dev/editor-api @docx-editor.dev/core
+```mermaid
+flowchart TD
+  accTitle: Three ways to show agent edits
+  A[Agent output] --> B[Browser document API]
+  A --> C[Shared server document API]
+  A --> D[Complete DOCX refresh]
 ```
 
-If you mount an editor in the page, also install an adapter:
+## 1. Edit the open document in the browser
 
-<FrameworkTabs>
-<Framework value="react">
+Use `DocxEditor.createBrowser(editor)` from `@docx-editor.dev/editor-api/browser`. Connect the runtime to your existing editor, then execute validated agent tools through `runtime.run()`.
 
-```bash
-npm install @docx-editor.dev/react
-```
-
-</Framework>
-<Framework value="vue">
-
-```bash
-npm install @docx-editor.dev/vue
-```
-
-</Framework>
-</FrameworkTabs>
-
-If you display or edit comments and tracked changes in the browser, also install Pro:
-
-```bash
-npm install @docx-editor.dev/pro
-```
-
-</Step>
-
-<Step>
-
-### Create a runtime
-
-If you have DOCX bytes and no editor in the page, create a server runtime. The server runtime returns edited bytes. It does not start Microsoft Word and does not use a browser Document Object Model (DOM).
-
-```ts
-import { DocxEditor } from '@docx-editor.dev/editor-api';
+Tools use supported Office.js methods such as `search()`, `range.insertText()`, and `range.delete()`. Each completed `context.sync()` makes the edits visible. You do not need collaboration for this approach.
 
-const runtime = await DocxEditor.createServer(bytes, {
-  author: 'Contract agent',
-});
-```
+Your application receives the model stream and chooses when to commit. For a progressive draft, insert completed paragraphs. For existing content, apply targeted edits. The API does not consume raw token streams or incomplete tool arguments. Display partial output as progress until an operation is ready.
 
-If a reader already has the document open, create a browser runtime. Edits use the editor undo stack and appear in the page.
+See [Runtime and setup](/docs/2.x/editor-api/runtime#drive-an-open-browser-editor) for the browser integration.
 
-```ts
-import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+## 2. Edit a shared document from the server
 
-const runtime = DocxEditor.createBrowser(editor, {
-  author: 'Review agent',
-});
-```
+Use `DocxEditor.createCollaborative(room.document, room.session)` when an agent and readers share a collaboration room. The worker joins the room and executes document API operations. The collaboration session distributes committed changes to connected clients.
 
-Call `runtime.dispose()` when the work ends. For capabilities, `sync()` rules, and disposal, see [Editing API](/docs/2.x/editor-api).
+Commit each completed operation to show progress in the document. Send job status through your application's transport. Keep room authorization, persistence, and job lifetime in your backend. Exported DOCX files are snapshots of the shared document; do not use them to replace an active room.
 
-</Step>
+See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) for setup and worker lifecycle.
 
-<Step>
+## 3. Receive complete DOCX files
 
-### Define one tool per document task
+Use `createDocumentRefresh(editor)` when your agent or external processor returns a complete updated file. Call `capture()` before processing, then pass the returned DOCX bytes, submission, and sequence number to `refresh.applyUpdate()`.
 
-Give the model a small catalog. Each tool does one job, validates its input, and runs inside one `runtime.run` callback.
+The editor keeps its instance and preserves scroll by default. You can call `highlightChanges()` for temporary highlights or `navigateToChange()` to show a changed passage. Highlights require valid change locations or supported tracked revisions. They do not compare arbitrary files or create tracked changes.
 
-This AI SDK example defines a read tool and two write tools:
+Your application must receive or fetch each result; the editor does not watch a file URL. Each accepted replacement resets selection and undo history. Refresh refuses collaborative sessions. It also refuses a result if the document changed after `capture()`.
 
-```ts
-import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
-import { tool } from 'ai';
-import { z } from 'zod';
+See [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) for methods, options, and failure handling. Try its [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects) to see scroll preservation, navigation, and fading highlights.
 
-export function createDocumentTools(runtime: DocxEditorRuntime) {
-  return {
-    read_document: tool({
-      description: 'Read the current document text.',
-      inputSchema: z.object({}),
-      execute: async () =>
-        runtime.run(async (context) => {
-          const body = context.document.body;
-          body.load('text');
-          await context.sync();
-          return { text: body.text };
-        }),
-    }),
+## Show edits as review suggestions
 
-    append_paragraph: tool({
-      description: 'Add one paragraph to the end of the document.',
-      inputSchema: z.object({
-        text: z.string().min(1),
-      }),
-      execute: async ({ text }) =>
-        runtime.run(async (context) => {
-          context.document.body.insertParagraph(text, 'End');
-          await context.sync();
-          return { inserted: true };
-        }),
-    }),
+For API-driven text review, set `document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion separately so readers can review it while the agent continues.
 
-    replace_exact_text: tool({
-      description: 'Replace one exact phrase when it occurs once.',
-      inputSchema: z.object({
-        search: z.string().min(1),
-        replacement: z.string(),
-      }),
-      execute: async ({ search, replacement }) =>
-        runtime.run(async (context) => {
-          const matches = context.document.body.search(search, {
-            matchCase: true,
-          });
-          matches.load('items');
-          await context.sync();
+Tracked edits require an author and support inline text within one paragraph, including table cells. Browser tracking also requires the Pro review module and an editable editor. Tracked structural edits and edits that touch pending revisions are unsupported. Tracking records the edits you submit; it does not turn a paragraph rewrite into smaller suggestions.
 
-          if (matches.items.length !== 1) {
-            return {
-              replaced: false,
-              reason: `Expected one match, found ${matches.items.length}.`,
-            };
-          }
+If a document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering the proposal. Do not replay the old edit automatically. Serialize agent operations. Use tool-call IDs to prevent duplicate execution, including calls that are still running.
 
-          matches.items[0].insertText(replacement, 'Replace');
-          await context.sync();
-          return { replaced: true };
-        }),
-    }),
-  };
-}
-```
+The editing API and Pro review module require the EigenPal Pro License. See [Tracked changes](/docs/2.x/editor-api/revisions) for supported operations.
 
-Return a structured result. If a search matches zero times or more than once, return a refusal. Do not pick a match for the model.
+## Run the example
 
-This package does not include a model, a tool catalog, or a chat UI. Keep those in your application.
-
-</Step>
-
-<Step>
-
-### Address text with an exact phrase
-
-Pass a verbatim `search` phrase from the paragraph you read. Copy case and punctuation.
-
-If you send a document snapshot with the chat request, cap it by paragraph count and character count. A large document must not grow every later turn.
-
-</Step>
-
-<Step>
-
-### Split a fresh draft into stages
-
-Do not put the whole document in one `write_document` tool. Split a draft so you can see each failure:
-
-1. Replace the body with styled paragraphs. Return paragraph IDs.
-2. Apply native bullets or numbering.
-3. Wrap exact placeholders in content controls.
-4. Insert a table, then populate its cell paragraphs.
-5. Write the header, footer, and page field.
-
-<Callout>
-  Do not put `•` or `1.` in paragraph text. Native list formatting adds those markers. Literal
-  prefixes show up twice in Word.
-</Callout>
-
-Each later tool uses IDs from the first tool. If a required stage fails, stop.
-
-The [writer agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/write-agent) runs this sequence. The [comment agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/agent) reads an open document and adds anchored comments.
-
-</Step>
-
-<Step>
-
-### Choose direct edits or tracked changes
-
-Read the user request, then pick tools:
-
-- If the user says "update", "rewrite", or "fix", call direct replacement, insertion, or deletion.
-- If the user says "suggest", "review", or "redline", call tracked proposal tools.
-
-On a server, set `context.document.changeTrackingMode = 'TrackMineOnly'` and use `range.insertText()` or `range.delete()` to record tracked text edits. See the [server tracking example](/docs/2.x/editor-api#create-tracked-changes-on-a-server) for prerequisites and limits.
-
-Leave accept and reject off the agent allowlist. The reader decides in the editor.
-
-Cap tracked proposals per turn. Skip headings, placeholders, and sentences that are already clear. Prefer the smallest edit that fixes the problem.
-
-For revision markup, see [Tracked changes](/docs/2.x/pro/tracked-changes). For comment threads, see [Comments](/docs/2.x/pro/comments).
-
-</Step>
-
-<Step>
-
-### Wrap values in content controls
-
-A content control is a Structured Document Tag (SDT). Use one when a value has identity beyond its visible text, such as a party name or an effective date.
-
-Pass a paragraph ID, the exact placeholder text, a `tag`, a `title`, and a `subtype`. Search only that paragraph. If the phrase is missing or appears twice, return a refusal.
-
-<Callout>
-  Wrap the placeholder, not the label. Wrap `[Effective Date]`. Do not wrap `Date of Birth`.
-</Callout>
-
-For field types and template filling, see [Content controls](/docs/2.x/guides/content-controls).
-
-</Step>
-
-<Step>
-
-### Trust the tool result
-
-For every write, do the following:
-
-1. Read or search for an exact target.
-2. If the match is missing or ambiguous, return a refusal.
-3. Apply one document transaction.
-4. Return a short success object or a typed refusal.
-5. Continue only when the result says the write succeeded.
-
-If the model emits parallel tool calls, queue the writes on the client. Do not tell the reader that a table, field, or revision exists until its tool succeeds.
-
-</Step>
-
-</Steps>
-
-## Next steps
-
-- [Editing API](/docs/2.x/editor-api): runtimes, `sync()`, and tool integration
-- [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
-- [API reference](/docs/2.x/api/editor-api)
-- [React composition](/docs/2.x/react/composition): mount chrome around the editor
+The [DOCX document refresh example](/examples/document-refresh) shows a mock server response, scroll preservation, change navigation, and temporary highlights. See its [source on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/document-refresh). The example uses approach 3; it does not require a model API key.

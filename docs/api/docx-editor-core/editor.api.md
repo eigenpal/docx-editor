@@ -883,6 +883,11 @@ export function chromeSlotId(group: {
 // @public
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
 
+// @public
+export interface ClearRefreshHighlightsOptions {
+    readonly animation?: boolean | RefreshHighlightAnimation;
+}
+
 // @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
 
@@ -1011,6 +1016,9 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Automat
 export function createContentControlListNavigation(locale?: string): ContentControlListNavigation;
 
 // @public
+export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefresh;
+
+// @public
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance;
 
 // @public
@@ -1079,6 +1087,40 @@ export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFo
 
 // @public
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
+
+// @public
+export interface DocumentRefresh {
+    applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
+    cancel(): void;
+    capture(): Promise<RefreshSubmission>;
+    clearHighlights(options?: ClearRefreshHighlightsOptions): void;
+    finish(submission: RefreshSubmission): void;
+    highlightChanges(options?: RefreshHighlightOptions): number;
+    navigateToChange(id: string, options?: NavigateToChangeOptions): boolean;
+    onResult(listener: (result: RefreshResult) => void): () => void;
+    recover(): Promise<boolean>;
+    recoveryBytes(): ArrayBuffer | null;
+    snapshot(): DocumentRefreshState;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public
+export class DocumentRefreshError extends Error {
+    constructor(code: RefreshFailureCode, cause?: unknown);
+    readonly code: RefreshFailureCode;
+}
+
+// @public
+export interface DocumentRefreshState {
+    // (undocumented)
+    readonly changes: readonly RefreshChange[];
+    readonly highlightsVisible: boolean;
+    // (undocumented)
+    readonly phase: 'idle' | 'capturing' | 'processing' | 'refreshing' | 'recovering' | 'complete' | 'failed';
+    readonly recoveryAvailable: boolean;
+    // (undocumented)
+    readonly result: RefreshResult | null;
+}
 
 // @public
 export interface DocxEditorConfig {
@@ -1634,6 +1676,14 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
 
 // @public
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
+
+// @public
+export interface NavigateToChangeOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly focus?: boolean;
+    readonly offsetPx?: number;
+}
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
@@ -2220,6 +2270,97 @@ export const PX_PER_CM: number;
 
 // @public
 export const PX_PER_INCH = 96;
+
+// @public
+export interface RefreshChange {
+    // (undocumented)
+    readonly id: string;
+    readonly isNew: boolean;
+    // (undocumented)
+    readonly location?: RefreshLocation;
+    readonly resultId: string;
+    // (undocumented)
+    readonly status: 'available' | 'deleted' | 'unavailable' | 'invalid' | 'unsupported-story';
+}
+
+// @public
+export interface RefreshChangeInput {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly location?: RefreshLocation;
+    readonly unavailableReason?: 'deleted' | 'unavailable';
+}
+
+// @public
+export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
+
+// @public
+export interface RefreshHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface RefreshHighlightOptions {
+    readonly animation?: boolean | RefreshHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly changeIds?: readonly string[];
+    readonly className?: string;
+    readonly color?: string;
+    readonly includePrevious?: boolean;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
+}
+
+// @public
+export interface RefreshLocation {
+    // (undocumented)
+    readonly end: number;
+    readonly paragraphId?: string;
+    readonly paragraphIndex?: number;
+    readonly start: number;
+    readonly text: string;
+}
+
+// @public
+export type RefreshResult = {
+    readonly changeInformation: 'available' | 'unavailable';
+    readonly changes: readonly RefreshChange[];
+    readonly failures: readonly string[];
+    readonly ok: true;
+    readonly resultId: string;
+} | {
+    readonly code: RefreshFailureCode;
+    readonly ok: false;
+    readonly recovered?: boolean;
+    readonly resultId: string;
+};
+
+// @public
+export interface RefreshSubmission {
+    // (undocumented)
+    readonly bytes: ArrayBuffer;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export interface RefreshUpdate {
+    // (undocumented)
+    readonly bytes: ArrayBuffer | Uint8Array;
+    readonly changes?: readonly RefreshChangeInput[];
+    readonly failures?: readonly string[];
+    // (undocumented)
+    readonly sequence: number;
+    // (undocumented)
+    readonly submission: RefreshSubmission;
+}
 
 // @public
 export interface RemoteCaretLabelAnchor {

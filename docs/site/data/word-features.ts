@@ -1161,6 +1161,18 @@ export const wordFeatures: WordFeature[] = [
       "The default zoom mode is `auto`: it fits the page width between 50% and 100%. A container narrower than a Letter sheet shrinks the document instead of overflowing. Chrome that pads the scroll container, such as the navigation pane or the review rail, recomputes the fit. A host can pin a fixed scale with `zoom` or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. The toolbar ladder and the Ctrl+= and Cmd+= shortcuts use the same engine-owned mode.",
   },
   {
+    id: 'collab.document-refresh',
+    name: 'Refresh from server updates',
+    category: 'collaboration',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Accept complete DOCX results in React and Vue without replacing the editor instance. Preserve scroll by default. Reject local edits, stale results, and collaborative sessions. Present temporary paragraph highlights with configurable color, opacity, padding, corners, borders, CSS decoration, and separate entrance and exit fades. Select changes by ID. Auto-dismiss highlights after a configurable timeout and respect reduced motion. Customize scroll alignment, padding, motion, and focus using validated body locations or a registered review module. Reload resets selection and undo history. Arbitrary file comparison and merging are outside this API.',
+    docsLink: '/docs/2.x/guides/document-refresh',
+  },
+  {
     id: 'collab.agent-tools',
     name: 'Document automation object model',
     category: 'collaboration',

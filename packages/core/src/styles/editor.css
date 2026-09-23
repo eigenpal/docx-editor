@@ -247,6 +247,8 @@
   /* Focus ring & text selection (derived from primary) */
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
+  --doc-refresh-highlight-color: #3b82f6;
+  --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
     * Chrome layering.
@@ -7423,6 +7425,11 @@ a.docx-hyperlink:focus-visible {
 .docx-editor [data-docx-field]:has(> select[data-docx-form-dropdown]:focus-visible) {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
+}
+
+/* Keep dark document text legible beneath decorative change overlays. */
+:where(.docx-editor) [data-docx-refresh-highlight] {
+  mix-blend-mode: multiply;
 }
 
 .docx-editor .docx-export-dialog,

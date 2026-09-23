@@ -11,7 +11,7 @@
 import type { ZoomMode } from './editor-zoom.ts';
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { EditorEvents } from './editor-events.ts';
-export type { EditorEvents } from './editor-events.ts';
+export type { DocumentChange, EditorEvents } from './editor-events.ts';
 import type { ResolveReviewChangesOptions } from './editor-review.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 export type { ResolveReviewChangesOptions } from './editor-review.ts';
@@ -241,20 +241,6 @@ export class EditorFontError extends Error {
     this.request = details.request;
     this.diagnostic = details.diagnostic;
   }
-}
-
-/**
- * The payload of the `change` event / `onChange`. It carries revision + identity
- * deltas, NOT serialized bytes: serializing a whole DOCX on every keystroke would
- * be prohibitive for large documents. Call `save()` to get bytes on demand.
- */
-export interface DocumentChange {
-  /** Package revision after this change — `getDocumentHandle()`'s number, monotonic. */
-  readonly revision: number;
-  /** Block ids created/deleted/edited by this change, when the engine reports them. */
-  readonly created?: readonly string[];
-  readonly deleted?: readonly string[];
-  readonly dirty?: readonly string[];
 }
 
 /**

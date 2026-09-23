@@ -413,6 +413,23 @@ export {
   type ToolbarSlotValue,
 } from './toolbar-values.ts';
 
+export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
+} from './document-refresh.ts';
+
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
 export type {
   ChromeExportFormat,

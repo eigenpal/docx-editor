@@ -1,3 +1,6 @@
+import { queryEditorDocument } from './docx-editor-query.ts';
+import { refreshWriteBlocked } from './refresh-write-guard.ts';
+import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
 import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
@@ -15,24 +18,6 @@ import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
-// The Editor facade owns the document session, semantic layout, and painted pages.
-// - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
-//   alignment, indent, line break, undo/redo, semantic setSelection, selection-addressed
-//   insert/delete text), selection formatting, `isActive` for marks and alignment, page
-//   setup, page counts, the cached snapshot (with canUndo/canRedo),
-//   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
-//   `selectedText` and `selectionFormatting`, and the document catalogs
-//   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
-//
-// STATE TICK + CACHED SNAPSHOT (the external-store contract).
-//
-// The facade keeps a monotonic `stateVersion`, bumped at EVERY place observable state can
-// move: a committed change, a selection move, zoom, load success AND failure, the async
-// font remount (which goes through `mountBytes`), attach/detach, and destroy. `snapshot()`
-// derives lazily ONCE per version, deep-freezes, and returns the SAME reference until the
-// next bump — `useSyncExternalStore`'s getSnapshot contract, and N subscribers pay one
-// derivation instead of N. When it re-derives, the previous `formatting` and `page`
-// sub-objects are reused if value-equal, so selector results stay reference-stable too.
 
 import {
   anchorLineY,
@@ -76,14 +61,10 @@ import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type {
   CanResult,
-  ContainerRef,
-  ContentControlFilter,
   DocumentChange,
   DocumentHandle,
   EditorError,
   EditorEvents,
-  EditorQueries,
-  EditorQueryResults,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -137,9 +118,6 @@ import {
   currentPage as currentPageOf,
   pageSetupOf,
   gateCommand,
-  hyperlinkAtOf,
-  isInsideTocOf,
-  paragraphSummaries,
   runFormattingOf,
   selectionFormattingHalfPoints,
   selectionRangeOf,
@@ -156,8 +134,6 @@ import {
   canContentControlCommand,
   runContentControlCommand,
   gateModeOf,
-  contentControlAtOf,
-  contentControlsOf,
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import {
@@ -267,6 +243,8 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
  * @public
  */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  let refreshHost: RefreshHost | undefined = undefined;
+  let deferredRefreshBytes: Uint8Array | null = null;
   const hostConfig = createDocxEditorHostConfigState(config);
   let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
@@ -539,7 +517,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const scaleOf = (): number => zoomLane.scale();
 
-  function mountBytes(
+  function mountBytes(...args: Parameters<typeof mountBytesNow>): void {
+    const refreshing = refreshHost?.source !== undefined;
+    try {
+      if (deferredRefreshBytes === args[0]) {
+        deferredRefreshBytes = null;
+        loadBytes(args[0], true);
+        return;
+      }
+      mountBytesNow(...args);
+      refreshHost?.mounted(args[0]);
+    } catch (error) {
+      refreshHost?.mounted(args[0], error);
+      if (!refreshing) throw error;
+    }
+  }
+
+  function mountBytesNow(
     bytes: Uint8Array,
     initialSelection?: SemanticSelection,
     initialTextFormInput?: PendingTextFormInput
@@ -709,15 +703,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // must learn about it, exactly as it learns about any later commit. Without these a
     // store bound before `load()` never re-reads and keeps rendering "no document".
     bump();
-    emitDocumentChange({ revision: surface.session.packageRevision() });
+    emitDocumentChange({
+      revision: surface.session.packageRevision(),
+      source: refreshHost?.source ?? 'load',
+    });
     emitSelectionChange();
     liveFonts.schedule(true);
   }
 
   /** A NEW document: forget the previous document's measurer, then mount. */
-  function loadBytes(bytes: Uint8Array): void {
-    // A load supersedes any open still waiting on its frame: drop the superseded bytes.
+  function loadBytes(bytes: Uint8Array, immediate = false): void {
+    // Keep the live font resources intact until a deferred refresh actually mounts.
     openScheduler.cancel();
+    deferredRefreshBytes = null;
+    if (refreshHost?.source && !immediate && container && openScheduler.shouldYield(bytes)) {
+      deferredRefreshBytes = bytes;
+      openScheduler.schedule(bytes);
+      return;
+    }
     pendingTextFormInputs = new WeakMap();
     // The previous document can leave its comments pane open. Close it before a deferred
     // open publishes `isOpening`, so the loading page uses the full centred workspace.
@@ -744,7 +747,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // BEFORE the mount, so the initial paint materializes the pages actually in view.
     // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
     // function for the SAME document and must keep the reader's place.
-    if (container) {
+    if (container && !refreshHost?.source) {
       const scroller = surfaceScroller(container);
       if (scroller) {
         scroller.scrollTop = 0;
@@ -753,7 +756,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     // A big document into a live container yields one painted frame first. Detached
     // loads only stash bytes; the later `attach` decides whether the mount earns a yield.
-    if (container && openScheduler.shouldYield(bytes)) openScheduler.schedule(bytes);
+    if (!immediate && container && openScheduler.shouldYield(bytes)) openScheduler.schedule(bytes);
     else mountBytes(bytes);
   }
 
@@ -1104,7 +1107,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         !openScheduler.isScheduled(),
       // A supplied document on its way to painted pages. OVERLAY state only — gate
       // chrome on it, never the mount point; `isLoading` remains the gate-safe flag.
-      isOpening: openScheduler.isScheduled(),
+      isOpening: openScheduler.isScheduled() && !refreshHost?.source,
       parseError,
       // The LIVE mode, not only the construction-time one: hosts gate their chrome on this,
       // and it read `true` while every command was being refused with `locked`.
@@ -1112,7 +1115,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         surface !== null &&
         surface.session.editable &&
         hostConfig.mode() !== 'view' &&
-        editingMode !== 'viewing',
+        editingMode !== 'viewing' &&
+        !(container && refreshWriteBlocked(container)),
       zoom: zoomLane.zoom(),
       zoomMode: zoomLane.mode(),
       selection: selectionRangeOf(surface),
@@ -1779,6 +1783,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }),
 
     attach(el) {
+      if (container !== el) refreshHost?.invalidate();
       if (destroyed) {
         // Terminal by design: React StrictMode double-invokes effects, and a component
         // that destroyed its instance must create a new one rather than resurrect this.
@@ -1820,6 +1825,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     detach() {
+      refreshHost?.invalidate();
       if (destroyed) return;
       // Before the container goes: the observer is on an element found THROUGH it, and one
       // left running would keep re-fitting a document that is no longer mounted.
@@ -1849,6 +1855,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitError(editorError('unsupported', unloadableSourceReason(document)));
         return;
       }
+      refreshHost?.invalidate();
       loadBytes(bytes);
     },
 
@@ -1864,6 +1871,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     exec(command, options) {
+      if (container && refreshWriteBlocked(container))
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: 'An external document refresh is in progress.',
+        };
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
@@ -1960,6 +1973,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     can(command, options): CanResult {
+      if (container && refreshWriteBlocked(container))
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: 'An external document refresh is in progress.',
+        };
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
@@ -2535,54 +2554,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     getActiveScope: (): ViewScope => surface?.activeScope() ?? { kind: 'body' },
 
-    query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]) {
-      // The real answers, and the typed empty value for everything else.
-      switch (query.type as keyof EditorQueries) {
-        case 'selectedText':
-          return (surface?.selectedText() ?? '') as EditorQueryResults[K];
-        case 'selectionFormatting':
-          return (surface ? snapshotNow().formatting : null) as EditorQueryResults[K];
-        case 'selection':
-          return selectionRangeOf(surface) as EditorQueryResults[K];
-        case 'paragraphs':
-          return paragraphSummaries(
-            surface,
-            (query as { container?: ContainerRef }).container
-          ) as unknown as EditorQueryResults[K];
-        case 'isInsideToc':
-          return isInsideTocOf(surface) as EditorQueryResults[K];
-        case 'hyperlinkAt':
-          return hyperlinkAtOf(surface) as EditorQueryResults[K];
-        case 'contentControls':
-          return contentControlsOf(
-            surface,
-            (query as { filter?: ContentControlFilter }).filter
-          ) as unknown as EditorQueryResults[K];
-        case 'trackedChanges':
-        case 'revisions':
-        case 'findText':
-        case 'comments':
-          return [] as unknown as EditorQueryResults[K];
-        case 'styles':
-          return {
-            paragraph: new Map(),
-            character: new Map(),
-            table: new Map(),
-          } as unknown as EditorQueryResults[K];
-        case 'variables':
-          return {} as EditorQueryResults[K];
-        case 'contentControlAt':
-          return contentControlAtOf(
-            surface,
-            (query as { filter?: ContentControlFilter }).filter
-          ) as unknown as EditorQueryResults[K];
-        case 'tableContext':
-          return tableContextOf(surface) as EditorQueryResults[K];
-        default:
-          // watermark, splitCellConfig and pageContent are nullable and underived.
-          return null as EditorQueryResults[K];
-      }
-    },
+    query: (query) => queryEditorDocument(surface, () => snapshotNow().formatting, query),
 
     snapshot: () => snapshotNow(),
 
@@ -2628,6 +2600,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     destroy() {
+      refreshHost?.invalidate();
       destroyed = true;
       suggestingReporter.dispose();
       openScheduler.cancel();
@@ -2654,5 +2627,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
   };
 
+  refreshHost = registerRefreshHost(editor, {
+    surface: () => surface,
+    container: () => container,
+    collaboration: () => modules.collaboration !== null,
+    load: loadBytes,
+    changed: () => {
+      bump();
+      emitSelectionChange();
+    },
+    cancelLoad: () => {
+      deferredRefreshBytes = null;
+      openScheduler.cancel();
+    },
+  });
   return editor;
 }

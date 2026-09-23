@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Applications replace document bytes through ordinary loading.",
+  "after": "External refresh refuses collaborative sessions, including disconnected sessions.",
+  "reason": "The change adds host refresh handling without changing room data or protocol fields.",
+  "tests": ["packages/core/src/editor/__tests__/document-refresh.test.ts"],
+  "changeset": "external-document-refresh",
+  "migration": null
+}

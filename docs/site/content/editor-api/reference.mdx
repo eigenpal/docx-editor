@@ -91,3 +91,9 @@ Host factories, runtime capabilities, input budgets, and collaboration setup are
 ## Next steps
 
 See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) before migrating Office.js code. The generated reference remains the declaration authority; runtime notes and tests establish supported behavior.
+
+For integration patterns, see [Connect an agent to a document](/docs/2.x/build-a-docx-agent).
+
+## External document refresh
+
+The refresh controller belongs to the browser host, outside the Office.js document model. `RefreshHighlightOptions` controls change selection and decoration. `NavigateToChangeOptions` controls scroll alignment, motion, padding, and focus. For more information, see [Document refresh API](/docs/2.x/guides/document-refresh).

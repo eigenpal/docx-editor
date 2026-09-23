@@ -1,3 +1,4 @@
+import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { listParagraphStyleId } from './surface-list-style.ts';
@@ -2802,6 +2803,7 @@ export function mountPaginatedSurface(
     // The PROTECTION write is document-wide, so neither the view nor where the caret happens
     // to sit has anything to say about it. Without the second exemption a caret parked in a
     // table of contents refused it with a reason about the table of contents.
+    if (refreshWriteBlocked(container)) return 'An external document refresh is in progress.';
     const protectionWrite = isDocumentProtectionBatch(ops);
     if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
     if (
@@ -3029,6 +3031,7 @@ export function mountPaginatedSurface(
   }
 
   function commit(...args: Parameters<typeof commitNow>): void {
+    if (refreshWriteBlocked(container)) return;
     const finish = beginSurfaceCommit(container);
     try {
       commitNow(...args);
@@ -5429,7 +5432,7 @@ export function mountPaginatedSurface(
       // Undo is a WRITE. It reached the session directly, so a document the toolbar called
       // read-only silently rewound under the reader's hands — the one lane that walked past
       // `applyOps`, `applyPmDoc` and `commitReviewOps` alike.
-      if (editingMode === 'view') {
+      if (editingMode === 'view' || refreshWriteBlocked(container)) {
         lastRejection = VIEWING_REFUSAL;
         options.onChange?.(currentState());
         return;
@@ -5446,7 +5449,7 @@ export function mountPaginatedSurface(
       if (session.packageRevision() !== revision) restoreSelection(mark);
     },
     redo: () => {
-      if (editingMode === 'view') {
+      if (editingMode === 'view' || refreshWriteBlocked(container)) {
         lastRejection = VIEWING_REFUSAL;
         options.onChange?.(currentState());
         return;
@@ -6281,5 +6284,6 @@ export function mountPaginatedSurface(
       scheduler.flush();
     }
   );
+  registerRefreshComposition(surface, () => selectionSync.isComposing());
   return { ok: true, surface };
 }

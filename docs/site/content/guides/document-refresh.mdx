@@ -1,0 +1,466 @@
+---
+title: 'Document refresh API'
+description: 'Display updated DOCX files, preserve scroll, and present recent changes in React and Vue.'
+category: 'Guides'
+---
+
+Use `createDocumentRefresh(editor)` when a server returns a complete, updated DOCX file. The controller keeps the editor instance and its subscriptions active. It preserves a clamped scroll position by default. It does not move focus or scroll to changes automatically.
+
+Each accepted file resets selection, undo history, and some review state. This operation does not merge files or compare arbitrary documents. It refuses collaborative sessions, including disconnected sessions. Ordinary `editor.load()` keeps its existing behavior and `void` return type.
+
+The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
+
+For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.applyUpdate()`.
+
+## API overview
+
+Create one controller with `createDocumentRefresh(editor)`. It provides these methods:
+
+| Method | Purpose |
+| --- | --- |
+| `capture()` | Capture the current DOCX bytes and revision before starting a server job. Returns a submission. |
+| `applyUpdate(update)` | Accept a complete DOCX using that submission and a processor-assigned sequence. Returns a success or refusal result. |
+| `finish(submission)` | Close the submission when the job ends. Accepted content and change navigation remain available. |
+| `cancel()` | Invalidate pending results. Cancel your network request separately. |
+| `highlightChanges(options?)` | Highlight recent available changes. Configure colors, decoration, fade timing, and display time. Returns the selected change count. |
+| `clearHighlights(options?)` | Dismiss highlights with a fade or remove them immediately. |
+| `navigateToChange(id, options?)` | Reveal a validated change location. Configure alignment, scrolling, and focus. Returns whether the location is available. |
+| `snapshot()`, `subscribe(listener)`, `onResult(listener)` | Read status, observe state changes, and receive accepted or refused results. |
+| `recover()`, `recoveryBytes()` | Retry restoration after a failed replacement or obtain recovery bytes for download. |
+
+The update flow is `capture()` → your server job → `applyUpdate()` → `finish()`. Call presentation methods after a successful `applyUpdate()`. Scroll preservation is automatic; highlighting and navigation are opt-in.
+
+Try the [interactive effects preview](#try-the-effects), then follow [Accept an updated file](#accept-an-updated-file).
+
+## Try the effects
+
+This interactive mock shows the presentation and refusal states. It uses sample text, without loading the editor or contacting a server. The runnable examples use actual DOCX files and the public API.
+
+Choose one of four examples, then select **Run preview**. Each example shows one behavior and includes its API source code. Expand **Source code** to inspect the calls. Select **Replay** to run the example again.
+
+<DocumentRefreshDemo />
+
+## Accept an updated file
+
+Import the controller from your adapter or `@docx-editor.dev/core/editor`. Get the editor through `useDocxEditor()` inside the editor root. React returns an instance or `null`; Vue returns a shallow ref. Call the controller after the document mounts.
+
+This example sends the captured document to your backend:
+
+```ts
+import { createDocumentRefresh } from '@docx-editor.dev/react';
+
+const refresh = createDocumentRefresh(editor);
+const submission = await refresh.capture();
+
+try {
+  const response = await fetch('/api/update-document', {
+    method: 'POST',
+    body: submission.bytes,
+  });
+  if (!response.ok) throw new Error('Processing failed');
+
+  const result = await refresh.applyUpdate({
+    submission,
+    sequence: 1,
+    bytes: await response.arrayBuffer(),
+  });
+  if (result.ok) {
+    refresh.highlightChanges();
+  } else {
+    showRefreshError(result.code);
+  }
+} finally {
+  refresh.finish(submission);
+}
+```
+
+The example can highlight returned tracked revisions when a review module supplies their locations. For plain DOCX files, [provide change locations](#provide-reliable-change-locations) to enable highlights and navigation.
+
+`capture()` finishes buffered input and form input before export. It waits for active text composition to finish. It captures bytes and their revision together. The document stays editable during external processing. Edits after capture make `applyUpdate()` return `local-edits`, even after undo. Submit the edited document again; do not replay the old result.
+
+Keep the returned `submission` object in the browser. Pass that same object to `applyUpdate()`. A copied token, another editor's token, or a superseded token cannot authorize replacement. Send its bytes and ID to your backend when needed.
+
+## Receive cumulative updates
+
+Assign each result a nonnegative integer `sequence` at the processor. Each file must contain the complete cumulative output for that submission. Use processor order, never network arrival order. The controller serializes replacement and rejects duplicate or older accepted sequences. It advances its baseline only after successful loading.
+
+This example receives two cumulative files:
+
+```ts
+const submission = await refresh.capture();
+
+try {
+  for await (const update of receiveProcessorUpdates(submission.bytes)) {
+    const result = await refresh.applyUpdate({
+      submission,
+      sequence: update.sequence,
+      bytes: update.bytes,
+      changes: update.changes,
+      failures: update.failedOperationIds,
+    });
+    if (!result.ok) {
+      showRefreshError(result.code);
+      break;
+    }
+    refresh.highlightChanges();
+    showPartialFailures(result.failures);
+  }
+} finally {
+  refresh.finish(submission);
+}
+```
+
+`failures` reports processor operation IDs without repeating successful work. The controller never retries processor operations. `cancel()` invalidates pending processing and cancels a deferred replacement. It cannot reverse an already accepted file. Cancel your application's network request separately.
+
+Do not start processing from every document `change` event. Replacement events have `source: 'refresh'` or `source: 'recovery'`. Ordinary loads and internal remounts have `source: 'load'`. User edits omit `source`. Filter replacement events before scheduling automatic processing:
+
+```ts
+editor.on('change', (change) => {
+  if (change.source) return;
+  scheduleProcessing();
+});
+```
+
+## Provide reliable change locations
+
+A plain replacement file does not identify its changes. Without metadata or returned tracked revisions, the result reports `changeInformation: 'unavailable'`. The controller does not invent a document comparison.
+
+Supply metadata for the returned file, using stable change IDs across cumulative results:
+
+```ts
+const result = await refresh.applyUpdate({
+  submission,
+  sequence: 2,
+  bytes: updatedBytes,
+  changes: [
+    {
+      id: 'delivery-date',
+      location: {
+        paragraphId: '00A12B34',
+        start: 10,
+        end: 20,
+        text: 'October 12',
+      },
+    },
+    { id: 'removed-clause', unavailableReason: 'deleted' },
+  ],
+});
+```
+
+`paragraphId` is the paragraph's OOXML `w14:paraId`. Alternatively, use `paragraphIndex`, starting at zero in body document order. This order includes paragraphs inside tables. Specify exactly one paragraph selector. Offsets count UTF-16 code units. The `text` must equal the text between `start` and `end` in the returned paragraph.
+
+Locations cover nonempty ranges within one body paragraph. A missing, ambiguous, mismatched, or unplaced location does not receive a highlight. The result reports `invalid`, `unavailable`, `deleted`, or `unsupported-story` explicitly. Header, footer, note, and multiparagraph revision locations are unavailable for this presentation API. Use explicit metadata for a surviving body location when appropriate.
+
+If you omit `changes`, a registered review module supplies tracked revision locations. Tracked revisions already present at capture do not count as new changes. Their preservation does not require a review module. Review module use requires the EigenPal Pro License.
+
+## Highlight and navigate
+
+`result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs and changed text within an existing change ID. It compares cumulative results within one submission, plus tracked revisions present at capture. Plain metadata IDs do not form a history across independent captures. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
+
+Highlights are opt-in. Call `highlightChanges()` after a successful `applyUpdate()` when your interface needs them. These calls change presentation only:
+
+```ts
+refresh.highlightChanges(); // New available changes from the latest result.
+refresh.highlightChanges({ includePrevious: true });
+refresh.clearHighlights();
+
+const available = refresh
+  .snapshot()
+  .changes.filter((change) => change.isNew && change.status === 'available');
+if (available.length) {
+  refresh.navigateToChange(available[0].id);
+}
+```
+
+Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes by default. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
+
+To scroll to a recent change before the fade starts, navigate first:
+
+```ts
+const target = refresh
+  .snapshot()
+  .changes.find((change) => change.isNew && change.status === 'available');
+
+if (target && refresh.navigateToChange(target.id, { block: 'centerIfNeeded' })) {
+  refresh.highlightChanges({
+    changeIds: [target.id],
+    timeoutMs: 3000,
+    animation: { durationMs: 180 },
+  });
+}
+```
+
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll and fade** in the preview to try it.
+
+## Customize highlights and motion
+
+The default highlight is a light blue, borderless box with rounded corners. It extends four pixels beyond the paragraph text area. The box fades in over 180 milliseconds. It starts fading out after three seconds. It never moves text, changes scroll, or steals focus.
+
+`highlightChanges()` returns the number of selected, available changes, including offscreen locations. A zero result means no locations were selected. Options are validated even when locations are stale or unavailable. During document replacement, highlighting returns zero and navigation returns `false`. Completion listeners can present the accepted locations.
+
+Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling:
+
+```ts
+import type { RefreshHighlightOptions } from '@docx-editor.dev/react';
+
+const highlights: RefreshHighlightOptions = {
+  color: 'var(--doc-refresh-highlight-color)',
+  opacity: 0.14,
+  padding: 4,
+  borderRadius: 6,
+  timeoutMs: 3000,
+  animation: { durationMs: 180 },
+};
+
+refresh.highlightChanges(highlights);
+refresh.highlightChanges({ ...highlights, includePrevious: true });
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `changeIds` | Omitted | Select only these IDs, including earlier changes. Overrides `includePrevious`. Missing IDs are skipped. An empty array dismisses highlights. |
+| `color` | `var(--doc-refresh-highlight-color)` | A CSS color or a CSS variable. The theme token defaults to blue. |
+| `opacity` | `0.14` | Fill opacity between `0` and `1`. Borders, shadows, and patterns retain their own color alpha. |
+| `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
+| `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
+| `borderWidth` | `0` | Border width in CSS pixels at 100% zoom. |
+| `borderColor` | Same as `color` | CSS border color, independent of fill opacity. Use an alpha color for a lighter border. |
+| `borderStyle` | `'solid'` | Use `'solid'`, `'dashed'`, or `'dotted'`. |
+| `className` | Omitted | Add CSS classes for shadows, outlines, or background patterns. |
+| `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep highlights until cleared. |
+| `animation` | `true` | A 180ms opacity fade. Use `false` for immediate changes. |
+| `animation.durationMs` | `180` | Entrance and default exit duration, from `0` to `10000` milliseconds. |
+| `animation.exitDurationMs` | Same as `durationMs` | Separate automatic and explicit exit duration, from `0` to `10000` milliseconds. |
+| `animation.easing` | Theme token | CSS timing function for both fades. Accepts keywords, `cubic-bezier()`, and `steps()`. |
+
+All numeric settings must be finite. Border width must be nonnegative. `changeIds` accepts at most 10000 nonempty string IDs. `timeoutMs` accepts `0` through `2147483647`, or `null`. Padding and corner radius must be nonnegative. They scale with document zoom. Highlights exclude paragraph spacing before and after the text. Padding stops at the page edges and does not extend outside clipped text frames. Highlights cannot intercept clicks or enter saved DOCX content.
+
+Repeated calls reset the timeout without replaying the entrance. Expiration removes styling; change metadata and navigation remain available. Caret changes, zoom, and scrolling do not replay existing highlights. Style updates apply immediately; entrance and exit fades reverse from their current opacity. Invalid numeric settings throw `RangeError`; invalid colors or animation settings throw `TypeError`.
+
+Switching from all changes to recent changes fades out the excluded boxes. To replay an entrance deliberately, call `clearHighlights({ animation: false })` before `highlightChanges()`.
+
+`clearHighlights()` uses the last requested exit duration and easing. Showing highlights during dismissal reverses the fade without adding duplicate boxes. `snapshot().highlightsVisible` becomes `false` when dismissal starts. Local edits, document replacement, and editor teardown remove stale highlights immediately.
+
+Control the display time separately from the fade duration:
+
+```ts
+refresh.highlightChanges({
+  timeoutMs: 5000,
+  animation: { durationMs: 180 },
+});
+
+// Keep highlights until the user dismisses them.
+refresh.highlightChanges({ timeoutMs: null });
+```
+
+The timeout starts after each `highlightChanges()` call. A timeout of `0` starts dismissal on the next timer task. An older timeout cannot clear highlights from a newer call. Edits, document replacement, explicit clearing, and editor teardown cancel the timer.
+
+Disable motion for frequent updates or keyboard actions:
+
+```ts
+refresh.highlightChanges({ animation: false });
+refresh.clearHighlights({ animation: false });
+```
+
+You can also choose a different dismissal duration:
+
+```ts
+refresh.clearHighlights({ animation: { durationMs: 125 } });
+```
+
+Reduced-motion preferences cap fades at 125 milliseconds. Switching that preference on finishes active fades immediately. Unsupported animation environments show or remove highlights immediately. Navigation stays immediate unless you request smooth scrolling. Reduced motion makes smooth navigation immediate.
+
+For frequent server results, highlight only recent changes and keep previous changes available through explicit controls. Avoid repeatedly clearing and showing unchanged highlights. Keep a text count or change list beside the document; color alone does not explain what changed.
+
+### Add your own decoration
+
+Use the typed options for the fill, border, spacing, and timing. Add a class for other CSS decoration:
+
+```ts
+refresh.highlightChanges({
+  changeIds: ['delivery-date'],
+  color: 'var(--review-fill)',
+  borderColor: 'var(--review-border)',
+  borderWidth: 2,
+  borderStyle: 'dashed',
+  borderRadius: 8,
+  padding: 6,
+  opacity: 0.2,
+  className: 'server-change',
+  animation: {
+    durationMs: 180,
+    exitDurationMs: 250,
+    easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+  },
+});
+```
+
+Define your colors and decoration in application CSS:
+
+```css
+.docx-editor {
+  --review-fill: #93c5fd;
+  --review-border: #2563eb;
+  --review-shadow: #60a5fa;
+}
+
+.server-change {
+  box-shadow: 0 0 10px var(--review-shadow);
+}
+```
+
+The class decorates the overlay, not document text. Keep position, dimensions, pointer behavior, and animation under API control. The API controls fill opacity; the overlay opacity controls fades. The overlay remains decorative and does not enter saved DOCX files. Its default multiply blend keeps dark text readable. Your class can override `mix-blend-mode`. The default easing comes from `--doc-motion-ease-out`, with a built-in fallback. Set `animation.easing` to override it per call. This option does not accept CSS variables or inheritance keywords. Use `animation: false` to disable both fades.
+
+### Control change navigation
+
+Import `NavigateToChangeOptions` from your adapter or `@docx-editor.dev/core/editor`. All navigation settings belong to the host API:
+
+```ts
+import type { NavigateToChangeOptions } from '@docx-editor.dev/react';
+
+const navigation: NavigateToChangeOptions = {
+  block: 'centerIfNeeded',
+  behavior: 'instant',
+  offsetPx: 24,
+  focus: false,
+};
+refresh.navigateToChange('delivery-date', navigation);
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `block` | `'center'` | Use `'start'`, `'center'`, `'centerIfNeeded'`, or `'nearest'`. |
+| `behavior` | `'instant'` | Use `'smooth'` for an explicit animated navigation action. |
+| `offsetPx` | `24` | Nonnegative edge padding for `'start'` and `'nearest'`, in CSS pixels. |
+| `focus` | `false` | Move focus and the caret to the changed range start. |
+
+`centerIfNeeded` keeps the viewport still when the target is already visible. Navigation returns whether the location is available; it does not await smooth scrolling. Use `'instant'` when the highlight must start after the target is visible. Invalid navigation modes throw `TypeError`. Invalid padding throws `RangeError`. Keep automatic scrolling opt-in so server updates do not interrupt reading.
+
+## Handle a completely different document
+
+A valid DOCX can contain unrelated content. `applyUpdate()` accepts it when the submission, sequence, and local revision checks pass. It replaces the whole document. It does not measure similarity or reject large changes.
+
+Scroll preservation uses pixel offsets, not paragraph identity. A shorter replacement clamps the offset to its available scroll range. A longer replacement keeps the previous offset. Neither case guarantees that the reader sees the same subject.
+
+The controller validates change locations against the returned file. It never reuses old locations for a replacement. Without metadata or tracked revisions, it reports unavailable change information. Incorrect metadata gives that change an `invalid` status; it does not refuse the whole file.
+
+Use your application's document identity and job identity to prevent wrong-file responses. A submission token protects the open editor session. It does not prove which business document the server processed. Enforce this association on your backend, then verify its response before `applyUpdate()`.
+
+This example checks response headers from an application-defined endpoint:
+
+```ts
+const documentId = currentDocument.id;
+const jobId = crypto.randomUUID();
+const submission = await refresh.capture();
+
+try {
+  const response = await fetch('/api/update-document', {
+    method: 'POST',
+    headers: {
+      'X-Document-Id': documentId,
+      'X-Job-Id': jobId,
+    },
+    body: submission.bytes,
+  });
+  if (!response.ok) throw new Error('Processing failed');
+  if (
+    response.headers.get('X-Document-Id') !== documentId ||
+    response.headers.get('X-Job-Id') !== jobId
+  ) {
+    throw new Error('Mismatched processor result');
+  }
+
+  const result = await refresh.applyUpdate({
+    submission,
+    sequence: 1,
+    bytes: await response.arrayBuffer(),
+  });
+  if (!result.ok) showRefreshError(result.code);
+} finally {
+  refresh.finish(submission);
+}
+```
+
+These headers form an application protocol, not editor API members or authentication. Correct identifiers cannot detect a server that attaches the wrong bytes. If your workflow requires content comparison, perform that comparison before accepting the result.
+
+For an intentional switch to another business document, cancel processing and use your normal document-opening flow. An ordinary `editor.load()` invalidates pending refresh submissions.
+
+## Handle refused results
+
+Use failure codes to choose the next action:
+
+| Situation | Result | Application action |
+| --- | --- | --- |
+| The user edits after capture, including an edit followed by undo | `local-edits` | Capture the edited document and start a new job. |
+| A duplicate result or an older accepted sequence arrives | `out-of-order` | Discard that result. |
+| A result belongs to an inactive submission | `superseded` | Discard output for the previous submission. |
+| The document changes during replacement | `document-changed` | Discard output for the previous document. |
+| Cancellation interrupts an active replacement | `cancelled` | Stop the transport and discard later output. |
+| Returned bytes are not a valid DOCX | `invalid-document` | Keep the visible document and report the processor failure. |
+| A valid file fails during mounting | `load-failed` | Report the failure; inspect `recovered` for restoration success. |
+| Mounting and restoration both fail | `recovery-failed` | Offer recovery and a recovery-file download. |
+
+Do not retry a refused result blindly. Cancellation does not reverse files that the controller already accepted. A response delivered after cancellation reports `superseded`. A document switch can report `superseded`, `unavailable`, or `document-changed`, depending on when the response arrives.
+
+Connect your cancel control to both the transport and the controller:
+
+```ts
+const transport = new AbortController();
+// Pass transport.signal to your fetch calls.
+function cancelProcessing() {
+  transport.abort();
+  refresh.cancel();
+}
+```
+
+## Show status and handle recovery
+
+`subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `applyUpdate()` completion, including refused results. Both subscriptions return an unsubscribe function.
+
+The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. Highlight fades respect reduced-motion preferences. Navigation scrolls instantly by default.
+
+The controller validates returned bytes before replacement. It retains recovery bytes until loading succeeds. If mounting fails, it reloads the previous document and reports `load-failed`. If recovery also fails, it reports `recovery-failed`. Offer `recover()` and a download of `recoveryBytes()` in that state. Recovery also resets selection and undo history. A document switch invalidates recovery, so it cannot overwrite a later document.
+
+Handle the stable `RefreshFailureCode` values rather than error messages. `capture()` rejects with `DocumentRefreshError` when capture cannot proceed. Check `error instanceof DocumentRefreshError`, then read its typed `code` property. `applyUpdate()` returns an explicit success or failure result.
+
+## Offer recovery controls
+
+Show these controls only when `refresh.snapshot().recoveryAvailable` is `true`. Keep recovery explicit after automatic restoration fails:
+
+```ts
+async function retryRecovery() {
+  const recovered = await refresh.recover();
+  if (!recovered) showRecoveryError();
+}
+
+function downloadRecovery() {
+  const bytes = refresh.recoveryBytes();
+  if (!bytes) return;
+
+  const url = URL.createObjectURL(
+    new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.' + 'wordprocessingml.document',
+    })
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'document-recovery.docx';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+```
+
+Recovery bytes contain the document from before the failed replacement. They are not an undo archive for successfully accepted files.
+
+## Run the example
+
+The [DOCX document refresh example](/examples/document-refresh) includes a mock server and a React client. Run `bun run dev:refresh` after the setup steps in its README. Try scroll preservation, navigation with temporary highlights, and refusal after a local edit.
+
+## See also
+
+- [Connect an agent to a document](/docs/2.x/build-a-docx-agent): choose browser tools, shared execution, or complete file refresh
+
+- [Load and save documents](/docs/2.x/guides/loading-and-saving)
+- [Document automation reference](/docs/2.x/editor-api/reference)
