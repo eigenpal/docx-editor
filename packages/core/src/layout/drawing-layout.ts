@@ -4,11 +4,7 @@
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
-import {
-  anchorLaidOutInCell,
-  LEGACY_CELL_ANCHOR_SCOPE,
-  type CellAnchorScope,
-} from './cell-anchor-layout.ts';
+import { anchorLaidOutInCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import {
   drawingAccessibility,
   type DrawingAccessibility,
@@ -1155,52 +1151,61 @@ export function shiftAnchoredDrawingRecords(
   }
 }
 
-export function publishAnchoredDrawingsForParagraph(options: {
-  readonly paragraph: OoxmlNode;
-  readonly paragraphId: string;
-  readonly paragraphBox: LayoutBox;
-  readonly fragmentRange?: { readonly start: number; readonly end: number };
-  readonly lines: readonly {
-    readonly range: { readonly start: number; readonly end: number };
-    readonly box: LayoutBox;
-    readonly spans: readonly {
+/**
+ * A cell box always travels with the scope that reads its anchors' `layoutInCell`, so a
+ * publisher cannot pass one without the other and silently read the flag as authored.
+ */
+type PublishCellScope =
+  | { readonly cellBox: null; readonly cellAnchorScope: null }
+  | { readonly cellBox: LayoutBox; readonly cellAnchorScope: CellAnchorScope };
+
+export function publishAnchoredDrawingsForParagraph(
+  options: {
+    readonly paragraph: OoxmlNode;
+    readonly paragraphId: string;
+    readonly paragraphBox: LayoutBox;
+    readonly fragmentRange?: { readonly start: number; readonly end: number };
+    readonly lines: readonly {
       readonly range: { readonly start: number; readonly end: number };
       readonly box: LayoutBox;
-      readonly text?: string;
-      readonly style?: import('./run-style.ts').ResolvedRunStyle;
+      readonly spans: readonly {
+        readonly range: { readonly start: number; readonly end: number };
+        readonly box: LayoutBox;
+        readonly text?: string;
+        readonly style?: import('./run-style.ts').ResolvedRunStyle;
+      }[];
     }[];
-  }[];
-  readonly drawingLayout: InlineDrawingLayoutContext;
-  readonly frameBase: Omit<
-    DrawingAnchorFrameContext,
-    'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
-  >;
-  readonly columnBox: LayoutBox;
-  readonly cellBox: LayoutBox | null;
-  readonly cellContentBox?: LayoutBox;
-  /**
-   * With a {@link cellBox}: what decides the anchors' `layoutInCell`; `null` without one.
-   * Required so a publisher cannot forget it and fall back to reading the flag as authored.
-   */
-  readonly cellAnchorScope: CellAnchorScope | null;
-  readonly pageClip: LayoutBox;
-  readonly measurer?: import('./semantic-records.ts').TextMeasurer;
-  readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
-  /**
-   * Which revisions are resolved before publishing. A deleted anchor survives `all-markup`
-   * (marked, like deleted text) and disappears from the proposed result; an inserted one
-   * disappears from the original. Defaults to `all-markup`, which shows everything.
-   */
-  readonly displayMode?: RevisionDisplayMode;
-  readonly revisionAuthorFilter?: RevisionAuthorFilter;
-  /**
-   * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
-   * context). Absent hosts degrade textbox drawings to the placeholder path.
-   */
-  readonly layoutTextboxStory?: (
-    projection: DrawingProjection
-  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
-}): readonly AnchoredDrawingRecord[] {
+    readonly drawingLayout: InlineDrawingLayoutContext;
+    readonly frameBase: Omit<
+      DrawingAnchorFrameContext,
+      | 'paragraphBox'
+      | 'anchorLineBox'
+      | 'anchorCharacterX'
+      | 'columnBox'
+      | 'cellBox'
+      | 'layoutInCell'
+    >;
+    readonly columnBox: LayoutBox;
+    readonly cellContentBox?: LayoutBox;
+    readonly pageClip: LayoutBox;
+    readonly measurer?: import('./semantic-records.ts').TextMeasurer;
+    readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
+    /**
+     * Which revisions are resolved before publishing. A deleted anchor survives `all-markup`
+     * (marked, like deleted text) and disappears from the proposed result; an inserted one
+     * disappears from the original. Defaults to `all-markup`, which shows everything.
+     */
+    readonly displayMode?: RevisionDisplayMode;
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    /**
+     * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
+     * context). Absent hosts degrade textbox drawings to the placeholder path.
+     */
+    readonly layoutTextboxStory?: (
+      projection: DrawingProjection
+    ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
+  } & PublishCellScope
+): readonly AnchoredDrawingRecord[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return [];
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
@@ -1227,10 +1232,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
     const layoutInCell =
       options.cellBox === null
         ? (projection.anchor?.layoutInCell ?? true)
-        : anchorLaidOutInCell(
-            projection.anchor,
-            options.cellAnchorScope ?? LEGACY_CELL_ANCHOR_SCOPE
-          );
+        : anchorLaidOutInCell(projection.anchor, options.cellAnchorScope);
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;
