@@ -192,6 +192,38 @@ export function removedCaretParagraphEdit(
   };
 }
 
+/**
+ * Delete at the end of a paragraph, when the join to the next laid-out paragraph cannot reach
+ * it: absorb the run of removed paragraphs directly after it, and nothing else.
+ *
+ * Something that is not a removed paragraph (a body-level `w:bookmarkEnd`, a paragraph this
+ * view merges away) sits between, and a join across it would be refused. The removed run
+ * before it is still adjacent and shows nothing, so absorbing it is the edit Delete made when
+ * those paragraphs were laid out as blank lines, with no visible change. Null when no removed
+ * paragraph directly follows.
+ */
+export function absorbRemovedAfter(
+  part: OoxmlPart,
+  firstId: string,
+  view: RevisionView
+): TreeDocOp[] | null {
+  const parent = parentNodeOf(part, firstId);
+  if (parent === null) return null;
+  const siblings = parent.children;
+  const start = siblings.findIndex((child) => child.kind !== 'textValue' && child.id === firstId);
+  if (start === -1) return null;
+  let removed: ReadonlySet<string> | null = null;
+  const ops: TreeDocOp[] = [];
+  for (let index = start + 1; index < siblings.length; index += 1) {
+    const child = siblings[index]!;
+    if (child.kind === 'textValue') continue;
+    removed ??= hiddenMarkRemovedIds(siblings, view);
+    if (!removed.has(child.id)) break;
+    ops.push({ op: 'joinParagraphs', firstId, secondId: child.id });
+  }
+  return ops.length > 0 ? ops : null;
+}
+
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
@@ -200,6 +232,8 @@ export function createHiddenMarkEditing(deps: {
 }): {
   /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
   joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
+  /** Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. */
+  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
   /** A collapsed selection moved to where it shows; a range is left alone. */
@@ -220,6 +254,9 @@ export function createHiddenMarkEditing(deps: {
   return {
     joinOps: (firstId, secondId) =>
       joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
+    forwardJoinOps: (firstId, nextId) =>
+      joinAcrossHiddenMarks(deps.part(), firstId, nextId, deps.view()) ??
+      absorbRemovedAfter(deps.part(), firstId, deps.view()),
     shown,
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),

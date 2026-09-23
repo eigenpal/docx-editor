@@ -157,6 +157,43 @@ describe('Backspace and Delete across removed paragraphs', () => {
     expect(texts(surface)).toEqual(['Alpha', '', '', 'Beta']);
   });
 
+  // Something that is not a removed paragraph sits between, so the join cannot reach the next
+  // laid-out paragraph. Delete absorbs only the removed paragraph right after the caret: the
+  // edit it made when that paragraph was a blank line, and no visible change.
+  for (const [label, between, view, after] of [
+    ['a body-level marker', '<w:bookmarkEnd w:id="7"/>', 'all-markup', ['Alpha', 'Beta']],
+    [
+      'a paragraph the proposed view merges away',
+      '<w:p><w:pPr><w:rPr><w:del w:id="5" w:author="X" w:date="2024-01-01T00:00:00Z"/></w:rPr></w:pPr></w:p>',
+      'proposed',
+      ['Alpha', '', 'Beta'],
+    ],
+  ] as const) {
+    test(`Delete is not refused when ${label} follows a removed paragraph`, () => {
+      const surface = mount(para('Alpha') + hidden + between + para('Beta'));
+      surface.setRevisionDisplayMode(view);
+      const lines = () =>
+        surface
+          .layout()
+          .pages.flatMap((page) =>
+            page.fragments.flatMap((fragment) =>
+              fragment.kind === 'paragraph' ? fragment.lines : []
+            )
+          )
+          .map((line) => line.spans.map((span) => span.text).join(''));
+      const shown = lines();
+      caret(surface, idOf(surface, 'Alpha'), 5);
+      surface.deleteForward();
+      expect(surface.state().lastRejection).toBeFalsy();
+      expect(texts(surface)).toEqual([...after]);
+      expect(lines()).toEqual(shown);
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: idOf(surface, 'Alpha'),
+        offset: 5,
+      });
+    });
+  }
+
   test('a visible empty paragraph between is still its own line', () => {
     const surface = mount(para('Alpha') + '<w:p/>' + para('Beta'));
     caret(surface, idOf(surface, 'Beta'), 0);

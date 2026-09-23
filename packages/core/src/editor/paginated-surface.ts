@@ -4941,7 +4941,7 @@ export function mountPaginatedSurface(
       commit(
         () =>
           applyOps(
-            hiddenMarks.joinOps(position.paragraphId, next) ?? [
+            hiddenMarks.forwardJoinOps(position.paragraphId, next) ?? [
               { op: 'joinParagraphs', firstId: position.paragraphId, secondId: next },
             ],
             selectionMark()
