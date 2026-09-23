@@ -35,7 +35,7 @@ See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redli
 
 ## 3. Receive complete DOCX files
 
-Use `createDocumentRefresh(editor)` when your agent or external processor returns a complete updated file. Call `capture()` before processing, then pass the returned DOCX bytes, submission, and sequence number to `refresh.apply()`.
+Use `createDocumentRefresh(editor)` when your agent or external processor returns a complete updated file. Call `capture()` before processing, then pass the returned DOCX bytes, submission, and sequence number to `refresh.applyUpdate()`.
 
 The editor keeps its instance and preserves scroll by default. You can call `highlightChanges()` for temporary highlights or `navigateToChange()` to show a changed passage. Highlights require valid change locations or supported tracked revisions. They do not compare arbitrary files or create tracked changes.
 

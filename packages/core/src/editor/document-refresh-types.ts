@@ -158,7 +158,7 @@ export interface DocumentRefresh {
   /** Finish pending input and capture bytes with their document revision. Supersedes earlier submissions. */
   capture(): Promise<RefreshSubmission>;
   /** Accept cumulative output. Preserve a clamped scroll position without moving focus. */
-  apply(update: RefreshUpdate): Promise<RefreshResult>;
+  applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
   /** Cancel pending processing. An accepted result stays loaded. */
   cancel(): void;
   /** End processing when no further output will arrive. */
@@ -167,7 +167,7 @@ export interface DocumentRefresh {
   snapshot(): DocumentRefreshState;
   /** Observe state changes. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
-  /** Completion notification for every apply call, including a refused result. */
+  /** Completion notification for every `applyUpdate()` call, including a refused result. */
   onResult(listener: (result: RefreshResult) => void): () => void;
   /** Highlight available changes and return their count, including offscreen locations. Zero means none. Always validates options. */
   highlightChanges(options?: RefreshHighlightOptions): number;
@@ -181,7 +181,7 @@ export interface DocumentRefresh {
   recover(): Promise<boolean>;
 }
 
-/** A capture failure with a stable code. Apply failures use RefreshResult instead. @public */
+/** A capture failure with a stable code. `applyUpdate()` failures use RefreshResult instead. @public */
 export class DocumentRefreshError extends Error {
   /** Machine-readable reason. */
   readonly code: RefreshFailureCode;

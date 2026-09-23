@@ -79,7 +79,7 @@ export function mountRefreshDemoControls(
           await new Promise((resolve) => setTimeout(resolve, 1800));
           if (disposed || current !== run) return;
           const output = await sampleProcessor(submission.bytes, sequence);
-          const result = await refresh.apply({ submission, sequence, ...output });
+          const result = await refresh.applyUpdate({ submission, sequence, ...output });
           if (!result.ok) return;
           index = -1;
           refresh.highlightChanges();

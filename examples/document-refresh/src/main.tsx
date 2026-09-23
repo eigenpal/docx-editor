@@ -83,7 +83,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
         throw new Error('identity-mismatch');
       }
       if (controller.signal.aborted) return;
-      const result = await refresh.apply({
+      const result = await refresh.applyUpdate({
         submission,
         sequence: output.sequence,
         bytes: Uint8Array.from(atob(output.bytes), (c) => c.charCodeAt(0)),

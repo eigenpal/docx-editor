@@ -29,7 +29,7 @@ async function open(page: Page) {
       const editor = createDocxEditor({ container, document: refreshFixture(), zoom: 1 });
       const refresh = createDocumentRefresh(editor);
       const submission = await refresh.capture();
-      await refresh.apply({
+      await refresh.applyUpdate({
         submission,
         sequence: 1,
         bytes: refreshFixture(2),

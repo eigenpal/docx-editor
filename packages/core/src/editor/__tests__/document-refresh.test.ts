@@ -43,7 +43,7 @@ describe('external document refresh', () => {
     const button = document.createElement('button');
     document.body.append(button);
     button.focus();
-    const result = await refresh.apply({
+    const result = await refresh.applyUpdate({
       submission,
       sequence: 1,
       bytes: refreshFixture(1),
@@ -61,7 +61,7 @@ describe('external document refresh', () => {
   test('highlights leave bytes and undo unchanged, then clear on local edits', async () => {
     const { editor, refresh, container } = open();
     const submission = await refresh.capture();
-    await refresh.apply({
+    await refresh.applyUpdate({
       submission,
       sequence: 1,
       bytes: refreshFixture(1),
@@ -83,7 +83,7 @@ describe('external document refresh', () => {
     const { editor, refresh, text } = open();
     const submission = await refresh.capture();
     editor.surface!.enqueueType('local');
-    const result = await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) });
+    const result = await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) });
     expect(result).toMatchObject({ ok: false, code: 'local-edits' });
     expect(text()).toContain('local');
   });
@@ -97,29 +97,29 @@ describe('external document refresh', () => {
     });
     expect(check.surface!.session.bodyText()).toContain('captured');
     check.destroy();
-    expect((await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })).ok).toBe(
-      true
-    );
+    expect(
+      (await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })).ok
+    ).toBe(true);
   });
   test('rejects invalid bytes before tearing down the surface', async () => {
     const { editor, refresh } = open();
     const surface = editor.surface;
     const submission = await refresh.capture();
     expect(
-      await refresh.apply({ submission, sequence: 1, bytes: new Uint8Array([1]) })
+      await refresh.applyUpdate({ submission, sequence: 1, bytes: new Uint8Array([1]) })
     ).toMatchObject({ code: 'invalid-document' });
     expect(editor.surface).toBe(surface);
   });
   test('orders cumulative results by processor sequence and identifies only new changes', async () => {
     const { refresh } = open();
     const submission = await refresh.capture();
-    await refresh.apply({
+    await refresh.applyUpdate({
       submission,
       sequence: 1,
       bytes: refreshFixture(1),
       changes: refreshMetadata(),
     });
-    const second = await refresh.apply({
+    const second = await refresh.applyUpdate({
       submission,
       sequence: 3,
       bytes: refreshFixture(2),
@@ -129,17 +129,17 @@ describe('external document refresh', () => {
     expect(second).toMatchObject({ ok: true, failures: ['unavailable-source'] });
     expect(refresh.snapshot().changes.map((c) => c.isNew)).toEqual([false, true]);
     for (const sequence of [1, 2, 3])
-      expect(await refresh.apply({ submission, sequence, bytes: refreshFixture(1) })).toMatchObject(
-        { code: 'out-of-order' }
-      );
+      expect(
+        await refresh.applyUpdate({ submission, sequence, bytes: refreshFixture(1) })
+      ).toMatchObject({ code: 'out-of-order' });
   });
   test('serializes queued results and owns their byte arrays', async () => {
     const { refresh, text } = open();
     const submission = await refresh.capture();
     const bytes = refreshFixture(1);
-    const first = refresh.apply({ submission, sequence: 1, bytes });
+    const first = refresh.applyUpdate({ submission, sequence: 1, bytes });
     bytes.fill(0);
-    const second = refresh.apply({ submission, sequence: 2, bytes: refreshFixture(2) });
+    const second = refresh.applyUpdate({ submission, sequence: 2, bytes: refreshFixture(2) });
     expect((await first).ok).toBe(true);
     expect((await second).ok).toBe(true);
     expect(text()).toContain('Updated review date');
@@ -149,34 +149,36 @@ describe('external document refresh', () => {
     const old = await refresh.capture();
     refresh.cancel();
     expect(
-      (await refresh.apply({ submission: old, sequence: 1, bytes: refreshFixture(1) })).ok
+      (await refresh.applyUpdate({ submission: old, sequence: 1, bytes: refreshFixture(1) })).ok
     ).toBe(false);
     const next = await refresh.capture();
     await refresh.capture();
     expect(
-      (await refresh.apply({ submission: next, sequence: 1, bytes: refreshFixture(1) })).ok
+      (await refresh.applyUpdate({ submission: next, sequence: 1, bytes: refreshFixture(1) })).ok
     ).toBe(false);
     const other = open();
     expect(
-      (await other.refresh.apply({ submission: old, sequence: 1, bytes: refreshFixture(1) })).ok
+      (await other.refresh.applyUpdate({ submission: old, sequence: 1, bytes: refreshFixture(1) }))
+        .ok
     ).toBe(false);
     const switched = await refresh.capture();
     editor.load(refreshFixture(2));
     expect(
-      (await refresh.apply({ submission: switched, sequence: 1, bytes: refreshFixture(1) })).ok
+      (await refresh.applyUpdate({ submission: switched, sequence: 1, bytes: refreshFixture(1) }))
+        .ok
     ).toBe(false);
   });
   test('plain replacement reports unavailable change information', async () => {
     const { refresh } = open();
     const submission = await refresh.capture();
     expect(
-      await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })
+      await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
     ).toMatchObject({ ok: true, changeInformation: 'unavailable', changes: [] });
   });
   test('reports deleted, invalid, and unavailable locations without invented highlights', async () => {
     const { refresh, container } = open();
     const submission = await refresh.capture();
-    await refresh.apply({
+    await refresh.applyUpdate({
       submission,
       sequence: 1,
       bytes: refreshFixture(1),
@@ -198,7 +200,7 @@ describe('external document refresh', () => {
   test('preserves tracked revisions in saved and reopened bytes', async () => {
     const { editor, refresh } = open();
     const submission = await refresh.capture();
-    await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, false, true) });
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, false, true) });
     const saved = await editor.save();
     expect(readOoxmlPackage(new Uint8Array(saved)).ok).toBe(true);
     editor.load(saved);
@@ -208,7 +210,11 @@ describe('external document refresh', () => {
     const { editor, refresh, scroll } = open();
     const submission = await refresh.capture();
     scroll.scrollTop = 700;
-    const applying = refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+    const applying = refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: refreshFixture(1, true),
+    });
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -222,7 +228,11 @@ describe('external document refresh', () => {
   test('cancels a deferred load without replacing content', async () => {
     const { editor, refresh, text } = open();
     const submission = await refresh.capture();
-    const applying = refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+    const applying = refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: refreshFixture(1, true),
+    });
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -237,7 +247,11 @@ describe('external document refresh', () => {
   test('never restores over a later document switch', async () => {
     const { editor, refresh, text } = open();
     const submission = await refresh.capture();
-    const applying = refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+    const applying = refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: refreshFixture(1, true),
+    });
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -260,7 +274,7 @@ describe('external document refresh', () => {
       original(...nodes);
     };
     expect(
-      await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })
+      await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
     ).toMatchObject({
       ok: false,
       code: 'load-failed',
@@ -280,7 +294,7 @@ describe('external document refresh', () => {
       original(...nodes);
     };
     expect(
-      await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })
+      await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
     ).toMatchObject({ code: 'recovery-failed' });
     expect(refresh.recoveryBytes()).not.toBeNull();
     expect(refresh.snapshot().recoveryAvailable).toBe(true);
@@ -306,10 +320,10 @@ describe('external document refresh', () => {
     refresh.subscribe(() => {
       throw new Error('host');
     });
-    expect((await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })).ok).toBe(
-      true
-    );
-    await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) });
+    expect(
+      (await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })).ok
+    ).toBe(true);
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) });
     expect(ids).toHaveLength(2);
   });
 });

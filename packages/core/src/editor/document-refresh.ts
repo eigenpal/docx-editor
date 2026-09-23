@@ -197,7 +197,7 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
         );
       }
     },
-    apply(update) {
+    applyUpdate(update) {
       const resultId = `${update.submission?.id ?? 'unknown'}:${update.sequence}`;
       // Own bytes and metadata at delivery. A caller cannot mutate a queued result.
       let owned: RefreshUpdate;

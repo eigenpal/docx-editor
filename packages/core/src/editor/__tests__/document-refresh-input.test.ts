@@ -83,7 +83,9 @@ test('capture finalizes form values; pending form edits reject returned files', 
   const submission = await refresh.capture();
   expect(editor.surface!.session.bodyText()).toBe('04/03/2030 tail');
   enter('05/06/2030');
-  expect(await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })).toMatchObject({
+  expect(
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
+  ).toMatchObject({
     code: 'local-edits',
   });
   expect(editor.surface!.session.bodyText()).toContain('06/05/2030');
@@ -99,7 +101,9 @@ test('a refresh observer cannot lose newly buffered input', async () => {
       editor.surface!.enqueueType('Observer input');
     }
   });
-  expect(await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) })).toMatchObject({
+  expect(
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
+  ).toMatchObject({
     code: 'local-edits',
   });
   expect(editor.surface!.session.bodyText()).toContain('Observer input');
@@ -114,7 +118,7 @@ test('a completion observer can switch documents without publishing stale state'
   });
   expect(
     (
-      await refresh.apply({
+      await refresh.applyUpdate({
         submission,
         sequence: 1,
         bytes: refreshFixture(1),
@@ -128,7 +132,7 @@ test('a completion observer can switch documents without publishing stale state'
 test('tracked revisions provide locations and distinguish existing revisions', async () => {
   const { editor, refresh } = open(refreshFixture(), true);
   const submission = await refresh.capture();
-  const first = await refresh.apply({
+  const first = await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: refreshFixture(1, false, true),
@@ -140,17 +144,21 @@ test('tracked revisions provide locations and distinguish existing revisions', a
   const xml = strFromU8(unzipSync(new Uint8Array(saved))['word/document.xml']!);
   expect(xml).toContain('w:ins');
   expect(xml).toContain('Processor');
-  await refresh.apply({ submission, sequence: 2, bytes: refreshFixture(2, false, true) });
+  await refresh.applyUpdate({ submission, sequence: 2, bytes: refreshFixture(2, false, true) });
   expect(refresh.snapshot().changes[0]!.isNew).toBe(false);
   const next = await refresh.capture();
-  await refresh.apply({ submission: next, sequence: 1, bytes: refreshFixture(2, false, true) });
+  await refresh.applyUpdate({
+    submission: next,
+    sequence: 1,
+    bytes: refreshFixture(2, false, true),
+  });
   expect(refresh.snapshot().changes[0]!.isNew).toBe(false);
 });
 
 test('content changes within a stable tracked revision are recent', async () => {
   const { refresh } = open(refreshFixture(0, false, true), true);
   const submission = await refresh.capture();
-  await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, false, true) });
+  await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, false, true) });
   expect(refresh.snapshot().changes[0]!.isNew).toBe(true);
 });
 
@@ -158,7 +166,7 @@ test('undo cannot write while a deferred refresh is pending', async () => {
   const { editor, refresh } = open();
   editor.surface!.type('Existing edit');
   const submission = await refresh.capture();
-  const applying = refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+  const applying = refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) });
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -182,7 +190,7 @@ test('a deferred mounting exception resolves through recovery', async () => {
     original(...nodes);
   };
   expect(
-    await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) })
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) })
   ).toMatchObject({ code: 'load-failed', recovered: true });
   expect(editor.surface!.session.bodyText()).not.toContain('Updated delivery date');
 });
@@ -190,7 +198,7 @@ test('a deferred mounting exception resolves through recovery', async () => {
 test('detaching during a deferred refresh never saves cancelled result bytes for remount', async () => {
   const { container, editor, refresh } = open();
   const submission = await refresh.capture();
-  const applying = refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+  const applying = refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) });
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -204,7 +212,7 @@ test('finishing a failed request keeps its visible failure', async () => {
   const { refresh, editor } = open();
   const submission = await refresh.capture();
   editor.surface!.type('Local');
-  await refresh.apply({ submission, sequence: 1, bytes: refreshFixture(1) });
+  await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) });
   refresh.finish(submission);
   expect(refresh.snapshot()).toMatchObject({ phase: 'failed', result: { code: 'local-edits' } });
 });
@@ -212,7 +220,7 @@ test('finishing a failed request keeps its visible failure', async () => {
 test('cancellation after an accepted result keeps its change navigation', async () => {
   const { refresh } = open();
   const submission = await refresh.capture();
-  await refresh.apply({
+  await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: refreshFixture(1),

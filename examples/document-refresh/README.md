@@ -22,7 +22,7 @@ Open `http://localhost:5177`.
 
 ## How it works
 
-The client captures the open document, requests a result, and calls `refresh.apply()`. The server returns a complete DOCX and the changed text location. Highlights fade in and disappear after three seconds.
+The client captures the open document, requests a result, and calls `refresh.applyUpdate()`. The server returns a complete DOCX and the changed text location. Highlights fade in and disappear after three seconds.
 
 The mock generates two fixed sample files. It does not edit uploaded files. If you edit the sample, reset it before another request. A production processor can receive `submission.bytes` and modify that document.
 

@@ -10,7 +10,7 @@ Each accepted file resets selection, undo history, and some review state. This o
 
 The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
 
-For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.apply()`.
+For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.applyUpdate()`.
 
 ## API overview
 
@@ -19,7 +19,7 @@ Create one controller with `createDocumentRefresh(editor)`. It provides these me
 | Method | Purpose |
 | --- | --- |
 | `capture()` | Capture the current DOCX bytes and revision before starting a server job. Returns a submission. |
-| `apply(update)` | Accept a complete DOCX using that submission and a processor-assigned sequence. Returns a success or refusal result. |
+| `applyUpdate(update)` | Accept a complete DOCX using that submission and a processor-assigned sequence. Returns a success or refusal result. |
 | `finish(submission)` | Close the submission when the job ends. Accepted content and change navigation remain available. |
 | `cancel()` | Invalidate pending results. Cancel your network request separately. |
 | `highlightChanges(options?)` | Highlight recent available changes. Configure colors, decoration, fade timing, and display time. Returns the selected change count. |
@@ -28,7 +28,7 @@ Create one controller with `createDocumentRefresh(editor)`. It provides these me
 | `snapshot()`, `subscribe(listener)`, `onResult(listener)` | Read status, observe state changes, and receive accepted or refused results. |
 | `recover()`, `recoveryBytes()` | Retry restoration after a failed replacement or obtain recovery bytes for download. |
 
-The update flow is `capture()` → your server job → `apply()` → `finish()`. Call presentation methods after a successful `apply()`. Scroll preservation is automatic; highlighting and navigation are opt-in.
+The update flow is `capture()` → your server job → `applyUpdate()` → `finish()`. Call presentation methods after a successful `applyUpdate()`. Scroll preservation is automatic; highlighting and navigation are opt-in.
 
 Try the [interactive effects preview](#try-the-effects), then follow [Accept an updated file](#accept-an-updated-file).
 
@@ -59,7 +59,7 @@ try {
   });
   if (!response.ok) throw new Error('Processing failed');
 
-  const result = await refresh.apply({
+  const result = await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: await response.arrayBuffer(),
@@ -76,9 +76,9 @@ try {
 
 The example can highlight returned tracked revisions when a review module supplies their locations. For plain DOCX files, [provide change locations](#provide-reliable-change-locations) to enable highlights and navigation.
 
-`capture()` finishes buffered input and form input before export. It waits for active text composition to finish. It captures bytes and their revision together. The document stays editable during external processing. Edits after capture make `apply()` return `local-edits`, even after undo. Submit the edited document again; do not replay the old result.
+`capture()` finishes buffered input and form input before export. It waits for active text composition to finish. It captures bytes and their revision together. The document stays editable during external processing. Edits after capture make `applyUpdate()` return `local-edits`, even after undo. Submit the edited document again; do not replay the old result.
 
-Keep the returned `submission` object in the browser. Pass that same object to `apply()`. A copied token, another editor's token, or a superseded token cannot authorize replacement. Send its bytes and ID to your backend when needed.
+Keep the returned `submission` object in the browser. Pass that same object to `applyUpdate()`. A copied token, another editor's token, or a superseded token cannot authorize replacement. Send its bytes and ID to your backend when needed.
 
 ## Receive cumulative updates
 
@@ -91,7 +91,7 @@ const submission = await refresh.capture();
 
 try {
   for await (const update of receiveProcessorUpdates(submission.bytes)) {
-    const result = await refresh.apply({
+    const result = await refresh.applyUpdate({
       submission,
       sequence: update.sequence,
       bytes: update.bytes,
@@ -128,7 +128,7 @@ A plain replacement file does not identify its changes. Without metadata or retu
 Supply metadata for the returned file, using stable change IDs across cumulative results:
 
 ```ts
-const result = await refresh.apply({
+const result = await refresh.applyUpdate({
   submission,
   sequence: 2,
   bytes: updatedBytes,
@@ -157,7 +157,7 @@ If you omit `changes`, a registered review module supplies tracked revision loca
 
 `result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs and changed text within an existing change ID. It compares cumulative results within one submission, plus tracked revisions present at capture. Plain metadata IDs do not form a history across independent captures. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
 
-Highlights are opt-in. Call `highlightChanges()` after a successful `apply()` when your interface needs them. These calls change presentation only:
+Highlights are opt-in. Call `highlightChanges()` after a successful `applyUpdate()` when your interface needs them. These calls change presentation only:
 
 ```ts
 refresh.highlightChanges(); // New available changes from the latest result.
@@ -338,13 +338,13 @@ refresh.navigateToChange('delivery-date', navigation);
 
 ## Handle a completely different document
 
-A valid DOCX can contain unrelated content. `apply()` accepts it when the submission, sequence, and local revision checks pass. It replaces the whole document. It does not measure similarity or reject large changes.
+A valid DOCX can contain unrelated content. `applyUpdate()` accepts it when the submission, sequence, and local revision checks pass. It replaces the whole document. It does not measure similarity or reject large changes.
 
 Scroll preservation uses pixel offsets, not paragraph identity. A shorter replacement clamps the offset to its available scroll range. A longer replacement keeps the previous offset. Neither case guarantees that the reader sees the same subject.
 
 The controller validates change locations against the returned file. It never reuses old locations for a replacement. Without metadata or tracked revisions, it reports unavailable change information. Incorrect metadata gives that change an `invalid` status; it does not refuse the whole file.
 
-Use your application's document identity and job identity to prevent wrong-file responses. A submission token protects the open editor session. It does not prove which business document the server processed. Enforce this association on your backend, then verify its response before `apply()`.
+Use your application's document identity and job identity to prevent wrong-file responses. A submission token protects the open editor session. It does not prove which business document the server processed. Enforce this association on your backend, then verify its response before `applyUpdate()`.
 
 This example checks response headers from an application-defined endpoint:
 
@@ -370,7 +370,7 @@ try {
     throw new Error('Mismatched processor result');
   }
 
-  const result = await refresh.apply({
+  const result = await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: await response.arrayBuffer(),
@@ -415,13 +415,13 @@ function cancelProcessing() {
 
 ## Show status and handle recovery
 
-`subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `apply()` completion, including refused results. Both subscriptions return an unsubscribe function.
+`subscribe()` observes the cached `snapshot()`. Use it with React's `useSyncExternalStore` or a Vue `shallowRef`. `onResult()` reports every `applyUpdate()` completion, including refused results. Both subscriptions return an unsubscribe function.
 
 The phases separate capture, processing, refresh, and recovery. Show translated status in a polite live region. Keep the document visible during processing and use a small refresh indicator. The standard document loading overlay stays hidden during external refresh. Highlight fades respect reduced-motion preferences. Navigation scrolls instantly by default.
 
 The controller validates returned bytes before replacement. It retains recovery bytes until loading succeeds. If mounting fails, it reloads the previous document and reports `load-failed`. If recovery also fails, it reports `recovery-failed`. Offer `recover()` and a download of `recoveryBytes()` in that state. Recovery also resets selection and undo history. A document switch invalidates recovery, so it cannot overwrite a later document.
 
-Handle the stable `RefreshFailureCode` values rather than error messages. `capture()` rejects with `DocumentRefreshError` when capture cannot proceed. Check `error instanceof DocumentRefreshError`, then read its typed `code` property. `apply()` returns an explicit success or failure result.
+Handle the stable `RefreshFailureCode` values rather than error messages. `capture()` rejects with `DocumentRefreshError` when capture cannot proceed. Check `error instanceof DocumentRefreshError`, then read its typed `code` property. `applyUpdate()` returns an explicit success or failure result.
 
 ## Offer recovery controls
 

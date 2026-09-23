@@ -57,7 +57,7 @@ function open() {
 test('accepts unrelated shorter content, clamps both scroll axes, and discards previous change locations', async () => {
   const { editor, refresh, container, scroll, resize } = open();
   const submission = await refresh.capture();
-  await refresh.apply({
+  await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: refreshFixture(1),
@@ -68,7 +68,11 @@ test('accepts unrelated shorter content, clamps both scroll axes, and discards p
   scroll.scrollTop = 1900;
   scroll.scrollLeft = 300;
   resize(600, 820);
-  const result = await refresh.apply({ submission, sequence: 2, bytes: unrelatedDocument(2) });
+  const result = await refresh.applyUpdate({
+    submission,
+    sequence: 2,
+    bytes: unrelatedDocument(2),
+  });
   expect(result).toMatchObject({ ok: true, changeInformation: 'unavailable', changes: [] });
   expect(editor.surface!.session.bodyText()).toContain('Asset 1: Inspection complete.');
   expect(editor.surface!.session.bodyText()).not.toContain('Project schedule');
@@ -85,7 +89,11 @@ test('accepts unrelated longer content and keeps offsets without guessing semant
   scroll.scrollTop = 1600;
   scroll.scrollLeft = 150;
   resize(6000, 1600);
-  const result = await refresh.apply({ submission, sequence: 1, bytes: unrelatedDocument(90) });
+  const result = await refresh.applyUpdate({
+    submission,
+    sequence: 1,
+    bytes: unrelatedDocument(90),
+  });
   expect(result).toMatchObject({ ok: true, changeInformation: 'unavailable' });
   expect(editor.surface!.session.bodyText()).toContain('Asset 90: Inspection complete.');
   expect(scroll.scrollTop).toBe(1600);
@@ -97,7 +105,7 @@ test('accepts a replacement while refusing metadata that describes the previous 
   const submission = await refresh.capture();
   scroll.scrollTop = 1900;
   resize(300, 600);
-  const result = await refresh.apply({
+  const result = await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: unrelatedDocument(1),

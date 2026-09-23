@@ -1090,7 +1090,7 @@ export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 
 // @public
 export interface DocumentRefresh {
-    apply(update: RefreshUpdate): Promise<RefreshResult>;
+    applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
     cancel(): void;
     capture(): Promise<RefreshSubmission>;
     clearHighlights(options?: ClearRefreshHighlightsOptions): void;

@@ -19,7 +19,7 @@ async function open() {
   });
   const refresh = createDocumentRefresh(editor);
   const submission = await refresh.capture();
-  await refresh.apply({
+  await refresh.applyUpdate({
     submission,
     sequence: 1,
     bytes: refreshFixture(2),
@@ -208,7 +208,7 @@ test('explicit animation settings use their defaults instead of inheriting disab
 test('switching from all changes to recent changes fades only the excluded boxes', async () => {
   const { refresh, submission, bands } = await open();
   const changes = refreshMetadata(2);
-  await refresh.apply({
+  await refresh.applyUpdate({
     submission,
     sequence: 2,
     bytes: refreshFixture(2),
@@ -272,7 +272,12 @@ test('refreshing invalidates old locations before observers run, while completio
   );
   const changes = refreshMetadata(2);
   changes[1]!.location.paragraphIndex = 25;
-  await refresh.apply({ submission, sequence: 2, bytes: zipSync(parts, { level: 0 }), changes });
+  await refresh.applyUpdate({
+    submission,
+    sequence: 2,
+    bytes: zipSync(parts, { level: 0 }),
+    changes,
+  });
   expect(attempted).toBe(true);
   expect(bands()).toHaveLength(1);
   expect(refresh.snapshot().highlightsVisible).toBe(true);
@@ -282,7 +287,7 @@ test('refreshing invalidates old locations before observers run, while completio
 
 test('explicit change IDs select older changes, skip missing IDs, and return a change count', async () => {
   const { refresh, submission, bands } = await open();
-  await refresh.apply({
+  await refresh.applyUpdate({
     submission,
     sequence: 2,
     bytes: refreshFixture(2),
