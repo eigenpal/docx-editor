@@ -4,6 +4,13 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/i18n": ["../../packages/i18n/src/index.ts"],
+      "@docx-editor.dev/react": ["../../packages/react/src/index.ts"]
+    },
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
