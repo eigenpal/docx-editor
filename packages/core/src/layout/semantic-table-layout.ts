@@ -972,6 +972,7 @@ function placeCellParagraph(
           cellBox,
           cellContentBox: cellBox,
           pageClip: deps.pageContentClip(),
+          compatibilityMode: deps.compatibilityMode,
           measurer: deps.measurer,
           ...(deps.hostedStory
             ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor }

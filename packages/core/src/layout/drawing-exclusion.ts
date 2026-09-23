@@ -7,13 +7,13 @@ import type { DrawingProjection, ImageWrapTarget } from '../store/package/drawin
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
-  effectiveLayoutInCell,
   measureInlineDrawing,
   resolveAnchoredDrawingPosition,
   type AnchoredDrawingLayoutFallback,
   type AnchoredDrawingRecord,
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
+import { anchoredOutOfCell } from './cell-anchor-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import { topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
@@ -591,14 +591,7 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     // hole either: the original view must not wrap text around an insertion it hides.
     if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
-    // Out of the cell (`layoutInCell="0"` below mode 15), the object is positioned against
-    // the page, is not part of the cell's flow, and carves no hole in it: Word runs the
-    // cell's text straight through it.
-    if (
-      options.anchorCellBox != null &&
-      !effectiveLayoutInCell(atom.projection.anchor, options.compatibilityMode)
-    )
-      continue;
+    if (anchoredOutOfCell(atom.projection, options)) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
     const modelStart = offsets.get(atom.atomId);

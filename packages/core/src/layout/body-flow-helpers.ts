@@ -26,7 +26,6 @@ interface BodyAnchorFrameInput {
   readonly contentWidth: number;
   readonly contentHeight: number;
   readonly ownerPartName: string;
-  readonly compatibilityMode: number | undefined;
 }
 
 /** Build the drawing/table anchor facts for the current body sheet. */
@@ -47,7 +46,6 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     contentHeight: input.contentHeight,
     contentBandHeight: insets.height,
     ownerPartName: input.ownerPartName,
-    compatibilityMode: input.compatibilityMode,
     storyKind: 'body',
   });
 }

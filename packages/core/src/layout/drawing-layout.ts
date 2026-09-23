@@ -4,6 +4,7 @@
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
+import { effectiveLayoutInCell } from './cell-anchor-layout.ts';
 import {
   drawingAccessibility,
   type DrawingAccessibility,
@@ -520,8 +521,6 @@ export interface DrawingAnchorFrameContext {
   /** Cell text column, excluding padding; the physical cell still owns clipping. */
   readonly cellContentBox?: LayoutBox;
   readonly layoutInCell: boolean;
-  /** The document's Word compatibility mode; see {@link effectiveLayoutInCell}. */
-  readonly compatibilityMode?: number;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
   /**
@@ -568,22 +567,6 @@ export interface AnchoredDrawingRecord extends Omit<
    * did not thread story layout (the record then degrades to the placeholder path).
    */
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
-}
-
-/**
- * Whether an anchored object in a table cell is laid out in that cell.
- *
- * Word honours `wp:anchor/@layoutInCell="0"` only in compatibility mode 14 and below, or
- * with no mode declared. From mode 15 it ignores the flag and always lays the object out in
- * the cell: positioned against the cell and wrapping the cell's text, the same as `"1"`.
- * The projection keeps what the file says; this is the layout's reading of it.
- */
-export function effectiveLayoutInCell(
-  anchor: { readonly layoutInCell: boolean } | null | undefined,
-  compatibilityMode: number | undefined
-): boolean {
-  if (compatibilityMode !== undefined && compatibilityMode >= 15) return true;
-  return anchor?.layoutInCell ?? true;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -1186,6 +1169,8 @@ export function publishAnchoredDrawingsForParagraph(options: {
   readonly columnBox: LayoutBox;
   readonly cellBox: LayoutBox | null;
   readonly cellContentBox?: LayoutBox;
+  /** The document's Word compatibility mode, read by in-cell anchors' `layoutInCell`. */
+  readonly compatibilityMode?: number;
   readonly pageClip: LayoutBox;
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
@@ -1226,10 +1211,11 @@ export function publishAnchoredDrawingsForParagraph(options: {
       (line) => start >= line.range.start && start < line.range.end
     );
     if (!anchorLine) continue;
-    const layoutInCell = effectiveLayoutInCell(
-      projection.anchor,
-      options.frameBase.compatibilityMode
-    );
+    // Outside a table the authored flag is only recorded; no mode reinterprets it.
+    const layoutInCell =
+      options.cellBox === null
+        ? (projection.anchor?.layoutInCell ?? true)
+        : effectiveLayoutInCell(projection.anchor, options.compatibilityMode);
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;

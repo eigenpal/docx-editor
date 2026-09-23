@@ -143,6 +143,7 @@ function anchoredRecord(part: OoxmlPart): ReturnType<typeof buildAnchoredDrawing
     anchorParagraphId: 'p1',
     start: 1,
     resolved,
+    layoutInCell: projection.anchor?.layoutInCell ?? true,
   });
 }
 
