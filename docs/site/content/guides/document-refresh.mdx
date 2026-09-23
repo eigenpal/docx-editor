@@ -50,6 +50,7 @@ export const refreshPreview = String.raw`<!doctype html>
   <label for="effect">Effect</label>
   <select id="effect">
     <option value="update">First update: keep scroll</option>
+    <option value="scroll-highlight">Scroll to change, then fade in and out</option>
     <option value="cumulative">Second update: recent changes only</option>
     <option value="plain">Update without change information</option>
     <option value="invalid-location">Update with an invalid location</option>
@@ -102,7 +103,12 @@ export const refreshPreview = String.raw`<!doctype html>
   function highlight(all = false) {
     stopExpiry();
     Array.from(article.children).forEach(p => p.removeAttribute('data-mark'));
-    changes.filter(c => all || c.recent).forEach(c => article.children[c.index].setAttribute('data-mark', ''));
+    changes.filter(c => all || c.recent).forEach(c => {
+      const p = article.children[c.index];
+      // Resolve the unmarked style before starting a newly rendered paragraph's fade.
+      getComputedStyle(p, '::after').opacity;
+      p.setAttribute('data-mark', '');
+    });
     controls();
     if (article.querySelector('[data-mark]') && get('hold').value !== 'persist') {
       expiry = setTimeout(() => {
@@ -145,9 +151,16 @@ export const refreshPreview = String.raw`<!doctype html>
     }
     const top = Math.round(viewport.scrollTop);
     version = effect === 'cumulative' ? 2 : 1;
-    changes = effect === 'update' ? [{ id: 'delivery', index: 3, recent: true }] : effect === 'cumulative' ?
+    changes = effect === 'update' || effect === 'scroll-highlight' ? [{ id: 'delivery', index: 3, recent: true }] : effect === 'cumulative' ?
       [{ id: 'delivery', index: 3, recent: false }, { id: 'review', index: 8, recent: true }] : [];
-    render(effect === 'different'); highlight();
+    render(effect === 'different');
+    if (effect === 'scroll-highlight') {
+      navigate(false); highlight();
+      message('Scrolled to the change. Its highlight fades in, then fades out after the display time.',
+        "if (refresh.navigateToChange('delivery')) {\n  refresh.highlightChanges();\n}");
+      return;
+    }
+    highlight();
     const text = effect === 'different' ? 'Unrelated file accepted. Scroll clamps from ' + top + 'px to ' + Math.round(viewport.scrollTop) + 'px. No comparison or merge.' :
       effect === 'plain' ? 'File accepted. changeInformation: unavailable. No highlights.' :
       effect === 'invalid-location' ? 'File accepted. Change status: invalid. No highlight for that location.' :
@@ -310,6 +323,23 @@ if (available.length) {
 ```
 
 Highlights mark the paragraphs that contain the validated ranges. They do not change saved bytes or add undo entries. Navigation centers the target without animation or focus changes. Pass `{ focus: true }` to move the caret and focus explicitly. Navigation returns `false` when the location is unavailable. Applications can cycle the available array for previous and next controls.
+
+To scroll to a recent change before the fade starts, navigate first:
+
+```ts
+const change = refresh
+  .snapshot()
+  .changes.find((change) => change.isNew && change.status === 'available');
+
+if (change && refresh.navigateToChange(change.id)) {
+  refresh.highlightChanges({
+    timeoutMs: 3000,
+    animation: { durationMs: 180 },
+  });
+}
+```
+
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Select **Scroll to change, then fade in and out** in the preview to try it.
 
 ## Customize highlights and motion
 
