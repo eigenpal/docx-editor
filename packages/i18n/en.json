@@ -949,7 +949,7 @@
     "partial": "{count} processor operations failed. Successful changes remain applied.",
     "idle": "Ready for updates.",
     "capturing": "Preparing the document. Finish text composition to continue.",
-    "processing": "Processing on the server. You can continue reading or editing.",
+    "processing": "Processing on the server. Edits made now prevent this update.",
     "refreshing": "Displaying the updated document.",
     "recovering": "Restoring your previous document.",
     "complete": "Document updated. Your scroll position stays in place.",
@@ -961,6 +961,10 @@
     "cancelled": "Updates cancelled.",
     "unavailable": "This change has no available location.",
     "delivery": "Delivery date",
-    "review": "Review date"
+    "review": "Review date",
+    "sampleDescription": "The mock replaces this sample. Reset the example before each test.",
+    "scrollToChange": "Scroll to the change after the update",
+    "scrolled": "Document updated. Scrolled to the changed paragraph.",
+    "processingLabel": "Processing"
   }
 }

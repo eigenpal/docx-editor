@@ -961,6 +961,10 @@
     "show": null,
     "start": null,
     "title": null,
-    "unavailable": null
+    "unavailable": null,
+    "sampleDescription": null,
+    "scrollToChange": null,
+    "scrolled": null,
+    "processingLabel": null
   }
 }

@@ -1,5 +1,5 @@
 ---
-title: 'Refresh from server updates'
+title: 'Document refresh API'
 description: 'Display updated DOCX files, preserve scroll, and present recent changes in React and Vue.'
 category: 'Guides'
 ---
@@ -10,7 +10,7 @@ Each accepted file resets selection, undo history, and some review state. This o
 
 The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
 
-For a complete React app and mock server, see [Build a document refresh app](/docs/2.x/guides/document-refresh-example). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.apply()`.
+For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.apply()`.
 
 ## Try the effects
 
@@ -432,13 +432,13 @@ function downloadRecovery() {
 
 Recovery bytes contain the document from before the failed replacement. They are not an undo archive for successfully accepted files.
 
-## Run the examples
+## Run the example
 
-Run `bun run dev` in the repository. Open the [React refresh example](http://localhost:5173/?refresh=1) or the [Vue refresh example](http://localhost:5174/?refresh=1).
-
-The examples deliver two controlled, cumulative DOCX results. They preserve submitted content outside the sample changes. Try scrolling before processing, navigating after completion, or editing during processing. The example transport runs locally and makes no model calls. Replace it with your backend or event stream in your application.
+The [DOCX document refresh example](/examples/document-refresh) includes a mock server and a React client. Run `bun run dev:refresh` after the setup steps in its README. Try scroll preservation, navigation with temporary highlights, and refusal after a local edit.
 
 ## See also
+
+- [Connect an agent to a document](/docs/2.x/build-a-docx-agent): choose browser tools, shared execution, or complete file refresh
 
 - [Load and save documents](/docs/2.x/guides/loading-and-saving)
 - [Document automation reference](/docs/2.x/editor-api/reference)

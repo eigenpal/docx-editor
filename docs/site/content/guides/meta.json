@@ -3,7 +3,6 @@
   "pages": [
     "loading-and-saving",
     "document-refresh",
-    "document-refresh-example",
     "toolbar",
     "chrome-slots",
     "customize-dialogs",

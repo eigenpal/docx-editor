@@ -1,0 +1,40 @@
+.refresh-controls {
+  padding: 20px 24px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+}
+.refresh-controls h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.refresh-controls p {
+  margin: 10px 0;
+  color: var(--doc-text-muted);
+}
+.refresh-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 8px 0;
+}
+.refresh-controls button {
+  padding: 8px 12px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  font: inherit;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.refresh-controls button:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+.refresh-controls button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.refresh-controls :focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}

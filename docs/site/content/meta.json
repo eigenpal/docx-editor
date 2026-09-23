@@ -32,7 +32,6 @@
     "---Guides---",
     "guides/loading-and-saving",
     "guides/document-refresh",
-    "guides/document-refresh-example",
     "guides/toolbar",
     "guides/chrome-slots",
     "guides/customize-dialogs",
