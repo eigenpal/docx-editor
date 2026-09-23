@@ -2,7 +2,13 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
-import { positionedTablesByAnchor, type PositionedTableAnchor } from './table-float-position.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
+import {
+  positionedTablesByAnchor,
+  tableFloatOriginY,
+  type PositionedTableAnchor,
+  type TableVerticalAnchorFrames,
+} from './table-float-position.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -10,7 +16,11 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
-import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
+import {
+  readTableStructure,
+  type SemanticTableStructure,
+  type TableAnchorFrames,
+} from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -185,18 +195,105 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     )
   )
     return Infinity;
+  const band =
+    Math.max(0, structure.float.yPt) +
+    probeTableHeight(structure, table.id, deps) +
+    (structure.float.distances?.bottom ?? 0);
+  widths?.set(width, band);
+  return band;
+}
+
+function probeTableHeight(
+  structure: SemanticTableStructure,
+  tableId: string,
+  deps: TableFlowDeps
+): number {
   let line = 0;
-  const probe = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
+  return layoutTableFragment(structure, 0, 0, 0, tableId, 0, {
     ...stripAnchorSinksForProbe(deps),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
     nextLineId: () => `floating-table-probe-${line++}`,
+  }).bottom;
+}
+
+/**
+ * Room a page- or margin-framed table's anchor needs when the table lands on body lines
+ * already placed on the anchor's page.
+ *
+ * The table's box does not follow the flow, so the lines before its anchor on that page must
+ * clear it too. Clearing moves them, and the anchor after them, below the table. When the
+ * anchor then no longer fits, the band exceeds the page and the anchor opens the next page:
+ * the table follows its anchor there, and the earlier lines keep their places.
+ *
+ * Only a column-spanning table in single-column flow is priced. Lines beside a narrower table,
+ * and earlier columns of the same sheet, are not modeled.
+ */
+function pageFramedAnchorBand(
+  anchor: PositionedTableAnchor,
+  width: number,
+  deps: TableFlowDeps,
+  placement: {
+    readonly anchorY: number;
+    readonly anchorExtent: number;
+    readonly frames: TableAnchorFrames;
+    readonly verticalFrames: TableVerticalAnchorFrames;
+    readonly earlier: readonly BlockFragmentRecord[];
+  }
+): number {
+  const column = placement.frames.text;
+  if (
+    anchor.float.vertAnchor === 'text' ||
+    column.left > placement.frames.margin.left + 0.5 ||
+    column.width < placement.frames.margin.width - 0.5
+  )
+    return 0;
+  const lineBoxes = placement.earlier.flatMap((block) => {
+    if (isOutOfFlowFragment(block) || (block.kind === 'table' && block.floatingWrap)) return [];
+    return block.kind === 'table' ? [block.box] : block.lines.map((line) => line.box);
   });
-  const band =
-    Math.max(0, structure.float.yPt) + probe.bottom + (structure.float.distances?.bottom ?? 0);
-  widths?.set(width, band);
-  return band;
+  if (lineBoxes.length === 0) return 0;
+  const structure = readTableStructure(
+    anchor.table,
+    width,
+    0,
+    deps.styleCascade,
+    deps.displayMode,
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
+  );
+  const float = structure?.float;
+  if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
+  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const left = positionedTableOriginX(structure, placement.frames, deps.compatibilityMode);
+  const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  const bandLeft = left - distances.left;
+  const bandRight = left + tableWidth + distances.right;
+  if (bandLeft > column.left || bandRight < column.left + column.width) return 0;
+  // An offset top does not depend on the table height: skip the probe when no line reaches it.
+  const inkBottom = lineBoxes.reduce((bottom, box) => Math.max(bottom, box.y + box.height), 0);
+  if (
+    !float.ySpec &&
+    inkBottom <= tableFloatOriginY(float, 0, placement.verticalFrames) - distances.top
+  )
+    return 0;
+  const height = probeTableHeight(structure, anchor.table.id, deps);
+  const top = tableFloatOriginY(float, height, placement.verticalFrames);
+  const bandTop = top - distances.top;
+  const bandBottom = top + height + distances.bottom;
+  let firstTop = Infinity;
+  for (const box of lineBoxes) {
+    if (
+      box.y < bandBottom &&
+      box.y + box.height > bandTop &&
+      box.x < bandRight &&
+      box.x + box.width > bandLeft
+    )
+      firstTop = Math.min(firstTop, box.y);
+  }
+  if (firstTop > placement.anchorY) return 0;
+  return bandBottom - firstTop + placement.anchorExtent;
 }
 
 export function requiredAnchorBand(
@@ -207,7 +304,10 @@ export function requiredAnchorBand(
   deps: TableFlowDeps,
   placement: {
     readonly anchorY: number;
+    /** Height of the anchor's first line, which must fit below any cleared table. */
+    readonly anchorExtent: number;
     readonly frames: TableAnchorFrames;
+    readonly verticalFrames: TableVerticalAnchorFrames;
     readonly earlier: readonly BlockFragmentRecord[];
   }
 ): number {
@@ -228,7 +328,7 @@ export function requiredAnchorBand(
       clearedY -
       placement.anchorY +
       Math.min(0, anchor.float.yPt);
-    height = Math.max(height, band);
+    height = Math.max(height, band, pageFramedAnchorBand(anchor, width, deps, placement));
   }
   return height;
 }

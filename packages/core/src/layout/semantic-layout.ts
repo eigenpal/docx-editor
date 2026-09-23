@@ -1896,6 +1896,9 @@ function layoutBlocksPass(
     return Math.max(live, breakSkip);
   };
 
+  const tableVerticalFrames = (anchorY: number) =>
+    tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
+
   const layoutTableInFlow = (
     table: OoxmlElement,
     anchorY = cursorY,
@@ -1916,8 +1919,7 @@ function layoutBlocksPass(
         flow.cursorY = cursorY;
       },
       anchorFrames,
-      verticalAnchorFrames: () =>
-        tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top),
+      verticalAnchorFrames: () => tableVerticalFrames(anchorY),
       styleCascade,
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
@@ -2057,20 +2059,12 @@ function layoutBlocksPass(
               authorFilter,
             });
             if (placed) {
-              for (const fragment of placed.fragments) {
-                const source = positionedTables.find(
-                  (entry) => entry.table.id === fragment.tableId
-                )!;
-                pageFragments.push({
-                  ...fragment,
-                  floatingWrap: {
-                    anchorId: source.anchorId,
-                    columnIndex: flowColumnIndex,
-                    float: source.float,
-                    sourceOrder: source.sourceIndex,
-                  },
-                });
-              }
+              const tagged = terminalTables.withTerminalFloatingWrap(
+                placed.fragments,
+                positionedTables,
+                flowColumnIndex
+              );
+              for (const fragment of tagged) pageFragments.push(fragment);
               for (const [memberIndex, table] of terminalTextTables.tables.entries()) {
                 terminalTextTableIds.add(table.id);
                 registerTableCellBreakKeys(table, placed.cellBreakKeys[memberIndex]!);
@@ -2252,7 +2246,13 @@ function layoutBlocksPass(
             paragraphId,
             columnWidth(),
             tableDeps,
-            { anchorY: prospectiveFirstTop, frames: anchorFrames(), earlier: pageFragments }
+            {
+              anchorY: prospectiveFirstTop,
+              anchorExtent: firstExtent,
+              frames: anchorFrames(),
+              verticalFrames: tableVerticalFrames(prospectiveFirstTop),
+              earlier: pageFragments,
+            }
           )
         );
       // `w:keepNext` (§17.3.1.15): this paragraph may not be the last thing on its page. Priced
