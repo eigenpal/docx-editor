@@ -14,6 +14,7 @@ export interface RefreshHost {
   source: 'refresh' | 'recovery' | undefined;
   invalidated: Set<() => void>;
   invalidate(): void;
+  contentMounted(bytes: Uint8Array): void;
   mounted(bytes: Uint8Array, error?: unknown): void;
   replace(bytes: Uint8Array, source: 'refresh' | 'recovery'): Promise<boolean>;
 }
@@ -41,6 +42,7 @@ export function registerRefreshHost(
     container: HTMLElement;
     top: number;
     left: number;
+    mountedRevision: number | null;
   } | null = null;
   const host: RefreshHost = {
     ...deps,
@@ -51,6 +53,8 @@ export function registerRefreshHost(
     invalidated: new Set(),
     cancel() {
       if (!pending) return;
+      // Content already mounted before its observers ran. Cancellation cannot undo it.
+      if (pending.mountedRevision !== null) return;
       deps.cancelLoad();
       const load = pending;
       pending = null;
@@ -76,11 +80,14 @@ export function registerRefreshHost(
       host.source = undefined;
       for (const listener of host.invalidated) listener();
     },
+    contentMounted(bytes) {
+      if (pending?.bytes === bytes) pending.mountedRevision = host.revision;
+    },
     mounted(bytes, error) {
       if (!pending || pending.bytes !== bytes) return;
       const load = pending;
       const ok = !error && !!deps.surface();
-      host.mountedRevision = host.revision;
+      host.mountedRevision = load.mountedRevision ?? host.revision;
       if (!ok) recoveryViewport = { top: load.top, left: load.left };
       else recoveryViewport = null;
       const scroller = surfaceScroller(load.container);
@@ -124,6 +131,7 @@ export function registerRefreshHost(
             source === 'recovery' && recoveryViewport
               ? recoveryViewport.left
               : (scroller?.scrollLeft ?? 0),
+          mountedRevision: null,
         };
         host.source = source;
         setRefreshWriteGuard(container, true);

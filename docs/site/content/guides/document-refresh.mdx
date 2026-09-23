@@ -4,9 +4,9 @@ description: 'Display updated DOCX files, preserve scroll, and present recent ch
 category: 'Guides'
 ---
 
-Use `createDocumentRefresh(editor)` when a server returns a complete, updated DOCX file. The controller keeps the editor instance and its subscriptions active. It preserves a clamped scroll position by default. It does not move focus or scroll to changes automatically.
+Use `createDocumentRefresh(editor)` to display complete DOCX files returned by your server. The controller preserves the editor instance, subscriptions, and scroll position. It clamps scroll when the replacement is shorter. Highlighting and change navigation require explicit calls.
 
-Each accepted file resets selection, undo history, and some review state. This operation does not merge files or compare arbitrary documents. It refuses collaborative sessions, including disconnected sessions. Ordinary `editor.load()` keeps its existing behavior and `void` return type.
+Each accepted file resets selection, undo history, and some review state. The controller refuses results after local edits and refuses collaborative sessions, including disconnected sessions. It does not merge edits or compare arbitrary documents. Ordinary `editor.load()` keeps its existing behavior and `void` return type.
 
 The controller is a host integration API. It is separate from the Office.js document automation model. Keep processor jobs, credentials, and service sessions in your application backend.
 
@@ -14,7 +14,7 @@ For a complete React app and mock server, see [DOCX document refresh example](/e
 
 ## API overview
 
-Create one controller with `createDocumentRefresh(editor)`. It provides these methods:
+Call `createDocumentRefresh(editor)` after the editor mounts. Repeated calls for the same editor return the same controller. It provides these methods:
 
 | Method | Purpose |
 | --- | --- |
@@ -36,7 +36,7 @@ Try the [interactive effects preview](#try-the-effects), then follow [Accept an 
 
 This interactive mock shows the presentation and refusal states. It uses sample text, without loading the editor or contacting a server. The runnable examples use actual DOCX files and the public API.
 
-Choose one of four examples, then select **Run preview**. Each example shows one behavior and includes its API source code. Expand **Source code** to inspect the calls. Select **Replay** to run the example again.
+Choose an **Effect**, then select **Run effect**. Adjust the highlight appearance and timing with the preview controls. Expand **Source code** to inspect the API calls. Select **Reset** to restore the sample.
 
 <DocumentRefreshDemo />
 
@@ -84,7 +84,7 @@ Keep the returned `submission` object in the browser. Pass that same object to `
 
 Assign each result a nonnegative integer `sequence` at the processor. Each file must contain the complete cumulative output for that submission. Use processor order, never network arrival order. The controller serializes replacement and rejects duplicate or older accepted sequences. It advances its baseline only after successful loading.
 
-This example receives two cumulative files:
+This example receives cumulative files in processor order:
 
 ```ts
 const submission = await refresh.capture();
@@ -190,7 +190,7 @@ if (target && refresh.navigateToChange(target.id, { block: 'centerIfNeeded' })) 
 }
 ```
 
-The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll and fade** in the preview to try it.
+The highlight fades in, remains visible, and fades out automatically. Both fades use `animation.durationMs` unless you set `animation.exitDurationMs`. Use this sequence after an explicit user action, because it changes the scroll position. Choose **Scroll to change, then fade in and out** in the preview to try it.
 
 ## Customize highlights and motion
 
@@ -461,6 +461,5 @@ The [DOCX document refresh example](/examples/document-refresh) includes a mock 
 ## See also
 
 - [Connect an agent to a document](/docs/2.x/build-a-docx-agent): choose browser tools, shared execution, or complete file refresh
-
 - [Load and save documents](/docs/2.x/guides/loading-and-saving)
 - [Document automation reference](/docs/2.x/editor-api/reference)

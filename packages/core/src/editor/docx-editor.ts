@@ -690,6 +690,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       emitDocumentChange(documentChange);
     });
+    refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
     // — so a fit mode resolves here. Synchronous on purpose: it lands in the same task as the
     // mount, so the browser paints once at the fitted scale rather than painting 100% and

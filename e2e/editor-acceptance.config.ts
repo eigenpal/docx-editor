@@ -8,6 +8,8 @@ export default defineConfig(editorSmoke, {
     'adapter-render.smoke.spec.ts',
     'browser-first-tree.smoke.spec.ts',
     'clipboard-roundtrip.interaction.spec.ts',
+    'document-refresh.interaction.spec.ts',
+    'document-refresh-highlights.interaction.spec.ts',
     'font-remount-focus.interaction.spec.ts',
     'formtext-selection.interaction.spec.ts',
     'table-editing.interaction.spec.ts',

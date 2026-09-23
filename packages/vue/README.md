@@ -97,6 +97,12 @@ Configure `menu.exporters` to enable **File > Export** with the conversion packa
 
 **File > Print** and Ctrl+P use the same PDF handler, then open the browser print dialog. See [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print).
 
+## Accept server updates
+
+Use `createDocumentRefresh(editor)` to accept complete DOCX results from your server. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
+
+For highlights, change navigation, and recovery, see [Document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh).
+
 ## License
 
 Apache-2.0

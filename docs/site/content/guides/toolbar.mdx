@@ -1,13 +1,31 @@
 ---
 title: 'Toolbar'
-description: 'Customize the editor chrome in React or Vue: keep the packaged toolbar and title bar, override a single slot, or compose your own from the parts.'
+description: 'Compare toolbar designs, replace controls, and build custom editor interfaces in React and Vue.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The packaged host has two levels of chrome: a title bar (`title`, the title bar slots, and `menu`) and a formatting bar (the `Toolbar` part). Both the packaged host and the lower-level compounds live on the adapter package root.
+The editor provides a title bar, menu, and formatting toolbar. Keep the packaged controls, replace selected controls, or build your own arrangement. Import components and hooks from your adapter package.
 
 <ToolbarLayoutDiagram />
+
+## Compare toolbar designs
+
+Try the full toolbar, compact toolbar, and custom command bar. Select document text, then apply formatting with each design. The source panel shows the public APIs for the selected design.
+
+<ToolbarCustomDemo />
+
+Choose an approach for your application:
+
+| Goal                          | API                                      |
+| ----------------------------- | ---------------------------------------- |
+| Keep the default controls     | `DocxEditor.Toolbar`                     |
+| Change a control's appearance | `className`, `icon`, or `asChild`        |
+| Arrange selected controls     | `preset={false}` and named toolbar parts |
+| Use your own buttons          | `useEditorCommand(slotId)`               |
+| Change interface colors       | `--doc-*` CSS properties                 |
+
+For complete layouts, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
 
 ## Use the packaged chrome
 
@@ -128,7 +146,7 @@ const t = useChromeTranslate();
 
 If you use a locale provider, mount this component inside it so `useChromeTranslate()` reads its catalog.
 
-The root owns the editor instance, the viewport is the scroll container, and the content part is the painted page surface. The other compounds layer on top of that same provider.
+The root owns the editor instance. The viewport provides scrolling, and the content part displays the editable pages. Other parts use the same provider.
 
 ## Add root-level command buttons
 
@@ -147,6 +165,8 @@ function BoldButton() {
       onMouseDown={(e) => e.preventDefault()} // chrome must not steal the caret
       onClick={() => bold.execute()}
       disabled={!bold.isEnabled}
+      aria-pressed={bold.isActive}
+      title={bold.disabledReason ?? 'Bold'}
     >
       Bold
     </button>
@@ -166,7 +186,15 @@ const bold = useEditorCommand('text.bold');
 
 <template>
   <!-- chrome must not steal the caret -->
-  <button @mousedown.prevent @click="bold.execute()" :disabled="!bold.isEnabled.value">Bold</button>
+  <button
+    @mousedown.prevent
+    @click="bold.execute()"
+    :disabled="!bold.isEnabled.value"
+    :aria-pressed="bold.isActive.value"
+    :title="bold.disabledReason.value ?? 'Bold'"
+  >
+    Bold
+  </button>
 </template>
 ```
 

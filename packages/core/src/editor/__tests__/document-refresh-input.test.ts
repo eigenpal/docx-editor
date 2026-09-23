@@ -129,6 +129,24 @@ test('a completion observer can switch documents without publishing stale state'
   expect(refresh.snapshot()).toMatchObject({ phase: 'idle', result: null, changes: [] });
 });
 
+test('cancellation from a mounted content observer preserves the accepted result', async () => {
+  const { editor, refresh } = open();
+  const submission = await refresh.capture();
+  editor.on('change', (change) => {
+    if (change.source === 'refresh') refresh.cancel();
+  });
+  const result = await refresh.applyUpdate({
+    submission,
+    sequence: 1,
+    bytes: refreshFixture(1),
+    changes: refreshMetadata(),
+  });
+  expect(result).toMatchObject({ ok: true });
+  expect(editor.surface!.session.bodyText()).toContain('Updated delivery');
+  expect(refresh.snapshot()).toMatchObject({ phase: 'complete', result });
+  expect(refresh.highlightChanges({ animation: false })).toBe(1);
+});
+
 test('tracked revisions provide locations and distinguish existing revisions', async () => {
   const { editor, refresh } = open(refreshFixture(), true);
   const submission = await refresh.capture();

@@ -64,9 +64,9 @@ function PageIndicator() {
   );
 }
 
-function SaveButton() {
-  const dirty = useEditorState((s) => s.canUndo ?? false);
-  return <button disabled={!dirty}>Save</button>;
+function HistoryStatus() {
+  const canUndo = useEditorState((s) => s.canUndo);
+  return <span>{canUndo ? 'Undo is available' : 'No undo history'}</span>;
 }
 ```
 
@@ -78,6 +78,8 @@ const formatting = useEditorState(
   (a, b) => a?.bold === b?.bold && a?.italic === b?.italic
 );
 ```
+
+`canUndo` reports undo availability. It does not report unsaved changes. Track save completion separately in your application.
 
 Select only the state that your component needs. A page indicator does not need to render after a bold-state change.
 

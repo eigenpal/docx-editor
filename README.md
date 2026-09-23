@@ -121,6 +121,12 @@ For Nuxt and server-side rendering, load the editor in a client-only component. 
 
 Full docs: [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props).
 
+## Customize the editor
+
+Compare [toolbar designs](https://www.docx-editor.dev/docs/2.x/guides/toolbar#compare-toolbar-designs) and inspect their source. Use packaged controls, arrange toolbar parts, or build buttons with the shared command hooks.
+
+Use the [document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh) to display DOCX results from your server. Preserve scroll, highlight changes, and provide change navigation. The controller refuses results after local edits. Accepted files reset selection and undo history.
+
 ## Font measurement
 
 Pass usable font bytes for Word-accurate line and page breaks. Without them, the editor uses fallback measurement that does not guarantee Word-compatible layout.
@@ -143,7 +149,7 @@ bun run typecheck
 
 Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
-Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh)
 
 [Documentation](https://www.docx-editor.dev/docs) | [React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props) | [Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)
 

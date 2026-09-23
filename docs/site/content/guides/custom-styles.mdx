@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Custom styles, fonts, and branded DOCX templates'
 ---
 
-Load a styled `.docx` template to apply your styles and fonts from a template. The editor uses the styles defined in the document itself (headings, fonts, colors, spacing, and table styles) and preserves them when users save.
+Load a `.docx` template to define document styles. The editor reads its headings, fonts, colors, spacing, and table styles. Saving preserves these definitions.
 
 Templates can define:
 
@@ -14,7 +14,15 @@ Templates can define:
 - Fonts and themes
 - Table styles and the default table style
 
-Any content users create or insert inherits those styles from the document style definitions.
+Paragraphs use the document style definitions and any direct formatting. New tables use explicit borders; they do not inherit the default table style. See [Tables](#tables) for details.
+
+## Customize the editor interface
+
+The toolbar uses application styles, separate from the document template. Compare three toolbar designs and inspect their source:
+
+<ToolbarCustomDemo />
+
+Use named parts to arrange controls or hooks to build your own buttons. Set `--doc-*` CSS properties to change interface colors. Keep document fonts and colors in the template. For implementation details, see [Toolbar customization](/docs/2.x/guides/toolbar).
 
 ## Quick start
 
@@ -77,9 +85,9 @@ Set `w:qFormat` to surface a style in the dropdown, and `w:semiHidden` or `w:hid
 
 ## Tables
 
-Table styles defined in the document (borders, shading, banded rows, header-row formatting) render through the style cascade, including `basedOn` inheritance, and survive a round trip.
+Existing tables retain their document styles after editing and saving. The editor resolves borders, shading, banded rows, and header formatting, including `basedOn` inheritance.
 
-Newly inserted tables do not pick up a document default table style: Insert → Table authors an even grid with explicit single-line borders, so it renders the same in every document. Restyle it afterwards with the table border and fill controls.
+New tables do not use the document default table style. **Insert > Table** creates an even grid with explicit single-line borders. Use the table border and fill controls to change its appearance.
 
 ## Fonts
 

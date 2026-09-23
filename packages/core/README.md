@@ -107,6 +107,12 @@ Anything you render from document data (a font name, a hyperlink target, a comme
 - [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
 - [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
 
+## Accept server updates
+
+Import `createDocumentRefresh` from `@docx-editor.dev/core/editor`. Use `createDocumentRefresh(editor)` to accept complete DOCX results from your server. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
+
+For highlights, change navigation, and recovery, see [Document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh).
+
 ## License
 
 Apache-2.0
