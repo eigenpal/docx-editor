@@ -2647,6 +2647,7 @@ function layoutBlocksPass(
             columnBox: publishColumnBox,
             cellBox: null,
             pageClip: pageContentClip(),
+            compatibilityMode: options.compatibilityMode,
             measurer,
             sourceOrderOf,
             // The drawing-context guard above is the same predicate that creates this bundle.

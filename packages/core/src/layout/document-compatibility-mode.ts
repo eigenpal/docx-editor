@@ -16,14 +16,6 @@ const WORD_COMPATIBILITY_URI = 'http://schemas.microsoft.com/office/word';
  * `undefined` therefore means absent, duplicated (ambiguous, so no winner is invented), or
  * malformed. A value below Word's first mode is not a mode and reads as absent.
  */
-/**
- * Whether a document lays out in Word 2013 or later mode (15+). An absent mode is legacy,
- * never modern; see {@link compatibilityModeFromSettings}.
- */
-export function isWord2013OrLaterMode(compatibilityMode: number | undefined): boolean {
-  return compatibilityMode !== undefined && compatibilityMode >= 15;
-}
-
 export function compatibilityModeFromSettings(root: OoxmlElement | null): number | undefined {
   if (!root || root.namespaceUri !== WML_NAMESPACE_URI || root.localName !== 'settings') {
     return undefined;
@@ -61,4 +53,12 @@ export function compatibilityModeFromSettings(root: OoxmlElement | null): number
     }
   }
   return result;
+}
+
+/**
+ * Whether a document lays out in Word 2013 or later mode (15+). An absent mode is legacy,
+ * never modern; see {@link compatibilityModeFromSettings}.
+ */
+export function isWord2013OrLaterMode(compatibilityMode: number | undefined): boolean {
+  return compatibilityMode !== undefined && compatibilityMode >= 15;
 }

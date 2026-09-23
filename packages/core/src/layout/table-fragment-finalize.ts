@@ -7,12 +7,8 @@
 // questions — row layout decides what fits, this decides what the result looks like — and
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import {
-  anchoredDrawingAtomsInParagraph,
-  publishAnchoredDrawingsForParagraph,
-  shiftInlineDrawingRecord,
-} from './drawing-layout.ts';
+import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
 import {
   borderContentInset,
   cellContentInsets,
@@ -36,53 +32,8 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
-import type { BlockFragmentRecord, LayoutBox, TableRowFragmentRecord } from './semantic-records.ts';
+import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
-
-function republishAnchoredParagraphsInBlocks(
-  blocks: readonly BlockFragmentRecord[],
-  authoredBlocks: readonly OoxmlElement[],
-  cellBox: LayoutBox,
-  cellContentBox: LayoutBox,
-  deps: TableFlowDeps
-): void {
-  if (
-    !deps.onAnchorRepublish ||
-    !deps.inlineDrawingLayout ||
-    !deps.anchorFrameBase ||
-    !deps.pageContentClip
-  ) {
-    return;
-  }
-  for (const block of blocks) {
-    if (block.kind !== 'paragraph') continue;
-    const paragraph = authoredBlocks.find(
-      (candidate) => candidate.kind === 'paragraph' && candidate.id === block.paragraphId
-    );
-    if (!paragraph || paragraph.kind !== 'paragraph') continue;
-    const atoms = anchoredDrawingAtomsInParagraph(paragraph, deps.inlineDrawingLayout);
-    if (atoms.length === 0) continue;
-    deps.onAnchorRepublish(
-      block.paragraphId,
-      publishAnchoredDrawingsForParagraph({
-        paragraph,
-        paragraphId: block.paragraphId,
-        paragraphBox: block.box,
-        lines: block.lines,
-        drawingLayout: deps.inlineDrawingLayout,
-        frameBase: deps.anchorFrameBase(),
-        columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
-        cellBox,
-        cellContentBox,
-        pageClip: deps.pageContentClip(),
-        compatibilityMode: deps.compatibilityMode,
-        measurer: deps.measurer,
-        ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
-        ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
-      })
-    );
-  }
-}
 
 export function shiftBlocks(
   blocks: readonly BlockFragmentRecord[],
@@ -269,8 +220,8 @@ export function finalizeTableRows(
           blocks,
           authored.blocks,
           finalizedCellBox,
-          cellContentBox,
-          anchorDeps
+          anchorDeps,
+          cellContentBox
         );
       }
       return {

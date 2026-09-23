@@ -95,6 +95,7 @@ export function publishDeferredRowAnchors(
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
+        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
       })
     );
   }
@@ -140,6 +141,7 @@ export function republishAnchoredParagraphsInBlocks(
         measurer: deps.measurer,
         ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
+        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
       })
     );
   }

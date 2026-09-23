@@ -555,6 +555,11 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly verticalFrameOrigin: number;
   readonly behindDocument: boolean;
   readonly allowOverlap: boolean;
+  /**
+   * Whether the object is laid out in its table cell. For an anchor in a cell this is the
+   * layout's reading: from compatibility mode 15 Word ignores `layoutInCell="0"`, so it is
+   * `true`. Outside a table it is the authored `wp:anchor/@layoutInCell`.
+   */
   readonly layoutInCell: boolean;
   readonly relativeHeight: number;
   readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
@@ -1169,8 +1174,11 @@ export function publishAnchoredDrawingsForParagraph(options: {
   readonly columnBox: LayoutBox;
   readonly cellBox: LayoutBox | null;
   readonly cellContentBox?: LayoutBox;
-  /** The document's Word compatibility mode, read by in-cell anchors' `layoutInCell`. */
-  readonly compatibilityMode?: number;
+  /**
+   * The document's Word compatibility mode, read by in-cell anchors' `layoutInCell`.
+   * Required (not optional) so a publisher cannot forget it and fall back to legacy layout.
+   */
+  readonly compatibilityMode: number | undefined;
   readonly pageClip: LayoutBox;
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
