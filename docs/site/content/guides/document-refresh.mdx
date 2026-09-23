@@ -12,11 +12,31 @@ The controller is a host integration API. It is separate from the Office.js docu
 
 For a complete React app and mock server, see [DOCX document refresh example](/examples/document-refresh). The editor does not watch a file path or URL. Your application receives updates and calls `refresh.apply()`.
 
+## API overview
+
+Create one controller with `createDocumentRefresh(editor)`. It provides these methods:
+
+| Method | Purpose |
+| --- | --- |
+| `capture()` | Capture the current DOCX bytes and revision before starting a server job. Returns a submission. |
+| `apply(update)` | Accept a complete DOCX using that submission and a processor-assigned sequence. Returns a success or refusal result. |
+| `finish(submission)` | Close the submission when the job ends. Accepted content and change navigation remain available. |
+| `cancel()` | Invalidate pending results. Cancel your network request separately. |
+| `highlightChanges(options?)` | Highlight recent available changes. Configure colors, decoration, fade timing, and display time. Returns the selected change count. |
+| `clearHighlights(options?)` | Dismiss highlights with a fade or remove them immediately. |
+| `navigateToChange(id, options?)` | Reveal a validated change location. Configure alignment, scrolling, and focus. Returns whether the location is available. |
+| `snapshot()`, `subscribe(listener)`, `onResult(listener)` | Read status, observe state changes, and receive accepted or refused results. |
+| `recover()`, `recoveryBytes()` | Retry restoration after a failed replacement or obtain recovery bytes for download. |
+
+The update flow is `capture()` → your server job → `apply()` → `finish()`. Call presentation methods after a successful `apply()`. Scroll preservation is automatic; highlighting and navigation are opt-in.
+
+Try the [interactive effects preview](#try-the-effects), then follow [Accept an updated file](#accept-an-updated-file).
+
 ## Try the effects
 
 This interactive mock shows the presentation and refusal states. It uses sample text, without loading the editor or contacting a server. The runnable examples use actual DOCX files and the public API.
 
-Select an effect, then choose **Run effect**. Scroll inside the sample document to test scroll preservation. Highlight buttons never change the sample text.
+Select an effect, then choose **Run effect**. Scroll inside the sample document to test scroll preservation. Highlight buttons never change the sample text. The preview shows the corresponding API call below the document.
 
 <DocumentRefreshDemo />
 
@@ -53,6 +73,8 @@ try {
   refresh.finish(submission);
 }
 ```
+
+The example can highlight returned tracked revisions when a review module supplies their locations. For plain DOCX files, [provide change locations](#provide-reliable-change-locations) to enable highlights and navigation.
 
 `capture()` finishes buffered input and form input before export. It waits for active text composition to finish. It captures bytes and their revision together. The document stays editable during external processing. Edits after capture make `apply()` return `local-edits`, even after undo. Submit the edited document again; do not replay the old result.
 
