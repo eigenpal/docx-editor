@@ -12,7 +12,8 @@
 // percentage.
 
 import type { ExecResult, ZoomMode } from '../contracts/editor.ts';
-import { setPaginatedSurfaceScale, type PaginatedSurface } from './paginated-surface.ts';
+import type { PaginatedSurface } from './paginated-surface.ts';
+import { setPaginatedSurfaceScale } from './surface-scale.ts';
 import { createZoomController } from './zoom-controller.ts';
 import {
   AUTO_ZOOM_MODE,

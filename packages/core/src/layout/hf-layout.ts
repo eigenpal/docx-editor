@@ -312,7 +312,10 @@ export function layoutHeaderFooterStory(
     } else {
       const cached = contextCache.get(token);
       if (cached) return cached;
-      if (maxPageContextEntries === undefined) {
+      // Only a PAGE-field story needs a context per page. One whose sole page dependence is an
+      // anchored drawing keys by page number too, but lays out the same on every page, so it
+      // keeps the floor rather than holding one identical layout per page.
+      if (maxPageContextEntries === undefined && storyNeedsPageFields(needs)) {
         contextCache.growTo(
           Math.min(MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES, pageNumber * HF_PAGE_CONTEXTS_PER_PAGE)
         );

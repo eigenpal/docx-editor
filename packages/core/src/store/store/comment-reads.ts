@@ -319,7 +319,7 @@ const markedParagraphsByRoot = createRecentRootCache<readonly OoxmlParagraphNode
 function markedParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
   const cached = markedParagraphsByRoot.get(part.root);
   if (cached) return cached;
-  const paragraphs = markedParagraphsIn(part.root, 0);
+  const paragraphs = markedParagraphsIn(part.root, 0, false);
   markedParagraphsByRoot.set(part.root, paragraphs);
   return paragraphs;
 }
@@ -338,32 +338,40 @@ const MIN_MEMOIZED_DEPTH = 2;
  * An edit replaces only the nodes on the path to what it changed, so the next anchor pass
  * re-walks that path and answers every untouched sibling from here — a keystroke no longer
  * visits every paragraph of the story. The depth the answer was computed at is part of the
- * key, because the walk's depth bound depends on where the node sits. Runs are not memoized:
- * they are only walked when their paragraph is new.
+ * key, because the walk's depth bound depends on where the node sits. Nothing inside a
+ * paragraph is memoized: it is only walked when its paragraph is new, and an entry per run,
+ * property and text element would cost more than the walk it saves.
  */
 const markedParagraphsCache = new WeakMap<
   OoxmlNode,
   { readonly depth: number; readonly paragraphs: readonly OoxmlParagraphNode[] }
 >();
 
-function markedParagraphsIn(node: OoxmlNode, depth: number): readonly OoxmlParagraphNode[] {
+function markedParagraphsIn(
+  node: OoxmlNode,
+  depth: number,
+  insideParagraph: boolean
+): readonly OoxmlParagraphNode[] {
   if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return NO_PARAGRAPHS;
-  const cached = markedParagraphsCache.get(node);
+  const memoize = !insideParagraph && depth >= MIN_MEMOIZED_DEPTH;
+  const cached = memoize ? markedParagraphsCache.get(node) : undefined;
   if (cached && cached.depth === depth) return cached.paragraphs;
   let found: OoxmlParagraphNode[] | null = null;
   if (node.kind === 'paragraph' && markersInParagraphWithPolicy(node, true).length > 0) {
     found = [node];
   }
   for (const child of node.children) {
-    const inner = markedParagraphsIn(child, depth + 1);
+    const inner = markedParagraphsIn(
+      child,
+      depth + 1,
+      insideParagraph || node.kind === 'paragraph'
+    );
     if (inner.length === 0) continue;
     found ??= [];
     for (const paragraph of inner) found.push(paragraph);
   }
   const paragraphs = found ?? NO_PARAGRAPHS;
-  if (node.kind !== 'run' && depth >= MIN_MEMOIZED_DEPTH) {
-    markedParagraphsCache.set(node, { depth, paragraphs });
-  }
+  if (memoize) markedParagraphsCache.set(node, { depth, paragraphs });
   return paragraphs;
 }
 
