@@ -519,11 +519,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Vertical cell text (textDirection)',
     category: 'tables',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'tbRl and btLr cell text renders through writing-mode and round-trips. You cannot set it from the UI.',
+      'tbRl and btLr cell text renders through writing-mode and round-trips. An auto-height row is as tall as its btLr text. If other cells or a minimum row height make the row taller, centered and right-aligned btLr text stays at the start of the cell. You cannot set it from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------

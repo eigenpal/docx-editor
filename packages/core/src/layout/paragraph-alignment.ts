@@ -70,7 +70,8 @@ function alignLogicalSpans(
   paragraphRtl: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
-  if (alignment === 'left') return spans;
+  // An unbounded line (a measuring pass) has no far edge to align or justify against.
+  if (alignment === 'left' || !Number.isFinite(available)) return spans;
 
   let trailingEnd = spans.length;
   while (

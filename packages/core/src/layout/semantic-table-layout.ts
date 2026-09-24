@@ -27,7 +27,7 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { measuringFlowDeps } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
@@ -113,7 +113,7 @@ import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
-import { blockInlineRight } from './table-cell-text-direction.ts';
+import { blockInlineEnd, bottomToTopLineEnd } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
@@ -341,13 +341,17 @@ export interface CellPlaceCursor {
 }
 
 export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
-  return row.cells.map(() => ({
+  return row.cells.map(initialCellCursor);
+}
+
+function initialCellCursor(): CellPlaceCursor {
+  return {
     blockIndex: 0,
     lineIndex: 0,
     previousSpaceAfter: 0,
     paragraphFragmentIndex: 0,
     precededByEmittedTable: false,
-  }));
+  };
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -677,7 +681,7 @@ function placeCellParagraph(
         : alignment !== 'left' && alignment !== 'both'
           ? (() => {
               const slack = lineAvailableWidth - pendingLine.width;
-              if (slack <= 0) return 0;
+              if (slack <= 0 || !Number.isFinite(slack)) return 0;
               return alignment === 'center' ? slack / 2 : slack;
             })()
           : 0;
@@ -1344,18 +1348,9 @@ export function layoutRowFragmentBounded(
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
-    // Keep this typed: otherwise TypeScript can hide a missing cursor member.
-    // a `boolean`, and the collapse would silently never fire for that cell.
-    const cursor: CellPlaceCursor = cursors[cellIndex] ?? {
-      blockIndex: 0,
-      lineIndex: 0,
-      previousSpaceAfter: 0,
-      paragraphFragmentIndex: 0,
-      precededByEmittedTable: false,
-    };
+    const cursor = cursors[cellIndex] ?? initialCellCursor();
     // The reader resolves gridBefore and bounds the total span before border-grid walks.
-    const span = cell.gridSpan;
-    const gridColumn = cell.gridColumn;
+    const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
     const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
@@ -1377,13 +1372,35 @@ export function layoutRowFragmentBounded(
       : flowMaxBottom;
     const vertical = cell.textDirection === 'btLr';
     const flowLeft = vertical ? cellX + insets.bottom : cellX + insets.left;
-    const flowRight = vertical
-      ? cellX + Math.max(0, cellMaxBottom - rowTop) - topInset
-      : cellX + cellW - insets.right;
     const contentTop = vertical ? rowTop + insets.left : rowTop + topInset;
     const contentMaxBottom = vertical
       ? rowTop + cellW - insets.right
       : cellMaxBottom - insets.bottom;
+    const flowTo = (right: number, withDeps: TableFlowDeps, markBottom?: number) =>
+      flowBlocksInBoxBounded(
+        cell.blocks,
+        flowLeft,
+        right,
+        contentTop,
+        contentMaxBottom,
+        depth,
+        withDeps,
+        cursor,
+        cell.styleFormatting,
+        true,
+        markBottom,
+        cell.hideEndMark,
+        // Fixed cell boxes clip; their bottom is not a paragraph page break.
+        !vertical && (isDetached || exactHeightPt === undefined)
+      );
+    const flowRight = !vertical
+      ? cellX + cellW - insets.right
+      : bottomToTopLineEnd(
+          flowLeft,
+          cellX + Math.max(0, cellMaxBottom - rowTop) - topInset,
+          exactHeightPt !== undefined || isDetached || cell.vMergeContinue,
+          (right) => flowTo(right, measuringFlowDeps(flowDeps, true)).blocks
+        );
 
     const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
       cell,
@@ -1402,23 +1419,12 @@ export function layoutRowFragmentBounded(
       if (contentMaxBottom < contentTop - 0.001) {
         complete = cursor.blockIndex >= cell.blocks.length;
       } else {
-        const flow = flowBlocksInBoxBounded(
-          cell.blocks,
-          flowLeft,
+        const flow = flowTo(
           flowRight,
-          contentTop,
-          contentMaxBottom,
-          depth,
           flowDeps,
-          cursor,
-          cell.styleFormatting,
-          true,
           vertical
             ? undefined
-            : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
-          cell.hideEndMark,
-          // Fixed cell boxes clip; their bottom is not a paragraph page break.
-          !vertical && (isDetached || exactHeightPt === undefined)
+            : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom
         );
         blocks = flow.blocks;
         contentBottom = flow.bottom;
@@ -1446,7 +1452,7 @@ export function layoutRowFragmentBounded(
             ? rowTop + topInset + continuationPt + insets.bottom
             : rowTop
           : vertical && fitted
-            ? rowTop + topInset + (blockInlineRight(blocks, flowLeft) - flowLeft) + insets.bottom
+            ? rowTop + topInset + (blockInlineEnd(blocks, flowLeft) - flowLeft) + insets.bottom
             : fitted
               ? contentBottom + insets.bottom
               : rowTop + topInset + defaultLineHeight + insets.bottom
@@ -1618,16 +1624,10 @@ export function measureRowHeight(
   vMerge?: RowVMergeLayoutOptions,
   atYPt?: number
 ): number {
-  let lineCounter = 0;
   // `atYPt` measures the row WHERE IT IS GOING, wrap bands included — the one thing the
   // position-free probe above cannot do. A merge deciding how tall its span must be passes
   // it; everyone else keeps the position-free probe and the bands it must not see.
-  const positioned = atYPt !== undefined;
-  const probeDeps: TableFlowDeps = {
-    ...stripAnchorSinksForProbe(deps),
-    ...(positioned ? {} : { pageExclusionZones: undefined }),
-    nextLineId: () => `probe-${lineCounter++}`,
-  };
+  const probeDeps = measuringFlowDeps(deps, atYPt !== undefined);
   // `vMerge` reaches the probe so a detached head is detached HERE too. Emptying its blocks
   // instead still charged the row the empty-cell line below, and that phantom line became a
   // floor the placement never asked for.
