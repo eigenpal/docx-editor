@@ -1186,8 +1186,10 @@ export function breakParagraph(
         ...(piece.link ? { link: piece.link } : {}),
         ...paragraphSpanMetadata(piece),
       });
-      growLineMetrics(line, breakMetrics);
       line.end = piece.end;
+      // Keep the model offset, but a manual page break has no cell-flow geometry.
+      if (flow?.cellAnchorScope?.inTableCell) continue;
+      growLineMetrics(line, breakMetrics);
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
       // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
