@@ -51,10 +51,6 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 
 `@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, and `@docx-editor.dev/docx-to-pdf` use the EigenPal Pro License. See the license terms for [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md), and [docx-to-pdf](packages/docx-to-pdf/LICENSE.md). Compare license and support options on the [pricing page](https://www.docx-editor.dev/pricing).
 
-The [Nuxt module](packages/nuxt/README.md) is a private workspace package. For external applications, use the Vue adapter.
-
-If you fork an adapter, depend on `@docx-editor.dev/core` to receive engine fixes.
-
 ## React
 
 Import the stylesheet once and pass the selected file to the editor:
