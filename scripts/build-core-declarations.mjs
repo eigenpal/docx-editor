@@ -192,11 +192,13 @@ async function bundleDeclarations(entries, outDir) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
-  // tsconfig.json may carry comments, so read it the way TypeScript does.
-  const { config } = ts.readConfigFile(join(core, 'tsconfig.json'), ts.sys.readFile);
+  // The effective paths, read the way TypeScript reads them: comments, `extends`, errors.
+  const { config, error } = ts.readConfigFile(join(core, 'tsconfig.json'), ts.sys.readFile);
+  if (error) throw new Error(ts.formatDiagnostic(error, formatHost));
+  const { options } = ts.parseJsonConfigFileContent(config, ts.sys, core);
   const entries = publishedEntries(
     JSON.parse(readFileSync(join(core, 'package.json'), 'utf8')),
-    config.compilerOptions.paths
+    options.paths ?? {}
   );
   const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
   try {

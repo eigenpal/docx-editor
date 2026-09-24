@@ -66,7 +66,18 @@ test('declaration builds drop sibling source paths and keep local aliases', () =
     new URL('../../packages/pro/tsup.config.ts', import.meta.url),
     { jsx: 'preserve' }
   );
-  expect(pro).toEqual({ jsx: 'preserve', paths: {} });
+  // pro keeps its test-only editor-api path; it reads core, react, and vue from dist.
+  expect(pro).toEqual({
+    jsx: 'preserve',
+    paths: { '@docx-editor.dev/editor-api': ['../editor-api/src/index.ts'] },
+  });
+  const editorApi = declarationCompilerOptions(
+    new URL('../../packages/editor-api/tsup.config.ts', import.meta.url)
+  );
+  expect(
+    Object.keys(editorApi.paths).every((key) => !key.startsWith('@docx-editor.dev/core'))
+  ).toBe(true);
+  expect(Object.keys(editorApi.paths)).toContain('@docx-editor.dev/editor-api');
 });
 
 test('a package checks every sibling it reads, including those behind core', () => {
