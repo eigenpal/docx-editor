@@ -87,11 +87,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     if (env.SLACK_WEBHOOK_URL) {
       await withRetries(
         async () => {
+          // A request that timed out may have been delivered, so it is not sent again.
           const response = await fetch(env.SLACK_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: report.slack }),
             signal: AbortSignal.timeout(30_000),
+          }).catch((error) => {
+            throw new Error(`Slack did not answer: ${error.name}`);
           });
           if (!response.ok) throw new Error(`Slack returned HTTP ${response.status}`);
         },

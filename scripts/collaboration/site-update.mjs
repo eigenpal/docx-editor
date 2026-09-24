@@ -24,11 +24,15 @@ const DISPATCH =
  * - `mode: 'replacement'`: after the site cancels a run for a newer one, the next run of the
  *   same version (the request ID starts with the version), or the next unnamed run.
  */
-export function selectSiteRun(runs, { dispatchedAt, request, mode, after = null, followed = [] }) {
+export function selectSiteRun(
+  runs,
+  { dispatchedAt, request, mode, after = null, followed = [], workflow = null }
+) {
   const title = (item) => item.display_title?.trim();
   // The list request already keeps only runs created since the request's time margin.
   const dispatched = runs
     .filter((item) => item.event === 'repository_dispatch')
+    .filter((item) => !workflow || item.path === workflow)
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
   const exact = dispatched.find((item) => title(item) === `${DISPATCH_EVENT} ${request}`);
   if (mode === 'exact') return exact ?? null;
@@ -64,6 +68,7 @@ export async function waitForSiteRun({
   since,
   dispatchedAt = since,
   request,
+  workflow = null,
   api,
   wait = sleep,
   findAttempts = 40,
@@ -86,7 +91,7 @@ export async function waitForSiteRun({
       // Give the exact name time to appear before accepting an unnamed run.
       const mode = after ? 'replacement' : attempt < exactAttempts ? 'exact' : 'fallback';
       const runs = (await list()).workflow_runs ?? [];
-      const found = selectSiteRun(runs, { dispatchedAt, request, mode, after, followed });
+      const found = selectSiteRun(runs, { dispatchedAt, request, mode, after, followed, workflow });
       if (found) return found;
     }
     return null;
@@ -128,6 +133,7 @@ export async function updateSite({
   repository,
   version,
   request,
+  workflow = null,
   api,
   dispatch,
   latest,
@@ -141,12 +147,21 @@ export async function updateSite({
   const newer = await superseded();
   if (newer) return { result: 'superseded', latest: newer, replaced: [] };
   const iso = (offset) => new Date(now() - offset).toISOString().replace(/\.\d+Z$/, 'Z');
-  // A minute of margin for clock skew between the runner and GitHub.
+  // Margins for clock skew between the runner and GitHub: wide for the named match, which
+  // cannot pick another request's run, and narrower for the unnamed fallback.
   const since = iso(60_000);
-  const dispatchedAt = iso(5_000);
+  const dispatchedAt = iso(30_000);
   // Not retried: a request that failed after GitHub accepted it would start a second sync.
   await withRetries(dispatch, { attempts: 1, permission: DISPATCH });
-  const outcome = await waitForSiteRun({ repository, since, dispatchedAt, request, api, wait });
+  const outcome = await waitForSiteRun({
+    repository,
+    since,
+    dispatchedAt,
+    request,
+    workflow,
+    api,
+    wait,
+  });
   if (outcome.result === 'cancelled') {
     const later = await superseded();
     if (later) return { ...outcome, result: 'superseded', latest: later };
@@ -159,6 +174,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     TARGET_REPOSITORY: repository,
     RELEASE_VERSION: version,
     REQUEST_ID: request,
+    SYNC_WORKFLOW: workflow,
     GITHUB_STEP_SUMMARY: summary,
   } = process.env;
   try {
@@ -182,6 +198,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
       repository,
       version,
       request,
+      workflow: workflow || null,
       api,
       dispatch,
       // The registry client bypasses cached metadata and retries, like the verification.

@@ -42,6 +42,19 @@ test('the site run is the one named after the request; an unnamed run only as a 
   ];
   expect(pick(named, 'exact')).toBe(7);
   expect(pick(named, 'fallback')).toBe(7);
+  // Another workflow on the same dispatch event never counts as the site's sync.
+  const otherWorkflow = [
+    dispatchRun(15, '2026-09-24T09:40:00Z', { path: '.github/workflows/notify.yml' }),
+    dispatchRun(16, '2026-09-24T09:40:09Z', { path: '.github/workflows/sync-release.yml' }),
+  ];
+  expect(
+    selectSiteRun(otherWorkflow, {
+      dispatchedAt,
+      request,
+      mode: 'fallback',
+      workflow: '.github/workflows/sync-release.yml',
+    })?.id
+  ).toBe(16);
 });
 
 test('after a cancel, only a later run of the same version that was not followed replaces it', () => {
@@ -309,11 +322,12 @@ test('each post-release step is its own job, and the comments wait only for veri
   const downstream = workflow('post-release');
   const recovery = workflow('release-downstream');
   expect(recovery.jobs.sites.name).toBe('Site update');
-  expect(recovery.jobs.sites.strategy.matrix.repository).toEqual([
-    'docx-editor.dev',
-    'docx-to-markdown.com',
-    'docx-to-pdf.dev',
+  expect(recovery.jobs.sites.strategy.matrix.include).toEqual([
+    { repository: 'docx-editor.dev', workflow: 'sync-upstream-api.yml' },
+    { repository: 'docx-to-markdown.com', workflow: 'sync-release.yml' },
+    { repository: 'docx-to-pdf.dev', workflow: 'sync-release.yml' },
   ]);
+  expect(recovery.jobs.sites.env.SYNC_WORKFLOW).toBe('.github/workflows/${{ matrix.workflow }}');
   const update = recovery.jobs.sites.steps.find(
     (step: any) => step.name === 'Request the site update and wait for it'
   );

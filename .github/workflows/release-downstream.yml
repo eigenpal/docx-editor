@@ -15,18 +15,26 @@ permissions:
 
 jobs:
   sites:
-    # Named "Site update (<repository>)" once the matrix expands.
+    # Named "Site update (<repository>, <workflow>)" once the matrix expands.
     name: Site update
     strategy:
       fail-fast: false
       matrix:
-        repository: [docx-editor.dev, docx-to-markdown.com, docx-to-pdf.dev]
+        include:
+          - repository: docx-editor.dev
+            workflow: sync-upstream-api.yml
+          - repository: docx-to-markdown.com
+            workflow: sync-release.yml
+          - repository: docx-to-pdf.dev
+            workflow: sync-release.yml
     runs-on: ubuntu-latest
     # The documentation sync waits for its own PR checks before it merges.
     timeout-minutes: 60
     env:
       TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
       RELEASE_VERSION: ${{ inputs.version }}
+      # Only this workflow's runs count, not other workflows on the same dispatch event.
+      SYNC_WORKFLOW: .github/workflows/${{ matrix.workflow }}
       # The site names its run after this ID, so the wait finds exactly this request. It
       # starts with the version, so after a cancel the wait follows only the same version.
       REQUEST_ID: ${{ inputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.repository }}

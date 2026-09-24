@@ -176,7 +176,7 @@ Release finishes without waiting for npm metadata propagation. The post-release 
 | **Merge verified catalog** | Waits for the PR's checks, approves the tested commit, and merges it. |
 | **Release comments and roadmap** | Comments on the shipped PRs and issues and updates the roadmap board. |
 
-A site job passes only when that site's own sync run passes. Each site deploys in a separate workflow that the site job does not follow, so check the site's deployment if its content looks out of date. To read the sync runs, the `eigenpal-release-pal` GitHub App needs the **Actions: Read-only** repository permission.
+A site job passes only when that site's own sync run passes. Each site deploys in a separate workflow that the site job does not follow. If a site's content looks out of date, check that site's deployment. To read the sync runs, the `eigenpal-release-pal` GitHub App needs the **Actions: Read-only** repository permission.
 
 Each request carries an ID in `client_payload.request` that starts with the version, and each site's sync workflow names its run `upstream-release <request>`. The site job uses that name to find its own run. If a site does not name its runs, the site job waits 2 minutes and then takes the first unnamed sync run created after the request. If the site cancels the run because a newer sync of the same version queued, the site job follows the newer run.
 
@@ -196,7 +196,7 @@ If a post-release job failed after verification passed, fix the cause and rerun 
 
 A rerun of the failed jobs does not repeat a verification that passed, and the jobs that need it run again from its passed result. A site job that reruns after a newer release passes as superseded and sends nothing. To recover a catalog that a newer release left behind, run `collaboration-catalog.yml` with the missed `version` input. The Recover release workflow repeats verification, which fails when a newer version is already npm `latest`.
 
-Use the [Recover release workflow](../.github/workflows/recover-release.yml) if npm publication succeeded but registry verification failed, or if the post-release run cannot be rerun. Rerunning Release can skip these updates because Changesets reports that the packages are already published.
+If npm publication succeeded but registry verification failed, or if the post-release run cannot be rerun, use the [Recover release workflow](../.github/workflows/recover-release.yml). Rerunning Release can skip these updates because Changesets reports that the packages are already published.
 
 1. Open the original Release run. Confirm that **Release PR or Publish** succeeded, and copy the run ID from its URL.
 2. Run the recovery workflow from `main` with the published version and original run ID. For example, to recover 2.19.0:

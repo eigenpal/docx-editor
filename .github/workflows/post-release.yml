@@ -334,8 +334,11 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SOURCE_URL: ${{ github.event.workflow_run.html_url }}
+          PUBLISHED: ${{ needs.source.outputs.published }}
         run: |
           [ -n "$SLACK_WEBHOOK_URL" ] || exit 0
-          jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" \
-            '{text: ("Post-release: the step report could not be built or sent. Check the jobs in " + $run + ". Release run: " + $source + ".")}' \
+          note=""
+          if [ "$PUBLISHED" = true ]; then note=" The packages are already on npm; do not republish."; fi
+          jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" --arg note "$note" \
+            '{text: ("Post-release: the step report could not be built or sent. Check the jobs in " + $run + ". Release run: " + $source + "." + $note)}' \
             | curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" >/dev/null

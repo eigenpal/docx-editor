@@ -11,10 +11,6 @@ on:
       source_run_id:
         type: string
         required: true
-    outputs:
-      published_packages:
-        description: Packages verified against the original tested candidate
-        value: ${{ jobs.verify.outputs.published_packages }}
 
 permissions:
   contents: read
@@ -34,8 +30,6 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      published_packages: ${{ steps.candidate.outputs.packages }}
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
@@ -57,9 +51,5 @@ jobs:
           github-token: ${{ github.token }}
           path: .cache/collaboration/recovery
       - name: Verify archived tarballs and published integrity
-        id: candidate
-        run: |
-          node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
-          packages=$(jq -c '.packages | to_entries | map({name: .key, version: .value.version})' .cache/collaboration/recovery/candidate.json)
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+        run: node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
 
