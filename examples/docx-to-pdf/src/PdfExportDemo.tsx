@@ -8,7 +8,7 @@ import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { PdfViewer, preparePdfPreview } from './PdfViewer';
-import { PdfProgress, formatDuration } from './PdfProgress';
+import { PdfProgress } from './PdfProgress';
 import { readConversionResponse, type ConversionPayload } from './conversion-response';
 import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
 import {
@@ -495,16 +495,12 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
                   </div>
                 </div>
               ) : null}
-              <div className="pdf-page-meta" role="status" aria-live="polite">
-                {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}
-                {formatBytes(result.bytes)}
-                {result.timings?.workerStartupMs !== undefined
-                  ? ` · Worker startup ${formatDuration(result.timings.workerStartupMs)}`
-                  : ''}
-                {result.cached ? ' · Generated when the demo was built' : ''}
-                {result.timings?.generationMs !== undefined
-                  ? ` · Generated in ${formatDuration(result.timings.generationMs)}`
-                  : ''}
+              <div
+                className="pdf-page-meta"
+                role="status"
+                aria-live="polite"
+                hidden={result.diagnostics.length === 0}
+              >
                 {result.diagnostics.length > 0 ? (
                   <details className="pdf-diagnostics">
                     <summary>

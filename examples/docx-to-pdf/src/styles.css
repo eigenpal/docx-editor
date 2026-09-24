@@ -661,11 +661,6 @@ button {
   text-decoration: underline dotted;
 }
 
-.pdf-diagnostics summary::before {
-  content: ' · ';
-  text-decoration: none;
-}
-
 .pdf-diagnostics ul {
   margin: 8px 0 0;
   padding-left: 18px;
@@ -692,6 +687,10 @@ button {
   border: 1px solid var(--pdf-line);
   border-radius: 10px;
   background: var(--pdf-surface);
+}
+
+.pdf-page-meta[hidden] {
+  display: none;
 }
 
 .pdf-page-meta {
