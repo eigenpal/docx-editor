@@ -1,6 +1,7 @@
 import type { SemanticTableCell } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { resolveParagraphLayoutInputs } from './style-cascade.ts';
+import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
 
@@ -33,10 +34,11 @@ function endMarkBox(
     cell.styleFormatting,
     true
   );
+  // The floor also stands under a cell with content, so it reads the mark WITHOUT its
+  // character style (`paragraph-mark-run.ts`). An empty end paragraph's own line has it.
+  const mark = markRunPropertiesWithoutCharacterStyle(inputs.markRunProperties);
   const style =
-    inputs.markRunProperties.length === 0
-      ? DEFAULT_RUN_STYLE
-      : resolveRunStyle(inputs.markRunProperties, deps.styleCascade?.themeFonts);
+    mark.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(mark, deps.styleCascade?.themeFonts);
   if (style.hidden || deps.measurer.hasResolvedFont?.(style) === false) return null;
   const metrics = deps.measurer.lineMetrics(style);
   return {

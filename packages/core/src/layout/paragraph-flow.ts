@@ -2,6 +2,7 @@ import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-borde
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import { markPendingLineWrapAdvances, growPendingLineDrawingExtent } from './pending-line.ts';
 import { shouldIncludeParagraphMarkHeight } from './paragraph-mark-metrics.ts';
+import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import { fitsWithSpaceShrink, opensWithHangingSpace } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
@@ -432,6 +433,14 @@ export function breakParagraph(
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
     markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
+  // A line with content, drawings included, reads the mark WITHOUT its character style
+  // (`paragraph-mark-run.ts`); only a line with nothing on it reads `emptyStyle`.
+  const growthProps = markRunPropertiesWithoutCharacterStyle(markProps);
+  const growthStyle =
+    growthProps === markProps ? emptyStyle : resolveRunStyle(growthProps, flow?.themeFonts);
+  // Before its first piece a line is estimated from the mark, and only an empty paragraph's
+  // line has no piece to come.
+  const lineStartStyle = pieces.length === 0 ? emptyStyle : growthStyle;
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -610,7 +619,7 @@ export function breakParagraph(
     zones: activeExclusionZones,
     left: () => Math.max(contentLeft, lineOrigin()),
     right: wrapRight,
-    emptyStyle,
+    emptyStyle: lineStartStyle,
     measurer,
     lineSpacing,
   });
@@ -625,7 +634,7 @@ export function breakParagraph(
     left: contentLeft,
     right: wrapRight,
     lineSpacing,
-    initialMetrics: measurer.lineMetrics(emptyStyle),
+    initialMetrics: measurer.lineMetrics(lineStartStyle),
   });
   const availableIntervals = exclusionProbe.intervals;
 
@@ -943,7 +952,8 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
-    const metrics = measurer.lineMetrics(emptyStyle);
+    const empty = line.spans.length === 0 && line.drawings.length === 0;
+    const metrics = measurer.lineMetrics(empty ? emptyStyle : growthStyle);
     // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
     // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
     let glyphBaseline = line.baseline;
@@ -956,11 +966,11 @@ export function breakParagraph(
     } else if (
       options?.includeParagraphMark &&
       !flow?.paragraphMarkIsCellEnd &&
-      measurer.hasResolvedFont?.(emptyStyle) !== false &&
-      shouldIncludeParagraphMarkHeight(markProps, inheritedRunProperties, line.spans)
+      measurer.hasResolvedFont?.(growthStyle) !== false &&
+      shouldIncludeParagraphMarkHeight(growthProps, inheritedRunProperties, line.spans)
     ) {
       // Extra mark height stays below the glyph baseline, so a cover page keeps its rhythm.
-      line.height = Math.max(line.height, metrics.height);
+      line.height = Math.max(line.height, measurer.lineMetrics(growthStyle).height);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the

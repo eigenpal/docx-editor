@@ -19,6 +19,7 @@ import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts'
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
 import { simpleElement, textElement } from './tree-op-inline-elements.ts';
+import { characterStyleElement, emptyParagraphRunProperties } from './mark-character-style-run.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
   isContentRevisionKind,
@@ -774,7 +775,7 @@ function applyInsertContent(
           : leftRun.children
               .filter((child) => child.kind === 'runProperties')
               .map((child) => withFreshIds(child, nextId))
-        : [];
+        : emptyParagraphRunProperties(paragraph, nextId);
     inserted = fromEdit(
       insertChildren(
         part,
@@ -912,6 +913,22 @@ function applyInsertContent(
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
+  // Runs that hold nothing do not give an empty paragraph its face; its mark does
+  // (`mark-character-style-run.ts`). The first content goes in a run of its own after them.
+  const markStyled = last ? emptyParagraphRunProperties(paragraph, nextId) : [];
+  if (last && markStyled.length > 0) {
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        paragraph.id,
+        paragraph.children.indexOf(last) + 1,
+        [runElement(nextId, [...markStyled, ...nodes])],
+        deferOptions(options, control)
+      ),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
   if (last) {
     inserted = fromEdit(
       insertChildren(part, last.id, last.children.length, nodes, deferOptions(options, control)),
@@ -925,7 +942,7 @@ function applyInsertContent(
       part,
       paragraph.id,
       paragraph.children.length,
-      [runElement(nextId, nodes)],
+      [runElement(nextId, [...emptyParagraphRunProperties(paragraph, nextId), ...nodes])],
       deferOptions(options, control)
     ),
     effect
@@ -1416,24 +1433,7 @@ function withCharacterStyle(
     );
   }
   if (node.kind !== 'run') return node;
-  const rStyle = {
-    id: nextId(),
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'rStyle',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [
-      {
-        kind: 'genericExtension',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'val',
-        prefix: 'w',
-        value: styleId,
-      },
-    ],
-    children: [],
-  } as unknown as OoxmlNode;
+  const rStyle = characterStyleElement(nextId, styleId);
 
   const rPr = runPropertiesNodeOf(node);
   if (!rPr) {

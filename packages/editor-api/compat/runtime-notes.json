@@ -473,11 +473,15 @@
   },
   "Word.Body#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties."
+  },
+  "Word.Paragraph#insertText": {
+    "status": "partial",
+    "notes": "Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not inherit the mark's direct run properties."
   },
   "Word.Range#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties."
   },
   "Word.Range#delete": {
     "status": "partial",

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text inserted into an empty paragraph can omit the character style named by its paragraph mark.",
+  "after": "The inserted run carries that character style through existing run properties.",
+  "reason": "Full-document updates carry canonical nodes with existing run character-style properties. Released readers already interpret these properties. Node identities and synchronization formats do not change. Experimental paragraph-text rooms derive runs locally and do not synchronize formatting. Mixed versions can format the first inserted text differently in those rooms.",
+  "tests": [
+    "packages/core/src/store/__tests__/empty-paragraph-mark-style-insert.test.ts",
+    "packages/core/src/editor/__tests__/empty-paragraph-mark-style-typing.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-empty-paragraph-mark-style.test.ts"
+  ],
+  "changeset": "paragraph-mark-character-style",
+  "migration": null
+}

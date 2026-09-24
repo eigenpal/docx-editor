@@ -123,6 +123,8 @@ An empty paragraph that ends a section ignores its own page break before, from d
 
 Saved results of fields inside another field's instruction do not add text, line breaks, or links. The outer field keeps its normal display behavior. Fields inside a saved result still display.
 
+Named character styles set the font properties of empty paragraph marks and numbering markers. Direct mark properties override those styles. A mark's character style also sizes the empty line after a trailing line break. It does not enlarge a line that contains text or an inline picture. When you type in an empty paragraph, the new text takes the character style of the paragraph mark.
+
 Usable font bytes are required for Word-accurate text measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 
 The configured font resolver also receives faces used by SYMBOL fields and numbering markers. Your host must supply usable font bytes for those faces when they are unavailable locally. Unused numbering definitions do not add font requests.

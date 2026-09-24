@@ -44,6 +44,8 @@ The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`
 
 `insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph; newline-containing insertion text is refused.
 
+Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
+
 This example appends a paragraph and configures it after creation:
 
 ```ts

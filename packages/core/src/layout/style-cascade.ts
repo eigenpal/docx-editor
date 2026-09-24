@@ -50,6 +50,8 @@ import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './
 import { numberingTabSettings, withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
+import { styleChain, styleIdFromProps } from './style-chain.ts';
+import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import {
   strictTableStyleHierarchy,
   legacyTableDefaultProperties,
@@ -68,8 +70,7 @@ import {
 export { isValidStyleId } from './style-definition-reader.ts';
 export type { StyleDefinition } from './style-definition-reader.ts';
 
-/** Soft ceiling on `basedOn` chain length — enough for real templates, refuses hostile graphs. */
-export const MAX_STYLE_BASED_ON_DEPTH = 32;
+export { MAX_STYLE_BASED_ON_DEPTH } from './style-chain.ts';
 
 /** Soft ceiling on style definitions read from one styles part. */
 export const MAX_STYLE_DEFINITIONS = 4096;
@@ -148,7 +149,9 @@ export interface CascadedParagraphFormatting {
    */
   readonly runProperties: readonly OoxmlProperty[];
   /**
-   * Content cascade plus direct `w:pPr/w:rPr` — empty-line metrics and last-line mark height.
+   * Content cascade plus the mark's `w:pPr/w:rPr`, including its `w:rStyle` character style —
+   * empty-line metrics and the numbering marker. A line with content grows from the mark
+   * without that character style.
    */
   readonly markRunProperties: readonly OoxmlProperty[];
   /**
@@ -559,50 +562,6 @@ export function buildStyleCascadeTable(
   };
 }
 
-function styleIdFromProps(
-  directProps: readonly OoxmlProperty[],
-  localName: 'pStyle' | 'rStyle'
-): string | null {
-  let id: string | null = null;
-  for (const property of directProps) {
-    if (property.localName !== localName) continue;
-    const value = property.attributes?.val;
-    id = isValidStyleId(value) ? value : null;
-  }
-  return id;
-}
-
-/**
- * Resolve the `basedOn` chain base-first, stopping on missing ids, cycles, or depth.
- *
- * The tip must match `expectedType`; other types named by `w:pStyle` / `w:rStyle` contribute
- * nothing (Word ignores them for that inheritance axis).
- */
-function styleChain(
-  table: StyleCascadeTable,
-  styleId: string,
-  expectedType: 'paragraph' | 'character' | 'table'
-): readonly StyleDefinition[] {
-  const tip = table.styles.get(styleId);
-  if (!tip || tip.type !== expectedType) return [];
-
-  const tipFirst: StyleDefinition[] = [];
-  const seen = new Set<string>();
-  let current: string | null = styleId;
-  let depth = 0;
-  while (current !== null && depth < MAX_STYLE_BASED_ON_DEPTH) {
-    if (seen.has(current)) break;
-    if (!isValidStyleId(current)) break;
-    seen.add(current);
-    const definition = table.styles.get(current);
-    if (!definition) break;
-    tipFirst.push(definition);
-    current = definition.basedOn;
-    depth += 1;
-  }
-  return tipFirst.reverse();
-}
-
 /**
  * Cascade paragraph + inherited run properties for one paragraph's direct `w:pPr`.
  *
@@ -680,31 +639,18 @@ function cascadeParagraphWithNumbering(
       emit: true,
     },
   ]);
-  // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top, and that
-  // `w:rPr` is DIRECT formatting for the mark — absolute, either way it is stated.
-  //
-  // Combined rather than concatenated so the result carries its resolved toggle state like
-  // any other cascade output. `list-resolve.ts` resolves a numbering marker from this list,
-  // and a plain concatenation is a fresh array with nothing attached: the marker would fall
-  // back to reading the properties and could answer differently from the text of the very
-  // paragraph it belongs to.
-  const markRunProperties: readonly OoxmlProperty[] =
-    markProps.length === 0
-      ? runProperties
-      : combineStyleToggles([
-          { properties: runProperties, role: 'carried', emit: true },
-          { properties: markProps, role: 'direct', emit: true },
-        ]);
+  // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top: its
+  // `w:rStyle` chain at the character level, then its direct properties, which are absolute.
+  const markRunProperties = paragraphMarkRunProperties(table, runProperties, markProps, (props) =>
+    applyLigatureCompatibility(props, table.disableOptionalLigatures)
+  );
 
   return {
     paragraphProperties,
     inheritedParagraphProperties,
     paragraphPropertyNodes,
     runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
-    markRunProperties: applyLigatureCompatibility(
-      markRunProperties,
-      table.disableOptionalLigatures
-    ),
+    markRunProperties,
     styleId: styleId ?? null,
   };
 }
@@ -847,8 +793,8 @@ export interface ParagraphLayoutInputs {
   readonly shading: string | undefined;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   /**
-   * Paragraph-mark cascade (`inheritedRunProperties` + direct `w:pPr/w:rPr`).
-   * Empty-line sizing and last-line mark height — never content-run face.
+   * Paragraph-mark cascade (`inheritedRunProperties` + `w:pPr/w:rPr` and its `w:rStyle`).
+   * Empty-line sizing and last-line mark height (without the `w:rStyle`) — never content face.
    */
   readonly markRunProperties: readonly OoxmlProperty[];
   /** Cascaded custom tab stops + default interval for paragraph-flow breaking. */

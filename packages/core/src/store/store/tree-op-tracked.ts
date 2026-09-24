@@ -59,6 +59,7 @@ import {
 } from './tree-op-tracked-adjacency.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
+import { emptyParagraphRunProperties } from './mark-character-style-run.ts';
 
 export { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 export { build, revisionAttributes } from './tree-op-tracked-builders.ts';
@@ -460,6 +461,14 @@ function applyTrackedInsertion(
     return null;
   };
   const replacementRun = replacesThisEdit ? replacedRunIn(paragraph.children) : null;
+  // A paragraph with no content gives its first run the mark's character style, whatever an
+  // empty run beside the insertion carries (`mark-character-style-run.ts`).
+  // `offsets.segments` first: every keystroke in a paragraph with content skips the mark read.
+  const markStyled = (): readonly OoxmlNode[] | null => {
+    if (offsets.segments.length > 0) return null;
+    const styled = emptyParagraphRunProperties(paragraph, mint);
+    return styled.length > 0 ? styled : null;
+  };
   let exceedsDepth = false;
   const wrap = (properties: readonly OoxmlNode[], depth: number): OoxmlNode => {
     const wrapper = build(
@@ -470,7 +479,9 @@ function applyTrackedInsertion(
       payload.nodes
         ? [
             runOf(mint, [
-              ...(replacementRun ? insertedRunProperties(mint, replacementRun) : properties),
+              ...(replacementRun
+                ? insertedRunProperties(mint, replacementRun)
+                : (markStyled() ?? properties)),
               ...payload.nodes(mint),
             ]),
           ]
