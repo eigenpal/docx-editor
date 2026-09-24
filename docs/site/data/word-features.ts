@@ -1062,6 +1062,17 @@ export const wordFeatures: WordFeature[] = [
       'customXml parts and w:dataBinding round-trip with structural fidelity. The editor does not evaluate a binding.',
   },
   {
+    id: 'structure.misplaced-breaks',
+    name: 'Breaks outside runs (w:br, w:cr)',
+    category: 'structure',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Some files put a break directly in a paragraph or hyperlink, outside a run. The editor keeps that break in place and saves it unchanged. The text around it renders and stays editable. The break itself does not start a new line or page. The caret does not stop at it, and deleting text across it keeps it.',
+  },
+  {
     id: 'structure.macros',
     name: 'VBA macros',
     category: 'structure',

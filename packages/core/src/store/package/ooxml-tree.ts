@@ -1593,6 +1593,12 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
       ? 'generic'
       : 'contentControl';
   }
+  // `w:br`/`w:cr` are run content (`EG_RunInnerContent`). A stray one written straight under a
+  // paragraph or link, typed, demoted that container — and layout drops a generic paragraph
+  // whole. It stays generic at its position instead, so the runs around it keep painting.
+  if ((localName === 'br' || localName === 'cr') && parentLocalName !== undefined) {
+    return parentLocalName === 'r' ? 'hardBreak' : 'generic';
+  }
   return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
 }
 

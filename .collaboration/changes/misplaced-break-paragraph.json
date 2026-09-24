@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:br or w:cr written directly under a paragraph or hyperlink, outside a run, was typed as a hard break. That child failed its container's content check, so the whole paragraph (or link) was read as a generic node and its text left the layout and the editable flow.",
+  "after": "The reader types w:br and w:cr as hard breaks only inside a WML run. Under any other WML parent they stay generic at their position, so the paragraph and its runs stay typed. Breaks inside runs and breaks under non-WML parents are typed as before.",
+  "reason": "This is an import-side typing rule over OOXML bytes. Shared state stores each element's kind as seeded, and materialization reads that stored kind, so a room keeps the structure its seeding participant wrote. A typed paragraph with a generic child is a structure released participants already store, materialize, lay out, and edit. No stored field, operation kind, identity rule, or repair rule changes.",
+  "tests": ["packages/core/src/editor/__tests__/misplaced-break-paragraph.test.ts"],
+  "changeset": "misplaced-break-paragraph",
+  "migration": null
+}

@@ -149,6 +149,8 @@ The contract protects semantic meaning and structure. It does not promise byte i
 
 An `xml:space="preserve"` attribute on a run does not turn indentation into document text. Spaces inside text elements remain authored text.
 
+A `w:br` or `w:cr` directly inside a paragraph or hyperlink, outside a run, is kept as a generic node and saved unchanged in place. The paragraph and its runs still render and stay editable. The misplaced break does not start a new line or page. A `w:tab` or `w:t` directly inside a paragraph, outside a run, still makes the whole paragraph unknown content. That paragraph and its text are kept on save, but the paragraph does not render and you cannot edit it.
+
 Continuous integration checks real documents with a canonical tree fingerprint and a save-and-reopen semantic digest. Focused tests cover revisions, fields, hyperlinks, content controls, and browser editing.
 
 If untouched content is lost or reinterpreted, report a [round-trip issue](https://github.com/eigenpal/docx-editor/issues/new/choose) with the source document.
