@@ -13,9 +13,11 @@ describe('vue package build output', () => {
     async () => {
       const outDir = mkdtempSync(join(pkgRoot, '.test-dist-'));
       try {
+        // JavaScript only. Declarations read core's built `dist/`, which a fresh test
+        // checkout does not have, and this test asserts nothing about them.
         const result = spawnSync(
           'bunx',
-          ['tsup', '--config', 'tsup.config.ts', '--out-dir', outDir],
+          ['tsup', '--config', 'tsup.config.ts', '--out-dir', outDir, '--no-dts'],
           {
             cwd: pkgRoot,
             encoding: 'utf8',
