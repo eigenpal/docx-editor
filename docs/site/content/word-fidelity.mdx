@@ -123,6 +123,8 @@ This rule does not apply to some paragraphs. A paragraph with only a page break,
 
 An empty paragraph that ends a section ignores its own page break before, from direct formatting or its style. It stays after the section's content, so it does not add a blank page. The next section's break type controls where that section starts. This rule does not apply when nothing comes before the paragraph in its section. It also does not apply when the paragraph holds text, a tab, hidden text, or a field. Bookmarks, proofing marks, permission markers, comment range markers, and empty text runs do not prevent this rule.
 
+A footnote area can use the space below the text of the last body line on its page. This applies when that line uses `auto` or `atLeast` line spacing. A line that carries a footnote reference keeps its full line height above the notes.
+
 Saved results of fields inside another field's instruction do not add text, line breaks, or links. The outer field keeps its normal display behavior. Fields inside a saved result still display.
 
 Named character styles set the font properties of empty paragraph marks and numbering markers. Direct mark properties override those styles. A mark's character style also sizes the empty line after a trailing line break. It does not enlarge a line that contains text or an inline picture. When you type in an empty paragraph, the new text takes the character style of the paragraph mark.

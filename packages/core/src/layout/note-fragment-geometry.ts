@@ -94,13 +94,18 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 /**
  * Body bottom (content-relative pt) the note passes BUDGET against.
  *
- * MINUS each paragraph's trailing after-spacing: the page-fit decision admits a paragraph
- * without charging its `w:spacing w:after` (it moves to the next page with the flow), but
- * the fragment BOX includes it — so a page whose last paragraph carries after-spacing
- * "uses" more height here than the fit rule budgeted, the reserve the reflow settles on
- * under-claims by that amount, and the attach pass splits a note the reserve fit whole.
- * Word lets the footnote area rise into that blank band the same way. PLACEMENT of an
- * area that hangs off the body keeps {@link fragmentFlowBottom} unless the room is needed.
+ * MINUS each paragraph's trailing after-spacing and its last line's trailing `auto` /
+ * `atLeast` depth: the page-fit decision admits a line without charging either (the
+ * after-spacing moves to the next page with the flow, and the depth below the glyph band
+ * may cross the bottom of the text area), but the fragment BOX includes both — so a page
+ * whose last line carries either "uses" more height here than the fit rule budgeted, the
+ * reserve the reflow settles on under-claims by that amount, and the attach pass splits
+ * or carries a note the reserve fit whole. The footnote area rises into that blank band
+ * instead. PLACEMENT of an area that hangs off the body keeps {@link fragmentFlowBottom}
+ * unless the room is needed.
+ *
+ * A reference line does not get this allowance: its note must start below the line's
+ * full box ({@link noteReferenceLineBandPt}), which the reserve pass enforces per reference.
  */
 export function bodyFitBottomPt(page: PageRecord): number {
   let bottom = 0;
@@ -110,11 +115,17 @@ export function bodyFitBottomPt(page: PageRecord): number {
   return bottom;
 }
 
-/** One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing. */
+/**
+ * One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing and
+ * its last line's trailing depth, which the body fit rule leaves out of the budget.
+ */
 export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
   if (isOutOfFlowFragment(fragment)) return 0;
-  const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
-  return fragment.box.y + fragment.box.height - trailingAfter;
+  const bottom = fragment.box.y + fragment.box.height;
+  if (fragment.kind !== 'paragraph') return bottom;
+  const last = fragment.lines[fragment.lines.length - 1];
+  const trailingDepth = last ? Math.min(last.trailingSpacing ?? 0, last.box.height) : 0;
+  return bottom - fragment.spacing.after - trailingDepth;
 }
 
 /**
