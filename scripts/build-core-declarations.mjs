@@ -134,7 +134,6 @@ function declarationFor(outDir, sourceFile) {
 function declarationResolver(entries, outDir) {
   const manifest = JSON.parse(readFileSync(join(core, 'package.json'), 'utf8'));
   const declared = new Set([
-    PACKAGE,
     ...Object.keys(manifest.dependencies ?? {}),
     ...Object.keys(manifest.peerDependencies ?? {}),
   ]);
@@ -155,6 +154,10 @@ function declarationResolver(entries, outDir) {
       }
       if (!isAbsolute(source)) {
         const name = packageName(source);
+        // A core subpath that is not published would leave consumers an import they cannot
+        // resolve, even though tsconfig paths let the build see it.
+        if (name === PACKAGE)
+          throw new Error(`The declarations import ${source}, which package.json does not export.`);
         if (!declared.has(name))
           throw new Error(
             `The declarations import ${source}, but ${name} is not a dependency or peer ` +
@@ -189,10 +192,11 @@ async function bundleDeclarations(entries, outDir) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
-  const read = (file) => JSON.parse(readFileSync(join(core, file), 'utf8'));
+  // tsconfig.json may carry comments, so read it the way TypeScript does.
+  const { config } = ts.readConfigFile(join(core, 'tsconfig.json'), ts.sys.readFile);
   const entries = publishedEntries(
-    read('package.json'),
-    read('tsconfig.json').compilerOptions.paths
+    JSON.parse(readFileSync(join(core, 'package.json'), 'utf8')),
+    config.compilerOptions.paths
   );
   const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
   try {

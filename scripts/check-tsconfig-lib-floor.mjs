@@ -8,8 +8,9 @@
  * core is ES2022 and its sources use ES2022 features (`Array.prototype.at`,
  * `Error.cause`), which a program on ES2020 cannot compile.
  *
- * The package declaration builds do not compile these sources: they set `paths: {}` and
- * read core's built `.d.ts`. `bun run typecheck` still does, through these `paths`.
+ * The package declaration builds do not compile these sources: they drop the sibling
+ * `paths` (scripts/declaration-options.mjs) and read core's built `.d.ts`. `bun run
+ * typecheck` still does, through these `paths`.
  *
  * This needs its own gate because the failure hides. An ambient `@types/*` package
  * that references a newer `lib` (`@types/bun` does, and it is installed here) puts

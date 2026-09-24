@@ -6,13 +6,45 @@
 // a word. `build:packages` builds siblings first; this names the sibling to build when a
 // package is built by itself.
 //
-// Usage: node ../../scripts/check-built-siblings.mjs core react
+// The siblings are the `@docx-editor.dev/*` `dependencies` and `peerDependencies` of the
+// package in the current directory, followed transitively: core's declarations import
+// i18n's, so every package that reads core also reads i18n.
+//
+// Usage, from a package directory: node ../../scripts/check-built-siblings.mjs
 
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const packages = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages');
+const manifest = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+
+/** Workspace package name → directory. */
+function workspace() {
+  const byName = new Map();
+  for (const entry of readdirSync(packages, { withFileTypes: true })) {
+    const dir = join(packages, entry.name);
+    if (entry.isDirectory() && existsSync(join(dir, 'package.json')))
+      byName.set(manifest(dir).name, dir);
+  }
+  return byName;
+}
+
+/** The workspace packages `dir` depends on, directly or through another sibling. */
+export function siblingsOf(dir, byName = workspace()) {
+  const found = new Map();
+  const visit = (current) => {
+    const { dependencies = {}, peerDependencies = {} } = manifest(current);
+    for (const name of Object.keys({ ...dependencies, ...peerDependencies })) {
+      const sibling = byName.get(name);
+      if (!sibling || found.has(name)) continue;
+      found.set(name, sibling);
+      visit(sibling);
+    }
+  };
+  visit(dir);
+  return found;
+}
 
 /** Modification times of the files under `dir` that match `test`, skipping tests. */
 function mtimes(dir, test) {
@@ -25,37 +57,41 @@ function mtimes(dir, test) {
       else if (test(entry.name)) times.push(statSync(path).mtimeMs);
     }
   };
-  try {
-    walk(dir);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
+  if (existsSync(dir)) walk(dir);
   return times;
 }
 
-const problems = [];
-for (const sibling of process.argv.slice(2)) {
-  const root = join(packages, sibling);
-  const built = mtimes(join(root, 'dist'), (name) => name.endsWith('.d.ts'));
+/** Why a sibling's build cannot be read, or null when it is current. */
+export function staleness(name, dir) {
+  const built = mtimes(join(dir, 'dist'), (file) => file.endsWith('.d.ts'));
+  if (built.length === 0) return `${name} has no built declarations`;
   // Everything that shapes the emitted declarations: sources, and the root JSON files
   // (package.json exports, tsconfig, and generated inputs such as i18n's en.json).
-  const sources = [
+  const inputs = [
     ...mtimes(
-      join(root, 'src'),
-      (name) => /\.(tsx?|vue|json)$/.test(name) && !/\.test\./.test(name)
+      join(dir, 'src'),
+      (file) => /\.(tsx?|vue|json)$/.test(file) && !/\.test\./.test(file)
     ),
-    ...readdirSync(root)
-      .filter((name) => name.endsWith('.json'))
-      .map((name) => statSync(join(root, name)).mtimeMs),
+    ...readdirSync(dir)
+      .filter((file) => file.endsWith('.json'))
+      .map((file) => statSync(join(dir, file)).mtimeMs),
   ];
-  if (built.length === 0) problems.push(`${sibling} has no built declarations`);
-  else if (Math.max(...sources) > Math.min(...built))
-    problems.push(`${sibling}'s built declarations are older than its source`);
+  const oldestBuilt = built.reduce((a, b) => Math.min(a, b));
+  const newestInput = inputs.reduce((a, b) => Math.max(a, b), 0);
+  return newestInput > oldestBuilt
+    ? `${name}'s built declarations are older than its source`
+    : null;
 }
-if (problems.length > 0) {
-  console.error(
-    `${problems.join('; ')}. This package's declarations read them. ` +
-      'Run `bun run build:packages`, or build those packages first.'
-  );
-  process.exit(1);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  const problems = [...siblingsOf(process.cwd())]
+    .map(([name, dir]) => staleness(name, dir))
+    .filter(Boolean);
+  if (problems.length > 0) {
+    console.error(
+      `${problems.join('; ')}. This package's declarations read them. ` +
+        'Run `bun run build:packages`, or build those packages first.'
+    );
+    process.exit(1);
+  }
 }

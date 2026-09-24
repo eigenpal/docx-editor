@@ -29,7 +29,7 @@
     "licenses"
   ],
   "scripts": {
-    "build": "node ../../scripts/check-built-siblings.mjs core fonts && tsup",
+    "build": "node ../../scripts/check-built-siblings.mjs && tsup",
     "typecheck": "tsc --noEmit",
     "check:consumer": "node scripts/check-consumer.mjs",
     "license:check": "license-check-and-add check -f license-check.json",

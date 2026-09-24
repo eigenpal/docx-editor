@@ -15,8 +15,10 @@ export function declarationCompilerOptions(configUrl, extra = {}) {
   const file = join(dirname(fileURLToPath(configUrl)), 'tsconfig.json');
   const { config, error } = ts.readConfigFile(file, ts.sys.readFile);
   if (error) throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+  // The effective paths, including any that an `extends` base defines.
+  const { options } = ts.parseJsonConfigFileContent(config, ts.sys, dirname(file));
   const paths = Object.fromEntries(
-    Object.entries(config.compilerOptions?.paths ?? {}).filter(
+    Object.entries(options.paths ?? {}).filter(
       ([specifier]) => !specifier.startsWith('@docx-editor.dev/')
     )
   );

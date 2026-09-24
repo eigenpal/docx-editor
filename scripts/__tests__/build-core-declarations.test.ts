@@ -4,6 +4,7 @@ import {
   packageName,
   publishedEntries,
 } from '../build-core-declarations.mjs';
+import { siblingsOf } from '../check-built-siblings.mjs';
 import { declarationCompilerOptions } from '../declaration-options.mjs';
 
 const paths = {
@@ -66,4 +67,17 @@ test('declaration builds drop sibling source paths and keep local aliases', () =
     { jsx: 'preserve' }
   );
   expect(pro).toEqual({ jsx: 'preserve', paths: {} });
+});
+
+test('a package checks every sibling it reads, including those behind core', () => {
+  const siblings = (name: string) =>
+    [...siblingsOf(new URL(`../../packages/${name}`, import.meta.url).pathname).keys()].sort();
+  expect(siblings('editor-api')).toEqual(['@docx-editor.dev/core', '@docx-editor.dev/i18n']);
+  expect(siblings('pro')).toEqual([
+    '@docx-editor.dev/core',
+    '@docx-editor.dev/i18n',
+    '@docx-editor.dev/react',
+    '@docx-editor.dev/vue',
+  ]);
+  expect(siblings('fonts')).toEqual([]);
 });
