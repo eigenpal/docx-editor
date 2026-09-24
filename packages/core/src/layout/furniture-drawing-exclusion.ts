@@ -7,6 +7,7 @@ import {
 } from './drawing-exclusion.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord } from './semantic-records.ts';
 
 const projectionsByPart = new WeakMap<
@@ -14,16 +15,18 @@ const projectionsByPart = new WeakMap<
   ReturnType<typeof indexInlineDrawingProjectionsInPart>
 >();
 
+/** Whether an anchored drawing pushes text aside (and so can change where lines break). */
+export function anchoredDrawingWrapsText(
+  drawing: Pick<AnchoredDrawingRecord, 'behindDocument' | 'wrap'>
+): boolean {
+  return !drawing.behindDocument && !['inline', 'behind', 'inFront'].includes(drawing.wrap);
+}
+
 export function hasFurnitureDrawingExclusions(furniture: PageFurniture | undefined): boolean {
   if (!furniture) return false;
   for (const stories of [furniture.headers, furniture.footers])
     for (const story of stories.values())
-      if (
-        story.anchoredDrawings?.some(
-          (d) => !d.behindDocument && !['inline', 'behind', 'inFront'].includes(d.wrap)
-        )
-      )
-        return true;
+      if (story.anchoredDrawings?.some(anchoredDrawingWrapsText)) return true;
   return false;
 }
 

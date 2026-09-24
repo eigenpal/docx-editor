@@ -8,7 +8,7 @@ import type {
   ParagraphFragmentRecord,
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
-import { paragraphKeeps } from './pagination-keeps.ts';
+import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -181,8 +181,12 @@ export interface NoteReferenceLineBand {
   readonly top: number;
   /** Bottom of the referencing line — the floor a same-page reserve must not rise above. */
   readonly bottom: number;
-  /** Top of the owning block's fragment — where the line lands when its block moves whole. */
-  readonly blockTop: number;
+  /**
+   * Top of what leaves the page with the line when the body cuts right before it
+   * ({@link evictedRunStart}): the line itself, the lines widow/orphan control sends with
+   * it, or the whole fragment. Where the line lands when it is evicted.
+   */
+  readonly moveTop: number;
   /** Whether the reserve may claim the line itself to move the reference forward. */
   readonly evictable: boolean;
   /** Retain the opening orphan pair even when its second line's note must start later. */
@@ -240,7 +244,7 @@ function computeReferenceLineBand(
 ): NoteReferenceLineBand {
   let top = 0;
   let bottom = 0;
-  let blockTop = 0;
+  let moveTop = 0;
   let evictable = false;
   let preserveOrphanLine = false;
   for (const block of page.fragments) {
@@ -252,7 +256,8 @@ function computeReferenceLineBand(
       if (lineBottom > bottom) {
         top = lineTop;
         bottom = lineBottom;
-        blockTop = block.box.y;
+        const run = line ? evictedRunStart(block, line.index, 0, pageHoldsOnly(page, block)) : 0;
+        moveTop = run > 0 ? block.lines[run]!.box.y : block.box.y;
         // Only a located LINE may be evicted; an ownership match without a line segment
         // (merged/projected offsets) falls back to the fragment band and stays put.
         evictable = line !== null && !isOutOfFlowFragment(block);
@@ -286,13 +291,40 @@ function computeReferenceLineBand(
   return {
     top: clampedTop,
     bottom: clampedBottom,
-    blockTop: clamp(blockTop),
+    moveTop: clamp(moveTop),
     // A band the clamp collapsed (a line at or below the content bottom — overflow the
     // body pass tolerated) must not evict: the eviction reserve computed from its top
     // would be zero, and the reference's note would be neither placed nor carried.
     evictable: evictable && clampedBottom > clampedTop,
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
   };
+}
+
+/**
+ * Index into `fragment.lines` of the first line that leaves the page together with line
+ * `index` when the body cuts the page right before that line.
+ *
+ * The body pass moves the cut back under widow/orphan control and `w:keepLines`
+ * ({@link adjustedBreakIndex}), so this is the same rule. `before` counts the paragraph's
+ * lines that sit above the fragment on the same page; an answer below zero reaches into
+ * them. A fragment that does not end the paragraph has at least two more lines after it,
+ * because the body pass cut it under the same widow rule. `alone` is true when the
+ * paragraph's lines are all the page holds, which lets the rule fail open.
+ */
+export function evictedRunStart(
+  fragment: ParagraphFragmentRecord,
+  index: number,
+  before: number,
+  alone: boolean
+): number {
+  const lineCount = before + fragment.lines.length + (fragment.paragraphEnd ? 0 : 2);
+  const keeps = paragraphKeeps(fragment.props);
+  return adjustedBreakIndex(before + index, 0, lineCount, keeps, alone) - before;
+}
+
+/** Whether `fragment` is the only in-flow block on `page`. */
+export function pageHoldsOnly(page: PageRecord, fragment: BlockFragmentRecord): boolean {
+  return page.fragments.every((other) => other === fragment || isOutOfFlowFragment(other));
 }
 
 /** The owning line's band inside a fragment already known to own the ref, or null. */

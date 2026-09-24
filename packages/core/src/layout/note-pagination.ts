@@ -1182,10 +1182,10 @@ function buildFootnoteArea(
     // reference's LINE moves to the next page instead, so the reserve must reach the
     // line's TOP; the next reflow pass finds the reference there and lays the note whole
     // beside it. Splitting remains for the shapes the move cannot help:
-    // - a note that does not fit the destination either — measured with the line's own
-    //   BLOCK opening the next page (`band.bottom - band.blockTop` of content above the
-    //   line), because a `w:keepLines` paragraph moves whole and a fixed column budget
-    //   would re-evict there every round, minting a chain of near-blank pages;
+    // - a note that does not fit the destination either — measured with what leaves with
+    //   the line opening the next page (`band.bottom - band.moveTop`: a `w:keepLines`
+    //   paragraph moves whole), because a fixed column budget would re-evict there every
+    //   round, minting a chain of near-blank pages;
     // - a reference in the page's TOPMOST body line, where pushing only re-creates the
     //   same shape (a section-opening paragraph keeps its `w:spacing w:before` at page
     //   top, so a fixed band threshold would re-fire there);
@@ -1200,7 +1200,7 @@ function buildFootnoteArea(
       options?.evictionAllowed !== false &&
       !(options?.allowOrphanDeferral && band.preserveOrphanLine) &&
       laid.flowHeight > room + 0.001 &&
-      laid.flowHeight <= keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
+      laid.flowHeight <= keepWholeBudget - (band.bottom - band.moveTop) + 0.001 &&
       band.top > firstContentTop + 0.001 &&
       band.top >= MIN_FOOTNOTE_BODY_BAND_PT
     ) {
