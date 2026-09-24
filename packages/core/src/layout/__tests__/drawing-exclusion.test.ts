@@ -193,6 +193,35 @@ describe('wrapNone behind/inFront produce no exclusion', () => {
       })
     ).toBeNull();
   });
+
+  // `behindDoc` controls painting, while the wrap element controls text flow.
+  test.each([
+    ['square', '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>'],
+    [
+      'tight',
+      '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0">' +
+        '<wp:start x="0" y="0"/><wp:lineTo x="0" y="21600"/><wp:lineTo x="21600" y="21600"/>' +
+        '<wp:lineTo x="21600" y="0"/><wp:lineTo x="0" y="0"/>' +
+        '</wp:wrapPolygon></wp:wrapTight>',
+    ],
+  ] as const)('%s wrap still excludes when behindDoc is set', (_label, wrap) => {
+    const part = load(anchorXml({ wrap, behindDoc: '1' }));
+    const projection = projectDrawing(drawingOf(part), {
+      ownerPartName: '/word/document.xml',
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    })!;
+    const drawing = anchoredRecord(part);
+    expect(drawing.behindDocument).toBe(true);
+    const zone = exclusionZoneFromAnchoredDrawing({
+      drawing,
+      projection,
+      sourceOrder: 0,
+      contentLeft: 0,
+      contentRight: 468,
+    });
+    expect(zone).not.toBeNull();
+    expect(paintLayerOf(drawing)).toBe('behind');
+  });
 });
 
 describe('square wrap feeds scanline intervals into line breaking', () => {
