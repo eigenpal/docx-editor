@@ -44,7 +44,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/editor-api",
+    "build": "node ../../scripts/check-built-siblings.mjs core && tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/editor-api",
     "typecheck": "tsc --noEmit",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json",

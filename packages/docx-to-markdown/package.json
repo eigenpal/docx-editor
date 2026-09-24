@@ -39,7 +39,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node ../../scripts/check-built-siblings.mjs core fonts && tsup",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown",

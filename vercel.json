@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "export NODE_OPTIONS=\"--max-old-space-size=8192${NODE_OPTIONS:+ $NODE_OPTIONS}\"; bun run build:pdf && bun run build:preview",
+  "buildCommand": "bun run build:pdf && bun run build:preview",
   "outputDirectory": "examples/parity/dist",
   "installCommand": "HUSKY=0 bunx bun@1.4.2 install --frozen-lockfile",
   "functions": {

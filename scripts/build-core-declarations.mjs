@@ -14,10 +14,10 @@
 // package.json says which declaration file each subpath ships, and `paths` in tsconfig.json
 // says which source file that subpath compiles from.
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { rollup } from 'rollup';
 import dts from 'rollup-plugin-dts';
 import ts from 'typescript';
@@ -28,14 +28,16 @@ const dist = join(core, 'dist');
 const PACKAGE = '@docx-editor.dev/core';
 
 /** Every published subpath: its rollup entry name and its source file. */
-function publishedEntries() {
-  const manifest = JSON.parse(readFileSync(join(core, 'package.json'), 'utf8'));
-  const tsconfig = JSON.parse(readFileSync(join(core, 'tsconfig.json'), 'utf8'));
-  const paths = tsconfig.compilerOptions.paths;
+export function publishedEntries(manifest, paths) {
   const entries = [];
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     const types = typeof target === 'object' && target !== null ? target.types : undefined;
-    if (typeof types !== 'string') continue;
+    if (typeof types !== 'string') {
+      // Only a top-level `types` condition is read. A nested one would ship no declarations.
+      if (JSON.stringify(target).includes('"types"'))
+        throw new Error(`${subpath} nests its types condition; put \`types\` at the top level.`);
+      continue;
+    }
     const specifier = subpath === '.' ? PACKAGE : `${PACKAGE}${subpath.slice(1)}`;
     const source = paths[specifier]?.[0];
     if (!source) {
@@ -85,9 +87,25 @@ const formatHost = {
   getNewLine: () => '\n',
 };
 
+/** `@scope/name/sub` → `@scope/name`, `name/sub` → `name`. */
+export function packageName(specifier) {
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+/** Remove the declarations of an earlier run: chunk names carry hashes, so none is overwritten. */
+function removeDeclarations(dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) removeDeclarations(path);
+    else if (entry.name.endsWith('.d.ts')) rmSync(path);
+  }
+}
+
 /** The emitted declaration file for a source file. */
 function declarationFor(outDir, sourceFile) {
-  return join(outDir, relative(src, sourceFile)).replace(/\.tsx?$/, '.d.ts');
+  return join(outDir, relative(src, sourceFile)).replace(/\.([cm]?)tsx?$/, '.d.$1ts');
 }
 
 /**
@@ -96,9 +114,15 @@ function declarationFor(outDir, sourceFile) {
  * TypeScript keeps each specifier as written, so relative imports still end in `.ts`, and
  * the engine's imports of its own subpaths (`@docx-editor.dev/core/store`) still name the
  * package. Both resolve to the emitted files, so they bundle like any other module. Every
- * other bare specifier is a dependency and stays an import.
+ * other bare specifier stays an import, and must be a dependency or peer dependency.
  */
 function declarationResolver(entries, outDir) {
+  const manifest = JSON.parse(readFileSync(join(core, 'package.json'), 'utf8'));
+  const declared = new Set([
+    PACKAGE,
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.peerDependencies ?? {}),
+  ]);
   const selfImports = new Map(
     entries.map((entry) => [entry.specifier, declarationFor(outDir, entry.source)])
   );
@@ -108,13 +132,25 @@ function declarationResolver(entries, outDir) {
       const self = selfImports.get(source);
       if (self) return self;
       if (source.startsWith('.') && importer) {
-        const base = resolve(dirname(importer), source).replace(/\.(d\.ts|ts|tsx|js)$/, '');
-        for (const candidate of [`${base}.d.ts`, join(base, 'index.d.ts')]) {
+        const base = resolve(dirname(importer), source).replace(
+          /(?:\.d)?\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/,
+          ''
+        );
+        const candidates = ['.d.ts', '.d.mts', '.d.cts'].map((extension) => base + extension);
+        for (const candidate of [...candidates, join(base, 'index.d.ts')]) {
           if (existsSync(candidate)) return candidate;
         }
         throw new Error(`Cannot resolve ${source} from ${relative(outDir, importer)}.`);
       }
-      if (!isAbsolute(source)) return { id: source, external: true };
+      if (!isAbsolute(source)) {
+        const name = packageName(source);
+        if (!declared.has(name))
+          throw new Error(
+            `The declarations import ${source}, but ${name} is not a dependency or peer ` +
+              'dependency of the package, so consumers would not have its types.'
+          );
+        return { id: source, external: true };
+      }
       return null;
     },
   };
@@ -128,6 +164,7 @@ async function bundleDeclarations(entries, outDir) {
     plugins: [declarationResolver(entries, outDir), dts()],
   });
   try {
+    removeDeclarations(dist);
     await bundle.write({
       dir: dist,
       format: 'es',
@@ -140,11 +177,17 @@ async function bundleDeclarations(entries, outDir) {
   }
 }
 
-const entries = publishedEntries();
-const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
-try {
-  emitDeclarations(entries, outDir);
-  await bundleDeclarations(entries, outDir);
-} finally {
-  rmSync(outDir, { recursive: true, force: true });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const read = (file) => JSON.parse(readFileSync(join(core, file), 'utf8'));
+  const entries = publishedEntries(
+    read('package.json'),
+    read('tsconfig.json').compilerOptions.paths
+  );
+  const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
+  try {
+    emitDeclarations(entries, outDir);
+    await bundleDeclarations(entries, outDir);
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
 }

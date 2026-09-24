@@ -150,8 +150,6 @@ jobs:
 
       - name: Build demos and parity bundle
         run: bun run build
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Consumer install check
         run: bun run check:consumer-install
