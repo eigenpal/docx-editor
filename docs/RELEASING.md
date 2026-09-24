@@ -178,13 +178,15 @@ Release finishes without waiting for npm metadata propagation. The downstream wo
 
 A site job passes only when that site's own sync run passes. Each site deploys in a separate workflow that the site job does not follow, so check the site's deployment if its content looks out of date. To read the sync runs, the `eigenpal-release-pal` GitHub App needs the **Actions: Read-only** repository permission.
 
+Each request carries an ID in `client_payload.request`, and each site's sync workflow names its run `upstream-release <request>`. The site job uses that name to find its own run. If the site cancels the run because a newer sync queued, the site job follows the newer run.
+
 `main` requires an approving review, and release-pal cannot approve the catalog PR that it opened. The merge job approves it with the workflow token. This needs the repository setting **Allow GitHub Actions to create and approve pull requests** under **Settings** > **Actions** > **General**. The release comments need only verified packages, so a failed site or catalog step does not hold them back. Retried comments are deduplicated.
 
 The **Report** job posts one Slack message that lists every job with its result and a link. A skipped job is listed as skipped, not as passed. A downstream failure does not change the completed Release run.
 
 The release-success Slack notification runs immediately after publication and tagging, so it confirms publication only. The post-release report confirms the site syncs and the catalog.
 
-Automatic and manual downstream updates share a concurrency group that is separate from Release. Registry retries do not hold the release lock or delay another publication.
+The verification jobs of automatic and manual downstream updates share a concurrency group that is separate from Release. Registry retries do not hold the release lock or delay another publication. The site waits run outside that group, so a long documentation sync does not hold back the next request.
 
 ## Recover post-release updates without publishing
 
@@ -205,7 +207,7 @@ Use the [Recover release workflow](../.github/workflows/recover-release.yml) if 
 4. Check the site jobs. Each one passes only when its site's sync run passes, and links to that run.
 5. Check the collaboration baseline PR. The catalog workflow waits for the full CI run and all PR checks, then approves and merges the tested commit. If checks fail, the PR stays open. Fix the failure and rerun the catalog workflow to resume an existing PR.
 
-Recovery does not build or publish packages, create release tags, or replay release announcements. It only updates sites for the current npm `latest` version at verification time. Downstream updates are serialized separately from publication to keep their requests ordered. To capture a historical baseline, run `collaboration-catalog.yml` with its `version` input separately.
+Recovery does not build or publish packages, create release tags, or replay release announcements. It only updates sites for the current npm `latest` version at verification time. Verification is serialized separately from publication, so the site requests leave in order. To capture a historical baseline, run `collaboration-catalog.yml` with its `version` input separately.
 
 The candidate artifact is retained for 30 days on new Release runs. Earlier runs keep their original retention period. If the original artifact has expired, stop: a rebuilt tarball does not establish what the original release tested.
 

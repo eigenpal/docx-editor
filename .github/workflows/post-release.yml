@@ -295,10 +295,12 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          sparse-checkout: scripts/collaboration
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -312,4 +314,5 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SOURCE_URL: ${{ github.event.workflow_run.html_url }}
           VERSION: ${{ needs.source.outputs.version }}
+          PUBLISHED: ${{ needs.source.outputs.published }}
         run: node scripts/collaboration/post-release-report.mjs

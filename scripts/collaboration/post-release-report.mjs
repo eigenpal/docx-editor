@@ -14,7 +14,7 @@ export function jobLabel(name) {
   return label.includes('${{') ? 'Site update' : label;
 }
 
-export function summarizeJobs(jobs, { version, runUrl, sourceUrl }) {
+export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
   const rows = jobs
     .filter((job) => job.name !== REPORT_JOB)
     .map((job) => ({
@@ -33,10 +33,13 @@ export function summarizeJobs(jobs, { version, runUrl, sourceUrl }) {
       : skipped > 0
         ? `${release}: ${passed} passed, ${skipped} skipped. Check that each skipped step was not needed.`
         : `${release}: all ${passed} steps passed.`;
+  // Only a confirmed release may say that the packages are on npm.
   const next =
-    failed > 0
-      ? 'The packages are already on npm; do not republish. Fix the cause, then rerun the failed jobs in the post-release run.'
-      : '';
+    failed === 0
+      ? ''
+      : published
+        ? 'The packages are already on npm; do not republish. Fix the cause, then rerun the failed jobs in the post-release run.'
+        : 'The run could not confirm what was published. Check the Release run before you retry anything.';
   const icon = (result) => (result === 'success' ? '✅' : result === 'skipped' ? '⚪' : '❌');
   const suffix = (result) => (result === 'success' ? '' : `: ${result}`);
   const slack = [
@@ -72,6 +75,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
     const report = summarizeJobs(pages.jobs, {
       version: env.VERSION,
+      published: env.PUBLISHED === 'true',
       runUrl: env.RUN_URL,
       sourceUrl: env.SOURCE_URL,
     });

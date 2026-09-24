@@ -7,22 +7,28 @@ import { run } from './common.mjs';
 // failed site update fails the post-release job that requested it.
 
 export const DISPATCH_EVENT = 'upstream-release';
-const TRANSIENT = /HTTP (?:5\d\d|429)|rate limit|timed out|ECONNRESET|ETIMEDOUT/i;
+const PERMISSION = /Resource not accessible by integration/i;
+const RATE_LIMIT = /rate limit/i;
+const TRANSIENT = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i;
 
 /**
- * The sync run this request started: the first `upstream-release` dispatch run created at
- * or after the request. The dispatch API returns no run ID, so time is the only link.
+ * The sync run this request started. Each site names its dispatch runs
+ * `upstream-release <request>`, so the request ID finds the run exactly. A site that does
+ * not name its runs yet shows the bare event name; then the first such run created at or
+ * after the request is the best match the dispatch API allows.
  */
-export function selectSiteRun(runs, since) {
+export function selectSiteRun(runs, { since, request, after = null }) {
+  const dispatched = runs
+    .filter((item) => item.event === 'repository_dispatch' && item.created_at >= since)
+    .filter((item) => !after || item.created_at > after.created_at)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const title = (item) => item.display_title?.trim();
+  // A replacement after a cancel is the next sync of the site, whichever request started it.
+  if (after) return dispatched.find((item) => title(item)?.startsWith(DISPATCH_EVENT)) ?? null;
   return (
-    runs
-      .filter(
-        (item) =>
-          item.event === 'repository_dispatch' &&
-          item.display_title === DISPATCH_EVENT &&
-          item.created_at >= since
-      )
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))[0] ?? null
+    dispatched.find((item) => title(item) === `${DISPATCH_EVENT} ${request}`) ??
+    dispatched.find((item) => title(item) === DISPATCH_EVENT) ??
+    null
   );
 }
 
@@ -31,21 +37,28 @@ export function siteRunResult(item) {
   return item.status === 'completed' ? (item.conclusion ?? 'unknown') : 'pending';
 }
 
-/** One API call, retried on temporary GitHub errors. A missing permission fails at once. */
-export async function withRetries(call, { attempts = 5, delay = 10_000, wait = sleep } = {}) {
+/**
+ * One API call, retried on temporary GitHub errors. A rate limit waits longer, because the
+ * limit resets on a fixed window. A missing permission fails at once and says which one.
+ */
+export async function withRetries(
+  call,
+  { attempts = 8, delay = 10_000, rateLimitDelay = 60_000, wait = sleep } = {}
+) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await call();
     } catch (error) {
-      // GitHub also sends a secondary rate limit as HTTP 403, so rule that out first.
-      if (/HTTP 403|not accessible/i.test(error.message) && !/rate limit/i.test(error.message))
+      if (PERMISSION.test(error.message))
         throw new Error(
           'release-pal cannot read Actions runs in this repository. Give the ' +
-            'eigenpal-release-pal GitHub App the Actions: Read-only repository permission.'
+            'eigenpal-release-pal GitHub App the Actions: Read-only repository permission.\n' +
+            error.message
         );
-      if (attempt >= attempts || !TRANSIENT.test(error.message)) throw error;
+      const limited = RATE_LIMIT.test(error.message);
+      if (attempt >= attempts || !(limited || TRANSIENT.test(error.message))) throw error;
       console.warn(`Temporary GitHub API error (attempt ${attempt}/${attempts}); retrying.`);
-      await wait(delay * attempt);
+      await wait((limited ? rateLimitDelay : delay) * attempt);
     }
   }
 }
@@ -53,44 +66,66 @@ export async function withRetries(call, { attempts = 5, delay = 10_000, wait = s
 export async function waitForSiteRun({
   repository,
   since,
+  request,
   api,
   wait = sleep,
   findAttempts = 40,
   findDelay = 15_000,
   pollDelay = 30_000,
 }) {
-  let found = null;
-  for (let attempt = 0; attempt < findAttempts && !found; attempt += 1) {
-    if (attempt > 0) await wait(findDelay);
-    const page = await withRetries(
+  const list = () =>
+    withRetries(
       () =>
         api(
-          `repos/${repository}/actions/runs?event=repository_dispatch&created=${encodeURIComponent(`>=${since}`)}&per_page=20`
+          `repos/${repository}/actions/runs?event=repository_dispatch&created=${encodeURIComponent(`>=${since}`)}&per_page=50`
         ),
       { wait }
     );
-    found = selectSiteRun(page.workflow_runs ?? [], since);
+  const find = async (after) => {
+    for (let attempt = 0; attempt < findAttempts; attempt += 1) {
+      if (attempt > 0) await wait(findDelay);
+      const found = selectSiteRun((await list()).workflow_runs ?? [], { since, request, after });
+      if (found) return found;
+    }
+    return null;
+  };
+
+  let current = await find(null);
+  if (!current) throw new Error(`No update run started in ${repository} after the request.`);
+  const replaced = [];
+  for (;;) {
+    console.log(`Waiting for ${current.html_url}`);
+    let result = siteRunResult(current);
+    while (result === 'pending') {
+      await wait(pollDelay);
+      const id = current.id;
+      current = await withRetries(() => api(`repos/${repository}/actions/runs/${id}`), { wait });
+      result = siteRunResult(current);
+    }
+    // The site's own concurrency group cancels a pending sync when a newer one queues.
+    // That newer run does the update, so follow it instead of reporting a failure.
+    if (result !== 'cancelled') return { result, url: current.html_url, replaced };
+    const next = await find(current);
+    if (!next) return { result, url: current.html_url, replaced };
+    replaced.push(current.html_url);
+    current = next;
   }
-  if (!found) throw new Error(`No update run started in ${repository} after the request.`);
-  console.log(`Waiting for ${found.html_url}`);
-  let result = siteRunResult(found);
-  while (result === 'pending') {
-    await wait(pollDelay);
-    result = siteRunResult(
-      await withRetries(() => api(`repos/${repository}/actions/runs/${found.id}`), { wait })
-    );
-  }
-  return { result, url: found.html_url };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { TARGET_REPOSITORY: repository, SINCE: since, GITHUB_STEP_SUMMARY: summary } = process.env;
+  const {
+    TARGET_REPOSITORY: repository,
+    SINCE: since,
+    REQUEST_ID: request,
+    GITHUB_STEP_SUMMARY: summary,
+  } = process.env;
   try {
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !since)
-      throw new Error('Expected TARGET_REPOSITORY and SINCE');
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !since || !request)
+      throw new Error('Expected TARGET_REPOSITORY, SINCE, and REQUEST_ID');
     const api = (path) => JSON.parse(run('gh', ['api', path]));
-    const { result, url } = await waitForSiteRun({ repository, since, api });
-    const line = `${repository} update: ${result} (${url})`;
+    const { result, url, replaced } = await waitForSiteRun({ repository, since, request, api });
+    const note = replaced.length ? ` after a newer sync replaced ${replaced.join(', ')}` : '';
+    const line = `${repository} update: ${result} (${url})${note}`;
     console.log(line);
     if (summary) appendFileSync(summary, `${line}\n`);
     if (result !== 'success') {
@@ -98,7 +133,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exitCode = 1;
     }
   } catch (error) {
-    console.error(`::error::${error.message}`);
+    console.error(`::error::${error.message.split('\n')[0]}`);
+    console.error(error.message);
     process.exitCode = 1;
   }
 }

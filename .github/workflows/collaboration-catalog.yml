@@ -32,6 +32,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       pr: ${{ steps.capture.outputs.pr }}
+      recorded: ${{ steps.capture.outputs.recorded }}
       version: ${{ steps.capture.outputs.version }}
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
@@ -65,6 +66,7 @@ jobs:
           fi
           if node --input-type=module -e 'import { readFileSync } from "node:fs"; const data=JSON.parse(readFileSync(".collaboration/releases.json")); process.exit(data.releases.some(entry => entry.version === process.argv[1]) ? 0 : 1)' "$version"; then
             echo "Baseline $version is already recorded."
+            echo "recorded=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -106,7 +108,9 @@ jobs:
   merge:
     name: Merge verified catalog
     needs: capture
-    if: needs.capture.outputs.pr != ''
+    # Also runs when the catalog already records the version, for example on a rerun, so
+    # the job reports that as a pass rather than a skip.
+    if: needs.capture.outputs.pr != '' || needs.capture.outputs.recorded == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -128,7 +132,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Catalog already records this version
+        if: env.PR_NUMBER == ''
+        run: echo "The collaboration catalog on main already records ${{ inputs.version }}." >> "$GITHUB_STEP_SUMMARY"
       - name: Wait for the complete CI run and all PR checks
+        if: env.PR_NUMBER != ''
         id: checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -149,6 +157,10 @@ jobs:
           EXPECTED_HEAD: ${{ steps.checks.outputs.head }}
         run: |
           node scripts/collaboration/catalog-merge.mjs check
+          if [ "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state --jq .state)" = MERGED ]; then
+            echo "Catalog PR #$PR_NUMBER is already merged."
+            exit 0
+          fi
           # The check above proved this head holds only the generated baseline files and
           # passed every check, so approve exactly that commit.
           gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \

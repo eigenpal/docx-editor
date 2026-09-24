@@ -19,8 +19,9 @@ const dispatchRun = (id: number, created_at: string, extra: object = {}) => ({
   ...extra,
 });
 
-test('the site run is the first release dispatch at or after the request', () => {
+test('the site run is the one named after the request, else the first unnamed dispatch', () => {
   const since = '2026-09-24T09:40:00Z';
+  const request = '123-1-docx-editor.dev';
   const runs = [
     dispatchRun(1, '2026-09-24T09:39:59Z'),
     dispatchRun(4, '2026-09-24T09:40:30Z'),
@@ -28,8 +29,16 @@ test('the site run is the first release dispatch at or after the request', () =>
     dispatchRun(3, '2026-09-24T09:40:10Z', { event: 'push' }),
     dispatchRun(5, '2026-09-24T09:40:20Z'),
   ];
-  expect(selectSiteRun(runs, since)?.id).toBe(5);
-  expect(selectSiteRun([dispatchRun(1, '2026-09-24T09:39:00Z')], since)).toBeNull();
+  expect(selectSiteRun(runs, { since, request })?.id).toBe(5);
+  const named = [
+    ...runs,
+    dispatchRun(6, '2026-09-24T09:40:01Z', { display_title: 'upstream-release 999-1-other' }),
+    dispatchRun(7, '2026-09-24T09:40:40Z', { display_title: `upstream-release ${request}` }),
+  ];
+  expect(selectSiteRun(named, { since, request })?.id).toBe(7);
+  expect(selectSiteRun([dispatchRun(1, '2026-09-24T09:39:00Z')], { since, request })).toBeNull();
+  // After a cancel, any later sync of the site replaces it.
+  expect(selectSiteRun(named, { since, request, after: named[5] })?.id).toBe(5);
 });
 
 test('a site run is pending until it completes, then reports its conclusion', () => {
@@ -66,6 +75,25 @@ test('API calls retry temporary errors and fail at once without the Actions perm
     throw new Error('HTTP 404: Not Found');
   };
   await expect(withRetries(missing, { wait: noWait })).rejects.toThrow('HTTP 404');
+
+  // Any other 403 keeps its own message instead of blaming the Actions permission.
+  const sso = () => {
+    throw new Error('HTTP 403: Resource protected by organization SAML enforcement');
+  };
+  await expect(withRetries(sso, { wait: noWait })).rejects.toThrow('SAML enforcement');
+
+  const waits: number[] = [];
+  let primary = 0;
+  const primaryLimit = () => {
+    primary += 1;
+    if (primary < 3) throw new Error('HTTP 403: API rate limit exceeded for installation');
+    return 'ok';
+  };
+  const record = async (ms: number) => {
+    waits.push(ms);
+  };
+  expect(await withRetries(primaryLimit, { wait: record })).toBe('ok');
+  expect(waits).toEqual([60_000, 120_000]);
 });
 
 test('waiting follows the selected run to its conclusion', async () => {
@@ -80,17 +108,48 @@ test('waiting follows the selected run to its conclusion', async () => {
       conclusion: status === 'completed' ? 'failure' : null,
     });
   };
-  const result = await waitForSiteRun({ repository: 'o/site', since, api, wait: noWait });
-  expect(result).toEqual({ result: 'failure', url: 'https://example.test/runs/7' });
+  const request = 'r';
+  const result = await waitForSiteRun({ repository: 'o/site', since, request, api, wait: noWait });
+  expect(result).toEqual({ result: 'failure', url: 'https://example.test/runs/7', replaced: [] });
   await expect(
     waitForSiteRun({
       repository: 'o/site',
       since,
+      request,
       api: () => ({ workflow_runs: [] }),
       wait: noWait,
       findAttempts: 2,
     })
   ).rejects.toThrow('No update run started in o/site');
+});
+
+test('a sync that the site cancels for a newer one reports the newer run', async () => {
+  const since = '2026-09-24T09:40:00Z';
+  const request = '1-1-site';
+  const ours = dispatchRun(8, '2026-09-24T09:40:02Z', {
+    display_title: `upstream-release ${request}`,
+    conclusion: 'cancelled',
+  });
+  const newer = dispatchRun(9, '2026-09-24T09:41:00Z', {
+    display_title: 'upstream-release 2-1-site',
+  });
+  const api = (path: string) =>
+    path.includes('/actions/runs?') ? { workflow_runs: [ours, newer] } : newer;
+  const result = await waitForSiteRun({ repository: 'o/site', since, request, api, wait: noWait });
+  expect(result).toEqual({
+    result: 'success',
+    url: 'https://example.test/runs/9',
+    replaced: ['https://example.test/runs/8'],
+  });
+  const alone = await waitForSiteRun({
+    repository: 'o/site',
+    since,
+    request,
+    api: () => ({ workflow_runs: [ours] }),
+    wait: noWait,
+    findAttempts: 1,
+  });
+  expect(alone.result).toBe('cancelled');
 });
 
 test('the report counts every job, including source, and never calls a skip a pass', () => {
@@ -100,7 +159,12 @@ test('the report counts every job, including source, and never calls a skip a pa
     status: 'completed',
     html_url: `https://example.test/${encodeURIComponent(name)}`,
   });
-  const context = { version: '2.22.0', runUrl: 'https://run', sourceUrl: 'https://source' };
+  const context = {
+    version: '2.22.0',
+    published: false,
+    runUrl: 'https://run',
+    sourceUrl: 'https://source',
+  };
 
   const sourceFailed = summarizeJobs(
     [
@@ -114,6 +178,14 @@ test('the report counts every job, including source, and never calls a skip a pa
   expect(sourceFailed.slack).toContain('❌ Post-release 2.22.0: 1 failed, 1 skipped, 0 passed.');
   expect(sourceFailed.slack).toContain('|Site update>: skipped');
   expect(sourceFailed.slack).not.toContain('Report');
+  // Nothing confirmed the release, so the report must not claim the packages are on npm.
+  expect(sourceFailed.slack).not.toContain('do not republish');
+  expect(sourceFailed.slack).toContain('could not confirm what was published');
+  const siteFailed = summarizeJobs([job('updates / Docs site (docx-editor.dev)', 'failure')], {
+    ...context,
+    published: true,
+  });
+  expect(siteFailed.slack).toContain('do not republish');
 
   const skippedOnly = summarizeJobs(
     [job('updates / Verify published packages', 'success'), job('Release comments', 'skipped')],
@@ -159,4 +231,23 @@ test('each post-release step is its own job, and the comments wait only for veri
   );
   expect(merge.run).toContain('commit_id="$EXPECTED_HEAD"');
   expect(catalog.jobs.merge.permissions['pull-requests']).toBe('write');
+  // A merged PR cannot take a review, so the merge step checks the state first.
+  expect(merge.run.indexOf('= MERGED')).toBeLessThan(merge.run.indexOf('event=APPROVE'));
+  // A rerun finds the catalog already recorded, and reports that as a pass.
+  expect(catalog.jobs.merge.if).toContain("needs.capture.outputs.recorded == 'true'");
+  expect(downstream.jobs.report.permissions).toEqual({ actions: 'read', contents: 'read' });
+});
+
+test('only verification holds the downstream concurrency group, not the site waits', () => {
+  const recovery = workflow('recover-release');
+  expect(recovery.concurrency).toBeUndefined();
+  expect(recovery.jobs.verify.concurrency).toEqual({
+    group: 'post-release-updates',
+    'cancel-in-progress': false,
+  });
+  expect(recovery.jobs.sites.concurrency).toBeUndefined();
+  const dispatch = recovery.jobs.sites.steps.find(
+    (step: any) => step.name === 'Request the site update'
+  );
+  expect(dispatch.run).toContain('client_payload[request]=$REQUEST_ID');
 });
