@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { packageName, publishedEntries } from '../build-core-declarations.mjs';
+import {
+  declarationCandidates,
+  packageName,
+  publishedEntries,
+} from '../build-core-declarations.mjs';
+import { declarationCompilerOptions } from '../declaration-options.mjs';
 
 const paths = {
   '@docx-editor.dev/core': ['./src/index.ts'],
@@ -41,4 +46,24 @@ test('a bare import is checked against the package that owns it', () => {
   expect(packageName('prosemirror-model')).toBe('prosemirror-model');
   expect(packageName('fflate/browser')).toBe('fflate');
   expect(packageName('@docx-editor.dev/i18n/locales')).toBe('@docx-editor.dev/i18n');
+});
+
+test('an import keeps its module kind when it resolves to a declaration file', () => {
+  expect(declarationCandidates('/o/foo.ts')).toEqual(['/o/foo.d.ts']);
+  expect(declarationCandidates('/o/foo.js')).toEqual(['/o/foo.d.ts']);
+  expect(declarationCandidates('/o/foo.mts')).toEqual(['/o/foo.d.mts']);
+  expect(declarationCandidates('/o/foo.cjs')).toEqual(['/o/foo.d.cts']);
+  expect(declarationCandidates('/o/foo')).toEqual(['/o/foo.d.ts', '/o/foo/index.d.ts']);
+});
+
+test('declaration builds drop sibling source paths and keep local aliases', () => {
+  const react = declarationCompilerOptions(
+    new URL('../../packages/react/tsup.config.ts', import.meta.url)
+  );
+  expect(Object.keys(react.paths)).toEqual(['@/*']);
+  const pro = declarationCompilerOptions(
+    new URL('../../packages/pro/tsup.config.ts', import.meta.url),
+    { jsx: 'preserve' }
+  );
+  expect(pro).toEqual({ jsx: 'preserve', paths: {} });
 });

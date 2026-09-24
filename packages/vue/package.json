@@ -20,7 +20,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "node ../../scripts/check-built-siblings.mjs core && tsup",
+    "build": "node ../../scripts/check-built-siblings.mjs i18n core && tsup",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"

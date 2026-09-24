@@ -37,10 +37,17 @@ const problems = [];
 for (const sibling of process.argv.slice(2)) {
   const root = join(packages, sibling);
   const built = mtimes(join(root, 'dist'), (name) => name.endsWith('.d.ts'));
-  const sources = mtimes(
-    join(root, 'src'),
-    (name) => /\.(tsx?|vue)$/.test(name) && !/\.test\./.test(name)
-  );
+  // Everything that shapes the emitted declarations: sources, and the root JSON files
+  // (package.json exports, tsconfig, and generated inputs such as i18n's en.json).
+  const sources = [
+    ...mtimes(
+      join(root, 'src'),
+      (name) => /\.(tsx?|vue|json)$/.test(name) && !/\.test\./.test(name)
+    ),
+    ...readdirSync(root)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => statSync(join(root, name)).mtimeMs),
+  ];
   if (built.length === 0) problems.push(`${sibling} has no built declarations`);
   else if (Math.max(...sources) > Math.min(...built))
     problems.push(`${sibling}'s built declarations are older than its source`);

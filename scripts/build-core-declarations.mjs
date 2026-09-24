@@ -14,7 +14,7 @@
 // package.json says which declaration file each subpath ships, and `paths` in tsconfig.json
 // says which source file that subpath compiles from.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -56,6 +56,10 @@ function emitDeclarations(entries, outDir) {
   const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile);
   if (error) throw new Error(ts.formatDiagnostic(error, formatHost));
   const parsed = ts.parseJsonConfigFileContent(config, ts.sys, core);
+  if (parsed.errors.length > 0)
+    throw new Error(
+      `tsconfig.json is invalid:\n${ts.formatDiagnostics(parsed.errors, formatHost)}`
+    );
   const options = {
     ...parsed.options,
     noEmit: false,
@@ -103,6 +107,17 @@ function removeDeclarations(dir) {
   }
 }
 
+/**
+ * The emitted declaration files an import of `target` can mean, most specific first. An
+ * extension keeps its module kind: `.mts` and `.mjs` map to `.d.mts`, `.cts` and `.cjs`
+ * to `.d.cts`. A path without one can name a file or a directory index.
+ */
+export function declarationCandidates(target) {
+  const match = /(?:\.d)?\.(m|c)?(?:ts|tsx|js|jsx)$/.exec(target);
+  if (!match) return [`${target}.d.ts`, join(target, 'index.d.ts')];
+  return [`${target.slice(0, match.index)}.d.${match[1] ?? ''}ts`];
+}
+
 /** The emitted declaration file for a source file. */
 function declarationFor(outDir, sourceFile) {
   return join(outDir, relative(src, sourceFile)).replace(/\.([cm]?)tsx?$/, '.d.$1ts');
@@ -132,12 +147,8 @@ function declarationResolver(entries, outDir) {
       const self = selfImports.get(source);
       if (self) return self;
       if (source.startsWith('.') && importer) {
-        const base = resolve(dirname(importer), source).replace(
-          /(?:\.d)?\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/,
-          ''
-        );
-        const candidates = ['.d.ts', '.d.mts', '.d.cts'].map((extension) => base + extension);
-        for (const candidate of [...candidates, join(base, 'index.d.ts')]) {
+        const target = resolve(dirname(importer), source);
+        for (const candidate of declarationCandidates(target)) {
           if (existsSync(candidate)) return candidate;
         }
         throw new Error(`Cannot resolve ${source} from ${relative(outDir, importer)}.`);
@@ -177,7 +188,7 @@ async function bundleDeclarations(entries, outDir) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const read = (file) => JSON.parse(readFileSync(join(core, file), 'utf8'));
   const entries = publishedEntries(
     read('package.json'),
@@ -187,6 +198,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     emitDeclarations(entries, outDir);
     await bundleDeclarations(entries, outDir);
+    const missing = entries.filter((entry) => !existsSync(join(dist, `${entry.name}.d.ts`)));
+    if (missing.length > 0)
+      throw new Error(`No declarations written for ${missing.map((e) => e.specifier).join(', ')}.`);
   } finally {
     rmSync(outDir, { recursive: true, force: true });
   }

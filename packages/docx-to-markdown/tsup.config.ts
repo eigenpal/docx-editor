@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
 
 export default defineConfig({
   entry: { index: 'src/index.ts', node: 'src/node.ts' },
@@ -7,9 +8,11 @@ export default defineConfig({
   // Advanced live-view types share browser contracts with Core. Declare that type-only
   // dependency here so Node consumers do not need to change lib or skipLibCheck.
   // This adds no DOM runtime dependency or polyfill.
-  // Declarations read sibling packages from their built `dist/`, which `build:packages`
-  // builds first. Compiling their sources again multiplied this step's memory.
-  dts: { banner: '/// <reference lib="dom" />', compilerOptions: { paths: {} } },
+  // See scripts/declaration-options.mjs.
+  dts: {
+    banner: '/// <reference lib="dom" />',
+    compilerOptions: declarationCompilerOptions(import.meta.url),
+  },
   splitting: true,
   clean: true,
   treeshake: true,

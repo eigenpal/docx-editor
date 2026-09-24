@@ -99,6 +99,10 @@ jobs:
       - name: Demo deployment build
         if: "matrix.check == 'browser'"
         run: bun run build:preview
+        env:
+          # The same budget as the package build: the Vercel deployment runs this command
+          # with Node's default heap.
+          NODE_OPTIONS: '--max-old-space-size=2048'
       - name: Install Chromium for Markdown preview checks
         if: "matrix.check == 'browser'"
         run: bunx playwright install --with-deps chromium
