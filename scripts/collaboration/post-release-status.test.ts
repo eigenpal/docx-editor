@@ -1,13 +1,8 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { jobLabel, summarizeJobs } from './post-release-report.mjs';
-import {
-  selectSiteRun,
-  siteRunResult,
-  updateSite,
-  waitForSiteRun,
-  withRetries,
-} from './site-update.mjs';
+import { withRetries } from './common.mjs';
+import { selectSiteRun, siteRunResult, updateSite, waitForSiteRun } from './site-update.mjs';
 
 const workflow = (name: string): any =>
   Bun.YAML.parse(
@@ -65,6 +60,17 @@ test('after a cancel, only a later run of the same version that was not followed
   expect(pick([ours, otherVersion, sameSecond], [8])).toBe(9);
   // Two runs cancelled in the same second must not replace each other forever.
   expect(pick([ours, otherVersion, sameSecond], [8, 9])).toBeNull();
+  // A site that does not name its runs: only a later unnamed run replaces an unnamed one.
+  const unnamed = dispatchRun(13, '2026-09-24T09:40:02Z');
+  const laterUnnamed = dispatchRun(14, '2026-09-24T09:40:30Z');
+  expect(
+    selectSiteRun([unnamed, sameSecond, laterUnnamed], {
+      request,
+      mode: 'replacement',
+      after: unnamed,
+      followed: [13],
+    })?.id
+  ).toBe(14);
   const newerVersion = dispatchRun(11, '2026-09-24T09:41:00Z', {
     display_title: 'upstream-release 2.23.0-4-1-site',
   });
@@ -104,6 +110,21 @@ test('a site never receives a version older than npm latest', async () => {
   });
   expect(followedNewer).toMatchObject({ result: 'superseded', latest: '2.22.1' });
   expect(dispatched).toBe(1);
+
+  // A failed request is not sent twice: a retry could start a second sync.
+  let attempts = 0;
+  await expect(
+    updateSite({
+      ...base,
+      api: () => ({ workflow_runs: [] }),
+      latest: async () => '2.22.0',
+      dispatch: () => {
+        attempts += 1;
+        throw new Error('HTTP 502: Bad Gateway');
+      },
+    })
+  ).rejects.toThrow('HTTP 502');
+  expect(attempts).toBe(1);
 });
 
 test('a site run is pending until it completes, then reports its conclusion', () => {
@@ -132,8 +153,12 @@ test('API calls retry temporary errors and fail at once without the Actions perm
   const forbidden = () => {
     throw new Error('HTTP 403: Resource not accessible by integration');
   };
+  await expect(
+    withRetries(forbidden, { wait: noWait, permission: 'Needs Actions: Read-only.' })
+  ).rejects.toThrow('Needs Actions: Read-only.');
+  // Without a hint, the original message stays.
   await expect(withRetries(forbidden, { wait: noWait })).rejects.toThrow(
-    'Actions: Read-only repository permission'
+    'Resource not accessible by integration'
   );
 
   const missing = () => {
@@ -262,7 +287,7 @@ test('the report counts every job, including source, and never calls a skip a pa
   expect(siteFailed.slack).toContain('do not republish');
 
   const skippedOnly = summarizeJobs(
-    [job('updates / Verify published packages', 'success'), job('Release comments', 'skipped')],
+    [job('verify / Verify published packages', 'success'), job('Release comments', 'skipped')],
     context
   );
   expect(skippedOnly.failed).toBe(0);
@@ -272,12 +297,12 @@ test('the report counts every job, including source, and never calls a skip a pa
   );
 
   const allPassed = summarizeJobs(
-    [job('updates / catalog / Merge verified catalog', 'success')],
+    [job('downstream / catalog / Merge verified catalog', 'success')],
     context
   );
   expect(allPassed.slack.split('\n')[0]).toBe('✅ Post-release 2.22.0: all 1 steps passed.');
   expect(allPassed.slack).not.toContain('do not republish');
-  expect(jobLabel('updates / catalog / Merge verified catalog')).toBe('Merge verified catalog');
+  expect(jobLabel('downstream / catalog / Merge verified catalog')).toBe('Merge verified catalog');
 });
 
 test('each post-release step is its own job, and the comments wait only for verification', () => {
@@ -300,7 +325,7 @@ test('each post-release step is its own job, and the comments wait only for veri
   expect(downstream.jobs.announcements.if).toContain(guard);
   expect(workflow('recover-release').jobs.downstream.if).toBe(guard);
   const fallback = downstream.jobs.report.steps.at(-1);
-  expect(fallback.if).toBe('failure()');
+  expect(fallback.if).toBe('failure() || cancelled()');
   expect(fallback.run).toContain('curl');
   expect(downstream.jobs.announcements.needs).toEqual(['source', 'verify']);
   expect(downstream.jobs.report.needs).toEqual(['source', 'verify', 'downstream', 'announcements']);

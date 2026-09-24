@@ -301,7 +301,7 @@ jobs:
     needs: [source, verify, downstream, announcements]
     if: always() && (needs.source.outputs.published == 'true' || failure())
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: read
@@ -325,9 +325,10 @@ jobs:
           VERSION: ${{ needs.source.outputs.version }}
           PUBLISHED: ${{ needs.source.outputs.published }}
         run: node scripts/collaboration/post-release-report.mjs
-      # The report needs a checkout and the GitHub API. If either fails, still send an alert.
+      # The report needs a checkout, the GitHub API, and Slack. If any of them fails, or the
+      # job runs out of time, still send an alert.
       - name: Send a plain alert if the report failed
-        if: failure()
+        if: failure() || cancelled()
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -335,5 +336,5 @@ jobs:
         run: |
           [ -n "$SLACK_WEBHOOK_URL" ] || exit 0
           jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" \
-            '{text: ("Post-release: the step report could not be built. Check the jobs in " + $run + ". Release run: " + $source + ".")}' \
+            '{text: ("Post-release: the step report could not be built or sent. Check the jobs in " + $run + ". Release run: " + $source + ".")}' \
             | curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" >/dev/null

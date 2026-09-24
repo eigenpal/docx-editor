@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -57,6 +58,30 @@ export function compareVersions(a, b) {
   return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
 }
 export { registry } from './registry.mjs';
+
+/**
+ * One GitHub API call, retried on temporary errors. A rate limit waits longer, because the
+ * limit resets on a fixed window. A missing permission fails at once; `permission` says
+ * which one the caller needs.
+ */
+export async function withRetries(
+  call,
+  { attempts = 8, delay = 10_000, rateLimitDelay = 60_000, permission, wait = sleep } = {}
+) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await call();
+    } catch (error) {
+      if (/Resource not accessible by integration/i.test(error.message))
+        throw permission ? new Error(`${permission}\n${error.message}`) : error;
+      const limited = /rate limit/i.test(error.message);
+      const transient = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i.test(error.message);
+      if (attempt >= attempts || !(limited || transient)) throw error;
+      console.warn(`Temporary GitHub API error (attempt ${attempt}/${attempts}); retrying.`);
+      await wait((limited ? rateLimitDelay : delay) * attempt);
+    }
+  }
+}
 export function option(name, fallback) {
   const index = process.argv.indexOf('--' + name);
   if (index < 0) return fallback;

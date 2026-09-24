@@ -1,15 +1,18 @@
 import { appendFileSync, realpathSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { compareVersions, run } from './common.mjs';
+import { compareVersions, run, withRetries } from './common.mjs';
 
 // A sent dispatch is not a finished update. This waits for the site's own sync run, so a
 // failed site update fails the post-release job that requested it.
 
 export const DISPATCH_EVENT = 'upstream-release';
-const PERMISSION = /Resource not accessible by integration/i;
-const RATE_LIMIT = /rate limit/i;
-const TRANSIENT = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i;
+const READ_RUNS =
+  'release-pal cannot read Actions runs in this repository. Give the eigenpal-release-pal ' +
+  'GitHub App the Actions: Read-only repository permission.';
+const DISPATCH =
+  'release-pal cannot send the update request. Give the eigenpal-release-pal GitHub App ' +
+  'the Contents: Read and write permission on this repository.';
 
 /**
  * The sync run a request started, in order of preference:
@@ -19,7 +22,7 @@ const TRANSIENT = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i;
  * - `mode: 'fallback'`: a site that does not name its runs shows the bare event name. The
  *   first such run created after `dispatchedAt` is the best match the dispatch API allows.
  * - `mode: 'replacement'`: after the site cancels a run for a newer one, the next run of the
- *   same version. The request ID starts with the version.
+ *   same version (the request ID starts with the version), or the next unnamed run.
  */
 export function selectSiteRun(runs, { dispatchedAt, request, mode, after = null, followed = [] }) {
   const title = (item) => item.display_title?.trim();
@@ -37,13 +40,16 @@ export function selectSiteRun(runs, { dispatchedAt, request, mode, after = null,
       ) ??
       null
     );
+  // An unnamed run can only be replaced by a later unnamed run; its version is unknown, and
+  // the npm latest check after a cancel covers a newer release.
   const version = request.split('-')[0];
+  const replaces = (item) =>
+    title(after) === DISPATCH_EVENT
+      ? title(item) === DISPATCH_EVENT
+      : title(item)?.startsWith(`${DISPATCH_EVENT} ${version}-`);
   return (
     dispatched.find(
-      (item) =>
-        !followed.includes(item.id) &&
-        item.created_at >= after.created_at &&
-        title(item)?.startsWith(`${DISPATCH_EVENT} ${version}-`)
+      (item) => !followed.includes(item.id) && item.created_at >= after.created_at && replaces(item)
     ) ?? null
   );
 }
@@ -51,32 +57,6 @@ export function selectSiteRun(runs, { dispatchedAt, request, mode, after = null,
 /** `pending` until the run completes, then its conclusion. */
 export function siteRunResult(item) {
   return item.status === 'completed' ? (item.conclusion ?? 'unknown') : 'pending';
-}
-
-/**
- * One API call, retried on temporary GitHub errors. A rate limit waits longer, because the
- * limit resets on a fixed window. A missing permission fails at once and says which one.
- */
-export async function withRetries(
-  call,
-  { attempts = 8, delay = 10_000, rateLimitDelay = 60_000, wait = sleep } = {}
-) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await call();
-    } catch (error) {
-      if (PERMISSION.test(error.message))
-        throw new Error(
-          'release-pal cannot read Actions runs in this repository. Give the ' +
-            'eigenpal-release-pal GitHub App the Actions: Read-only repository permission.\n' +
-            error.message
-        );
-      const limited = RATE_LIMIT.test(error.message);
-      if (attempt >= attempts || !(limited || TRANSIENT.test(error.message))) throw error;
-      console.warn(`Temporary GitHub API error (attempt ${attempt}/${attempts}); retrying.`);
-      await wait((limited ? rateLimitDelay : delay) * attempt);
-    }
-  }
 }
 
 export async function waitForSiteRun({
@@ -98,7 +78,7 @@ export async function waitForSiteRun({
         api(
           `repos/${repository}/actions/runs?event=repository_dispatch&created=${encodeURIComponent(`>=${since}`)}&per_page=50`
         ),
-      { wait }
+      { wait, permission: READ_RUNS }
     );
   const find = async ({ attempts, after = null }) => {
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -123,7 +103,10 @@ export async function waitForSiteRun({
     while (result === 'pending') {
       await wait(pollDelay);
       const id = current.id;
-      current = await withRetries(() => api(`repos/${repository}/actions/runs/${id}`), { wait });
+      current = await withRetries(() => api(`repos/${repository}/actions/runs/${id}`), {
+        wait,
+        permission: READ_RUNS,
+      });
       result = siteRunResult(current);
     }
     // The site's own concurrency group cancels a pending sync when a newer one queues.
@@ -161,7 +144,8 @@ export async function updateSite({
   // A minute of margin for clock skew between the runner and GitHub.
   const since = iso(60_000);
   const dispatchedAt = iso(5_000);
-  await withRetries(dispatch, { wait });
+  // Not retried: a request that failed after GitHub accepted it would start a second sync.
+  await withRetries(dispatch, { attempts: 1, permission: DISPATCH });
   const outcome = await waitForSiteRun({ repository, since, dispatchedAt, request, api, wait });
   if (outcome.result === 'cancelled') {
     const later = await superseded();
@@ -174,7 +158,9 @@ async function npmLatest(name) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
-        headers: { Accept: 'application/vnd.npm.install-v1+json' },
+        // Bypass cached metadata, as registry.mjs does: a stale latest defeats this check.
+        headers: { accept: 'application/json', 'cache-control': 'no-cache' },
+        cache: 'no-store',
         signal: AbortSignal.timeout(30_000),
       });
       if (!response.ok) throw new Error(`npm returned HTTP ${response.status}`);
@@ -206,7 +192,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
         'api',
         `repos/${repository}/dispatches`,
         '-f',
-        'event_type=upstream-release',
+        `event_type=${DISPATCH_EVENT}`,
         '-f',
         `client_payload[version]=${version}`,
         '-f',

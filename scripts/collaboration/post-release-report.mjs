@@ -1,7 +1,6 @@
 import { appendFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { run } from './common.mjs';
-import { withRetries } from './site-update.mjs';
+import { run, withRetries } from './common.mjs';
 
 // One message per release that lists every post-release job with its result, so a reader
 // knows what went through and what to fix without opening the run.
@@ -65,14 +64,17 @@ export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const env = process.env;
   try {
-    const pages = await withRetries(() =>
-      JSON.parse(
-        run('gh', [
-          'api',
-          // `latest`: after a rerun, each job's newest attempt, not the first failure.
-          `repos/${env.REPO}/actions/runs/${env.RUN_ID}/jobs?filter=latest&per_page=100`,
-        ])
-      )
+    // Few attempts: the job has 15 minutes, and a plain alert follows if this fails.
+    const pages = await withRetries(
+      () =>
+        JSON.parse(
+          run('gh', [
+            'api',
+            // `latest`: after a rerun, each job's newest attempt, not the first failure.
+            `repos/${env.REPO}/actions/runs/${env.RUN_ID}/jobs?filter=latest&per_page=100`,
+          ])
+        ),
+      { attempts: 4 }
     );
     const report = summarizeJobs(pages.jobs, {
       version: env.VERSION,
@@ -83,13 +85,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     console.log(report.markdown);
     if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${report.markdown}\n`);
     if (env.SLACK_WEBHOOK_URL) {
-      const response = await fetch(env.SLACK_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: report.slack }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) throw new Error(`Slack returned HTTP ${response.status}`);
+      await withRetries(
+        async () => {
+          const response = await fetch(env.SLACK_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: report.slack }),
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (!response.ok) throw new Error(`Slack returned HTTP ${response.status}`);
+        },
+        { attempts: 3, delay: 5_000 }
+      );
     }
   } catch (error) {
     console.error(`::error::${error.message}`);

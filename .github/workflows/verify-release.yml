@@ -24,10 +24,11 @@ jobs:
   verify:
     name: Verify published packages
     if: github.ref == 'refs/heads/main'
-    # Serializes automatic and manual updates without locking publication, so their
-    # requests reach the sites in order. Only this short job holds the group: GitHub
-    # keeps one pending run per group, and an hour-long site wait would let a newer
-    # request cancel a queued one.
+    # Serializes the verification of automatic and manual updates without locking
+    # publication. Only this short job holds the group: GitHub keeps one pending run per
+    # group, and an hour-long site wait would let a newer request cancel a queued one. The
+    # site jobs check npm latest before they send a request, so a late one cannot move a
+    # site back.
     concurrency:
       group: post-release-updates
       cancel-in-progress: false
