@@ -377,6 +377,28 @@ describe('projected text offset mapping', () => {
     });
   });
 
+  test('skips simple fields nested in a field instruction in every review view', () => {
+    const nested = (result: string) =>
+      `<w:fldSimple w:instr=" STYLEREF Heading ">${run(result)}</w:fldSimple>`;
+    const inserted = `<w:ins w:id="1" w:author="Reviewer">${nested('S2')}</w:ins>`;
+    const conditional =
+      begin +
+      '<w:r><w:instrText xml:space="preserve"> IF </w:instrText></w:r>' +
+      nested('S1') +
+      inserted +
+      separate +
+      run('R') +
+      end;
+    const { paragraph, rawText } = paragraphOf(run('A') + conditional + run('Z'));
+    for (const projection of ['allMarkup', 'original'] as const) {
+      const projected = projectParagraphText(paragraph, rawText, projection);
+      expect(projected.text).toBe('ARZ');
+      expect(projected.findOccurrences('S1', 10).matches).toEqual([]);
+    }
+    // The model view keeps one unit for each field.
+    expect(projectParagraphText(paragraph, rawText, 'model').text).toHaveLength(5);
+  });
+
   test('caps a dense long-paragraph search and reports remaining matches', () => {
     const { paragraph, rawText } = paragraphOf(run('A'.repeat(5_000)));
     const projected = projectParagraphText(paragraph, rawText, 'allMarkup');

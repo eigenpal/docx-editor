@@ -5,7 +5,8 @@
 // allowlisted page fields inside a non-page simple field (complex markers or another
 // `w:fldSimple`) evaluate live too — concatenating their cached digits would stamp one sheet's
 // number onto every page after detection had already requested a per-sheet context. Other
-// nested field instructions stay inert.
+// nested field instructions stay inert. Content inside any nested field's instruction is input
+// to that field and never displays; the store's saved-result text reads the same marker rule.
 
 import {
   fldSimpleInstr,
@@ -15,6 +16,11 @@ import {
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import {
+  simpleFieldMarkerScope,
+  type SimpleFieldMarkerScope,
+} from '../store/package/field-marker-scope.ts';
+import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseRefLinkInstruction } from './field-ref-link.ts';
@@ -40,6 +46,7 @@ import {
   ingestInstrTextBounded,
   isFldChar,
   isInstrText,
+  MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   onFldCharBegin,
   onFldCharEnd,
@@ -48,6 +55,7 @@ import {
   type AllowlistedPageField,
   type FieldScanBudget,
 } from './field-instruction.ts';
+import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   numericPictureApplies,
@@ -129,6 +137,13 @@ export function collectSimpleFieldDisplay(args: {
   // `w:fldSimple`, deeper levels are fields nested in ITS cached result, and the tracker skips
   // the tracked field's digits and appends the live value at that level's matching end only.
   const tracker = createNestedPageTracker();
+  // Saved-result visibility uses the store's marker scopes, so malformed markers hide exactly
+  // what the store's text hides. Each nested `w:fldSimple` opens its own scope under one node
+  // budget; past MAX_FIELD_NESTING the store reads plain text (`null` scope, always shown).
+  const scopeBudget = { left: MAX_FIELD_RESULT_NODES };
+  let scope: SimpleFieldMarkerScope | null = simpleFieldMarkerScope(simple, scopeBudget);
+  let scopeDepth = 0;
+  const displayed = (): boolean => scope === null || scope.visible();
 
   const captureStyle = (props: readonly OoxmlProperty[], style: ResolvedRunStyle): void => {
     if (resultProps) return;
@@ -148,6 +163,7 @@ export function collectSimpleFieldDisplay(args: {
           if (grand.kind === 'runProperties') continue;
 
           if (isFldChar(grand, 'begin')) {
+            scope?.consume(grand);
             onFldCharBegin(nested);
             if (nested.nesting === 1) tracker.reset();
             continue;
@@ -160,6 +176,7 @@ export function collectSimpleFieldDisplay(args: {
             continue;
           }
           if (isFldChar(grand, 'separate')) {
+            scope?.consume(grand);
             const separateLevel = nested.nesting;
             const separatePhase = nested.phase;
             const match = onFldCharSeparate(nested);
@@ -168,11 +185,15 @@ export function collectSimpleFieldDisplay(args: {
             // that content is not painted) and never past the nesting cap, matching what
             // `detectStoryPageFields` notes so detection and projection stay one story.
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
-              tracker.onSeparate(pageContext ? match : null, separateLevel);
+              // A field inside an enclosing instruction never arms: its value feeds that
+              // instruction and is not displayed.
+              const shown = displayed() && !isInsideOpenFieldInstruction(nested);
+              tracker.onSeparate(pageContext && shown ? match : null, separateLevel);
             }
             continue;
           }
           if (isFldChar(grand, 'end')) {
+            scope?.consume(grand);
             const appendedLive = tracker.onEnd(nested.nesting, pageContext);
             if (appendedLive !== null) text += appendedLive;
             onFldCharEnd(nested);
@@ -180,6 +201,8 @@ export function collectSimpleFieldDisplay(args: {
           }
 
           if (isFieldChrome(grand)) continue;
+          // Instruction content of a nested field is input to that field, not saved result.
+          if (!displayed()) continue;
 
           // A collected display string cannot carry a per-glyph font switch, so only a
           // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
@@ -224,22 +247,19 @@ export function collectSimpleFieldDisplay(args: {
         continue;
       }
       if (isFldSimple(child)) {
-        // Inside a tracked complex field's skipped cache the simple field is part of the
-        // replaced result: descend so its runs are NOTED (visible cached content keeps the
-        // live replacement alive), never appended on their own.
-        // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
-        const simplePageField = tracker.active
-          ? null
-          : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
-        if (simplePageField && pageContext) {
-          if (!revisionsVisible(local, displayMode, args.authorFilter)) continue;
-          const beforeLen = text.length;
-          collect(child, nodeDepth + 1, local);
-          text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
-          continue;
-        }
-        collect(child, nodeDepth + 1, local);
+        // A simple field inside a nested instruction is input to that field: no text, no
+        // live page value, and no scan of its markers.
+        if (!displayed()) continue;
+        const parentScope = scope;
+        const parentDepth = scopeDepth;
+        scope =
+          parentScope === null || parentDepth >= MAX_FIELD_NESTING
+            ? null
+            : simpleFieldMarkerScope(child, scopeBudget);
+        scopeDepth = parentDepth + 1;
+        collectNestedSimple(child, nodeDepth, local);
+        scope = parentScope;
+        scopeDepth = parentDepth;
         continue;
       }
       if (child.kind === 'hyperlink') {
@@ -253,6 +273,29 @@ export function collectSimpleFieldDisplay(args: {
       }
       collect(child, nodeDepth + 1, local);
     }
+  };
+
+  const collectNestedSimple = (
+    child: OoxmlNode,
+    nodeDepth: number,
+    local: readonly RevisionAttribution[]
+  ): void => {
+    // Inside a tracked complex field's skipped cache the simple field is part of the
+    // replaced result: descend so its runs are NOTED (visible cached content keeps the
+    // live replacement alive), never appended on their own.
+    // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
+    const simplePageField = tracker.active
+      ? null
+      : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
+    if (simplePageField && pageContext) {
+      if (!revisionsVisible(local, displayMode, args.authorFilter)) return;
+      const beforeLen = text.length;
+      collect(child, nodeDepth + 1, local);
+      text = text.slice(0, beforeLen);
+      text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
+      return;
+    }
+    collect(child, nodeDepth + 1, local);
   };
 
   collect(simple, depth, revisions);

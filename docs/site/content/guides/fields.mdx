@@ -28,6 +28,8 @@ The shortcut changes the display without changing document content or adding an 
 
 The editor also renders saved results for other complex and simple fields. Unsupported instructions keep their saved result.
 
+Saved results of fields inside another field's instruction do not add text, line breaks, or links. Find and text reads skip them too. This applies when the outer field is a complex field or a simple field. The outer field keeps its normal display behavior. Fields inside a saved result still display.
+
 ## Table of contents boundaries
 
 Generated TOC rows are read-only. Ordinary text before or after the field remains editable, even when it shares a paragraph with a field marker. The TOC highlight follows the generated content. TOC links use the TOC paragraph formatting and explicit run formatting, as in Word. The Hyperlink character style does not add blue underlines inside generated TOC results.

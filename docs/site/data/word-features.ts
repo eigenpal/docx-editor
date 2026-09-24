@@ -987,7 +987,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The saved result displays for a complex field and for w:fldSimple. Field codes round-trip unchanged. Option+F9 on macOS and Alt+F9 on Windows toggle instruction display without changing the document. Some Mac keyboards require Fn. SYMBOL renders its character with the requested font and size. MACROBUTTON and GOTOBUTTON render display text without running the macro or jump. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and matching DOCPROPERTY fields render sanitized document metadata. DATE-valued properties stay inert. DATE, TIME, FILENAME, SEQ, LISTNUM, and EQ do not calculate a new value. The editor never runs macros, DDE instructions, or external include instructions.',
+      'The saved result displays for a complex field and for w:fldSimple. The saved result of a field nested inside another field’s instruction displays nothing, and Find skips it; the outer field keeps its normal display behavior. Field codes round-trip unchanged. Option+F9 on macOS and Alt+F9 on Windows toggle instruction display without changing the document. Some Mac keyboards require Fn. SYMBOL renders its character with the requested font and size. MACROBUTTON and GOTOBUTTON render display text without running the macro or jump. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and matching DOCPROPERTY fields render sanitized document metadata. DATE-valued properties stay inert. DATE, TIME, FILENAME, SEQ, LISTNUM, and EQ do not calculate a new value. The editor never runs macros, DDE instructions, or external include instructions.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {

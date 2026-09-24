@@ -23,7 +23,6 @@ import {
   createScanBudget,
   effectiveFieldInstruction,
   ingestInstrTextBounded,
-  isCollectingInstruction,
   isFldChar,
   isInsideFieldResult,
   isInstrText,
@@ -33,11 +32,13 @@ import {
   onFldCharSeparate,
   resetFieldParseState,
 } from './field-instruction.ts';
+import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { type BodyPageFieldContext, type FieldPageContext } from './field-page-furniture.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   modelTextOfRunChild,
+  nonBreakingHyphenOf,
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
@@ -577,8 +578,10 @@ export function piecesOfParagraphForDisplay(
           // Level-aware: the tracker arms at ANY nested level 2..MAX_FIELD_NESTING when idle,
           // and while armed ignores deeper separates (part of the replaced result) and null
           // duplicates at the tracked level. Overflowed nesting never arms — projection would
-          // be replacing content the atom parser already demoted.
-          nestedPage.onSeparate(pageContext ? match : null, separateLevel);
+          // be replacing content the atom parser already demoted. A field inside an enclosing
+          // instruction never arms: its value feeds that instruction and is not displayed.
+          const displayed = pageContext && !isInsideOpenFieldInstruction(field);
+          nestedPage.onSeparate(displayed ? match : null, separateLevel);
         }
         continue;
       }
@@ -609,8 +612,9 @@ export function piecesOfParagraphForDisplay(
         continue;
       }
 
-      if (isCollectingInstruction(field)) {
-        // Only well-formed atomic fields suppress instruction-phase run content.
+      if (isInsideOpenFieldInstruction(field)) {
+        // Only well-formed atomic fields suppress instruction-phase run content, at any level:
+        // a nested field's result inside an enclosing instruction is never displayed text.
         // Demoted / malformed opens must not make surrounding text disappear.
         //
         // An editable-result FORMTEXT field falls through ON PURPOSE: the offset authority
@@ -866,6 +870,9 @@ export function piecesOfParagraphForDisplay(
       recordRemoved(start, start + 1, revisions);
       return;
     }
+    // Inside an atomic field's instruction the result is input to that field, as nested run
+    // content is. It keeps its model unit and paints nothing; the outer saved result shows.
+    if (pending?.atomic && isInsideOpenFieldInstruction(field)) return;
 
     const projected = projectSimpleFieldResult({
       simple,
@@ -987,14 +994,5 @@ export function piecesOfParagraphForDisplay(
         )
       : pieces,
     themeFonts
-  );
-}
-
-/** Only the WordprocessingML element is a displayed nonbreaking hyphen. */
-function nonBreakingHyphenOf(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.localName === 'noBreakHyphen' &&
-    node.namespaceUri === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
   );
 }

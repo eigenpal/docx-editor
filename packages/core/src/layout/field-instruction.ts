@@ -488,11 +488,6 @@ export function onFldCharEnd(state: ComplexFieldParseState): void {
   if (state.nesting === 0) resetFieldParseState(state);
 }
 
-/** True while collecting instruction text — run content in this phase is not measurable. */
-export function isCollectingInstruction(state: ComplexFieldParseState): boolean {
-  return state.phase === 'instruction' && state.nesting >= 1;
-}
-
 /** True while inside an outermost field result that was live-projected. */
 export function isInsideFieldResult(state: ComplexFieldParseState): boolean {
   return state.phase === 'result' && state.nesting >= 1;

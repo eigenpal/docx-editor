@@ -121,6 +121,8 @@ This rule does not apply to some paragraphs. A paragraph with only a page break,
 
 An empty paragraph that ends a section ignores its own page break before, from direct formatting or its style. It stays after the section's content, so it does not add a blank page. The next section's break type controls where that section starts. This rule does not apply when nothing comes before the paragraph in its section. It also does not apply when the paragraph holds text, a tab, hidden text, or a field. Bookmarks, proofing marks, permission markers, comment range markers, and empty text runs do not prevent this rule.
 
+Saved results of fields inside another field's instruction do not add text, line breaks, or links. The outer field keeps its normal display behavior. Fields inside a saved result still display.
+
 Usable font bytes are required for Word-accurate text measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 
 The configured font resolver also receives faces used by SYMBOL fields and numbering markers. Your host must supply usable font bytes for those faces when they are unavailable locally. Unused numbering definitions do not add font requests.

@@ -30,6 +30,15 @@ export function modelTextOfRunChild(grand: OoxmlNode): string {
   return '';
 }
 
+/** Only the WordprocessingML element is a displayed nonbreaking hyphen. */
+export function nonBreakingHyphenOf(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.localName === 'noBreakHyphen' &&
+    node.namespaceUri === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+  );
+}
+
 export function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {
   if (!container || container.kind === 'textValue') return [];
   const props: OoxmlProperty[] = [];

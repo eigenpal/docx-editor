@@ -2,7 +2,8 @@
 //
 // Field instructions are inert source text. This walk exposes only saved result content.
 // It follows the same typed run vocabulary as `paragraphTextOf`. Unknown generic content,
-// drawings, and note references stay invisible. Nested fields expose their own results.
+// drawings, and note references stay invisible. Nested fields in a saved result expose their
+// own results; nested fields in an instruction add nothing (`field-marker-scope.ts`).
 // Exhausting a field's node budget returns its atom placeholder. The walk fails soft and
 // never makes a file-sized allocation.
 
@@ -18,6 +19,13 @@ import {
   type AtomicFieldSpan,
   type FieldRunChildRef,
 } from './field-nodes.ts';
+import {
+  consumeFieldMarker,
+  fieldMarkerPlan,
+  fieldMarkerStatesVisible,
+  type FieldMarkerPlan,
+  type FieldMarkerState,
+} from './field-marker-scope.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from './ooxml-tree.ts';
 
 /** Review view applied to cached field-result content. */
@@ -36,21 +44,10 @@ export interface FieldResultProjection {
   readonly runs: readonly FieldResultRunBoundary[];
 }
 
-interface FieldState {
-  readonly beginId: string;
-  separated: boolean;
-}
-
-interface FieldMarkerPlan {
-  readonly activeBegins: ReadonlySet<string>;
-  readonly separateBegin: ReadonlyMap<string, string>;
-  readonly endBegin: ReadonlyMap<string, string>;
-}
-
 interface ActiveComplexField {
   readonly span: AtomicFieldSpan;
   readonly owned: ReadonlySet<string>;
-  readonly states: FieldState[];
+  readonly states: FieldMarkerState[];
   readonly markers: FieldMarkerPlan;
   readonly endId: string;
   readonly result: MutableFieldResult;
@@ -59,8 +56,8 @@ interface ActiveComplexField {
   overflow: boolean;
 }
 
-/** Fixed node budget for one field's cached result. */
-const MAX_FIELD_RESULT_NODES = 4_096;
+/** Fixed node budget for one field's saved result. @internal */
+export const MAX_FIELD_RESULT_NODES = 4_096;
 
 /**
  * Fixed UTF-16 budget for one field's cached result.
@@ -130,69 +127,10 @@ function finishFieldResult(result: MutableFieldResult): FieldResultProjection {
   return { text: result.out.join(''), runs: result.runs };
 }
 
+const EMPTY_FIELD_RESULT: FieldResultProjection = Object.freeze({ text: '', runs: [] });
+
 function placeholderResult(): FieldResultProjection {
   return { text: FIELD_ATOM_CHAR, runs: [] };
-}
-
-function statesAreVisible(states: readonly FieldState[]): boolean {
-  for (const state of states) if (!state.separated) return false;
-  return true;
-}
-
-function fieldMarkerPlan(
-  entries: readonly FieldRunChildRef[],
-  from = 0,
-  to = entries.length,
-  enclosingBeginId?: string
-): FieldMarkerPlan {
-  const activeBegins = new Set<string>();
-  const separateBegin = new Map<string, string>();
-  const endBegin = new Map<string, string>();
-  const stack = enclosingBeginId ? [enclosingBeginId] : [];
-  if (enclosingBeginId) activeBegins.add(enclosingBeginId);
-  for (let index = from; index < to; index += 1) {
-    const node = entries[index]!.node;
-    if (isFldChar(node, 'begin')) {
-      stack.push(node.id);
-      continue;
-    }
-    if (isFldChar(node, 'separate')) {
-      const beginId = stack[stack.length - 1];
-      if (beginId) {
-        activeBegins.add(beginId);
-        separateBegin.set(node.id, beginId);
-      }
-      continue;
-    }
-    if (isFldChar(node, 'end')) {
-      const beginId = stack.pop();
-      if (beginId) {
-        activeBegins.add(beginId);
-        endBegin.set(node.id, beginId);
-      }
-    }
-  }
-  return { activeBegins, separateBegin, endBegin };
-}
-
-function consumeMarker(states: FieldState[], markers: FieldMarkerPlan, node: OoxmlNode): boolean {
-  if (isFldChar(node, 'begin')) {
-    if (markers.activeBegins.has(node.id)) states.push({ beginId: node.id, separated: false });
-    return true;
-  }
-  if (isFldChar(node, 'separate')) {
-    const beginId = markers.separateBegin.get(node.id);
-    const state = states[states.length - 1];
-    if (beginId && state?.beginId === beginId) state.separated = true;
-    return true;
-  }
-  if (isFldChar(node, 'end')) {
-    const beginId = markers.endBegin.get(node.id);
-    const state = states[states.length - 1];
-    if (beginId && state?.beginId === beginId) states.pop();
-    return true;
-  }
-  return false;
 }
 
 function plainFieldResultText(
@@ -229,13 +167,13 @@ function scanSimpleEntries(
   depth: number
 ): FieldResultProjection | null {
   const result = emptyFieldResult();
-  const states: FieldState[] = [];
+  const states: FieldMarkerState[] = [];
   const markers = fieldMarkerPlan(entries);
   for (const entry of entries) {
     const node = entry.node;
-    if (consumeMarker(states, markers, node)) continue;
+    if (consumeFieldMarker(states, markers, node)) continue;
     if (isInstrText(node)) continue;
-    if (!statesAreVisible(states)) continue;
+    if (!fieldMarkerStatesVisible(states)) continue;
     if (view === 'original' && entry.hiddenInOriginal) continue;
     if (isFldSimple(node)) {
       const nested =
@@ -275,31 +213,16 @@ function consumeComplexEntry(
     active.nodesLeft -= 1;
     if (active.nodesLeft < 0) active.overflow = true;
   }
-  if (isFldChar(node, 'begin')) {
-    if (node.id !== active.span.node.id && active.markers.activeBegins.has(node.id)) {
-      active.states.push({ beginId: node.id, separated: false });
-    }
-    return false;
-  }
-  if (isFldChar(node, 'separate')) {
-    const beginId = active.markers.separateBegin.get(node.id);
-    const state = active.states[active.states.length - 1];
-    if (beginId && state?.beginId === beginId) state.separated = true;
-    return false;
-  }
-  if (isFldChar(node, 'end')) {
-    if (node.id === active.endId) return true;
-    const beginId = active.markers.endBegin.get(node.id);
-    const state = active.states[active.states.length - 1];
-    if (beginId && state?.beginId === beginId) active.states.pop();
-    return false;
-  }
+  if (node.id === active.endId) return true;
+  // The span's own begin opened `states` already.
+  if (node.id === active.span.node.id) return false;
+  if (consumeFieldMarker(active.states, active.markers, node)) return false;
   if (
     active.overflow ||
     isInstrText(node) ||
     isFldSimple(node) ||
     !active.owned.has(node.id) ||
-    !statesAreVisible(active.states) ||
+    !fieldMarkerStatesVisible(active.states) ||
     (view === 'original' && entry.hiddenInOriginal)
   ) {
     return false;
@@ -334,10 +257,16 @@ export function fieldResultProjectionsOf(
     const entry = entries[entryIndex]!;
     const simple = simpleByNode.get(entry.node.id);
     if (simple) {
-      const budget = { left: MAX_FIELD_RESULT_NODES };
-      const chars = { left: MAX_FIELD_RESULT_CHARS };
-      const text = simpleFieldResultText(simple.node, view, budget, chars, 0);
-      results.set(simple.node.id, text ?? placeholderResult());
+      if (active !== null && !fieldMarkerStatesVisible(active.states)) {
+        // Inside an atomic field's instruction, a simple field is input to that field. It
+        // keeps its model unit and adds no text; the outer saved result shows instead.
+        results.set(simple.node.id, EMPTY_FIELD_RESULT);
+      } else {
+        const budget = { left: MAX_FIELD_RESULT_NODES };
+        const chars = { left: MAX_FIELD_RESULT_CHARS };
+        const text = simpleFieldResultText(simple.node, view, budget, chars, 0);
+        results.set(simple.node.id, text ?? placeholderResult());
+      }
     }
 
     if (active === null) {
