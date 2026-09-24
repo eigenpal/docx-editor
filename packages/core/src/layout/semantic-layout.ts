@@ -161,6 +161,7 @@ import {
   geometryOfSection,
   paragraphSectionNode,
 } from './section-properties.ts';
+import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
 import { resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
@@ -1646,6 +1647,11 @@ function layoutBlocksPass(
     columnCount,
   });
 
+  /** `w:pageBreakBefore`, except on an empty section mark after its section's content. */
+  const breaksBeforeAt = (at: number, entry: PreparedParagraph): boolean =>
+    paragraphBreaksBefore(entry.props) &&
+    !markIgnoresPageBreakBefore(entry.paragraph, at, prepared.length);
+
   // Placement and keep-with-next lookahead share cached line breaks.
   const breakBlock = (
     entry: PreparedParagraph,
@@ -1682,7 +1688,7 @@ function layoutBlocksPass(
           before,
           previousSpaceAfter,
           cursorY === 0 && !regionHasFragments(),
-          firstParagraphOfSection || paragraphBreaksBefore(entry.props)
+          firstParagraphOfSection || breaksBeforeAt(entryIndex, entry)
         ) + paragraphBorderExtentPt(continuesBorder ? undefined : entry.borders.top);
     }
     const allPageZones = entry.frame ? [] : pageExclusionZones();
@@ -1922,7 +1928,7 @@ function layoutBlocksPass(
     // A mark that is its section's only block IS the section's content: it keeps its line.
     if (options.sectionMarkCollapses !== true || at === 0) return false;
     const mark = emptySectionMarkAt(at, lines);
-    return mark !== undefined && !paragraphBreaksBefore(mark.props);
+    return mark !== undefined && !breaksBeforeAt(at, mark);
   };
   let converged = false;
   let convergedAt = prepared.length;
@@ -2100,7 +2106,7 @@ function layoutBlocksPass(
     // A fresh section already starts on a new sheet. Only break when this sheet
     // holds content, including the host content of a continued section.
     if (
-      paragraphBreaksBefore(props) &&
+      breaksBeforeAt(index, entry) &&
       (pageFragments.length > 0 || cursorY > 0) &&
       index !== markOnBreakSheet
     ) {
@@ -2260,7 +2266,7 @@ function layoutBlocksPass(
       spacing.before,
       previousSpaceAfter,
       frame ? false : atTopOfPage,
-      frame ? false : firstParagraphOfSection || paragraphBreaksBefore(props)
+      frame ? false : firstParagraphOfSection || breaksBeforeAt(index, entry)
     );
     if (appliedBefore > 0) cursorY += appliedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom
