@@ -380,6 +380,92 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     }
   });
 
+  test('merges over the same rows leave the head row to the cells that stay in it', () => {
+    // Columns 1 and 2 both merge rows 0-1. The head row is as tall as its side cell alone;
+    // the taller merge is carried by the rows together, whichever column it sits in.
+    const shaped = (b: string, c: string): SemanticLayout =>
+      layoutTiny(
+        loadPart(
+          `<w:tbl>${GRID}` +
+            `<w:tr>${tc(p('s0'))}${tc(b, RESTART)}${tc(c, RESTART)}</w:tr>` +
+            `<w:tr>${tc(p('s1'))}${tc(p(''), CONTINUE)}${tc(p(''), CONTINUE)}</w:tr>` +
+            '</w:tbl>'
+        )
+      );
+    const tall = Array.from({ length: 4 }, (_, index) => p(`T${index}`)).join('');
+    const short = p('A0') + p('A1');
+    const control = tablesOf(shaped(p('x'), p('y')), 0)[0]!;
+    const layouts = [shaped(short, tall), shaped(tall, short)];
+    for (const layout of layouts) {
+      expect(layout.pages).toHaveLength(1);
+      const table = tablesOf(layout, 0)[0]!;
+      expect(table.rows[0]!.box.height).toBe(control.rows[0]!.box.height);
+      expect(table.rows[1]!.box.height).toBeGreaterThan(control.rows[1]!.box.height);
+      for (const column of [1, 2]) {
+        const head = table.rows[0]!.cells[column]!;
+        expect(head.rowSpan).toBe(2);
+        expect(head.box.height).toBe(table.box.height);
+      }
+      expectContentInsideItsTable(layout);
+    }
+    const [first, second] = layouts.map((layout) => tablesOf(layout, 0)[0]!) as [
+      TableFragmentRecord,
+      TableFragmentRecord,
+    ];
+    expect(first.rows.map((row) => row.box.height)).toEqual(
+      second.rows.map((row) => row.box.height)
+    );
+    // The span is exactly as tall as the tallest head needs: four lines and no stacked row.
+    const tallHead = first.rows[0]!.cells[2]!;
+    expect(contentBottomOf(tallHead)).toBeLessThanOrEqual(tallHead.box.y + tallHead.box.height);
+    expect(first.box.height).toBeLessThan(control.rows[0]!.box.height + 4 * 14 + 4);
+  });
+
+  test('merges over the same rows that no page holds keep every line inside the table', () => {
+    const nine = (prefix: string) =>
+      Array.from({ length: 9 }, (_, index) => p(`${prefix}${index}`)).join('');
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('side'))}${tc(nine('A'), RESTART)}${tc(nine('B'), RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('side2'))}${tc(p('ghost'), CONTINUE)}${tc(p('ghost'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const painted = layout.pages
+      .flatMap((page) => tablesOf(layout, layout.pages.indexOf(page)))
+      .flatMap((table) => table.rows)
+      .flatMap((row) => row.cells)
+      .flatMap((cell) => cell.blocks)
+      .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+      .flatMap((line) => line.spans)
+      .map((span) => span.text);
+    for (const prefix of ['A', 'B']) {
+      for (let index = 0; index < 9; index += 1) expect(painted).toContain(`${prefix}${index}`);
+    }
+    expect(painted).toContain('side2');
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
+  test('merges over the same rows under a repeated header stay inside their page', () => {
+    const layout = layoutTiny(
+      loadPart(
+        `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
+          `<w:tr><w:trPr><w:tblHeader/></w:trPr>${tc(p('H'))}${tc(p('Hb'))}${tc(p('Hc'))}</w:tr>` +
+          `<w:tr>${tc(p('side'))}${tc(p('A0') + p('A1'), RESTART)}${tc(MERGED_CONTENT, RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('side2'))}${tc(p('g'), CONTINUE)}${tc(p('g'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
   test('two merges in different columns are decided one at a time', () => {
     // Column 0 merges rows 0-1 and column 1 merges rows 1-2. Treating the two as one
     // keep-together block moved the whole table to the next page and left the first one

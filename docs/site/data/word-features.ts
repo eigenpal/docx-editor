@@ -468,7 +468,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Authored merges render and round-trip. A row inserted at a boundary inside a vertical merge extends the merge by one row and keeps one cell per column. The merge and split commands are declared but refused. Column insert, delete, and resize on a merged table report the engine reason.',
+      'Authored merges render and round-trip. A vertical merge takes its height from the rows it covers, and merges that cover the same rows share that height. A row inserted at a boundary inside a vertical merge extends the merge by one row and keeps one cell per column. The merge and split commands are declared but refused. Column insert, delete, and resize on a merged table report the engine reason.',
   },
   {
     id: 'tables.page-break',

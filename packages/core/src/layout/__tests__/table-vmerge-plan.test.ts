@@ -170,6 +170,108 @@ describe('the vMerge plan hands out heights, never positions', () => {
     );
   });
 
+  test('merges over the same rows detach together and reserve the tallest head', () => {
+    // Columns 1 and 2 both merge rows 0-1. Deciding them one at a time kept the second head
+    // sizing row 0, and row 1 then stacked under that height instead of beside it.
+    const planFor = (order: readonly [string, string]) => {
+      const rows = [
+        row('r0', [filled('side0', 0), filled(order[0], 1), filled(order[1], 2)]),
+        row('r1', [filled('side1', 0), cell('c1', 1, true), cell('c2', 2, true)]),
+      ];
+      const plan = planVMergeRowHeights(
+        rows,
+        probeFrom({ side0: 12, side1: 36, short: 36, tall: 60 })
+      )!;
+      for (const span of plan.spansAt(0)) plan.accept(span);
+      return plan;
+    };
+    for (const order of [
+      ['short', 'tall'],
+      ['tall', 'short'],
+    ] as const) {
+      const plan = planFor(order);
+      const head = plan.rowOptions(0)!;
+      // Both heads out of row 0, each bounded by the one shared span of 60.
+      expect([...(head.detachedSpanHeightPtByCellId ?? [])].sort()).toEqual([
+        ['short', 60],
+        ['tall', 60],
+      ]);
+      // Row 0 is its own side cell; row 1 takes the 60 - 12 the tallest head still needs.
+      expect(head.heightFloorPt).toBe(12);
+      expect(plan.rowOptions(1)!.heightFloorPt).toBe(48);
+    }
+  });
+
+  test('merges over the same rows add nothing when the rows already hold them', () => {
+    const rows = [
+      row('r0', [filled('side0', 0), filled('a', 1), filled('b', 2)]),
+      row('r1', [filled('side1', 0), cell('c1', 1, true), cell('c2', 2, true)]),
+    ];
+    const plan = planVMergeRowHeights(rows, probeFrom({ side0: 24, side1: 48, a: 24, b: 36 }))!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect(plan.rowOptions(0)!.heightFloorPt).toBe(24);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(48);
+    expect(plan.rowOptions(0)!.detachedSpanHeightPtByCellId?.get('b')).toBe(72);
+  });
+
+  test('a merge ending at another row still sizes the head row beside a joint pair', () => {
+    // Columns 1 and 2 merge rows 0-2; column 3 merges rows 0-1. The pair is decided together,
+    // and the shorter span stays declined and in row 0, exactly as a lone longer span did.
+    const rows = [
+      row('r0', [filled('side0', 0), filled('a', 1), filled('b', 2), filled('shortHead', 3)]),
+      row('r1', [
+        filled('side1', 0),
+        cell('a1', 1, true),
+        cell('b1', 2, true),
+        cell('s1', 3, true),
+      ]),
+      row('r2', [filled('side2', 0), cell('a2', 1, true), cell('b2', 2, true), filled('p', 3)]),
+    ];
+    const plan = planVMergeRowHeights(
+      rows,
+      probeFrom({ side0: 10, side1: 10, side2: 10, a: 50, b: 90, shortHead: 30, p: 10 })
+    )!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    const head = plan.rowOptions(0)!;
+    expect([...(head.detachedSpanHeightPtByCellId ?? []).keys()].sort()).toEqual(['a', 'b']);
+    expect(head.heightFloorPt).toBe(30);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(10);
+    expect(plan.rowOptions(2)!.heightFloorPt).toBe(90 - 30 - 10);
+  });
+
+  test('withdrawing a head row takes the whole joint decision back', () => {
+    const rows = [
+      row('r0', [filled('side0', 0), filled('a', 1), filled('b', 2)]),
+      row('r1', [filled('side1', 0), cell('c1', 1, true), cell('c2', 2, true)]),
+    ];
+    const plan = planVMergeRowHeights(rows, probeFrom({ side0: 12, side1: 12, a: 40, b: 70 }))!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(58);
+    plan.withdrawAt(0);
+    expect(plan.rowOptions(0)).toBeUndefined();
+    expect(plan.rowOptions(1)).toBeUndefined();
+    // Offered again, it plans the same heights: no surplus was left behind on row 1.
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect(plan.rowOptions(0)!.heightFloorPt).toBe(12);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(58);
+  });
+
+  test('merges over rows that cannot grow are still decided one head at a time', () => {
+    // Every row is exact, so whether a head fits is a question about that head alone: the
+    // short one detaches, and the tall one stays in its row to be clipped there.
+    const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
+      ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;
+    const rows = [
+      exact('r0', [filled('fits', 0), filled('tooTall', 1)]),
+      exact('r1', [cell('c0', 0, true), cell('c1', 1, true)]),
+    ];
+    const probe = (probed: SemanticTableRow, detached?: ReadonlySet<string>): number =>
+      probed.height.rule === 'exact' ? 20 : probeFrom({ fits: 30, tooTall: 200 })(probed, detached);
+    const plan = planVMergeRowHeights(rows, probe)!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect([...(plan.rowOptions(0)!.detachedSpanHeightPtByCellId ?? []).keys()]).toEqual(['fits']);
+  });
+
   test('a span no row of which can grow is declined rather than handed a short box', () => {
     const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
       ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;
