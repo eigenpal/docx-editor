@@ -136,7 +136,7 @@
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
     "typecheck:root": "tsc -p tsconfig.json --noEmit",
-    "version-packages": "changeset version && bun install --lockfile-only && bun install --lockfile-only && bun run check:lockfile-workspaces && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
+    "version-packages": "changeset version && bun install --lockfile-only && node scripts/check-lockfile-workspaces.mjs --fix && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
     "dev:server-agent-review": "bun run build:packages && node examples/server-agent-review/dev.mjs",
     "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts",
     "collaboration:change": "node scripts/collaboration/cli.mjs change",
