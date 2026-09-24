@@ -74,18 +74,22 @@ test('publication and its Slack notification cannot wait on registry verificatio
 test('downstream starts on completed main releases and all effects depend on verified artifacts', () => {
   const downstream = workflow('post-release');
   const recovery = workflow('recover-release');
+  const verify = workflow('verify-release');
   expect(downstream.on.workflow_run).toEqual({
     workflows: ['Release'],
     branches: ['main'],
     types: ['completed'],
   });
-  expect(downstream.jobs.updates.needs).toBe('source');
-  expect(downstream.jobs.updates.if).toContain("published == 'true'");
-  expect(downstream.jobs.updates.uses).toBe('./.github/workflows/recover-release.yml');
-  expect(downstream.jobs.announcements.needs).toContain('updates');
-  expect(recovery.jobs.sites.needs).toBe('verify');
-  expect(recovery.jobs.catalog.needs).toBe('verify');
-  const download = recovery.jobs.verify.steps.find((step: any) =>
+  expect(downstream.jobs.verify.needs).toBe('source');
+  expect(downstream.jobs.verify.if).toContain("published == 'true'");
+  expect(downstream.jobs.verify.uses).toBe('./.github/workflows/verify-release.yml');
+  expect(downstream.jobs.downstream.needs).toEqual(['source', 'verify']);
+  expect(downstream.jobs.downstream.uses).toBe('./.github/workflows/release-downstream.yml');
+  expect(downstream.jobs.announcements.needs).toEqual(['source', 'verify']);
+  expect(recovery.jobs.verify.uses).toBe('./.github/workflows/verify-release.yml');
+  expect(recovery.jobs.downstream.needs).toBe('verify');
+  expect(recovery.jobs.downstream.uses).toBe('./.github/workflows/release-downstream.yml');
+  const download = verify.jobs.verify.steps.find((step: any) =>
     step.uses?.startsWith('actions/download-artifact@')
   );
   expect(download.with['run-id']).toBe('${{ inputs.source_run_id }}');
@@ -94,7 +98,7 @@ test('downstream starts on completed main releases and all effects depend on ver
 
 test('post-release retries neither hold the release concurrency lock nor have publication credentials', () => {
   const release = workflow('release');
-  for (const name of ['recover-release', 'post-release']) {
+  for (const name of ['recover-release', 'verify-release', 'release-downstream', 'post-release']) {
     const downstream = workflow(name);
     expect(downstream.concurrency?.group).not.toBe(release.concurrency.group);
     expect(downstream.permissions?.['id-token']).toBeUndefined();

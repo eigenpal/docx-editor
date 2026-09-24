@@ -164,23 +164,23 @@ bun run release
 
 The [Post-release updates workflow](../.github/workflows/post-release.yml) starts when Release completes. It checks that the source run published packages and created the version tag. Release-PR updates and runs that published nothing skip these tasks.
 
-Release finishes without waiting for npm metadata propagation. The downstream workflow runs these steps, each as its own job:
+Release finishes without waiting for npm metadata propagation. The post-release workflow calls [Verify release](../.github/workflows/verify-release.yml) and then [Release downstream updates](../.github/workflows/release-downstream.yml). Each step is its own job:
 
 | Job | What it does |
 | --- | --- |
 | **Verify published packages** | Checks the published packages against the original tested artifacts. Every other step waits for it. |
-| **Docs site (docx-editor.dev)** | Requests the documentation update and waits for that site's sync run to finish. |
-| **Markdown site (docx-to-markdown.com)** | Requests the Markdown site update and waits for its sync run. |
-| **PDF site (docx-to-pdf.dev)** | Requests the PDF site update and waits for its sync run. |
+| **Site update (docx-editor.dev)** | Requests the documentation update and waits for that site's sync run to finish. |
+| **Site update (docx-to-markdown.com)** | Requests the Markdown site update and waits for its sync run. |
+| **Site update (docx-to-pdf.dev)** | Requests the PDF site update and waits for its sync run. |
 | **Capture collaboration catalog** | Opens the generated collaboration baseline PR. |
 | **Merge verified catalog** | Waits for the PR's checks, approves the tested commit, and merges it. |
 | **Release comments and roadmap** | Comments on the shipped PRs and issues and updates the roadmap board. |
 
 A site job passes only when that site's own sync run passes. Each site deploys in a separate workflow that the site job does not follow, so check the site's deployment if its content looks out of date. To read the sync runs, the `eigenpal-release-pal` GitHub App needs the **Actions: Read-only** repository permission.
 
-Each request carries an ID in `client_payload.request`, and each site's sync workflow names its run `upstream-release <request>`. The site job uses that name to find its own run. If the site cancels the run because a newer sync queued, the site job follows the newer run.
+Each request carries an ID in `client_payload.request` that starts with the version, and each site's sync workflow names its run `upstream-release <request>`. The site job uses that name to find its own run. If a site does not name its runs, the site job waits 2 minutes and then takes the first unnamed sync run created after the request. If the site cancels the run because a newer sync of the same version queued, the site job follows the newer run.
 
-`main` requires an approving review, and release-pal cannot approve the catalog PR that it opened. The merge job approves it with the workflow token. This needs the repository setting **Allow GitHub Actions to create and approve pull requests** under **Settings** > **Actions** > **General**. The release comments need only verified packages, so a failed site or catalog step does not hold them back. Retried comments are deduplicated.
+`main` requires an approving review, and release-pal cannot approve the catalog PR that it opened. The merge job approves it with the workflow token. This needs the repository setting **Allow GitHub Actions to create and approve pull requests** under **Settings** > **Actions** > **General**. The release comments need only verification, so they do not wait for the site updates or the catalog, and a failure there does not hold them back. Retried comments are deduplicated.
 
 The **Report** job posts one Slack message that lists every job with its result and a link. A skipped job is listed as skipped, not as passed. A downstream failure does not change the completed Release run.
 
@@ -190,7 +190,9 @@ The verification jobs of automatic and manual downstream updates share a concurr
 
 ## Recover post-release updates without publishing
 
-If a post-release job failed after verification passed, fix the cause and rerun the failed jobs in that post-release run (`gh run rerun <run-id> --failed`). The rerun can also repeat other jobs in the same reusable workflow, such as site updates that passed. That is safe: a site that already has the version records no change.
+If a post-release job failed after verification passed, fix the cause and rerun the failed jobs in that post-release run (`gh run rerun <run-id> --failed`). The rerun can also repeat other jobs in the same reusable workflow, such as site updates that passed. That is safe: a site that already has the version records no change, and a catalog that already records the version passes.
+
+A rerun repeats verification, which fails when a newer version is already npm `latest`. In that case, the sites follow the newer release, and you recover only the catalog: run `collaboration-catalog.yml` with the missed `version` input.
 
 Use the [Recover release workflow](../.github/workflows/recover-release.yml) if npm publication succeeded but registry verification failed, or if the post-release run cannot be rerun. Rerunning Release can skip these updates because Changesets reports that the packages are already published.
 

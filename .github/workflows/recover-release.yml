@@ -1,18 +1,8 @@
 name: Recover release
 
+# Reruns verification and the downstream updates of a published release. See
+# docs/RELEASING.md, "Recover post-release updates without publishing".
 on:
-  workflow_call:
-    inputs:
-      version:
-        type: string
-        required: true
-      source_run_id:
-        type: string
-        required: true
-    outputs:
-      published_packages:
-        description: Packages verified against the original tested candidate
-        value: ${{ jobs.verify.outputs.published_packages }}
   workflow_dispatch:
     inputs:
       version:
@@ -30,105 +20,14 @@ permissions:
 
 jobs:
   verify:
-    name: Verify published packages
-    if: github.ref == 'refs/heads/main'
-    # Serializes automatic and manual updates without locking publication, so their
-    # requests reach the sites in order. Only this short job holds the group: GitHub
-    # keeps one pending run per group, and an hour-long site wait would let a newer
-    # request cancel a queued one.
-    concurrency:
-      group: post-release-updates
-      cancel-in-progress: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      published_packages: ${{ steps.candidate.outputs.packages }}
-    env:
-      GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-      RELEASE_VERSION: ${{ inputs.version }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - name: Validate the original release run and tag
-        run: node scripts/collaboration/recovery.mjs source
-      - name: Download the original tested candidate
-        uses: actions/download-artifact@v8
-        with:
-          name: collaboration-candidate
-          run-id: ${{ inputs.source_run_id }}
-          github-token: ${{ github.token }}
-          path: .cache/collaboration/recovery
-      - name: Verify archived tarballs and published integrity
-        id: candidate
-        run: |
-          node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
-          packages=$(jq -c '.packages | to_entries | map({name: .key, version: .value.version})' .cache/collaboration/recovery/candidate.json)
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/verify-release.yml
+    with:
+      version: ${{ inputs.version }}
+      source_run_id: ${{ inputs.source_run_id }}
 
-  sites:
-    name: ${{ matrix.label }}
+  downstream:
     needs: verify
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - repository: docx-editor.dev
-            label: Docs site (docx-editor.dev)
-          - repository: docx-to-markdown.com
-            label: Markdown site (docx-to-markdown.com)
-          - repository: docx-to-pdf.dev
-            label: PDF site (docx-to-pdf.dev)
-    runs-on: ubuntu-latest
-    # The documentation sync waits for its own PR checks before it merges.
-    timeout-minutes: 60
-    steps:
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        id: token
-        with:
-          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
-          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ matrix.repository }}
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          sparse-checkout: scripts/collaboration
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - name: Request the site update
-        id: dispatch
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
-          RELEASE_VERSION: ${{ inputs.version }}
-          # The site names its run after this ID, so the wait finds exactly this request.
-          REQUEST_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.repository }}
-        run: |
-          # A minute of margin for clock skew between the runner and GitHub.
-          echo "since=$(date -u -d '-60 seconds' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-          gh api "repos/$TARGET_REPOSITORY/dispatches" \
-            -f event_type=upstream-release \
-            -f "client_payload[version]=$RELEASE_VERSION" \
-            -f "client_payload[request]=$REQUEST_ID"
-      # A sent dispatch is not a finished update. This job passes only when the site's own
-      # sync run passes. The site deploys in a separate workflow that this does not follow.
-      - name: Wait for the site update to finish
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
-          SINCE: ${{ steps.dispatch.outputs.since }}
-          REQUEST_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.repository }}
-        run: node scripts/collaboration/site-update.mjs
-
-  catalog:
-    needs: verify
-    uses: ./.github/workflows/collaboration-catalog.yml
+    uses: ./.github/workflows/release-downstream.yml
     with:
       version: ${{ inputs.version }}
     secrets: inherit

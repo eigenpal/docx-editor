@@ -66,6 +66,7 @@ jobs:
           fi
           if node --input-type=module -e 'import { readFileSync } from "node:fs"; const data=JSON.parse(readFileSync(".collaboration/releases.json")); process.exit(data.releases.some(entry => entry.version === process.argv[1]) ? 0 : 1)' "$version"; then
             echo "Baseline $version is already recorded."
+            echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "recorded=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -134,7 +135,7 @@ jobs:
           node-version: '24'
       - name: Catalog already records this version
         if: env.PR_NUMBER == ''
-        run: echo "The collaboration catalog on main already records ${{ inputs.version }}." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "The collaboration catalog on main already records $RELEASE_VERSION." >> "$GITHUB_STEP_SUMMARY"
       - name: Wait for the complete CI run and all PR checks
         if: env.PR_NUMBER != ''
         id: checks

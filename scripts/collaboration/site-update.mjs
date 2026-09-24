@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, realpathSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { run } from './common.mjs';
@@ -12,23 +12,40 @@ const RATE_LIMIT = /rate limit/i;
 const TRANSIENT = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i;
 
 /**
- * The sync run this request started. Each site names its dispatch runs
- * `upstream-release <request>`, so the request ID finds the run exactly. A site that does
- * not name its runs yet shows the bare event name; then the first such run created at or
- * after the request is the best match the dispatch API allows.
+ * The sync run a request started, in order of preference:
+ *
+ * - `mode: 'exact'`: the run named `upstream-release <request>`. Each site names its dispatch
+ *   runs after the request ID, so this is exact.
+ * - `mode: 'fallback'`: a site that does not name its runs shows the bare event name. The
+ *   first such run created after `dispatchedAt` is the best match the dispatch API allows.
+ * - `mode: 'replacement'`: after the site cancels a run for a newer one, the next run of the
+ *   same version. The request ID starts with the version.
  */
-export function selectSiteRun(runs, { since, request, after = null }) {
-  const dispatched = runs
-    .filter((item) => item.event === 'repository_dispatch' && item.created_at >= since)
-    .filter((item) => !after || item.created_at > after.created_at)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+export function selectSiteRun(runs, { since, dispatchedAt, request, mode, after = null }) {
   const title = (item) => item.display_title?.trim();
-  // A replacement after a cancel is the next sync of the site, whichever request started it.
-  if (after) return dispatched.find((item) => title(item)?.startsWith(DISPATCH_EVENT)) ?? null;
+  const dispatched = runs
+    .filter((item) => item.event === 'repository_dispatch')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  const exact = dispatched.find(
+    (item) => item.created_at >= since && title(item) === `${DISPATCH_EVENT} ${request}`
+  );
+  if (mode === 'exact') return exact ?? null;
+  if (mode === 'fallback')
+    return (
+      exact ??
+      dispatched.find(
+        (item) => item.created_at >= dispatchedAt && title(item) === DISPATCH_EVENT
+      ) ??
+      null
+    );
+  const version = request.split('-')[0];
   return (
-    dispatched.find((item) => title(item) === `${DISPATCH_EVENT} ${request}`) ??
-    dispatched.find((item) => title(item) === DISPATCH_EVENT) ??
-    null
+    dispatched.find(
+      (item) =>
+        item.id !== after.id &&
+        item.created_at >= after.created_at &&
+        title(item)?.startsWith(`${DISPATCH_EVENT} ${version}-`)
+    ) ?? null
   );
 }
 
@@ -66,10 +83,13 @@ export async function withRetries(
 export async function waitForSiteRun({
   repository,
   since,
+  dispatchedAt = since,
   request,
   api,
   wait = sleep,
   findAttempts = 40,
+  exactAttempts = 8,
+  replacementAttempts = 3,
   findDelay = 15_000,
   pollDelay = 30_000,
 }) {
@@ -81,16 +101,19 @@ export async function waitForSiteRun({
         ),
       { wait }
     );
-  const find = async (after) => {
-    for (let attempt = 0; attempt < findAttempts; attempt += 1) {
+  const find = async ({ attempts, after = null }) => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       if (attempt > 0) await wait(findDelay);
-      const found = selectSiteRun((await list()).workflow_runs ?? [], { since, request, after });
+      // Give the exact name time to appear before accepting an unnamed run.
+      const mode = after ? 'replacement' : attempt < exactAttempts ? 'exact' : 'fallback';
+      const runs = (await list()).workflow_runs ?? [];
+      const found = selectSiteRun(runs, { since, dispatchedAt, request, mode, after });
       if (found) return found;
     }
     return null;
   };
 
-  let current = await find(null);
+  let current = await find({ attempts: findAttempts });
   if (!current) throw new Error(`No update run started in ${repository} after the request.`);
   const replaced = [];
   for (;;) {
@@ -105,17 +128,18 @@ export async function waitForSiteRun({
     // The site's own concurrency group cancels a pending sync when a newer one queues.
     // That newer run does the update, so follow it instead of reporting a failure.
     if (result !== 'cancelled') return { result, url: current.html_url, replaced };
-    const next = await find(current);
+    const next = await find({ attempts: replacementAttempts, after: current });
     if (!next) return { result, url: current.html_url, replaced };
     replaced.push(current.html_url);
     current = next;
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const {
     TARGET_REPOSITORY: repository,
     SINCE: since,
+    DISPATCHED_AT: dispatchedAt,
     REQUEST_ID: request,
     GITHUB_STEP_SUMMARY: summary,
   } = process.env;
@@ -123,7 +147,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !since || !request)
       throw new Error('Expected TARGET_REPOSITORY, SINCE, and REQUEST_ID');
     const api = (path) => JSON.parse(run('gh', ['api', path]));
-    const { result, url, replaced } = await waitForSiteRun({ repository, since, request, api });
+    const { result, url, replaced } = await waitForSiteRun({
+      repository,
+      since,
+      dispatchedAt: dispatchedAt || since,
+      request,
+      api,
+    });
     const note = replaced.length ? ` after a newer sync replaced ${replaced.join(', ')}` : '';
     const line = `${repository} update: ${result} (${url})${note}`;
     console.log(line);

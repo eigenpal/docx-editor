@@ -19,26 +19,55 @@ const dispatchRun = (id: number, created_at: string, extra: object = {}) => ({
   ...extra,
 });
 
-test('the site run is the one named after the request, else the first unnamed dispatch', () => {
-  const since = '2026-09-24T09:40:00Z';
-  const request = '123-1-docx-editor.dev';
+test('the site run is the one named after the request; an unnamed run only as a fallback', () => {
+  const since = '2026-09-24T09:39:00Z';
+  const dispatchedAt = '2026-09-24T09:39:55Z';
+  const request = '2.22.0-123-1-docx-editor.dev';
   const runs = [
-    dispatchRun(1, '2026-09-24T09:39:59Z'),
+    dispatchRun(1, '2026-09-24T09:39:30Z'),
     dispatchRun(4, '2026-09-24T09:40:30Z'),
     dispatchRun(2, '2026-09-24T09:40:05Z', { display_title: 'other-event' }),
     dispatchRun(3, '2026-09-24T09:40:10Z', { event: 'push' }),
     dispatchRun(5, '2026-09-24T09:40:20Z'),
   ];
-  expect(selectSiteRun(runs, { since, request })?.id).toBe(5);
+  const pick = (list: any[], mode: string) =>
+    selectSiteRun(list, { since, dispatchedAt, request, mode })?.id ?? null;
+  // Without a named run, exact mode waits, and the fallback skips the run from before the dispatch.
+  expect(pick(runs, 'exact')).toBeNull();
+  expect(pick(runs, 'fallback')).toBe(5);
   const named = [
     ...runs,
-    dispatchRun(6, '2026-09-24T09:40:01Z', { display_title: 'upstream-release 999-1-other' }),
+    dispatchRun(6, '2026-09-24T09:40:01Z', { display_title: 'upstream-release 2.22.0-999-1-x' }),
     dispatchRun(7, '2026-09-24T09:40:40Z', { display_title: `upstream-release ${request}` }),
   ];
-  expect(selectSiteRun(named, { since, request })?.id).toBe(7);
-  expect(selectSiteRun([dispatchRun(1, '2026-09-24T09:39:00Z')], { since, request })).toBeNull();
-  // After a cancel, any later sync of the site replaces it.
-  expect(selectSiteRun(named, { since, request, after: named[5] })?.id).toBe(5);
+  expect(pick(named, 'exact')).toBe(7);
+  expect(pick(named, 'fallback')).toBe(7);
+});
+
+test('after a cancel, only a later run of the same version replaces it', () => {
+  const since = '2026-09-24T09:39:00Z';
+  const request = '2.22.0-1-1-site';
+  const ours = dispatchRun(8, '2026-09-24T09:40:02Z', {
+    display_title: `upstream-release ${request}`,
+  });
+  const sameSecond = dispatchRun(9, '2026-09-24T09:40:02Z', {
+    display_title: 'upstream-release 2.22.0-2-1-site',
+  });
+  const otherVersion = dispatchRun(10, '2026-09-24T09:40:01Z', {
+    display_title: 'upstream-release 2.22.1-3-1-site',
+  });
+  const pick = (list: any[]) =>
+    selectSiteRun(list, { since, dispatchedAt: since, request, mode: 'replacement', after: ours })
+      ?.id ?? null;
+  expect(pick([ours, otherVersion, sameSecond])).toBe(9);
+  expect(
+    pick([
+      ours,
+      dispatchRun(11, '2026-09-24T09:41:00Z', {
+        display_title: 'upstream-release 2.23.0-4-1-site',
+      }),
+    ])
+  ).toBeNull();
 });
 
 test('a site run is pending until it completes, then reports its conclusion', () => {
@@ -108,8 +137,15 @@ test('waiting follows the selected run to its conclusion', async () => {
       conclusion: status === 'completed' ? 'failure' : null,
     });
   };
-  const request = 'r';
-  const result = await waitForSiteRun({ repository: 'o/site', since, request, api, wait: noWait });
+  const request = '2.22.0-r';
+  const result = await waitForSiteRun({
+    repository: 'o/site',
+    since,
+    request,
+    api,
+    wait: noWait,
+    exactAttempts: 1,
+  });
   expect(result).toEqual({ result: 'failure', url: 'https://example.test/runs/7', replaced: [] });
   await expect(
     waitForSiteRun({
@@ -125,13 +161,13 @@ test('waiting follows the selected run to its conclusion', async () => {
 
 test('a sync that the site cancels for a newer one reports the newer run', async () => {
   const since = '2026-09-24T09:40:00Z';
-  const request = '1-1-site';
+  const request = '2.22.0-1-1-site';
   const ours = dispatchRun(8, '2026-09-24T09:40:02Z', {
     display_title: `upstream-release ${request}`,
     conclusion: 'cancelled',
   });
   const newer = dispatchRun(9, '2026-09-24T09:41:00Z', {
-    display_title: 'upstream-release 2-1-site',
+    display_title: 'upstream-release 2.22.0-2-1-site',
   });
   const api = (path: string) =>
     path.includes('/actions/runs?') ? { workflow_runs: [ours, newer] } : newer;
@@ -147,7 +183,6 @@ test('a sync that the site cancels for a newer one reports the newer run', async
     request,
     api: () => ({ workflow_runs: [ours] }),
     wait: noWait,
-    findAttempts: 1,
   });
   expect(alone.result).toBe('cancelled');
 });
@@ -169,7 +204,7 @@ test('the report counts every job, including source, and never calls a skip a pa
   const sourceFailed = summarizeJobs(
     [
       job('source', 'failure'),
-      job('updates / ${{ matrix.label }}', 'skipped'),
+      job('downstream / Site update', 'skipped'),
       job('Report', 'success'),
     ],
     context
@@ -177,6 +212,9 @@ test('the report counts every job, including source, and never calls a skip a pa
   expect(sourceFailed.failed).toBe(1);
   expect(sourceFailed.slack).toContain('❌ Post-release 2.22.0: 1 failed, 1 skipped, 0 passed.');
   expect(sourceFailed.slack).toContain('|Site update>: skipped');
+  expect(jobLabel('downstream / Site update (docx-editor.dev)')).toBe(
+    'Site update (docx-editor.dev)'
+  );
   expect(sourceFailed.slack).not.toContain('Report');
   // Nothing confirmed the release, so the report must not claim the packages are on npm.
   expect(sourceFailed.slack).not.toContain('do not republish');
@@ -208,8 +246,9 @@ test('the report counts every job, including source, and never calls a skip a pa
 
 test('each post-release step is its own job, and the comments wait only for verification', () => {
   const downstream = workflow('post-release');
-  const recovery = workflow('recover-release');
-  expect(recovery.jobs.sites.strategy.matrix.include.map((site: any) => site.repository)).toEqual([
+  const recovery = workflow('release-downstream');
+  expect(recovery.jobs.sites.name).toBe('Site update');
+  expect(recovery.jobs.sites.strategy.matrix.repository).toEqual([
     'docx-editor.dev',
     'docx-to-markdown.com',
     'docx-to-pdf.dev',
@@ -218,9 +257,8 @@ test('each post-release step is its own job, and the comments wait only for veri
     (step: any) => step.name === 'Wait for the site update to finish'
   );
   expect(wait.run).toBe('node scripts/collaboration/site-update.mjs');
-  expect(downstream.jobs.announcements.if).toContain('!cancelled()');
-  expect(downstream.jobs.announcements.if).toContain('published_packages');
-  expect(downstream.jobs.report.needs).toEqual(['source', 'updates', 'announcements']);
+  expect(downstream.jobs.announcements.needs).toEqual(['source', 'verify']);
+  expect(downstream.jobs.report.needs).toEqual(['source', 'verify', 'downstream', 'announcements']);
   expect(downstream.jobs.report.if).toStartWith('always()');
   const catalog = workflow('collaboration-catalog');
   const merge = catalog.jobs.merge.steps.find(
@@ -239,12 +277,14 @@ test('each post-release step is its own job, and the comments wait only for veri
 });
 
 test('only verification holds the downstream concurrency group, not the site waits', () => {
-  const recovery = workflow('recover-release');
-  expect(recovery.concurrency).toBeUndefined();
-  expect(recovery.jobs.verify.concurrency).toEqual({
+  const verify = workflow('verify-release');
+  const recovery = workflow('release-downstream');
+  expect(verify.concurrency).toBeUndefined();
+  expect(verify.jobs.verify.concurrency).toEqual({
     group: 'post-release-updates',
     'cancel-in-progress': false,
   });
+  expect(recovery.concurrency).toBeUndefined();
   expect(recovery.jobs.sites.concurrency).toBeUndefined();
   const dispatch = recovery.jobs.sites.steps.find(
     (step: any) => step.name === 'Request the site update'

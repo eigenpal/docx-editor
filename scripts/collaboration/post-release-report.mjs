@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { run } from './common.mjs';
 
@@ -9,9 +9,7 @@ export const REPORT_JOB = 'Report';
 
 /** A job's display name without its reusable-workflow prefix (`updates / catalog / …`). */
 export function jobLabel(name) {
-  const label = name.split(' / ').at(-1) ?? name;
-  // A matrix job that never started keeps its unexpanded name.
-  return label.includes('${{') ? 'Site update' : label;
+  return name.split(' / ').at(-1) ?? name;
 }
 
 export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
@@ -63,7 +61,7 @@ export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
   return { failed, skipped, passed, slack, markdown };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const env = process.env;
   try {
     const pages = JSON.parse(

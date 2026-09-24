@@ -33,12 +33,18 @@ jobs:
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: node scripts/collaboration/post-release.mjs
 
-  updates:
+  verify:
     needs: source
     if: needs.source.outputs.published == 'true'
-    uses: ./.github/workflows/recover-release.yml
+    uses: ./.github/workflows/verify-release.yml
     with:
       source_run_id: ${{ format('{0}', github.event.workflow_run.id) }}
+      version: ${{ needs.source.outputs.version }}
+
+  downstream:
+    needs: [source, verify]
+    uses: ./.github/workflows/release-downstream.yml
+    with:
       version: ${{ needs.source.outputs.version }}
     secrets: inherit
     permissions:
@@ -50,10 +56,10 @@ jobs:
 
   announcements:
     name: Release comments and roadmap
-    needs: [source, updates]
-    # Needs only verified packages. A failed site or catalog update is reported on its own
-    # and does not hold back the release comments.
-    if: ${{ !cancelled() && needs.source.outputs.published == 'true' && needs.updates.outputs.published_packages != '' }}
+    # Only verification, not the site updates or the catalog: those can take an hour, and
+    # a failure there is reported on its own.
+    needs: [source, verify]
+    if: needs.source.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -94,7 +100,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.pal-token.outputs.token }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ needs.updates.outputs.published_packages }}
+          PUBLISHED_PACKAGES: ${{ needs.verify.outputs.published_packages }}
           REPO: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
           ORG: eigenpal
@@ -289,7 +295,7 @@ jobs:
 
   report:
     name: Report
-    needs: [source, updates, announcements]
+    needs: [source, verify, downstream, announcements]
     if: always() && (needs.source.outputs.published == 'true' || failure())
     runs-on: ubuntu-latest
     timeout-minutes: 5
