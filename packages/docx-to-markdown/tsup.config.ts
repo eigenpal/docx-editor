@@ -7,7 +7,9 @@ export default defineConfig({
   // Advanced live-view types share browser contracts with Core. Declare that type-only
   // dependency here so Node consumers do not need to change lib or skipLibCheck.
   // This adds no DOM runtime dependency or polyfill.
-  dts: { banner: '/// <reference lib="dom" />' },
+  // Declarations read sibling packages from their built `dist/`, which `build:packages`
+  // builds first. Compiling their sources again multiplied this step's memory.
+  dts: { banner: '/// <reference lib="dom" />', compilerOptions: { paths: {} } },
   splitting: true,
   clean: true,
   treeshake: true,

@@ -2689,7 +2689,7 @@ export const DocxEditorHorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes
 }>> & Readonly<{}>, {
     className: string;
     style: CSSProperties;
-    unit: "cm" | "inch";
+    unit: "inch" | "cm";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3468,9 +3468,9 @@ export const DocxEditorPageSetupDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop";
+        name: "pageSize" | "orientation" | "scope" | "marginBottom" | "marginLeft" | "marginRight" | "marginTop";
     }>;
 };
 
@@ -3561,9 +3561,9 @@ export const DocxEditorParagraphDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue";
+        name: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
     }>;
 };
 
@@ -3846,7 +3846,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
-    mode: "edit" | "view" | "suggesting";
+    mode: "suggesting" | "edit" | "view";
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
@@ -3966,7 +3966,7 @@ export const DocxEditorTextFormFieldDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     preset: boolean;
     session: TextFormFieldDialogSession | null;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Header" | "Footer" | "Title" | "Cancel" | "Apply" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: keyof TextFormFieldDialogFields;
     }>;
@@ -4127,7 +4127,7 @@ export const DocxEditorVerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     className: string;
     style: CSSProperties;
-    unit: "cm" | "inch";
+    unit: "inch" | "cm";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -4460,7 +4460,7 @@ export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     showIndentHandles: boolean;
     style: CSSProperties;
     tabMarks: RulerTabStop[] | null;
-    unit: "cm" | "inch";
+    unit: "inch" | "cm";
     zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -6745,7 +6745,7 @@ export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     onTopMarginChange: (marginTwips: number) => void;
     pageSetup: _docx_editor_dev_core.PageSetup | null;
     style: CSSProperties;
-    unit: "cm" | "inch";
+    unit: "inch" | "cm";
     zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 

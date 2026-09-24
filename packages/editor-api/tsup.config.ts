@@ -14,7 +14,9 @@ export default defineConfig({
   // makes the ROOT entry importable from all three rather than only from Node.
   platform: 'browser',
   format: ['cjs', 'esm'],
-  dts: { resolve: true },
+  // Declarations read sibling packages from their built `dist/`, which `build:packages`
+  // builds first. Compiling their sources again multiplied this step's memory.
+  dts: { resolve: true, compilerOptions: { paths: {} } },
   tsconfig: 'tsconfig.json',
   // Off on purpose. With splitting, "what is in the server bundle" becomes a question about a
   // graph of shared chunks; off, `scripts/pack-smoke.mjs` can answer it by reading one entry file.

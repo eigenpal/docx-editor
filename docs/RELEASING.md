@@ -96,12 +96,12 @@ bun run check:docs-vue-refs
 bun run check:public-docs-surface
 bun run check:example-readmes
 bun run format:check
-NODE_OPTIONS=--max-old-space-size=8192 bun run build:packages
+bun run build:packages
 bun run api:check
 bun run docs:json
 ```
 
-Use the same 8 GiB Node.js heap limit as CI when building declarations. Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
+Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
 
 Review the generated release plan with `bun changeset status`. Keep all eight published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
 

@@ -51,15 +51,12 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: bun install --frozen-lockfile
       - name: Build the packages the runtime bundles
-        # Only the converter's own dependency chain; the DTS build of core needs the
-        # same heap as the main CI build job.
+        # Only the converter's own dependency chain.
         run: >-
           bun run --filter '@docx-editor.dev/i18n' build &&
           bun run --filter '@docx-editor.dev/core' build &&
           bun run --filter '@docx-editor.dev/fonts' build &&
           bun run --filter '@docx-editor.dev/docx-to-markdown' build
-        env:
-          NODE_OPTIONS: '--max-old-space-size=8192'
       - name: Typecheck runtime
         working-directory: python/docx-to-markdown
         run: bun run typecheck:runtime

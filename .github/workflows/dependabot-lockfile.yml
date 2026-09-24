@@ -100,8 +100,6 @@ jobs:
 
       - name: Build packages
         run: bun run build:packages
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Install Chromium for editor acceptance
         run: bunx playwright install --with-deps chromium

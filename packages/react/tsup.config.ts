@@ -21,7 +21,9 @@ export default defineConfig({
   // it is.
   platform: 'browser',
   format: ['cjs', 'esm'],
-  dts: true,
+  // Declarations read sibling packages from their built `dist/`, which `build:packages`
+  // builds first. Compiling their sources again multiplied this step's memory.
+  dts: { compilerOptions: { paths: {} } },
   splitting: false,
   sourcemap: false,
   clean: true,

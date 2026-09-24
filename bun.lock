@@ -41,6 +41,8 @@
         "prettier": "^3.8.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "rollup": "^4.60.2",
+        "rollup-plugin-dts": "^6.4.1",
         "tailwindcss": "^3.4.1",
         "tailwindcss-animate": "^1.0.7",
         "tsup": "^8.0.1",

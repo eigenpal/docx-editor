@@ -147,10 +147,6 @@ jobs:
 
       - name: Build packages (publish reuses the dist/)
         run: bun run build:packages
-        env:
-          # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
-          # core's 67 entries OOM under the default 1.5 GB heap.
-          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Build demos and parity bundle
         run: bun run build

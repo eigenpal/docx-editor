@@ -25,6 +25,7 @@ const CORE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const manifest = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')) as {
   exports: Record<string, unknown>;
+  scripts: Record<string, string>;
 };
 const tsconfig = JSON.parse(readFileSync(join(CORE, 'tsconfig.json'), 'utf8')) as {
   compilerOptions: { paths: Record<string, string[]> };
@@ -159,12 +160,12 @@ describe('the published subpath tables agree', () => {
     }
   });
 
-  test('one build owns the one declaration graph selected by every export', () => {
+  test('one declaration graph, selected by every export, built outside tsup', () => {
     // `types` is the outer condition for every JS subpath, so import and require
-    // consumers both select the same `.d.ts` declaration graph. tsup evaluates
-    // array configs concurrently: enabling DTS on both formats does not improve
-    // that public contract, but it does build a second unused `.d.cts` graph at
-    // the same time and can exhaust a constrained preview builder.
+    // consumers both select the same `.d.ts` declaration graph. The package build emits
+    // it with `scripts/build-core-declarations.mjs`. tsup's own declaration bundler needed
+    // more than Node's default heap for this package, so neither tsup build may turn it
+    // back on.
     const typeTargets = jsSubpaths.map((subpath) => {
       const value = manifest.exports[subpath] as { types?: unknown };
       return value.types;
@@ -174,7 +175,8 @@ describe('the published subpath tables agree', () => {
     ).toBe(true);
 
     const [esm, cjs] = configs as readonly (BuildConfig & { dts?: boolean })[];
-    expect({ esm: esm!.dts, cjs: cjs!.dts }).toEqual({ esm: true, cjs: false });
+    expect({ esm: esm!.dts, cjs: cjs!.dts }).toEqual({ esm: false, cjs: false });
+    expect(manifest.scripts.build).toContain('node ../../scripts/build-core-declarations.mjs');
   });
 
   test('only the build that inlines the runtime aliases Node’s `module`', () => {

@@ -1042,28 +1042,28 @@ export interface DocxEditorPageNumberProps {
 // @public
 export const DocxEditorPageSetupDialog: typeof PageSetupDialogRoot & {
     Apply: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Body: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Cancel: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Error: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Field: (props: DialogPartProps & {
-        name: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop";
+        name: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft";
     }) => react.ReactNode;
     Footer: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Header: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Title: (props: DialogPartProps & {
-        name?: "scope" | "orientation" | "pageSize" | "marginLeft" | "marginRight" | "marginBottom" | "marginTop" | undefined;
+        name?: "pageSize" | "orientation" | "scope" | "marginTop" | "marginRight" | "marginBottom" | "marginLeft" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
 };
 
@@ -1076,28 +1076,28 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 // @public
 export const DocxEditorParagraphDialog: typeof ParagraphDialogRoot & {
     Apply: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Body: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Cancel: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Error: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Field: (props: DialogPartProps & {
-        name: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue";
+        name: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
     }) => react.ReactNode;
     Footer: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Header: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Title: (props: DialogPartProps & {
-        name?: "keepNext" | "keepLines" | "pageBreakBefore" | "widowControl" | "contextualSpacing" | "alignment" | "spaceBefore" | "spaceAfter" | "lineRule" | "tabStops" | "special" | "indentLeft" | "indentRight" | "specialBy" | "lineValue" | undefined;
+        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
 };
 

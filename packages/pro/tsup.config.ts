@@ -108,7 +108,9 @@ export default defineConfig([
       'collaboration/webrtc': 'src/collaboration/webrtc.ts',
       'collaboration/hocuspocus': 'src/collaboration/hocuspocus.ts',
     },
-    dts: true,
+    // Declarations read sibling packages from their built `dist/`, which `build:packages`
+    // builds first. Compiling their sources again multiplied this step's memory.
+    dts: { compilerOptions: { paths: {} } },
     // The one config in this array that may let tsup name the file. See
     // `writeMetafileAs`.
     metafile: true,
@@ -122,6 +124,8 @@ export default defineConfig([
     },
     dts: {
       compilerOptions: {
+        // See the declaration note on the build above.
+        paths: {},
         jsx: 'preserve',
         jsxImportSource: 'vue',
       },

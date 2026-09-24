@@ -105,8 +105,6 @@ jobs:
       - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
         run: bun run build:pdf
-        env:
-          NODE_OPTIONS: '--max-old-space-size=8192'
       - name: Check table revision grouping and file exports in the editor
         if: "matrix.check == 'browser'"
         run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts e2e/file-export.interaction.spec.ts
@@ -131,7 +129,11 @@ jobs:
       - name: Build packages
         run: bun run build:packages
         env:
-          NODE_OPTIONS: '--max-old-space-size=8192'
+          # A budget, not a workaround. Anyone who builds these packages gets Node's
+          # default heap, which is 2 GiB on an 8 GiB machine. Every package build peaks
+          # near 1.2 GiB. If one outgrows this budget, it fails here instead of in a
+          # caller that does not raise the heap.
+          NODE_OPTIONS: '--max-old-space-size=2048'
         if: "matrix.check == 'build'"
       - name: Check editor API consumers against published declarations
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published"
