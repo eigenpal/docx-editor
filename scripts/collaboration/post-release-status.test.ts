@@ -319,11 +319,12 @@ test('each post-release step is its own job, and the comments wait only for veri
   );
   expect(update.run).toBe('node scripts/collaboration/site-update.mjs');
   expect(recovery.jobs.sites.env.REQUEST_ID).toStartWith('${{ inputs.version }}-');
-  // Nothing downstream runs unless verification produced its output.
-  const guard = "needs.verify.outputs.published_packages != ''";
-  expect(downstream.jobs.downstream.if).toBe(guard);
-  expect(downstream.jobs.announcements.if).toContain(guard);
-  expect(workflow('recover-release').jobs.downstream.if).toBe(guard);
+  // Verification is gated on the calling job, so a skip there skips everything after it,
+  // and nothing depends on reusable-workflow outputs, which a rerun can lose.
+  expect(downstream.jobs.verify.if).toContain("github.ref == 'refs/heads/main'");
+  expect(workflow('recover-release').jobs.verify.if).toBe("github.ref == 'refs/heads/main'");
+  expect(downstream.jobs.downstream.if).toBeUndefined();
+  expect(JSON.stringify(downstream.jobs)).not.toContain('outputs.published_packages');
   const fallback = downstream.jobs.report.steps.at(-1);
   expect(fallback.if).toBe('failure() || cancelled()');
   expect(fallback.run).toContain('curl');

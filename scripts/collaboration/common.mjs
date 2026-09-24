@@ -75,10 +75,14 @@ export async function withRetries(
       if (/Resource not accessible by integration/i.test(error.message))
         throw permission ? new Error(`${permission}\n${error.message}`) : error;
       const limited = /rate limit/i.test(error.message);
-      const transient = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i.test(error.message);
+      const transient =
+        /HTTP (?:5\d\d|429)|timed out|timeout|ECONNRESET|ETIMEDOUT|connection reset|error connecting|fetch failed/i.test(
+          error.message
+        );
       if (attempt >= attempts || !(limited || transient)) throw error;
       console.warn(`Temporary GitHub API error (attempt ${attempt}/${attempts}); retrying.`);
-      await wait((limited ? rateLimitDelay : delay) * attempt);
+      // Capped: a job has a fixed budget, and an uncapped rate-limit wait can use all of it.
+      await wait(Math.min((limited ? rateLimitDelay : delay) * attempt, 300_000));
     }
   }
 }

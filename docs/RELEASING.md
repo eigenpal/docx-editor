@@ -194,7 +194,7 @@ The verification jobs of automatic and manual downstream updates share a concurr
 
 If a post-release job failed after verification passed, fix the cause and rerun the failed jobs in that post-release run (`gh run rerun <run-id> --failed`). The rerun can also repeat other jobs in the same reusable workflow, such as site updates that passed. That is safe: a site that already has the version records no change, and a catalog that already records the version passes.
 
-A rerun of the failed jobs does not repeat a verification that passed. A site job that reruns after a newer release passes as superseded and sends nothing. To recover a catalog that a newer release left behind, run `collaboration-catalog.yml` with the missed `version` input. The Recover release workflow repeats verification, which fails when a newer version is already npm `latest`.
+A rerun of the failed jobs does not repeat a verification that passed, and the jobs that need it run again from its passed result. A site job that reruns after a newer release passes as superseded and sends nothing. To recover a catalog that a newer release left behind, run `collaboration-catalog.yml` with the missed `version` input. The Recover release workflow repeats verification, which fails when a newer version is already npm `latest`.
 
 Use the [Recover release workflow](../.github/workflows/recover-release.yml) if npm publication succeeded but registry verification failed, or if the post-release run cannot be rerun. Rerunning Release can skip these updates because Changesets reports that the packages are already published.
 

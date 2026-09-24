@@ -20,6 +20,8 @@ permissions:
 
 jobs:
   verify:
+    # The ref check sits on this calling job, so a skip here skips the downstream updates.
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/verify-release.yml
     with:
       version: ${{ inputs.version }}
@@ -27,9 +29,6 @@ jobs:
 
   downstream:
     needs: verify
-    # The verify output exists only when verification ran and passed on main. A skipped inner
-    # job can still leave the reusable-workflow call itself reported as a success.
-    if: needs.verify.outputs.published_packages != ''
     uses: ./.github/workflows/release-downstream.yml
     with:
       version: ${{ inputs.version }}

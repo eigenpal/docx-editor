@@ -1,7 +1,7 @@
 import { appendFileSync, realpathSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { compareVersions, run, withRetries } from './common.mjs';
+import { compareVersions, registry, run, withRetries } from './common.mjs';
 
 // A sent dispatch is not a finished update. This waits for the site's own sync run, so a
 // failed site update fails the post-release job that requested it.
@@ -154,26 +154,6 @@ export async function updateSite({
   return outcome;
 }
 
-async function npmLatest(name) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
-        // Bypass cached metadata, as registry.mjs does: a stale latest defeats this check.
-        headers: { accept: 'application/json', 'cache-control': 'no-cache' },
-        cache: 'no-store',
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) throw new Error(`npm returned HTTP ${response.status}`);
-      const latest = (await response.json())['dist-tags']?.latest;
-      if (!/^\d+\.\d+\.\d+$/.test(latest ?? '')) throw new Error(`Unexpected latest tag ${latest}`);
-      return latest;
-    } catch (error) {
-      if (attempt >= 5) throw error;
-      await sleep(10_000 * attempt);
-    }
-  }
-}
-
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const {
     TARGET_REPOSITORY: repository,
@@ -204,7 +184,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
       request,
       api,
       dispatch,
-      latest: () => npmLatest('@docx-editor.dev/core'),
+      // The registry client bypasses cached metadata and retries, like the verification.
+      latest: async () => (await registry('@docx-editor.dev/core'))['dist-tags'].latest,
     });
     const line =
       outcome.result === 'superseded'

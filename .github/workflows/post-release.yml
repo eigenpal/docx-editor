@@ -35,7 +35,9 @@ jobs:
 
   verify:
     needs: source
-    if: needs.source.outputs.published == 'true'
+    # The ref check sits on this calling job, so a skip here skips every job that needs it.
+    # A reusable workflow whose inner job was skipped can still report the call as success.
+    if: needs.source.outputs.published == 'true' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/verify-release.yml
     with:
       source_run_id: ${{ format('{0}', github.event.workflow_run.id) }}
@@ -43,9 +45,6 @@ jobs:
 
   downstream:
     needs: [source, verify]
-    # The verify output exists only when verification ran and passed on main. A skipped inner
-    # job can still leave the reusable-workflow call itself reported as a success.
-    if: needs.verify.outputs.published_packages != ''
     uses: ./.github/workflows/release-downstream.yml
     with:
       version: ${{ needs.source.outputs.version }}
@@ -62,7 +61,9 @@ jobs:
     # Only verification, not the site updates or the catalog: those can take an hour, and
     # a failure there is reported on its own.
     needs: [source, verify]
-    if: needs.source.outputs.published == 'true' && needs.verify.outputs.published_packages != ''
+    # Plain `needs` results, not reusable-workflow outputs: a rerun of the failed jobs keeps
+    # the results of the jobs that passed.
+    if: needs.source.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -103,7 +104,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.pal-token.outputs.token }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ needs.verify.outputs.published_packages }}
+          VERSION: ${{ needs.source.outputs.version }}
           REPO: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
           ORG: eigenpal
@@ -115,7 +116,7 @@ jobs:
           # best-effort API call would otherwise abort this step — which, via
           # the implicit success() gate, would skip the landing-notify
           # dispatch below.
-          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          version="$VERSION"
           OWNER="${REPO%%/*}"
           NAME="${REPO#*/}"
           # The checkout includes the umbrella tag created by the Release workflow.
