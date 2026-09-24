@@ -216,6 +216,42 @@
         "package-lock.json": "c580319b7174c7afe45c6990142cb2e9ae928163f910bbb2af5feb52fbfad516",
         "fixture.json": "d9b6840c8cc501a665cc2bffa44ed79bf3f43ec93fb14054abc67d32933515a7"
       }
+    },
+    {
+      "version": "2.22.0",
+      "commit": "abe6191d1c1fa6820a6fcca6ab7526a50d0d25f5",
+      "sourceLockHash": "f43c6cf7b24db2f76547139c21b10997adde57d1d687773a6b8c71a76eedf7a6",
+      "format": "docx-collaboration:1.3.1.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 3,
+        "repairVersion": 1,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.22.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.22.0.tgz",
+          "integrity": "sha512-g0gjrXQixsPmuZPjQQQrqI/Zf7P0KOggn0PKg2/3tCTvb5Z06VLMvpKQueFt5wtaBUVFYjZmx3loyY7d235pbQ=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.22.0.tgz",
+          "integrity": "sha512-Umwc4eoPts0qVfL0riJcK9u5hPYEj41yOWC7aBKRTUhZUD+PULEDO3O1Ouazn4Ti5eQqLCbg2EcjJIt8kUTuhw=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.22.0.tgz",
+          "integrity": "sha512-Qt0NFOfq0pT2wGTmZhXq8NEtcJPoO2AQyuONzcPMSE1nCpbN6kRRmJEnVrTWLyh+APZtmcht7Fu/6S1bvXFpQQ=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.22.0.tgz",
+          "integrity": "sha512-ua/Uj1bOIIvAV1TOXkpdmcEu0VZwGoP7/b2kEd1wAd+wCSOJawZLOZSgXaR7JvAILpKWaeqgpEgn3yNlM1YmMg=="
+        }
+      },
+      "hashes": {
+        "package.json": "3fb3d1394b8046f4f30b42ab7f5ae455237ad584aa831eea6e2b0850fee53d6e",
+        "package-lock.json": "da8a667950a5f5fc36e3765a273eb3bacead20fddf1f919dd4dbcee59a6df78e",
+        "fixture.json": "d6733da6e6b1ee2405082513d2b51d11812e7a2a2580308020175be64aa90567"
+      }
     }
   ]
 }
