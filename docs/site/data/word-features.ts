@@ -292,7 +292,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'w:keepNext, w:keepLines, w:widowControl and w:pageBreakBefore all reach pagination, and the Paragraph dialog sets each of them. A value a style supplies reads through the cascade, so a checkbox shows what is in force rather than only what the paragraph authors itself.',
+      'w:keepNext, w:keepLines, w:widowControl and w:pageBreakBefore all reach pagination, and the Paragraph dialog sets each of them. Keep-with-next groups account for the following paragraph’s keep-lines and widow-control requirements when the group fits on a page. A value a style supplies reads through the cascade, so a checkbox shows what is in force rather than only what the paragraph authors itself.',
   },
   {
     id: 'paragraphs.indentation',

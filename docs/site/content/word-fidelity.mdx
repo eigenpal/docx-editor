@@ -45,6 +45,8 @@ The matrix reports three separate support axes.
 
 <FeatureMatrix category="paragraphs" />
 
+A paragraph with `w:keepNext` stays with the opening lines that the following paragraph must keep together. With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the entire following paragraph together when the group fits on a page.
+
 Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored positions. Text wraps inside the frame width and remains selectable and editable. Adjacent paragraphs with identical `w:framePr` attributes share one frame. Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Following text wraps around frames; `none` and `notBeside` move that text below the frame.
 
 This supports auto-height frames in single-column sections with page, margin, or text anchors. Drop caps, fixed heights, alignment-based positions, and frames containing drawings or notes retain ordinary layout. Upward text-relative offsets also retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page use ordinary layout. The editor preserves their properties on save. A following continuous section starts below the preceding frames. There is no interface for creating, moving, or resizing text frames.

@@ -163,15 +163,15 @@ export interface KeepNextBlock {
  * Flow height a `w:keepNext` chain starting at `start` needs to hold together (§17.3.1.15).
  *
  * The chain is every consecutive block that declares `w:keepNext`, plus the block the last of
- * them is kept WITH — of which only the opening line has to share the page, since that is all
- * Word requires to consider a heading attached to its body. Where widow control is on that
- * block, two lines are required instead: one would be pulled over anyway and the heading
- * would be stranded a moment later.
+ * them is kept WITH. That last paragraph contributes the shortest prefix its own keep rules
+ * allow. Widow control requires two lines on each side of a split, so a paragraph with fewer
+ * than four lines stays whole. A paragraph with keepLines also stays whole. Pricing a shorter
+ * prefix lets the later break retreat move the paragraph away from its heading.
  *
  * Returns null for anything the lookahead cannot price — a table in the chain, a chain that
  * runs past {@link MAX_KEEP_NEXT_CHAIN} — and null means the caller places on ordinary fit
  * rules. Word abandons a keep it cannot honour rather than searching, and so does this: the
- * content is placed, just not moved. `lineHeights` is asked for lazily, one block at a time,
+ * content is placed, just not moved. `linesFor` is asked for lazily, one block at a time,
  * so a chain that stops early never measures the blocks past its end.
  *
  * Paragraph borders are deliberately NOT priced in. Under-estimating degrades to the
@@ -182,8 +182,13 @@ export function keepNextGroupHeight(
   blocks: readonly KeepNextBlock[],
   start: number,
   carry: number,
-  lineHeights: (index: number) => readonly number[],
-  skipBlock?: (index: number) => boolean
+  linesFor: (index: number) => readonly {
+    readonly height: number;
+    readonly pageBreakAfter?: boolean;
+    readonly columnBreakAfter?: boolean;
+  }[],
+  skipBlock?: (index: number) => boolean,
+  breaksBefore?: (index: number) => boolean
 ): number | null {
   let total = 0;
   let after = carry;
@@ -191,16 +196,29 @@ export function keepNextGroupHeight(
     const block = blocks[index];
     if (block && skipBlock?.(index)) continue;
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
+    // A forced new page also discards the preceding paragraph's trailing spacing.
+    if (index > start && breaksBefore?.(index)) return total - after;
     // Adjacent before/after collapse to the larger gap rather than summing (Word).
     total += Math.max(block.spacing.before, after) - after;
-    const heights = lineHeights(index);
+    const lines = linesFor(index);
+    const hardBreak = lines.findIndex((line) => line.pageBreakAfter || line.columnBreakAfter);
+    const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;
     // The story's LAST block keeps with nothing, so it terminates the chain however authored.
     if (!block.keeps.keepNext || index + 1 >= blocks.length) {
-      total += heights[0] ?? 0;
-      if (block.keeps.widowControl && heights.length > 1) total += heights[1]!;
+      let openingLines = 1;
+      if (block.keeps.keepLines) openingLines = openingLength;
+      else if (block.keeps.widowControl) {
+        openingLines =
+          lines.length < MIN_LINES_EITHER_SIDE * 2
+            ? openingLength
+            : Math.min(MIN_LINES_EITHER_SIDE, openingLength);
+      }
+      for (let line = 0; line < openingLines; line += 1) total += lines[line]?.height ?? 0;
       return total;
     }
-    for (const height of heights) total += height;
+    for (let line = 0; line < openingLength; line += 1) total += lines[line]!.height;
+    // An authored page or column break ends this page's keep group.
+    if (hardBreak >= 0) return total;
     total += block.spacing.after;
     after = block.spacing.after;
   }

@@ -2245,13 +2245,23 @@ function layoutBlocksPass(
           previousSpaceAfter,
           (at) => {
             const member = prepareBlock(bodies[at]!, columnWidth());
-            return member.kind === 'paragraph' ? breakBlock(member, at).map((l) => l.height) : [];
+            return member.kind === 'paragraph' ? breakBlock(member, at) : [];
           },
           (at) =>
-            prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || collapsesSectionMark(at))
+            prepared[at]?.kind === 'paragraph' &&
+            (!!prepared[at].frame || collapsesSectionMark(at)),
+          (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at])
         );
-        if (group !== null && group + topExtent <= contentHeight()) {
-          needed = Math.max(needed, group + topExtent);
+        // Natural page movement suppresses the head's before spacing. Price that
+        // destination separately from the space needed beside the current content.
+        const pricedLead = collapsedMark
+          ? 0
+          : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter);
+        const groupBody = group === null ? null : group - pricedLead;
+        const freshLead =
+          firstParagraphOfSection || breaksBeforeAt(index, entry) ? spacing.before : 0;
+        if (groupBody !== null && groupBody + freshLead + topExtent <= contentHeight()) {
+          needed = Math.max(needed, groupBody + lead + topExtent);
         }
       }
       if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
