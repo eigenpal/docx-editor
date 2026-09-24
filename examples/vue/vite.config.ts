@@ -77,6 +77,12 @@ export default defineConfig({
             find: '@docx-editor.dev/pro/vue',
             replacement: path.join(monorepoRoot, 'packages/pro/dist/vue/index.js'),
           },
+          // examples/shared imports it, and node_modules lookup from there never
+          // reaches this app's workspace link.
+          {
+            find: /^@docx-editor\.dev\/docx-to-markdown$/,
+            replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/dist/index.js'),
+          },
         ]
       : [
           {

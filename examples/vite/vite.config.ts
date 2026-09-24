@@ -105,6 +105,12 @@ export default defineConfig(async (): Promise<UserConfig> => {
               replacement: path.join(monorepoRoot, 'packages/react/dist/index.mjs'),
             },
             { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+            // examples/shared imports it, and node_modules lookup from there never
+            // reaches this app's workspace link.
+            {
+              find: /^@docx-editor\.dev\/docx-to-markdown$/,
+              replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/dist/index.js'),
+            },
           ]
         : [
             {
