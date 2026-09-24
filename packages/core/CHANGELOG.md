@@ -1,5 +1,57 @@
 # @docx-editor.dev/core
 
+## 2.22.0
+
+### Minor Changes
+
+- 07718bd: Reserve the full height of a collapsed horizontal table border in the row below it. Draw each column's border downward from the shared boundary.
+- fe66ece: Add safe DOCX refresh with scroll preservation, customizable timed change highlights, and configurable change navigation. Fixes #951
+- 648f13c: Add optional File menu exports for continuous Markdown and PDF with clear setup and conversion errors. Customize export feedback with `popups.export` in React and Vue.
+- 95c792f: Add File > Print and Ctrl+P, which print the document through the configured PDF converter. Customize print feedback with `popups.print` in React and Vue.
+- 07718bd: Add `lastResortFonts` to `openFontBackedDocumentForExport`. These font sources resolve missing families after embedded fonts, preserving fonts supplied by the document.
+- 07718bd: Add export capabilities for absolute span geometry, laid-out glyph shaping, glyph fallback, picture bullet records, and fixed picture opacity from `a:alphaModFix`.
+- a893c05: Add `editor.scrollToAnchor()` to reveal paragraphs by `paraId` without changing selection or focus. Fixes #957
+
+### Patch Changes
+
+- 139688b: Improve screen reader labels and keyboard access for document pages, formatting controls, and vertical ruler margins.
+- d98b6d8: Floating objects that must not overlap now move beside the object they collide with, as Word places them, and move down only when neither side has room.
+- abc656b: Keep floating drawings whose anchor flags are spelled with surrounding whitespace. `behindDoc`, `locked`, `layoutInCell`, `allowOverlap`, `simplePos` and `hidden` are `xsd:boolean`, which carries a fixed `whiteSpace="collapse"` facet, so `1` and `true\n` are legal — the anchor gate compared the raw string and dropped the drawing instead. Schema-invalid spellings such as `yes` or `2` are still refused.
+- 07718bd: Center `w:insideV` table borders on column boundaries, including the first and last columns.
+- 07718bd: Center vertical table borders on column boundaries when `w:tblW` uses `w:type="auto"`.
+- 07718bd: Support color fonts that include glyph outlines. Prefer color emoji fonts for emoji-presentation text while preserving symbol fonts for other characters.
+- 9912e81: Fix slow download file names, layout, and Markdown conversion for text with long runs of spaces or dots. Download names also prefix Windows device names that have an extension, such as `_NUL.tar.docx`, and no longer double a padded `.docx` suffix.
+- 7ff2004: When a section has other content, the empty paragraph that ends it before a continuous section no longer adds its line height or paragraph spacing, so the next section starts directly below the previous content.
+- ac84ccf: Convert long documents to PDF about twice as fast, and shape text faster in the editor and in headless exports. Page content is unchanged, but compressed PDF stream bytes can differ.
+- cde01d8: Enter, Backspace, and typing are faster in long documents, most of all in documents with many sections, tables, comments, or page-number footers.
+- 07718bd: Include a floating table's outer border in its text-wrapping exclusion area.
+- 07718bd: Use the run font's strikeout metrics to set the thickness and baseline offset of `w:separator` footnote rules.
+- 07718bd: Draw a framed paragraph's bottom border at the frame's bottom edge, after the paragraph's trailing spacing.
+- d98b6d8: Header and footer text outside tables in documents saved before Word 2013 compatibility mode no longer wraps around the floating objects in that header or footer, as Word lays it out.
+- 23093e9: Empty paragraphs whose paragraph mark is hidden no longer add blank lines and spacing to the page, and they still count in list numbering.
+- edfb06d: Justified paragraphs now compress inter-word spaces to fit a word when the space after that word is in a separate run or the paragraph uses an East Asian language, so these lines no longer wrap one word early. Justified lines that end in a double space split across runs now fill the full line width.
+- 07718bd: Apply `w:widowControl` to footnotes and endnotes that span pages. Move a three-line note to the next page when splitting it would leave its final line alone.
+- d98b6d8: Floating objects in a table cell now stay in the cell when `layoutInCell` is off in a document saved in Word 2013 or later compatibility mode, as Word lays them out. For such an object, `AnchoredDrawingRecord.layoutInCell` now reports where the layout placed it rather than the authored attribute.
+- 07718bd: Exclude page-positioned floating objects with `w:layoutInCell="0"` from text wrapping inside their containing table cell.
+- d98b6d8: In documents saved before Word 2013 compatibility mode, table rows now move below a floating object that a cell places against the page, and objects positioned against their own character or line stay in their cell, as Word lays them out.
+- e6616fe: Table rows that cannot break across pages but are taller than a page now start on a new page and continue onto the following pages, instead of failing layout and export.
+- 1bb2434: A page- or margin-anchored floating table that spans the text column now moves to the next page with its following paragraph when earlier text on the page would leave no room for that paragraph below the table.
+- 07718bd: Keep picture bullets aligned with text when a bottom-aligned cell, frame, or note moves the paragraph. Apply fixed picture opacity in the editor and reject invalid character-border colors before rendering.
+- 07718bd: Render `w:numPicBullet` picture bullets as image list markers in the editor and PDF export. Use the list level's bullet text when the image is unavailable.
+- 139688b: Preserve accepted document refresh results when a change observer cancels processing.
+- 07718bd: Use authored `w:tblGrid` column widths when the table specifies a total width. Apply absolute cell widths only to columns without a grid width.
+- 07718bd: Reduce cumulative rounding errors in PDF text baselines across paragraph lines.
+- 07718bd: Render list bullets and calculate their line height using the document's specified symbol font. Preserve Unicode text for copying.
+- 07718bd: Apply automatic spacing between table-cell paragraphs when `w:beforeAutospacing` or `w:afterAutospacing` is enabled.
+- 9db7eb3: Improve PDF conversion with reusable export sessions, configurable limits, typed errors, and font diagnostics.
+- 07718bd: Include the anchor's vertical offset when positioning text below a drawing with top-and-bottom wrapping.
+- 07718bd: Prevent extra line breaks at run boundaries after a drawing with top-and-bottom wrapping.
+- 07718bd: Draw vertical table borders outward from their grid lines instead of inside the preceding cell.
+- 07718bd: Apply modern justification and default ligatures to documents with `compatibilityMode` 16 or later.
+- 07718bd: Expand `w:lineRule="atLeast"` line boxes upward when their minimum height exceeds the text height. Improve PDF baseline placement at rounding boundaries.
+- 07718bd: Allow documents with wrapping exclusions to complete layout when they require more than eight reflow passes.
+- @docx-editor.dev/i18n@2.22.0
+
 ## 2.21.1
 
 ### Patch Changes

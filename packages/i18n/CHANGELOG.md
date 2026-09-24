@@ -1,5 +1,7 @@
 # @docx-editor.dev/i18n
 
+## 2.22.0
+
 ## 2.21.1
 
 ### Patch Changes

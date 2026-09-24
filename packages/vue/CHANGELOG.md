@@ -1,5 +1,56 @@
 # @docx-editor.dev/vue
 
+## 2.22.0
+
+### Patch Changes
+
+- 95c792f: Ctrl+S and Ctrl+O now work in the Vue menu bar when the editor is ready before the menu mounts.
+- Updated dependencies [139688b]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [abc656b]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9912e81]
+- Updated dependencies [7ff2004]
+- Updated dependencies [fe66ece]
+- Updated dependencies [ac84ccf]
+- Updated dependencies [cde01d8]
+- Updated dependencies [648f13c]
+- Updated dependencies [95c792f]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [23093e9]
+- Updated dependencies [edfb06d]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [e6616fe]
+- Updated dependencies [1bb2434]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [139688b]
+- Updated dependencies [a893c05]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9db7eb3]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+  - @docx-editor.dev/core@2.22.0
+  - @docx-editor.dev/i18n@2.22.0
+
 ## 2.21.1
 
 ### Patch Changes
