@@ -1,0 +1,93 @@
+import { appendFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { run } from './common.mjs';
+
+// One message per release that lists every post-release job with its result, so a reader
+// knows what went through and what to fix without opening the run.
+
+export const REPORT_JOB = 'Report';
+
+/** A job's display name without its reusable-workflow prefix (`updates / catalog / …`). */
+export function jobLabel(name) {
+  const label = name.split(' / ').at(-1) ?? name;
+  // A matrix job that never started keeps its unexpanded name.
+  return label.includes('${{') ? 'Site update' : label;
+}
+
+export function summarizeJobs(jobs, { version, runUrl, sourceUrl }) {
+  const rows = jobs
+    .filter((job) => job.name !== REPORT_JOB)
+    .map((job) => ({
+      label: jobLabel(job.name),
+      result: job.conclusion ?? job.status,
+      url: job.html_url,
+    }));
+  const count = (test) => rows.filter((row) => test(row.result)).length;
+  const passed = count((result) => result === 'success');
+  const skipped = count((result) => result === 'skipped');
+  const failed = rows.length - passed - skipped;
+  const release = version ? `Post-release ${version}` : 'Post-release';
+  const title =
+    failed > 0
+      ? `${release}: ${failed} failed, ${skipped} skipped, ${passed} passed.`
+      : skipped > 0
+        ? `${release}: ${passed} passed, ${skipped} skipped. Check that each skipped step was not needed.`
+        : `${release}: all ${passed} steps passed.`;
+  const next =
+    failed > 0
+      ? 'The packages are already on npm; do not republish. Fix the cause, then rerun the failed jobs in the post-release run.'
+      : '';
+  const icon = (result) => (result === 'success' ? '✅' : result === 'skipped' ? '⚪' : '❌');
+  const suffix = (result) => (result === 'success' ? '' : `: ${result}`);
+  const slack = [
+    `${icon(failed ? 'failure' : skipped ? 'skipped' : 'success')} ${title}`,
+    ...rows.map((row) => `${icon(row.result)} <${row.url}|${row.label}>${suffix(row.result)}`),
+    next,
+    `<${sourceUrl}|Release run> · <${runUrl}|Post-release run>`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const markdown = [
+    `### ${title}`,
+    '',
+    ...rows.map((row) => `- ${icon(row.result)} [${row.label}](${row.url})${suffix(row.result)}`),
+    '',
+    next,
+    `[Release run](${sourceUrl}) · [Post-release run](${runUrl})`,
+  ]
+    .filter((line, index, all) => line !== '' || all[index - 1] !== '')
+    .join('\n');
+  return { failed, skipped, passed, slack, markdown };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const env = process.env;
+  try {
+    const pages = JSON.parse(
+      run('gh', [
+        'api',
+        // `latest`: after a rerun, each job's newest attempt, not the first failure.
+        `repos/${env.REPO}/actions/runs/${env.RUN_ID}/jobs?filter=latest&per_page=100`,
+      ])
+    );
+    const report = summarizeJobs(pages.jobs, {
+      version: env.VERSION,
+      runUrl: env.RUN_URL,
+      sourceUrl: env.SOURCE_URL,
+    });
+    console.log(report.markdown);
+    if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${report.markdown}\n`);
+    if (env.SLACK_WEBHOOK_URL) {
+      const response = await fetch(env.SLACK_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: report.slack }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error(`Slack returned HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.error(`::error::${error.message}`);
+    process.exitCode = 1;
+  }
+}
