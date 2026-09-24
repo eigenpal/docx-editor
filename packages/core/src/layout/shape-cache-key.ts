@@ -16,12 +16,19 @@ const MAX_INTERNED_ENVIRONMENTS = 4096;
  * over calls `onRestart`, which must drop every result keyed by an old id: otherwise a reused id
  * would find another environment's run.
  */
+const typed = (value: unknown): string =>
+  typeof value === 'number' ? String(value) : (JSON.stringify(value) ?? typeof value);
+
 export class ShapeCacheKeys {
   readonly #ids = new Map<string, number>();
 
   constructor(private readonly onRestart: () => void) {}
 
-  /** The text goes last, so no split of the key is ambiguous. */
+  /**
+   * The text goes last, so no split of the key is ambiguous. A size or level that is not a
+   * number keeps its type in the key: `'24'` must miss the entry for `24` and reach the
+   * validation that refuses it, as it did when the key was JSON.
+   */
   keyOf(input: ShapeInput, environment: ShapingEnvironment): string {
     const fingerprint = shapingEnvironmentFingerprint(environment);
     let id = this.#ids.get(fingerprint);
@@ -33,7 +40,7 @@ export class ShapeCacheKeys {
       id = this.#ids.size;
       this.#ids.set(fingerprint, id);
     }
-    return `${id}\u0000${input.fontSizeHalfPoints}\u0000${input.bidiLevel}\u0000${input.text}`;
+    return `${id}\u0000${typed(input.fontSizeHalfPoints)}\u0000${typed(input.bidiLevel)}\u0000${input.text}`;
   }
 
   clear(): void {

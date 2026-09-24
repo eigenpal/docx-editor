@@ -69,6 +69,8 @@ describe('HarfBuzz shape cache', () => {
     let shapeCalls = 0;
     let cleared = 0;
     const shaper = createHarfBuzzTextShaper({
+      // Room for every run, so English is still cached when its id is handed out again.
+      maxCachedShapes: 4096,
       instrumentation: {
         onShapeCall: () => (shapeCalls += 1),
         onShapeCacheEvent: ({ kind, retainedBytes }) => {
@@ -92,6 +94,16 @@ describe('HarfBuzz shape cache', () => {
     expect(again.glyphs.map(({ id, advanceX }) => [id, advanceX])).toEqual(
       english.glyphs.map(({ id, advanceX }) => [id, advanceX])
     );
+    shaper.dispose();
+  });
+
+  test('a size or level of the wrong type is refused even when the number is cached', () => {
+    const shaper = createHarfBuzzTextShaper();
+    shaper.shape(input('typed'));
+    const loose = (overrides: Record<string, unknown>) =>
+      ({ ...input('typed'), ...overrides }) as unknown as ShapeInput;
+    expect(() => shaper.shape(loose({ fontSizeHalfPoints: '24' }))).toThrow();
+    expect(() => shaper.shape(loose({ bidiLevel: '0' }))).toThrow();
     shaper.dispose();
   });
 });

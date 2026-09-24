@@ -448,7 +448,8 @@ const NUMBER_STORAGE_BYTES = 8;
 const ARRAY_OVERHEAD_BYTES = 32;
 const MAP_ENTRY_OVERHEAD_BYTES = OBJECT_OVERHEAD_BYTES + 2 * REFERENCE_BYTES;
 const CACHED_OUTLINE_WRAPPER_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
-const CACHED_SHAPE_WRAPPER_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
+const CACHED_SHAPE_WRAPPER_BYTES =
+  OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + 2 * NUMBER_STORAGE_BYTES;
 const OUTLINE_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
 const SHAPED_RUN_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + 8 * REFERENCE_BYTES;
 const GLYPH_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + 8 * NUMBER_STORAGE_BYTES + REFERENCE_BYTES;
@@ -778,8 +779,8 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
     const cacheKey = this.#keys.keyOf(input, environment);
     const cached = this.#shapeResults.get(cacheKey);
     if (cached) {
-      // Approximate recency: an entry in the younger half stays put. A delete and re-insert on
-      // every hit cost a long document more than the shaping the cache saves.
+      // Approximate recency: an entry in the younger half stays put, so a hot run survives in
+      // at worst a half-size true LRU. A delete and re-insert on every hit was a hot spot.
       if (this.#shapeStamp - cached.stamp >= Math.max(1, this.#shapeResults.size >> 1)) {
         this.#shapeResults.delete(cacheKey);
         this.#shapeResults.set(cacheKey, cached);

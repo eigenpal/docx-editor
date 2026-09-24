@@ -19,7 +19,7 @@ import {
   type FontRequest,
   type ResolvedFont,
 } from '../layout/font-resource.ts';
-import { LAYOUT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
+import { EXPORT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
 import {
   configurationOfPreparedLayoutFonts,
   createLayoutShapingWithTextShaper,
@@ -80,7 +80,7 @@ export function acquireProcessWideExportShaper(): Promise<TextShaper> {
   if (processWideExportShaper) return processWideExportShaper;
   const pending = (async (): Promise<TextShaper> => {
     await initializeHarfBuzz();
-    return createHarfBuzzTextShaper(LAYOUT_HARFBUZZ_SHAPER_POLICY);
+    return createHarfBuzzTextShaper(EXPORT_HARFBUZZ_SHAPER_POLICY);
   })();
   processWideExportShaper = pending;
   void pending.catch(() => {
@@ -121,7 +121,7 @@ export async function createSessionExportShaping(
     await createLayoutShapingWithTextShaper(
       prepared,
       shaper,
-      LAYOUT_HARFBUZZ_SHAPER_POLICY,
+      EXPORT_HARFBUZZ_SHAPER_POLICY,
       instrumentation,
       documentLigatures
     ),
@@ -194,7 +194,7 @@ export function acquireSharedExportShaping(
         shaping = await createLayoutShapingWithTextShaper(
           prepared,
           shaper,
-          LAYOUT_HARFBUZZ_SHAPER_POLICY,
+          EXPORT_HARFBUZZ_SHAPER_POLICY,
           instrumentation
         );
       } catch (error) {

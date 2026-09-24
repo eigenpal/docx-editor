@@ -120,8 +120,8 @@ async function renderSession(
     throw new PdfFidelityError(diagnostics);
   work.check();
   // pdf-lib yields with `setTimeout(0)` between batches, which costs at least a millisecond
-  // each on Node. A batch of a thousand objects serializes in a few milliseconds, so the event
-  // loop still turns often. The deadline and signal are checked again after the save.
+  // each on Node. A batch of a thousand objects takes milliseconds for text pages and tens of
+  // milliseconds for large images. The deadline and signal are checked again after the save.
   const bytes = await doc.save({ useObjectStreams: false, objectsPerTick: 1000 });
   work.check();
   if (bytes.byteLength > maxBytes) throw new PdfOutputLimitError(maxBytes, bytes.byteLength);

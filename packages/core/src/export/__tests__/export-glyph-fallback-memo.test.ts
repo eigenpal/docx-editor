@@ -117,3 +117,25 @@ test('a base shaper that reuses one run for unequal inputs still gets each chain
   // The chain ran again: more than the one base call a memo hit would make.
   expect(base.calls()).toBeGreaterThan(callsAfterFirst + 1);
 });
+
+test('the memo answers only an input equal in every field', () => {
+  // Keyed by face alone, so each call below gets the same base run object.
+  const base = coverageShaper((input) => input.environment.font.id);
+  const fallback = withExportGlyphFallbacks(
+    { fonts, shaper: base.shaper } as LayoutShapingOptions,
+    [request('B')]
+  ).shaper;
+  const german = createShapingEnvironment({ ...environment, language: 'de' });
+  const variants: ShapeInput[] = [
+    input('AB'),
+    { ...input('AB'), fontSizeHalfPoints: 24 },
+    // Equal to the call before it in all but the environment.
+    { ...input('AB'), fontSizeHalfPoints: 24, environment: german },
+  ];
+  for (const variant of variants) {
+    const before = base.calls();
+    fallback.shape(variant);
+    // A memo hit makes exactly one base call; the chain makes more.
+    expect(base.calls()).toBeGreaterThan(before + 1);
+  }
+});

@@ -524,7 +524,7 @@ describe('HarfBuzz production shaper', () => {
     expect(retained.at(-1)).toBe(0);
   });
 
-  test('many tiny shape entries include key and map overhead before cache admission', () => {
+  test('many tiny shape entries include key, wrapper and map overhead before cache admission', () => {
     const events: HarfBuzzShapeCacheEvent[] = [];
     let shapeCalls = 0;
     const bounded = createHarfBuzzTextShaper({

@@ -97,6 +97,43 @@ describe('shaping environment reuse', () => {
     expect(seen[0]!.features.smcp).toBeUndefined();
   });
 
+  test('every run-level shaping input selects its own environment', () => {
+    const shaping = { script: 'Latn', direction: 'ltr' as const, level: 0, baseLevel: 0 };
+    const { shaper, seen } = recordingShaper();
+    const environment = deepFreeze({ ...operation(), documentLigatures: true });
+    const styles = [
+      DEFAULT_RUN_STYLE,
+      { ...DEFAULT_RUN_STYLE, kerningEnabled: true, kerningMinPt: 1 },
+      {
+        ...DEFAULT_RUN_STYLE,
+        ligatures: { standard: true, contextual: false, historical: false, discretionary: false },
+      },
+      { ...DEFAULT_RUN_STYLE, shaping },
+      { ...DEFAULT_RUN_STYLE, shaping: { ...shaping, direction: 'rtl' as const } },
+      { ...DEFAULT_RUN_STYLE, shaping: { ...shaping, script: 'Grek' } },
+    ];
+    for (const style of styles) shapeLayoutStyleRun(shaper, environment, font, style, 'a');
+    expect(new Set(seen).size).toBe(styles.length);
+    expect(seen[1]!.features.kern).toBe(1);
+    expect(seen[2]!.features.liga).toBe(1);
+    expect(seen[4]!.direction).toBe('rtl');
+    expect(seen[5]!.script).toBe('Grek');
+  });
+
+  test('a frozen environment with mutable features is read on every call', () => {
+    const { shaper, seen } = recordingShaper();
+    const features: Record<string, number> = { liga: 1 };
+    // Frozen everywhere but `features`, so only that check can refuse the cache.
+    const environment = Object.freeze({
+      ...deepFreeze(operation()),
+      features,
+    });
+    shapeLayoutStyleRun(shaper, environment, font, DEFAULT_RUN_STYLE, 'a');
+    features.liga = 0;
+    shapeLayoutStyleRun(shaper, environment, font, DEFAULT_RUN_STYLE, 'a');
+    expect(seen.map((entry) => entry.features.liga)).toEqual([1, 0]);
+  });
+
   test('a mutable operation environment is read on every call', () => {
     const { shaper, seen } = recordingShaper();
     const environment = { ...operation() };

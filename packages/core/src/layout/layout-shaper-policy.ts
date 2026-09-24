@@ -59,11 +59,24 @@ export const LAYOUT_HARFBUZZ_SHAPER_POLICY = Object.freeze({
   // Keep mixed-document faces warm without exceeding the old 4 × 16 MiB byte bound.
   maxCachedFaces: 32,
   maxCachedFontBytes: 64 * 1024 * 1024,
-  maxCachedShapes: 4096,
+  maxCachedShapes: 512,
   maxOutlineBytes: 1024 * 1024,
   maxCachedOutlineBytes: 16 * 1024 * 1024,
   maxShapedRunBytes: 32 * 1024 * 1024,
   maxCachedShapeBytes: 64 * 1024 * 1024,
+} satisfies LayoutHarfBuzzShaperPolicy);
+
+/**
+ * The policy of the one process-wide exporter shaper. A whole-document export revisits every
+ * run at least twice, in layout and in paint, and a long document has thousands of distinct
+ * runs, so 512 entries thrash. More entries change retention only, never the producer
+ * identity, and the byte cap is the same. Editors keep {@link LAYOUT_HARFBUZZ_SHAPER_POLICY},
+ * whose shaper lives once per editor instance.
+ * @internal
+ */
+export const EXPORT_HARFBUZZ_SHAPER_POLICY = Object.freeze({
+  ...LAYOUT_HARFBUZZ_SHAPER_POLICY,
+  maxCachedShapes: 4096,
 } satisfies LayoutHarfBuzzShaperPolicy);
 
 /** Stable framed identity for every refusal-affecting production shaper option. @internal */

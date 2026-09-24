@@ -76,14 +76,15 @@ export function pdfLiteralUri(href: string): string | null {
   return href.replace(/[\\()]/g, (character) => `\\${character}`);
 }
 /**
- * A `FlateDecode` stream compressed by Node's native zlib. pdf-lib's `flateStream` runs the
- * same algorithm in JavaScript, which was most of the time spent writing a long document's
- * pages. A string is taken byte per UTF-16 unit, as pdf-lib takes it.
+ * A `FlateDecode` stream compressed by the runtime's native zlib. pdf-lib's `flateStream` runs
+ * the same algorithm in JavaScript, which was most of the time spent writing a long document's
+ * pages. The decoded content is the same; the compressed bytes can differ between runtimes. A
+ * string is taken byte per UTF-16 unit, as pdf-lib takes it.
  */
 export function flateStream(
   context: PDFContext,
   contents: string | Uint8Array,
-  dict: Record<string, unknown> = {}
+  dict: StreamDict = {}
 ): PDFRawStream {
   const bytes = typeof contents === 'string' ? Buffer.from(contents, 'latin1') : contents;
   const deflated = deflateSync(bytes);
@@ -91,8 +92,9 @@ export function flateStream(
   // the save, so keep only the bytes rather than one chunk per page.
   const owned =
     deflated.buffer.byteLength > deflated.byteLength * 2 ? new Uint8Array(deflated) : deflated;
-  return context.stream(owned, { ...dict, Filter: 'FlateDecode' } as never);
+  return context.stream(owned, { ...dict, Filter: 'FlateDecode' });
 }
+type StreamDict = NonNullable<Parameters<PDFContext['stream']>[1]>;
 const pageHeights = new WeakMap<PDFPage, number>();
 /**
  * A page's height in user space. pdf-lib walks the page tree and parses the media box on
