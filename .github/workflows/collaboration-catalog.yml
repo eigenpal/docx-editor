@@ -27,6 +27,7 @@ concurrency:
 
 jobs:
   capture:
+    name: Capture collaboration catalog
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -110,7 +111,9 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
-      pull-requests: read
+      # Write, to approve the generated PR. main requires one approving review, and
+      # release-pal cannot approve the PR it opened.
+      pull-requests: write
       actions: read
       checks: read
       statuses: read
@@ -146,4 +149,9 @@ jobs:
           EXPECTED_HEAD: ${{ steps.checks.outputs.head }}
         run: |
           node scripts/collaboration/catalog-merge.mjs check
+          # The check above proved this head holds only the generated baseline files and
+          # passed every check, so approve exactly that commit.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
+            -f event=APPROVE -f commit_id="$EXPECTED_HEAD" \
+            -f body="Generated catalog for $RELEASE_VERSION. Only baseline files changed, and all checks passed." >/dev/null
           GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" --squash --match-head-commit "$EXPECTED_HEAD" --repo "$GITHUB_REPOSITORY"

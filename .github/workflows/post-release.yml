@@ -49,8 +49,11 @@ jobs:
       statuses: read
 
   announcements:
+    name: Release comments and roadmap
     needs: [source, updates]
-    if: needs.source.outputs.published == 'true'
+    # Needs only verified packages. A failed site or catalog update is reported on its own
+    # and does not hold back the release comments.
+    if: always() && needs.source.outputs.published == 'true' && needs.updates.outputs.published_packages != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -284,20 +287,46 @@ jobs:
           fi
           sync_version "v$version" 1
 
-  notify-failure:
+  report:
+    name: Report
     needs: [source, updates, announcements]
-    if: failure()
+    if: always() && (needs.source.outputs.published == 'true' || failure())
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      actions: read
     steps:
-      - name: Report a post-release failure
+      # One message per release that lists every step with its result, so a reader knows
+      # what went through and what to fix without opening the run.
+      - name: Post the result of every step
         env:
+          GH_TOKEN: ${{ github.token }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SOURCE_URL: ${{ github.event.workflow_run.html_url }}
-        if: env.SLACK_WEBHOOK_URL != ''
+          VERSION: ${{ needs.source.outputs.version }}
         run: |
-          payload=$(jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" \
-            '{text: ("Post-release verification or updates failed: " + $run + ". Original Release run: " + $source + ". Check both runs before retrying. Use Recover release for already-published packages; do not republish them.")}')
-          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+          set -euo pipefail
+          jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate --jq '.jobs[]
+            | select(.name != "Report" and .name != "source")
+            | {name: (.name | split(" / ") | last), conclusion: (.conclusion // .status), url: .html_url}' \
+            | jq -s .)
+          failed=$(jq '[.[] | select(.conclusion != "success" and .conclusion != "skipped")] | length' <<<"$jobs")
+          lines=$(jq -r '.[] | (if .conclusion == "success" then ":white_check_mark:"
+            elif .conclusion == "skipped" then ":white_circle:" else ":x:" end)
+            + " <" + .url + "|" + .name + ">" + (if .conclusion == "success" then "" else ": " + .conclusion end)' <<<"$jobs")
+          if [ "$failed" -eq 0 ]; then
+            title="Post-release ${VERSION:-updates}: every step passed."
+            next=""
+          else
+            title="Post-release ${VERSION:-updates}: $failed step(s) did not pass."
+            next=$'\n'"The packages are already on npm; do not republish. Fix the failed step, then rerun the failed jobs in <$RUN_URL|this run>."
+          fi
+          text="$title"$'\n'"$lines$next"$'\n'"<$SOURCE_URL|Release run> · <$RUN_URL|Post-release run>"
+          echo "$text" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            jq -n --arg text "$text" '{text: $text}' \
+              | curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" >/dev/null
+          fi

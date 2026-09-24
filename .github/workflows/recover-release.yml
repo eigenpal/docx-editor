@@ -35,6 +35,7 @@ permissions:
 
 jobs:
   verify:
+    name: Verify published packages
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,13 +69,21 @@ jobs:
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   sites:
+    name: ${{ matrix.label }}
     needs: verify
     strategy:
       fail-fast: false
       matrix:
-        repository: [docx-editor.dev, docx-to-markdown.com, docx-to-pdf.dev]
+        include:
+          - repository: docx-editor.dev
+            label: Docs site (docx-editor.dev)
+          - repository: docx-to-markdown.com
+            label: Markdown site (docx-to-markdown.com)
+          - repository: docx-to-pdf.dev
+            label: PDF site (docx-to-pdf.dev)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The documentation sync waits for its own PR checks before it merges.
+    timeout-minutes: 60
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         id: token
@@ -84,15 +93,58 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ matrix.repository }}
       - name: Request the site update
+        id: dispatch
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
+          echo "since=$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           gh api "repos/$TARGET_REPOSITORY/dispatches" \
             -f event_type=upstream-release \
             -f "client_payload[version]=$RELEASE_VERSION"
-          echo "Requested $TARGET_REPOSITORY update to $RELEASE_VERSION. Check the downstream workflow for completion." >> "$GITHUB_STEP_SUMMARY"
+      # A sent dispatch is not a finished update. This job passes only when the site's own
+      # sync run passes, so a failed site shows as a failed job here.
+      - name: Wait for the site update to finish
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
+          SINCE: ${{ steps.dispatch.outputs.since }}
+        run: |
+          set -euo pipefail
+          run_id=""
+          for _ in $(seq 1 40); do
+            if ! runs=$(gh api -X GET "repos/$TARGET_REPOSITORY/actions/runs" \
+              -f event=repository_dispatch -f "created=>=$SINCE" -f per_page=20 2>/tmp/runs-error); then
+              if grep -qiE 'HTTP 403|not accessible' /tmp/runs-error; then
+                echo "::error::release-pal cannot read Actions runs in $TARGET_REPOSITORY. Give the eigenpal-release-pal GitHub App the Actions: Read-only repository permission."
+              else
+                cat /tmp/runs-error >&2
+              fi
+              exit 1
+            fi
+            run_id=$(jq -r '[.workflow_runs[] | select(.display_title == "upstream-release")]
+              | sort_by(.created_at) | .[0].id // empty' <<<"$runs")
+            [ -n "$run_id" ] && break
+            sleep 15
+          done
+          if [ -z "$run_id" ]; then
+            echo "::error::No update run started in $TARGET_REPOSITORY within 10 minutes of the request."
+            exit 1
+          fi
+          url="https://github.com/$TARGET_REPOSITORY/actions/runs/$run_id"
+          echo "Waiting for $url"
+          while :; do
+            state=$(gh api "repos/$TARGET_REPOSITORY/actions/runs/$run_id" --jq '.status + " " + (.conclusion // "")')
+            [ "${state%% *}" = completed ] && break
+            sleep 30
+          done
+          conclusion="${state#* }"
+          echo "$TARGET_REPOSITORY update: $conclusion ($url)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$conclusion" != success ]; then
+            echo "::error::The $TARGET_REPOSITORY update finished with $conclusion: $url"
+            exit 1
+          fi
 
   catalog:
     needs: verify
