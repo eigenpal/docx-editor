@@ -724,7 +724,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`.',
+      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`. When a plain paragraph starts with a manual page break and has text after the break, the text starts on the next page, even when the current page has no room for another line. Paragraphs with only a page break, list numbering, borders, shading, or anchored floating tables, text frames, or drawings keep the ordinary rule, so after a full page their text starts one page later.',
   },
   {
     id: 'layout.sections',

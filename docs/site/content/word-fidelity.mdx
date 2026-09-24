@@ -113,6 +113,10 @@ The layout result controls line and page breaks. The editor paints that result a
 
 No-break spaces (U+00A0, U+2007, and U+202F) retain their line-break behavior across formatting runs. This also applies to word joiners (U+2060 and U+FEFF). Ordinary spaces can still provide break positions. Oversized groups retain the existing overflow rules.
 
+If a plain paragraph starts with a manual page break and has text after the break, that text starts on the next page. This also applies when the current page has no room for another line. The position before the break stays at the bottom of the current page.
+
+This rule does not apply to some paragraphs. A paragraph with only a page break, and a paragraph with list numbering, borders, or shading, keep the ordinary rule. A paragraph that anchors a floating table, text frame, or drawing also keeps it. If such a paragraph follows a full page, its break line moves to a new page, and its text starts one page later.
+
 Usable font bytes are required for Word-accurate text measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 
 The configured font resolver also receives faces used by SYMBOL fields and numbering markers. Your host must supply usable font bytes for those faces when they are unavailable locally. Unused numbering definitions do not add font requests.

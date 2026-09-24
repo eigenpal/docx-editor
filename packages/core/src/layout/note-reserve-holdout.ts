@@ -21,7 +21,7 @@ import {
 } from './note-reserves.ts';
 import { MAX_KEEP_NEXT_CHAIN } from './pagination-keeps.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
 
 /**
  * How many of the next page's opening blocks may sit above the pulled reference's line:
@@ -68,8 +68,9 @@ export interface HoldOutArgs {
  * rule (the note stays whole with its reference), so its reserve claims the remaining
  * slack and reproduces itself round over round.
  *
- * Zero when there is nothing to hold out: no next page, a next page in different section
- * geometry (a pull-back across a page-size change cannot be reasoned about here), a slack
+ * Zero when there is nothing to hold out: no next page, a source page whose body ends with a
+ * manual page break (nothing after the break can return across it), a next page in different
+ * section geometry (a pull-back across a page-size change cannot be reasoned about here), a slack
  * too small to seat even the pulled line, the next page opening with a table or holding
  * the reference deeper than {@link MAX_HOLD_OUT_SCAN_BLOCKS} paragraphs, no page-bottom
  * footnote reference at all, or a pulled band whose notes would fit back — then the lines
@@ -95,7 +96,7 @@ export interface HoldOutArgs {
  */
 export function holdOutReserveNeed(args: HoldOutArgs): number {
   const { bodyPage, nextPage } = args;
-  if (!nextPage) return 0;
+  if (!nextPage || endsWithPageBreak(bodyPage)) return 0;
   if (
     nextPage.contentBox.width !== bodyPage.contentBox.width ||
     nextPage.contentBox.height !== bodyPage.contentBox.height
@@ -232,4 +233,21 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
   const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
   return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
+}
+
+/**
+ * Whether the page's body ends with a manual page break: its last paragraph line, the kept
+ * empty line of a leading break included. Text frames and collapsed section marks sit
+ * outside the flow and do not end it.
+ */
+function endsWithPageBreak(page: PageRecord): boolean {
+  for (let index = page.fragments.length - 1; index >= 0; index -= 1) {
+    const fragment = page.fragments[index]!;
+    if (fragment.kind !== 'paragraph') return false;
+    const last = fragment.lines[fragment.lines.length - 1];
+    const breaks = last?.spans.some((span) => span.text === PAGE_BREAK_CHAR) ?? false;
+    if (!breaks && (fragment.positionedFrame || fragment.outOfFlow)) continue;
+    return breaks;
+  }
+  return false;
 }

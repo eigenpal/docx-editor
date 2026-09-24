@@ -422,8 +422,9 @@ export interface ParagraphFragmentRecord {
   readonly clipToBox?: true;
   /**
    * The fragment retains its source identity without consuming body flow height: a positioned
-   * text frame (with {@link ParagraphFragmentRecord.positionedFrame}), or an empty section-mark
-   * paragraph before a continuous section, which paints nothing.
+   * text frame (with {@link ParagraphFragmentRecord.positionedFrame}), an empty section-mark
+   * paragraph before a continuous section, or the empty line in front of a paragraph's leading
+   * page break at the bottom of a full page. The last two paint nothing.
    */
   readonly outOfFlow?: true;
   /** Placement and wrapping of one authored text-frame group, in page-content coordinates. */

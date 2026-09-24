@@ -92,6 +92,7 @@ import * as tableWrap from './table-float-exclusion.ts';
 import * as frameWrap from './paragraph-frame-exclusion.ts';
 import {
   bodyAnchorFrameBase,
+  opensWithPageBreak,
   paragraphHoldsNothing,
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
@@ -2134,6 +2135,11 @@ function layoutBlocksPass(
     const holdsSheet = (): boolean =>
       collapsedMark ||
       (marksSectionBreak && columnRegionBottom === undefined && columnIndex + 1 >= columns.count);
+    // Floating tables and text frames anchor at the paragraph start, which would stay behind.
+    const leadingBreak = (): boolean =>
+      paragraphFrames.checkpoint() === undefined &&
+      !tableFloat.positionedTablesByAnchor(positionedTables).has(paragraphId) &&
+      opensWithPageBreak(entry, lines, options.inlineDrawingLayout);
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // ListParagraph styles can set it to suppress paragraph gaps between list items.
     const spacing = contextualParagraphSpacing(
@@ -2242,7 +2248,7 @@ function layoutBlocksPass(
           needed = Math.max(needed, group + topExtent);
         }
       }
-      if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet()) {
+      if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2272,6 +2278,8 @@ function layoutBlocksPass(
     // once, the same way it closes once.
     let fragmentTopExtent = topExtent;
     let endedWithPageBreak = false;
+    /** The fragment is a leading page break's empty line, kept out of flow on a full page. */
+    let keptBreakLine = false;
     let fragmentParagraphStartY = cursorY;
     /** Clearance applied above the fragment's first placed line, for anchor framing. */
     let fragmentFirstLineSkip = 0;
@@ -2482,7 +2490,7 @@ function layoutBlocksPass(
         indent,
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
         ...(strokes.length > 0 ? { borders: strokes } : {}),
-        ...(collapsedMark ? { outOfFlow: true as const } : {}),
+        ...(collapsedMark || keptBreakLine ? { outOfFlow: true as const } : {}),
         ...(shading === undefined || collapsedMark
           ? {}
           : {
@@ -2669,11 +2677,15 @@ function layoutBlocksPass(
       // trailing external depth.
       const lineExtent =
         skipBefore + Math.max(0, pendingLine.height - pendingLine.trailingSpacing) + tail;
+      // A leading page break's empty line stays: the break itself opens the next sheet.
+      keptBreakLine =
+        !frame && lineIndex === 0 && cursorY + lineExtent > contentHeight() && leadingBreak();
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
         !frame &&
         cursorY + lineExtent > contentHeight() &&
         !holdsSheet() &&
+        !keptBreakLine &&
         (pending.length > 0 ||
           pageFragments.length > 0 ||
           ((pages.length > 0 || (furnitureHasWrap && skipBefore > 0)) &&
@@ -2747,6 +2759,10 @@ function layoutBlocksPass(
       const columnX = columnOffsetX();
       appliedSkipByLineIndex.set(lineIndex, skipBefore);
       cursorY += skipBefore;
+      // Inside the band, so the page's notes and furniture still see the body where it ends.
+      if (keptBreakLine) {
+        cursorY = Math.min(cursorY, Math.max(0, contentHeight() - pendingLine.height));
+      }
       const lineIndent = columnX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
       const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
       const placedSpans = pendingLine.spans.map((span) => ({

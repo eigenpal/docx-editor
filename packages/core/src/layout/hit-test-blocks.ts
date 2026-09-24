@@ -45,7 +45,10 @@ export function blockDistance(
   return 0;
 }
 
-/** Out-of-flow paragraphs are text frames, which carry their placement, or collapsed marks. */
+/**
+ * Out-of-flow paragraphs are text frames, which carry their placement, or collapsed marks: an
+ * empty section mark, or the empty line before a leading page break on a full page.
+ */
 export function isCollapsedSectionMark(block: BlockFragmentRecord): boolean {
   return block.kind === 'paragraph' && block.outOfFlow === true && !block.positionedFrame;
 }

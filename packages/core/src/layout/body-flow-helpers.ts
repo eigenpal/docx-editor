@@ -92,3 +92,32 @@ export function paragraphHoldsNothing(
       line.spans.every((span) => span.text.length === 0)
   );
 }
+
+/** Whether a line holds text or a picture, not just break characters. */
+const lineHoldsContent = (line: PendingLine): boolean =>
+  line.drawings.length > 0 || line.spans.some((span) => /[^\f\n]/.test(span.text));
+
+/**
+ * Whether a paragraph opens with a page break and has content after it: its first line holds
+ * nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
+ * the page it starts on, and the break then starts the content on the next sheet.
+ *
+ * A list marker, border, shading, or anchored drawing is content on the first line, so those
+ * paragraphs keep the ordinary fit rule. So does a paragraph with nothing after the break.
+ * Layout also keeps that rule when the paragraph anchors floating tables or text frames.
+ */
+export function opensWithPageBreak(
+  entry: PaintableParagraph,
+  lines: readonly PendingLine[],
+  drawingContext: InlineDrawingLayoutContext | undefined
+): boolean {
+  const first = lines[0];
+  return (
+    first !== undefined &&
+    first.start === 0 &&
+    first.pageBreakAfter === true &&
+    !lineHoldsContent(first) &&
+    lines.some((line, index) => index > 0 && lineHoldsContent(line)) &&
+    paragraphPaintsNothing(entry, [], drawingContext)
+  );
+}
