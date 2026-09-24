@@ -53,8 +53,11 @@ function mtimes(dir, test) {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
       const path = join(current, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (test(entry.name)) times.push(statSync(path).mtimeMs);
+      // A directory's own time moves when a file in it is deleted or renamed.
+      if (entry.isDirectory()) {
+        times.push(statSync(path).mtimeMs);
+        walk(path);
+      } else if (test(entry.name)) times.push(statSync(path).mtimeMs);
     }
   };
   if (existsSync(dir)) walk(dir);
@@ -65,15 +68,16 @@ function mtimes(dir, test) {
 export function staleness(name, dir) {
   const built = mtimes(join(dir, 'dist'), (file) => file.endsWith('.d.ts'));
   if (built.length === 0) return `${name} has no built declarations`;
-  // Everything that shapes the emitted declarations: sources, and the root JSON files
-  // (package.json exports, tsconfig, and generated inputs such as i18n's en.json).
+  // Everything that shapes the emitted declarations: sources, package.json exports, the
+  // tsconfig files, and en.json, the locale i18n's types come from. The other locale files
+  // do not change any type.
   const inputs = [
     ...mtimes(
       join(dir, 'src'),
       (file) => /\.(tsx?|vue|json)$/.test(file) && !/\.test\./.test(file)
     ),
     ...readdirSync(dir)
-      .filter((file) => file.endsWith('.json'))
+      .filter((file) => /^(package|tsconfig.*|en)\.json$/.test(file))
       .map((file) => statSync(join(dir, file)).mtimeMs),
   ];
   const oldestBuilt = built.reduce((a, b) => Math.min(a, b));

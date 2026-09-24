@@ -4,7 +4,7 @@
     // `paths` below, and they use ES2022 features (`Array.prototype.at`, `Error.cause`).
     // An ES2020 floor only appears to work: `@types/bun` pulls in `@types/node`, whose
     // `compatibility/indexable.d.ts` back-declares `.at` for older libs, so the gap hides
-    // until something type-checks without those ambient types — such as the dts build.
+    // until something type-checks without those ambient types.
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

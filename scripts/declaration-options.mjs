@@ -12,6 +12,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { packageName } from './build-core-declarations.mjs';
 import { siblingsOf } from './check-built-siblings.mjs';
 
 /** @param {string | URL} configUrl the calling tsup config's `import.meta.url` */
@@ -22,9 +23,10 @@ export function declarationCompilerOptions(configUrl, extra = {}) {
   // The effective paths, including any that an `extends` base defines.
   const { options } = ts.parseJsonConfigFileContent(config, ts.sys, dirname(file));
   const siblings = siblingsOf(dirname(file));
-  const owner = (specifier) => specifier.split('/').slice(0, 2).join('/');
   const paths = Object.fromEntries(
-    Object.entries(options.paths ?? {}).filter(([specifier]) => !siblings.has(owner(specifier)))
+    Object.entries(options.paths ?? {}).filter(
+      ([specifier]) => !siblings.has(packageName(specifier))
+    )
   );
   return { ...extra, paths };
 }

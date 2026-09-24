@@ -51,17 +51,9 @@ export function publishedEntries(manifest, paths) {
 }
 
 /** Emit declarations for everything the entries reach, into `outDir`. */
-function emitDeclarations(entries, outDir) {
-  const configPath = join(core, 'tsconfig.json');
-  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (error) throw new Error(ts.formatDiagnostic(error, formatHost));
-  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, core);
-  if (parsed.errors.length > 0)
-    throw new Error(
-      `tsconfig.json is invalid:\n${ts.formatDiagnostics(parsed.errors, formatHost)}`
-    );
+function emitDeclarations(entries, outDir, parsedOptions) {
   const options = {
-    ...parsed.options,
+    ...parsedOptions,
     noEmit: false,
     declaration: true,
     emitDeclarationOnly: true,
@@ -195,14 +187,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   // The effective paths, read the way TypeScript reads them: comments, `extends`, errors.
   const { config, error } = ts.readConfigFile(join(core, 'tsconfig.json'), ts.sys.readFile);
   if (error) throw new Error(ts.formatDiagnostic(error, formatHost));
-  const { options } = ts.parseJsonConfigFileContent(config, ts.sys, core);
+  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, core);
+  if (parsed.errors.length > 0)
+    throw new Error(
+      `tsconfig.json is invalid:\n${ts.formatDiagnostics(parsed.errors, formatHost)}`
+    );
   const entries = publishedEntries(
     JSON.parse(readFileSync(join(core, 'package.json'), 'utf8')),
-    options.paths ?? {}
+    parsed.options.paths ?? {}
   );
   const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
   try {
-    emitDeclarations(entries, outDir);
+    emitDeclarations(entries, outDir, parsed.options);
     await bundleDeclarations(entries, outDir);
     const missing = entries.filter((entry) => !existsSync(join(dist, `${entry.name}.d.ts`)));
     if (missing.length > 0)
