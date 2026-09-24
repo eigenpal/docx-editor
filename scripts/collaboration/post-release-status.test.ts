@@ -1,7 +1,13 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { jobLabel, summarizeJobs } from './post-release-report.mjs';
-import { selectSiteRun, siteRunResult, waitForSiteRun, withRetries } from './site-update.mjs';
+import {
+  selectSiteRun,
+  siteRunResult,
+  updateSite,
+  waitForSiteRun,
+  withRetries,
+} from './site-update.mjs';
 
 const workflow = (name: string): any =>
   Bun.YAML.parse(
@@ -20,7 +26,6 @@ const dispatchRun = (id: number, created_at: string, extra: object = {}) => ({
 });
 
 test('the site run is the one named after the request; an unnamed run only as a fallback', () => {
-  const since = '2026-09-24T09:39:00Z';
   const dispatchedAt = '2026-09-24T09:39:55Z';
   const request = '2.22.0-123-1-docx-editor.dev';
   const runs = [
@@ -31,7 +36,7 @@ test('the site run is the one named after the request; an unnamed run only as a 
     dispatchRun(5, '2026-09-24T09:40:20Z'),
   ];
   const pick = (list: any[], mode: string) =>
-    selectSiteRun(list, { since, dispatchedAt, request, mode })?.id ?? null;
+    selectSiteRun(list, { dispatchedAt, request, mode })?.id ?? null;
   // Without a named run, exact mode waits, and the fallback skips the run from before the dispatch.
   expect(pick(runs, 'exact')).toBeNull();
   expect(pick(runs, 'fallback')).toBe(5);
@@ -44,8 +49,7 @@ test('the site run is the one named after the request; an unnamed run only as a 
   expect(pick(named, 'fallback')).toBe(7);
 });
 
-test('after a cancel, only a later run of the same version replaces it', () => {
-  const since = '2026-09-24T09:39:00Z';
+test('after a cancel, only a later run of the same version that was not followed replaces it', () => {
   const request = '2.22.0-1-1-site';
   const ours = dispatchRun(8, '2026-09-24T09:40:02Z', {
     display_title: `upstream-release ${request}`,
@@ -56,18 +60,50 @@ test('after a cancel, only a later run of the same version replaces it', () => {
   const otherVersion = dispatchRun(10, '2026-09-24T09:40:01Z', {
     display_title: 'upstream-release 2.22.1-3-1-site',
   });
-  const pick = (list: any[]) =>
-    selectSiteRun(list, { since, dispatchedAt: since, request, mode: 'replacement', after: ours })
-      ?.id ?? null;
-  expect(pick([ours, otherVersion, sameSecond])).toBe(9);
-  expect(
-    pick([
-      ours,
-      dispatchRun(11, '2026-09-24T09:41:00Z', {
-        display_title: 'upstream-release 2.23.0-4-1-site',
-      }),
-    ])
-  ).toBeNull();
+  const pick = (list: any[], followed: number[]) =>
+    selectSiteRun(list, { request, mode: 'replacement', after: ours, followed })?.id ?? null;
+  expect(pick([ours, otherVersion, sameSecond], [8])).toBe(9);
+  // Two runs cancelled in the same second must not replace each other forever.
+  expect(pick([ours, otherVersion, sameSecond], [8, 9])).toBeNull();
+  const newerVersion = dispatchRun(11, '2026-09-24T09:41:00Z', {
+    display_title: 'upstream-release 2.23.0-4-1-site',
+  });
+  expect(pick([ours, newerVersion], [8])).toBeNull();
+});
+
+test('a site never receives a version older than npm latest', async () => {
+  let dispatched = 0;
+  const base = {
+    repository: 'o/site',
+    version: '2.22.0',
+    request: '2.22.0-1-1-site',
+    wait: noWait,
+    now: () => Date.parse('2026-09-24T09:40:00Z'),
+    dispatch: () => {
+      dispatched += 1;
+    },
+  };
+  const skipped = await updateSite({
+    ...base,
+    api: () => ({ workflow_runs: [] }),
+    latest: async () => '2.23.0',
+  });
+  expect(skipped).toMatchObject({ result: 'superseded', latest: '2.23.0' });
+  expect(dispatched).toBe(0);
+
+  // A newer version's sync cancelled ours: the site follows the newer release.
+  const cancelled = dispatchRun(12, '2026-09-24T09:40:02Z', {
+    display_title: 'upstream-release 2.22.0-1-1-site',
+    conclusion: 'cancelled',
+  });
+  const answers = ['2.22.0', '2.22.1'];
+  const followedNewer = await updateSite({
+    ...base,
+    api: () => ({ workflow_runs: [cancelled] }),
+    latest: async () => answers.shift()!,
+  });
+  expect(followedNewer).toMatchObject({ result: 'superseded', latest: '2.22.1' });
+  expect(dispatched).toBe(1);
 });
 
 test('a site run is pending until it completes, then reports its conclusion', () => {
@@ -219,7 +255,7 @@ test('the report counts every job, including source, and never calls a skip a pa
   // Nothing confirmed the release, so the report must not claim the packages are on npm.
   expect(sourceFailed.slack).not.toContain('do not republish');
   expect(sourceFailed.slack).toContain('could not confirm what was published');
-  const siteFailed = summarizeJobs([job('updates / Docs site (docx-editor.dev)', 'failure')], {
+  const siteFailed = summarizeJobs([job('downstream / Site update (docx-editor.dev)', 'failure')], {
     ...context,
     published: true,
   });
@@ -253,10 +289,19 @@ test('each post-release step is its own job, and the comments wait only for veri
     'docx-to-markdown.com',
     'docx-to-pdf.dev',
   ]);
-  const wait = recovery.jobs.sites.steps.find(
-    (step: any) => step.name === 'Wait for the site update to finish'
+  const update = recovery.jobs.sites.steps.find(
+    (step: any) => step.name === 'Request the site update and wait for it'
   );
-  expect(wait.run).toBe('node scripts/collaboration/site-update.mjs');
+  expect(update.run).toBe('node scripts/collaboration/site-update.mjs');
+  expect(recovery.jobs.sites.env.REQUEST_ID).toStartWith('${{ inputs.version }}-');
+  // Nothing downstream runs unless verification produced its output.
+  const guard = "needs.verify.outputs.published_packages != ''";
+  expect(downstream.jobs.downstream.if).toBe(guard);
+  expect(downstream.jobs.announcements.if).toContain(guard);
+  expect(workflow('recover-release').jobs.downstream.if).toBe(guard);
+  const fallback = downstream.jobs.report.steps.at(-1);
+  expect(fallback.if).toBe('failure()');
+  expect(fallback.run).toContain('curl');
   expect(downstream.jobs.announcements.needs).toEqual(['source', 'verify']);
   expect(downstream.jobs.report.needs).toEqual(['source', 'verify', 'downstream', 'announcements']);
   expect(downstream.jobs.report.if).toStartWith('always()');
@@ -286,8 +331,5 @@ test('only verification holds the downstream concurrency group, not the site wai
   });
   expect(recovery.concurrency).toBeUndefined();
   expect(recovery.jobs.sites.concurrency).toBeUndefined();
-  const dispatch = recovery.jobs.sites.steps.find(
-    (step: any) => step.name === 'Request the site update'
-  );
-  expect(dispatch.run).toContain('client_payload[request]=$REQUEST_ID');
+  expect(recovery.jobs.sites.env.REQUEST_ID).toContain('${{ github.run_id }}');
 });

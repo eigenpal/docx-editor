@@ -1,6 +1,7 @@
 import { appendFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { run } from './common.mjs';
+import { withRetries } from './site-update.mjs';
 
 // One message per release that lists every post-release job with its result, so a reader
 // knows what went through and what to fix without opening the run.
@@ -9,7 +10,7 @@ export const REPORT_JOB = 'Report';
 
 /** A job's display name without its reusable-workflow prefix (`updates / catalog / …`). */
 export function jobLabel(name) {
-  return name.split(' / ').at(-1) ?? name;
+  return name.split(' / ').at(-1);
 }
 
 export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
@@ -64,12 +65,14 @@ export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const env = process.env;
   try {
-    const pages = JSON.parse(
-      run('gh', [
-        'api',
-        // `latest`: after a rerun, each job's newest attempt, not the first failure.
-        `repos/${env.REPO}/actions/runs/${env.RUN_ID}/jobs?filter=latest&per_page=100`,
-      ])
+    const pages = await withRetries(() =>
+      JSON.parse(
+        run('gh', [
+          'api',
+          // `latest`: after a rerun, each job's newest attempt, not the first failure.
+          `repos/${env.REPO}/actions/runs/${env.RUN_ID}/jobs?filter=latest&per_page=100`,
+        ])
+      )
     );
     const report = summarizeJobs(pages.jobs, {
       version: env.VERSION,

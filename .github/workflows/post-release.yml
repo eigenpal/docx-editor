@@ -43,6 +43,9 @@ jobs:
 
   downstream:
     needs: [source, verify]
+    # The verify output exists only when verification ran and passed on main. A skipped inner
+    # job can still leave the reusable-workflow call itself reported as a success.
+    if: needs.verify.outputs.published_packages != ''
     uses: ./.github/workflows/release-downstream.yml
     with:
       version: ${{ needs.source.outputs.version }}
@@ -59,7 +62,7 @@ jobs:
     # Only verification, not the site updates or the catalog: those can take an hour, and
     # a failure there is reported on its own.
     needs: [source, verify]
-    if: needs.source.outputs.published == 'true'
+    if: needs.source.outputs.published == 'true' && needs.verify.outputs.published_packages != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -322,3 +325,15 @@ jobs:
           VERSION: ${{ needs.source.outputs.version }}
           PUBLISHED: ${{ needs.source.outputs.published }}
         run: node scripts/collaboration/post-release-report.mjs
+      # The report needs a checkout and the GitHub API. If either fails, still send an alert.
+      - name: Send a plain alert if the report failed
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          [ -n "$SLACK_WEBHOOK_URL" ] || exit 0
+          jq -n --arg run "$RUN_URL" --arg source "$SOURCE_URL" \
+            '{text: ("Post-release: the step report could not be built. Check the jobs in " + $run + ". Release run: " + $source + ".")}' \
+            | curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" >/dev/null

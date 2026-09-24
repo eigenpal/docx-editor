@@ -27,6 +27,9 @@ jobs:
 
   downstream:
     needs: verify
+    # The verify output exists only when verification ran and passed on main. A skipped inner
+    # job can still leave the reusable-workflow call itself reported as a success.
+    if: needs.verify.outputs.published_packages != ''
     uses: ./.github/workflows/release-downstream.yml
     with:
       version: ${{ inputs.version }}

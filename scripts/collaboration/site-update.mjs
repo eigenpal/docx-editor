@@ -1,7 +1,7 @@
 import { appendFileSync, realpathSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { run } from './common.mjs';
+import { compareVersions, run } from './common.mjs';
 
 // A sent dispatch is not a finished update. This waits for the site's own sync run, so a
 // failed site update fails the post-release job that requested it.
@@ -21,14 +21,13 @@ const TRANSIENT = /HTTP (?:5\d\d|429)|timed out|ECONNRESET|ETIMEDOUT/i;
  * - `mode: 'replacement'`: after the site cancels a run for a newer one, the next run of the
  *   same version. The request ID starts with the version.
  */
-export function selectSiteRun(runs, { since, dispatchedAt, request, mode, after = null }) {
+export function selectSiteRun(runs, { dispatchedAt, request, mode, after = null, followed = [] }) {
   const title = (item) => item.display_title?.trim();
+  // The list request already keeps only runs created since the request's time margin.
   const dispatched = runs
     .filter((item) => item.event === 'repository_dispatch')
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
-  const exact = dispatched.find(
-    (item) => item.created_at >= since && title(item) === `${DISPATCH_EVENT} ${request}`
-  );
+  const exact = dispatched.find((item) => title(item) === `${DISPATCH_EVENT} ${request}`);
   if (mode === 'exact') return exact ?? null;
   if (mode === 'fallback')
     return (
@@ -42,7 +41,7 @@ export function selectSiteRun(runs, { since, dispatchedAt, request, mode, after 
   return (
     dispatched.find(
       (item) =>
-        item.id !== after.id &&
+        !followed.includes(item.id) &&
         item.created_at >= after.created_at &&
         title(item)?.startsWith(`${DISPATCH_EVENT} ${version}-`)
     ) ?? null
@@ -107,16 +106,18 @@ export async function waitForSiteRun({
       // Give the exact name time to appear before accepting an unnamed run.
       const mode = after ? 'replacement' : attempt < exactAttempts ? 'exact' : 'fallback';
       const runs = (await list()).workflow_runs ?? [];
-      const found = selectSiteRun(runs, { since, dispatchedAt, request, mode, after });
+      const found = selectSiteRun(runs, { dispatchedAt, request, mode, after, followed });
       if (found) return found;
     }
     return null;
   };
 
+  const followed = [];
   let current = await find({ attempts: findAttempts });
   if (!current) throw new Error(`No update run started in ${repository} after the request.`);
   const replaced = [];
   for (;;) {
+    followed.push(current.id);
     console.log(`Waiting for ${current.html_url}`);
     let result = siteRunResult(current);
     while (result === 'pending') {
@@ -135,31 +136,103 @@ export async function waitForSiteRun({
   }
 }
 
+/**
+ * Request one site update and wait for it. A version that is no longer npm `latest` is not
+ * sent: a rerun after a newer release must not move the site back. The same check turns a
+ * sync that a newer version cancelled into `superseded`, not a failure.
+ */
+export async function updateSite({
+  repository,
+  version,
+  request,
+  api,
+  dispatch,
+  latest,
+  now = Date.now,
+  wait = sleep,
+}) {
+  const superseded = async () => {
+    const current = await latest();
+    return compareVersions(current, version) > 0 ? current : null;
+  };
+  const newer = await superseded();
+  if (newer) return { result: 'superseded', latest: newer, replaced: [] };
+  const iso = (offset) => new Date(now() - offset).toISOString().replace(/\.\d+Z$/, 'Z');
+  // A minute of margin for clock skew between the runner and GitHub.
+  const since = iso(60_000);
+  const dispatchedAt = iso(5_000);
+  await withRetries(dispatch, { wait });
+  const outcome = await waitForSiteRun({ repository, since, dispatchedAt, request, api, wait });
+  if (outcome.result === 'cancelled') {
+    const later = await superseded();
+    if (later) return { ...outcome, result: 'superseded', latest: later };
+  }
+  return outcome;
+}
+
+async function npmLatest(name) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
+        headers: { Accept: 'application/vnd.npm.install-v1+json' },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error(`npm returned HTTP ${response.status}`);
+      const latest = (await response.json())['dist-tags']?.latest;
+      if (!/^\d+\.\d+\.\d+$/.test(latest ?? '')) throw new Error(`Unexpected latest tag ${latest}`);
+      return latest;
+    } catch (error) {
+      if (attempt >= 5) throw error;
+      await sleep(10_000 * attempt);
+    }
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const {
     TARGET_REPOSITORY: repository,
-    SINCE: since,
-    DISPATCHED_AT: dispatchedAt,
+    RELEASE_VERSION: version,
     REQUEST_ID: request,
     GITHUB_STEP_SUMMARY: summary,
   } = process.env;
   try {
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !since || !request)
-      throw new Error('Expected TARGET_REPOSITORY, SINCE, and REQUEST_ID');
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^\d+\.\d+\.\d+$/.test(version ?? ''))
+      throw new Error('Expected TARGET_REPOSITORY and a stable RELEASE_VERSION');
+    if (!request?.startsWith(`${version}-`))
+      throw new Error('REQUEST_ID must start with the version');
     const api = (path) => JSON.parse(run('gh', ['api', path]));
-    const { result, url, replaced } = await waitForSiteRun({
+    const dispatch = () =>
+      run('gh', [
+        'api',
+        `repos/${repository}/dispatches`,
+        '-f',
+        'event_type=upstream-release',
+        '-f',
+        `client_payload[version]=${version}`,
+        '-f',
+        `client_payload[request]=${request}`,
+      ]);
+    const outcome = await updateSite({
       repository,
-      since,
-      dispatchedAt: dispatchedAt || since,
+      version,
       request,
       api,
+      dispatch,
+      latest: () => npmLatest('@docx-editor.dev/core'),
     });
-    const note = replaced.length ? ` after a newer sync replaced ${replaced.join(', ')}` : '';
-    const line = `${repository} update: ${result} (${url})${note}`;
+    const line =
+      outcome.result === 'superseded'
+        ? `${repository} update: superseded by ${outcome.latest}, which the site follows instead.`
+        : `${repository} update: ${outcome.result} (${outcome.url})` +
+          (outcome.replaced.length
+            ? ` after a newer sync replaced ${outcome.replaced.join(', ')}`
+            : '');
     console.log(line);
     if (summary) appendFileSync(summary, `${line}\n`);
-    if (result !== 'success') {
-      console.error(`::error::The ${repository} update finished with ${result}: ${url}`);
+    if (!['success', 'superseded'].includes(outcome.result)) {
+      console.error(
+        `::error::The ${repository} update finished with ${outcome.result}: ${outcome.url}`
+      );
       process.exitCode = 1;
     }
   } catch (error) {
