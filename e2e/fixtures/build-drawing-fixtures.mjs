@@ -40,6 +40,10 @@ const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64'
 );
+const PNG_LANDSCAPE = Buffer.from(
+  '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',
+  'base64'
+);
 const JPEG_1X1 = Buffer.from([
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
   0x00, 0x01, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11,
@@ -163,6 +167,7 @@ function pictureBlip({
   effects = '',
   xfrm = 'rot="0" flipH="0" flipV="0"',
   cNvPrId,
+  extent = 'cx="914400" cy="914400"',
 }) {
   const embedAttr = embed !== undefined ? ` r:embed="${embed}"` : '';
   const linkAttr = link ? ` r:link="${link}"` : '';
@@ -176,7 +181,7 @@ function pictureBlip({
     rect +
     `<a:stretch><a:fillRect/></a:stretch>` +
     `</pic:blipFill>` +
-    `<pic:spPr><a:xfrm ${xfrm}><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm>` +
+    `<pic:spPr><a:xfrm ${xfrm}><a:off x="0" y="0"/><a:ext ${extent}/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
     `</pic:pic>`
   );
@@ -245,15 +250,28 @@ function basePackage(documentXml, docRels, extra = {}, contentTypesExtra = '') {
 }
 
 function buildImagesExternal() {
+  const landscapeExtent = 'cx="3657600" cy="2194560"';
   const blipLink = pictureBlip({ link: 'rIdLink', cNvPrId: 1 });
   const blipUnsafe = pictureBlip({ embed: 'rIdUnsafe', cNvPrId: 2 });
-  const blipSpoof = pictureBlip({ embed: 'rIdSpoof', cNvPrId: 3 });
+  const blipSpoof = pictureBlip({
+    embed: 'rIdSpoof',
+    cNvPrId: 3,
+    extent: landscapeExtent,
+  });
   const blipHuge = pictureBlip({ embed: 'rIdHuge', cNvPrId: 4 });
   const body =
     `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}"><w:body>` +
     paragraph('External r:link', anchorDrawing({ id: 1, name: 'link ext', blip: blipLink, wrap: '<wp:wrapNone/>' })) +
     paragraph('Unsafe scheme', inlineDrawing({ id: 2, name: 'unsafe', blip: blipUnsafe })) +
-    paragraph('MIME spoof', inlineDrawing({ id: 3, name: 'spoof', blip: blipSpoof })) +
+    paragraph(
+      'PNG bytes declared as JPEG',
+      inlineDrawing({
+        id: 3,
+        name: 'raster content type mismatch',
+        blip: blipSpoof,
+        extent: landscapeExtent,
+      })
+    ) +
     paragraph('Oversize extent', inlineDrawing({ id: 4, name: 'oversize', blip: blipHuge, extent: 'cx="999999999" cy="999999999"' })) +
     SECT +
     `</w:body></w:document>`;
@@ -265,7 +283,7 @@ function buildImagesExternal() {
     `<Relationship Id="rIdHuge" Type="${IMAGE_REL}" Target="media/huge.png"/>` +
     `</Relationships>`;
   return basePackage(body, rels, {
-    'word/media/spoof.jpg': PNG_1X1,
+    'word/media/spoof.jpg': PNG_LANDSCAPE,
     'word/media/huge.png': PNG_1X1,
   });
 }
