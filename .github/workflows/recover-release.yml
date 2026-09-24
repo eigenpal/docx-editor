@@ -72,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repository: [docx-editor.dev, docx-to-markdown.com]
+        repository: [docx-editor.dev, docx-to-markdown.com, docx-to-pdf.dev]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
