@@ -9,7 +9,7 @@ import { packagedFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { PdfViewer, preparePdfPreview } from './PdfViewer';
 import { PdfProgress, formatDuration } from './PdfProgress';
-import { readConversionResponse } from './conversion-response';
+import { readConversionResponse, type ConversionPayload } from './conversion-response';
 import { clampSplit, desktopSplitBounds, type SplitBounds } from './split-layout';
 import {
   diagnosticSummary,
@@ -27,6 +27,38 @@ const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const EDITOR_PACKAGED_FONTS = packagedFonts();
 type MobilePane = 'source' | 'pdf';
 
+/** A finished conversion as the preview shows it; the caller owns the object URL. */
+function conversionResult(
+  payload: ConversionPayload & { pdf: string },
+  cached = false
+): PdfConversion {
+  const bytes = Uint8Array.from(atob(payload.pdf), (character) => character.charCodeAt(0));
+  return {
+    url: URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })),
+    bytes: bytes.byteLength,
+    pageCount: payload.pageCount ?? 0,
+    diagnostics: payload.diagnostics ?? [],
+    timings: cached ? undefined : payload.timings,
+    cached,
+  };
+}
+
+/**
+ * The sample's PDF, converted when the demo was built, or `null` to convert it live.
+ *
+ * A missing file comes back from the host's SPA fallback as HTML, which fails the parse and
+ * lands here too.
+ */
+async function fetchSamplePdf(): Promise<PdfConversion | null> {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}sample-pdf.json`);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as ConversionPayload;
+    return payload.pdf ? conversionResult({ ...payload, pdf: payload.pdf }, true) : null;
+  } catch {
+    return null;
+  }
+}
 /** The `.DOCX` mark from the site header, wearing a PDF band. */
 function PdfIcon() {
   return (
@@ -95,6 +127,8 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
   const conversion = useRef(0);
   const revision = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
+  // Set when a document is opened, cleared when its editor is ready and conversion starts.
+  const convertOnReady = useRef(false);
 
   const [document, setDocument] = useState<Uint8Array | 'blank'>('blank');
   const [status, setStatus] = useState<PdfStatus>('idle');
@@ -139,16 +173,24 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
     cancelConversion();
     // Resolve against the app base, not the page URL: on the dedicated host the page is `/`
     // and a relative `sample.docx` would ask the SPA catch-all for HTML.
-    const response = await fetch(`${import.meta.env.BASE_URL}sample.docx`).catch(() => null);
+    const [response, samplePdf] = await Promise.all([
+      fetch(`${import.meta.env.BASE_URL}sample.docx`).catch(() => null),
+      fetchSamplePdf(),
+    ]);
     if (!response?.ok) {
+      if (samplePdf) URL.revokeObjectURL(samplePdf.url);
       // Say so: an empty editor with no explanation reads as a broken page.
       setStatus('error');
       setError('The sample document could not be loaded. Open a DOCX of your own instead.');
       return;
     }
-    setDocument(new Uint8Array(await response.arrayBuffer()));
-    setStatus('idle');
-    setResult(null);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // The unedited sample shows its build-time PDF at once. Without one, it converts like
+    // any opened document.
+    convertOnReady.current = samplePdf === null;
+    setDocument(bytes);
+    setStatus(samplePdf ? 'ready' : 'preparing');
+    setResult(samplePdf);
     setError(null);
   }, [cancelConversion]);
 
@@ -203,14 +245,7 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         setError(payload.message ?? 'The document could not be converted.');
         return;
       }
-      const bytes = Uint8Array.from(atob(payload.pdf), (character) => character.charCodeAt(0));
-      setResult({
-        url: URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })),
-        bytes: bytes.byteLength,
-        pageCount: payload.pageCount ?? 0,
-        diagnostics: payload.diagnostics ?? [],
-        timings: payload.timings,
-      });
+      setResult(conversionResult({ ...payload, pdf: payload.pdf }));
       setStatus(savedRevision === revision.current ? 'ready' : 'stale');
     } catch (cause) {
       if (current !== conversion.current || abort.signal.aborted) return;
@@ -230,8 +265,11 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
         return;
       }
       cancelConversion();
-      setDocument(new Uint8Array(await file.arrayBuffer()));
-      setStatus('idle');
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Convert as soon as the editor has the document; the pane shows progress meanwhile.
+      convertOnReady.current = true;
+      setDocument(bytes);
+      setStatus('preparing');
       setResult(null);
       setError(null);
     },
@@ -369,6 +407,11 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
               author="PDF demo"
               title="Document"
               onOpen={() => fileInput.current?.click()}
+              onReady={() => {
+                if (!convertOnReady.current) return;
+                convertOnReady.current = false;
+                void generate();
+              }}
               onChange={(change) => {
                 if (!shouldMarkStale(change)) return;
                 revision.current += 1;
@@ -438,16 +481,30 @@ export function PdfExportDemo({ embedded = false }: { readonly embedded?: boolea
               >
                 <PdfViewer src={result.url} />
               </div>
+              {stale ? (
+                <div className="pdf-stale-overlay">
+                  <div className="pdf-stale-card" role="status">
+                    <p>The document changed since this PDF was generated.</p>
+                    <button
+                      type="button"
+                      className="pdf-button pdf-button--primary pdf-generate-action"
+                      onClick={() => void generate()}
+                    >
+                      Regenerate PDF
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="pdf-page-meta" role="status" aria-live="polite">
                 {result.pageCount} page{result.pageCount === 1 ? '' : 's'} ·{' '}
                 {formatBytes(result.bytes)}
                 {result.timings?.workerStartupMs !== undefined
                   ? ` · Worker startup ${formatDuration(result.timings.workerStartupMs)}`
                   : ''}
+                {result.cached ? ' · Generated when the demo was built' : ''}
                 {result.timings?.generationMs !== undefined
                   ? ` · Generated in ${formatDuration(result.timings.generationMs)}`
                   : ''}
-                {stale ? ' · the document changed since this was generated' : ''}
                 {result.diagnostics.length > 0 ? (
                   <details className="pdf-diagnostics">
                     <summary>

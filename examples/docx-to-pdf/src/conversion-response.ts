@@ -10,7 +10,7 @@ export interface ConversionProgress {
   readonly workerStartupMs?: number;
 }
 
-interface ConversionPayload {
+export interface ConversionPayload {
   readonly pdf?: string;
   readonly pageCount?: number;
   readonly diagnostics?: readonly PdfDiagnostic[];

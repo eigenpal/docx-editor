@@ -15,7 +15,9 @@ Open <http://127.0.0.1:5180>.
 
 ## Use the demo
 
-Select **Open DOCX** to load a file up to 20 MiB, or edit the sample document. Select **Generate PDF** to create a preview, then **Download PDF** to save it. After editing, select **Regenerate PDF** to update the preview. **Reset** restores the sample.
+The sample document opens with its PDF preview. The build converts the sample once, so the page shows it without a conversion request. If the build cannot convert it, the page converts the sample when it loads.
+
+Select **Open DOCX** to load a file up to 20 MiB. The conversion starts when the document opens. Select **Download PDF** to save the result. When you edit the document, the preview is grayed out. Select **Regenerate PDF** to update it. **Reset** restores the sample.
 
 The demo uses best-effort conversion. Unsupported content and font substitutions appear as diagnostics below the preview. Expand the diagnostics to see the affected pages.
 

@@ -30,6 +30,8 @@ export interface PdfConversion {
   readonly bytes: number;
   readonly pageCount: number;
   readonly diagnostics: readonly PdfDiagnostic[];
+  /** Converted when the demo was built, not on this request. */
+  readonly cached?: boolean;
 }
 
 /** The block-id deltas an authored commit carries; a plain mount carries none. */

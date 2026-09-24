@@ -240,6 +240,7 @@ export async function createPdfDemo({
         '/apple-icon.png',
         '/robots.txt',
         '/sitemap.xml',
+        '/sample-pdf.json',
       ].includes(url.pathname);
       const target =
         url.pathname.startsWith('/assets/') || isPublicFile

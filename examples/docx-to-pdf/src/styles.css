@@ -618,6 +618,39 @@ button {
   opacity: 0.58;
 }
 
+/* An edited document greys out its old PDF and offers the conversion in place. */
+.pdf-stale-overlay {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  background: rgb(238 240 243 / 55%);
+  place-items: center;
+  animation: pdf-progress-enter 180ms var(--pdf-ease-out);
+}
+
+.pdf-stale-card {
+  display: flex;
+  max-width: 320px;
+  align-items: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--pdf-line);
+  border-radius: 12px;
+  background: var(--pdf-surface);
+  box-shadow: 0 5px 18px rgb(31 35 40 / 8%);
+  text-align: center;
+}
+
+.pdf-stale-card p {
+  margin: 0;
+  color: var(--pdf-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .pdf-diagnostics {
   display: inline;
 }
