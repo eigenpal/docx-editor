@@ -924,8 +924,7 @@ function layoutBlocksPass(
     // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
     // list that continues inside a table cell has its markers there — so reading the table's
     // own id gave an empty token, and a renumbering that left the table's flow key untouched
-    // reused the cell markers verbatim. The drawing token aggregates the same way, for the
-    // same reason.
+    // reused the cell markers verbatim. The drawing token aggregates for the same reason.
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
