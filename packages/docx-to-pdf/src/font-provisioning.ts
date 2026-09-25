@@ -264,12 +264,14 @@ const knownFamilies = new Set<string>([
   'MT Extra',
 ]);
 /**
- * The Word families planned onto the CJK face. The plan holds only when that face resolves,
- * so the stand-in covers one that is still uncovered when it runs.
+ * The CJK face and the Word families planned onto it. The plan holds only when that face
+ * resolves, so the stand-in covers one that is still uncovered when it runs. A document can
+ * name the CJK face itself, so it is here too.
  */
-const cjkWordFamilies = new Set<string>(
-  Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY)
-);
+const cjkWordFamilies = new Set<string>([
+  CJK_FAMILY,
+  ...Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY),
+]);
 
 /** The optional package that carries the CJK face. */
 const CJK_PACKAGE = '@docx-editor.dev/fonts-cjk';

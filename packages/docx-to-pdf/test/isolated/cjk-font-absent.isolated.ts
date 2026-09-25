@@ -47,6 +47,26 @@ test('without the CJK package, CJK text is reported and strict export refuses it
   );
 });
 
+test('without the CJK package, text set in the CJK face itself still renders', async () => {
+  const source = docx(
+    paragraph(
+      'Hello world',
+      '<w:rPr><w:rFonts w:ascii="Noto Sans CJK JP" w:hAnsi="Noto Sans CJK JP"/></w:rPr>'
+    )
+  );
+  const result = await exportPdf(source, {
+    useSystemFonts: false,
+    fidelityPolicy: 'best-effort',
+  });
+  const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+  expect(codes).toEqual(['font-substitution']);
+  const noto = result.fontResolution.families.find(
+    (family) => family.family === 'Noto Sans CJK JP'
+  );
+  expect(noto?.coverage).toBe('complete');
+  expect(noto?.faces[0]?.sourceFamily).toBe('Liberation Sans');
+});
+
 test('without the CJK package, a Latin document keeps every other packaged face', async () => {
   const source = docx(
     paragraph(

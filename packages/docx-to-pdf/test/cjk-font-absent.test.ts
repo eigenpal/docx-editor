@@ -18,6 +18,6 @@ test('exports without the CJK package installed', () => {
   });
   const output = `${run.stdout}\n${run.stderr}`;
   expect(run.status, output).toBe(0);
-  expect(output).toMatch(/\b2 pass\b/);
+  expect(output).toMatch(/\b3 pass\b/);
   expect(output).toMatch(/\b0 fail\b/);
 });
