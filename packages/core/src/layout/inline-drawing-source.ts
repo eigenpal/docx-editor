@@ -331,6 +331,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           groupPicture.embeddedRelationshipId ?? '',
           groupPicture.linkedRelationshipId ?? '',
           groupPicture.memberNodeId,
+          groupPicture.alternateContent ? 'mc' : '',
         ])
       : '',
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
@@ -515,8 +516,18 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  const projectionForAtom = (atomNodeId: string): DrawingProjection | null =>
-    atomProjections.get(atomNodeId) ?? null;
+  // An MC-wrapped group whose picture cannot render lays out as nothing, the same as an MC
+  // payload the projection cannot draw (`projectRunLevelMcDrawing`). A linked picture settles
+  // at once; an embedded one counts only after its decode settles, so a pending group keeps
+  // its frame and paints its vector members.
+  const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
+    const projection = atomProjections.get(atomNodeId) ?? null;
+    if (!projection?.groupPicture?.alternateContent) return projection;
+    const state = projection.groupPicture.linkedRelationshipId
+      ? resourceOf(projection)
+      : resourceByKey.get(pendingResourceKey(projection));
+    return state && state.kind !== 'ready' && state.kind !== 'pending' ? null : projection;
+  };
 
   const context: InlineDrawingLayoutContext = Object.freeze({
     ownerPartName,

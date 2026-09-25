@@ -60,12 +60,12 @@ function pictureMember(options: PictureOptions = {}): string {
 }
 
 /** A thin black bar in group child space. */
-function barMember(y: number): string {
+function barMember(y: number, x = 600, line = ''): string {
   return (
     '<wps:wsp><wps:cNvPr id="3" name="Bar"/><wps:cNvSpPr/><wps:spPr>' +
-    `<a:xfrm><a:off x="600" y="${y}"/><a:ext cx="1000" cy="10"/></a:xfrm>` +
+    `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="1000" cy="10"/></a:xfrm>` +
     '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-    '<a:solidFill><a:srgbClr val="000000"/></a:solidFill></wps:spPr><wps:bodyPr/></wps:wsp>'
+    `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>${line}</wps:spPr><wps:bodyPr/></wps:wsp>`
   );
 }
 
@@ -163,6 +163,24 @@ describe('group picture projection', () => {
     });
   });
 
+  test('only an MC-wrapped group picture is marked as alternate content', () => {
+    // Layout drops an MC-wrapped group whose picture resource fails; a bare group keeps its card.
+    const drawing = groupDrawing(pictureMember() + barMember(2100));
+    expect(projectionsOf(mcWrapped(drawing))[0]!.groupPicture?.alternateContent).toBe(true);
+    expect(projectionsOf(drawing)[0]!.groupPicture?.alternateContent).toBe(false);
+  });
+
+  test('a picture frame partly outside the group extent keeps its frame', () => {
+    // Half the picture lies left of the child offset; paint clips it to the extent.
+    const [projection] = projectionsOf(groupDrawing(pictureMember({ x: -1400 })));
+    expect(projection!.groupPicture?.frameEmu).toEqual({
+      x: -1500 * SCALE,
+      y: 0,
+      cx: 3000 * SCALE,
+      cy: 1000 * SCALE,
+    });
+  });
+
   test('the run-level atom index carries the group picture', () => {
     const part = parsePart(`<w:p><w:r>${mcWrapped(groupDrawing(pictureMember()))}</w:r></w:p>`);
     const atoms = [...indexInlineDrawingProjectionsInPart(part).values()];
@@ -194,6 +212,34 @@ describe('group picture projection', () => {
     ['a picture beside a text box member', groupDrawing(pictureMember() + textboxMember())],
     ['a picture beside a nested group', groupDrawing(pictureMember() + '<wpg:grpSp/>')],
     ['a rotated group', groupDrawing(pictureMember(), ' rot="60000"')],
+    // Frame bounds: a frame with no visible part, or one that reaches more than one extent
+    // past the group, is refused before its coordinates reach any output.
+    ['a picture right of the group extent', groupDrawing(pictureMember({ x: 3100 }))],
+    ['a picture above the group extent', groupDrawing(pictureMember({ y: -800 }))],
+    [
+      'a picture offset far past the group extent',
+      groupDrawing(pictureMember({ x: 999999999999999 }) + barMember(2100)),
+    ],
+    [
+      'a picture reaching more than one extent past the group',
+      groupDrawing(pictureMember({ x: -2950, cx: 3200 })),
+    ],
+    // The picture makes its vector members visible, so they get the same outer bound.
+    [
+      'a vector member far past a picture group',
+      groupDrawing(pictureMember() + barMember(2100, 999999999999999)),
+    ],
+    [
+      'a vector member stroke wider than a picture group',
+      groupDrawing(
+        pictureMember() +
+          barMember(
+            2100,
+            600,
+            '<a:ln w="7000"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>'
+          )
+      ),
+    ],
   ];
 
   for (const [name, drawing] of refused) {

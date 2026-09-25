@@ -50,7 +50,11 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
-import { readGroupPicture, type GroupPictureProjection } from './drawing-group-picture.ts';
+import {
+  groupVectorMembersAreBounded,
+  readGroupPicture,
+  type GroupPictureProjection,
+} from './drawing-group-picture.ts';
 import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
@@ -1502,7 +1506,7 @@ export function projectDrawingWithState(
         })
       : null;
   const groupRead = pictureResult.picture ? null : readGroupPicture(anchor, extent);
-  const vectorShape = pictureResult.picture
+  const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(
         anchor,
@@ -1512,9 +1516,15 @@ export function projectDrawingWithState(
         ctx.resolveStyleMatrixReference,
         groupRead?.picture.memberNodeId
       );
-  // A group paints whole or not at all: the picture needs every other member to paint too.
-  const groupPicture =
-    groupRead && (!groupRead.hasOtherMembers || vectorShape) ? groupRead.picture : null;
+  // A group paints whole or not at all: the picture needs every other member to paint too,
+  // inside the same bounds as the picture frame.
+  const groupAdmitted =
+    groupRead !== null &&
+    (vectorMembers
+      ? groupVectorMembersAreBounded(vectorMembers, extent)
+      : !groupRead.hasOtherMembers);
+  const groupPicture = groupAdmitted ? groupRead.picture : null;
+  const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
   const textboxStory = pictureResult.picture
     ? null
     : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
@@ -1588,6 +1598,11 @@ export function projectRunLevelMcDrawing(
     projection.textboxStory === null
   ) {
     return null;
+  }
+  // Layout applies the same rule to a group picture whose resource fails.
+  if (projection.groupPicture) {
+    const groupPicture = Object.freeze({ ...projection.groupPicture, alternateContent: true });
+    return Object.freeze({ ...projection, groupPicture });
   }
   return projection;
 }

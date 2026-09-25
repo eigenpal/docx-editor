@@ -169,7 +169,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
-| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder |
+| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), they are not shown |
 | Anchored text boxes | Render the story read-only and clip it to the extent |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
@@ -186,11 +186,18 @@ A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape
 The picture renders only if all of these conditions are true:
 
 - The group holds exactly one picture, and the picture comes before every shape member.
-- The picture is not rotated or flipped, and it has a rectangle geometry and a stretched fill.
+- The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
 - The picture has no image effects, such as grayscale or transparency.
+- The picture frame overlaps the group's area and extends no more than one group width or height past it.
 - Every other member of the group is a supported solid shape.
 
-If a condition is false, the editor treats the group as an unsupported group. Picture commands, such as resize and replace, do not apply to a picture in a group. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
+If a condition is false, the group is an unsupported group. Word stores most groups in alternative content (`mc:AlternateContent`). An unsupported group in alternative content is not shown. Other unsupported groups show a labeled placeholder.
+
+A group renders completely or not at all. While the picture loads, the editor renders the group's shapes alone. If the picture cannot load, the editor and PDF export treat the group as an unsupported group. For example, the picture is missing, linked, damaged, or over a decode limit. PDF export embeds PNG and JPEG pictures only. If a group in alternative content holds a picture in another format, PDF export leaves the group out and reports an `information` diagnostic. PDF export reports other groups that it cannot render as `unsupported`.
+
+The picture is clipped to the group's area. The group's shapes can extend into the effect extent (`wp:effectExtent`), as the shapes of a group without a picture can.
+
+Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
 
 ## Find text in text boxes
 

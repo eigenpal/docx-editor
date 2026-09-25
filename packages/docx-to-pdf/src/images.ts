@@ -165,18 +165,52 @@ export class ImageWriter {
       this.work.report('drawing', message, visit.page.index);
       return '';
     };
-    if (d.vectorShape) {
-      const vector = paintVectorShape(this.doc, page, visit, this.work);
-      if (!d.groupPicture) return vector;
-      // A group picture sits below the group's vector members.
-      const picture = await this.paintPicture(visit, page, report);
-      return picture ? `${picture}\n${vector}` : vector;
-    }
+    if (d.groupPicture) return this.paintGroupPicture(visit, page, report);
+    if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
     if (d.kind === 'anchoredDrawing' && d.textboxStory)
       return report('Textbox story not routed through paintTextbox');
-    if (d.placeholderGraphicKind && !d.groupPicture)
-      return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
+    if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
     return this.paintPicture(visit, page, report);
+  }
+
+  /**
+   * A shape group with a picture member: the picture, then the group's vector members over it.
+   *
+   * The group paints whole or not at all, as it does on screen. Layout already drops an
+   * `mc:AlternateContent` group whose picture resource fails, following the rule for MC
+   * payloads the engine cannot draw. A ready picture in a format this writer cannot embed
+   * gets the same rule here: the MC group is left out and reported at `information`, because
+   * the editor draws it and only this output cannot. A bare group reports every refusal as
+   * `unsupported`, as it reports an unsupported group.
+   */
+  private async paintGroupPicture(
+    visit: SemanticDrawingVisit,
+    page: PDFPage,
+    report: (message: string) => string
+  ): Promise<string> {
+    const d = visit.drawing;
+    const { resource } = d;
+    if (
+      d.groupPicture?.alternateContent &&
+      resource.kind === 'ready' &&
+      !EMBEDDABLE_MIMES.has(resource.mime)
+    ) {
+      this.work.report(
+        'drawing',
+        `Shape group left out: picture format not embeddable: ${resource.mime}`,
+        visit.page.index,
+        'information'
+      );
+      return '';
+    }
+    let refused = false;
+    const picture = await this.paintPicture(visit, page, (message) => {
+      refused = true;
+      return report(message);
+    });
+    if (refused) return '';
+    const vector = d.vectorShape ? paintVectorShape(this.doc, page, visit, this.work) : '';
+    return [picture, vector].filter((commands) => commands !== '').join('\n');
   }
 
   private async paintPicture(

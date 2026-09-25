@@ -71,7 +71,7 @@ function drawingPaintFields(projection: DrawingProjection): {
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
   readonly vectorShape: VectorShapeProjection | null;
-  readonly groupPicture?: true;
+  readonly groupPicture?: DrawingGroupPictureRecord;
 } {
   const picture = projection.picture;
   let placeholderGraphicKind: string | null = null;
@@ -91,7 +91,13 @@ function drawingPaintFields(projection: DrawingProjection): {
     transform: picture?.transform ?? EMPTY_TRANSFORM,
     placeholderGraphicKind: picture || projection.legacyGraphic ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
-    ...(projection.groupPicture ? { groupPicture: true as const } : {}),
+    ...(projection.groupPicture
+      ? {
+          groupPicture: Object.freeze({
+            alternateContent: projection.groupPicture.alternateContent,
+          }),
+        }
+      : {}),
   });
 }
 
@@ -299,6 +305,16 @@ export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
   return Object.freeze({ x, y, width: right - x, height: bottom - y });
 }
 
+/** How a drawing record holds the picture member of a shape group. */
+export interface DrawingGroupPictureRecord {
+  /**
+   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. An output
+   * that cannot draw the picture leaves such a group out, as it leaves out other MC content
+   * it cannot draw. A group without it shows the output's unsupported-drawing result.
+   */
+  readonly alternateContent: boolean;
+}
+
 export interface InlineDrawingRecord {
   readonly kind: 'inlineDrawing';
   readonly drawingNodeId: string;
@@ -338,9 +354,10 @@ export interface InlineDrawingRecord {
    * the bounds of `geometry.imageTransformCorners`, not `geometry.contentBounds`, and paints
    * below `vectorShape`, which holds the group's other members. `placeholderGraphicKind`
    * stays non-null, as for a vector shape, so image commands do not treat the group as a
-   * picture.
+   * picture. The group paints whole or not at all: when the picture cannot paint, an output
+   * shows no part of the group.
    */
-  readonly groupPicture?: true;
+  readonly groupPicture?: DrawingGroupPictureRecord;
   /**
    * The revision wrappers enclosing the owning run, outermost first — the same stack spans
    * carry, so paint and review chrome give a tracked picture the same cues as tracked text.

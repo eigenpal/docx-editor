@@ -449,15 +449,19 @@ function paintReadyImage(
   outer.removeAttribute('tabindex');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
-  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon.
-  const clipPath = cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], drawing.paintBounds);
-  if (clipPath) outer.style.clipPath = clipPath;
-
   const inner = document.createElement('div');
   inner.className = 'docx-drawing-image-frame';
   inner.style.position = 'absolute';
   const content = imageFrameBounds(drawing);
   const paint = drawing.paintBounds;
+  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon. A
+  // group clips only its picture there: the vector members share the outer box, which
+  // clips at the paint bounds so strokes can use the effect extent, as a lone shape does.
+  const clipPath = cssClipPathFromPolygon(
+    drawing.geometry.clipPolygon ?? [],
+    drawing.groupPicture ? content : paint
+  );
+  if (clipPath) (drawing.groupPicture ? inner : outer).style.clipPath = clipPath;
   inner.style.left = `${(content.x - paint.x) * ctx.scale}px`;
   inner.style.top = `${(content.y - paint.y) * ctx.scale}px`;
   inner.style.width = `${content.width * ctx.scale}px`;
@@ -711,10 +715,16 @@ function paintDrawingRecordElement(
     resource.kind === 'ready' && ctx.imageUrlPort && urlRegistry
       ? urlRegistry.urlForReady(resource.validatedHandle, resource.mime)
       : null;
-  // A group picture paints under its vector members once its image is ready; until then,
-  // or without a URL port, the vector members still paint on their own.
-  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) {
-    if (!(drawing.groupPicture && url)) return paintVectorShape(document, drawing, ctx, origin);
+  // A group paints whole or not at all. Its vector members paint alone only while the
+  // picture is pending. A picture that cannot paint turns the whole group into the refusal
+  // card of an unsupported group. Layout drops an MC-wrapped group whose resource fails, so
+  // that group never reaches this card.
+  if (drawing.groupPicture && resource.kind !== 'pending' && !url) {
+    return paintPlaceholderCard(document, drawing, ctx, origin);
+  }
+  const groupImageReady = drawing.groupPicture !== undefined && url !== null;
+  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0 && !groupImageReady) {
+    return paintVectorShape(document, drawing, ctx, origin);
   }
 
   if (resource.kind === 'ready') {
