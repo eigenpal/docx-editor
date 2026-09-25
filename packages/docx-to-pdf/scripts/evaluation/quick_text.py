@@ -1,21 +1,17 @@
 """Linear pagination/text screening. No rasterization or geometric matching."""
+
 import argparse
-from collections import Counter
 import gzip
-import hashlib
 import json
-from pathlib import Path
 import unicodedata
+from collections import Counter
+from pathlib import Path
 
 INDEX_VERSION = "page-words-nfc-v1"
 COMPARE_VERSION = "page-word-multiset-v1"
 MAX_PAGES = 1000
 MAX_WORDS = 250000
 MAX_BYTES = 64 * 1024 * 1024
-
-
-def signature(tokens):
-    return hashlib.sha256(json.dumps(tokens, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
 
 def index_pages(pages):
@@ -38,18 +34,29 @@ def index_pages(pages):
             raise ValueError("Text index exceeds page limit")
     if not output:
         raise ValueError("Empty document")
-    return dict(version=INDEX_VERSION, dictionary=dictionary, pages=output, words=total)
+    return {
+        "version": INDEX_VERSION,
+        "dictionary": dictionary,
+        "pages": output,
+        "words": total,
+    }
 
 
 def measure_pdf(path):
     import pymupdf
+
     with pymupdf.open(path) as doc:
         if doc.needs_pass or doc.is_repaired or not 0 < len(doc) <= MAX_PAGES:
             raise ValueError("Encrypted, repaired, empty, or oversized PDF")
         return index_pages(
-            (word[4] for word in page.get_text(
-                "words", flags=pymupdf.TEXTFLAGS_WORDS | pymupdf.TEXT_IGNORE_ACTUALTEXT
-            )) for page in doc
+            (
+                word[4]
+                for word in page.get_text(
+                    "words",
+                    flags=pymupdf.TEXTFLAGS_WORDS | pymupdf.TEXT_IGNORE_ACTUALTEXT,
+                )
+            )
+            for page in doc
         )
 
 
@@ -63,6 +70,53 @@ def from_measurement(value):
             raise ValueError("Invalid word page")
         pages[page - 1].append(word["text"])
     return index_pages(pages)
+
+
+def from_layout(value):
+    text = value.get("text", {})
+    if text.get("version") != "layout-text-v1":
+        raise ValueError("Incompatible layout text")
+    pages = text["pages"]
+    if len(pages) != value["pageCount"]:
+        raise ValueError("Layout text page count differs")
+    return index_pages((word for line in page["lines"] for word in line["text"].split()) for page in pages)
+
+
+def compare_layout(reference, summary):
+    candidate = from_layout(summary)
+    result = compare(reference, candidate)
+    result["scope"] = "layout-text-screen"
+    result["textStatus"] = "logical-layout-versus-pdf"
+    # Only bounded excerpts enter agent responses. Complete text stays in artifacts.
+    for difference in result["firstDifferences"]:
+        page = difference["page"] - 1
+        for name, index in (("reference", reference), ("candidate", candidate)):
+            tokens = index["pages"][page] if page < len(index["pages"]) else []
+            other = candidate if name == "reference" else reference
+            other_tokens = other["pages"][page] if page < len(other["pages"]) else []
+            remaining = Counter(other["dictionary"][token] for token in other_tokens)
+            excerpts = []
+            for token in tokens:
+                word = index["dictionary"][token]
+                if remaining[word]:
+                    remaining[word] -= 1
+                elif len(excerpts) < 8:
+                    excerpts.append(word[:80])
+            difference[name + "UnmatchedSample"] = excerpts
+        lines = summary["text"]["pages"][page]["lines"] if page < summary["pageCount"] else []
+        samples = set(difference["candidateUnmatchedSample"])
+        difference["candidateLocations"] = [
+            {
+                "paragraphId": line["paragraphId"],
+                "story": line["story"],
+                "sourceRange": span["sourceRange"],
+                "box": span["box"],
+            }
+            for line in lines
+            if any(word[:80] in samples for word in line["text"].split())
+            for span in line["spans"]
+        ][:3]
+    return result
 
 
 def read(path):
@@ -112,22 +166,47 @@ def compare(left, right):
         equal = page < min(len(left_pages), len(right_pages)) and a == b
         exact_pages += equal
         if not equal:
-            differing.append(dict(page=page + 1, referenceWords=len(a), candidateWords=len(b),
-                                  unmatchedOccurrences=len(a) + len(b) - 2 * overlap))
+            differing.append(
+                {
+                    "page": page + 1,
+                    "referenceWords": len(a),
+                    "candidateWords": len(b),
+                    "unmatchedOccurrences": len(a) + len(b) - 2 * overlap,
+                }
+            )
     common = sum((ref_total & candidate_total).values())
     moved = common - same_page
     missing, extra = left["words"] - common, right["words"] - common
     page_error = abs(len(left_pages) - len(right_pages))
-    main = ("pagination" if page_error or moved else "text-mismatch" if missing or extra
-            else "word-order" if differing else "none")
-    return dict(version=COMPARE_VERSION, scope="pagination-text-screen", mainIssue=main,
-                referencePages=len(left_pages), candidatePages=len(right_pages),
-                absolutePageError=page_error, matchingPageCount=page_error == 0,
-                referenceWords=left["words"], candidateWords=right["words"],
-                missingWords=missing, extraWords=extra, minimumMovedWords=moved,
-                samePageWordOccurrences=same_page, exactTextPages=exact_pages,
-                differentTextPages=len(differing), firstDifferences=differing[:3],
-                visualStatus="not-measured", movementStatus="multiset-lower-bound")
+    main = (
+        "pagination"
+        if page_error or moved
+        else "text-mismatch"
+        if missing or extra
+        else "word-order"
+        if differing
+        else "none"
+    )
+    return {
+        "version": COMPARE_VERSION,
+        "scope": "pagination-text-screen",
+        "mainIssue": main,
+        "referencePages": len(left_pages),
+        "candidatePages": len(right_pages),
+        "absolutePageError": page_error,
+        "matchingPageCount": page_error == 0,
+        "referenceWords": left["words"],
+        "candidateWords": right["words"],
+        "missingWords": missing,
+        "extraWords": extra,
+        "minimumMovedWords": moved,
+        "samePageWordOccurrences": same_page,
+        "exactTextPages": exact_pages,
+        "differentTextPages": len(differing),
+        "firstDifferences": differing[:3],
+        "visualStatus": "not-measured",
+        "movementStatus": "multiset-lower-bound",
+    }
 
 
 def main():
@@ -139,7 +218,7 @@ def main():
     value = measure_pdf(args.source) if args.operation == "pdf" else from_measurement(read(args.source))
     with gzip.open(args.output, "wt", encoding="utf-8") as stream:
         json.dump(value, stream, ensure_ascii=False, separators=(",", ":"))
-    print(json.dumps(dict(status="indexed", pages=len(value["pages"]), words=value["words"])))
+    print(json.dumps({"status": "indexed", "pages": len(value["pages"]), "words": value["words"]}))
 
 
 if __name__ == "__main__":

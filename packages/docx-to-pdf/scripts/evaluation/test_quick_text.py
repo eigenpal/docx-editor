@@ -1,11 +1,14 @@
 import unittest
-from quick_text import compare, index_pages, from_measurement
+
+from quick_text import compare, from_measurement, index_pages
 
 
 class QuickTextTests(unittest.TestCase):
     def test_shift_does_not_become_missing_content(self):
-        value = compare(index_pages([["a", "b"], ["c", "d"]]),
-                        index_pages([["a"], ["b", "c"], ["d"]]))
+        value = compare(
+            index_pages([["a", "b"], ["c", "d"]]),
+            index_pages([["a"], ["b", "c"], ["d"]]),
+        )
         self.assertEqual(value["minimumMovedWords"], 2)
         self.assertEqual(value["missingWords"], 0)
         self.assertEqual(value["extraWords"], 0)
@@ -30,10 +33,10 @@ class QuickTextTests(unittest.TestCase):
         self.assertEqual(value["differentTextPages"], 1)
 
     def test_measurement_conversion_preserves_page_assignment(self):
-        value = from_measurement(dict(pages=[{}, {}], words=[dict(page=2, text="word")]))
+        value = from_measurement({"pages": [{}, {}], "words": [{"page": 2, "text": "word"}]})
         self.assertEqual(value["pages"], [[], [0]])
         with self.assertRaises(ValueError):
-            from_measurement(dict(pages=[{}], words=[dict(page=0, text="word")]))
+            from_measurement({"pages": [{}], "words": [{"page": 0, "text": "word"}]})
 
     def test_identical_and_empty_text(self):
         value = compare(index_pages([[], ["a"]]), index_pages([[], ["a"]]))
@@ -41,13 +44,10 @@ class QuickTextTests(unittest.TestCase):
         self.assertEqual(value["exactTextPages"], 2)
 
     def test_invalid_cached_index_refused(self):
-        bad = index_pages([["a"]]); bad["pages"][0][0] = -1
+        bad = index_pages([["a"]])
+        bad["pages"][0][0] = -1
         with self.assertRaises(ValueError):
             compare(bad, index_pages([["a"]]))
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class PdfIndexTests(unittest.TestCase):
@@ -55,15 +55,21 @@ class PdfIndexTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from unittest.mock import patch
+
         import pymupdf
         from quick_text import measure_pdf
+
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "synthetic.pdf"
             with pymupdf.open() as doc:
                 doc.new_page().insert_text((72, 72), "alpha alpha beta")
                 doc.new_page()
                 doc.save(path)
-            with patch.object(pymupdf.Page, "get_pixmap", side_effect=AssertionError("Unexpected rasterization")):
+            with patch.object(
+                pymupdf.Page,
+                "get_pixmap",
+                side_effect=AssertionError("Unexpected rasterization"),
+            ):
                 measured = measure_pdf(path)
             self.assertEqual(measured["words"], 3)
             self.assertEqual(len(measured["pages"]), 2)
@@ -76,3 +82,44 @@ class RepeatedPageBoundaryTests(unittest.TestCase):
         self.assertEqual(value["minimumMovedWords"], 1)
         self.assertEqual(value["missingWords"], 0)
         self.assertEqual(value["extraWords"], 0)
+
+
+class LayoutTextTests(unittest.TestCase):
+    def test_layout_reports_moved_words_and_source_locations(self):
+        from quick_text import compare_layout
+
+        summary = {
+            "pageCount": 2,
+            "text": {
+                "version": "layout-text-v1",
+                "pages": [
+                    {
+                        "lines": [
+                            {
+                                "text": "alpha beta",
+                                "story": "body",
+                                "paragraphId": "p1",
+                                "spans": [
+                                    {
+                                        "text": "alpha beta",
+                                        "sourceRange": {"paragraphId": "p1", "start": 0, "end": 10},
+                                        "box": {"x": 20, "y": 30, "width": 60, "height": 12},
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                    {"lines": []},
+                ],
+            },
+        }
+        result = compare_layout(index_pages([["alpha"], ["beta"]]), summary)
+        self.assertEqual(result["minimumMovedWords"], 1)
+        self.assertEqual(result["missingWords"], 0)
+        self.assertEqual(result["scope"], "layout-text-screen")
+        self.assertEqual(result["firstDifferences"][0]["candidateUnmatchedSample"], ["beta"])
+        self.assertEqual(result["firstDifferences"][0]["candidateLocations"][0]["paragraphId"], "p1")
+
+
+if __name__ == "__main__":
+    unittest.main()

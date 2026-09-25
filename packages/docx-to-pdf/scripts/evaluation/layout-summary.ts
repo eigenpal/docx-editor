@@ -1,6 +1,7 @@
 /** Pagination-only evaluation through the same font-backed session as PDF export. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { openExportSession } from '../../src/open-session.ts';
+import { recordLayoutText } from './layout-text.ts';
 
 export async function summarizePages(source: Uint8Array) {
   const started = performance.now();
@@ -34,7 +35,8 @@ export async function summarizePages(source: Uint8Array) {
       fontResolution: opened.session.fontResolution,
       contentWarnings: layout.contentWarnings ?? [],
       timings: { openMs, layoutMs: performance.now() - started - openMs },
-      textStatus: 'not-measured',
+      text: recordLayoutText(layout),
+      textStatus: 'recorded-logical-layout',
       visualStatus: 'not-measured',
     };
   } finally {

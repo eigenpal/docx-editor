@@ -2,4 +2,4 @@
 "@docx-editor.dev/docx-to-pdf": patch
 ---
 
-Add evaluation tools for pagination-only layout and cached page-word screening.
+Add evaluation tools for page layout, source text locations, and cached page-word screening.

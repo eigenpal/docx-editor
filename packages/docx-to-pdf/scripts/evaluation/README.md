@@ -52,8 +52,13 @@ The evaluator owns caching, application reference capture, feature grouping, and
 ## Fast pagination and text screening
 
 `layout-summary.ts input.docx output.json` opens the production font-backed session
-and returns page counts without painting or writing a PDF. It does not measure text
-or visual fidelity. Use the same TypeScript configuration as `export.ts`.
+and records page counts and logical text without painting or writing a PDF.
+Text records include lines, stories, source ranges, and span positions in layout points.
+Positions precede paint transforms; rotated content needs PDF evidence for exact highlighting.
+The record includes table text, page furniture, and textboxes through the export traversal.
+Whitespace tokenization joins styled spans within each line. It can differ from PDF extraction.
+`compare_layout` reports this separate scope and bounded excerpts with candidate source locations.
+It does not certify visual fidelity. Use the same TypeScript configuration as `export.ts`.
 
 `quick_text.py pdf input.pdf index.json.gz` extracts words without rendering pages.
 `quick_text.py measurement measurement.json.gz index.json.gz` reuses an existing
