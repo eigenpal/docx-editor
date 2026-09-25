@@ -117,7 +117,7 @@ Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines, l
 
 Known single-byte Symbol and Wingdings bullets use Unicode fallback when their font is unavailable. The editor preserves the original numbering definition when you save.
 
-Rows with bottom-to-top cell text use the text length when they have no fixed height. Minimum row heights also control text alignment. If another cell makes the row taller, alignment still uses the measured height.
+Rows with bottom-to-top cell text use the text length when they have no fixed height. If a minimum height or another cell makes the row taller, text alignment still uses the measured text length.
 
 Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
 

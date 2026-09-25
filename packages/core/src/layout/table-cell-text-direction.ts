@@ -52,20 +52,17 @@ export function blockInlineRight(blocks: readonly BlockFragmentRecord[], fallbac
  * indent included, and never longer than the room the row has.
  *
  * `measure` lays the blocks out against an unbounded line, where every line starts at its
- * indent because alignment has no far edge. `minimumLength` retains an authored row floor.
+ * indent because alignment has no far edge.
  */
 export function bottomToTopLineEnd(
   flowLeft: number,
   roomRight: number,
   fixedLength: boolean,
-  measure: (right: number) => readonly BlockFragmentRecord[],
-  minimumLength = 0
+  measure: (right: number) => readonly BlockFragmentRecord[]
 ): number {
   if (fixedLength) return roomRight;
   const natural = blockInlineEnd(measure(Number.POSITIVE_INFINITY), flowLeft);
-  return Number.isFinite(natural)
-    ? Math.min(roomRight, Math.max(natural, flowLeft + minimumLength))
-    : roomRight;
+  return Number.isFinite(natural) ? Math.min(roomRight, natural) : roomRight;
 }
 
 /** {@link blockInlineRight} plus each paragraph's end indent: how far the lines need to run. */

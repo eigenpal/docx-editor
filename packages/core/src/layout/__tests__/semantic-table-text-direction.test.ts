@@ -200,24 +200,6 @@ describe('bottom-to-top table cell text', () => {
       expect(heights[0]).toBeLessThan(50);
     });
 
-    test('a minimum row height gives centred turned text its authored line length', () => {
-      const result = layout(
-        table(
-          `<w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr>` +
-            `${cell(turned, upright('center', 'label'))}${cell('', paragraph('side'))}</w:tr>`
-        )
-      );
-      expect(firstTable(result).rows[0]!.box.height).toBeCloseTo(150, 3);
-      const line = turnedParagraph(result).lines[0]!;
-      const first = line.spans[0]!.box;
-      const last = line.spans.at(-1)!.box;
-      expect(first.x - line.box.x).toBeGreaterThan(50);
-      expect(first.x - line.box.x).toBeCloseTo(
-        line.box.x + line.box.width - last.x - last.width,
-        3
-      );
-    });
-
     test('a minimum that exceeds page room does not enlarge the turned line', () => {
       const filler = Array.from({ length: 40 }, () => paragraph('filler')).join('');
       for (const alignment of ['left', 'center', 'right']) {
@@ -238,26 +220,47 @@ describe('bottom-to-top table cell text', () => {
       }
     });
 
-    test('a neighbour margin contributes to centred turned text clearance', () => {
-      const result = layout(
-        table(
-          '<w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr>' +
-            cell(turned, upright('center', 'label')) +
-            cell(
-              '<w:tcMar><w:top w:w="400" w:type="dxa"/><w:bottom w:w="400" w:type="dxa"/></w:tcMar>',
-              paragraph('side')
-            ) +
-            '</w:tr>'
-        )
-      );
-      const row = firstTable(result).rows[0]!;
-      const line = turnedParagraph(result).lines[0]!;
-      const span = line.spans[0]!.box;
-      expect(row.box.height).toBeCloseTo(190, 3);
-      expect(span.x - row.cells[0]!.box.x).toBeCloseTo(
-        row.box.height - (span.x + span.width - row.cells[0]!.box.x),
-        3
-      );
+    test('an incomplete row keeps the turned line inside its cell for every alignment', () => {
+      const nested =
+        '<w:tbl><w:tblGrid><w:gridCol w:w="700"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="2400" w:hRule="exact"/></w:trPr>' +
+        `<w:tc>${paragraph('nested')}</w:tc></w:tr></w:tbl>`;
+      for (const ownOverflow of [false, true]) {
+        const heights = ['left', 'center', 'right'].map((alignment) => {
+          const body = ownOverflow
+            ? Array.from({ length: 6 }, (_, index) => upright(alignment, `label${index}`)).join('')
+            : upright(alignment, 'label');
+          const neighbour = ownOverflow
+            ? paragraph('side')
+            : paragraph('a') + paragraph('b') + nested + paragraph('z');
+          const result = layout(
+            (ownOverflow ? '' : Array.from({ length: 40 }, () => paragraph('filler')).join('')) +
+              table(
+                '<w:tr><w:trPr><w:trHeight w:val="2600" w:hRule="atLeast"/></w:trPr>' +
+                  cell(turned, body) +
+                  cell('', neighbour) +
+                  '</w:tr>'
+              )
+          );
+          const fragment = result.pages
+            .flatMap((page) => page.fragments)
+            .find((item) => item.kind === 'table');
+          if (fragment?.kind !== 'table') throw new Error('expected table');
+          const row = fragment.rows[0]!;
+          const turnedCell = row.cells[0]!;
+          for (const block of turnedCell.blocks) {
+            if (block.kind !== 'paragraph') continue;
+            for (const line of block.lines) {
+              expect(line.box.x + line.box.width).toBeLessThanOrEqual(
+                turnedCell.box.x + turnedCell.box.height + 0.001
+              );
+            }
+          }
+          return row.box.height;
+        });
+        expect(heights[1]).toBeCloseTo(heights[0]!, 3);
+        expect(heights[2]).toBeCloseTo(heights[0]!, 3);
+      }
     });
 
     test('a positional tab does not give an auto row an unbounded line length', () => {

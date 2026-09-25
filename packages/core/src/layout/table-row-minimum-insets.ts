@@ -86,24 +86,3 @@ export function authoredRowMinimumFloorPt(
   }
   return atLeastHeightPt + top + bottom;
 }
-
-/** Resolve the authored row floor before measuring its cell content. */
-export function rowMinimumFloorPt(
-  row: SemanticTableRow,
-  isContinuation: boolean,
-  collapsed: boolean,
-  insets: {
-    readonly cellContentInsets?: RowMinimumInsetMap;
-    readonly cellMinimumContentInsets?: RowMinimumInsetMap;
-  }
-): number {
-  if (isContinuation || row.height.rule !== 'atLeast') return 0;
-  return authoredRowMinimumFloorPt(
-    row.height.valuePt,
-    row.cells.map((cell) => ({
-      cell,
-      insets: insets.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, collapsed),
-    })),
-    insets.cellMinimumContentInsets
-  );
-}

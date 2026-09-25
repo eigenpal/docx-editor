@@ -523,7 +523,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'tbRl and btLr cell text renders through writing-mode and round-trips. An auto-height row is as tall as its btLr text. Centered and right-aligned btLr text uses the authored minimum row height. If other cells make the row taller, that text stays aligned within its measured height. You cannot set it from the UI.',
+      'tbRl and btLr cell text renders through writing-mode and round-trips. An auto-height row is as tall as its btLr text. If a minimum height or other cells make the row taller, btLr text stays aligned within its measured text length. You cannot set it from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
