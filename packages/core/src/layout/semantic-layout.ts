@@ -83,7 +83,7 @@ import {
   breakPreparedParagraph,
   createParagraphBreakRetention,
 } from './paragraph-break-request.ts';
-import { resolveParagraphLayoutInputs } from './style-cascade.ts';
+import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -2182,7 +2182,7 @@ function layoutBlocksPass(
       : null;
     if (frameStart) {
       cursorY = frameStart.cursorY;
-      previousSpaceAfter = frameStart.previousSpaceAfter;
+      previousSpaceAfter = collapsingSpaceAfter(frameStart.previousSpaceAfter, styleCascade);
     }
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
@@ -2251,7 +2251,8 @@ function layoutBlocksPass(
           (at) =>
             prepared[at]?.kind === 'paragraph' &&
             (!!prepared[at].frame || collapsesSectionMark(at)),
-          (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at])
+          (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
+          styleCascade?.sumAdjacentParagraphSpacing
         );
         // Natural page movement suppresses the head's before spacing. Price that
         // destination separately from the space needed beside the current content.
@@ -2902,7 +2903,7 @@ function layoutBlocksPass(
     }
     flushFragment(true);
     releasePlacedBreaks(paragraphId);
-    previousSpaceAfter = endedWithPageBreak ? 0 : spacing.after;
+    previousSpaceAfter = collapsingSpaceAfter(endedWithPageBreak ? 0 : spacing.after, styleCascade);
     if (savedFrameFlow) {
       cursorY = savedFrameFlow.cursorY;
       previousSpaceAfter = savedFrameFlow.previousSpaceAfter;

@@ -4,6 +4,7 @@ import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-liga
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 import { adjustLineHeightInTable, withLineGrid } from './line-grid.ts';
+import { adjacentParagraphSpacingSettings } from './adjacent-paragraph-spacing.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -69,6 +70,7 @@ import {
 } from './style-definition-reader.ts';
 
 export { isValidStyleId } from './style-definition-reader.ts';
+export { collapsingSpaceAfter } from './adjacent-paragraph-spacing.ts';
 export type { StyleDefinition } from './style-definition-reader.ts';
 
 export { MAX_STYLE_BASED_ON_DEPTH } from './style-chain.ts';
@@ -91,6 +93,8 @@ export interface StyleCascadeTable {
   readonly adjustLineHeightInTable?: true;
   /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
   readonly ignoreIndentAsNumberingTabStop?: true;
+  /** `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up. */
+  readonly sumAdjacentParagraphSpacing?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -458,6 +462,7 @@ export function buildStyleCascadeTable(
       : {}),
     ...(adjustLineHeightInTable(settingsRoot) ? { adjustLineHeightInTable: true as const } : {}),
     ...numberingTabSettings(settingsRoot),
+    ...adjacentParagraphSpacingSettings(settingsRoot),
   };
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);

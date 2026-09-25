@@ -4197,6 +4197,7 @@ export interface StyleCascadeTable {
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
+    readonly sumAdjacentParagraphSpacing?: true;
     readonly themeFonts: ThemeFonts;
     // (undocumented)
     readonly typography?: CjkTypographySettings;
