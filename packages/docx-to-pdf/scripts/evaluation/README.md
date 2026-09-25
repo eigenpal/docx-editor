@@ -48,3 +48,35 @@ Layout traces return up to three nearby records, including source node IDs and r
 The browser recipe checks pointer placement, keyboard insertion, undo/redo, saved body content, and fresh layout. It uses a local demo server and blocks external browser requests. Batch mode reuses the static server and starts a fresh browser process for each document. The parent caches results using browser, recipe, font, and engine identities. It does not cover drag selection, formatting, or review operations. See [Browser eval probe](../../../../e2e/evaluation-browser.md).
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.
+
+## Layout and text checks
+
+`layout-summary.ts input.docx output.json` records page counts, logical text, and source locations.
+It uses the export session without creating a PDF. Use the TypeScript configuration shown for `export.ts`.
+`layout-worker.ts` accepts the same paths in newline-delimited JSON requests.
+The caller must enforce process time and memory limits.
+
+`quick_text.py pdf input.pdf index.json.gz` creates a text index.
+Use `measurement` instead of `pdf` to read an existing compressed measurement.
+Indexes and comparisons have separate version identities.
+
+These checks report pagination and text differences. Logical text and PDF extraction can differ.
+Repeated words make occurrence locations ambiguous. Layout positions precede paint transforms.
+Use PDF evidence for visual validation. Failed or missing inputs never count as passes.
+
+Run synthetic checks with:
+
+```sh
+python -m unittest discover -s packages/docx-to-pdf/scripts/evaluation -p 'test_quick_text.py'
+bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts packages/docx-to-pdf/scripts/evaluation/layout-worker.test.ts
+```
+
+For Node 24.2 or later, load source aliases before starting the worker:
+
+```sh
+node --experimental-transform-types \
+  --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
+  packages/docx-to-pdf/scripts/evaluation/layout-worker.ts
+```
+
+This development command uses the checkout's TypeScript dependency and source configuration.
