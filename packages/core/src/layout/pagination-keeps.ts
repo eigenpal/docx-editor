@@ -160,6 +160,26 @@ export interface KeepNextBlock {
 }
 
 /**
+ * How many opening lines of a `w:keepNext` chain's terminal paragraph the chain holds.
+ *
+ * `lineCount` is the paragraph's whole line count; `openingLength` stops at its first hard
+ * page or column break. `w:keepLines` holds the whole opening. Widow control holds two
+ * lines, or the whole opening when fewer than four lines would leave a lone line on either
+ * side. Otherwise one line is enough.
+ */
+export function keepNextTerminalLines(
+  keeps: ParagraphKeeps,
+  lineCount: number,
+  openingLength: number
+): number {
+  if (keeps.keepLines) return openingLength;
+  if (!keeps.widowControl) return 1;
+  return lineCount < MIN_LINES_EITHER_SIDE * 2
+    ? openingLength
+    : Math.min(MIN_LINES_EITHER_SIDE, openingLength);
+}
+
+/**
  * Flow height a `w:keepNext` chain starting at `start` needs to hold together (§17.3.1.15).
  *
  * The chain is every consecutive block that declares `w:keepNext`, plus the block the last of
@@ -205,14 +225,7 @@ export function keepNextGroupHeight(
     const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;
     // The story's LAST block keeps with nothing, so it terminates the chain however authored.
     if (!block.keeps.keepNext || index + 1 >= blocks.length) {
-      let openingLines = 1;
-      if (block.keeps.keepLines) openingLines = openingLength;
-      else if (block.keeps.widowControl) {
-        openingLines =
-          lines.length < MIN_LINES_EITHER_SIDE * 2
-            ? openingLength
-            : Math.min(MIN_LINES_EITHER_SIDE, openingLength);
-      }
+      const openingLines = keepNextTerminalLines(block.keeps, lines.length, openingLength);
       for (let line = 0; line < openingLines; line += 1) total += lines[line]?.height ?? 0;
       return total;
     }

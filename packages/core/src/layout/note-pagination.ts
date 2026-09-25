@@ -69,6 +69,7 @@ import {
   type NoteReferenceLineBand,
 } from './note-fragment-geometry.ts';
 import { splitNoteFragments } from './note-splitting.ts';
+import { lastInFlowParagraphId } from './note-holdout-keep-group.ts';
 import { holdOutReserveNeed } from './note-reserve-holdout.ts';
 import { fingerprintNotesInput } from './note-input-fingerprint.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
@@ -996,8 +997,11 @@ function buildFootnoteArea(
      * it, stably. The TOP is where the reserve reaches when the note cannot even start in
      * that room: Word keeps a footnote whole with its reference, so the reference's LINE
      * moves to the next page instead of the note splitting (see the eviction branch in the
-     * reference loop). Only read with {@link reserveColumnBudget}; attach passes size from
-     * real body slack.
+     * reference loop). Attach passes omit it: they size from real body slack, and the
+     * BOTTOM still bounds each note by its reference line's full box there, because the
+     * slack ends at the fit bottom ({@link bodyFitBottomPt}), which may sit inside the last
+     * line's box. Without that bound a split note's head rises into the reference line
+     * that the reserve pass kept clear.
      */
     readonly reserveBandOf?: (ref: PageRefHit) => NoteReferenceLineBand;
     readonly separatorCache?: NoteSeparatorCache;
@@ -1133,10 +1137,11 @@ function buildFootnoteArea(
       reasons.push('note-count-limit');
       break;
     }
-    // Reserve mode tightens each note's budget to ITS reference's floor; the stack may not
-    // rise above any line that cites into it. Later references sit lower, so their budgets
-    // only shrink.
-    const band = options?.reserveBandOf?.(ref);
+    // Each note's budget ends at ITS reference's floor; the stack may not rise above any
+    // line that cites into it. Later references sit lower, so their budgets only shrink.
+    // Attach mode reads the same band the reserve pass used, so both split a note at the
+    // same point; its eviction guard stays off (`keepWholeBudget` is 0).
+    const band = options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
@@ -2164,6 +2169,7 @@ function computeFootnoteReservesWithPolicy(
     filterRefsOnPage(page, allRefs, refIndex).filter(isPageBottomFootnoteRef);
   const recordReserve = (pageIndex: number, needed: number, cap: number): void =>
     recordFootnoteReserve(reserves, pageIndex, Math.min(needed, cap));
+  const bodyLastParagraphId = lastInFlowParagraphId(layout.pages);
 
   for (let pageAt = 0; pageAt < layout.pages.length; pageAt += 1) {
     const page = layout.pages[pageAt]!;
@@ -2194,6 +2200,7 @@ function computeFootnoteReservesWithPolicy(
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
+            bodyLastParagraphId,
             allowOrphanDeferral,
             existingAreaHeight,
             usedReservePt,

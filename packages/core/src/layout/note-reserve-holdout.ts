@@ -13,6 +13,7 @@ import {
   noteReferenceLineBandPt,
   pageHoldsOnly,
 } from './note-fragment-geometry.ts';
+import { classifyKeepGroup, frontierKeepGroup } from './note-holdout-keep-group.ts';
 import { collapsedSpaceBefore } from './paragraph-style.ts';
 import {
   layoutNoteCached,
@@ -52,6 +53,8 @@ export interface HoldOutArgs {
   readonly allowOrphanDeferral?: boolean;
   readonly bodyPage: PageRecord;
   readonly nextPage: PageRecord | undefined;
+  /** Paragraph id of the body's last in-flow block, whose `w:keepNext` binds nothing. */
+  readonly bodyLastParagraphId?: string;
   /** Height of `bodyPage`'s existing note area (0 when it has none). */
   readonly existingAreaHeight: number;
   /** The reserve `bodyPage` was laid under (for the observed-refusal test), if known. */
@@ -99,7 +102,15 @@ export interface HoldOutArgs {
  * line quantum charges only the notes referenced on the lines that must return with the
  * frontier line, because the lines below them stay on the next page. The whole-block
  * quantum charges every pulled reference in the OWNING BLOCK, because a block that
- * returns whole brings all of its notes.
+ * returns whole brings all of its notes. On a page whose lines could re-break or change
+ * column ({@link pullBackShiftPt} has no answer), both quanta charge every pulled note.
+ *
+ * A `w:keepNext` group that holds the frontier line ({@link frontierKeepGroup}) returns
+ * whole or not at all, so both quanta reach the group's end and charge the notes on its
+ * lines. The body pass drops a keep whose group is taller than the page's reserved height,
+ * so a frontier hold could split a group that a release keeps whole, or move a head the
+ * body pass already placed. Those groups keep the whole-slack hold
+ * ({@link classifyKeepGroup}).
  *
  * Where the returning lines' landing on `bodyPage` is exact ({@link pullBackShiftPt}),
  * each quantum is tested there against the rule the reserve pass applies afterwards.
@@ -150,15 +161,15 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // fragment. A table anywhere in that opening run, or a reference deeper than the scan
   // window, is a pull-back this reserve cannot reason about — fail open.
   let owningBlock: ParagraphFragmentRecord | undefined;
-  let scanned = 0;
+  let owningIndex = 0;
   for (const block of nextBody.fragments) {
     if (block.kind !== 'paragraph') return 0;
-    if (scanned >= MAX_HOLD_OUT_SCAN_BLOCKS) return 0;
-    scanned += 1;
+    if (owningIndex >= MAX_HOLD_OUT_SCAN_BLOCKS) return 0;
     if (fragmentOwnsPosition(block, frontierRef.paragraphId, frontierRef.atomOffset)) {
       owningBlock = block;
       break;
     }
+    owningIndex += 1;
   }
   if (!owningBlock) return 0;
   // Release a settled hold only when the preceding body plus this opening pair
@@ -183,26 +194,81 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   ) {
     return 0;
   }
-  const pulled = candidates.filter((ref) =>
-    fragmentOwnsPosition(owningBlock, ref.paragraphId, ref.atomOffset)
+  const frontierIndex = owningBlock.lines.findIndex(
+    (line) => Math.abs(line.box.y - frontier.top) <= 0.001
   );
+  // Where the lines land on `bodyPage`; undefined on a page whose lines could re-break.
+  const shift = pullBackShiftPt(bodyPage, nextBody);
+  let hold = frontierHoldPt(bodyPage, owningBlock, frontier, bodyBottom, shift);
+  // A keep-with-next group that holds the frontier line returns whole or not at all, and a
+  // hold that changes whether its keep holds changes which lines return. The policy says
+  // how to price the group and when to keep the whole-slack hold instead.
+  const group = frontierKeepGroup(
+    bodyPage,
+    nextBody,
+    owningIndex,
+    frontierIndex,
+    args.bodyLastParagraphId
+  );
+  const keepPolicy = group
+    ? classifyKeepGroup(
+        group,
+        shift?.pt,
+        contentHeight,
+        args.existingAreaHeight,
+        Math.max(hold, args.existingAreaHeight),
+        RESERVE_BOUNDARY_BACKOFF_PT
+      )
+    : undefined;
+  if (keepPolicy?.holdWholeSlack) hold = wholeSlackHoldPt(bodyPage, bodyBottom);
+  const groupEnd = keepPolicy ? group?.end : undefined;
+  // Blocks that return with the frontier line: the owning block, and the rest of a
+  // keep-with-next group it belongs to. A later block brings only the references on its
+  // group lines; its lower lines stay on the next page.
+  const lastReturning = groupEnd !== undefined ? group!.lastIndex : owningIndex;
+  const returning = nextBody.fragments.slice(owningIndex, lastReturning + 1);
+  const blockOf = (ref: HoldOutRef): ParagraphFragmentRecord | undefined => {
+    for (const entry of returning) {
+      if (entry.kind !== 'paragraph') continue;
+      if (fragmentOwnsPosition(entry, ref.paragraphId, ref.atomOffset)) return entry;
+    }
+    return undefined;
+  };
+  const pulled = candidates.filter((ref) => {
+    const block = blockOf(ref);
+    if (block === owningBlock) return true;
+    return (
+      block !== undefined &&
+      groupEnd !== undefined &&
+      noteReferenceLineBandPt(nextBody, ref).bottom <= groupEnd + 0.001
+    );
+  });
   if (pulled.length === 0) return 0;
 
   const firstContentTop = firstBodyContentTopPt(nextBody);
   // Two pull-back quanta. The LINE quantum ends at the smallest cut the body pass may make
   // at or below the reference's line ({@link pullBackUnitBottomPt}): a splittable
   // paragraph returns just its opening lines, but widow/orphan control and `w:keepLines`
-  // can tie lines below the reference to it. The WHOLE-BLOCK quantum ends at the reference
-  // paragraph's fit bottom (a keep-with-next group returns only as one piece).
-  const unitBottom = pullBackUnitBottomPt(bodyPage, owningBlock, frontier);
+  // can tie lines below the reference to it. A keep-with-next group that holds the line
+  // returns only whole, so the quantum reaches the group's end. The WHOLE-BLOCK quantum
+  // ends at the reference paragraph's fit bottom, or at the group's end when the group
+  // continues past it.
+  let unitBottom = pullBackUnitBottomPt(bodyPage, owningBlock, frontier);
+  if (groupEnd !== undefined) unitBottom = Math.max(unitBottom, groupEnd);
+  const wholeBottom = Math.max(
+    fragmentFitBottomPt(owningBlock),
+    lastReturning > owningIndex && groupEnd !== undefined ? groupEnd : 0
+  );
   const lineBandHeight = Math.max(0, unitBottom - firstContentTop);
-  const blockBandHeight = Math.max(0, fragmentFitBottomPt(owningBlock) - firstContentTop);
+  const blockBandHeight = Math.max(0, wholeBottom - firstContentTop);
 
   const contentWidth = bodyPage.contentBox.width;
   const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
   // The line quantum returns only the lines of its unit, so it carries only the notes
   // referenced there. References lower in the block stay on the next page with their
-  // notes; the reserve pass evicts any of them the body pulls back anyway.
+  // notes; the reserve pass evicts any of them the body pulls back anyway. Pages whose
+  // lines could re-break or reflow into another column ({@link pullBackShiftPt} has no
+  // answer) charge every pulled note: which lines return there is only an estimate.
   let unitNotesHeight = 0;
   let pulledNotesHeight = 0;
   let deepestRefBottom = 0;
@@ -223,17 +289,20 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     // `evictable: false`) spans the whole block and would over-subtract it; the guard never
     // evicts those, so the bare column is their complement.
     const band = noteReferenceLineBandPt(nextBody, ref);
-    const moveOffset = band.evictable ? returnedEvictionOffsetPt(bodyPage, owningBlock, band) : 0;
+    const moveOffset = band.evictable
+      ? returnedEvictionOffsetPt(bodyPage, blockOf(ref) ?? owningBlock, band)
+      : 0;
     if (laid.flowHeight > columnBudget - moveOffset + 0.001) continue;
     pulledNotesHeight += laid.flowHeight;
-    if (band.bottom <= unitBottom + 0.001) unitNotesHeight += laid.flowHeight;
+    if (!shift || band.bottom <= unitBottom + 0.001) unitNotesHeight += laid.flowHeight;
   }
   if (pulledNotesHeight <= 0) return 0;
 
   const areaBase =
     args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
-  const shift = pullBackShiftPt(bodyPage, nextBody);
-  const hold = frontierHoldPt(bodyPage, owningBlock, frontier, bodyBottom, shift);
+  // A group whose end the next page does not show may return whole, with notes this test
+  // cannot see.
+  if (keepPolicy?.unpriced) return hold;
   // Where the lines land exactly, each quantum fits when its notes start below its lowest
   // line's full box on `bodyPage` — the rule the reserve pass applies once they are there.
   // Otherwise the page-top geometry is charged plus one reference line of headroom.
@@ -246,10 +315,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   if (!fitsLineQuantum) return hold;
   const fitsWholeBlock =
     exact !== undefined
-      ? Math.max(deepestRefBottom, fragmentFitBottomPt(owningBlock)) +
-          exact +
-          areaBase +
-          pulledNotesHeight <=
+      ? Math.max(deepestRefBottom, wholeBottom) + exact + areaBase + pulledNotesHeight <=
         contentHeight - EXACT_FIT_MARGIN_PT
       : bodyBottom + blockBandHeight + refLineHeight + areaBase + pulledNotesHeight <=
         contentHeight + 0.001;
@@ -357,7 +423,8 @@ function returnedEvictionOffsetPt(
  * too high would let the frontier line in, and its note would evict it again. The budget
  * therefore ends a glyph band into the landing line, which absorbs any unrecorded gap up
  * to that height. Where lines could re-break on the way back (a float or text frame on
- * either page) the landing is unreadable, and the whole slack is held as before.
+ * either page) the landing is unreadable, and the whole slack is held as before. The
+ * caller also holds the whole slack when this hold could change a `w:keepNext` decision.
  */
 function frontierHoldPt(
   bodyPage: PageRecord,
@@ -367,9 +434,7 @@ function frontierHoldPt(
   shift: PullBackShift | undefined
 ): number {
   const contentHeight = bodyPage.contentBox.height;
-  // Backed off by half a point like the eviction reserve: the last kept body line's bottom
-  // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
-  const wholeSlack = Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT);
+  const wholeSlack = wholeSlackHoldPt(bodyPage, bodyBottom);
   const line = owningBlock.lines.find((entry) => Math.abs(entry.box.y - frontier.top) <= 0.001);
   if (!shift || !line) return wholeSlack;
   const landing = frontier.top + shift.pt;
@@ -379,6 +444,15 @@ function frontierHoldPt(
   if (glyphExtent <= 2 * RESERVE_BOUNDARY_BACKOFF_PT) return wholeSlack;
   const budget = landing + glyphExtent - RESERVE_BOUNDARY_BACKOFF_PT;
   return Math.min(wholeSlack, Math.max(0, contentHeight - budget));
+}
+
+/**
+ * The hold that claims all of `bodyPage`'s remaining slack, so nothing returns. Backed off
+ * by half a point like the eviction reserve: the last kept body line's bottom is exactly
+ * `bodyBottom`, and a budget equal to it flips on float drift.
+ */
+function wholeSlackHoldPt(bodyPage: PageRecord, bodyBottom: number): number {
+  return Math.max(0, bodyPage.contentBox.height - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT);
 }
 
 /** How far `nextPage` content moves when it flows back onto `bodyPage`. */
