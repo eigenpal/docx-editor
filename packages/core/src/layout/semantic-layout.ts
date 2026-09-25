@@ -1319,7 +1319,7 @@ function layoutBlocksPass(
     authorFilter,
     options.compatibilityMode
   );
-  const positionedTableIds = new Set(positionedTables.map(({ table }) => table.id));
+  const positionedTablePolicy = tableWrap.anchorBreakPolicy(positionedTables, prepared);
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
@@ -2041,9 +2041,10 @@ function layoutBlocksPass(
         }
       }
       if (
-        positionedTableIds.has(entry.table.id) &&
+        positionedTablePolicy.has(entry.table.id) &&
         !furnitureHasWrap &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
+          allowBreak: columns.count === 1 && positionedTablePolicy.get(entry.table.id),
           zones: options.drawingExclusionZonesByPage,
           page: pages.length,
           width: Math.min(...columns.widths),

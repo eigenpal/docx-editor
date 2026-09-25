@@ -27,8 +27,9 @@ const table = ({
   header = false,
   anchor = 'w:horzAnchor="text" w:tblpX="1"',
   extra = '',
+  distance = '',
 } = {}) =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" ${anchor} w:tblpY="${offset * 20 + (offset < 0 ? -1 : 1)}"/>${extra}<w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid>${Array.from(
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" ${anchor} ${distance} w:tblpY="${offset * 20 + (offset < 0 ? -1 : 1)}"/>${extra}<w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid>${Array.from(
     { length: rows },
     (_, index) => row(index, header && index === 0)
   ).join('')}</w:tbl>`;
@@ -226,6 +227,66 @@ describe('wrapped-table compatibility setting', () => {
       const fresh = layoutSemanticDocument(source, 0, { ...options, styleCascade });
       expect(warm.pages).toEqual(fresh.pages);
       expect(tablesOn(warm, 0)).toHaveLength(styleCascade === enabled ? 0 : 1);
+    }
+  });
+});
+
+describe('floating tables retain their anchor placement constraints', () => {
+  test('a page break before the anchor moves the table with it', () => {
+    const result = render(lead(100) + table() + p('Anchor', '<w:pageBreakBefore/>') + p('Tail'));
+    expect(result.pages).toHaveLength(2);
+    expect(tablesOn(result, 0)).toHaveLength(0);
+    expect(tablesOn(result, 1)[0]!.rows).toHaveLength(4);
+    expect(isOutOfFlowTableFragment(tablesOn(result, 1)[0]!)).toBe(true);
+  });
+
+  for (const kind of ['page', 'column']) {
+    test(`an anchor with a manual ${kind} break retains whole placement`, () => {
+      const anchor = `<w:p><w:r><w:br w:type="${kind}"/><w:t>Anchor</w:t></w:r></w:p>`;
+      const result = render(lead(100) + table() + anchor);
+      const tables = result.pages.flatMap((_, page) => tablesOn(result, page));
+      expect(tables).toHaveLength(1);
+      expect(isOutOfFlowTableFragment(tables[0]!)).toBe(true);
+    });
+  }
+
+  test('a page-wide table in multiple columns keeps the whole-table path', () => {
+    const section =
+      '<w:sectPr><w:pgSz w:w="8000" w:h="4000"/>' +
+      '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0"/>' +
+      '<w:cols w:num="2" w:space="0"/></w:sectPr>';
+    const result = layoutSemanticDocument(
+      part(
+        lead(100) + table({ width: 400, anchor: 'w:horzAnchor="margin"' }) + p('Anchor') + section
+      ),
+      0,
+      {
+        ...options,
+        geometry: { ...options.geometry, width: 400 },
+      }
+    );
+    const tables = result.pages.flatMap((_, page) => tablesOn(result, page));
+    expect(tables).toHaveLength(1);
+    expect(isOutOfFlowTableFragment(tables[0]!)).toBe(true);
+  });
+
+  test('two tables sharing one anchor do not change their flow order', () => {
+    const result = render(lead(100) + table({ rows: 1 }) + table() + p('Anchor'));
+    const tables = result.pages.flatMap((_, page) => tablesOn(result, page));
+    expect(tables).toHaveLength(2);
+    expect(tables.every(isOutOfFlowTableFragment)).toBe(true);
+    expect(tables.map((fragment) => fragment.rows.length)).toEqual([1, 4]);
+  });
+
+  test('authored gaps retain whole-table placement', () => {
+    for (const body of [
+      table({ distance: 'w:bottomFromText="200"' }) + p('Anchor'),
+      table() + p('Anchor', '<w:spacing w:before="800"/>'),
+    ]) {
+      const result = render(lead(100) + body);
+      const tables = result.pages.flatMap((_, page) => tablesOn(result, page));
+      expect(tables).toHaveLength(1);
+      expect(isOutOfFlowTableFragment(tables[0]!)).toBe(true);
     }
   });
 });
