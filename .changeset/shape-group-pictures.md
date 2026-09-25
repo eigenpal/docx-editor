@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-A shape group that holds a picture below its shapes, such as a scanned letterhead behind the text, now shows the picture in the editor and in PDF export instead of showing nothing.
+Render supported picture members in shape groups in the editor and PDF exports.
