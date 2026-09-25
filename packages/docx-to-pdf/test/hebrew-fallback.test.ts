@@ -25,7 +25,7 @@ const input = docx(
   `<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Noto Sans Arabic" w:hAnsi="Noto Sans Arabic" w:cs="Noto Sans Arabic"/><w:rtl/></w:rPr><w:t>${HEBREW}</w:t></w:r></w:p>`
 );
 
-test('Hebrew in a face without Hebrew falls back to a packaged Hebrew face', async () => {
+test('Hebrew in a face without Hebrew falls back to the Times New Roman-compatible face', async () => {
   const opened = await openExportSession(input, { fonts, useSystemFonts: false });
   if (!opened.ok) throw new Error(opened.reason);
   try {
@@ -39,7 +39,7 @@ test('Hebrew in a face without Hebrew falls back to a packaged Hebrew face', asy
       shaped.push(run.font.family);
     });
     expect(shaped.length).toBeGreaterThan(0);
-    expect(new Set(shaped)).toEqual(new Set(['Liberation Sans']));
+    expect(new Set(shaped)).toEqual(new Set(['Liberation Serif']));
   } finally {
     opened.session.dispose();
   }

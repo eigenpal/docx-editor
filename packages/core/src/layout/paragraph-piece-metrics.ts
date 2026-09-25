@@ -93,25 +93,29 @@ export function measureFollowingTabSegment(
     const piece = pieces[index]!;
     const style = styleForFontSlot(piece.style, piece.fontSlot);
     const from = index === pieceIndex ? offsetInPiece : 0;
-    for (let cursor = from; cursor < piece.text.length; ) {
-      const ch = piece.text[cursor]!;
-      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) {
-        return { width, decimalOffset: sawDecimal ? decimalOffset : width };
-      }
-      // Walk one code unit; surrogate pairs measure as two units under the fixed measurer
-      // contract (UTF-16), matching how source offsets are counted elsewhere.
-      const next = cursor + 1;
-      const glyph = piece.text.slice(cursor, next);
-      const advance = measurer.measure(displayText(glyph, style), style);
-      if (!sawDecimal && ch === '.') {
+    let to = from;
+    while (to < piece.text.length) {
+      const ch = piece.text[to]!;
+      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) break;
+      to += 1;
+    }
+    // Measure each piece's slice whole, so a joining script (Arabic) measures as shaped
+    // and not as a sum of isolated letters.
+    const measure = (end: number) =>
+      end > from ? measurer.measure(displayText(piece.text.slice(from, end), style), style) : 0;
+    const segmentWidth = measure(to);
+    if (!sawDecimal) {
+      const dot = piece.text.indexOf('.', from);
+      if (dot !== -1 && dot < to) {
         sawDecimal = true;
         // Decimal point itself sits ON the stop — offset is the advance before it.
-      } else if (!sawDecimal) {
-        decimalOffset += advance;
+        decimalOffset += measure(dot);
+      } else {
+        decimalOffset += segmentWidth;
       }
-      width += advance;
-      cursor = next;
     }
+    width += segmentWidth;
+    if (to < piece.text.length) return { width, decimalOffset: sawDecimal ? decimalOffset : width };
   }
   return { width, decimalOffset: sawDecimal ? decimalOffset : width };
 }

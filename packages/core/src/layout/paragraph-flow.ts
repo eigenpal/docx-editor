@@ -358,18 +358,16 @@ export function breakParagraph(
     flow?.tocLinkStyleRanges,
     changeSites
   );
-  const allPieces = bidiPieces(
-    rawPieces,
+  const paragraphRtl =
     flow?.paragraphRtl ??
-      paragraphIsRtl(
-        propertiesOf(
-          'children' in paragraph
-            ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
-            : undefined
-        )
-      ),
-    bidiSourceBoundaries(paragraph)
-  );
+    paragraphIsRtl(
+      propertiesOf(
+        'children' in paragraph
+          ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
+          : undefined
+      )
+    );
+  const allPieces = bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph));
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   // A zero-width projected piece at the start offset (a `w:sym` glyph, a field-code atom)
   // owns no model text, so `end <= startOffset` would drop it. At the paragraph start no
@@ -445,6 +443,8 @@ export function breakParagraph(
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
   const contentOriginX = flow?.contentOriginX ?? 0;
+  // The right-to-left line's leading (right) indent, from the paragraph's full measure.
+  const rtlLeadingIndent = Math.max(0, (flow?.marginExtent?.right ?? rightEdge) - rightEdge);
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
   const lines: PendingLine[] = [];
   let alignedTabRight = 0;
@@ -1274,6 +1274,13 @@ export function breakParagraph(
         )
           closeLine();
         const currentX = lineOrigin() + line.width;
+        // Tab stops count from the LEADING margin. A right-to-left line is placed later by
+        // bidi reordering and alignment, so its stop arithmetic runs in leading-edge
+        // coordinates: the pen stands its leading indent plus the text so far from the
+        // right margin, and the far edge is the leading indent plus the available width.
+        const leading = paragraphRtl ? rtlLeadingIndent : 0;
+        const stopX = paragraphRtl ? leading + lineOffset() + line.width : currentX;
+        const stopRight = paragraphRtl ? leading + available : rightEdge;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
         // A `w:ptab` states its own destination and leader, so it does NOT consult the
         // paragraph's tab stops — a table-of-contents line authored with one has none.
@@ -1288,13 +1295,13 @@ export function breakParagraph(
         // right indent. Only their following segment gets that extra room.
         const tabEdge =
           activeExclusionZones().length === 0
-            ? Math.max(rightEdge, flow?.marginExtent?.right ?? rightEdge)
-            : rightEdge;
-        const authored = nextTabDestination(tabStops, currentX, tabEdge);
+            ? Math.max(stopRight, flow?.marginExtent?.right ?? stopRight)
+            : stopRight;
+        const authored = nextTabDestination(tabStops, stopX, tabEdge);
         const destination =
           positional === null
             ? authored.alignment === 'left'
-              ? nextTabDestination(tabStops, currentX, rightEdge)
+              ? nextTabDestination(tabStops, stopX, stopRight)
               : authored
             : positional.positionPt > currentX
               ? positional
@@ -1303,12 +1310,12 @@ export function breakParagraph(
                   ...nextTabDestination(tabStops, currentX, rightEdge),
                   ...(positional.leader ? { leader: positional.leader } : {}),
                 };
-        if (destination.alignment !== 'left') {
+        if (destination.alignment !== 'left' && !paragraphRtl) {
           alignedTabRight = Math.max(alignedTabRight, Math.min(destination.positionPt, tabEdge));
         }
         const width = tabAdvanceWidth(
           destination.alignment,
-          currentX,
+          positional === null ? stopX : currentX,
           destination.positionPt,
           segment.width,
           segment.decimalOffset

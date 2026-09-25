@@ -69,7 +69,10 @@ export function bidiPieces(
     !pieces.some((piece) => runIsRtl(piece.props))
   )
     return pieces;
-  // Atom and tab placement have separate advances and are not ordinary text runs.
+  // Atom placement has separate advances and is not an ordinary text run. A tab is: it is a
+  // segment separator (UAX #9 class S), so it takes the paragraph level below and the text
+  // on each side of it resolves as usual. Bailing out on tabs left every tab-aligned RTL form
+  // label unshaped and in left-to-right order.
   if (
     pieces.some(
       (p) =>
@@ -78,8 +81,7 @@ export function bidiPieces(
         p.equation ||
         p.positionalTab ||
         p.measureText !== undefined ||
-        p.end - p.start !== p.text.length ||
-        p.text.includes('\t')
+        p.end - p.start !== p.text.length
     )
   )
     return pieces;
@@ -98,12 +100,15 @@ export function bidiPieces(
       return pieces;
     }
     for (const item of items) {
+      // UAX #9 L1: a segment separator is reset to the paragraph embedding level.
+      const separator = /^\t+$/u.test(piece.text.slice(item.from, item.to));
+      const level = separator ? (rtl ? 1 : 0) : item.bidiLevel;
       const style = {
         ...piece.style,
         shaping: {
           script: item.script,
-          direction: item.direction,
-          level: item.bidiLevel,
+          direction: separator ? (rtl ? ('rtl' as const) : ('ltr' as const)) : item.direction,
+          level,
           baseLevel: rtl ? 1 : 0,
           ...(usesRunGroups
             ? { runDirection: runIsRtl(piece.props) ? ('rtl' as const) : ('ltr' as const) }
