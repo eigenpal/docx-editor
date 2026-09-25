@@ -322,6 +322,38 @@ describe('sets drawing wrap', () => {
     expect(findById(next.root, drawing.id)?.children[0]?.kind).toBe('inlineDrawing');
   });
 
+  test('wrap changes keep unsigned distance spellings and write malformed ones as zero', () => {
+    const attrs = (node: OoxmlNode | undefined) =>
+      Object.fromEntries(
+        (node as OoxmlElement).attributes
+          .filter((a) => a.localName.startsWith('dist'))
+          .map((a) => [a.localName, a.value])
+      );
+    const part = parse(
+      anchoredPictureDrawing({
+        wrap: '<wp:wrapSquare wrapText="bothSides" distT="4294967291" distB="abc" distL="-5" distR="12700"/>',
+        anchorAttrs:
+          'distT="4294967291" distB="0" distL="114300" distR="114300" simplePos="0" behindDoc="0" locked="0" relativeHeight="952500" allowOverlap="1" layoutInCell="1"',
+      })
+    );
+    const drawing = drawingOf(part);
+    const square = apply(part, {
+      op: 'setDrawingWrap',
+      drawingNodeId: drawing.id,
+      wrap: 'squareRight',
+    });
+    const anchor = findById(square.root, drawing.id)!.children[0] as OoxmlElement;
+    const wrap = anchor.children.find((c) => c.kind === 'drawingWrapSquare');
+    expect(attrs(wrap)).toEqual({ distT: '4294967291', distB: '0', distL: '0', distR: '12700' });
+    const inline = apply(part, { op: 'setDrawingWrap', drawingNodeId: drawing.id, wrap: 'inline' });
+    expect(attrs(findById(inline.root, drawing.id)!.children[0])).toEqual({
+      distT: '4294967291',
+      distR: '114300',
+      distB: '0',
+      distL: '114300',
+    });
+  });
+
   test('behind and inFront both use wrapNone differing only by behindDoc', () => {
     const behindPart = parse(
       anchoredPictureDrawing({ wrap: '<wp:wrapSquare wrapText="bothSides"/>' })

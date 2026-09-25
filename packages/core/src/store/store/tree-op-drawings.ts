@@ -1069,8 +1069,8 @@ function wrapSchemaAttributes(
   existing: OoxmlElement | null
 ): OoxmlAttribute[] {
   const distances = existing
-    ? readDistancesFromWrap(existing)
-    : { top: 0, right: 0, bottom: 0, left: 0 };
+    ? readDistanceTexts(existing)
+    : { top: '0', right: '0', bottom: '0', left: '0' };
   const attrs: OoxmlAttribute[] = (existing?.attributes ?? []).filter(
     (attribute) => attribute.namespaceUri !== ''
   );
@@ -1079,20 +1079,20 @@ function wrapSchemaAttributes(
       break;
     case 'wrapSquare':
       attrs.push(
-        attr('distT', String(distances.top)),
-        attr('distB', String(distances.bottom)),
-        attr('distL', String(distances.left)),
-        attr('distR', String(distances.right))
+        attr('distT', distances.top),
+        attr('distB', distances.bottom),
+        attr('distL', distances.left),
+        attr('distR', distances.right)
       );
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTight':
     case 'wrapThrough':
-      attrs.push(attr('distL', String(distances.left)), attr('distR', String(distances.right)));
+      attrs.push(attr('distL', distances.left), attr('distR', distances.right));
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTopAndBottom':
-      attrs.push(attr('distT', String(distances.top)), attr('distB', String(distances.bottom)));
+      attrs.push(attr('distT', distances.top), attr('distB', distances.bottom));
       break;
   }
   return attrs;
@@ -1139,13 +1139,17 @@ function wrapElementForSpec(
   } as OoxmlElement;
 }
 
-function readDistancesFromWrap(wrap: OoxmlElement): {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-} {
-  const read = (name: string): number => Number(schemaAttributeValue(wrap.attributes, name) ?? '0');
+type DistanceTexts = { top: string; right: string; bottom: string; left: string };
+
+/**
+ * Copied text distances keep their `xsd:unsignedInt` spelling, including the two's-complement
+ * form of a negative distance; a missing or malformed value is written as 0.
+ */
+function readDistanceTexts(element: OoxmlElement): DistanceTexts {
+  const read = (name: string): string => {
+    const value = schemaAttributeValue(element.attributes, name);
+    return value !== undefined && /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
+  };
   return { top: read('distT'), right: read('distR'), bottom: read('distB'), left: read('distL') };
 }
 
@@ -1251,13 +1255,8 @@ function buildAnchoredRoot(
   const position = defaultPositionChildren(nextId, projection);
   const inlineDistances =
     inlineOrAnchor.kind === 'inlineDrawing' || inlineOrAnchor.localName === 'inline'
-      ? {
-          top: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distT') ?? '0'),
-          right: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distR') ?? '0'),
-          bottom: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distB') ?? '0'),
-          left: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distL') ?? '0'),
-        }
-      : { top: 0, right: 0, bottom: 0, left: 0 };
+      ? readDistanceTexts(inlineOrAnchor)
+      : { top: '0', right: '0', bottom: '0', left: '0' };
   const preservedAnchorAttrs = inlineOrAnchor.attributes.filter(
     (attribute) => attribute.namespaceUri !== ''
   );
@@ -1269,10 +1268,10 @@ function buildAnchoredRoot(
     prefix: 'wp',
     namespaceBindings: [],
     attributes: [
-      attr('distT', String(inlineDistances.top)),
-      attr('distB', String(inlineDistances.bottom)),
-      attr('distL', String(inlineDistances.left)),
-      attr('distR', String(inlineDistances.right)),
+      attr('distT', inlineDistances.top),
+      attr('distB', inlineDistances.bottom),
+      attr('distL', inlineDistances.left),
+      attr('distR', inlineDistances.right),
       attr('simplePos', schemaAttributeValue(inlineOrAnchor.attributes, 'simplePos') ?? '0'),
       attr('relativeHeight', String(projection.anchor?.relativeHeight ?? 251658240)),
       attr('behindDoc', spec.behindDocument ? '1' : '0'),
@@ -1287,12 +1286,7 @@ function buildAnchoredRoot(
 
 function buildInlineRoot(anchor: OoxmlElement, nextId: () => string): OoxmlElement {
   const shared = sharedAnchorChildren(anchor);
-  const inlineDistances = {
-    top: Number(schemaAttributeValue(anchor.attributes, 'distT') ?? '0'),
-    right: Number(schemaAttributeValue(anchor.attributes, 'distR') ?? '0'),
-    bottom: Number(schemaAttributeValue(anchor.attributes, 'distB') ?? '0'),
-    left: Number(schemaAttributeValue(anchor.attributes, 'distL') ?? '0'),
-  };
+  const inlineDistances = readDistanceTexts(anchor);
   return {
     id: nextId(),
     kind: 'inlineDrawing',
@@ -1301,10 +1295,10 @@ function buildInlineRoot(anchor: OoxmlElement, nextId: () => string): OoxmlEleme
     prefix: 'wp',
     namespaceBindings: [],
     attributes: [
-      attr('distT', String(inlineDistances.top)),
-      attr('distR', String(inlineDistances.right)),
-      attr('distB', String(inlineDistances.bottom)),
-      attr('distL', String(inlineDistances.left)),
+      attr('distT', inlineDistances.top),
+      attr('distR', inlineDistances.right),
+      attr('distB', inlineDistances.bottom),
+      attr('distL', inlineDistances.left),
     ],
     children: shared,
   } as OoxmlElement;
