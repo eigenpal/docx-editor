@@ -74,6 +74,8 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
 
+The wrap element controls text flow, and `@behindDoc` controls only paint order. If a picture uses `@behindDoc="1"` with a wrap element other than `wrapNone`, text wraps around the picture, and the picture paints behind the text. `SelectedImageState.wrap` reports the wrap mode for that picture.
+
 Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
