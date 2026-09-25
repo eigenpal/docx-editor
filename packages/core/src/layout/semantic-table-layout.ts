@@ -113,7 +113,12 @@ import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
-import { blockInlineRight } from './table-cell-text-direction.ts';
+import {
+  blockInlineRight,
+  cellFlowBox,
+  layOutWaitingBottomToTopCells,
+  waitsForRowHeight,
+} from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
@@ -1331,28 +1336,24 @@ export function layoutRowFragmentBounded(
     readonly complete: boolean;
     readonly fitted: boolean;
     readonly nestedSplitBlocked: boolean;
+    readonly flowTo?: (right: number) => ReturnType<typeof flowBlocksInBoxBounded>;
   }
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Continuation cells paint no content and size no row: an ordinary cell beside one owns
-  // the height on its own. A row where EVERY cell continues a merge has nothing left to
-  // size it, and then its end-of-cell paragraph does — see `cellContinuationHeight`.
-  const continuationOnlyRow =
-    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue);
+  // Continuation cells and waiting `btLr` cells size no row. A row of only those takes its
+  // end-of-cell paragraphs instead — see `cellContinuationHeight` and `waitsForRowHeight`.
+  const waits = (cell: SemanticTableCell): boolean =>
+    waitsForRowHeight(cell, exactHeightPt !== undefined || detachedSpans?.has(cell.id) === true);
+  const markSizedRow =
+    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
     // Keep this typed: otherwise TypeScript can hide a missing cursor member.
     // a `boolean`, and the collapse would silently never fire for that cell.
-    const cursor: CellPlaceCursor = cursors[cellIndex] ?? {
-      blockIndex: 0,
-      lineIndex: 0,
-      previousSpaceAfter: 0,
-      paragraphFragmentIndex: 0,
-      precededByEmittedTable: false,
-    };
+    const cursor: CellPlaceCursor = cursors[cellIndex] ?? initialCellCursors(row)[0]!;
     // The reader resolves gridBefore and bounds the total span before border-grid walks.
     const span = cell.gridSpan;
     const gridColumn = cell.gridColumn;
@@ -1376,20 +1377,14 @@ export function layoutRowFragmentBounded(
       ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
       : flowMaxBottom;
     const vertical = cell.textDirection === 'btLr';
-    const flowLeft = vertical ? cellX + insets.bottom : cellX + insets.left;
-    const flowRight = vertical
-      ? cellX + Math.max(0, cellMaxBottom - rowTop) - topInset
-      : cellX + cellW - insets.right;
-    const contentTop = vertical ? rowTop + insets.left : rowTop + topInset;
-    const contentMaxBottom = vertical
-      ? rowTop + cellW - insets.right
-      : cellMaxBottom - insets.bottom;
+    const box = cellFlowBox(vertical, cellX, cellW, rowTop, cellMaxBottom, insets);
+    const { flowLeft, flowRight, contentTop, contentMaxBottom } = box;
 
     const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
       cell,
       flowRight - flowLeft,
       flowDeps,
-      { vertical, continuationOnlyRow }
+      { vertical, markSizedRow }
     );
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1397,29 +1392,31 @@ export function layoutRowFragmentBounded(
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
+    const flowTo = (right: number): ReturnType<typeof flowBlocksInBoxBounded> =>
+      flowBlocksInBoxBounded(
+        cell.blocks,
+        flowLeft,
+        right,
+        contentTop,
+        contentMaxBottom,
+        depth,
+        flowDeps,
+        cursor,
+        cell.styleFormatting,
+        true,
+        vertical
+          ? undefined
+          : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
+        cell.hideEndMark,
+        // Fixed cell boxes clip; their bottom is not a paragraph page break.
+        !vertical && (isDetached || exactHeightPt === undefined)
+      );
 
-    if (!cell.vMergeContinue) {
+    if (!cell.vMergeContinue && !waits(cell)) {
       if (contentMaxBottom < contentTop - 0.001) {
         complete = cursor.blockIndex >= cell.blocks.length;
       } else {
-        const flow = flowBlocksInBoxBounded(
-          cell.blocks,
-          flowLeft,
-          flowRight,
-          contentTop,
-          contentMaxBottom,
-          depth,
-          flowDeps,
-          cursor,
-          cell.styleFormatting,
-          true,
-          vertical
-            ? undefined
-            : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
-          cell.hideEndMark,
-          // Fixed cell boxes clip; their bottom is not a paragraph page break.
-          !vertical && (isDetached || exactHeightPt === undefined)
-        );
+        const flow = flowTo(flowRight);
         blocks = flow.blocks;
         contentBottom = flow.bottom;
         nextCursor = flow.cursor;
@@ -1441,7 +1438,7 @@ export function layoutRowFragmentBounded(
       cellMaxBottom,
       Math.max(
         rowTop + appliedMarkFloor,
-        cell.vMergeContinue
+        cell.vMergeContinue || waits(cell)
           ? continuationPt > 0
             ? rowTop + topInset + continuationPt + insets.bottom
             : rowTop
@@ -1468,6 +1465,7 @@ export function layoutRowFragmentBounded(
       complete: cell.vMergeContinue ? true : complete,
       fitted,
       nestedSplitBlocked,
+      ...(waits(cell) ? { flowTo } : {}),
     });
   }
 
@@ -1526,6 +1524,8 @@ export function layoutRowFragmentBounded(
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
+  // Beside other content, waiting `btLr` text is no progress of its own: the row's is.
+  if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;

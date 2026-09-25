@@ -101,21 +101,21 @@ export function cellContinuationHeight(
  * The two heights an end-of-cell paragraph can reserve, resolved together.
  *
  * `markFloor` is what an ordinary cell reserves for its own end mark. `continuation` is
- * what a row reserves when EVERY one of its cells continues a vertical merge and there is
- * no other content to size it. They are mutually exclusive by construction, and a `btLr`
- * cell takes neither: its extent comes from the row's width, not from a line box.
+ * what a row reserves when every one of its cells continues a vertical merge or holds
+ * `btLr` text that waits for the row (`waitsForRowHeight`), so no other content sizes it.
+ * They are mutually exclusive by construction. A `btLr` cell reserves no mark floor: its
+ * text runs along the row, so only a row that nothing else sizes takes its end mark.
  */
 export function cellReservedMarkHeights(
   cell: SemanticTableCell,
   widthPt: number,
   deps: TableFlowDeps,
-  options: { readonly vertical: boolean; readonly continuationOnlyRow: boolean }
+  options: { readonly vertical: boolean; readonly markSizedRow: boolean }
 ): { readonly markFloor: number; readonly continuation: number } {
-  if (options.vertical) return { markFloor: 0, continuation: 0 };
-  if (!cell.vMergeContinue)
+  if (!cell.vMergeContinue && !options.vertical)
     return { markFloor: cellEndMarkHeight(cell, widthPt, deps), continuation: 0 };
   return {
     markFloor: 0,
-    continuation: options.continuationOnlyRow ? cellContinuationHeight(cell, widthPt, deps) : 0,
+    continuation: options.markSizedRow ? cellContinuationHeight(cell, widthPt, deps) : 0,
   };
 }

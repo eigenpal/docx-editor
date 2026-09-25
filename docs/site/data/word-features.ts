@@ -524,7 +524,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'tbRl and btLr cell text renders through writing-mode and round-trips. You cannot set it from the UI.',
+      'tbRl and btLr cell text renders through writing-mode and round-trips. btLr text wraps at the row height, does not make the row taller, and is clipped at the cell width. You cannot set it from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------

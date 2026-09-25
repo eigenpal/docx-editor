@@ -6,7 +6,129 @@ import type {
   TableCellFragmentRecord,
 } from './semantic-records.ts';
 import type { CaretGeometry } from './semantic-interaction.ts';
+import type { CellPlaceCursor } from './semantic-table-layout.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
+import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+
+/**
+ * Whether a `btLr` cell lays out its text only after its row has a final height.
+ *
+ * `btLr` text runs along the row, so its line length is the row height less the cell's top
+ * and bottom margins. The text never sizes the row: horizontal cells, `w:trHeight` and merge
+ * spans do, and a row that nothing else sizes takes its end-of-cell paragraphs. Text that
+ * the cell width cannot hold is clipped and never continues on another fragment. An exact
+ * row and a detached merge head already know their height, so their cells lay out in place.
+ */
+export function waitsForRowHeight(cell: SemanticTableCell, heightKnown: boolean): boolean {
+  return cell.textDirection === 'btLr' && !cell.vMergeContinue && !heightKnown;
+}
+
+/** A cell's line span (`flowLeft`..`flowRight`) and block span (`contentTop`..). */
+interface CellFlowBox {
+  readonly flowLeft: number;
+  readonly flowRight: number;
+  readonly contentTop: number;
+  readonly contentMaxBottom: number;
+}
+
+/**
+ * Where a cell's content flows. `btLr` lines run along the row from its bottom inset, and
+ * lines stack across the cell width. `maxBottom` bounds the row, so it sets the line length.
+ */
+export function cellFlowBox(
+  vertical: boolean,
+  x: number,
+  width: number,
+  rowTop: number,
+  maxBottom: number,
+  insets: CellContentInsets
+): CellFlowBox {
+  return vertical
+    ? {
+        flowLeft: x + insets.bottom,
+        flowRight: x + Math.max(0, maxBottom - rowTop) - insets.top,
+        contentTop: rowTop + insets.left,
+        contentMaxBottom: rowTop + width - insets.right,
+      }
+    : {
+        flowLeft: x + insets.left,
+        flowRight: x + width - insets.right,
+        contentTop: rowTop + insets.top,
+        contentMaxBottom: maxBottom - insets.bottom,
+      };
+}
+
+interface WaitingCellFlow {
+  readonly blocks: readonly BlockFragmentRecord[];
+  readonly bottom: number;
+  readonly fitted: boolean;
+}
+
+/** One row entry as the row layout keeps it; `flowTo` is set while its `btLr` text waits. */
+interface WaitingCellEntry {
+  readonly cell: SemanticTableCell;
+  readonly x: number;
+  readonly insets: { readonly top: number };
+  readonly blocks: readonly BlockFragmentRecord[];
+  readonly contentBottom: number;
+  readonly fitted: boolean;
+  readonly nextCursor: CellPlaceCursor;
+  readonly flowTo?: (right: number) => WaitingCellFlow;
+}
+
+/**
+ * Lay out every waiting `btLr` cell along the finished row height, in place. Each cell's
+ * cursor then moves past its last block: text that the cell width cannot hold is clipped
+ * and never continues on the next fragment. Returns whether any cell placed a line.
+ */
+export function layOutWaitingBottomToTopCells<T extends WaitingCellEntry>(
+  entries: T[],
+  rowHeight: number
+): boolean {
+  let fitted = false;
+  for (const [index, entry] of entries.entries()) {
+    if (!entry.flowTo) continue;
+    const flow = entry.flowTo(entry.x + rowHeight - entry.insets.top);
+    fitted ||= flow.fitted;
+    entries[index] = {
+      ...entry,
+      blocks: flow.blocks,
+      contentBottom: flow.bottom,
+      fitted: flow.fitted,
+      nextCursor: finishedCellCursor(entry.cell),
+      flowTo: undefined,
+    };
+  }
+  return fitted;
+}
+
+/** A cursor past the last block, so a waiting `btLr` cell adds nothing to later fragments. */
+function finishedCellCursor(cell: SemanticTableCell): CellPlaceCursor {
+  return {
+    blockIndex: cell.blocks.length,
+    lineIndex: 0,
+    previousSpaceAfter: 0,
+    paragraphFragmentIndex: 0,
+    precededByEmittedTable: false,
+  };
+}
+
+/**
+ * Whether `btLr` text keeps its row whole when a fresh page can hold the row.
+ *
+ * A split at a page end gives the text only that page's share of the row as its line
+ * length and clips the rest. A row with an authored minimum, or a row that only end marks
+ * size, moves whole instead. A row that no page can hold still splits.
+ */
+export function bottomToTopTextKeepsRowWhole(row: SemanticTableRow): boolean {
+  if (row.height.rule === 'exact') return false;
+  if (!row.cells.some((cell) => waitsForRowHeight(cell, false))) return false;
+  return (
+    row.height.rule === 'atLeast' ||
+    row.cells.every((cell) => cell.vMergeContinue || cell.textDirection === 'btLr')
+  );
+}
 
 /** Supported `w:textDirection` value, with horizontal layout as the safe default. */
 export function readCellTextDirection(
