@@ -129,10 +129,6 @@ This rule does not apply to some paragraphs. A paragraph with only a page break,
 
 An empty paragraph that ends a section ignores its own page break before, from direct formatting or its style. It stays after the section's content, so it does not add a blank page. The next section's break type controls where that section starts. This rule does not apply when nothing comes before the paragraph in its section. It also does not apply when the paragraph holds text, a tab, hidden text, or a field. Bookmarks, proofing marks, permission markers, comment range markers, and empty text runs do not prevent this rule.
 
-A footnote area can use the space below the text of the last body line on its page. This applies when that line uses `auto` or `atLeast` line spacing. A line that carries a footnote reference keeps its full line height above the notes. In multi-column sections, the notes can use the blank space below the text of a reference line. If a reference line moves to the next page with its note, the lines above it stay on the current page when they fit. Widow and orphan control and keep lines together decide which of those lines stay. A keep-with-next group that holds the reference line and fits on one page moves as one piece. This applies to single-column pages without text-wrapping pictures, text frames, or floating tables.
-
-Some edits within keep-with-next chains can retain extra blank space or an extra page. Difficult multi-column layouts can still separate notes from references.
-
 Saved results of fields inside another field's instruction do not add text, line breaks, or links. The outer field keeps its normal display behavior. Fields inside a saved result still display.
 
 Named character styles set the font properties of empty paragraph marks and numbering markers. Direct mark properties override those styles. A mark's character style also sizes the empty line after a trailing line break. It does not enlarge a line that contains text or an inline picture. When you type in an empty paragraph, the new text takes the character style of the paragraph mark.

@@ -996,11 +996,8 @@ function buildFootnoteArea(
      * it, stably. The TOP is where the reserve reaches when the note cannot even start in
      * that room: Word keeps a footnote whole with its reference, so the reference's LINE
      * moves to the next page instead of the note splitting (see the eviction branch in the
-     * reference loop). Attach passes omit it: they size from real body slack, and the
-     * BOTTOM still bounds each note by its reference line's full box there, because the
-     * slack ends at the fit bottom ({@link bodyFitBottomPt}), which may sit inside the last
-     * line's box. Without that bound a split note's head rises into the reference line
-     * that the reserve pass kept clear.
+     * reference loop). Only read with {@link reserveColumnBudget}; attach passes size from
+     * real body slack.
      */
     readonly reserveBandOf?: (ref: PageRefHit) => NoteReferenceLineBand;
     readonly separatorCache?: NoteSeparatorCache;
@@ -1136,11 +1133,10 @@ function buildFootnoteArea(
       reasons.push('note-count-limit');
       break;
     }
-    // Each note's budget ends at ITS reference's floor; the stack may not rise above any
-    // line that cites into it. Later references sit lower, so their budgets only shrink.
-    // Attach mode reads the same band the reserve pass used, so both split a note at the
-    // same point; its eviction guard stays off (`keepWholeBudget` is 0).
-    const band = options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref);
+    // Reserve mode tightens each note's budget to ITS reference's floor; the stack may not
+    // rise above any line that cites into it. Later references sit lower, so their budgets
+    // only shrink.
+    const band = options?.reserveBandOf?.(ref);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
@@ -1186,10 +1182,10 @@ function buildFootnoteArea(
     // reference's LINE moves to the next page instead, so the reserve must reach the
     // line's TOP; the next reflow pass finds the reference there and lays the note whole
     // beside it. Splitting remains for the shapes the move cannot help:
-    // - a note that does not fit the destination either — measured with what leaves with
-    //   the line opening the next page (`band.bottom - band.moveTop`: a `w:keepLines`
-    //   paragraph moves whole), because a fixed column budget would re-evict there every
-    //   round, minting a chain of near-blank pages;
+    // - a note that does not fit the destination either — measured with the line's own
+    //   BLOCK opening the next page (`band.bottom - band.blockTop` of content above the
+    //   line), because a `w:keepLines` paragraph moves whole and a fixed column budget
+    //   would re-evict there every round, minting a chain of near-blank pages;
     // - a reference in the page's TOPMOST body line, where pushing only re-creates the
     //   same shape (a section-opening paragraph keeps its `w:spacing w:before` at page
     //   top, so a fixed band threshold would re-fire there);
@@ -1204,7 +1200,7 @@ function buildFootnoteArea(
       options?.evictionAllowed !== false &&
       !(options?.allowOrphanDeferral && band.preserveOrphanLine) &&
       laid.flowHeight > room + 0.001 &&
-      laid.flowHeight <= keepWholeBudget - (band.bottom - band.moveTop) + 0.001 &&
+      laid.flowHeight <= keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
       band.top > firstContentTop + 0.001 &&
       band.top >= MIN_FOOTNOTE_BODY_BAND_PT
     ) {
@@ -2198,8 +2194,6 @@ function computeFootnoteReservesWithPolicy(
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
-            pages: layout.pages,
-            holdState: memo ?? undefined,
             allowOrphanDeferral,
             existingAreaHeight,
             usedReservePt,

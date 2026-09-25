@@ -8,7 +8,7 @@ import type {
   ParagraphFragmentRecord,
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
-import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
+import { paragraphKeeps } from './pagination-keeps.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -94,18 +94,13 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 /**
  * Body bottom (content-relative pt) the note passes BUDGET against.
  *
- * MINUS each paragraph's trailing after-spacing and its last line's trailing `auto` /
- * `atLeast` depth: the page-fit decision admits a line without charging either (the
- * after-spacing moves to the next page with the flow, and the depth below the glyph band
- * may cross the bottom of the text area), but the fragment BOX includes both — so a page
- * whose last line carries either "uses" more height here than the fit rule budgeted, the
- * reserve the reflow settles on under-claims by that amount, and the attach pass splits
- * or carries a note the reserve fit whole. The footnote area rises into that blank band
- * instead. PLACEMENT of an area that hangs off the body keeps {@link fragmentFlowBottom}
- * unless the room is needed.
- *
- * A reference line does not get this allowance: its note must start below the line's
- * full box ({@link noteReferenceLineBandPt}), which the reserve pass enforces per reference.
+ * MINUS each paragraph's trailing after-spacing: the page-fit decision admits a paragraph
+ * without charging its `w:spacing w:after` (it moves to the next page with the flow), but
+ * the fragment BOX includes it — so a page whose last paragraph carries after-spacing
+ * "uses" more height here than the fit rule budgeted, the reserve the reflow settles on
+ * under-claims by that amount, and the attach pass splits a note the reserve fit whole.
+ * Word lets the footnote area rise into that blank band the same way. PLACEMENT of an
+ * area that hangs off the body keeps {@link fragmentFlowBottom} unless the room is needed.
  */
 export function bodyFitBottomPt(page: PageRecord): number {
   let bottom = 0;
@@ -115,17 +110,11 @@ export function bodyFitBottomPt(page: PageRecord): number {
   return bottom;
 }
 
-/**
- * One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing and
- * its last line's trailing depth, which the body fit rule leaves out of the budget.
- */
+/** One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing. */
 export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
   if (isOutOfFlowFragment(fragment)) return 0;
-  const bottom = fragment.box.y + fragment.box.height;
-  if (fragment.kind !== 'paragraph') return bottom;
-  const last = fragment.lines[fragment.lines.length - 1];
-  const trailingDepth = last ? Math.min(last.trailingSpacing ?? 0, last.box.height) : 0;
-  return bottom - fragment.spacing.after - trailingDepth;
+  const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
+  return fragment.box.y + fragment.box.height - trailingAfter;
 }
 
 /**
@@ -181,12 +170,8 @@ export interface NoteReferenceLineBand {
   readonly top: number;
   /** Bottom of the referencing line — the floor a same-page reserve must not rise above. */
   readonly bottom: number;
-  /**
-   * Top of what leaves the page with the line when the body cuts right before it
-   * ({@link evictedRunStart}): the line itself, the lines widow/orphan control sends with
-   * it, or the whole fragment. Where the line lands when it is evicted.
-   */
-  readonly moveTop: number;
+  /** Top of the owning block's fragment — where the line lands when its block moves whole. */
+  readonly blockTop: number;
   /** Whether the reserve may claim the line itself to move the reference forward. */
   readonly evictable: boolean;
   /** Retain the opening orphan pair even when its second line's note must start later. */
@@ -244,7 +229,7 @@ function computeReferenceLineBand(
 ): NoteReferenceLineBand {
   let top = 0;
   let bottom = 0;
-  let moveTop = 0;
+  let blockTop = 0;
   let evictable = false;
   let preserveOrphanLine = false;
   for (const block of page.fragments) {
@@ -256,8 +241,7 @@ function computeReferenceLineBand(
       if (lineBottom > bottom) {
         top = lineTop;
         bottom = lineBottom;
-        const run = line ? evictedRunStart(block, line.index, 0, pageHoldsOnly(page, block)) : 0;
-        moveTop = run > 0 ? block.lines[run]!.box.y : block.box.y;
+        blockTop = block.box.y;
         // Only a located LINE may be evicted; an ownership match without a line segment
         // (merged/projected offsets) falls back to the fragment band and stays put.
         evictable = line !== null && !isOutOfFlowFragment(block);
@@ -291,55 +275,13 @@ function computeReferenceLineBand(
   return {
     top: clampedTop,
     bottom: clampedBottom,
-    moveTop: clamp(moveTop),
+    blockTop: clamp(blockTop),
     // A band the clamp collapsed (a line at or below the content bottom — overflow the
     // body pass tolerated) must not evict: the eviction reserve computed from its top
     // would be zero, and the reference's note would be neither placed nor carried.
     evictable: evictable && clampedBottom > clampedTop,
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
   };
-}
-
-/**
- * Index into `fragment.lines` of the first line that leaves the page together with line
- * `index` when the body cuts the page right before that line.
- *
- * The body pass moves the cut back under widow/orphan control and `w:keepLines`
- * ({@link adjustedBreakIndex}), so this is the same rule. `before` counts the paragraph's
- * lines that sit above the fragment on the same page; an answer below zero reaches into
- * them. A fragment that does not end the paragraph has at least two more lines after it,
- * because the body pass cut it under the same widow rule. `alone` is true when the
- * paragraph's lines are all the page holds, which lets the rule fail open.
- */
-export function evictedRunStart(
-  fragment: ParagraphFragmentRecord,
-  index: number,
-  before: number,
-  alone: boolean
-): number {
-  const lineCount = before + fragment.lines.length + (fragment.paragraphEnd ? 0 : 2);
-  const keeps = paragraphKeeps(fragment.props);
-  return adjustedBreakIndex(before + index, 0, lineCount, keeps, alone) - before;
-}
-
-/**
- * Whether `fragment` is the only in-flow block in its column of `page`, which is where the
- * body pass asks whether a paragraph holds its region alone. Blocks of one column stack in
- * document order, so a block that starts above its predecessor's bottom opens a column.
- */
-export function pageHoldsOnly(page: PageRecord, fragment: BlockFragmentRecord): boolean {
-  let column = 0;
-  let fragmentColumn = -1;
-  let previousBottom = Number.NEGATIVE_INFINITY;
-  const counts: number[] = [];
-  for (const other of page.fragments) {
-    if (isOutOfFlowFragment(other)) continue;
-    if (other.box.y < previousBottom - 0.001) column += 1;
-    previousBottom = other.box.y + other.box.height;
-    counts[column] = (counts[column] ?? 0) + 1;
-    if (other === fragment) fragmentColumn = column;
-  }
-  return fragmentColumn >= 0 && counts[fragmentColumn] === 1;
 }
 
 /** The owning line's band inside a fragment already known to own the ref, or null. */

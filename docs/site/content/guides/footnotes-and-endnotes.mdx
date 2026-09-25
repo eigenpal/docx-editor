@@ -41,12 +41,6 @@ The editor supports Word note positions such as page bottom, beneath text, secti
 
 A footnote stays with its reference line when both fit on one page. The editor moves that line when the note cannot fit below it.
 
-When a reference line moves to the next page, the lines above it stay on the current page if they fit. Widow and orphan control and keep lines together decide which of those lines stay. If a keep-with-next group holds the reference line and fits on one page, the group moves with the line as one piece. This applies to single-column pages without text-wrapping pictures, text frames, or floating tables. On other pages, the lines that moved with the reference line stay on the next page.
-
-The note area can use the space below the last body line's text when that line uses `auto` or `atLeast` line spacing. A line that carries a reference keeps its full line height above the note area. In multi-column sections, the note area can use the blank space below the text of a reference line.
-
-Some edits within keep-with-next chains can retain extra blank space or an extra page. Difficult multi-column layouts can still separate notes from references.
-
 A note splits only when it is taller than the available note column. Split note pages keep separate rectangles for painting and pointer input.
 
 ## Limits
