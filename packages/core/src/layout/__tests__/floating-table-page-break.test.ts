@@ -281,6 +281,7 @@ describe('floating tables retain their anchor placement constraints', () => {
   test('authored gaps retain whole-table placement', () => {
     for (const body of [
       table({ distance: 'w:bottomFromText="200"' }) + p('Anchor'),
+      table({ distance: 'w:topFromText="400"' }) + p('Anchor'),
       table() + p('Anchor', '<w:spacing w:before="800"/>'),
     ]) {
       const result = render(lead(100) + body);

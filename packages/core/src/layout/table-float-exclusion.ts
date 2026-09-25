@@ -327,7 +327,7 @@ function breaksAtPageBottom(
   // A negative offset collides with earlier text. Only anchor placement displaces it.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
   const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
-  if (distances.bottom > 0) return false;
+  if (distances.top > 0 || distances.bottom > 0) return false;
   const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const column = flow.frames.text;
