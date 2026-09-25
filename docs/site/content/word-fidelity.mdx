@@ -119,7 +119,7 @@ Known single-byte Symbol and Wingdings bullets use Unicode fallback when their f
 
 Rows with bottom-to-top cell text use the text length when they have no fixed height. Minimum row heights also control text alignment. If another cell makes the row taller, alignment still uses the measured height.
 
-Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, each merged cell displays the content that fits the complete span.
+Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
 
 No-break spaces (U+00A0, U+2007, and U+202F) retain their line-break behavior across formatting runs. This also applies to word joiners (U+2060 and U+FEFF). Ordinary spaces can still provide break positions. Oversized groups retain the existing overflow rules.
 

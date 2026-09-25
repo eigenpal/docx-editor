@@ -459,7 +459,7 @@ export function planVMergeRowHeights(
       // where `hRule="exact"` clips it exactly as Word does.
       if (growable === undefined && contentHeightPt > covered + EPSILON_PT) return;
       const surplus = growable === undefined ? 0 : contentHeightPt - covered;
-      // The whole group joins at once: the floors above were measured with every one of its
+      // For growable spans, the whole group joins: the floors were measured with each of its
       // heads out of the head row, so admitting only some would leave the rest sizing a row
       // those floors do not describe.
       // Fixed rows keep their floors when another fitting head detaches. Heads that do
