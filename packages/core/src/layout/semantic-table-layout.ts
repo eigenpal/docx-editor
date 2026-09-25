@@ -991,7 +991,7 @@ function placeCellParagraph(
   return {
     fragment,
     bottom,
-    spaceAfter: deps.styleCascade?.sumAdjacentParagraphSpacing ? 0 : appliedAfter,
+    spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
     nextLineIndex: priorLineCount + nextLineIndex,
     nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
     complete,

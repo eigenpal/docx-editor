@@ -93,8 +93,11 @@ export interface StyleCascadeTable {
   readonly adjustLineHeightInTable?: true;
   /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
   readonly ignoreIndentAsNumberingTabStop?: true;
-  /** `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up. */
-  readonly sumAdjacentParagraphSpacing?: true;
+  /**
+   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and automatic
+   * spacing is a fixed 5pt before and 10pt after.
+   */
+  readonly fixedParagraphSpacing?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -939,7 +942,12 @@ export function resolveParagraphLayoutInputs(
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell, lineUnitPt }),
+    spacing: paragraphSpacing(props, {
+      inList: listItem !== undefined,
+      inTableCell,
+      lineUnitPt,
+      fixedAutoSpacing: styleCascade?.fixedParagraphSpacing === true,
+    }),
     lineSpacing: withLineGrid(
       {
         ...paragraphLineSpacing(props),

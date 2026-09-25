@@ -49,10 +49,12 @@ export function resolveListAutoSpacing<T extends SpacingBlock>(
     // last item before Enter, or an interior item before the next paragraph was deleted.
     // Include contextual suppression here so keep-with-next prices the same margins
     // as placement, including explicit spacing on unnamed paragraphs.
-    const outer = paragraphSpacing(block.props, { lineUnitPt });
+    const fixedAutoSpacing = styles?.fixedParagraphSpacing === true;
+    const outer = paragraphSpacing(block.props, { lineUnitPt, fixedAutoSpacing });
     const inner = paragraphSpacing(block.props, {
       inList: block.listItem !== undefined,
       lineUnitPt,
+      fixedAutoSpacing,
     });
     // Word also suppresses automatic before-spacing at the start of a story/section.
     let before =

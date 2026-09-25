@@ -2440,6 +2440,7 @@ export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right",
 
 // @public
 export interface ParagraphAutoSpacingContext {
+    readonly fixedAutoSpacing?: boolean;
     readonly inList?: boolean;
     readonly inTableCell?: boolean;
     readonly lineUnitPt?: number;
@@ -4192,12 +4193,12 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
-    readonly sumAdjacentParagraphSpacing?: true;
     readonly themeFonts: ThemeFonts;
     // (undocumented)
     readonly typography?: CjkTypographySettings;

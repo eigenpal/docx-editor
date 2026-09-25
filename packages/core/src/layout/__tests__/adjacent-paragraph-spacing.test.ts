@@ -3,6 +3,9 @@
 //
 // Each paragraph carries 12pt before and 12pt after. Collapsed, the second line sits one line
 // plus 12pt below the first; summed, one line plus 24pt.
+//
+// The setting also fixes automatic spacing (ISO/IEC 29500-1 §17.15.3): `w:beforeAutospacing`
+// gives 5pt and `w:afterAutospacing` 10pt, in place of the 14pt HTML paragraph margin.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -13,6 +16,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { adjacentParagraphSpacingSettings } from '../adjacent-paragraph-spacing.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
 import { keepNextGroupHeight } from '../pagination-keeps.ts';
 import {
   createFixedMeasurer,
@@ -24,6 +28,7 @@ import {
   type ParagraphFragmentRecord,
   type SemanticLayout,
 } from '../semantic-records.ts';
+import { paragraphSpacing } from '../paragraph-style.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = WML_NAMESPACE_URI;
@@ -39,7 +44,10 @@ function read(xml: string, name: string): OoxmlPart {
 const STYLES =
   `<w:styles xmlns:w="${W}">` +
   `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>` +
-  `<w:style w:type="paragraph" w:styleId="Other"><w:name w:val="Other"/></w:style></w:styles>`;
+  `<w:style w:type="paragraph" w:styleId="Other"><w:name w:val="Other"/></w:style>` +
+  `<w:style w:type="paragraph" w:styleId="Web"><w:name w:val="Web"/><w:pPr>` +
+  `<w:spacing w:before="100" w:beforeAutospacing="1" w:after="100" w:afterAutospacing="1"/>` +
+  `</w:pPr></w:style></w:styles>`;
 
 const settingsPart = (compat: string) =>
   read(
@@ -66,6 +74,19 @@ function document(body: string): OoxmlPart {
   );
 }
 
+/** A paragraph in the automatic-spacing style, with optional extra paragraph properties. */
+const web = (text: string, pPr = '') =>
+  `<w:p><w:pPr><w:pStyle w:val="Web"/>${pPr}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+const NUMBERING = buildNumberingIndex(
+  read(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">` +
+      `<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>` +
+      `</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`,
+    '/word/numbering.xml'
+  ).root
+);
+
 function layout(
   body: string,
   compat = '',
@@ -74,6 +95,7 @@ function layout(
 ): SemanticLayout {
   return layoutSemanticDocument(document(body), 1, {
     measurer,
+    numberingIndex: NUMBERING,
     styleCascade: cascade(compat),
     geometry: { width: 400, height, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
     ...(session ? { session } : {}),
@@ -82,10 +104,10 @@ function layout(
 
 const firstLineY = (fragment: ParagraphFragmentRecord) => fragment.lines[0]!.box.y;
 
-/** Distance between the first lines of the first two body paragraphs on page one. */
-function bodyPitch(body: string, compat = ''): number {
-  const [first, second] = paragraphFragmentsOf(layout(body, compat).pages[0]!);
-  return firstLineY(second!) - firstLineY(first!);
+/** Distance between the first lines of body paragraphs `at` and `at + 1` on page one. */
+function bodyPitch(body: string, compat = '', at = 0): number {
+  const fragments = paragraphFragmentsOf(layout(body, compat).pages[0]!);
+  return firstLineY(fragments[at + 1]!) - firstLineY(fragments[at]!);
 }
 
 function cellParagraphs(result: SemanticLayout): ParagraphFragmentRecord[] {
@@ -108,8 +130,7 @@ const LINE = bodyPitch(paragraph('One', NO_SPACING) + paragraph('Two', NO_SPACIN
 describe('reading the setting', () => {
   test('presence, and every ST_OnOff spelling', () => {
     const read = (compat: string) =>
-      adjacentParagraphSpacingSettings(settingsPart(compat).root).sumAdjacentParagraphSpacing ??
-      false;
+      adjacentParagraphSpacingSettings(settingsPart(compat).root).fixedParagraphSpacing ?? false;
     expect(read('')).toBe(false);
     expect(read(FLAG)).toBe(true);
     for (const on of ['1', 'true', 'on']) {
@@ -259,5 +280,67 @@ describe('keep-with-next pricing', () => {
     expect(keepNextGroupHeight(blocks, 0, 0, lines, undefined, undefined, true)).toBe(
       12 + 14 + 12 + 12 + 14
     );
+  });
+});
+
+describe('automatic spacing under the setting', () => {
+  test('resolves to 5pt before and 10pt after, outside and inside a list', () => {
+    const props = [
+      {
+        localName: 'spacing',
+        attributes: { before: '100', beforeAutospacing: '1', after: '100', afterAutospacing: '1' },
+      },
+    ];
+    expect(paragraphSpacing(props)).toEqual({ before: 14, after: 14 });
+    expect(paragraphSpacing(props, { fixedAutoSpacing: true })).toEqual({ before: 5, after: 10 });
+    expect(paragraphSpacing(props, { fixedAutoSpacing: true, inList: true })).toEqual({
+      before: 0,
+      after: 0,
+    });
+  });
+
+  test('an inherited automatic style gives 5pt before and 10pt after, which add up', () => {
+    const body = web('One') + web('Two');
+    expect(bodyPitch(body)).toBeCloseTo(LINE + 14, 6);
+    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 10 + 5, 6);
+    const first = (compat: string) => paragraphFragmentsOf(layout(body, compat).pages[0]!)[0]!;
+    expect(firstLineY(first(''))).toBeCloseTo(14, 6);
+    expect(firstLineY(first(FLAG))).toBeCloseTo(5, 6);
+  });
+
+  test('a direct measurement overrides the inherited automatic side', () => {
+    const body = web('One') + web('Two', '<w:spacing w:before="240" w:beforeAutospacing="0"/>');
+    expect(bodyPitch(body)).toBeCloseTo(LINE + 14, 6);
+    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 10 + 12, 6);
+  });
+
+  test('an automatic side and a measured side add up', () => {
+    const explicitThenAuto = paragraph('One', 'w:after="120"') + web('Two');
+    expect(bodyPitch(explicitThenAuto)).toBeCloseTo(LINE + 14, 6);
+    expect(bodyPitch(explicitThenAuto, FLAG)).toBeCloseTo(LINE + 6 + 5, 6);
+    const autoThenExplicit = web('One') + paragraph('Two', 'w:before="240"');
+    expect(bodyPitch(autoThenExplicit)).toBeCloseTo(LINE + 14, 6);
+    expect(bodyPitch(autoThenExplicit, FLAG)).toBeCloseTo(LINE + 10 + 12, 6);
+  });
+
+  test('items of one list still suppress automatic spacing between them', () => {
+    const item = (text: string) =>
+      web(text, '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>');
+    const body = item('One') + item('Two') + web('Three');
+    for (const compat of ['', FLAG]) expect(bodyPitch(body, compat)).toBeCloseTo(LINE, 6);
+    // The list keeps its outer margin: the last item's after-spacing meets the next paragraph.
+    expect(bodyPitch(body, '', 1)).toBeCloseTo(LINE + 14, 6);
+    expect(bodyPitch(body, FLAG, 1)).toBeCloseTo(LINE + 10 + 5, 6);
+  });
+
+  test('a table cell drops automatic spacing at its edges and adds it between paragraphs', () => {
+    const table = `<w:tbl><w:tr><w:tc>${web('One') + web('Two')}</w:tc></w:tr></w:tbl>`;
+    const cell = (compat: string) => cellParagraphs(layout(table, compat));
+    const [first, second] = cell(FLAG);
+    expect(first!.spacing.before).toBe(0);
+    expect(second!.spacing.after).toBe(0);
+    expect(firstLineY(second!) - firstLineY(first!)).toBeCloseTo(LINE + 10 + 5, 6);
+    const [base, next] = cell('');
+    expect(firstLineY(next!) - firstLineY(base!)).toBeCloseTo(LINE + 14, 6);
   });
 });

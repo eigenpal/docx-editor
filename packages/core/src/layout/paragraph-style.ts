@@ -85,6 +85,14 @@ export interface ParagraphSpacing {
 export const AUTO_PARAGRAPH_SPACING_PT = 14;
 
 /**
+ * The fixed automatic spacing of `w:doNotUseHTMLParagraphAutoSpacing` (ISO/IEC 29500-1 §17.15.3,
+ * "Use Fixed Paragraph Spacing for HTML Auto Setting"): with the setting on, `w:beforeAutospacing`
+ * gives 5pt before and `w:afterAutospacing` 10pt after, in place of the HTML `<p>` margin.
+ */
+const FIXED_AUTO_SPACING_BEFORE_PT = 5;
+const FIXED_AUTO_SPACING_AFTER_PT = 10;
+
+/**
  * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
@@ -109,6 +117,11 @@ export interface ParagraphAutoSpacingContext {
   readonly inTableCell?: boolean;
   /** Section grid pitch in points; no grid uses Word's fixed 12pt line unit. */
   readonly lineUnitPt?: number;
+  /**
+   * `w:doNotUseHTMLParagraphAutoSpacing` is on: automatic spacing outside a list resolves to
+   * the fixed 5pt before and 10pt after instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
+   */
+  readonly fixedAutoSpacing?: boolean;
 }
 
 /**
@@ -362,9 +375,11 @@ export function paragraphSpacing(
       MAX_PARAGRAPH_SPACING_PT
     );
   if (beforeAuto || afterAuto) {
-    const auto = context?.inList ? 0 : AUTO_PARAGRAPH_SPACING_PT;
-    if (beforeAuto) before = auto;
-    if (afterAuto) after = auto;
+    const fixed = context?.fixedAutoSpacing === true;
+    const autoBefore = fixed ? FIXED_AUTO_SPACING_BEFORE_PT : AUTO_PARAGRAPH_SPACING_PT;
+    const autoAfter = fixed ? FIXED_AUTO_SPACING_AFTER_PT : AUTO_PARAGRAPH_SPACING_PT;
+    if (beforeAuto) before = context?.inList ? 0 : autoBefore;
+    if (afterAuto) after = context?.inList ? 0 : autoAfter;
   }
   return { before, after };
 }

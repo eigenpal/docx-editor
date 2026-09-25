@@ -2253,7 +2253,7 @@ function layoutBlocksPass(
             prepared[at]?.kind === 'paragraph' &&
             (!!prepared[at].frame || collapsesSectionMark(at)),
           (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
-          styleCascade?.sumAdjacentParagraphSpacing
+          styleCascade?.fixedParagraphSpacing
         );
         // Natural page movement suppresses the head's before spacing. Price that
         // destination separately from the space needed beside the current content.

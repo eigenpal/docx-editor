@@ -1,15 +1,20 @@
-// How the space after one paragraph combines with the space before the next.
+// Paragraph spacing without the HTML rules: `w:doNotUseHTMLParagraphAutoSpacing` (§17.15.3).
 //
-// By default the larger of the two separates the paragraphs. `w:doNotUseHTMLParagraphAutoSpacing`
-// (§17.15.3) adds them instead. The setting lives in `settings.xml`, outside every paragraph's
-// property chain, so the style cascade reads it once and carries it; its cache token covers it.
+// By default the larger of one paragraph's after-spacing and the next one's before-spacing
+// separates them, and automatic spacing is the HTML `<p>` margin. With the setting on, the two
+// gaps add up, and automatic spacing is a fixed 5pt before and 10pt after (`paragraphSpacing`).
+// The setting lives in `settings.xml`, outside every paragraph's property chain, so the style
+// cascade reads it once and carries it; its cache token covers it.
 
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 
-/** The settings-derived part of the adjacent-spacing rule. */
+/** The settings-derived part of the paragraph spacing rules. */
 export interface AdjacentParagraphSpacingSettings {
-  /** Adjacent after- and before-spacing add up rather than collapse to the larger one. */
-  readonly sumAdjacentParagraphSpacing?: true;
+  /**
+   * Adjacent after- and before-spacing add up rather than collapse to the larger one, and
+   * automatic spacing resolves to fixed values.
+   */
+  readonly fixedParagraphSpacing?: true;
 }
 
 function wordChild(parent: OoxmlElement, localName: string): OoxmlElement | undefined {
@@ -36,7 +41,7 @@ export function adjacentParagraphSpacingSettings(
     (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
   )?.value;
   const on = value === undefined || value === '1' || value === 'true' || value === 'on';
-  return on ? { sumAdjacentParagraphSpacing: true } : {};
+  return on ? { fixedParagraphSpacing: true } : {};
 }
 
 /**
@@ -48,5 +53,5 @@ export function collapsingSpaceAfter(
   after: number,
   settings: AdjacentParagraphSpacingSettings | undefined
 ): number {
-  return settings?.sumAdjacentParagraphSpacing ? 0 : after;
+  return settings?.fixedParagraphSpacing ? 0 : after;
 }
