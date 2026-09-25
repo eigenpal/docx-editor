@@ -69,7 +69,6 @@ import {
   type NoteReferenceLineBand,
 } from './note-fragment-geometry.ts';
 import { splitNoteFragments } from './note-splitting.ts';
-import { lastInFlowParagraphId } from './note-holdout-keep-group.ts';
 import { holdOutReserveNeed } from './note-reserve-holdout.ts';
 import { fingerprintNotesInput } from './note-input-fingerprint.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
@@ -2169,7 +2168,6 @@ function computeFootnoteReservesWithPolicy(
     filterRefsOnPage(page, allRefs, refIndex).filter(isPageBottomFootnoteRef);
   const recordReserve = (pageIndex: number, needed: number, cap: number): void =>
     recordFootnoteReserve(reserves, pageIndex, Math.min(needed, cap));
-  const bodyLastParagraphId = lastInFlowParagraphId(layout.pages);
 
   for (let pageAt = 0; pageAt < layout.pages.length; pageAt += 1) {
     const page = layout.pages[pageAt]!;
@@ -2200,7 +2198,8 @@ function computeFootnoteReservesWithPolicy(
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
-            bodyLastParagraphId,
+            pages: layout.pages,
+            holdState: memo ?? undefined,
             allowOrphanDeferral,
             existingAreaHeight,
             usedReservePt,

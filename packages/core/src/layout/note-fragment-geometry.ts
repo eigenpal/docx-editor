@@ -322,9 +322,24 @@ export function evictedRunStart(
   return adjustedBreakIndex(before + index, 0, lineCount, keeps, alone) - before;
 }
 
-/** Whether `fragment` is the only in-flow block on `page`. */
+/**
+ * Whether `fragment` is the only in-flow block in its column of `page`, which is where the
+ * body pass asks whether a paragraph holds its region alone. Blocks of one column stack in
+ * document order, so a block that starts above its predecessor's bottom opens a column.
+ */
 export function pageHoldsOnly(page: PageRecord, fragment: BlockFragmentRecord): boolean {
-  return page.fragments.every((other) => other === fragment || isOutOfFlowFragment(other));
+  let column = 0;
+  let fragmentColumn = -1;
+  let previousBottom = Number.NEGATIVE_INFINITY;
+  const counts: number[] = [];
+  for (const other of page.fragments) {
+    if (isOutOfFlowFragment(other)) continue;
+    if (other.box.y < previousBottom - 0.001) column += 1;
+    previousBottom = other.box.y + other.box.height;
+    counts[column] = (counts[column] ?? 0) + 1;
+    if (other === fragment) fragmentColumn = column;
+  }
+  return fragmentColumn >= 0 && counts[fragmentColumn] === 1;
 }
 
 /** The owning line's band inside a fragment already known to own the ref, or null. */

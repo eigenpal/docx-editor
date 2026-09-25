@@ -13,7 +13,12 @@ import {
   noteReferenceLineBandPt,
   pageHoldsOnly,
 } from './note-fragment-geometry.ts';
-import { classifyKeepGroup, frontierKeepGroup } from './note-holdout-keep-group.ts';
+import {
+  classifyKeepGroup,
+  frontierKeepGroup,
+  lastInFlowParagraphId,
+  type FrontierKeepGroup,
+} from './note-holdout-keep-group.ts';
 import { collapsedSpaceBefore } from './paragraph-style.ts';
 import {
   layoutNoteCached,
@@ -26,7 +31,7 @@ import {
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
 import { MAX_KEEP_NEXT_CHAIN } from './pagination-keeps.ts';
-import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
+import type { LineRecord, PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
 
 /**
@@ -53,8 +58,17 @@ export interface HoldOutArgs {
   readonly allowOrphanDeferral?: boolean;
   readonly bodyPage: PageRecord;
   readonly nextPage: PageRecord | undefined;
-  /** Paragraph id of the body's last in-flow block, whose `w:keepNext` binds nothing. */
-  readonly bodyLastParagraphId?: string;
+  /**
+   * Every page of the layout: a keep-with-next group may continue onto them, and the
+   * body's last paragraph keeps with nothing.
+   */
+  readonly pages?: readonly PageRecord[];
+  /**
+   * The session's notes memo, or undefined outside a session. While its reflow loop has
+   * adopted nothing for this document state, the page was laid under the previous
+   * state's reserves ({@link heldOnThisState}).
+   */
+  readonly holdState?: { readonly reflowSpent: { readonly adopted: number } | null };
   /** Height of `bodyPage`'s existing note area (0 when it has none). */
   readonly existingAreaHeight: number;
   /** The reserve `bodyPage` was laid under (for the observed-refusal test), if known. */
@@ -208,8 +222,18 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     nextBody,
     owningIndex,
     frontierIndex,
-    args.bodyLastParagraphId
+    lastInFlowParagraphId(args.pages ?? []),
+    args.pages ?? []
   );
+  const contentWidth = bodyPage.contentBox.width;
+  const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
+  const areaBase =
+    args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
+  const layNote = (ref: HoldOutRef) =>
+    layoutNoteCached(args.footnotesPart, ref.noteId, contentWidth, args.opts, args.noteLayoutCache);
+  const groupNotes = group
+    ? groupNotesHeightPt(nextBody, group, owningIndex, candidates, layNote, columnBudget)
+    : 0;
   const keepPolicy = group
     ? classifyKeepGroup(
         group,
@@ -217,7 +241,8 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
         contentHeight,
         args.existingAreaHeight,
         Math.max(hold, args.existingAreaHeight),
-        RESERVE_BOUNDARY_BACKOFF_PT
+        RESERVE_BOUNDARY_BACKOFF_PT,
+        groupNotes > 0 ? areaBase + groupNotes : args.existingAreaHeight
       )
     : undefined;
   if (keepPolicy?.holdWholeSlack) hold = wholeSlackHoldPt(bodyPage, bodyBottom);
@@ -262,8 +287,6 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const lineBandHeight = Math.max(0, unitBottom - firstContentTop);
   const blockBandHeight = Math.max(0, wholeBottom - firstContentTop);
 
-  const contentWidth = bodyPage.contentBox.width;
-  const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
   // The line quantum returns only the lines of its unit, so it carries only the notes
   // referenced there. References lower in the block stay on the next page with their
   // notes; the reserve pass evicts any of them the body pulls back anyway. Pages whose
@@ -274,13 +297,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   let deepestRefBottom = 0;
   for (const ref of pulled) {
     deepestRefBottom = Math.max(deepestRefBottom, noteReferenceLineBandPt(nextBody, ref).bottom);
-    const laid = layoutNoteCached(
-      args.footnotesPart,
-      ref.noteId,
-      contentWidth,
-      args.opts,
-      args.noteLayoutCache
-    );
+    const laid = layNote(ref);
     if (!laid) continue;
     // The eviction guard's exact complement: a note is kept whole only when it fits the
     // column MINUS what would leave with its line, measured once the line is back on
@@ -298,8 +315,6 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   }
   if (pulledNotesHeight <= 0) return 0;
 
-  const areaBase =
-    args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
   // A group whose end the next page does not show may return whole, with notes this test
   // cannot see.
   if (keepPolicy?.unpriced) return hold;
@@ -328,13 +343,116 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // re-observed there; upstream shrinkage releases through the whole-block test above,
   // and a vanished note releases through the pulled scan. Release only a page that was
   // offered the room and refused nothing — or whose lay-down reserve is unknown (a caller
-  // outside the reflow loop must not manufacture holds the loop never observed).
+  // outside the reflow loop must not manufacture holds the loop never observed). A page
+  // laid out under a previous document state's hold counts as held only when that state
+  // held the same lines ({@link heldOnThisState}).
   const { usedReservePt } = args;
   if (usedReservePt === undefined) return 0;
   const offeredGap = Math.max(0, contentHeight - usedReservePt - bodyBottom);
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
-  const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
-  return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
+  const shape = heldShapeKey(bodyPage, owningBlock, frontierIndex, frontierRef.noteId);
+  const alreadyHeldHere =
+    Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT && heldOnThisState(args, shape);
+  if (neverOfferedTheRoom && !alreadyHeldHere) return 0;
+  recordHeldShape(args, shape);
+  return hold;
+}
+
+/**
+ * Shapes ({@link heldShapeKey}) of the pages the release test kept held, per notes part.
+ * The part outlives body edits, so a hold on a page the edit did not reach stays trusted.
+ * One entry per page index bounds the size by the page count.
+ */
+const heldShapes = new WeakMap<
+  OoxmlPart,
+  { readonly byIndex: Map<number, string>; readonly keys: Set<string> }
+>();
+
+/**
+ * Whether a page laid out under its hold was held on this document state.
+ *
+ * The rule that keeps a held page held exists because a held page offers no gap, so the
+ * body pass cannot refuse the returning lines again. A warm session seeds the reflow loop
+ * with the reserves of the PREVIOUS document state, and after an edit that shifts the
+ * content by whole lines a seeded reserve can equal the new frontier hold exactly. The
+ * page then looks held, but no body pass has refused these lines. So before the loop
+ * adopts its first reserves for a state, a held page counts only when an earlier state
+ * held the same shape: the same last body line and the same returning lines.
+ */
+function heldOnThisState(args: HoldOutArgs, shape: string): boolean {
+  if (!args.holdState || (args.holdState.reflowSpent?.adopted ?? 0) > 0) return true;
+  return (
+    args.footnotesPart !== null && heldShapes.get(args.footnotesPart)?.keys.has(shape) === true
+  );
+}
+
+function recordHeldShape(args: HoldOutArgs, shape: string): void {
+  if (!args.holdState || !args.footnotesPart) return;
+  let shapes = heldShapes.get(args.footnotesPart);
+  if (!shapes)
+    heldShapes.set(args.footnotesPart, (shapes = { byIndex: new Map(), keys: new Set() }));
+  const previous = shapes.byIndex.get(args.bodyPage.index);
+  if (previous !== undefined) shapes.keys.delete(previous);
+  shapes.byIndex.set(args.bodyPage.index, shape);
+  shapes.keys.add(shape);
+}
+
+/**
+ * What a held page's hold depends on, by source position: the body's last line on the
+ * page, the returning block's first line, and the frontier line with its note.
+ */
+function heldShapeKey(
+  bodyPage: PageRecord,
+  owningBlock: ParagraphFragmentRecord,
+  frontierIndex: number,
+  noteId: number
+): string {
+  let last: ParagraphFragmentRecord | undefined;
+  for (const fragment of bodyPage.fragments) {
+    if (fragment.kind === 'paragraph' && !isOutOfFlowFragment(fragment)) last = fragment;
+  }
+  const range = (line: LineRecord | undefined) =>
+    line ? `${line.range.paragraphId}:${line.range.start}:${line.range.end}` : '-';
+  return [
+    range(last?.lines[last.lines.length - 1]),
+    range(owningBlock.lines[0]),
+    range(owningBlock.lines[frontierIndex]),
+    noteId,
+  ].join('|');
+}
+
+/**
+ * Height of the notes referenced on `group`'s lines on the next page, each one a page can
+ * keep whole: a lower bound on the notes the group brings back when it returns whole.
+ * References on later pages are not counted.
+ */
+function groupNotesHeightPt(
+  nextPage: PageRecord,
+  group: FrontierKeepGroup,
+  owningIndex: number,
+  candidates: readonly HoldOutRef[],
+  layNote: (ref: HoldOutRef) => { readonly flowHeight: number } | null | undefined,
+  columnBudget: number
+): number {
+  // The frontier line is the page's earliest reference line, so no group line above the
+  // owning block carries a reference.
+  const blocks = nextPage.fragments.slice(owningIndex, group.lastIndex + 1);
+  let height = 0;
+  for (const ref of candidates) {
+    const inGroup = blocks.some(
+      (block) =>
+        block.kind === 'paragraph' && fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)
+    );
+    if (!inGroup) continue;
+    if (
+      group.end !== undefined &&
+      noteReferenceLineBandPt(nextPage, ref).bottom > group.end + 0.001
+    )
+      continue;
+    const laid = layNote(ref);
+    if (laid && laid.flowHeight <= columnBudget + 0.001) height += laid.flowHeight;
+  }
+  return height;
 }
 
 /**
@@ -344,8 +462,9 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
  * The body pass cuts a paragraph only where {@link evictedRunStart} leaves the cut in
  * place, so the run ends at the first line at or below the frontier line after which that
  * rule accepts a cut: two lines must stay behind under widow control, the paragraph's
- * lines on `bodyPage` must not be a lone orphan, and `w:keepLines` never splits. With no
- * such cut inside the fragment, the whole fragment returns as one piece.
+ * lines on `bodyPage` must not be a lone orphan, and `w:keepLines` never splits unless
+ * those lines are all their column holds. With no such cut inside the fragment, the whole
+ * fragment returns as one piece.
  */
 function pullBackUnitBottomPt(
   bodyPage: PageRecord,
@@ -357,10 +476,12 @@ function pullBackUnitBottomPt(
   const last = lines[lines.length - 1];
   const wholeBottom = last ? last.box.y + last.box.height : frontier.bottom;
   if (frontierIndex < 0) return Math.max(frontier.bottom, wholeBottom);
-  const before = returningHead(bodyPage, owningBlock)?.lines.length ?? 0;
+  const head = returningHead(bodyPage, owningBlock);
+  const before = head?.lines.length ?? 0;
+  const alone = head !== undefined && pageHoldsOnly(bodyPage, head);
   for (let index = frontierIndex; index < lines.length; index += 1) {
     const endsParagraph = index === lines.length - 1 && owningBlock.paragraphEnd === true;
-    if (endsParagraph || evictedRunStart(owningBlock, index + 1, before, false) === index + 1) {
+    if (endsParagraph || evictedRunStart(owningBlock, index + 1, before, alone) === index + 1) {
       const line = lines[index]!;
       return line.box.y + line.box.height;
     }
