@@ -6,6 +6,7 @@
       "name": "docx-editor-monorepo",
       "dependencies": {
         "@docx-editor.dev/docx-to-pdf": "workspace:*",
+        "@docx-editor.dev/fonts-cjk": "workspace:*",
         "prosemirror-commands": "^1.7.1",
         "prosemirror-history": "^1.5.0",
         "prosemirror-keymap": "^1.2.3",
@@ -232,6 +233,7 @@
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/docx-to-pdf": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
+        "@docx-editor.dev/fonts-cjk": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "@embedpdf/core": "^2.15.0",
@@ -538,6 +540,7 @@
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
+        "@docx-editor.dev/fonts-cjk": "workspace:*",
         "dejavu-fonts-ttf": "^2.37.3",
         "fflate": "^0.8.2",
         "license-check-and-add": "^4.0.5",
@@ -546,7 +549,11 @@
       },
       "peerDependencies": {
         "@docx-editor.dev/core": "~2.22.0",
+        "@docx-editor.dev/fonts-cjk": "~2.22.0",
       },
+      "optionalPeers": [
+        "@docx-editor.dev/fonts-cjk",
+      ],
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
@@ -569,6 +576,13 @@
         "@docx-editor.dev/core": "workspace:*",
         "@happy-dom/global-registrator": "^20.8.3",
         "fflate": "^0.8.2",
+        "typescript": "^5.3.3",
+      },
+    },
+    "packages/fonts-cjk": {
+      "name": "@docx-editor.dev/fonts-cjk",
+      "version": "2.22.0",
+      "devDependencies": {
         "typescript": "^5.3.3",
       },
     },
@@ -908,6 +922,8 @@
     "@docx-editor.dev/example-collaboration": ["@docx-editor.dev/example-collaboration@workspace:examples/collaboration"],
 
     "@docx-editor.dev/fonts": ["@docx-editor.dev/fonts@workspace:packages/fonts"],
+
+    "@docx-editor.dev/fonts-cjk": ["@docx-editor.dev/fonts-cjk@workspace:packages/fonts-cjk"],
 
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 

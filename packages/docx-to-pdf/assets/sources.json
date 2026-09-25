@@ -24,15 +24,6 @@
     "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/OFL.txt",
     "sha256": "07fc70bfeb985cc1a87a8587d0a0c80bab11c86c9dc3fd95b6f0cb332f983e96"
   },
-  "NotoSansCJKjp-Regular.otf": {
-    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
-    "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
-    "installedSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
-  },
-  "NotoSansCJK-OFL.txt": {
-    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/LICENSE",
-    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
-  },
   "NotoSansSymbols2-Regular.ttf": {
     "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf",
     "sha256": "7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21",

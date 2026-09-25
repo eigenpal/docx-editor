@@ -17,7 +17,12 @@ const assetRoot = new NodeURL(
   typeof __dirname === 'string' ? pathToFileURL(__dirname + '/').href : import.meta.url
 );
 type FaceStyle = 'normal' | 'italic';
-type PackagedFace = readonly [family: string, file: NodeURL, weight: number, style: FaceStyle];
+type PackagedFace = readonly [
+  family: string,
+  file: string | NodeURL,
+  weight: number,
+  style: FaceStyle,
+];
 const latinSubstitute = (family: string, prefix: string): readonly PackagedFace[] =>
   (
     [
@@ -32,16 +37,18 @@ const latinSubstitute = (family: string, prefix: string): readonly PackagedFace[
     weight,
     style,
   ]);
+/** The CJK fallback face. Its file comes from the optional `@docx-editor.dev/fonts-cjk`. */
+const CJK_FAMILY = 'Noto Sans CJK JP';
 /**
- * Every face this resolver can read: the symbol, mathematics, Arabic, CJK and emoji faces
- * this package carries, and the metric-compatible Latin substitutes from
- * `@docx-editor.dev/fonts`, which stand in here for families that package has no plan for.
+ * Every face this resolver can read: the symbol, mathematics, Arabic and emoji faces this
+ * package carries, and the metric-compatible Latin substitutes from `@docx-editor.dev/fonts`,
+ * which stand in here for families that package has no plan for. The CJK face is not listed:
+ * its file is located on demand ({@link CjkFaceLocator}).
  */
 const supplemental: readonly PackagedFace[] = [
   ['Noto Sans Symbols 2', new NodeURL('NotoSansSymbols2-Regular.ttf', assetRoot), 400, 'normal'],
   ['Noto Sans Math', new NodeURL('NotoSansMath-Regular.ttf', assetRoot), 400, 'normal'],
   ['Noto Sans Arabic', new NodeURL('NotoSansArabic-Regular.ttf', assetRoot), 400, 'normal'],
-  ['Noto Sans CJK JP', new NodeURL('NotoSansCJKjp-Regular.otf', assetRoot), 400, 'normal'],
   ['Twemoji Mozilla', new NodeURL('TwemojiMozilla.ttf', assetRoot), 400, 'normal'],
   ['Noto Emoji', new NodeURL('NotoEmoji-Regular.ttf', assetRoot), 400, 'normal'],
   ...latinSubstitute('Liberation Sans', 'LiberationSans'),
@@ -54,8 +61,7 @@ const supplemental: readonly PackagedFace[] = [
  * The fallback faces offered to every export, small faces first.
  *
  * Offering a face costs nothing until a family the document uses needs it: the resolver
- * below reads a packaged file only for a family it is asked about, so the 16 MB CJK face is
- * read by a document with CJK text and by no other.
+ * below reads a packaged file only for a family it is asked about.
  */
 export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Segoe UI Symbol',
@@ -67,10 +73,11 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   // Liberation Serif, whose Latin letters share its widths but whose Hebrew runs about 12%
   // wider, so Hebrew in that face can wrap earlier.
   'Times New Roman',
-  // Prefer available Word CJK faces; packaged Noto remains the portable fallback.
+  // Prefer available Word CJK faces; Noto Sans CJK JP from `@docx-editor.dev/fonts-cjk` is
+  // the portable fallback when that package is installed.
   'SimSun',
   'Batang',
-  'Noto Sans CJK JP',
+  CJK_FAMILY,
   // Color first: a COLR face paints its layers in the writer. The monochrome face stays
   // behind it for the few symbols the color set leaves out.
   'Twemoji Mozilla',
@@ -119,7 +126,7 @@ const substitutes: Record<string, string> = {
       'Gulim',
       'Dotum',
       'Malgun Gothic',
-    ].map((family) => [family, 'Noto Sans CJK JP'])
+    ].map((family) => [family, CJK_FAMILY])
   ),
 };
 /**
@@ -245,6 +252,7 @@ export function genericSubstituteFor(family: string): string {
  */
 const knownFamilies = new Set<string>([
   ...supplemental.map(([family]) => family),
+  CJK_FAMILY,
   ...Object.keys(substitutes),
   ...Object.keys(packagedSubstitutes),
   ...Object.values(packagedSubstitutes),
@@ -255,123 +263,225 @@ const knownFamilies = new Set<string>([
   'Webdings',
   'MT Extra',
 ]);
+/** The families this package answers for with the CJK face, and only while it has one. */
+const cjkFamilies = new Set<string>([
+  CJK_FAMILY,
+  ...Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY),
+]);
+
+/** The optional package that carries the CJK face. */
+const CJK_PACKAGE = '@docx-editor.dev/fonts-cjk';
+
+/** Where the CJK face file is, or `null` when `@docx-editor.dev/fonts-cjk` is not installed. */
+export type CjkFaceLocator = () => Promise<string | NodeURL | null>;
 
 /**
- * Whether a face resolved through the generic stand-in rather than a metric-compatible
- * plan: a substitution whose family this package knows nothing about. The writer reports
- * these at information level, since the page carries the text in another font's metrics.
+ * Whether `error` says that `specifier` itself is not installed, as Node's ESM loader, its
+ * CommonJS loader and Bun each phrase it. A package that is installed but broken (a missing
+ * `dist/` file, a missing dependency of its own) names another module, so it does not match:
+ * that failure propagates instead of reading as "not installed".
  */
-export function isGenericSubstitution(family: string, sourceFamily: string): boolean {
-  if (family === sourceFamily) return false;
-  return !knownFamilies.has(canonicalFamily(family).family);
+export function isPackageNotFound(error: unknown, specifier: string): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (code !== 'ERR_MODULE_NOT_FOUND' && code !== 'MODULE_NOT_FOUND') return false;
+  if (typeof message !== 'string') return false;
+  return [`Cannot find package '${specifier}'`, `Cannot find module '${specifier}'`].some(
+    (prefix) => message.startsWith(prefix)
+  );
 }
 
-/**
- * Packaged faces, read on demand.
- *
- * `families` is every family the document names plus every fallback the caller requested, so a
- * packaged face is opened only when something asked for it, by its own name or as the
- * substitute for a family the document uses. Reading all five up front mapped about 20 MB of
- * font data into every export, 16 MB of it a CJK face a Latin document never touches.
- */
-export const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
-  const wanted = new Set<string>();
-  for (const family of families) {
-    wanted.add(family);
-    const target = substituteFor(family);
-    if (target) wanted.add(target);
+/** Locate the CJK face in `@docx-editor.dev/fonts-cjk`, or `null` when it is not installed. */
+export async function importCjkFace(): Promise<NodeURL | null> {
+  let module: { NOTO_SANS_CJK_JP_URL?: unknown };
+  try {
+    // A literal specifier, so a file tracer that follows it ships the package with a
+    // deployment. The ignore comments leave the import to Node at run time, so a webpack or
+    // Turbopack bundle that includes this package builds without the optional package.
+    module = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ '@docx-editor.dev/fonts-cjk'
+    );
+  } catch (error) {
+    if (isPackageNotFound(error, CJK_PACKAGE)) return null;
+    throw error;
   }
-  const sources = await Promise.all(
-    supplemental
-      .filter(([family]) => wanted.has(family))
-      .map(async ([family, file, weight, style]) => {
-        const bytes = new Uint8Array(await readFontFile(file, signal));
-        const result = createFontSource(bytes, face(family, weight, style));
-        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file.pathname}`);
-        return result.source;
-      })
-  );
-  return {
-    sources,
-    substitutions: families.flatMap((family) => {
-      const target = substituteFor(family);
-      if (!target) return [];
-      const { bold, italic } = canonicalFamily(family);
-      return [400, 700].flatMap((weight) =>
-        (['normal', 'italic'] as const).map((style) => ({
-          from: face(family, weight, style),
-          // The packaged CJK, symbol and mathematics faces come in one weight and one style.
-          to: target.startsWith('Noto')
-            ? face(target)
-            : face(
-                target,
-                bold || weight === 700 ? 700 : 400,
-                italic || style === 'italic' ? 'italic' : 'normal'
-              ),
-        }))
-      );
-    }),
-  };
-});
+  const file = module.NOTO_SANS_CJK_JP_URL as { href?: unknown } | undefined;
+  if (typeof file?.href !== 'string')
+    throw new TypeError(`${CJK_PACKAGE} does not export NOTO_SANS_CJK_JP_URL`);
+  return new NodeURL(file.href);
+}
+
+/** Characters only the CJK face carries among the packaged faces: Hangul, kana, ideographs. */
+const CJK_TEXT = /[ᄀ-ᇿ⺀-⿟　-鿿ꥠ-꥿가-퟿豈-﫿︰-﹏＀-￯]|[\u{20000}-\u{3ffff}]/u;
 
 /**
- * The last word on a face nothing else covers, composed after the document's own embedded
- * fonts so it can never shadow one of them.
+ * The packaged resolvers, over one way to locate the CJK face.
  *
- * Two answers. A family with no face at all renders in a packaged face of its class
- * ({@link genericSubstituteFor}); the export reports it. A family whose regular face is
- * covered but whose bold or italic is not points those at the regular face, as Word does when
- * it emboldens a font that ships in one weight: every symbol face, most CJK faces. Legacy
- * symbol families never get a text stand-in; their private-use bullets belong to the glyph
- * fallback path.
+ * The locator runs at most once per instance, the first time a document needs the CJK face,
+ * and its answer holds for the process: a package is installed or it is not. Without the
+ * face, the CJK families are no longer this package's to answer for. They take the generic
+ * stand-in of their class, which the export reports, and their CJK characters report as
+ * missing glyphs that name the package. Tests supply their own locator.
  */
-export const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
-  const covered = new Set(
-    (resolvedFaces ?? []).map((face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`)
-  );
-  const has = (family: string, weight: number, style: FaceStyle) =>
-    covered.has(`${family.toLowerCase()}/${weight}/${style}`);
-  const faces = [
-    [400, 'normal'],
-    [700, 'normal'],
-    [400, 'italic'],
-    [700, 'italic'],
-  ] as const;
-  const substitutions: { from: FontRequest; to: FontRequest }[] = [];
-  const wanted = new Set<string>();
-  for (const family of families) {
-    if (has(family, 400, 'normal')) {
-      for (const [weight, style] of faces)
-        if (!has(family, weight, style))
-          substitutions.push({ from: face(family, weight, style), to: face(family) });
-      continue;
-    }
-    if (knownFamilies.has(canonicalFamily(family).family)) continue;
-    const target = genericSubstituteFor(family);
-    wanted.add(target);
-    const { bold, italic } = canonicalFamily(family);
-    for (const [weight, style] of faces)
-      substitutions.push({
-        from: face(family, weight, style),
-        to: face(
-          target,
-          bold || weight === 700 ? 700 : 400,
-          italic || style === 'italic' ? 'italic' : 'normal'
-        ),
-      });
-  }
-  const sources = await Promise.all(
-    supplemental
-      .filter(([family]) => wanted.has(family))
-      .map(async ([family, file, weight, style]) => {
+export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkFace) {
+  let located: Promise<string | NodeURL | null> | undefined;
+  let cjkMissing = false;
+  const cjkFace = () =>
+    (located ??= locateCjkFace().then(
+      (file) => {
+        cjkMissing = file === null;
+        return file;
+      },
+      (error: unknown) => {
+        // A broken install renders as an absent one, and the resolver reports why.
+        cjkMissing = true;
+        throw error;
+      }
+    ));
+  const known = (family: string) => {
+    const canonical = canonicalFamily(family).family;
+    return knownFamilies.has(canonical) && !(cjkMissing && cjkFamilies.has(canonical));
+  };
+  const readFaces = (faces: readonly PackagedFace[], signal: AbortSignal | undefined) =>
+    Promise.all(
+      faces.map(async ([family, file, weight, style]) => {
         const bytes = new Uint8Array(await readFontFile(file, signal));
         const result = createFontSource(bytes, face(family, weight, style));
-        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${file.pathname}`);
+        if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${String(file)}`);
         return result.source;
       })
-  );
-  return { sources, substitutions };
-});
+    );
+
+  /**
+   * Packaged faces, read on demand.
+   *
+   * `families` is every family the document names plus every fallback the caller requested,
+   * so a packaged face is opened only when something asked for it, by its own name or as the
+   * substitute for a family the document uses. Reading every face up front mapped about 20 MB
+   * of font data into every export, 16 MB of it a CJK face a Latin document never touches.
+   */
+  const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
+    const wanted = new Set<string>();
+    for (const family of families) {
+      wanted.add(family);
+      const target = substituteFor(family);
+      if (target) wanted.add(target);
+    }
+    const cjkFile = wanted.has(CJK_FAMILY) ? await cjkFace() : null;
+    const faces: readonly PackagedFace[] = cjkFile
+      ? [...supplemental, [CJK_FAMILY, cjkFile, 400, 'normal']]
+      : supplemental;
+    const sources = await readFaces(
+      faces.filter(([family]) => wanted.has(family)),
+      signal
+    );
+    return {
+      sources,
+      substitutions: families.flatMap((family) => {
+        const target = substituteFor(family);
+        if (!target || (target === CJK_FAMILY && !cjkFile)) return [];
+        const { bold, italic } = canonicalFamily(family);
+        return [400, 700].flatMap((weight) =>
+          (['normal', 'italic'] as const).map((style) => ({
+            from: face(family, weight, style),
+            // The packaged CJK, symbol and mathematics faces come in one weight and one style.
+            to: target.startsWith('Noto')
+              ? face(target)
+              : face(
+                  target,
+                  bold || weight === 700 ? 700 : 400,
+                  italic || style === 'italic' ? 'italic' : 'normal'
+                ),
+          }))
+        );
+      }),
+    };
+  });
+
+  /**
+   * The last word on a face nothing else covers, composed after the document's own embedded
+   * fonts so it can never shadow one of them.
+   *
+   * Two answers. A family with no face at all renders in a packaged face of its class
+   * ({@link genericSubstituteFor}); the export reports it. A family whose regular face is
+   * covered but whose bold or italic is not points those at the regular face, as Word does
+   * when it emboldens a font that ships in one weight: every symbol face, most CJK faces.
+   * Legacy symbol families never get a text stand-in; their private-use bullets belong to the
+   * glyph fallback path.
+   */
+  const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
+    // Settle whether the CJK families are still this package's to answer for. A failed
+    // lookup was already reported by the supplemental resolver, and reads as absent here.
+    if (families.some((family) => cjkFamilies.has(canonicalFamily(family).family)))
+      await cjkFace().catch(() => null);
+    const covered = new Set(
+      (resolvedFaces ?? []).map(
+        (face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`
+      )
+    );
+    const has = (family: string, weight: number, style: FaceStyle) =>
+      covered.has(`${family.toLowerCase()}/${weight}/${style}`);
+    const faces = [
+      [400, 'normal'],
+      [700, 'normal'],
+      [400, 'italic'],
+      [700, 'italic'],
+    ] as const;
+    const substitutions: { from: FontRequest; to: FontRequest }[] = [];
+    const wanted = new Set<string>();
+    for (const family of families) {
+      if (has(family, 400, 'normal')) {
+        for (const [weight, style] of faces)
+          if (!has(family, weight, style))
+            substitutions.push({ from: face(family, weight, style), to: face(family) });
+        continue;
+      }
+      if (known(family)) continue;
+      const target = genericSubstituteFor(family);
+      wanted.add(target);
+      const { bold, italic } = canonicalFamily(family);
+      for (const [weight, style] of faces)
+        substitutions.push({
+          from: face(family, weight, style),
+          to: face(
+            target,
+            bold || weight === 700 ? 700 : 400,
+            italic || style === 'italic' ? 'italic' : 'normal'
+          ),
+        });
+    }
+    const sources = await readFaces(
+      supplemental.filter(([family]) => wanted.has(family)),
+      signal
+    );
+    return { sources, substitutions };
+  });
+
+  return {
+    supplementalFonts,
+    standInFonts,
+    /**
+     * Whether a face resolved through the generic stand-in rather than a metric-compatible
+     * plan: a substitution whose family this package does not answer for. The writer reports
+     * these, since the page carries the text in another font's metrics.
+     */
+    isGenericSubstitution(family: string, sourceFamily: string): boolean {
+      return family !== sourceFamily && !known(family);
+    },
+    /**
+     * What a missing-glyph report adds for `text`: the package to install, when the text is
+     * CJK and the CJK face was looked for and is not installed. Empty otherwise.
+     */
+    missingGlyphHint(text: string): string {
+      return cjkMissing && CJK_TEXT.test(text)
+        ? `; install ${CJK_PACKAGE} for Chinese, Japanese, and Korean text`
+        : '';
+    },
+  };
+}
+
+export const { supplementalFonts, standInFonts, isGenericSubstitution, missingGlyphHint } =
+  packagedFontResolvers();
 
 const wordFontRoots =
   process.platform === 'darwin'

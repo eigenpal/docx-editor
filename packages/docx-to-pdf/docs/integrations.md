@@ -70,11 +70,12 @@ export default {
     '@docx-editor.dev/docx-to-pdf',
     '@docx-editor.dev/core',
     '@docx-editor.dev/fonts',
+    '@docx-editor.dev/fonts-cjk',
   ],
 };
 ```
 
-If you deploy a standalone bundle, include the converter's `assets/` directory and the fonts package's assets. Keep the package directory structure intact. Test the deployment artifact with a real conversion before release.
+If you deploy a standalone bundle, include the `assets/` directories of the converter, `@docx-editor.dev/fonts`, and `@docx-editor.dev/fonts-cjk` if you install it. Keep the package directory structure intact. Test the deployment artifact with a real conversion before release.
 
 ## Convert a batch
 

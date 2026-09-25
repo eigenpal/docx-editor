@@ -18,7 +18,7 @@ Sources resolve in this order:
 2. Installed fonts, unless `useSystemFonts` is `false`.
 3. Packaged substitutes.
 4. Your `fallbackFonts` sources.
-5. Supplemental packaged faces.
+5. Supplemental packaged faces, including `@docx-editor.dev/fonts-cjk` when it is installed.
 6. Document-embedded fonts.
 7. Your `lastResortFonts` sources.
 8. Generic substitutes for unresolved families.
@@ -26,6 +26,18 @@ Sources resolve in this order:
 Earlier sources take priority. Each option accepts one source or an ordered array of sources. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
 
 The default sources need no network access. A resolver that you supply can make network requests.
+
+## Add Chinese, Japanese, and Korean text
+
+The converter package does not include a CJK font. To render Chinese, Japanese, and Korean text on any host, install `@docx-editor.dev/fonts-cjk`:
+
+```sh
+npm install @docx-editor.dev/fonts-cjk
+```
+
+The converter finds the package at run time and needs no configuration. It uses Noto Sans CJK JP for CJK characters that earlier sources do not cover. It also uses the face for Word CJK families, such as SimSun, MS Mincho, and Malgun Gothic, when those fonts are not available.
+
+If the package is not installed and `useSystemFonts` is `true`, the converter uses installed Word CJK fonts, such as SimSun, Batang, and MS Gothic, from the standard font directories. If no source covers a CJK character, the export reports a `missing-glyph` diagnostic that names the package, and a strict export fails. A Word CJK family with no available face uses a generic substitute and reports a `font-substitution` diagnostic.
 
 ## Supply a font file
 
@@ -88,6 +100,6 @@ Each `font-origin-failed` diagnostic provides the source index, optional source 
 | `font-substitution` diagnostic | Supply the requested family through `fonts` or review best-effort output. |
 | Strict font policy rejects conversion | Inspect the callback report for failed sources and missing face variants. |
 | Missing font assets after bundling | Keep converter packages external and copy their assets with deployment output. |
-| Missing glyphs | Supply a face that contains the requested characters. |
+| Missing glyphs | Supply a face that contains the requested characters. For CJK text, install `@docx-editor.dev/fonts-cjk`. |
 
 For server setup, see [Integrate PDF conversion](integrations.md).
