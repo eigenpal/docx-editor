@@ -71,6 +71,24 @@ export function growLineMetrics(
 }
 
 /**
+ * Spaces (U+0020) and tabs take no line height, whatever their size, underline or tab leader.
+ * A line that holds only them measures as an empty line: the paragraph mark sets its height.
+ * A no-break space still counts, and so does a line break.
+ */
+export function isHeightlessWhitespace(text: string): boolean {
+  return text.length > 0 && /^[ \t]+$/.test(text);
+}
+
+/** {@link growLineMetrics} for a placed span; {@link isHeightlessWhitespace} text leaves the box. */
+export function growLineMetricsForText(
+  line: { height: number; baseline: number },
+  metrics: { readonly height: number; readonly baseline: number },
+  text: string
+): void {
+  if (!isHeightlessWhitespace(text)) growLineMetrics(line, metrics);
+}
+
+/**
  * Every {@link StyleSpanRecord} field outside range, text and box, as a checked record:
  * a new field fails to compile here until it is added (blocking the merge below when it
  * differs) or consciously exempted beside range/text/box in the `Exclude`.
