@@ -6,6 +6,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { copyFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { NOTO_SANS_CJK_JP_URL } from '@docx-editor.dev/fonts-cjk';
 import {
   importCjkFace,
@@ -57,7 +60,12 @@ test('the installed package supplies the face for CJK families from its own orig
     to: { family: CJK, weight: 400, style: 'normal' },
   });
   expect(await resolvers.supplementalFonts(request)).toEqual({ sources: [], substitutions: [] });
-  expect(await resolvers.standInFonts(request)).toEqual({ sources: [], substitutions: [] });
+  // Core reports the faces earlier origins cover, substituted ones included.
+  const resolvedFaces = (cjk.substitutions ?? []).map((substitution) => substitution.from);
+  expect(await resolvers.standInFonts({ ...request, resolvedFaces })).toEqual({
+    sources: [],
+    substitutions: [],
+  });
   expect(resolvers.isGenericSubstitution('宋体', CJK)).toBe(false);
   expect(resolvers.missingGlyphHint('日本語')).toBe('');
 });
@@ -143,9 +151,42 @@ for (const [name, locate] of [
     const standIn = await resolvers.standInFonts({ families: ['宋体'], defaultFamily: 'Arial' });
     expect(standIn.substitutions[0]?.to.family).toBe('Liberation Sans');
     expect(resolvers.isGenericSubstitution('宋体', 'Liberation Sans')).toBe(true);
-    expect(resolvers.missingGlyphHint('中文')).toContain(HINT);
     expect(locator.calls).toBe(1);
   });
+
+test('the install hint follows the package lookup, not a failed read', async () => {
+  const broken = packagedFontResolvers(async () => {
+    throw new TypeError('@docx-editor.dev/fonts-cjk does not export NOTO_SANS_CJK_JP_URL');
+  });
+  await expect(broken.cjkFonts({ families: [CJK], defaultFamily: 'Arial' })).rejects.toThrow();
+  expect(broken.missingGlyphHint('中文')).toContain(HINT);
+  const unreadable = packagedFontResolvers(
+    async () => new URL('./missing-assets/NotoSansCJKjp-Regular.otf', import.meta.url)
+  );
+  await expect(unreadable.cjkFonts({ families: [CJK], defaultFamily: 'Arial' })).rejects.toThrow();
+  expect(unreadable.missingGlyphHint('中文')).toBe('');
+});
+
+test('a failed read affects only its own export', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pdf-cjk-face-'));
+  try {
+    const file = join(root, 'NotoSansCJKjp-Regular.otf');
+    const resolvers = packagedFontResolvers(async () => file);
+    const request = { families: ['MS Mincho'], defaultFamily: 'Arial' };
+    await expect(resolvers.cjkFonts(request)).rejects.toThrow('could not supply its face');
+    const standIn = await resolvers.standInFonts(request);
+    expect(standIn.substitutions[0]?.to.family).toBe('Liberation Sans');
+    await copyFile(NOTO_SANS_CJK_JP_URL, file);
+    const cjk = await resolvers.cjkFonts(request);
+    expect(cjk.sources).toHaveLength(1);
+    const resolvedFaces = (cjk.substitutions ?? []).map((substitution) => substitution.from);
+    expect((await resolvers.standInFonts({ ...request, resolvedFaces })).substitutions).toEqual([]);
+    expect(resolvers.isGenericSubstitution('MS Mincho', CJK)).toBe(false);
+    expect(resolvers.missingGlyphHint('中文')).toBe('');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('a cancelled read does not mark the package absent', async () => {
   const resolvers = packagedFontResolvers(async () => NOTO_SANS_CJK_JP_URL);

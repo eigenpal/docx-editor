@@ -43,7 +43,7 @@ npm install @docx-editor.dev/fonts-cjk
 
 The converter finds the package at run time and needs no configuration. It uses Noto Sans CJK JP for CJK characters that earlier sources do not cover. It also uses the face for Word CJK families, such as SimSun, MS Mincho, and Malgun Gothic, when those fonts are not available.
 
-If the package is not installed and `useSystemFonts` is `true`, the converter uses installed Word CJK fonts, such as SimSun, Batang, and MS Gothic, from the standard font directories. If no source covers a CJK character, the export reports a `missing-glyph` diagnostic that names the package, and a strict export fails. A Word CJK family with no available face uses a generic substitute and reports a `font-substitution` diagnostic.
+When `useSystemFonts` is `true`, installed Word CJK fonts, such as SimSun, Batang, and MS Gothic, take priority over the package. If no source covers a CJK character and the package is not installed, the export reports a `missing-glyph` diagnostic that names the package, and a strict export fails. A Word CJK family with no available face uses a generic substitute and reports a `font-substitution` diagnostic.
 
 ## Supply a font file
 

@@ -263,11 +263,13 @@ const knownFamilies = new Set<string>([
   'Webdings',
   'MT Extra',
 ]);
-/** The families this package answers for with the CJK face, and only while it has one. */
-const cjkFamilies = new Set<string>([
-  CJK_FAMILY,
-  ...Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY),
-]);
+/**
+ * The Word families planned onto the CJK face. The plan holds only when that face resolves,
+ * so the stand-in covers one that is still uncovered when it runs.
+ */
+const cjkWordFamilies = new Set<string>(
+  Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY)
+);
 
 /** The optional package that carries the CJK face. */
 const CJK_PACKAGE = '@docx-editor.dev/fonts-cjk';
@@ -338,10 +340,10 @@ const substitutionsTo = (family: string, target: string) => {
  * The packaged resolvers, over one way to locate the CJK face.
  *
  * The locator runs at most once per instance, and its answer holds for the process: a
- * package is installed or it is not. Without the face, the CJK families are no longer this
- * package's to answer for. They take the generic stand-in of their class, which the export
- * reports, and their CJK characters report as missing glyphs that name the package. Tests
- * supply their own locator.
+ * package is installed or it is not. Whether the face resolved is decided per export: a Word
+ * CJK family that no source covers takes the generic stand-in of its class, which the export
+ * reports. When the locator found no package, missing CJK glyphs also name it. Tests supply
+ * their own locator.
  */
 export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkFace) {
   let located: Promise<string | NodeURL | null> | undefined;
@@ -353,15 +355,11 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
         return file;
       },
       (error: unknown) => {
-        // A broken install renders as an absent one, and the CJK origin reports why.
+        // A package that is installed but broken supplies no face either.
         cjkMissing = true;
         throw error;
       }
     ));
-  const known = (family: string) => {
-    const canonical = canonicalFamily(family).family;
-    return knownFamilies.has(canonical) && !(cjkMissing && cjkFamilies.has(canonical));
-  };
   const readFaces = (faces: readonly PackagedFace[], signal: AbortSignal | undefined) =>
     Promise.all(
       faces.map(async ([family, file, weight, style]) => {
@@ -405,9 +403,9 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * Word CJK families at it.
    *
    * Its own origin, so a package that is installed but cannot supply its face (a broken
-   * install, a deployment without its `assets/`) fails here alone and is reported as a font
-   * origin failure. Every other packaged face still resolves, and the CJK families then read
-   * as absent.
+   * install, a deployment without its `assets/`, a failed read) fails here alone and is
+   * reported as a font origin failure. Every other packaged face still resolves, and the
+   * stand-in covers the CJK families in that export.
    */
   const cjkFonts = defineFontResolver(async ({ families, signal }) => {
     const planned = families.filter((family) => substituteFor(family) === CJK_FAMILY);
@@ -419,7 +417,6 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
       sources = await readFaces([[CJK_FAMILY, file, 400, 'normal']], signal);
     } catch (error) {
       if (signal?.aborted) throw error;
-      cjkMissing = true;
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(`${CJK_PACKAGE} could not supply its face: ${detail}`, { cause: error });
     }
@@ -441,10 +438,6 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * glyph fallback path.
    */
   const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
-    // Settle whether the CJK families are still this package's to answer for. A failed
-    // lookup was already reported by the supplemental resolver, and reads as absent here.
-    if (families.some((family) => cjkFamilies.has(canonicalFamily(family).family)))
-      await cjkFace().catch(() => null);
     const covered = new Set(
       (resolvedFaces ?? []).map(
         (face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`
@@ -467,7 +460,10 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
             substitutions.push({ from: face(family, weight, style), to: face(family) });
         continue;
       }
-      if (known(family)) continue;
+      // A Word CJK family reaching here is uncovered: its plan needed a face that did not
+      // resolve in this export.
+      const canonical = canonicalFamily(family).family;
+      if (knownFamilies.has(canonical) && !cjkWordFamilies.has(canonical)) continue;
       const target = genericSubstituteFor(family);
       wanted.add(target);
       const { bold, italic } = canonicalFamily(family);
@@ -494,15 +490,19 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
     standInFonts,
     /**
      * Whether a face resolved through the generic stand-in rather than a metric-compatible
-     * plan: a substitution whose family this package does not answer for. The writer reports
-     * these, since the page carries the text in another font's metrics.
+     * plan: a substitution whose family this package does not answer for, or a Word CJK
+     * family in its stand-in rather than the CJK face. The writer reports these, since the
+     * page carries the text in another font's metrics.
      */
     isGenericSubstitution(family: string, sourceFamily: string): boolean {
-      return family !== sourceFamily && !known(family);
+      if (family === sourceFamily) return false;
+      const canonical = canonicalFamily(family).family;
+      if (cjkWordFamilies.has(canonical)) return sourceFamily === genericSubstituteFor(family);
+      return !knownFamilies.has(canonical);
     },
     /**
      * What a missing-glyph report adds for `text`: the package to install, when the text is
-     * CJK and the CJK face was looked for and is not installed. Empty otherwise.
+     * CJK and the lookup found no usable package. Empty otherwise.
      */
     missingGlyphHint(text: string): string {
       return cjkMissing && CJK_TEXT.test(text)
