@@ -51,6 +51,7 @@ import {
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
 import { alignDrawings, alignSpans, type PendingLine } from './paragraph-flow.ts';
+import { lineAlignOffset } from './paragraph-alignment.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -672,19 +673,16 @@ function placeCellParagraph(
       alignment,
       isLastLine,
       alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
-      rtl
+      rtl,
+      options?.inTableCell === true
     );
-    // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
-    const alignOffset =
-      placedSpans.length > 0 && alignedSpans.length > 0
-        ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-        : alignment !== 'left' && alignment !== 'both'
-          ? (() => {
-              const slack = lineAvailableWidth - pendingLine.width;
-              if (slack <= 0 || !Number.isFinite(slack)) return 0;
-              return alignment === 'center' ? slack / 2 : slack;
-            })()
-          : 0;
+    const alignOffset = lineAlignOffset(
+      placedSpans,
+      alignedSpans,
+      alignment,
+      lineAvailableWidth,
+      pendingLine.width
+    );
     const cellClip = Object.freeze({
       x: originX,
       y: top,

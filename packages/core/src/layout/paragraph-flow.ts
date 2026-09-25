@@ -331,6 +331,8 @@ export function breakParagraph(
   const firstLineOffset = flow?.firstLineOffset ?? 0;
   const markerBaselineFloor = flow?.firstLineMinimumBaseline ?? 0;
   const markerAscent = Math.max(0, flow?.firstLineMarkerAscent ?? 0);
+  // A manual page break inside a table cell keeps its model offset but has no geometry.
+  const pageBreaksIgnored = flow?.cellAnchorScope?.inTableCell === true;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -414,7 +416,7 @@ export function breakParagraph(
     measurer.inkBounds !== undefined &&
     canFitCjkOptically(allPieces);
   const opticalCompression = opticalParagraph && !preserveColonAdvances;
-  const placeableSuffixes = placeableContentSuffixes(pieces);
+  const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const fitCjkOptically = createCjkOpticalFitter(
     pieces,
@@ -519,6 +521,7 @@ export function breakParagraph(
     firstLineOffset,
     anchorStarts: sameParagraphAnchorStarts,
     equationLayoutOf,
+    pageBreaksIgnored,
   });
 
   for (const start of wrapAnchorStarts) {
@@ -1187,8 +1190,7 @@ export function breakParagraph(
         ...paragraphSpanMetadata(piece),
       });
       line.end = piece.end;
-      // Keep the model offset, but a manual page break has no cell-flow geometry.
-      if (flow?.cellAnchorScope?.inTableCell) continue;
+      if (pageBreaksIgnored) continue;
       growLineMetrics(line, breakMetrics);
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
@@ -1276,7 +1278,13 @@ export function breakParagraph(
         )
           closeLine();
         const currentX = lineOrigin() + line.width;
-        const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
+        const segment = measureFollowingTabSegment(
+          pieces,
+          pieceIndex,
+          boundary,
+          measurer,
+          pageBreaksIgnored
+        );
         // A `w:ptab` states its own destination and leader, so it does NOT consult the
         // paragraph's tab stops — a table-of-contents line authored with one has none.
         // A positional tab whose destination is at or behind the caret cannot advance —

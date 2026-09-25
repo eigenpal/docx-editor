@@ -57,6 +57,7 @@ import {
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './paragraph-flow.ts';
+import { lineAlignOffset } from './paragraph-alignment.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -2802,18 +2803,13 @@ function layoutBlocksPass(
         alignment === 'center' || alignment === 'right' ? measure.used : undefined,
         rtl
       );
-      // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
-      // content — and so the caret — at the middle of the measure, not at the left edge.
-      const alignOffset =
-        placedSpans.length > 0 && alignedSpans.length > 0
-          ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-          : alignment !== 'left' && alignment !== 'both'
-            ? (() => {
-                const slack = measure.available - measure.used;
-                if (slack <= 0) return 0;
-                return alignment === 'center' ? slack / 2 : slack;
-              })()
-            : 0;
+      const alignOffset = lineAlignOffset(
+        placedSpans,
+        alignedSpans,
+        alignment,
+        measure.available,
+        measure.used
+      );
       const pageClip = Object.freeze({
         x: 0,
         y: 0,

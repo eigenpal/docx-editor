@@ -54,9 +54,13 @@ export interface Piece {
  * as wrappable opened a new line per tab: the header grew by several lines, and because a
  * header's flow height sets the body's effective top margin, the body was pushed down the
  * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
- * spaces, which are themselves trimmed at the line end.
+ * spaces, which are themselves trimmed at the line end. When `pageBreaksIgnored` (a table
+ * cell), a page break ends nothing and is skipped too.
  */
-export function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array[] {
+export function placeableContentSuffixes(
+  pieces: readonly Piece[],
+  pageBreaksIgnored = false
+): readonly Uint8Array[] {
   const suffixes = new Array<Uint8Array>(pieces.length);
   let follows = false;
   for (let pieceIndex = pieces.length - 1; pieceIndex >= 0; pieceIndex -= 1) {
@@ -68,7 +72,8 @@ export function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uin
     } else {
       for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
         const ch = piece.text[cursor]!;
-        if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
+        if (ch === PAGE_BREAK_CHAR && pageBreaksIgnored) suffix[cursor] = suffix[cursor + 1]!;
+        else if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
         else if (ch !== '\t' && !lineEndSpaces.isCollapsibleLineEndWhitespace(ch))
           suffix[cursor] = 1;
         else suffix[cursor] = suffix[cursor + 1]!;
@@ -80,11 +85,16 @@ export function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uin
   return suffixes;
 }
 
+/**
+ * Width of the text an aligned tab positions: up to the next tab or break. A page break
+ * the line ignores (`pageBreaksIgnored`, a table cell) adds no width and does not end it.
+ */
 export function measureFollowingTabSegment(
   pieces: readonly Piece[],
   pieceIndex: number,
   offsetInPiece: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  pageBreaksIgnored = false
 ): { width: number; decimalOffset: number } {
   let width = 0;
   let decimalOffset = 0;
@@ -95,6 +105,10 @@ export function measureFollowingTabSegment(
     const from = index === pieceIndex ? offsetInPiece : 0;
     for (let cursor = from; cursor < piece.text.length; ) {
       const ch = piece.text[cursor]!;
+      if (ch === PAGE_BREAK_CHAR && pageBreaksIgnored) {
+        cursor += 1;
+        continue;
+      }
       if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) {
         return { width, decimalOffset: sawDecimal ? decimalOffset : width };
       }

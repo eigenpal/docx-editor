@@ -1,30 +1,57 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
-import { caretAt } from '../semantic-interaction.ts';
+import { caretAt, hitTestSemantic } from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
+import { layoutContext } from './anchored-drawing-test-fixtures.ts';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const paragraph = (content: string) => `<w:p><w:r>${content}</w:r></w:p>`;
-const table = (content: string) =>
-  `<w:tbl><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>${content}</w:tc></w:tr></w:tbl>`;
-const text = (value: string) => `<w:t>${value}</w:t>`;
+const NAMESPACES = [
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"',
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"',
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"',
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+].join(' ');
+const paragraph = (content: string, pPr = '') => `<w:p>${pPr}<w:r>${content}</w:r></w:p>`;
+const table = (content: string, twips = 6000) =>
+  `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="${twips}"/></w:tblGrid>` +
+  `<w:tr><w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/></w:tcPr>${content}</w:tc></w:tr></w:tbl>`;
+const text = (value: string) => `<w:t xml:space="preserve">${value}</w:t>`;
+const run = (content: string, rPr = '') =>
+  `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${content}</w:r>`;
 const pageBreak = '<w:br w:type="page"/>';
+const largeFont = '<w:sz w:val="48"/>';
+const rightTab = '<w:pPr><w:tabs><w:tab w:val="right" w:pos="5000"/></w:tabs></w:pPr>';
+/** A 100 x 50 pt square-wrapped picture at the top left of its paragraph. */
+const squareAnchor =
+  '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+  '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+  '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+  '<wp:extent cx="1270000" cy="635000"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="pic"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+  '<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+  '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
 
 function part(body: string) {
-  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+  const result = readOoxmlPart(`<w:document ${NAMESPACES}><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',
   });
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
-function layout(body: string) {
-  return layoutSemanticDocument(part(body), 0, { measurer: createFixedMeasurer() });
+function layout(body: string, drawings = false) {
+  const source = part(body);
+  return layoutSemanticDocument(source, 0, {
+    measurer: createFixedMeasurer(),
+    ...(drawings ? { inlineDrawingLayout: layoutContext(source) } : {}),
+  });
 }
 function cellParagraph(result: SemanticLayout) {
   const block = result.pages[0]!.fragments[0]!;
@@ -32,6 +59,23 @@ function cellParagraph(result: SemanticLayout) {
   const p = block.rows[0]!.cells[0]!.blocks[0]!;
   if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
   return p;
+}
+function cellCaret(result: SemanticLayout, offset: number) {
+  const caret = caretAt(result, { paragraphId: cellParagraph(result).paragraphId, offset });
+  if (!caret) throw new Error(`No caret at ${offset}`);
+  return caret;
+}
+/** Per line: the visible text, where it starts, and where its last span ends. */
+function textPlacement(result: SemanticLayout) {
+  return cellParagraph(result).lines.map((line) => {
+    const spans = line.spans.filter((span) => span.text !== '\f');
+    const last = spans.at(-1)!;
+    return [spans.map((span) => span.text).join(''), spans[0]!.box.x, last.box.x + last.box.width];
+  });
+}
+function lineEndX(result: SemanticLayout) {
+  const last = cellParagraph(result).lines[0]!.spans.at(-1)!;
+  return last.box.x + last.box.width;
 }
 
 describe('manual page breaks inside table cells', () => {
@@ -45,9 +89,24 @@ describe('manual page breaks inside table cells', () => {
     expect(p.box.height).toBe(control.box.height);
     expect(p.lines[0]!.box.width).toBe(control.lines[0]!.box.width);
     expect(p.lines[0]!.spans.map((s) => s.text).join('')).toBe('\f\fAlpha\fBeta\f');
+  });
+
+  test('carets beside ignored breaks sit where the text without breaks puts them', () => {
+    const control = layout(table(paragraph(text('AlphaBeta'))));
+    const result = layout(
+      table(paragraph(pageBreak + pageBreak + text('Alpha') + pageBreak + text('Beta') + pageBreak))
+    );
+    // Each offset in `\f\fAlpha\fBeta\f`, mapped to the same position in `AlphaBeta`.
+    const controlOffset = [0, 0, 0, 1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 9];
     for (let offset = 0; offset <= 13; offset++) {
-      expect(caretAt(result, { paragraphId: p.paragraphId, offset })).not.toBeNull();
+      const caret = cellCaret(result, offset);
+      const expected = cellCaret(control, controlOffset[offset]!);
+      expect(caret.x).toBeCloseTo(expected.x, 9);
+      expect([offset, caret.y, caret.height]).toEqual([offset, expected.y, expected.height]);
     }
+    const end = cellCaret(result, 13);
+    const hit = hitTestSemantic(result, { x: end.x + 200, y: end.y + 1, pageIndex: 0 });
+    expect(hit?.position.offset).toBe(12);
   });
 
   test('a cell with only page breaks keeps one empty paragraph line', () => {
@@ -58,6 +117,104 @@ describe('manual page breaks inside table cells', () => {
     expect(p.box.height).toBe(control.box.height);
     expect(p.lines[0]!.spans.map((span) => span.text).join('')).toBe('\f\f');
     expect(caretAt(result, { paragraphId: p.paragraphId, offset: 2 })).not.toBeNull();
+  });
+
+  test('a break run with a larger font adds no line height', () => {
+    const control = cellParagraph(layout(table(paragraph(text('AlphaBeta')))));
+    const empty = cellParagraph(layout(table('<w:p/>')));
+    const interior = layout(
+      table(`<w:p>${run(text('Alpha'))}${run(pageBreak, largeFont)}${run(text('Beta'))}</w:p>`)
+    );
+    const leading = layout(table(`<w:p>${run(pageBreak, largeFont)}${run(text('Alpha'))}</w:p>`));
+    const only = layout(table(`<w:p>${run(pageBreak, largeFont)}</w:p>`));
+    expect(cellParagraph(interior).box.height).toBe(control.box.height);
+    expect(cellParagraph(leading).box.height).toBe(control.box.height);
+    expect(cellParagraph(only).box.height).toBe(empty.box.height);
+    const [before, after] = [cellCaret(interior, 5), cellCaret(interior, 6)];
+    expect([after.x, after.y, after.height]).toEqual([before.x, before.y, before.height]);
+    // A manual line break run still sizes the line that it ends.
+    const lineBreak = layout(
+      table(`<w:p>${run(text('Alpha'))}${run('<w:br/>', largeFont)}${run(text('Beta'))}</w:p>`)
+    );
+    expect(cellParagraph(lineBreak).lines[0]!.box.height).toBeGreaterThan(
+      control.lines[0]!.box.height
+    );
+  });
+
+  test('an ignored break is not a wrap opportunity', () => {
+    // `Alpha Beta` fits the first line, but `Alpha BetaKappaLambda` does not.
+    const control = layout(table(paragraph(text('Alpha BetaKappaLambda sit')), 2000));
+    const result = layout(
+      table(paragraph(text('Alpha Beta') + pageBreak + text('KappaLambda sit')), 2000)
+    );
+    expect(textPlacement(result)).toEqual(textPlacement(control));
+    const lines = cellParagraph(result).lines.map((line) =>
+      line.spans.map((span) => span.text).join('')
+    );
+    expect(lines).toEqual(['Alpha ', 'Beta\fKappaLambda ', 'sit']);
+  });
+
+  test('a justified line that wraps after an ignored break stretches as without the break', () => {
+    const pPr = '<w:pPr><w:jc w:val="both"/></w:pPr>';
+    const words = 'Loremipsumdolorsit amet';
+    const control = layout(table(paragraph(text('Alpha Beta ' + words), pPr), 2000));
+    const result = layout(
+      table(paragraph(text('Alpha Beta ') + pageBreak + text(words), pPr), 2000)
+    );
+    expect(textPlacement(result)).toEqual(textPlacement(control));
+    // The position after the break starts the wrapped line.
+    const wrapped = cellParagraph(control).lines[1]!;
+    expect(cellCaret(result, 12)).toMatchObject({ x: wrapped.spans[0]!.box.x, y: wrapped.box.y });
+  });
+
+  test('an aligned tab positions the whole segment across an ignored break', () => {
+    const control = layout(table(paragraph('<w:tab/>' + text('AlphaBeta'), rightTab)));
+    const result = layout(
+      table(paragraph('<w:tab/>' + text('Alpha') + pageBreak + text('Beta'), rightTab))
+    );
+    expect(cellParagraph(result).lines).toHaveLength(1);
+    expect(lineEndX(result)).toBeCloseTo(lineEndX(control), 6);
+    expect(cellCaret(result, 1).x).toBeCloseTo(cellCaret(control, 1).x, 6);
+    expect(cellCaret(result, 7).x).toBeCloseTo(cellCaret(control, 6).x, 6);
+  });
+
+  test('a space before an ignored break is not line-end whitespace when text follows', () => {
+    const bold = run(text('Alpha'), '<w:b/>');
+    const control = cellParagraph(layout(table(`<w:p>${bold}${run(text(' Beta'))}</w:p>`)));
+    const result = cellParagraph(
+      layout(table(`<w:p>${bold}${run(text(' ') + pageBreak + text('Beta'))}</w:p>`))
+    );
+    const spans = (p: ReturnType<typeof cellParagraph>) =>
+      p.lines[0]!.spans.filter((span) => span.text !== '\f').map((span) => [
+        span.text.trim(),
+        span.box.x,
+        span.lineEndWhitespace ?? false,
+      ]);
+    expect(spans(result)).toEqual([
+      ['Alpha', 0.5, false],
+      ['', control.lines[0]!.spans[1]!.box.x, false],
+      ['Beta', control.lines[0]!.spans[2]!.box.x, false],
+    ]);
+  });
+
+  test('a same-paragraph anchor wraps the same lines as without the break', () => {
+    const words = run(text('word '.repeat(40)));
+    const control = layout(
+      table(`<w:p>${run(text('Alpha Beta '))}${squareAnchor}${words}</w:p>`),
+      true
+    );
+    const result = layout(
+      table(`<w:p>${run(text('Alpha ') + pageBreak + text('Beta '))}${squareAnchor}${words}</w:p>`),
+      true
+    );
+    const lineGeometry = (l: SemanticLayout) =>
+      cellParagraph(l).lines.map((line) => [
+        line.box.y,
+        line.spans.find((span) => span.text.trim() && span.text !== '\f')?.box.x,
+      ]);
+    expect(lineGeometry(result)).toEqual(lineGeometry(control));
+    // Four lines beside the 50 pt picture, then full-width lines below it.
+    expect(lineGeometry(result).filter(([, x]) => (x ?? 0) > 50)).toHaveLength(4);
   });
 
   test('nested cells also ignore manual page breaks', () => {
@@ -82,6 +239,20 @@ describe('manual page breaks inside table cells', () => {
   test('body page breaks still start a new page', () => {
     const result = layout(paragraph(text('Alpha') + pageBreak + text('Beta')));
     expect(result.pages).toHaveLength(2);
+  });
+
+  test('a body page break still ends an aligned tab segment', () => {
+    const tabbed = (content: string) => {
+      const first = layout(paragraph('<w:tab/>' + content, rightTab)).pages[0]!.fragments[0]!;
+      if (first.kind !== 'paragraph') throw new Error('Expected paragraph');
+      return first.lines[0]!.spans.find((span) => span.text.startsWith('Alpha'))!;
+    };
+    const alpha = tabbed(text('Alpha') + pageBreak + text('Beta'));
+    const alone = tabbed(text('Alpha'));
+    expect(alpha.box.x).toBeCloseTo(alone.box.x, 6);
+    expect(
+      layout(paragraph('<w:tab/>' + text('Alpha') + pageBreak + text('Beta'), rightTab)).pages
+    ).toHaveLength(2);
   });
 
   test('an edit after an ignored break keeps incremental layout equal to a clean pass', () => {

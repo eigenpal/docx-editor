@@ -55,6 +55,31 @@ function endsWithExpandableSpace(text: string): boolean {
 }
 
 /**
+ * A table cell ignores its page breaks, so a line that wrapped right after one aligns as the
+ * same line without it: otherwise the break span would end the content, and the space before
+ * it would count as text. The breaks then follow the aligned text. Null when the line does
+ * not end with such a break, or holds nothing else.
+ */
+function alignBeforeIgnoredBreaks(
+  spans: readonly StyleSpanRecord[],
+  align: (content: readonly StyleSpanRecord[]) => readonly StyleSpanRecord[]
+): readonly StyleSpanRecord[] | null {
+  let end = spans.length;
+  while (end > 0 && spans[end - 1]!.text === PAGE_BREAK_CHAR && spans[end - 1]!.box.width === 0) {
+    end -= 1;
+  }
+  if (end === 0 || end === spans.length) return null;
+  const aligned = align(spans.slice(0, end));
+  const before = spans[end - 1]!;
+  const after = aligned[aligned.length - 1]!;
+  const shift = after.box.x + after.box.width - (before.box.x + before.box.width);
+  return [
+    ...aligned,
+    ...spans.slice(end).map((span) => ({ ...span, box: { ...span.box, x: span.box.x + shift } })),
+  ];
+}
+
+/**
  * Align logical spans before bidi reordering. Layout publishes the shared geometry.
  * Justification expands inter-word spaces, matching paint's CSS word-spacing.
  * Empty lines stay unchanged; callers publish their aligned origin as contentX.
@@ -67,11 +92,28 @@ function alignLogicalSpans(
   alignment: Alignment,
   isLastLine: boolean,
   lineUsedWidth: number | undefined,
-  paragraphRtl: boolean
+  paragraphRtl: boolean,
+  pageBreaksIgnored: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
   if (alignment === 'left' || !Number.isFinite(available)) return spans;
+  if (pageBreaksIgnored) {
+    const aligned = alignBeforeIgnoredBreaks(spans, (content) =>
+      alignLogicalSpans(
+        content,
+        measurer,
+        indentLeft,
+        available,
+        alignment,
+        isLastLine,
+        lineUsedWidth,
+        paragraphRtl,
+        false
+      )
+    );
+    if (aligned) return aligned;
+  }
 
   let trailingEnd = spans.length;
   while (
@@ -220,7 +262,8 @@ export function alignSpans(
   alignment: Alignment,
   isLastLine: boolean,
   lineUsedWidth?: number,
-  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1)
+  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
+  pageBreaksIgnored = false
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
   return reorderBidiSpans(
@@ -232,10 +275,31 @@ export function alignSpans(
       effective,
       isLastLine,
       lineUsedWidth,
-      paragraphRtl
+      paragraphRtl,
+      pageBreaksIgnored
     ),
     paragraphRtl
   );
+}
+
+/**
+ * How far alignment moved a line. A line with no spans still aligns: an empty centred
+ * paragraph puts its (zero width) content, and so the caret, at the middle of the measure.
+ */
+export function lineAlignOffset(
+  placedSpans: readonly StyleSpanRecord[],
+  alignedSpans: readonly StyleSpanRecord[],
+  alignment: Alignment,
+  available: number,
+  used: number
+): number {
+  if (placedSpans.length > 0 && alignedSpans.length > 0) {
+    return alignedSpans[0]!.box.x - placedSpans[0]!.box.x;
+  }
+  if (alignment === 'left' || alignment === 'both') return 0;
+  const slack = available - used;
+  if (slack <= 0 || !Number.isFinite(slack)) return 0;
+  return alignment === 'center' ? slack / 2 : slack;
 }
 
 /**

@@ -113,7 +113,7 @@ The editor calculates document layout without browser flow layout. It uses docum
 
 The layout result controls line and page breaks. The editor paints that result as DOM text, not a canvas bitmap.
 
-Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines or start pages. The document retains these breaks for editing and saving. Manual line breaks still start a new line inside a cell.
+Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines, line height, or pages. This applies to breaks at the start, middle, or end of a cell paragraph. The text on each side of a break stays on the same line. Line wrapping, tab alignment, and text wrap around floating pictures treat the text as if the break were absent. The document retains these breaks for editing and saving. Manual line breaks still start a new line inside a cell.
 
 Known single-byte Symbol and Wingdings bullets use Unicode fallback when their font is unavailable. The editor preserves the original numbering definition when you save.
 
