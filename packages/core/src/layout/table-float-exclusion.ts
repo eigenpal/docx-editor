@@ -239,6 +239,11 @@ function paragraphHasPageOrColumnBreak(paragraph: OoxmlElement): boolean {
   return false;
 }
 
+export interface PositionedTableFlowPolicy {
+  readonly positionedTables: readonly PositionedTableAnchor[];
+  readonly positionedTablePolicy: ReadonlyMap<string, boolean>;
+}
+
 /** Anchor admission is a forward dependency of the earlier table's flow checkpoint. */
 export function anchorFlow(
   prepared: readonly PreparedBlock[],
@@ -247,7 +252,7 @@ export function anchorFlow(
   mode: RevisionDisplayMode,
   authors: RevisionAuthorFilter | undefined,
   compatibilityMode?: number
-) {
+): PositionedTableFlowPolicy {
   const positionedTables = positionedTableAnchors(
     prepared,
     width,
@@ -260,7 +265,8 @@ export function anchorFlow(
   return { positionedTables, positionedTablePolicy };
 }
 
-export function anchorFlowKeys(keys: string[], state: ReturnType<typeof anchorFlow>): string[] {
+/** Run before cross-block folds so keep-next chains carry anchor admission changes. */
+export function anchorFlowKeys(keys: string[], state: PositionedTableFlowPolicy): string[] {
   if (!state.positionedTables.length) return keys;
   const flowKeys = [...keys];
   for (const anchor of state.positionedTables) {

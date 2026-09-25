@@ -305,10 +305,12 @@ describe('retained floating-table anchor policy', () => {
     '<w:framePr w:w="400" w:h="200" w:wrap="around" w:vAnchor="text" w:hAnchor="text"/>'
   );
   const prefix = lead(100) + table();
+  const keepPrefix = lead(100).replace('<w:pPr>', '<w:pPr><w:keepNext/>') + table();
   const anchor = p('Anchor');
   const pageAnchor = p('Anchor', '<w:pageBreakBefore/>');
   for (const [label, before, after, changed] of [
     ['page break before', prefix + anchor, prefix + pageAnchor, 2],
+    ['keep-next lead', keepPrefix + anchor, keepPrefix + pageAnchor, 2],
     ['spacing before', prefix + anchor, prefix + p('Anchor', '<w:spacing w:before="200"/>'), 2],
     [
       'manual page break',
