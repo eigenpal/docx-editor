@@ -30,12 +30,13 @@ const tab = '<w:tab/>';
 const rtl = '<w:rtl/>';
 const run = (content: string, rPr = '') =>
   `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${content}</w:r>`;
-const table = (content: string) =>
-  `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid>` +
-  `<w:tr><w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${content}</w:tc></w:tr></w:tbl><w:p/>`;
+const table = (content: string, width = 6000) =>
+  `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>` +
+  `<w:tr><w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>${content}</w:tc></w:tr></w:tbl><w:p/>`;
 const tabs = (bidi: boolean, alignment = 'decimal') =>
   `<w:pPr>${bidi ? '<w:bidi/>' : ''}<w:tabs><w:tab w:val="${alignment}" w:pos="3000"/></w:tabs></w:pPr>`;
-const cell = (pPr: string, runs: string) => table(`<w:p>${pPr}${runs}</w:p>`);
+const cell = (pPr: string, runs: string, width?: number) =>
+  table(`<w:p>${pPr}${runs}</w:p>`, width);
 const fixed = createFixedMeasurer(6, 12);
 
 await initializeHarfBuzz();
@@ -117,12 +118,14 @@ const endOf = (result: SemanticLayout) =>
 /**
  * Everything the reader sees: lines, tab, line widths, glyph order, the caret at each offset
  * (keyed by the offset without breaks), and where clicks inside the control's glyphs land.
+ * With a `measurer`, carets inside a span use its measured advances.
  */
-function geometry(result: SemanticLayout, control: SemanticLayout) {
+function geometry(result: SemanticLayout, control: SemanticLayout, measurer?: TextMeasurer) {
   const map = withoutBreaks(result);
   const carets = new Set<string>();
   for (let offset = 0; offset <= endOf(result); offset++) {
-    const caret = caretAt(result, { paragraphId: cellParagraph(result).paragraphId, offset })!;
+    const position = { paragraphId: cellParagraph(result).paragraphId, offset };
+    const caret = caretAt(result, position, measurer)!;
     carets.add(`${map(offset)}@${round(caret.x)}`);
   }
   // A click inside each control glyph, clear of the ties at span edges.
@@ -260,6 +263,92 @@ describe('bidi text around an ignored cell page break', () => {
     expect(cellParagraph(lineBreak).lines).toHaveLength(2);
     const body = layout(`<w:p>${pPr}${run(text('12') + pageBreak + text('34'), rtl)}</w:p>`);
     expect(body.pages).toHaveLength(2);
+  });
+});
+
+describe('an ignored cell page break beside line-end spaces', () => {
+  const face = '<w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans" w:cs="DejaVu Sans"/>';
+  const bidi = '<w:pPr><w:bidi/></w:pPr>';
+  const centered = '<w:pPr><w:bidi/><w:jc w:val="center"/></w:pPr>';
+  const long = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab';
+  // [label, pPr, cell width, text before the break, text after it]
+  const cases = [
+    ['a wrapped line ends in a space', bidi, 1500, tab + text('abc'), text(' def אבג דהו 123')],
+    ['the paragraph ends in a space', bidi, 6000, text('abc'), text(' ')],
+    ['a centered paragraph ends in a space', centered, 6000, text('abc'), text(' ')],
+    ['two spaces end the paragraph', bidi, 6000, text('abc'), text('  ')],
+    ['the space overflows the margin', bidi, 6000, text(long), text(' ')],
+    ['left-to-right text continues after it', '', 6000, text('$12'), text('.50')],
+  ] as const;
+  const measurers = [
+    ['fixed', fixed, ''],
+    ['HarfBuzz', shaped, face],
+  ] as const;
+
+  test.each(cases)('%s: text, carets and hits match the text without it', (...testCase) => {
+    const [, pPr, width, before, after] = testCase;
+    for (const [name, measurer, rPr] of measurers) {
+      // Shaped, the control's `abc ` is one span and the break splits it in two. A click
+      // inside a shaped span that ends in a space snaps differently from one inside the
+      // split halves, with or without a break, so shaped hits are not compared.
+      const compared = (result: SemanticLayout) => {
+        const { hits, ...rest } = geometry(result, control, measurer);
+        return name === 'fixed' ? { hits, ...rest } : rest;
+      };
+      const control = layout(cell(pPr, run(before + after, rPr), width), measurer);
+      for (const runs of [
+        run(before + pageBreak + after, rPr),
+        run(before, rPr) + run(pageBreak, rPr) + run(after, rPr),
+      ]) {
+        const actual = compared(layout(cell(pPr, runs, width), measurer));
+        expect({ name, ...actual }).toEqual({ name, ...compared(control) });
+      }
+    }
+  });
+
+  test('a genuine run boundary before the space still hangs it', () => {
+    const bold = run(text('abc'), '<w:b/>');
+    const control = layout(cell(bidi, bold + run(text(' '))));
+    const result = layout(cell(bidi, bold + run(pageBreak + text(' '))));
+    expect(geometry(result, control, fixed)).toEqual(geometry(control, control, fixed));
+    expect(cellParagraph(result).lines[0]!.spans.at(-1)!.lineEndWhitespace).toBe(true);
+  });
+});
+
+describe('merged paragraph boundaries with ignored cell page breaks', () => {
+  const piece = (value: string, start: number) => ({
+    text: value,
+    start,
+    end: start + value.length,
+    props: [],
+    style: DEFAULT_RUN_STYLE,
+    ...(value === '\f' ? { breakKind: 'page' as const } : {}),
+  });
+
+  test('each boundary maps past the breaks before it', () => {
+    const pieces = ['א', '\f', 'ב', 'ג', '\f', '\f', 'ד', 'ה'].map((value, at) => piece(value, at));
+    const result = bidiPieces(pieces, true, new Set([2, 3, 6, 7]), true);
+    expect(result.map((p) => [p.text, p.start, p.end])).toEqual([
+      ['א', 0, 1],
+      ['\f', 1, 2],
+      ['ב', 2, 3],
+      ['ג', 3, 4],
+      ['\f', 4, 5],
+      ['\f', 5, 6],
+      ['ד', 6, 7],
+      ['ה', 7, 8],
+    ]);
+  });
+
+  test('many members that each end with a break resolve in linear time', () => {
+    const count = 40000;
+    const pieces = Array.from({ length: count * 2 }, (_, at) => piece(at % 2 ? '\f' : 'א', at));
+    const boundaries = new Set(Array.from({ length: count }, (_, member) => member * 2));
+    const started = performance.now();
+    const result = bidiPieces(pieces, true, boundaries, true);
+    const elapsed = performance.now() - started;
+    expect(result).toHaveLength(count * 2);
+    expect(elapsed).toBeLessThan(2_000);
   });
 });
 

@@ -1459,7 +1459,12 @@ export function breakParagraph(
       const lineEndWhitespace =
         !protectedEnd &&
         lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
-        (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
+        ((placeableSuffixes[pieceIndex]![boundary] !== 1 &&
+          !(
+            pageBreaksIgnored &&
+            consumed === 0 &&
+            lineEndSpaces.endsWordAcrossIgnoredBreaks(pieces, pieceIndex, candidate, lastEmitted)
+          )) ||
           (!layoutOwned &&
             (line.spans.length > 0 || line.drawings.length > 0) &&
             line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT));

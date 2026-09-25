@@ -128,12 +128,20 @@ function withoutIgnoredBreaks(
         removed ? { ...piece, start: piece.start - removed, end: piece.end - removed } : piece
       );
   }
+  // The breaks are in source order, so the count before a boundary is a binary search. A
+  // scan per boundary was quadratic in merged-paragraph members that each end with a break.
+  const breaksBefore = (boundary: number) => {
+    let low = 0;
+    let high = breaks.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (breaks[mid]!.piece.start < boundary) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  };
   const boundaries = sourceBoundaries
-    ? new Set(
-        [...sourceBoundaries].map(
-          (boundary) => boundary - breaks.filter(({ piece }) => piece.start < boundary).length
-        )
-      )
+    ? new Set([...sourceBoundaries].map((boundary) => boundary - breaksBefore(boundary)))
     : undefined;
   const items = resolvedItems(kept, rtl, boundaries);
   if (!items) return null;
@@ -367,9 +375,10 @@ const BREAKS_JOINING = /\s/u;
 
 /**
  * Where the line-end whitespace that UAX #9 L1 resets to the paragraph level starts in
- * `spans[start, end)`. With `pageBreaksIgnored`, a page break directly after visible text is
- * not line-end whitespace: without the break that text ends the line, so the break keeps its
- * level and stays beside it.
+ * `spans[start, end)`. With `pageBreaksIgnored`, page breaks directly after visible text are
+ * not line-end whitespace when only breaks follow them: without the breaks that text ends the
+ * line, so the breaks keep its level and stay beside it. When whitespace follows the breaks,
+ * that whitespace starts at the break offset without them, so the breaks reset with it.
  */
 function lineEndWhitespaceStart(
   spans: readonly StyleSpanRecord[],
@@ -386,8 +395,9 @@ function lineEndWhitespaceStart(
   )
     trailing--;
   if (!pageBreaksIgnored || trailing === start) return trailing;
-  while (trailing < end && spans[trailing]!.text === PAGE_BREAK_CHAR) trailing++;
-  return trailing;
+  let skipped = trailing;
+  while (skipped < end && spans[skipped]!.text === PAGE_BREAK_CHAR) skipped++;
+  return skipped === end ? skipped : trailing;
 }
 
 function bidiOrder(
