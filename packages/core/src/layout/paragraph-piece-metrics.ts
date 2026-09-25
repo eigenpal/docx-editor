@@ -6,7 +6,7 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
-import { displayText, type ResolvedRunStyle } from './run-style.ts';
+import { displayText, runStylesEqual, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -109,6 +109,9 @@ export function measureFollowingTabSegment(
   let decimalOffset = 0;
   let sawDecimal = false;
   let afterRightToLeftLetter = false;
+  // The last visible character, while only ignored page breaks follow it; `broken` once one
+  // has. Without a break between them, a piece boundary ends the lookback as before.
+  let carried: { piece: Piece; char: string; end: number; broken: boolean } | undefined;
   const result = () => ({
     width,
     decimalOffset: sawDecimal ? decimalOffset : width,
@@ -142,7 +145,11 @@ export function measureFollowingTabSegment(
       const dot = piece.text.indexOf('.', from);
       if (dot !== -1 && dot < to) {
         sawDecimal = true;
-        const preceding = visibleSlice(dot).at(-1);
+        const preceding =
+          visibleSlice(dot).at(-1) ??
+          (carried?.broken && carried.end === piece.start && oneShapedItem(carried.piece, piece)
+            ? carried.char
+            : undefined);
         afterRightToLeftLetter = preceding !== undefined && RIGHT_TO_LEFT_LETTER.test(preceding);
         // Decimal point itself sits ON the stop — offset is the advance before it.
         decimalOffset += measure(dot);
@@ -152,8 +159,29 @@ export function measureFollowingTabSegment(
     }
     width += segmentWidth;
     if (to < piece.text.length) return result();
+    const tail = visibleSlice(to).at(-1);
+    if (tail !== undefined) carried = { piece, char: tail, end: piece.end, broken: false };
+    else if (carried?.end === piece.start && pageBreaksIgnored && piece.text === PAGE_BREAK_CHAR)
+      carried = { ...carried, end: piece.end, broken: true };
+    else carried = undefined;
   }
   return result();
+}
+
+/**
+ * Whether two pieces are the halves of one shaped item that an ignored page break split.
+ *
+ * The decimal rule reads the character before the point within its item. Bidi resolution
+ * itemizes a cell's text as though its page breaks were absent, then splits an item at each
+ * break into halves with one style, apart from the joining context each half reads. Pieces
+ * that differ in anything else (a formatting change, a bidi level) were separate items
+ * without the break too.
+ */
+function oneShapedItem(before: Piece, after: Piece): boolean {
+  const shaping = after.style.shaping;
+  if (!shaping || !before.style.shaping) return false;
+  const { context } = before.style.shaping;
+  return runStylesEqual(before.style, { ...after.style, shaping: { ...shaping, context } });
 }
 
 /**

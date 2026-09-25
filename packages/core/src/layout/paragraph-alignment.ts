@@ -299,7 +299,8 @@ export function alignSpans(
       paragraphRtl,
       pageBreaksIgnored
     ),
-    paragraphRtl
+    paragraphRtl,
+    pageBreaksIgnored
   );
 }
 

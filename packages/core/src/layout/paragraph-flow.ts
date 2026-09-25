@@ -374,7 +374,12 @@ export function breakParagraph(
           : undefined
       )
     );
-  const allPieces = bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph));
+  const allPieces = bidiPieces(
+    rawPieces,
+    paragraphRtl,
+    bidiSourceBoundaries(paragraph),
+    pageBreaksIgnored
+  );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   // A zero-width projected piece at the start offset (a `w:sym` glyph, a field-code atom)
   // owns no model text, so `end <= startOffset` would drop it. At the paragraph start no

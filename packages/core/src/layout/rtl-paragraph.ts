@@ -1,4 +1,4 @@
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
@@ -56,11 +56,17 @@ function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rt
   return embedding;
 }
 
-/** Resolve paragraph-wide levels before wrapping; source offsets remain logical. */
+/**
+ * Resolve paragraph-wide levels before wrapping; source offsets remain logical.
+ *
+ * With `pageBreaksIgnored` (a table cell), a page break is laid out as absent, so it is
+ * absent for bidi resolution, itemization and joining too; see {@link withoutIgnoredBreaks}.
+ */
 export function bidiPieces(
   pieces: readonly FieldAwarePiece[],
   rtl: boolean,
-  sourceBoundaries?: ReadonlySet<number>
+  sourceBoundaries?: ReadonlySet<number>,
+  pageBreaksIgnored = false
 ): readonly FieldAwarePiece[] {
   const text = pieces.map((piece) => piece.text).join('');
   if (
@@ -85,6 +91,119 @@ export function bidiPieces(
     )
   )
     return pieces;
+  const ignored = pageBreaksIgnored && pieces.some(isPageBreak);
+  const items = ignored
+    ? withoutIgnoredBreaks(pieces, rtl, sourceBoundaries)
+    : resolvedItems(pieces, rtl, sourceBoundaries);
+  return items ? withJoiningContext(items, ignored) : pieces;
+}
+
+const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+
+/**
+ * Resolve the pieces as though every page break were absent, then put the breaks back.
+ *
+ * Inside a table cell a page break has no geometry, so the text on its two sides must read as
+ * the text without it. As a whitespace character (UAX #9 class WS) it split a number into
+ * two digit groups that reordered separately, and took a level of its own that displaced a
+ * tab. Here it acts as UAX #9 X9 treats a boundary neutral (BN): it is removed before
+ * resolution, and then takes the level of a logical neighbour. The source pieces on its two
+ * sides coalesce and itemize as one, so a shaped item the break falls inside is split at the
+ * break into halves with one style. Every piece keeps its authored source offsets.
+ */
+function withoutIgnoredBreaks(
+  pieces: readonly FieldAwarePiece[],
+  rtl: boolean,
+  sourceBoundaries: ReadonlySet<number> | undefined
+): FieldAwarePiece[] | null {
+  // Each break is one UTF-16 unit (the caller refuses pieces whose text and range differ);
+  // `at` is where it sits in the offsets without breaks.
+  const breaks: { piece: FieldAwarePiece; at: number }[] = [];
+  const kept: FieldAwarePiece[] = [];
+  for (const piece of pieces) {
+    const removed = breaks.length;
+    if (isPageBreak(piece)) breaks.push({ piece, at: piece.start - removed });
+    else
+      kept.push(
+        removed ? { ...piece, start: piece.start - removed, end: piece.end - removed } : piece
+      );
+  }
+  const boundaries = sourceBoundaries
+    ? new Set(
+        [...sourceBoundaries].map(
+          (boundary) => boundary - breaks.filter(({ piece }) => piece.start < boundary).length
+        )
+      )
+    : undefined;
+  const items = resolvedItems(kept, rtl, boundaries);
+  if (!items) return null;
+  const result: FieldAwarePiece[] = [];
+  let next = 0;
+  const placeBreaks = (at: number) => {
+    for (; next < breaks.length && breaks[next]!.at <= at; next++) result.push(breaks[next]!.piece);
+  };
+  for (const item of items) {
+    placeBreaks(item.start);
+    let from = item.start;
+    // `next` counts the breaks already placed, which is the shift back to source offsets.
+    const slice = (to: number) => {
+      result.push({
+        ...item,
+        text: item.text.slice(from - item.start, to - item.start),
+        start: from + next,
+        end: to + next,
+      });
+      from = to;
+    };
+    while (next < breaks.length && breaks[next]!.at < item.end) {
+      slice(breaks[next]!.at);
+      placeBreaks(from);
+    }
+    slice(item.end);
+  }
+  placeBreaks(Infinity);
+  // The level of the logical neighbour: the following text, else (trailing breaks) the last
+  // text. A caret at an offset sits on the span that starts there, so a break placed at the
+  // leading edge of the text after it keeps each caret where the text without it puts it.
+  let neighbour: FieldAwarePiece | undefined;
+  for (const piece of result) if (!isPageBreak(piece)) neighbour = piece;
+  for (let index = result.length - 1; index >= 0; index--) {
+    const piece = result[index]!;
+    if (!isPageBreak(piece)) {
+      neighbour = piece;
+      continue;
+    }
+    const shaping = neighbour?.style.shaping;
+    const level = shaping?.level ?? (rtl ? 1 : 0);
+    const runDirection = neighbour
+      ? shaping?.runDirection
+      : runIsRtl(piece.props)
+        ? ('rtl' as const)
+        : ('ltr' as const);
+    result[index] = {
+      ...piece,
+      style: {
+        ...piece.style,
+        shaping: {
+          script: 'Zyyy',
+          direction: level % 2 ? ('rtl' as const) : ('ltr' as const),
+          level,
+          baseLevel: rtl ? 1 : 0,
+          ...(runDirection ? { runDirection } : {}),
+        },
+      },
+    };
+  }
+  return result;
+}
+
+/** Levels, script items and shaping styles for pieces that bidi resolution accepts. */
+function resolvedItems(
+  pieces: readonly FieldAwarePiece[],
+  rtl: boolean,
+  sourceBoundaries: ReadonlySet<number> | undefined
+): FieldAwarePiece[] | null {
+  const text = pieces.map((piece) => piece.text).join('');
   // Contiguous runs with the same w:rtl state share one directional context.
   // Unmarked runs use LTR context; strong Arabic and Arabic-Indic digits retain
   // their Unicode classes inside it. Paragraph bidi still controls outer layout.
@@ -97,7 +216,7 @@ export function bidiPieces(
     try {
       items = itemizeScriptFontSlots(piece.text, offset, embedding);
     } catch {
-      return pieces;
+      return null;
     }
     for (const item of items) {
       // UAX #9 L1: a segment separator is reset to the paragraph embedding level.
@@ -125,7 +244,7 @@ export function bidiPieces(
     }
     offset += piece.text.length;
   }
-  return withJoiningContext(result);
+  return result;
 }
 
 /** Scripts whose letters change form with their neighbours (Unicode joining types). */
@@ -153,12 +272,29 @@ const JOINING_SCRIPTS: ReadonlySet<string> = new Set([
  * side. Only the edge word carries the outside context. Line breaks come later; a word does
  * not break mid-word, so a boundary inside one keeps both halves on one line. Context changes
  * glyph forms only: a kern or cursive offset between the two halves is not applied.
+ *
+ * With `breaksIgnored`, a page break between two pieces is absent: the pieces on its two
+ * sides join as they would without it.
  */
-function withJoiningContext(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
+function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): FieldAwarePiece[] {
   if (!pieces.some((piece) => JOINING_SCRIPTS.has(piece.style.shaping?.script ?? ''))) {
     return pieces;
   }
   const levelOf = (piece: FieldAwarePiece | undefined) => piece?.style.shaping?.level;
+  // The adjacent piece in `step` direction, stepping over contiguous ignored breaks.
+  const neighbourOf = (index: number, step: -1 | 1) => {
+    let at = index + step;
+    let edge = step < 0 ? pieces[index]!.start : pieces[index]!.end;
+    for (; breaksIgnored && isPageBreak(pieces[at]); at += step) {
+      const next = pieces[at]!;
+      if ((step < 0 ? next.end : next.start) !== edge) return undefined;
+      edge = step < 0 ? next.start : next.end;
+    }
+    const neighbour = pieces[at];
+    return neighbour && (step < 0 ? neighbour.end : neighbour.start) === edge
+      ? neighbour
+      : undefined;
+  };
   const result: FieldAwarePiece[] = [];
   pieces.forEach((piece, index) => {
     const shaping = piece.style.shaping;
@@ -166,13 +302,12 @@ function withJoiningContext(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
       result.push(piece);
       return;
     }
-    const previous = pieces[index - 1];
-    const next = pieces[index + 1];
+    const previous = neighbourOf(index, -1);
+    const next = neighbourOf(index, 1);
     // Nothing joins across whitespace, so a boundary with a space on either side needs none.
     const before =
       previous &&
       levelOf(previous) === shaping.level &&
-      previous.end === piece.start &&
       !BREAKS_JOINING.test(previous.text.slice(-1)) &&
       !BREAKS_JOINING.test(piece.text.slice(0, 1))
         ? previous.text.slice(-MAX_SHAPING_CONTEXT)
@@ -180,7 +315,6 @@ function withJoiningContext(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
     const after =
       next &&
       levelOf(next) === shaping.level &&
-      next.start === piece.end &&
       !BREAKS_JOINING.test(piece.text.slice(-1)) &&
       !BREAKS_JOINING.test(next.text.slice(0, 1))
         ? next.text.slice(0, MAX_SHAPING_CONTEXT)
@@ -231,20 +365,43 @@ function withJoiningContext(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
 /** Characters no joining script joins across. */
 const BREAKS_JOINING = /\s/u;
 
+/**
+ * Where the line-end whitespace that UAX #9 L1 resets to the paragraph level starts in
+ * `spans[start, end)`. With `pageBreaksIgnored`, a page break directly after visible text is
+ * not line-end whitespace: without the break that text ends the line, so the break keeps its
+ * level and stays beside it.
+ */
+function lineEndWhitespaceStart(
+  spans: readonly StyleSpanRecord[],
+  start: number,
+  end: number,
+  pageBreaksIgnored: boolean
+): number {
+  let trailing = end;
+  while (
+    trailing > start &&
+    Array.from(spans[trailing - 1]!.text).every((character) =>
+      ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(character))
+    )
+  )
+    trailing--;
+  if (!pageBreaksIgnored || trailing === start) return trailing;
+  while (trailing < end && spans[trailing]!.text === PAGE_BREAK_CHAR) trailing++;
+  return trailing;
+}
+
 function bidiOrder(
   spans: readonly StyleSpanRecord[],
   levels: number[],
   start: number,
   end: number,
-  rtl: boolean
+  rtl: boolean,
+  pageBreaksIgnored: boolean
 ): number[] {
   for (
-    let index = end - 1;
-    index >= start &&
-    Array.from(spans[index]!.text).every((character) =>
-      ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(character))
-    );
-    index--
+    let index = lineEndWhitespaceStart(spans, start, end, pageBreaksIgnored);
+    index < end;
+    index++
   )
     levels[index] = rtl ? 1 : 0;
   return visualOrderOfLevels(levels, start, end);
@@ -282,7 +439,8 @@ export function visualOrderOfLevels(
 /** UAX #9 L1/L2 at the line boundary. Keep the array in source order for selection. */
 export function reorderBidiSpans(
   spans: readonly StyleSpanRecord[],
-  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1)
+  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
+  pageBreaksIgnored = false
 ): readonly StyleSpanRecord[] {
   if (!spans.some((s) => s.style.shaping)) return spans;
   // Exclusion passages have fixed physical gaps. Reorder only within each passage.
@@ -291,7 +449,8 @@ export function reorderBidiSpans(
     let start = 0;
     for (let end = 1; end <= spans.length; end++) {
       if (end < spans.length && !(spans[end]!.wrapAdvanceBefore! > 0)) continue;
-      for (const span of reorderBidiSpans(spans.slice(start, end), paragraphRtl)) result.push(span);
+      for (const span of reorderBidiSpans(spans.slice(start, end), paragraphRtl, pageBreaksIgnored))
+        result.push(span);
       start = end;
     }
     return result;
@@ -299,18 +458,12 @@ export function reorderBidiSpans(
   const levels = spans.map((s) => s.style.shaping?.level ?? 0);
   const order: number[] = [];
   if (!spans.every((span) => span.style.shaping?.runDirection !== undefined)) {
-    for (const index of bidiOrder(spans, levels, 0, spans.length, paragraphRtl)) order.push(index);
+    for (const index of bidiOrder(spans, levels, 0, spans.length, paragraphRtl, pageBreaksIgnored))
+      order.push(index);
   } else {
     // L1 puts line-ending whitespace back in the paragraph context, outside
     // the run-direction group whose visible text precedes it.
-    let trailing = spans.length;
-    while (
-      trailing > 0 &&
-      Array.from(spans[trailing - 1]!.text).every((character) =>
-        ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(character))
-      )
-    )
-      trailing--;
+    const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
     const directionAt = (index: number) =>
       index >= trailing ? paragraphRtl : spans[index]!.style.shaping?.runDirection === 'rtl';
     const groups: Array<{ start: number; end: number; rtl: boolean }> = [];
@@ -325,7 +478,14 @@ export function reorderBidiSpans(
     // internal Unicode order. A numeric LTR group remains intact beside an RTL run.
     if (paragraphRtl) groups.reverse();
     for (const group of groups) {
-      for (const index of bidiOrder(spans, levels, group.start, group.end, group.rtl))
+      for (const index of bidiOrder(
+        spans,
+        levels,
+        group.start,
+        group.end,
+        group.rtl,
+        pageBreaksIgnored
+      ))
         order.push(index);
     }
   }
