@@ -22,6 +22,9 @@ export type DeepPartial<T> = {
 export const en: LocaleStrings;
 
 // @public
+export const es: PartialLocaleStrings;
+
+// @public
 export const fr: PartialLocaleStrings;
 
 // @public
@@ -37,7 +40,7 @@ export const id: PartialLocaleStrings;
 export function isApplePlatform(): boolean;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;

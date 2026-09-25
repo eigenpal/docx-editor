@@ -77,6 +77,7 @@ const LANG_DISPLAY = new Intl.DisplayNames(['en'], { type: 'language' });
 const LOCALE_NAME_OVERRIDES = {
   en: 'English',
   de: 'German',
+  es: 'Spanish',
   he: 'Hebrew',
   pl: 'Polish',
   'pt-BR': 'Portuguese (Brazil)',
