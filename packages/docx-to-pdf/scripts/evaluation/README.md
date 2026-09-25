@@ -49,42 +49,24 @@ The browser recipe checks pointer placement, keyboard insertion, undo/redo, save
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.
 
-## Fast pagination and text screening
+## Layout and text checks
 
-`layout-summary.ts input.docx output.json` opens the production font-backed session
-and records page counts and logical text without painting or writing a PDF.
-Text records include lines, stories, source ranges, and span positions in layout points.
-Positions precede paint transforms; rotated content needs PDF evidence for exact highlighting.
-The record includes table text, page furniture, and textboxes through the export traversal.
-Whitespace tokenization joins styled spans within each line. It can differ from PDF extraction.
-`compare_layout` reports this separate scope and bounded excerpts with candidate source locations.
-It does not certify visual fidelity. Use the same TypeScript configuration as `export.ts`.
+`layout-summary.ts input.docx output.json` records page counts, logical text, and source locations.
+It uses the export session without creating a PDF. Use the TypeScript configuration shown for `export.ts`.
+`layout-worker.ts` accepts the same paths in newline-delimited JSON requests.
+The caller must enforce process time and memory limits.
 
-`quick_text.py pdf input.pdf index.json.gz` extracts words without rendering pages.
-`quick_text.py measurement measurement.json.gz index.json.gz` reuses an existing
-PDF measurement. Both produce a versioned dictionary and per-page token arrays.
-The evaluator caches these indexes by PDF content identity and extraction version.
-Bump `INDEX_VERSION` when extraction or normalization changes. Matcher changes use
-an independent comparison identity and do not invalidate reference indexes.
+`quick_text.py pdf input.pdf index.json.gz` creates a text index.
+Use `measurement` instead of `pdf` to read an existing compressed measurement.
+Indexes and comparisons have separate version identities.
 
-The Python `compare` entry point counts word occurrences in linear time. It reports
-page-count error, missing and extra occurrences, and the minimum number of matched
-occurrences that must move between pages. Repeated words can make the exact movement
-ambiguous. This lower bound does not replace geometric correspondence. Ordered
-page sequences distinguish rearranged text from identical text. NFC normalization
-preserves case, punctuation, hyphens, and repeated words.
+These checks report pagination and text differences. Logical text and PDF extraction can differ.
+Repeated words make occurrence locations ambiguous. Layout positions precede paint transforms.
+Use PDF evidence for visual validation. Failed or missing inputs never count as passes.
 
 Run synthetic checks with:
 
 ```sh
 python -m unittest discover -s packages/docx-to-pdf/scripts/evaluation -p 'test_quick_text.py'
-bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts
+bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts packages/docx-to-pdf/scripts/evaluation/layout-worker.test.ts
 ```
-
-Missing or invalid inputs remain failures. Text screening does not certify visual
-fidelity. Use the regular PDF comparison for geometry, drawings, and final evidence.
-
-`layout-worker.ts` accepts newline-delimited JSON requests with `input` and `output`
-paths. It returns one status per request and disposes each document session. The
-caller controls process recycling, memory limits, deadlines, and concurrent workers.
-The process shares only the engine's existing caches between requests.
