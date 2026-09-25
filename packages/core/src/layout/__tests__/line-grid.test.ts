@@ -61,6 +61,28 @@ function cellLineHeights(layout: ReturnType<typeof layoutSemanticDocument>): num
     )
   );
 }
+function lineBaselines(
+  layout: ReturnType<typeof layoutSemanticDocument>,
+  inCell: boolean
+): number[] {
+  return layout.pages.flatMap((page) =>
+    page.fragments.flatMap((fragment: Fragment) => {
+      const paragraphs =
+        fragment.kind === 'paragraph'
+          ? inCell
+            ? []
+            : [fragment]
+          : fragment.kind === 'table' && inCell
+            ? fragment.rows.flatMap((row) =>
+                row.cells.flatMap((cell) =>
+                  cell.blocks.filter((block) => block.kind === 'paragraph')
+                )
+              )
+            : [];
+      return paragraphs.flatMap((block) => block.lines.map((line) => line.baseline));
+    })
+  );
+}
 function settings(compat: string): OoxmlElement {
   return root(
     `<w:settings xmlns:w="${W}"><w:compat>${compat}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`,
@@ -282,6 +304,63 @@ describe('paragraph lines in layout', () => {
         const cold = layoutSemanticDocument(part, index + 1, { measurer, styleCascade });
         expect(warm.pages).toEqual(cold.pages);
         expect(heights(warm)).toEqual([expected]);
+      });
+    }
+  );
+
+  test.each([false, true])(
+    'shared paragraph nodes follow a section grid change (cell=%s)',
+    (inCell) => {
+      // Only the section properties change: every paragraph and table node object is reused,
+      // so nothing keyed by node identity may keep the previous grid.
+      const content = inCell ? table(paragraph()) : paragraph();
+      const styleCascade = cascade('', '<w:adjustLineHeightInTable/>');
+      const heights = inCell ? cellLineHeights : bodyLineHeights;
+      const shared = documentPart(content + lines360);
+      const withSection = (sectPr: string) => {
+        const donor = documentPart(content + sectPr).root.children.find(
+          (child) => child.kind === 'body'
+        ) as OoxmlElement;
+        const body = shared.root.children.find((child) => child.kind === 'body') as OoxmlElement;
+        const children = body.children.map((child) =>
+          child.kind !== 'textValue' && child.localName === 'sectPr'
+            ? donor.children.find((c) => c.kind !== 'textValue' && c.localName === 'sectPr')!
+            : child
+        );
+        return {
+          ...shared,
+          root: {
+            ...shared.root,
+            children: shared.root.children.map((child) =>
+              child === body ? { ...body, children } : child
+            ),
+          },
+        };
+      };
+      const cache = createParagraphLayoutCache();
+      const session = createLayoutSession();
+      const revisions = [
+        [lines360, 18],
+        [grid('w:linePitch="360"'), 14],
+        [grid('w:type="lines" w:linePitch="240"'), 24],
+        [grid('w:linePitch="240"'), 14],
+        [lines360, 18],
+      ] as const;
+      revisions.forEach(([sectPr, expected], index) => {
+        const reused = withSection(sectPr) as typeof shared;
+        const warm = layoutSemanticDocument(reused, index + 1, {
+          measurer,
+          styleCascade,
+          cache,
+          session,
+        });
+        const fresh = layoutSemanticDocument(documentPart(content + sectPr), index + 1, {
+          measurer,
+          styleCascade,
+        });
+        expect(heights(warm)).toEqual([expected]);
+        expect(heights(warm)).toEqual(heights(fresh));
+        expect(lineBaselines(warm, inCell)).toEqual(lineBaselines(fresh, inCell));
       });
     }
   );

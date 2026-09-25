@@ -913,13 +913,14 @@ function layoutBlocksPass(
             options.drawingLayoutToken ||
             ''
           : options.drawingLayoutToken || '';
-    const projectionToken =
+    const projectionToken = `${
       block.kind === 'paragraph'
         ? (options.projectionTokenForParagraph?.(block) ?? '')
         : block.kind === 'table' && options.projectionTokenForParagraph
           ? (options.projectionTokenForTable?.(block) ??
             aggregateParagraphTokensForTableBlock(block, options.projectionTokenForParagraph))
-          : '';
+          : ''
+    }|${options.paragraphLineUnitPt ?? '-'}`;
     // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
     // list that continues inside a table cell has its markers there — so reading the table's
     // own id gave an empty token, and a renumbering that left the table's flow key untouched
@@ -981,7 +982,7 @@ function layoutBlocksPass(
           width: availableWidth,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? '-'}`,
+          projectionToken,
         }),
       };
     } else {
@@ -1064,7 +1065,7 @@ function layoutBlocksPass(
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? '-'}`,
+          projectionToken,
         }),
       };
     }
