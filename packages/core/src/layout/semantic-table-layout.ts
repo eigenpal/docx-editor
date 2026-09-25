@@ -113,7 +113,7 @@ import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
-import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
+import { rowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import { blockInlineEnd, bottomToTopLineEnd } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
@@ -1302,7 +1302,8 @@ export function layoutRowFragmentBounded(
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
-  const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  const authoredFloorPt = rowMinimumFloorPt(row, isContinuation, cellSpacingPt === 0, deps);
+  const minimumFits = rowTop + authoredFloorPt <= maxBottom + 0.001;
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
   const flowDeps: TableFlowDeps =
@@ -1398,7 +1399,7 @@ export function layoutRowFragmentBounded(
           cellX + Math.max(0, cellMaxBottom - rowTop) - topInset,
           exactHeightPt !== undefined || isDetached || cell.vMergeContinue,
           (right) => flowTo(right, measuringFlowDeps(flowDeps, true)).blocks,
-          isContinuation ? 0 : (atLeastHeightPt ?? 0)
+          minimumFits ? Math.max(0, authoredFloorPt - topInset - insets.bottom) : 0
         );
     const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
       cell,
@@ -1519,10 +1520,6 @@ export function layoutRowFragmentBounded(
     // content-driven, and flooring both halves counts the span twice — or past the budget.
     // A span floor already includes the row's insets through its height probe. Pad only
     // the authored minimum, then take the maximum, or merged rows count the padding twice.
-    const authoredFloorPt =
-      isContinuation || atLeastHeightPt === undefined
-        ? 0
-        : authoredRowMinimumFloorPt(atLeastHeightPt, flowed, deps.cellMinimumContentInsets);
     const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
     const minBottom = rowTop + Math.max(authoredFloorPt, spanFloorPt);
     const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;

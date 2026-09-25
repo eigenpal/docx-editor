@@ -218,9 +218,51 @@ describe('bottom-to-top table cell text', () => {
       );
     });
 
+    test('a minimum that exceeds page room does not enlarge the turned line', () => {
+      const filler = Array.from({ length: 40 }, () => paragraph('filler')).join('');
+      for (const alignment of ['left', 'center', 'right']) {
+        const result = layout(
+          filler +
+            table(
+              `<w:tr><w:trPr><w:trHeight w:val="4000" w:hRule="atLeast"/></w:trPr>` +
+                `${cell(turned, upright(alignment, 'label'))}${cell('', paragraph('side'))}</w:tr>`
+            )
+        );
+        const fragment = result.pages[0]!.fragments.find((item) => item.kind === 'table');
+        if (fragment?.kind !== 'table') throw new Error('expected table on first page');
+        const row = fragment.rows[0]!;
+        const block = row.cells[0]!.blocks[0]!;
+        if (block.kind !== 'paragraph') throw new Error('expected turned paragraph');
+        expect(block.lines[0]!.box.width).toBeLessThanOrEqual(row.cells[0]!.box.height + 0.001);
+        expect(row.box.height).toBeLessThan(30);
+      }
+    });
+
+    test('a neighbour margin contributes to centred turned text clearance', () => {
+      const result = layout(
+        table(
+          '<w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr>' +
+            cell(turned, upright('center', 'label')) +
+            cell(
+              '<w:tcMar><w:top w:w="400" w:type="dxa"/><w:bottom w:w="400" w:type="dxa"/></w:tcMar>',
+              paragraph('side')
+            ) +
+            '</w:tr>'
+        )
+      );
+      const row = firstTable(result).rows[0]!;
+      const line = turnedParagraph(result).lines[0]!;
+      const span = line.spans[0]!.box;
+      expect(row.box.height).toBeCloseTo(190, 3);
+      expect(span.x - row.cells[0]!.box.x).toBeCloseTo(
+        row.box.height - (span.x + span.width - row.cells[0]!.box.x),
+        3
+      );
+    });
+
     test('a positional tab does not give an auto row an unbounded line length', () => {
       for (const alignment of ['right', 'center']) {
-        const content = `<w:p><w:r><w:ptab w:alignment="${alignment}" w:relativeTo="margin"/><w:t>label</w:t></w:r></w:p>`;
+        const content = `<w:p><w:r><w:t>Head</w:t><w:ptab w:alignment="${alignment}" w:relativeTo="margin"/><w:t>label</w:t></w:r></w:p>`;
         for (const merged of [false, true]) {
           const result = layout(
             table(
