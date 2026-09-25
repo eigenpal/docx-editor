@@ -12,6 +12,7 @@ import {
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import {
+  cjkFonts,
   installedWordFonts,
   standInFonts,
   supplementalFonts,
@@ -50,6 +51,7 @@ export function openExportSession(
     bundledFonts,
     ...(fallbackFonts ? (Array.isArray(fallbackFonts) ? fallbackFonts : [fallbackFonts]) : []),
     supplementalFonts,
+    cjkFonts,
   ];
   return openFontBackedDocumentForExport(source, {
     ...core,

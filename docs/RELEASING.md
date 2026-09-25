@@ -21,12 +21,14 @@ The [Release workflow](../.github/workflows/release.yml) uses Changesets:
 | `@docx-editor.dev/pro`              | `packages/pro`              | Yes       |
 | `@docx-editor.dev/fonts`            | `packages/fonts`            | Yes       |
 | `@docx-editor.dev/docx-to-markdown` | `packages/docx-to-markdown` | Yes       |
+| `@docx-editor.dev/docx-to-pdf`      | `packages/docx-to-pdf`      | Yes       |
+| `@docx-editor.dev/fonts-cjk`        | `packages/fonts-cjk`        | Yes       |
 
-`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` use the EigenPal Pro License. See the [editor-api terms](../packages/editor-api/LICENSE.md) and [Pro terms](../packages/pro/LICENSE.md). Their manifests use `LicenseRef-EigenPal-Pro-Evaluation-1.0`.
+`@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, and `@docx-editor.dev/docx-to-pdf` use the EigenPal Pro License. See the [editor-api terms](../packages/editor-api/LICENSE.md), [Pro terms](../packages/pro/LICENSE.md), and [DOCX to PDF terms](../packages/docx-to-pdf/LICENSE.md). Their manifests use `LicenseRef-EigenPal-Pro-Evaluation-1.0`.
 
-Core, React, Vue, Nuxt, i18n, and DOCX to Markdown use Apache 2.0. The fonts package uses `Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License`.
+Core, React, Vue, Nuxt, i18n, and DOCX to Markdown use Apache 2.0. The fonts package uses `Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License`. The CJK font package uses `Apache-2.0 AND OFL-1.1`.
 
-The eight published packages are in a fixed group in `.changeset/config.json`. Changesets assigns them the same release version.
+The ten published packages are in a fixed group in `.changeset/config.json`. Changesets assigns them the same release version.
 
 Example applications and the Nuxt package are private workspaces (`"private": true`). They are not published to npm. Private workspace versioning and tagging are disabled in Changesets, so these workspaces do not receive release version bumps or appear in the release PR's release notes. Keep example applications private when adding them to the workspace.
 
@@ -103,7 +105,7 @@ bun run docs:json
 
 Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
 
-Review the generated release plan with `bun changeset status`. Keep all eight published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
+Review the generated release plan with `bun changeset status`. Keep all ten published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
 
 These checks cover documentation and public declarations. Before publication, also require the [Release workflow](../.github/workflows/release.yml) checks on the release commit. These include lint, type checks, unit tests, parity, licenses, translations, consumer installation, and collaboration candidate tests.
 
@@ -127,7 +129,7 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 | --- | --- |
 | npmjs.com | Trusted Publisher configured for each published `@docx-editor.dev/*` package, including `editor-api` and `docx-to-markdown`, → repo `eigenpal/docx-editor`, workflow `release.yml` |
 | `package.json` | `"publishConfig": { "access": "public" }` on each published package |
-| `.changeset/config.json` | `"access": "public"`; fixed release group for the eight published packages; private workspace versioning and tagging disabled |
+| `.changeset/config.json` | `"access": "public"`; fixed release group for the ten published packages; private workspace versioning and tagging disabled |
 | GitHub perms | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
 | GitHub secrets | `SLACK_WEBHOOK_URL` (optional — release notifications) |
 

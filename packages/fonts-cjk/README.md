@@ -10,7 +10,7 @@ Install the package next to `@docx-editor.dev/docx-to-pdf`:
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/fonts-cjk
 ```
 
-PDF export finds the package without configuration. It reads the font file only for a document that needs a CJK face.
+PDF export finds the package without configuration and uses the face as a glyph fallback for every document.
 
 If you do not install this package, PDF export can use installed Word CJK fonts, such as SimSun, Batang, and MS Gothic. If no font covers a CJK character, the export reports a `missing-glyph` diagnostic that names this package, and a strict export fails.
 

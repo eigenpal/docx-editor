@@ -11,6 +11,7 @@ import {
   importCjkFace,
   isPackageNotFound,
   packagedFontResolvers,
+  PDF_GLYPH_FALLBACKS,
   type CjkFaceLocator,
 } from '../src/font-provisioning.ts';
 import { exportPdf } from '../src/index.ts';
@@ -43,19 +44,20 @@ test('the PDF package no longer ships the CJK face and declares its package opti
   expect(pkg.dependencies['@docx-editor.dev/fonts-cjk']).toBeUndefined();
 });
 
-test('the installed package supplies the face for CJK families', async () => {
+test('the installed package supplies the face for CJK families from its own origin', async () => {
   expect((await importCjkFace())?.href).toBe(NOTO_SANS_CJK_JP_URL.href);
   const resolvers = packagedFontResolvers(async () => NOTO_SANS_CJK_JP_URL);
-  const result = await resolvers.supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' });
-  expect(result.sources.map((source) => source.request)).toEqual([
+  const request = { families: ['宋体'], defaultFamily: 'Arial' };
+  const cjk = await resolvers.cjkFonts(request);
+  expect(cjk.sources.map((source) => source.request)).toEqual([
     { family: CJK, weight: 400, style: 'normal' },
   ]);
-  expect(result.substitutions).toContainEqual({
+  expect(cjk.substitutions).toContainEqual({
     from: { family: '宋体', weight: 700, style: 'italic' },
     to: { family: CJK, weight: 400, style: 'normal' },
   });
-  const standIn = await resolvers.standInFonts({ families: ['宋体'], defaultFamily: 'Arial' });
-  expect(standIn).toEqual({ sources: [], substitutions: [] });
+  expect(await resolvers.supplementalFonts(request)).toEqual({ sources: [], substitutions: [] });
+  expect(await resolvers.standInFonts(request)).toEqual({ sources: [], substitutions: [] });
   expect(resolvers.isGenericSubstitution('宋体', CJK)).toBe(false);
   expect(resolvers.missingGlyphHint('日本語')).toBe('');
 });
@@ -65,10 +67,9 @@ test('without the package, CJK families take the reported stand-in and glyphs na
   const resolvers = packagedFontResolvers(locator.locate);
   // Before any lookup, nothing is known to be missing.
   expect(resolvers.missingGlyphHint('日本語')).toBe('');
-  const result = await resolvers.supplementalFonts({
-    families: ['宋体', 'MS Mincho', CJK, 'Cambria Math'],
-    defaultFamily: 'Arial',
-  });
+  const request = { families: ['宋体', 'MS Mincho', CJK, 'Cambria Math'], defaultFamily: 'Arial' };
+  expect(await resolvers.cjkFonts(request)).toEqual({ sources: [] });
+  const result = await resolvers.supplementalFonts(request);
   expect(result.sources.map((source) => source.request.family)).toEqual(['Noto Sans Math']);
   expect(result.substitutions.every((s) => s.to.family !== CJK)).toBe(true);
   const standIn = await resolvers.standInFonts({
@@ -89,33 +90,70 @@ test('without the package, CJK families take the reported stand-in and glyphs na
     `; ${HINT} for Chinese, Japanese, and Korean text`
   );
   expect(resolvers.missingGlyphHint('한국어')).toContain(HINT);
-  expect(resolvers.missingGlyphHint('\u{20000}')).toContain(HINT);
+  expect(resolvers.missingGlyphHint(String.fromCodePoint(0x20000))).toContain(HINT);
   expect(resolvers.missingGlyphHint('Hello')).toBe('');
   expect(resolvers.missingGlyphHint('😀')).toBe('');
   expect(locator.calls).toBe(1);
 });
 
-test('a document that needs no CJK face never looks for the package', async () => {
+test('a request that names no CJK family never looks for the package', async () => {
   const locator = counted(async () => null);
   const resolvers = packagedFontResolvers(locator.locate);
-  await resolvers.supplementalFonts({ families: ['Helvetica'], defaultFamily: 'Arial' });
-  await resolvers.standInFonts({ families: ['Montserrat'], defaultFamily: 'Arial' });
+  const request = { families: ['Helvetica', 'Montserrat'], defaultFamily: 'Arial' };
+  await resolvers.supplementalFonts(request);
+  await resolvers.cjkFonts(request);
+  await resolvers.standInFonts(request);
   expect(locator.calls).toBe(0);
 });
 
-test('a broken package fails the lookup loudly and then reads as absent', async () => {
-  const broken = new Error('Invalid packaged face');
-  const locator = counted(async () => {
-    throw broken;
+// Core adds every glyph fallback to the families a resolver receives, so a real export always
+// asks for the CJK face. Its failure must stay in its own origin.
+const exportFamilies = [...PDF_GLYPH_FALLBACKS.map((face) => face.family), 'Calibri'];
+
+for (const [name, locate] of [
+  [
+    'a broken package',
+    async () => {
+      throw new TypeError('@docx-editor.dev/fonts-cjk does not export NOTO_SANS_CJK_JP_URL');
+    },
+  ],
+  [
+    'a deployment without the package assets',
+    async () => new URL('./missing-assets/NotoSansCJKjp-Regular.otf', import.meta.url),
+  ],
+] as const)
+  test(`${name} fails the CJK origin alone and then reads as absent`, async () => {
+    const locator = counted(locate);
+    const resolvers = packagedFontResolvers(locator.locate);
+    const request = { families: exportFamilies, defaultFamily: 'Arial' };
+    const supplemental = await resolvers.supplementalFonts(request);
+    expect(supplemental.sources.map((source) => source.request.family)).toEqual([
+      'Noto Sans Symbols 2',
+      'Noto Sans Math',
+      'Noto Sans Arabic',
+      'Twemoji Mozilla',
+      'Noto Emoji',
+    ]);
+    await expect(resolvers.cjkFonts(request)).rejects.toThrow(
+      '@docx-editor.dev/fonts-cjk could not supply its face'
+    );
+    await expect(resolvers.cjkFonts(request)).rejects.toThrow(
+      '@docx-editor.dev/fonts-cjk could not supply its face'
+    );
+    const standIn = await resolvers.standInFonts({ families: ['宋体'], defaultFamily: 'Arial' });
+    expect(standIn.substitutions[0]?.to.family).toBe('Liberation Sans');
+    expect(resolvers.isGenericSubstitution('宋体', 'Liberation Sans')).toBe(true);
+    expect(resolvers.missingGlyphHint('中文')).toContain(HINT);
+    expect(locator.calls).toBe(1);
   });
-  const resolvers = packagedFontResolvers(locator.locate);
-  await expect(
-    resolvers.supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' })
-  ).rejects.toBe(broken);
-  const standIn = await resolvers.standInFonts({ families: ['宋体'], defaultFamily: 'Arial' });
-  expect(standIn.substitutions[0]?.to.family).toBe('Liberation Sans');
-  expect(resolvers.missingGlyphHint('中文')).toContain(HINT);
-  expect(locator.calls).toBe(1);
+
+test('a cancelled read does not mark the package absent', async () => {
+  const resolvers = packagedFontResolvers(async () => NOTO_SANS_CJK_JP_URL);
+  const request = { families: ['宋体'], defaultFamily: 'Arial', signal: AbortSignal.abort() };
+  await expect(resolvers.cjkFonts(request)).rejects.toThrow();
+  expect(resolvers.missingGlyphHint('中文')).toBe('');
+  const cjk = await resolvers.cjkFonts({ families: ['宋体'], defaultFamily: 'Arial' });
+  expect(cjk.sources).toHaveLength(1);
 });
 
 test('only "the package itself is not installed" reads as absent', () => {

@@ -3,8 +3,7 @@
  * Japanese, and Korean text in `@docx-editor.dev/docx-to-pdf`.
  *
  * The face is about 16 MB, so it ships in its own package. When this package is installed
- * next to `@docx-editor.dev/docx-to-pdf`, PDF export finds it without configuration. It reads
- * the file only for a document that needs a CJK face.
+ * next to `@docx-editor.dev/docx-to-pdf`, PDF export finds it without configuration.
  *
  * Node.js only: the face is a file beside this module, not a bundled asset.
  *
