@@ -69,7 +69,8 @@
       "listFormatting": "עיצוב רשימה",
       "image": "תמונה",
       "table": "טבלה",
-      "format": null
+      "format": null,
+      "direction": "כיוון טקסט"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": "כיוון",
+      "directionLtr": "משמאל לימין",
+      "directionRtl": "מימין לשמאל"
     }
   },
   "comments": {

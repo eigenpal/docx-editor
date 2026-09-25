@@ -357,6 +357,24 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    id: 'direction',
+    labelKey: 'formattingBar.groups.direction',
+    controls: [
+      {
+        id: 'ltr',
+        labelKey: 'toolbar.leftToRight',
+        paths: GENERATED_ICON_PATHS['format_textdirection_l_to_r'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'rtl',
+        labelKey: 'toolbar.rightToLeft',
+        paths: GENERATED_ICON_PATHS['format_textdirection_r_to_l'],
+        state: { kind: 'command' },
+      },
+    ],
+  },
+  {
     id: 'list',
     labelKey: 'formattingBar.groups.listFormatting',
     controls: [
@@ -679,6 +697,7 @@ export type ChromeGroupId =
   | 'text'
   | 'script'
   | 'alignment'
+  | 'direction'
   | 'list'
   | 'format'
   | 'review'
@@ -716,6 +735,8 @@ export type ChromeSlotId =
   | 'alignment.center'
   | 'alignment.right'
   | 'alignment.justify'
+  | 'direction.ltr'
+  | 'direction.rtl'
   | 'list.bullet'
   | 'list.numbered'
   | 'list.outdent'
@@ -952,10 +973,6 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
     ],
   },
   {
-    // Every Format row is a WIRED engine command, which is why the direction pair
-    // (left-to-right / right-to-left) is not here: `w:bidi` is not in the command
-    // vocabulary, and two permanently refused rows would be the whole visible half of
-    // this menu.
     id: 'format',
     labelKey: 'toolbar.format',
     entries: [
@@ -968,6 +985,9 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'alignment.center' },
       { kind: 'item', slot: 'alignment.right' },
       { kind: 'item', slot: 'alignment.justify' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'direction.ltr' },
+      { kind: 'item', slot: 'direction.rtl' },
       { kind: 'separator' },
       // A SECOND route to the Paragraph dialog, the way `file.pageSetup` sits in the File
       // menu. The line-spacing menu is its natural home, but that control collapses into

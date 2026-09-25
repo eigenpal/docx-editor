@@ -201,6 +201,35 @@ test('custom paragraph rule changes use the same unit rebasing', async () => {
   });
   expect(view.getByRole('status').textContent).toBe('12');
 });
+function CustomDirection() {
+  const dialog = useParagraphDialog();
+  return (
+    <>
+      <output>{dialog.values.direction}</output>
+      <button onClick={() => dialog.setValue('direction', 'rtl')}>Make RTL</button>
+    </>
+  );
+}
+test('a custom paragraph layout reads and sets the direction', async () => {
+  const { view, editor } = mount(
+    <Paragraph open onClose={() => {}}>
+      <Paragraph.Field name="direction">
+        <CustomDirection />
+      </Paragraph.Field>
+    </Paragraph>
+  );
+  // The custom control replaces the packaged select, and reads the seeded draft.
+  expect(view.queryByLabelText('Direction')).toBeNull();
+  expect(view.getByRole('status').textContent).toBe('ltr');
+  await act(async () => {
+    fireEvent.click(view.getByText('Make RTL'));
+  });
+  expect(view.getByRole('status').textContent).toBe('rtl');
+  await act(async () => {
+    fireEvent.click(view.getByText('OK'));
+  });
+  expect(editor().snapshot().formatting?.direction).toBe('rtl');
+});
 function TogglePage() {
   const [open, setOpen] = useState(false);
   return (

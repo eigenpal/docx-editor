@@ -3563,7 +3563,7 @@ export const DocxEditorParagraphDialog: {
     preset: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
+        name: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
     }>;
 };
 
@@ -4038,6 +4038,8 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Italic: ToolbarPartComponent;
     // (undocumented)
+    readonly LeftToRight: ToolbarPartComponent;
+    // (undocumented)
     readonly LineSpacing: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Link: ToolbarPartComponent;
@@ -4049,6 +4051,8 @@ export interface DocxEditorToolbarNamespace {
     readonly Redo: ToolbarPartComponent;
     // (undocumented)
     readonly Reviewers: typeof ToolbarReviewers;
+    // (undocumented)
+    readonly RightToLeft: ToolbarPartComponent;
     // (undocumented)
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
@@ -5339,6 +5343,8 @@ export interface PaginatedDocxEditorHandle {
     selectAll(): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
+        readonly paragraphDirection?: 'ltr' | 'rtl';
+        readonly physicalAlignment?: boolean;
     }): void;
     // (undocumented)
     setRunProperty(localName: string, attributes?: Record<string, string>): void;

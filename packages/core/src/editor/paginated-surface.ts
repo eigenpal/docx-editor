@@ -232,12 +232,9 @@ import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import { createSurfaceFormatPainter } from './surface-format-painter.ts';
-import {
-  authoredRunPropertiesAt,
-  mergedProperties,
-  mergedMultiSettingProperty,
-  type SurfaceProperty,
-} from './surface-formatting.ts';
+import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatting.ts';
+import { complexScriptAt, mergedRunWrite } from '../store/store/direct-properties.ts';
+import { bindDirectionChord, createDirectionChordHandler } from './surface-direction-chord.ts';
 import {
   absorbPlaceholderControls,
   createPointerController,
@@ -757,10 +754,10 @@ export function mountPaginatedSurface(
         // Merged per attribute for the multi-setting properties, exactly as the selection
         // path does: a font armed at a caret and then typed must keep the run's other font
         // slots, or the two halves of one feature disagree.
-        properties: armed.properties.reduce(
-          (merged, property) =>
-            mergedProperties(merged, mergedMultiSettingProperty(merged, property)),
-          [...armed.base]
+        properties: mergedRunWrite(
+          armed.base,
+          armed.properties,
+          complexScriptAt(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId, offset)
         ),
       },
     ];
@@ -4619,10 +4616,14 @@ export function mountPaginatedSurface(
       // Persist the insertion face on the marks of an end split. Stored marks alone
       // disappear on a click away and cannot give the empty tail its line height.
       // Only direct properties are copied, leaving the follower style free to inherit.
-      const markProperties = armed.properties.reduce(
-        (merged, property) =>
-          mergedProperties(merged, mergedMultiSettingProperty(merged, property)),
-        [...armed.base]
+      const markProperties = mergedRunWrite(
+        armed.base,
+        armed.properties,
+        complexScriptAt(
+          partOfNodeId(session, position.paragraphId) ?? session.part(),
+          position.paragraphId,
+          position.offset
+        )
       );
       const markOps: TreeDocOp[] =
         endsParagraph && editingMode === 'edit' && markProperties.length > 0
@@ -5671,6 +5672,7 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
         pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onKeyDown);
+        unbindDirectionChord();
         pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
         pagesLayer.removeEventListener('copy', onCopy as EventListener);
         pagesLayer.removeEventListener('cut', onCut as EventListener);
@@ -5917,7 +5919,12 @@ export function mountPaginatedSurface(
       scheduler.flush();
     },
   });
+  const directionChord = createDirectionChordHandler(
+    surface,
+    () => (partOfNodeId(session, selection.head.paragraphId) ?? session.part()).root
+  );
   const onKeyDown = (event: KeyboardEvent): void => {
+    directionChord.keydown(event);
     if (legacyDropdownInteraction?.keydown(event)) return;
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
@@ -6007,6 +6014,7 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
   pagesLayer.addEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onKeyDown);
+  const unbindDirectionChord = bindDirectionChord(pagesLayer, directionChord);
   pagesLayer.addEventListener('beforeinput', onBeforeInput as EventListener);
   pagesLayer.addEventListener('copy', onCopy as EventListener);
   pagesLayer.addEventListener('cut', onCut as EventListener);

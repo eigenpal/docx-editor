@@ -501,6 +501,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;

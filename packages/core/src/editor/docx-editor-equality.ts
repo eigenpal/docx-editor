@@ -39,6 +39,7 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   superscript: true,
   subscript: true,
   alignment: true,
+  direction: true,
   styleId: true,
   lineSpacing: true,
   spaceBeforePt: true,
@@ -59,6 +60,7 @@ void COMPARED_FORMATTING_KEYS;
  */
 const COMPARED_DISAGREEMENT_KEYS: readonly (keyof ParagraphDisagreements)[] = [
   'alignment',
+  'direction',
   'spaceBeforePt',
   'spaceAfterPt',
   'lineSpacing',
@@ -85,6 +87,7 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.fontFamily !== b.fontFamily ||
     a.fontSizePt !== b.fontSizePt ||
     a.alignment !== b.alignment ||
+    a.direction !== b.direction ||
     a.styleId !== b.styleId ||
     a.spaceBeforePt !== b.spaceBeforePt ||
     a.spaceAfterPt !== b.spaceAfterPt ||

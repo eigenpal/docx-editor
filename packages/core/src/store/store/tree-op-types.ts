@@ -113,6 +113,9 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
   // it (`paragraphContextualSpacing`); until now nothing could write it.
   'contextualSpacing',
   'shd', // shading
+  // Paragraph base direction: Word's Left-to-Right / Right-to-Left Text Direction. On/off
+  // only; `w:val="0"` is the explicit left-to-right that overrides a right-to-left style.
+  'bidi',
 ] as const;
 
 export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];

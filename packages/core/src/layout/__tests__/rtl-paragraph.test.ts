@@ -4,6 +4,7 @@ import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { paragraphAlignment } from '../paragraph-flow.ts';
+import { jcValueForAlignment } from '../paragraph-alignment.ts';
 import { spanOffsetX, hitTestPage, lineEndOffset } from '../semantic-hit-test.ts';
 import { paragraphIsRtl, reorderBidiSpans } from '../rtl-paragraph.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
@@ -33,6 +34,8 @@ function layout(text: string, pPr = '', table = false, width = 120, rPr = '') {
   );
 }
 
+const bidiJc = (val: string) => [{ localName: 'bidi' }, { localName: 'jc', attributes: { val } }];
+
 test('inherited bidi gives logical start alignment and permits an explicit off override', () => {
   expect(paragraphIsRtl([{ localName: 'bidi' }])).toBe(true);
   expect(
@@ -45,10 +48,23 @@ test('inherited bidi gives logical start alignment and permits an explicit off o
   expect(
     paragraphAlignment([{ localName: 'bidi' }, { localName: 'jc', attributes: { val: 'end' } }])
   ).toBe('left');
-  expect(
-    paragraphAlignment([{ localName: 'bidi' }, { localName: 'jc', attributes: { val: 'left' } }])
-  ).toBe('left');
+  // Word 16 reads `left`/`right` as the leading and trailing edges of a bidi paragraph.
+  expect(paragraphAlignment(bidiJc('left'))).toBe('right');
+  expect(paragraphAlignment(bidiJc('right'))).toBe('left');
+  expect(paragraphAlignment(bidiJc('lowKashida'))).toBe('both');
+  expect(paragraphAlignment([{ localName: 'jc', attributes: { val: 'left' } }])).toBe('left');
   expect(linesOf(layout('abc', '<w:bidi w:val="0"/>'))[0]!.contentX).toBe(0);
+});
+
+test('a physical alignment request is spelled per paragraph direction', () => {
+  expect(jcValueForAlignment('right', true)).toBe('left');
+  expect(jcValueForAlignment('left', true)).toBe('right');
+  expect(jcValueForAlignment('right', false)).toBe('right');
+  expect(jcValueForAlignment('justify', true)).toBe('both');
+  for (const align of ['left', 'right', 'center', 'both'] as const) {
+    const val = jcValueForAlignment(align, true);
+    expect(paragraphAlignment(bidiJc(val))).toBe(align);
+  }
 });
 
 test.each([false, true])(

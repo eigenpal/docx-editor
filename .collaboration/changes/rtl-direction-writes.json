@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph writes could not name w:bidi, and formatting writes named only the Latin run properties.",
+  "after": "Paragraph writes can set or clear w:bidi, and run formatting on w:rtl or w:cs runs also writes w:bCs, w:iCs, w:szCs, and the w:rFonts cs slot.",
+  "reason": "Collaboration replicates canonical primitive journals. The new writes produce ordinary w:pPr and w:rPr child elements and attributes that released readers already store and interpret, because documents and paste already contain them. No protocol, shared schema, repair, or canonical model rule changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/store/__tests__/complex-script-companions.test.ts",
+    "packages/core/src/editor/__tests__/paragraph-direction.test.ts"
+  ],
+  "changeset": "rtl-paragraph-direction",
+  "migration": null
+}

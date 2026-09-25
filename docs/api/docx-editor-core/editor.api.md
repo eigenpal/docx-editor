@@ -5,6 +5,9 @@
 ```ts
 
 // @public
+export function alignmentAfterDirectionChange(alignment: ParagraphDialogFields['alignment']): ParagraphDialogFields['alignment'];
+
+// @public
 export interface AnchorFrameOrigin {
     // (undocumented)
     readonly x: number;
@@ -270,6 +273,24 @@ export const CHROME_GROUPS: readonly [{
     }];
     readonly id: "alignment";
     readonly labelKey: "formattingBar.groups.alignment";
+}, {
+    readonly controls: readonly [{
+        readonly id: "ltr";
+        readonly labelKey: "toolbar.leftToRight";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly id: "rtl";
+        readonly labelKey: "toolbar.rightToLeft";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }];
+    readonly id: "direction";
+    readonly labelKey: "formattingBar.groups.direction";
 }, {
     readonly controls: readonly [{
         readonly id: "bullet";
@@ -824,7 +845,7 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
 }
 
 // @public
-export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
+export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'direction' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
 
 // @public
 export interface ChromeMenu {
@@ -899,7 +920,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1976,9 +1997,7 @@ export interface PaginatedSurface {
     }): boolean;
     setParagraphFormat(update: SurfaceParagraphFormat): boolean;
     setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
-    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
-        readonly mergeAttributes?: boolean;
-    }): void;
+    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: Pick<ParagraphPropertyEdit, 'mergeAttributes' | 'physicalAlignment' | 'paragraphDirection'>): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
         readonly formattingKinds?: readonly string[];
@@ -2091,6 +2110,8 @@ export interface ParagraphDialogFields {
     // (undocumented)
     contextualSpacing: boolean;
     // (undocumented)
+    direction: 'ltr' | 'rtl';
+    // (undocumented)
     indentLeft: number;
     // (undocumented)
     indentRight: number;
@@ -2124,6 +2145,8 @@ export interface ParagraphDialogMixed {
     readonly alignment: boolean;
     // (undocumented)
     readonly contextualSpacing: boolean;
+    // (undocumented)
+    readonly direction: boolean;
     // (undocumented)
     readonly indentLeft: boolean;
     // (undocumented)
@@ -2172,8 +2195,10 @@ export interface ParagraphFormatRead {
     readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
     // (undocumented)
     readonly contextualSpacing: ParagraphFlagState;
+    readonly direction: 'ltr' | 'rtl' | null;
     readonly disagrees: {
         readonly alignment: boolean;
+        readonly direction: boolean;
         readonly indentFirstLine: boolean;
         readonly indentLeft: boolean;
         readonly indentRight: boolean;
@@ -2214,6 +2239,7 @@ export interface ParagraphFormatUpdate {
     readonly alignment?: 'left' | 'center' | 'right' | 'justify';
     // (undocumented)
     readonly contextualSpacing?: boolean;
+    readonly direction?: 'ltr' | 'rtl';
     // (undocumented)
     readonly indentFirstLineTwips?: number | null;
     // (undocumented)
@@ -2246,6 +2272,9 @@ export interface ParagraphPropertyEdit {
     // (undocumented)
     readonly localName: string;
     readonly mergeAttributes?: boolean;
+    readonly paragraphDirection?: 'ltr' | 'rtl';
+    readonly physicalAlignment?: boolean;
+    readonly remove?: boolean;
 }
 
 // @public
@@ -2814,6 +2843,7 @@ export interface SurfaceFormatting {
     readonly bold: boolean;
     // (undocumented)
     readonly color: string | null;
+    readonly direction: 'ltr' | 'rtl' | null;
     readonly disagrees: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily: string | null;
@@ -2896,6 +2926,7 @@ export interface SurfaceParagraphFormat {
     readonly alignment?: 'left' | 'center' | 'right' | 'both';
     // (undocumented)
     readonly contextualSpacing?: boolean;
+    readonly direction?: 'ltr' | 'rtl';
     readonly indentFirstLineTwips?: number | null;
     // (undocumented)
     readonly indentLeftTwips?: number | null;

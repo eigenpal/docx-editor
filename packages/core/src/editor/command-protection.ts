@@ -73,6 +73,7 @@ export function commandProtectionRefusal(
       break;
     case 'clearFormatting':
     case 'setAlignment':
+    case 'setParagraphDirection':
     case 'setLineSpacing':
     case 'setParagraphSpacing':
     case 'setIndent':

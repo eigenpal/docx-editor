@@ -201,7 +201,8 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Run direction controls numbers and punctuation independently of paragraph alignment. Matching adjacent runs preserve contextual joining. List markers, spacing, and logical indents follow paragraph direction in body text and table cells. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Tabs, inline objects, complex-script font selection, and shaping across formatting boundaries have partial support. The i18n package includes Hebrew UI translations.',
+      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Alignment and indents name leading and trailing sides, and kashida alignments justify. Run direction controls numbers and punctuation independently of paragraph alignment. Runs with w:rtl or w:cs take their complex-script font, size, bold, and italic, and formatting commands write both halves of each pair on those runs. Matching adjacent runs preserve contextual joining. List markers, spacing, and logical indents follow paragraph direction in body text and table cells. Left-to-right and right-to-left paragraph direction controls are in the toolbar, the Format menu, the Paragraph dialog, and the Ctrl+Shift keyboard chords in documents that already contain right-to-left text. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Tabs, inline objects, section direction, w:dir and w:bdo wrappers, and shaping across formatting boundaries have partial support. Typed text does not receive w:rtl automatically. The i18n package includes Hebrew UI translations.',
+    docsLink: '/docs/2.x/guides/right-to-left',
   },
   {
     id: 'text.effects',

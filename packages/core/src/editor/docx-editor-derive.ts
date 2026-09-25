@@ -65,6 +65,7 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
       ? { fontSizePt: formatting.fontSizeHalfPoints / 2 }
       : {}),
     ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
+    ...(formatting.direction ? { direction: formatting.direction } : {}),
     ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
     ...(formatting.lineSpacing ? { lineSpacing: formatting.lineSpacing } : {}),
     ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),

@@ -69,7 +69,8 @@
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
       "table": "Tablo",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

@@ -45,12 +45,16 @@ import {
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
   cascadedParagraphAttributes,
   paragraphBreaksBefore,
   paragraphContextualSpacing,
 } from '../layout/paragraph-style.ts';
 import { paragraphKeeps, type ParagraphKeeps } from '../layout/pagination-keeps.ts';
+
+const paragraphDirectionOf = (properties: readonly SurfaceProperty[]): 'ltr' | 'rtl' =>
+  paragraphIsRtl(properties) ? 'rtl' : 'ltr';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -721,6 +725,7 @@ export function formattingAt(
   // never disagree about the same paragraph. It also folds the cascade the way a cascade has
   // to be folded — see `cascadedParagraphAttributes`.
   const alignment = paragraphValue((properties) => paragraphAlignment(properties));
+  const direction = paragraphValue(paragraphDirectionOf);
   // Resolved per paragraph BEFORE agreement, so a styled paragraph selected together with
   // an unstyled one still reads as mixed (two different styles), while an unstyled
   // paragraph on its own reports the default rather than nothing. Comparing raw `w:pStyle`
@@ -836,12 +841,14 @@ export function formattingAt(
     color: agreed((entry) => entry.color),
     highlight: agreed((entry) => entry.highlight),
     alignment,
+    direction,
     styleId: style,
     lineSpacing,
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
     disagrees: {
       alignment: paragraphDisagrees((properties) => paragraphAlignment(properties)),
+      direction: paragraphDisagrees(paragraphDirectionOf),
       spaceBeforePt: paragraphDisagrees((properties) => spacePtOf(properties, 'before')),
       spaceAfterPt: paragraphDisagrees((properties) => spacePtOf(properties, 'after')),
       lineSpacing: paragraphDisagrees(lineSpacingTextOf),

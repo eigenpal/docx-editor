@@ -268,7 +268,7 @@ export const MenuItem = defineComponent({
       // press.
       const isToggle = chromeSlotIsToggle(slot);
       // The four alignments are one-of-four, not four independent toggles.
-      const isRadio = ['setAlignment', 'setReviewDisplayMode'].includes(
+      const isRadio = ['setAlignment', 'setParagraphDirection', 'setReviewDisplayMode'].includes(
         commandForSlot(slot)?.type ?? ''
       );
       return (

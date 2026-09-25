@@ -376,3 +376,55 @@ describe('empty East Asian theme faces use the final run language (#787)', () =>
     ).toBe('Theme');
   });
 });
+
+// Word 16 PDF output is the oracle for every expectation in this block.
+describe('complex-script runs use Word complex-script properties', () => {
+  const p = (localName: string, attributes?: Record<string, string>) =>
+    attributes ? { localName, attributes } : { localName };
+  const faces = [p('rFonts', { ascii: 'Courier New', hAnsi: 'Courier New', cs: 'Arial' })];
+
+  test('w:rtl selects the cs face, szCs, bCs, and iCs for the whole run', () => {
+    const style = resolveRunStyle([
+      ...faces,
+      p('sz', { val: '20' }),
+      p('szCs', { val: '40' }),
+      p('b'),
+      p('iCs'),
+      p('rtl'),
+    ]);
+    expect(style.fontFamily).toBe('Arial');
+    expect(style.fontSizePt).toBe(20);
+    expect(style.bold).toBe(false);
+    expect(style.italic).toBe(true);
+  });
+
+  test('w:cs forces the complex-script lane without a direction', () => {
+    const style = resolveRunStyle([...faces, p('bCs'), p('szCs', { val: '30' }), p('cs')]);
+    expect(style).toMatchObject({ fontFamily: 'Arial', fontSizePt: 15, bold: true });
+  });
+
+  test('a run without w:rtl or w:cs keeps the Latin properties', () => {
+    const style = resolveRunStyle([...faces, p('sz', { val: '40' }), p('szCs', { val: '16' })]);
+    expect(style.fontFamily).toBe('Courier New');
+    expect(style.fontSizePt).toBe(20);
+    expect(resolveRunStyle([...faces, p('rtl', { val: '0' }), p('bCs')]).bold).toBe(false);
+  });
+
+  test('unauthored complex-script values use Word defaults, not the Latin ones', () => {
+    const style = resolveRunStyle([
+      p('rFonts', { ascii: 'Courier New' }),
+      p('sz', { val: '40' }),
+      p('rtl'),
+    ]);
+    expect(style.fontFamily).toBe('Times New Roman');
+    expect(style.fontSizePt).toBe(10);
+  });
+
+  test('cstheme resolves through the theme bidi faces', () => {
+    const themed = [p('rFonts', { cstheme: 'minorBidi', cs: 'Arial' }), p('rtl')];
+    const theme = { major: null, minor: null };
+    expect(resolveRunStyle(themed, { ...theme, minorBidi: 'Tahoma' }).fontFamily).toBe('Tahoma');
+    // An empty theme face falls back to the explicit name beside it.
+    expect(resolveRunStyle(themed, { ...theme, minorBidi: '' }).fontFamily).toBe('Arial');
+  });
+});

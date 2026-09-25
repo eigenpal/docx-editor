@@ -10,6 +10,7 @@ import {
   createShapedRun,
   createShapingEnvironment,
   fixedPoint,
+  MAX_SHAPING_CONTEXT,
   type FixedPoint,
   type FixedPointRoundingMode,
   type GlyphOutline,
@@ -828,13 +829,22 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
 
     const text = input.text;
     this.#assertTextBudget(text);
+    const before = input.context?.before ?? '';
+    const after = input.context?.after ?? '';
+    const limit = MAX_SHAPING_CONTEXT;
+    const actual = Math.max(String(before).length, String(after).length);
+    if (typeof before !== 'string' || typeof after !== 'string' || actual > limit)
+      throw new HarfBuzzShapingError('textOverLimit', { limit, actual });
 
     try {
       const active = this.#loadFont(environment.font, bytes);
       const { face, font } = active;
       const buffer = this.#buffer;
       buffer.reset();
-      buffer.addText(text);
+      // Context is read for contextual forms and never shaped. HarfBuzz reports clusters as
+      // offsets into the whole string, so they shift back by the leading context below.
+      if (before || after) buffer.addText(before + text + after, before.length, text.length);
+      else buffer.addText(text);
       buffer.setDirection(
         environment.direction === 'rtl'
           ? this.#harfBuzz.Direction.RTL
@@ -882,7 +892,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         const advanceY = convert(glyph.yAdvance ?? 0);
         const positioned = {
           id: glyph.codepoint,
-          cluster: glyph.cluster,
+          cluster: glyph.cluster - before.length,
           originX,
           originY,
           advanceX,

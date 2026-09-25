@@ -315,7 +315,10 @@ export interface PaginatedSurface {
   setParagraphProperty(
     localName: string,
     attributes?: Record<string, string | null>,
-    options?: { readonly mergeAttributes?: boolean }
+    options?: Pick<
+      ParagraphPropertyEdit,
+      'mergeAttributes' | 'physicalAlignment' | 'paragraphDirection'
+    >
   ): void;
   /**
    * Several paragraph properties in ONE transaction, so a dialog is one undo step.

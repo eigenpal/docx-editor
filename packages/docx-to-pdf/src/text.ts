@@ -22,8 +22,9 @@ import {
 import { underlineGap } from './underline-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
-import { colorGlyph, type ColorGlyphLayer } from './color-glyphs.ts';
-import { color, number as n, pageHeight, rect, Work } from './context.ts';
+import { colorGlyph, glyphOutline, type ColorGlyphLayer } from './color-glyphs.ts';
+import { color, flateStream, number as n, pageHeight, rect, Work } from './context.ts';
+import { outlineOperators, type OutlinePlacement } from './outline-placement.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
@@ -119,6 +120,32 @@ export function griddedBaselineInLine(
   return (units(naturalBox) - units(descent)) * PDF_PAINT_GRID_PT;
 }
 
+/**
+ * Word's synthetic style for a face that lacks the requested weight or slant, measured from
+ * Word 16 PDF output of single-weight faces (Noto Sans Arabic, Noto Sans Math) at 10pt and
+ * 20pt. Bold fills and strokes the outline (`2 Tr`) with a line of `size / 50 + 0.12` points,
+ * draws it 1/1.02 as tall, and raises the baseline by half the line over 1.02. Italic skews the
+ * text matrix by 87/256 of its height. Word also widens synthetic-bold advances by about
+ * 0.018em; layout does not model that, so paint keeps layout's advances.
+ */
+const SYNTHETIC_ITALIC_SKEW = 87 / 256;
+const SYNTHETIC_BOLD_VERTICAL = 1 / 1.02;
+const syntheticBoldStrokePt = (size: number): number => size / 50 + 0.12;
+
+const rightToLeftLines = new WeakMap<SemanticSpanVisit['line'], boolean>();
+
+/** Whether every span of a line with visible text is at a right-to-left bidi level. */
+function rightToLeftOnly(line: SemanticSpanVisit['line']): boolean {
+  let known = rightToLeftLines.get(line);
+  if (known === undefined) {
+    known = line.spans.every(
+      (span) => !/\S/u.test(span.text) || (span.style.shaping?.level ?? 0) % 2 === 1
+    );
+    rightToLeftLines.set(line, known);
+  }
+  return known;
+}
+
 /** Largest `TJ` adjustment the writer's number formatter accepts. */
 const MAX_TJ_ADJUSTMENT = 1_000_000;
 
@@ -174,16 +201,30 @@ function createGlyphBatch(out: string[], horizontal: number) {
   let startX = 0;
   let penX = 0;
   let parts: string[] = [];
+  // Synthetic style: skew (c), vertical scale (d) and a baseline rise, all paint only.
+  let skew = 0;
+  let vertical = 1;
+  let rise = 0;
   const flush = (): void => {
     if (parts.length === 0) return;
     const show =
       parts.length === 1 && parts[0]!.startsWith('<') ? `${parts[0]} Tj` : `[${parts.join('')}] TJ`;
-    out.push(`${n(horizontal)} 0 0 1 ${n(startX)} ${n(baselineY)} Tm ${show}`);
+    out.push(
+      `${n(horizontal)} 0 ${n(skew * vertical)} ${n(vertical)} ${n(startX)} ${n(baselineY + rise)} Tm ${show}`
+    );
     parts = [];
     face = null;
   };
   return {
     flush,
+    /** Change the synthetic matrix; the next glyph starts a new batch when it changes. */
+    matrix(nextSkew: number, nextVertical: number, nextRise: number): void {
+      if (nextSkew === skew && nextVertical === vertical && nextRise === rise) return;
+      flush();
+      skew = nextSkew;
+      vertical = nextVertical;
+      rise = nextRise;
+    },
     add(nextFace: EmbeddedFace, nextSize: number, gx: number, gy: number, code: string): void {
       const unit = nextSize * horizontal;
       const continues = face === nextFace && size === nextSize && baselineY === gy && unit !== 0;
@@ -216,6 +257,14 @@ function createGlyphBatch(out: string[], horizontal: number) {
 
 export class TextWriter {
   readonly faces = new Map<string, EmbeddedFace>();
+  /** Outline glyphs of the current line, for {@link takeOutlines}. */
+  private pendingOutlines: OutlinePlacement[] = [];
+  /** The outline glyphs painted since the last call; the caller places them after a line. */
+  takeOutlines(): string {
+    const taken = this.pendingOutlines.length > 0 ? outlineOperators(this.pendingOutlines) : '';
+    this.pendingOutlines = [];
+    return taken;
+  }
   private readonly refused = new Map<string, string>();
   constructor(
     readonly doc: PDFDocument,
@@ -324,7 +373,22 @@ export class TextWriter {
       y: number;
       scale: number;
     }[] = [];
+    // Glyphs without text of their own, filled as outlines after the text object.
+    const outlineGlyphs: {
+      face: EmbeddedFace;
+      id: number;
+      path: string;
+      x: number;
+      y: number;
+      scale: number;
+      skew: number;
+      vertical: number;
+      strokeWidth: number;
+    }[] = [];
+    const rightToLeft = (style.shaping?.level ?? 0) % 2 === 1;
     let extra = 0;
+    let strokeWidth = 0;
+    let stroked = false;
     let activeSize = size;
     let activeFace = face;
     let activeIdentity = shaped.font.identity;
@@ -339,6 +403,12 @@ export class TextWriter {
         if (!activeFace.colorLayers) out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
       }
       const text = shaped.run.text.slice(cluster.textStart, cluster.textEnd);
+      // The cluster's text rides the glyph with the widest advance: the base letter, not a
+      // mark. In a right-to-left run a mark can come first in glyph order, and text on a
+      // zero-advance dot makes an extractor see a gap before the base and split the word.
+      let textGlyph = cluster.glyphStart;
+      for (let i = cluster.glyphStart + 1; i < cluster.glyphEnd; i++)
+        if (shaped.run.glyphs[i]!.advanceX > shaped.run.glyphs[textGlyph]!.advanceX) textGlyph = i;
       for (let i = cluster.glyphStart; i < cluster.glyphEnd; i++) {
         this.work.tick();
         const glyph = shaped.run.glyphs[i]!;
@@ -392,19 +462,122 @@ export class TextWriter {
             batch.add(host, activeSize, gx, gy, carrier);
             batch.flush();
             out.push('0 Tr 100 Tz');
+            strokeWidth = 0;
           }
           continue;
         }
-        const code = activeFace.encode(glyph.id, i === cluster.glyphStart ? text : '');
-        batch.add(activeFace, activeSize, gx, gy, code);
+        // Synthetic bold and italic, per FACE: a fallback face in the same run can be real
+        // bold while the primary is not. A text outline already strokes, so it takes no bold.
+        const synthesizeBold = style.bold && !style.textOutline && !activeFace.bold;
+        const width = synthesizeBold ? syntheticBoldStrokePt(activeSize) : 0;
+        if (width !== strokeWidth) {
+          batch.flush();
+          if (width > 0 && !stroked) out.push(`${color(foreground)} RG`);
+          stroked ||= width > 0;
+          out.push(width > 0 ? `${n(width)} w 2 Tr` : '0 Tr');
+          strokeWidth = width;
+        }
+        batch.matrix(
+          style.italic && !activeFace.slanted ? SYNTHETIC_ITALIC_SKEW : 0,
+          width > 0 ? SYNTHETIC_BOLD_VERTICAL : 1,
+          width > 0 ? (width / 2) * SYNTHETIC_BOLD_VERTICAL : 0
+        );
+        // A space on a line of right-to-left text draws nothing and is not written. MuPDF
+        // reorders such a line per word when it meets a written space, and emitted the words
+        // in visual order; from the gap it infers the space and reorders the whole line, as
+        // it does for LibreOffice's PDFs. pdf.js and Poppler also infer the space from the
+        // gap. A line that also holds left-to-right text keeps its spaces: MuPDF keeps its
+        // runs in visual order there either way, and without the spaces it merged the words.
+        if (rightToLeft && /^ +$/.test(text) && rightToLeftOnly(line)) continue;
+        if (i === textGlyph) {
+          batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, text));
+          continue;
+        }
+        // A glyph without text of its own, such as the dots a face draws apart from an
+        // Arabic base letter, is filled as an outline after the text object. Text there would
+        // need a mapping every extractor ignores, and none exists: pdf.js reads a raw code or
+        // a format character, MuPDF prints the format character, and marked content around
+        // the glyph splits pdf.js's words. Its base letters stay one `TJ`.
+        const outline = glyphOutline(activeFace.font, glyph.id, this.work);
+        if (outline === null) {
+          this.work.report(
+            'glyph-outline',
+            `A glyph outline in ${family} is malformed or too long`,
+            visit.page.index
+          );
+          continue;
+        }
+        if (outline) {
+          outlineGlyphs.push({
+            face: activeFace,
+            id: glyph.id,
+            path: outline,
+            x: gx,
+            y: gy + (width > 0 ? (width / 2) * SYNTHETIC_BOLD_VERTICAL : 0),
+            scale: glyphSize / activeFace.font.unitsPerEm,
+            skew: style.italic && !activeFace.slanted ? SYNTHETIC_ITALIC_SKEW : 0,
+            vertical: width > 0 ? SYNTHETIC_BOLD_VERTICAL : 1,
+            strokeWidth: width,
+          });
+        }
       }
       extra +=
         text.length * style.characterSpacingPt +
         (text.match(/ /g)?.length ?? 0) * (style.shaping?.wordSpacingPt ?? 0);
     }
     batch.flush();
+    // The render mode outlives `ET`; every other stroke in this writer sets its own colour
+    // and width. No `q`/`Q` pair: pdf.js ends a text item at `Q`, which split a bold
+    // right-to-left line into visual-order pieces.
+    if (strokeWidth > 0) out.push('0 Tr');
     out.push('ET');
     if (style.textOutline) out.push('Q');
+    const placements: OutlinePlacement[] = [];
+    for (const glyph of outlineGlyphs) {
+      // Font units to page: the glyph's size, the run's horizontal scale, and the same
+      // synthetic skew, height and stroke the text object applies. The stroke is set in the
+      // scaled space, so its width is divided back out.
+      const matrix = [
+        glyph.scale * horizontal,
+        0,
+        glyph.skew * glyph.scale * glyph.vertical,
+        glyph.scale * glyph.vertical,
+        glyph.x,
+        glyph.y,
+      ];
+      const outlineStroke = style.textOutline
+        ? { color: style.textOutline.color, width: style.textOutline.widthPt }
+        : glyph.strokeWidth > 0
+          ? { color: foreground, width: glyph.strokeWidth }
+          : null;
+      const stroke = outlineStroke
+        ? `${color(outlineStroke.color)} RG ${n(outlineStroke.width / (glyph.scale * glyph.vertical))} w `
+        : '';
+      const form = this.outlineForm(
+        glyph.face,
+        glyph.id,
+        glyph.path,
+        outlineStroke ? 'B' : 'f',
+        page
+      );
+      placements.push({
+        state: `${color(foreground)} rg ${stroke}`,
+        a: matrix[0]!,
+        c: matrix[2]!,
+        d: matrix[3]!,
+        x: glyph.x,
+        y: glyph.y,
+        form,
+      });
+    }
+    // pdf.js ends its text item at `Do`, so an outline between two spans split a line into
+    // visual-order pieces. The line's painter places them after the line's text instead,
+    // unless the paragraph clips each span, where they must stay inside the clip.
+    if (visit.paragraph.clipToBox) {
+      if (placements.length > 0) out.push(outlineOperators(placements));
+    } else {
+      for (const placement of placements) this.pendingOutlines.push(placement);
+    }
     for (const { layers, x: gx, y: gy, scale: glyphScale } of colorGlyphs) {
       out.push(`q ${n(glyphScale * horizontal)} 0 0 ${n(glyphScale)} ${n(gx)} ${n(gy)} cm`);
       for (const layer of layers) {
@@ -605,6 +778,46 @@ export class TextWriter {
       faceBaseline -
       baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
     return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
+  }
+  private readonly outlineForms = new Map<
+    EmbeddedFace,
+    Map<string, { name: string; ref: PDFRef }>
+  >();
+  /**
+   * A form XObject that paints one glyph outline in font units, registered on the page.
+   *
+   * The same few dot and mark glyphs repeat across a page, so each outline is written once
+   * per face and paint operator and placed with `Do`. The form sets no colour or width, so
+   * the caller's fill, stroke and line width apply.
+   */
+  private outlineForm(
+    face: EmbeddedFace,
+    glyphId: number,
+    path: string,
+    operator: 'f' | 'B',
+    page: PDFPage
+  ): string {
+    let forms = this.outlineForms.get(face);
+    if (!forms) this.outlineForms.set(face, (forms = new Map()));
+    const key = `${glyphId}:${operator}`;
+    let form = forms.get(key);
+    if (!form) {
+      this.work.reserveContent(path.length + 2);
+      // Room for a synthetic stroke, which reaches past the outline by half its width.
+      const margin = face.font.unitsPerEm / 4;
+      const bbox = face.font.bbox;
+      const ref = this.doc.context.register(
+        flateStream(this.doc.context, `${path} ${operator}`, {
+          Type: 'XObject',
+          Subtype: 'Form',
+          BBox: [bbox.minX - margin, bbox.minY - margin, bbox.maxX + margin, bbox.maxY + margin],
+        })
+      );
+      form = { name: `${face.name}G${forms.size + 1}`, ref };
+      forms.set(key, form);
+    }
+    page.node.setXObject(PDFName.of(form.name), form.ref);
+    return form.name;
   }
   private readonly alphaStates = new Map<number, PDFRef>();
   /** A registered constant-alpha graphics state, shared across layers of the same alpha. */

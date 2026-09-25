@@ -27,6 +27,8 @@ export type {
  */
 export interface SurfaceParagraphFormat {
   readonly alignment?: 'left' | 'center' | 'right' | 'both';
+  /** Base direction; see `directionalParagraphEntry` for what each value writes. */
+  readonly direction?: 'ltr' | 'rtl';
   readonly spaceBeforePt?: number | null;
   readonly spaceAfterPt?: number | null;
   readonly lineSpacing?: {
@@ -56,4 +58,17 @@ export interface ParagraphPropertyEdit {
   readonly attributes?: Record<string, string | null>;
   /** Keep the attributes this entry does not name, for multi-setting elements. */
   readonly mergeAttributes?: boolean;
+  /**
+   * For `w:jc` only: `attributes.val` names a PHYSICAL edge, as a toolbar button does. The
+   * writer converts it per paragraph, because a bidi paragraph reaches its right margin
+   * with `left` (see `jcValueForAlignment`).
+   */
+  readonly physicalAlignment?: boolean;
+  /**
+   * For `w:bidi` only: the base direction the paragraph must END in. The writer spells it per
+   * paragraph and skips one already in that direction (see `directionalParagraphEntry`).
+   */
+  readonly paragraphDirection?: 'ltr' | 'rtl';
+  /** Drop the paragraph's own element of this name instead of writing one. */
+  readonly remove?: boolean;
 }

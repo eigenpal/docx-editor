@@ -69,7 +69,8 @@
       "listFormatting": "列表格式",
       "image": "图片",
       "table": "表格",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "撤销",
     "undoShortcut": "撤销(Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

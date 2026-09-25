@@ -40,7 +40,12 @@ export class ShapeCacheKeys {
       id = this.#ids.size;
       this.#ids.set(fingerprint, id);
     }
-    return `${id}\u0000${typed(input.fontSizeHalfPoints)}\u0000${typed(input.bidiLevel)}\u0000${input.text}`;
+    const base = `${id}\u0000${typed(input.fontSizeHalfPoints)}\u0000${typed(input.bidiLevel)}\u0000`;
+    const context = input.context;
+    // One tag character says which form follows, so no text can pose as a context key.
+    if (!context || (context.before === '' && context.after === '')) return `${base}-${input.text}`;
+    // The two lengths fix every split, so the text can still go last.
+    return `${base}c${context.before.length},${context.after.length}\u0000${context.before}${context.after}${input.text}`;
   }
 
   clear(): void {

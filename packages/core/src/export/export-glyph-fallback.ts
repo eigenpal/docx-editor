@@ -1,5 +1,6 @@
 import { shapeExportClusterFallback } from './export-cluster-fallback.ts';
 import { orderFallbackFacesForCluster } from './export-color-font.ts';
+import { orderFacesForScript } from './export-script-support.ts';
 import { shapeExportHyphenFallback } from './export-hyphen-fallback.ts';
 import { synthesizeExportSmallCaps } from './export-small-caps.ts';
 // Optional export fallback over admitted faces. Measurement and PDF glyph publication
@@ -49,6 +50,8 @@ export function withExportGlyphFallbacks(
         memo.input.text === input.text &&
         memo.input.fontSizeHalfPoints === input.fontSizeHalfPoints &&
         memo.input.bidiLevel === input.bidiLevel &&
+        memo.input.context?.before === input.context?.before &&
+        memo.input.context?.after === input.context?.after &&
         memo.input.environment === input.environment
       )
         return memo.run;
@@ -70,8 +73,13 @@ export function withExportGlyphFallbacks(
       if (mixed) return mixed;
     }
     // Color faces go first for emoji presentation and last otherwise, so a dingbat stays a
-    // symbol glyph and an emoji-default pictograph gets its color face.
-    for (const font of orderFallbackFacesForCluster(fonts, input.text)) {
+    // symbol glyph and an emoji-default pictograph gets its color face. Within that, a face
+    // that declares the run's script goes first: covering Arabic letters is not shaping
+    // them, and a math face that only maps them draws every letter isolated.
+    for (const font of orderFacesForScript(
+      orderFallbackFacesForCluster(fonts, input.text),
+      input.environment.script
+    )) {
       if (
         font.hash === input.environment.font.hash &&
         font.faceIndex === input.environment.font.faceIndex

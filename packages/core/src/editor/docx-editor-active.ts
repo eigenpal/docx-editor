@@ -39,6 +39,8 @@ export function formattingCommandActive(
         default:
           return false;
       }
+    case 'setParagraphDirection':
+      return formatting.direction === command.direction;
     case 'setAlignment':
       // `exec` writes `justify` as `both`; compare in the same vocabulary.
       return formatting.alignment === (command.align === 'justify' ? 'both' : command.align);

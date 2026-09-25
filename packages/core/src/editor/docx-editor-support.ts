@@ -274,6 +274,14 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     }
     case 'setAlignment':
       return { supported: true, mutating: true };
+    case 'setParagraphDirection':
+      return command.direction === 'ltr' || command.direction === 'rtl'
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            code: 'invalidArgs',
+            reason: "setParagraphDirection requires a direction of 'ltr' or 'rtl'",
+          };
     case 'clearFormatting':
       return { supported: true, mutating: true };
     // The painter's two halves gate differently, which is why they are two commands: copying
@@ -422,6 +430,9 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         !['left', 'center', 'right', 'justify'].includes(command.alignment)
       ) {
         return { supported: false, code: 'invalidArgs', reason: 'unknown alignment' };
+      }
+      if (command.direction !== undefined && !['ltr', 'rtl'].includes(command.direction)) {
+        return { supported: false, code: 'invalidArgs', reason: 'unknown direction' };
       }
       if (command.tabStops !== undefined) {
         if (command.tabStops.length > 64) {

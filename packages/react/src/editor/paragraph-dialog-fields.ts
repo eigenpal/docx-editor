@@ -18,6 +18,7 @@ export {
   mixedFieldsOf,
   sameTabStops,
   changedFields,
+  alignmentAfterDirectionChange,
   withTabStop,
   trapTabWithin,
 } from '@docx-editor.dev/core/editor';

@@ -62,6 +62,10 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Noto Sans Symbols 2',
   'Noto Sans Math',
   'Noto Sans Arabic',
+  // Hebrew, and Latin, Greek or Cyrillic letters the faces above lack. Without it, Hebrew
+  // in an Arabic face was covered only when `Segoe UI Symbol` was missing and its stand-in
+  // happened to be Liberation Sans. The face already ships here, so this adds no file.
+  'Liberation Sans',
   // Prefer available Word CJK faces; packaged Noto remains the portable fallback.
   'SimSun',
   'Batang',

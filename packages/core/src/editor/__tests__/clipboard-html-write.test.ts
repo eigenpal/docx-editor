@@ -147,6 +147,26 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('>styled<');
   });
 
+  test('an RTL paragraph copies its physical alignment and margins', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:pPr><w:bidi/><w:ind w:left="720" w:right="360"/><w:jc w:val="left"/></w:pPr>' +
+          '<w:r><w:rPr><w:rtl/></w:rPr><w:t>rtl</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:ind w:left="720"/><w:jc w:val="left"/></w:pPr>' +
+          '<w:r><w:t>ltr</w:t></w:r></w:p>',
+      })
+    );
+    const [rtl, ltr] = html.split('</p>');
+    // `w:jc="left"` in a bidi paragraph sits at the RIGHT margin, and `w:ind w:left` is its
+    // leading (right) side.
+    expect(rtl).toContain('text-align:right');
+    expect(rtl).toContain('margin-right:36pt');
+    expect(rtl).toContain('margin-left:18pt');
+    expect(ltr).toContain('text-align:left');
+    expect(ltr).toContain('margin-left:36pt');
+  });
+
   test('inline run wrappers contribute their text in reading order', () => {
     const html = interopHtmlFromFragment(
       fragment({

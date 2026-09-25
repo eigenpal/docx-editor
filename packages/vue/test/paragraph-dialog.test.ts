@@ -380,6 +380,44 @@ describe('Vue dialog composition', () => {
       mounted.app.unmount();
     }
   });
+
+  test('a custom layout reads and sets the direction through useParagraphDialog', async () => {
+    const Custom = defineComponent({
+      setup() {
+        // Vue composables run in setup; this is not a React hook.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const dialog = useParagraphDialog();
+        return () =>
+          h(
+            'button',
+            { 'data-custom-direction': '', onClick: () => dialog.setValue('direction', 'rtl') },
+            dialog.values.value.direction
+          );
+      },
+    });
+    const mounted = mountDialog(p('alpha'), {
+      preset: false,
+      children: () => [h(Custom), h(DocxEditorParagraphDialog.Apply)],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      const control = document.querySelector('[data-custom-direction]') as HTMLButtonElement;
+      expect(control.textContent).toBe('ltr');
+      control.click();
+      await flush();
+      expect(control.textContent).toBe('rtl');
+      (document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.editor().snapshot().formatting?.direction).toBe('rtl');
+      expect(mounted.open.value).toBe(false);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
 });
 
 test('a Paragraph draft cannot apply to a replacement document before the next render', async () => {
@@ -405,4 +443,64 @@ test('a Paragraph draft cannot apply to a replacement document before the next r
   } finally {
     mounted.app.unmount();
   }
+});
+
+describe('the Vue Paragraph dialog Direction field', () => {
+  const pick = (node: HTMLSelectElement, value: string) => {
+    node.value = value;
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  test('seeds the current direction, and OK writes the one you pick', async () => {
+    const { container, app, open, editor } = mountDialog(p('alpha', '<w:bidi/>'));
+    try {
+      await flush();
+      editor().surface!.selectAll();
+      await flush();
+      open.value = true;
+      await flush();
+
+      const direction = field(container, 'Direction') as HTMLSelectElement;
+      expect(direction.value).toBe('rtl');
+      pick(direction, 'ltr');
+      await flush();
+      okButton(container).click();
+      await flush();
+      expect(editor().snapshot().formatting?.direction).toBe('ltr');
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test('a mixed selection opens blank, stays mixed if untouched, and resolves when set', async () => {
+    const { container, app, open, editor } = mountDialog(p('one', '<w:bidi/>') + p('two'));
+    try {
+      await flush();
+      editor().surface!.selectAll();
+      await flush();
+      open.value = true;
+      await flush();
+      expect(editor().snapshot().formatting?.disagrees?.direction).toBe(true);
+      expect((field(container, 'Direction') as HTMLSelectElement).value).toBe('');
+
+      // Untouched: OK writes nothing, so the paragraphs keep their own directions.
+      okButton(container).click();
+      await flush();
+      expect(open.value).toBe(false);
+      expect(editor().snapshot().canUndo).toBe(false);
+
+      open.value = true;
+      await flush();
+      const direction = field(container, 'Direction') as HTMLSelectElement;
+      expect(direction.value).toBe('');
+      pick(direction, 'rtl');
+      await flush();
+      okButton(container).click();
+      await flush();
+      expect(editor().snapshot().formatting?.direction).toBe('rtl');
+      expect(editor().snapshot().formatting?.disagrees?.direction).toBe(false);
+    } finally {
+      app.unmount();
+    }
+  });
 });

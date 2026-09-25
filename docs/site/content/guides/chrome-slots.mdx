@@ -58,9 +58,11 @@ Use `Action` for a host-owned action without a registry slot. Use `Separator` on
 | `script.super`   | Default toolbar  | `Superscript` | Toggle superscript          |
 | `script.sub`     | Default toolbar  | `Subscript`   | Toggle subscript            |
 
-## Alignment, lists, and formatting
+## Alignment, direction, lists, and formatting
 
 The default toolbar combines the four alignment slots into `Alignment`. Use the four `Align*` parts when you want separate controls.
+
+Alignment slots name a physical edge. In a right-to-left paragraph, `alignment.right` writes the leading edge, which Word spells `w:jc="left"`. The direction slots set the base direction of each selected paragraph and show a mixed selection as neither pressed.
 
 | Slot                | Packaged surface | Toolbar part             | Purpose                   |
 | ------------------- | ---------------- | ------------------------ | ------------------------- |
@@ -68,6 +70,8 @@ The default toolbar combines the four alignment slots into `Alignment`. Use the 
 | `alignment.center`  | Default toolbar  | `AlignCenter`            | Align center              |
 | `alignment.right`   | Default toolbar  | `AlignRight`             | Align right               |
 | `alignment.justify` | Default toolbar  | `AlignJustify`           | Justify                   |
+| `direction.ltr`     | Default toolbar  | `LeftToRight`            | Left-to-right paragraph   |
+| `direction.rtl`     | Default toolbar  | `RightToLeft`            | Right-to-left paragraph   |
 | `list.bullet`       | Default toolbar  | `BulletList`             | Toggle a bulleted list    |
 | `list.numbered`     | Default toolbar  | `NumberedList`           | Toggle a numbered list    |
 | `list.outdent`      | Default toolbar  | `Outdent`                | Decrease list indent      |

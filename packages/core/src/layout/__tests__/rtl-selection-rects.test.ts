@@ -14,7 +14,7 @@ import {
 const measurer = createFixedMeasurer(6, 14);
 function layout(text: string, width = 120, next = '', rtl = true, runRtl = rtl) {
   const paragraph = (value: string) =>
-    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:rPr><w:sz w:val="22"/>${runRtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r></w:p>`;
+    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr><w:r><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/>${runRtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r></w:p>`;
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraph(text)}${next ? paragraph(next) : ''}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'application/xml' }

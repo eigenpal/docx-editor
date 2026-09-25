@@ -354,6 +354,7 @@ export {
   mixedFieldsOf,
   sameTabStops,
   changedFields,
+  alignmentAfterDirectionChange,
   withTabStop,
   trapTabWithin,
 } from './paragraph-dialog-fields.ts';

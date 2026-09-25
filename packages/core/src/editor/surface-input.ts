@@ -377,7 +377,13 @@ export function createKeyDownHandler(
       // page anyway. Right alignment stays on Ctrl+R, which pages may claim and which is
       // an unused chord on macOS.
       if (event.metaKey && event.key.toLowerCase() === 'r') return;
-      surface.setParagraphProperty('jc', { val: ALIGNMENT[event.key.toLowerCase()]! });
+      surface.setParagraphProperties([
+        {
+          localName: 'jc',
+          attributes: { val: ALIGNMENT[event.key.toLowerCase()]! },
+          physicalAlignment: true,
+        },
+      ]);
       event.preventDefault();
       return;
     }

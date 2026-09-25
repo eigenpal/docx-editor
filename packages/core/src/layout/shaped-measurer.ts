@@ -302,8 +302,13 @@ export function createShapedMeasurer(
       if (!font) return fallbackWidth(text, style);
 
       const byText = widthsFor(font, layoutRunHalfPointsOf(style), style.smallCaps);
+      const context = style.shaping?.context;
       const shapingKey = style.shaping
-        ? `1:${JSON.stringify([style.shaping.script, style.shaping.direction, text])}`
+        ? `1:${JSON.stringify(
+            context
+              ? [style.shaping.script, style.shaping.direction, text, context.before, context.after]
+              : [style.shaping.script, style.shaping.direction, text]
+          )}`
         : `0:${text}`;
       const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
       let advance = byText.get(widthKey);

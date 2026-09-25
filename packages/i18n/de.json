@@ -69,7 +69,8 @@
       "listFormatting": "Listenformatierung",
       "image": "Grafik",
       "table": "Tabelle",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

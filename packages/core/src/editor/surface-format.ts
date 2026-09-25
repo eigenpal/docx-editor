@@ -21,6 +21,7 @@ import {
   isRunPropertyActive,
   mergedProperties,
   paragraphMarkOps,
+  paragraphPropertiesOf,
   paragraphsInRange,
   pendingPropertyState,
   runPropertyEdits,
@@ -36,6 +37,7 @@ import type {
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
 import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceFormatDeps {
@@ -349,11 +351,23 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     const ops = order
       .slice(firstIndex, lastIndex + 1)
       .filter((paragraphId) => deps.paragraphMarkVisible(paragraphId))
-      .map((paragraphId) => {
+      .flatMap((paragraphId) => {
         // Folded in order over the paragraph's OWN properties, so a batch that names the
         // same element twice ends with the last word and every entry sees the ones before it.
-        let properties = directParagraphProperties(part, paragraphId);
-        for (const entry of entries) {
+        const original = directParagraphProperties(part, paragraphId);
+        let properties = original;
+        const cascaded = paragraphPropertiesOf(currentLayout.value, paragraphId);
+        // A paragraph every entry leaves as it is gets no op, so a direction press over
+        // text already in that direction is not an undo step.
+        let wrote = false;
+        for (const rawEntry of entries) {
+          const entry = directionalParagraphEntry(rawEntry, cascaded, properties, original);
+          if (!entry) continue;
+          wrote = true;
+          if (entry.remove) {
+            properties = properties.filter((property) => property.localName !== entry.localName);
+            continue;
+          }
           // `mergeAttributes` is for the properties that carry SEVERAL independent settings
           // in one element. `w:spacing` holds the line rule, the space before and the space
           // after; replacing it wholesale meant picking a line spacing deleted the
@@ -375,7 +389,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
             ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
           });
         }
-        return { op: 'setParagraphProperties' as const, paragraphId, properties };
+        return wrote ? [{ op: 'setParagraphProperties' as const, paragraphId, properties }] : [];
       });
     if (ops.length === 0) return;
     // Word leaves the cells selected after a paragraph command, exactly as it does after
@@ -584,11 +598,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         ) {
           ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
         }
-        if (
-          deps.paragraphMarkVisible(paragraphId) &&
-          directParagraphProperties(part, paragraphId).length > 0
-        ) {
-          ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
+        // Direction is not formatting to erase: the paragraph keeps its `w:bidi`, the way
+        // it kept it before the property was nameable, so Arabic stays right-to-left.
+        const direct = directParagraphProperties(part, paragraphId);
+        const kept = direct.filter((property) => property.localName === 'bidi');
+        if (deps.paragraphMarkVisible(paragraphId) && direct.length > kept.length) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties: kept });
         }
       }
       if (ops.length === 0) return;

@@ -69,7 +69,8 @@
       "listFormatting": "सूची प्रारूपण",
       "image": "चित्र",
       "table": "तालिका",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

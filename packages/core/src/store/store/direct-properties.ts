@@ -29,6 +29,10 @@ import {
 } from './formattable-runs.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 import {
+  containerIsComplexScript,
+  withComplexScriptCompanions,
+} from './complex-script-companions.ts';
+import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   type OoxmlProperty,
@@ -283,25 +287,62 @@ export function mergedParagraphMarkProperties(
   incoming: OoxmlProperty | readonly OoxmlProperty[]
 ): OoxmlProperty[] {
   const authored = directParagraphMarkProperties(part, paragraphId);
-  const additions = Array.isArray(incoming)
-    ? (incoming as readonly OoxmlProperty[])
-    : [incoming as OoxmlProperty];
-  return mergedProperties(
-    authored,
-    additions.map((property) => mergedMultiSettingProperty(authored, property))
-  );
+  const pPr = propertyContainer(findNode(part, paragraphId), 'paragraphProperties', 'pPr');
+  const complex = containerIsComplexScript(propertyContainer(pPr, 'runProperties', 'rPr'));
+  return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+}
+
+/**
+ * A run write merged over the run's own properties the way a range write merges it:
+ * multi-setting elements per attribute, and the complex-script companions on a `w:rtl`
+ * or `w:cs` run. The caret's armed formatting lands through this, so typing after Bold
+ * matches bolding a selection.
+ */
+export function mergedRunWrite(
+  authored: readonly OoxmlProperty[],
+  incoming: readonly OoxmlProperty[],
+  complex: boolean
+): OoxmlProperty[] {
+  return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+}
+
+/**
+ * Whether the run the caret at `offset` types into is a complex-script run: the run ending
+ * at the caret, else the one starting there, else the paragraph mark — the same owner
+ * `authoredRunPropertiesAt` reads the typing format from.
+ */
+export function complexScriptAt(part: OoxmlPart, paragraphId: string, offset: number): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return false;
+  let left: OoxmlNode | null = null;
+  let right: OoxmlNode | null = null;
+  for (const [runId, range] of runAddressRanges(paragraph)) {
+    if (range.end <= range.start) continue;
+    if (range.start < offset && offset <= range.end) left = findNode(part, runId) ?? left;
+    if (!right && range.start <= offset && offset < range.end)
+      right = findNode(part, runId) ?? null;
+  }
+  const owner = left ?? right;
+  const container = owner
+    ? propertyContainer(owner, 'runProperties', 'rPr')
+    : propertyContainer(
+        propertyContainer(paragraph, 'paragraphProperties', 'pPr'),
+        'runProperties',
+        'rPr'
+      );
+  return containerIsComplexScript(container);
 }
 
 function withMultiSettingsKept(
   authored: readonly OoxmlProperty[],
-  incoming: OoxmlProperty | readonly OoxmlProperty[]
-): OoxmlProperty | readonly OoxmlProperty[] {
-  if (Array.isArray(incoming)) {
-    return (incoming as readonly OoxmlProperty[]).map((property) =>
-      mergedMultiSettingProperty(authored, property)
-    );
-  }
-  return mergedMultiSettingProperty(authored, incoming as OoxmlProperty);
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  complex: boolean
+): readonly OoxmlProperty[] {
+  const additions = withComplexScriptCompanions(
+    complex,
+    Array.isArray(incoming) ? (incoming as readonly OoxmlProperty[]) : [incoming as OoxmlProperty]
+  );
+  return additions.map((property) => mergedMultiSettingProperty(authored, property));
 }
 
 /**
@@ -341,14 +382,13 @@ export function runPropertyEdits(
     displayMode,
     authorFilter
   )) {
-    const authored = authoredProperties(
-      propertyContainer(covered.run, 'runProperties', 'rPr'),
-      AUTHORABLE_RUN_PROPERTIES
-    );
+    const container = propertyContainer(covered.run, 'runProperties', 'rPr');
+    const authored = authoredProperties(container, AUTHORABLE_RUN_PROPERTIES);
+    const complex = containerIsComplexScript(container);
     edits.push({
       start: covered.start,
       end: covered.end,
-      properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming)),
+      properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex)),
       ...(formatOwned.has(covered.run.id) ? { targetRunIds: [covered.run.id] } : {}),
     });
   }

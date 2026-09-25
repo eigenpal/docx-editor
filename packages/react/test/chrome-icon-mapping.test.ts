@@ -41,6 +41,8 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'alignment.center': 'format_align_center',
   'alignment.right': 'format_align_right',
   'alignment.justify': 'format_align_justify',
+  'direction.ltr': 'format_textdirection_l_to_r',
+  'direction.rtl': 'format_textdirection_r_to_l',
   'list.lineSpacing': 'format_line_spacing',
   'list.bullet': 'format_list_bulleted',
   'list.numbered': 'format_list_numbered',

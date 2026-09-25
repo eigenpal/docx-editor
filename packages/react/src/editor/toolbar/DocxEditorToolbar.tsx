@@ -72,10 +72,12 @@ import {
   ToolbarComments,
   ToolbarIndent,
   ToolbarItalic,
+  ToolbarLeftToRight,
   ToolbarLink,
   ToolbarNumberedList,
   ToolbarOutdent,
   ToolbarRedo,
+  ToolbarRightToLeft,
   ToolbarSave,
   ToolbarSeparator,
   ToolbarStrike,
@@ -548,6 +550,8 @@ export interface DocxEditorToolbarNamespace {
   readonly AlignCenter: ToolbarPartComponent;
   readonly AlignRight: ToolbarPartComponent;
   readonly AlignJustify: ToolbarPartComponent;
+  readonly LeftToRight: ToolbarPartComponent;
+  readonly RightToLeft: ToolbarPartComponent;
   readonly LineSpacing: ToolbarSlotPartComponent;
   readonly BulletList: ToolbarPartComponent;
   readonly NumberedList: ToolbarPartComponent;
@@ -609,6 +613,8 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   AlignCenter: ToolbarAlignCenter,
   AlignRight: ToolbarAlignRight,
   AlignJustify: ToolbarAlignJustify,
+  LeftToRight: ToolbarLeftToRight,
+  RightToLeft: ToolbarRightToLeft,
   LineSpacing: ToolbarLineSpacing,
   BulletList: ToolbarBulletList,
   NumberedList: ToolbarNumberedList,
