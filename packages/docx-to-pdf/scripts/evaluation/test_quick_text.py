@@ -145,5 +145,21 @@ class RepeatedLocationTests(unittest.TestCase):
         self.assertEqual(value["firstDifferences"][0]["locationStatus"], "occurrence-ambiguous")
 
 
+class FingerprintTests(unittest.TestCase):
+    def test_fingerprint_preserves_pages_order_and_repeated_words(self):
+        from quick_text import fingerprint, equal_fingerprints
+
+        left = index_pages([["a", "a"], ["b"], []])
+        same = {"version": left["version"], "dictionary": ["b", "a"], "pages": [[1, 1], [0], []], "words": 3}
+        a, b = fingerprint(left), fingerprint(same)
+        self.assertEqual(a, b)
+        self.assertEqual(equal_fingerprints(a, b), compare(left, same))
+        for pages in [[["a"], ["a", "b"], []], [["a", "a"], ["b"]], [["a"], ["b"], []]]:
+            other = fingerprint(index_pages(pages))
+            self.assertNotEqual(a["document"], other["document"])
+            with self.assertRaises(ValueError):
+                equal_fingerprints(a, other)
+
+
 if __name__ == "__main__":
     unittest.main()

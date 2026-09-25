@@ -223,6 +223,59 @@ def compare(left, right):
     }
 
 
+FINGERPRINT_VERSION = "page-text-sha256-v1"
+
+
+def fingerprint(index):
+    validate(index)
+    import hashlib
+
+    def digest(value):
+        return hashlib.sha256(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    pages = [digest([index["dictionary"][token] for token in page]) for page in index["pages"]]
+    return {
+        "version": FINGERPRINT_VERSION,
+        "pages": pages,
+        "words": index["words"],
+        "document": digest([FINGERPRINT_VERSION, pages]),
+    }
+
+
+def equal_fingerprints(left, right):
+    if left["version"] != FINGERPRINT_VERSION or right["version"] != FINGERPRINT_VERSION:
+        raise ValueError("Incompatible text fingerprint")
+    if (
+        left["document"] != right["document"]
+        or left["pages"] != right["pages"]
+        or left["words"] != right["words"]
+    ):
+        raise ValueError("Different text fingerprints")
+    count = len(left["pages"])
+    return {
+        "version": COMPARE_VERSION,
+        "scope": "pagination-text-screen",
+        "mainIssue": "none",
+        "referencePages": count,
+        "candidatePages": count,
+        "absolutePageError": 0,
+        "matchingPageCount": True,
+        "referenceWords": left["words"],
+        "candidateWords": right["words"],
+        "missingWords": 0,
+        "extraWords": 0,
+        "minimumMovedWords": 0,
+        "samePageWordOccurrences": left["words"],
+        "exactTextPages": count,
+        "differentTextPages": 0,
+        "firstDifferences": [],
+        "visualStatus": "not-measured",
+        "movementStatus": "multiset-lower-bound",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=["pdf", "measurement"])
