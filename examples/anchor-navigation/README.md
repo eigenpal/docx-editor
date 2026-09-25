@@ -30,4 +30,4 @@ Each reference is a `DocAnchor`: a paragraph's `w14:paraId`, with optional `sear
 
 `editor.scrollToAnchor(anchor, options)` moves the viewport. `editor.highlightAnchor(anchor, options)` adds a temporary overlay to the paragraph. Neither method changes selection, focus, document content, or undo history. Headers, footers, and notes support scrolling but not highlights, so the header reference scrolls and then reports that no highlight is available.
 
-For more information, see [Highlight an external paragraph reference](https://docx-editor.dev/docs/2.x/core#highlight-an-external-paragraph-reference).
+For more information, see [Navigate a document](https://docx-editor.dev/docs/2.x/guides/navigation).

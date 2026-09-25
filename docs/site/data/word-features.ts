@@ -1133,15 +1133,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.anchor-navigation',
-    name: 'Scroll to an external paragraph reference',
+    name: 'Scroll to and highlight paragraph references',
     category: 'collaboration',
     editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/2.x/core#scroll-to-an-external-paragraph-reference',
+    docsLink: '/docs/2.x/guides/navigation#scroll-to-a-paragraph-reference',
     notes:
-      'The browser Editor accepts DocAnchor values through scrollToAnchor. Paragraph IDs resolve without internal block IDs. Optional search and occurrence locate text within a paragraph. Scrolling preserves selection, focus, editing scope, content, and undo history. Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes are supported. Repeated headers and footers use their first laid-out occurrence. Text boxes and targets without layout positions return false. Invalid, missing, and ambiguous anchors also return false. React and Vue use the same core method.',
+      'The browser Editor accepts DocAnchor values through scrollToAnchor. Paragraph IDs resolve without internal block IDs. Optional search and occurrence locate text within a paragraph. Scrolling preserves selection, focus, editing scope, content, and undo history. Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes are supported. Repeated headers and footers use their first laid-out occurrence. Text boxes and targets without layout positions return false. Invalid, missing, and ambiguous anchors also return false. Optional block, behavior, and offsetPx settings control the scroll position. highlightAnchor adds a temporary paragraph highlight with the same color, border, padding, timeout, and fade options as document refresh highlights. Highlights support body paragraphs, table cells, and block content controls; headers, footers, and notes return false. Highlights never change selection, content, undo history, or saved files. React and Vue use the same core methods.',
   },
   {
     id: 'collab.clipboard',
