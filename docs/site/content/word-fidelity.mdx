@@ -63,7 +63,7 @@ Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for 
 
 Body text wraps beside supported floating tables and below tables that cover the text column. Text does not wrap into gaps of 0.25 inches or less beside floating tables. Captions and headings move past these gaps. The table's text distances keep the authored gap between its border and surrounding text. Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column. Negative offsets remain in place when they clear preceding text. A table that intersects preceding text moves below that text.
 
-Text-anchored tables taller than a content page retain row pagination. Text-anchored tables marked no-overlap or using vertical alignment also retain their normal flow behavior. Tables whose cells can wrap around earlier floating objects also retain row pagination. Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page. Floating-table properties survive save, but have no editing interface.
+Text-anchored tables taller than a content page retain row pagination. A text-anchored table that covers the text column also breaks across pages when the rest of the page cannot hold it. It breaks only when its first rows fit on that page. The first rows are any header rows and the first body row. The remaining rows continue at the top of the next page, and the following text starts below the last row. This continuation applies to single-column sections with one table per anchor. Anchors with page or column breaks, or space before them, keep whole-table placement. Tables with text distances above or below them also keep whole-table placement. If the first rows do not fit, the table moves to the next page with its following paragraph. Tables that fit a full page move together when `w:doNotBreakWrappedTables` is enabled. Text-anchored tables marked no-overlap or using vertical alignment also retain their normal flow behavior. Tables whose cells can wrap around earlier floating objects also retain row pagination. Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page. Floating-table properties survive save, but have no editing interface.
 
 When you compare a multipage table, check the space between each repeated header and its first body row. The table pagination note lists the shared-border measurement limits. Keep the original document when you report a spacing issue.
 
@@ -102,7 +102,7 @@ The matrix remains the source of truth for support status. These drawing limits 
 | Feature | Rendering | Editing | Round-trip |
 | --- | --- | --- | --- |
 | Anchored text boxes | Shows read-only content inside the authored extent. Linked chains, autofit, and rotation can clip or use placeholders. | No | Preserved |
-| Drawing shapes | Renders solid rectangles, ellipses, bounded polygons, and groups. Other shapes use a placeholder. | No | Preserved |
+| Drawing shapes | Renders solid rectangles, ellipses, bounded polygons, and groups. A group can include one unrotated picture below its shapes. Other shapes use a placeholder. | No | Preserved |
 | WMF and EMF | Rasterizes supported files. Other files keep their extent with a placeholder. | No | Full |
 
 ## Rendering and pagination
@@ -112,6 +112,14 @@ The editor renders opaque solid Word 2010 text outlines with explicit RGB colors
 The editor calculates document layout without browser flow layout. It uses document fonts, themes, section geometry, margins, and Word units.
 
 The layout result controls line and page breaks. The editor paints that result as DOM text, not a canvas bitmap.
+
+Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines, line height, or pages. This applies to breaks at the start, middle, or end of a cell paragraph. The text on each side of a break stays on the same line. Line wrapping, tab alignment, and text wrap around floating pictures treat the text as if the break were absent. The document retains these breaks for editing and saving. Manual line breaks still start a new line inside a cell.
+
+Known single-byte Symbol and Wingdings bullets use Unicode fallback when their font is unavailable. The editor preserves the original numbering definition when you save.
+
+Rows with bottom-to-top cell text use the text length when they have no fixed height. If a minimum height or another cell makes the row taller, text alignment still uses the measured text length.
+
+Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
 
 No-break spaces (U+00A0, U+2007, and U+202F) retain their line-break behavior across formatting runs. This also applies to word joiners (U+2060 and U+FEFF). Ordinary spaces can still provide break positions. Oversized groups retain the existing overflow rules.
 

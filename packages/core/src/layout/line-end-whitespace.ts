@@ -1,3 +1,4 @@
+import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import type { StyleSpanRecord } from './semantic-records.ts';
 
 /** Spaces Word may hang/clip at a line end instead of wrapping onto a new line. */
@@ -7,6 +8,24 @@ export function isCollapsibleLineEndWhitespace(text: string): boolean {
     if (char !== ' ' && char !== '\u3000') return false;
   }
   return true;
+}
+
+/**
+ * Whether the space that opens `pieces[index]` is the trailing space of the word before the
+ * ignored page breaks in front of it. A table cell lays its text out as though the breaks
+ * were absent, and then the word and its space are one candidate with one style, so the
+ * space hangs only when it overflows, not because it ends the paragraph.
+ */
+export function endsWordAcrossIgnoredBreaks(
+  pieces: readonly { readonly text: string; readonly style: object }[],
+  index: number,
+  candidate: string,
+  lastEmitted: string
+): boolean {
+  if (candidate !== ' ' || !/\S$/u.test(lastEmitted)) return false;
+  let before = index - 1;
+  while (pieces[before]?.text === PAGE_BREAK_CHAR) before--;
+  return before < index - 1 && pieces[before]?.style === pieces[index]!.style;
 }
 
 interface ClippedWordEnd {

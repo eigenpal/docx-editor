@@ -135,4 +135,187 @@ describe('bottom-to-top table cell text', () => {
       expect(stops.every(isBottomToTopCaret)).toBe(true);
     }
   });
+
+  describe('rows sized by their bottom-to-top text', () => {
+    const upright = (jc: string, text: string): string =>
+      `<w:p><w:pPr><w:ind w:left="6" w:right="6"/><w:jc w:val="${jc}"/></w:pPr>` +
+      (text ? `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>` : '') +
+      '</w:p>';
+    const cell = (properties: string, body: string): string =>
+      `<w:tc><w:tcPr><w:tcW w:w="850" w:type="dxa"/>${properties}</w:tcPr>${body}</w:tc>`;
+    const turned = '<w:textDirection w:val="btLr"/>';
+    const table = (rows: string): string =>
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="850"/><w:gridCol w:w="850"/></w:tblGrid>' +
+      `${rows}</w:tbl><w:p/>`;
+    const finite = (value: unknown): boolean =>
+      JSON.stringify(value, (_key, entry) =>
+        typeof entry === 'number' && !Number.isFinite(entry) ? 'NON-FINITE' : entry
+      ).includes('NON-FINITE') === false;
+    const turnedParagraph = (result: SemanticLayout, row = 0) => {
+      const block = firstTable(result).rows[row]!.cells[0]!.blocks[0]!;
+      if (block.kind !== 'paragraph') throw new Error('expected paragraph');
+      return block;
+    };
+
+    test('a centred merge head beside turned cells gets a finite span and centres in it', () => {
+      const result = layout(
+        table(
+          `<w:tr><w:trPr><w:trHeight w:val="1000"/></w:trPr>` +
+            cell(`<w:vMerge w:val="restart"/>${turned}`, upright('center', 'head label')) +
+            cell(turned, upright('center', 'side')) +
+            '</w:tr>' +
+            `<w:tr><w:trPr><w:trHeight w:val="1000"/></w:trPr>` +
+            cell(`<w:vMerge/>${turned}`, upright('left', '')) +
+            cell(turned, upright('center', 'side')) +
+            '</w:tr>'
+        )
+      );
+      const tableRecord = firstTable(result);
+      expect(finite(tableRecord)).toBe(true);
+      const head = tableRecord.rows[0]!.cells[0]!;
+      expect(head.rowSpan).toBe(2);
+      const line = turnedParagraph(result).lines[0]!;
+      expect(line.spans.map((span) => span.text).join('')).toBe('head label');
+      // The line runs the span's height, and the label sits halfway along it.
+      const start = line.spans[0]!.box.x;
+      const last = line.spans.at(-1)!.box;
+      const before = start - line.box.x;
+      const after = line.box.x + line.box.width - (last.x + last.width);
+      expect(before).toBeGreaterThan(1);
+      expect(before).toBeCloseTo(after, 3);
+    });
+
+    test('an auto-height row is as tall as its turned text, whatever the alignment', () => {
+      const heights = ['left', 'center', 'right', 'both'].map((jc) => {
+        const result = layout(
+          table(`<w:tr>${cell(turned, upright(jc, 'label'))}${cell('', paragraph('side'))}</w:tr>`)
+        );
+        expect(finite(firstTable(result))).toBe(true);
+        const line = turnedParagraph(result).lines[0]!;
+        expect(line.spans.map((span) => span.text).join('')).toBe('label');
+        return firstTable(result).rows[0]!.box.height;
+      });
+      expect(new Set(heights).size).toBe(1);
+      expect(heights[0]).toBeLessThan(50);
+    });
+
+    test('a minimum that exceeds page room does not enlarge the turned line', () => {
+      const filler = Array.from({ length: 40 }, () => paragraph('filler')).join('');
+      for (const alignment of ['left', 'center', 'right']) {
+        const result = layout(
+          filler +
+            table(
+              `<w:tr><w:trPr><w:trHeight w:val="4000" w:hRule="atLeast"/></w:trPr>` +
+                `${cell(turned, upright(alignment, 'label'))}${cell('', paragraph('side'))}</w:tr>`
+            )
+        );
+        const fragment = result.pages[0]!.fragments.find((item) => item.kind === 'table');
+        if (fragment?.kind !== 'table') throw new Error('expected table on first page');
+        const row = fragment.rows[0]!;
+        const block = row.cells[0]!.blocks[0]!;
+        if (block.kind !== 'paragraph') throw new Error('expected turned paragraph');
+        expect(block.lines[0]!.box.width).toBeLessThanOrEqual(row.cells[0]!.box.height + 0.001);
+        expect(row.box.height).toBeLessThan(30);
+      }
+    });
+
+    test('an incomplete row keeps the turned line inside its cell for every alignment', () => {
+      const nested =
+        '<w:tbl><w:tblGrid><w:gridCol w:w="700"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="2400" w:hRule="exact"/></w:trPr>' +
+        `<w:tc>${paragraph('nested')}</w:tc></w:tr></w:tbl>`;
+      for (const ownOverflow of [false, true]) {
+        const heights = ['left', 'center', 'right'].map((alignment) => {
+          const body = ownOverflow
+            ? Array.from({ length: 6 }, (_, index) => upright(alignment, `label${index}`)).join('')
+            : upright(alignment, 'label');
+          const neighbour = ownOverflow
+            ? paragraph('side')
+            : paragraph('a') + paragraph('b') + nested + paragraph('z');
+          const result = layout(
+            (ownOverflow ? '' : Array.from({ length: 40 }, () => paragraph('filler')).join('')) +
+              table(
+                '<w:tr><w:trPr><w:trHeight w:val="2600" w:hRule="atLeast"/></w:trPr>' +
+                  cell(turned, body) +
+                  cell('', neighbour) +
+                  '</w:tr>'
+              )
+          );
+          const fragment = result.pages
+            .flatMap((page) => page.fragments)
+            .find((item) => item.kind === 'table');
+          if (fragment?.kind !== 'table') throw new Error('expected table');
+          const row = fragment.rows[0]!;
+          const turnedCell = row.cells[0]!;
+          for (const block of turnedCell.blocks) {
+            if (block.kind !== 'paragraph') continue;
+            for (const line of block.lines) {
+              expect(line.box.x + line.box.width).toBeLessThanOrEqual(
+                turnedCell.box.x + turnedCell.box.height + 0.001
+              );
+            }
+          }
+          return row.box.height;
+        });
+        expect(heights[1]).toBeCloseTo(heights[0]!, 3);
+        expect(heights[2]).toBeCloseTo(heights[0]!, 3);
+      }
+    });
+
+    test('a positional tab does not give an auto row an unbounded line length', () => {
+      for (const alignment of ['right', 'center']) {
+        const content = `<w:p><w:r><w:t>Head</w:t><w:ptab w:alignment="${alignment}" w:relativeTo="margin"/><w:t>label</w:t></w:r></w:p>`;
+        for (const merged of [false, true]) {
+          const result = layout(
+            table(
+              `<w:tr>${cell(turned + (merged ? '<w:vMerge w:val="restart"/>' : ''), content)}` +
+                `${cell('', paragraph('side'))}</w:tr>` +
+                (merged
+                  ? `<w:tr>${cell(turned + '<w:vMerge/>', paragraph(''))}${cell('', paragraph('next'))}</w:tr>`
+                  : '')
+            )
+          );
+          expect(result.pages).toHaveLength(1);
+          expect(finite(firstTable(result))).toBe(true);
+          expect(firstTable(result).box.height).toBeLessThan(100);
+          expect(
+            turnedParagraph(result)
+              .lines.flatMap((line) => line.spans)
+              .map((span) => span.text)
+              .join('')
+          ).toContain('label');
+        }
+      }
+    });
+
+    test('an exact row still aligns the turned text along its fixed height', () => {
+      const result = layout(
+        table(
+          `<w:tr><w:trPr><w:trHeight w:val="2000" w:hRule="exact"/></w:trPr>` +
+            `${cell(turned, upright('right', 'label'))}${cell('', paragraph('side'))}</w:tr>`
+        )
+      );
+      expect(firstTable(result).rows[0]!.box.height).toBe(100);
+      const line = turnedParagraph(result).lines[0]!;
+      const span = line.spans[0]!;
+      expect(line.box.x + line.box.width).toBeCloseTo(span.box.x + span.box.width, 3);
+    });
+
+    test('turned text longer than the page still wraps at the page and keeps every word', () => {
+      const words = Array.from({ length: 120 }, (_, index) => `word${index}`).join(' ');
+      const result = layout(
+        table(
+          `<w:tr>${cell(turned, upright('center', words))}${cell('', paragraph('side'))}</w:tr>`
+        )
+      );
+      const tableRecord = firstTable(result);
+      expect(finite(tableRecord)).toBe(true);
+      const block = turnedParagraph(result);
+      expect(block.lines.length).toBeGreaterThan(1);
+      expect(tableRecord.rows[0]!.box.height).toBeLessThanOrEqual(
+        result.pages[0]!.contentBox.height + 0.001
+      );
+    });
+  });
 });

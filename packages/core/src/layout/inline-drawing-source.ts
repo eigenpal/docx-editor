@@ -5,6 +5,7 @@
 // with an empty namespace scope.
 
 import { textboxLayoutToken } from './textbox-layout-token.ts';
+import { pointsDigest, vectorShapeLayoutToken } from './drawing-geometry-digest.ts';
 import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import type {
   OoxmlDrawingNode,
@@ -75,7 +76,7 @@ export interface CreateInlineDrawingLayoutBundleOptions {
 }
 
 function pendingResourceKey(projection: DrawingProjection): string {
-  const picture = projection.picture;
+  const picture = projection.picture ?? projection.groupPicture;
   if (picture?.embeddedRelationshipId) {
     return `embed:${projection.ownerPartName}:${picture.embeddedRelationshipId}`;
   }
@@ -232,110 +233,13 @@ export function drawingSourceOrderInPart(
   return order;
 }
 
-// Scratch view used to fold a coordinate in by its exact IEEE-754 bits. Coordinates are not
-// integers once a group transform has scaled them, so rounding would fold real geometry
-// changes together.
-const COORDINATE_SCRATCH = new Float64Array(1);
-const COORDINATE_BITS = new Uint32Array(COORDINATE_SCRATCH.buffer);
-
-/**
- * Digest of one vector shape's geometry and chrome, for the layout reuse token.
- *
- * Deliberately NOT a serialization. `JSON.stringify` of a shape at the 1024-point budget is
- * ~48 KB and ~230 us, and `isCompatibleWith` reads this token twice per atom whenever the
- * atom-identity fast path misses, so the serialization dominated a document full of shapes.
- * Every other field in the enclosing token is a cheap scalar join; this one folds the point
- * stream into two 32-bit FNV-1a accumulators and joins the scalars verbatim. The shape of
- * the component list (its length, and each subpath's length) is joined literally rather than
- * hashed, so a structural change can never hide inside the digest.
- *
- * This is a cache key, NOT a security primitive. FNV-1a is trivially invertible — its round
- * is `h = (h ^ d) * p` with an odd, hence modularly invertible, `p` — so a chosen last
- * coordinate can drive both accumulators to any target in closed form. That buys nothing
- * here, because forging a collision needs two shapes under the same `drawingNodeId` in two
- * revisions of one document, and the payoff is a stale repaint. Do not reuse this digest
- * anywhere an attacker profits from a collision.
- */
-export function vectorShapeLayoutToken(
-  vector: NonNullable<DrawingProjection['vectorShape']>
-): string {
-  HASH_SCRATCH[0] = 0x811c_9dc5;
-  HASH_SCRATCH[1] = 0x1000_0193;
-  const scalars: string[] = [];
-  for (const component of vector.components) {
-    scalars.push(
-      component.fillHex ?? '',
-      String(component.fillAlpha),
-      component.strokeHex ?? '',
-      String(component.strokeAlpha),
-      String(component.strokeWidthEmu),
-      String(component.subpathsEmu.length)
-    );
-    const subpaths = component.subpathsEmu;
-    for (let index = 0; index < subpaths.length; index += 1) {
-      const subpath = subpaths[index]!;
-      // An omitted close flag paints closed, exactly like `true`; only `false` leaves the
-      // path open, so that is the one value that must separate two otherwise equal shapes.
-      scalars.push(String(subpath.length), component.subpathsClosed?.[index] === false ? '0' : '1');
-      foldPointsInto(subpath, HASH_SCRATCH);
-    }
-    // Line-end triangles are generated geometry the painter fills separately, so a changed
-    // `a:headEnd`/`a:tailEnd` moves nothing in the subpath stream. Their vertices join the
-    // same accumulators, framed by their counts, so the token cannot reuse a stale record.
-    const arrowheads = component.arrowheadsEmu;
-    scalars.push(String(arrowheads?.length ?? 0));
-    if (arrowheads) {
-      for (const arrowhead of arrowheads) {
-        scalars.push(String(arrowhead.length));
-        foldPointsInto(arrowhead, HASH_SCRATCH);
-      }
-    }
-  }
-  return [
-    String(vector.extentEmu.cx),
-    String(vector.extentEmu.cy),
-    String(vector.components.length),
-    scalars.join(','),
-    HASH_SCRATCH[0]!.toString(36),
-    HASH_SCRATCH[1]!.toString(36),
-  ].join(';');
-}
-
-/** The two FNV-1a accumulators {@link vectorShapeLayoutToken} folds every point stream into. */
-const HASH_SCRATCH = new Uint32Array(2);
-
-type EmuPoints = readonly Readonly<{ x: number; y: number }>[];
-
-/** A standalone digest of one point list, for the wrap polygon. */
-function pointsDigest(points: EmuPoints): string {
-  HASH_SCRATCH[0] = 0x811c_9dc5;
-  HASH_SCRATCH[1] = 0x1000_0193;
-  foldPointsInto(points, HASH_SCRATCH);
-  return `${HASH_SCRATCH[0]!.toString(36)}:${HASH_SCRATCH[1]!.toString(36)}`;
-}
-
-/** One fold shared by subpaths, line ends and wrap polygons, so all hash the same way. */
-function foldPointsInto(points: EmuPoints, hash: Uint32Array): void {
-  let hashA = hash[0]!;
-  let hashB = hash[1]!;
-  for (const point of points) {
-    COORDINATE_SCRATCH[0] = point.x;
-    hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
-    hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
-    COORDINATE_SCRATCH[0] = point.y;
-    hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
-    hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
-  }
-  hash[0] = hashA;
-  hash[1] = hashB;
-}
-
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   const position = projection.position;
   const anchor = projection.anchor;
   const picture = projection.picture;
   const wrap = projection.wrapGeometry;
   const vector = projection.vectorShape;
+  const groupPicture = projection.groupPicture;
   // Length-framed (`framedTokenJoin`): relationship ids, part names, and preset geometry
   // are verbatim file values, so a printable field separator would let two different
   // picture references serialize to one token — and `isCompatibleWith` compares
@@ -412,6 +316,22 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
           picture.fillMode,
+        ])
+      : '',
+    groupPicture: groupPicture
+      ? framedTokenJoin([
+          String(groupPicture.crop.left),
+          String(groupPicture.crop.top),
+          String(groupPicture.crop.right),
+          String(groupPicture.crop.bottom),
+          String(groupPicture.frameEmu.x),
+          String(groupPicture.frameEmu.y),
+          String(groupPicture.frameEmu.cx),
+          String(groupPicture.frameEmu.cy),
+          groupPicture.embeddedRelationshipId ?? '',
+          groupPicture.linkedRelationshipId ?? '',
+          groupPicture.memberNodeId,
+          groupPicture.alternateContent ? 'mc' : '',
         ])
       : '',
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
@@ -576,7 +496,7 @@ function createPartDrawingContextSlot(options: {
     const cached = resourceByKey.get(key);
     if (cached) return cached;
 
-    const linked = projection.picture?.linkedRelationshipId;
+    const linked = (projection.picture ?? projection.groupPicture)?.linkedRelationshipId;
     if (linked) {
       const linkedState = lookup.resolveLinked(ownerPartName, linked);
       resourceByKey.set(key, linkedState);
@@ -596,8 +516,18 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  const projectionForAtom = (atomNodeId: string): DrawingProjection | null =>
-    atomProjections.get(atomNodeId) ?? null;
+  // An MC-wrapped group whose picture cannot render lays out as nothing, the same as an MC
+  // payload the projection cannot draw (`projectRunLevelMcDrawing`). A linked picture settles
+  // at once; an embedded one counts only after its decode settles, so a pending group keeps
+  // its frame and paints its vector members.
+  const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
+    const projection = atomProjections.get(atomNodeId) ?? null;
+    if (!projection?.groupPicture?.alternateContent) return projection;
+    const state = projection.groupPicture.linkedRelationshipId
+      ? resourceOf(projection)
+      : resourceByKey.get(pendingResourceKey(projection));
+    return state && state.kind !== 'ready' && state.kind !== 'pending' ? null : projection;
+  };
 
   const context: InlineDrawingLayoutContext = Object.freeze({
     ownerPartName,
@@ -993,4 +923,4 @@ export function drawingTokenForTableBlock(
   return aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph);
 }
 
-export { drawingProjectionLayoutToken, drawingResourceLayoutToken };
+export { drawingProjectionLayoutToken, drawingResourceLayoutToken, vectorShapeLayoutToken };

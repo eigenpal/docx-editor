@@ -38,6 +38,43 @@ export function blockInlineRight(blocks: readonly BlockFragmentRecord[], fallbac
   return right;
 }
 
+/**
+ * Where the lines of a `btLr` cell end.
+ *
+ * An exact row or a merge head's span fixes the row's height, and the lines take all of
+ * `roomRight`. Otherwise the row takes its height from the cell's text.
+ *
+ * Those lines run along the row, so their length is the row's height, and that height is
+ * not known until the text is measured. Laying them out against the room left on the page
+ * aligned centred text halfway down it and grew the row to match. A probe with no page
+ * aligned it against an unbounded line and published non-finite positions, which a merge
+ * head then took as its span height. The lines are as long as the longest one needs, end
+ * indent included, and never longer than the room the row has.
+ *
+ * `measure` lays the blocks out against an unbounded line, where every line starts at its
+ * indent because alignment has no far edge.
+ */
+export function bottomToTopLineEnd(
+  flowLeft: number,
+  roomRight: number,
+  fixedLength: boolean,
+  measure: (right: number) => readonly BlockFragmentRecord[]
+): number {
+  if (fixedLength) return roomRight;
+  const natural = blockInlineEnd(measure(Number.POSITIVE_INFINITY), flowLeft);
+  return Number.isFinite(natural) ? Math.min(roomRight, natural) : roomRight;
+}
+
+/** {@link blockInlineRight} plus each paragraph's end indent: how far the lines need to run. */
+export function blockInlineEnd(blocks: readonly BlockFragmentRecord[], flowLeft: number): number {
+  let end = flowLeft;
+  for (const block of blocks) {
+    const endIndent = block.kind === 'paragraph' ? block.indent.right : 0;
+    end = Math.max(end, blockInlineRight([block], flowLeft) + endIndent);
+  }
+  return end;
+}
+
 /** Map a sheet point into the horizontal local plane used to lay out `btLr` content. */
 export function pointInBottomToTopCell(point: LayoutBoxPoint, cell: LayoutBox): LayoutBoxPoint {
   return {

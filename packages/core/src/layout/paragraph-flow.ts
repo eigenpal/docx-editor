@@ -336,6 +336,8 @@ export function breakParagraph(
   const firstLineOffset = flow?.firstLineOffset ?? 0;
   const markerBaselineFloor = flow?.firstLineMinimumBaseline ?? 0;
   const markerAscent = Math.max(0, flow?.firstLineMarkerAscent ?? 0);
+  // A manual page break inside a table cell keeps its model offset but has no geometry.
+  const pageBreaksIgnored = flow?.cellAnchorScope?.inTableCell === true;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -372,7 +374,12 @@ export function breakParagraph(
           : undefined
       )
     );
-  const allPieces = bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph));
+  const allPieces = bidiPieces(
+    rawPieces,
+    paragraphRtl,
+    bidiSourceBoundaries(paragraph),
+    pageBreaksIgnored
+  );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   // A zero-width projected piece at the start offset (a `w:sym` glyph, a field-code atom)
   // owns no model text, so `end <= startOffset` would drop it. At the paragraph start no
@@ -417,7 +424,7 @@ export function breakParagraph(
     measurer.inkBounds !== undefined &&
     canFitCjkOptically(allPieces);
   const opticalCompression = opticalParagraph && !preserveColonAdvances;
-  const placeableSuffixes = placeableContentSuffixes(pieces);
+  const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const fitCjkOptically = createCjkOpticalFitter(
     pieces,
@@ -523,6 +530,7 @@ export function breakParagraph(
     firstLineOffset,
     anchorStarts: sameParagraphAnchorStarts,
     equationLayoutOf,
+    pageBreaksIgnored,
   });
 
   for (const start of wrapAnchorStarts) {
@@ -1191,8 +1199,9 @@ export function breakParagraph(
         ...(piece.link ? { link: piece.link } : {}),
         ...paragraphSpanMetadata(piece),
       });
-      growLineMetrics(line, breakMetrics);
       line.end = piece.end;
+      if (pageBreaksIgnored) continue;
+      growLineMetrics(line, breakMetrics);
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
       // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
@@ -1286,7 +1295,13 @@ export function breakParagraph(
         const leading = paragraphRtl ? rtlLeadingIndent : 0;
         const stopX = paragraphRtl ? leading + lineOffset() + line.width : currentX;
         const stopRight = paragraphRtl ? leading + available : rightEdge;
-        const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
+        const segment = measureFollowingTabSegment(
+          pieces,
+          pieceIndex,
+          boundary,
+          measurer,
+          pageBreaksIgnored
+        );
         // A `w:ptab` states its own destination and leader, so it does NOT consult the
         // paragraph's tab stops — a table-of-contents line authored with one has none.
         // A positional tab whose destination is at or behind the caret cannot advance —
@@ -1308,7 +1323,7 @@ export function breakParagraph(
             ? authored.alignment === 'left'
               ? nextTabDestination(tabStops, stopX, stopRight)
               : authored
-            : positional.positionPt > currentX
+            : Number.isFinite(positional.positionPt) && positional.positionPt > currentX
               ? positional
               : {
                   // The stop changes; the LEADER is the element's own and survives it.
@@ -1444,7 +1459,12 @@ export function breakParagraph(
       const lineEndWhitespace =
         !protectedEnd &&
         lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
-        (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
+        ((placeableSuffixes[pieceIndex]![boundary] !== 1 &&
+          !(
+            pageBreaksIgnored &&
+            consumed === 0 &&
+            lineEndSpaces.endsWordAcrossIgnoredBreaks(pieces, pieceIndex, candidate, lastEmitted)
+          )) ||
           (!layoutOwned &&
             (line.spans.length > 0 || line.drawings.length > 0) &&
             line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT));

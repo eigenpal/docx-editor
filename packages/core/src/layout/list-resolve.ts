@@ -33,7 +33,7 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { hasSymbolPua, mapSymbolPuaText } from './symbol-encoding.ts';
+import { hasSymbolPua, mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
@@ -548,7 +548,8 @@ export function resolveStoryListItems(
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same
     // string; doing it in the painter would size the marker box for a glyph nobody draws.
-    const markerText = mapSymbolPuaText(
+    const mapMarker = advanced.level.numFmt === 'bullet' ? mapSymbolBulletText : mapSymbolPuaText;
+    const markerText = mapMarker(
       advanced.markerText,
       authoredMarkerStyle.fontFamily,
       isFontAvailable

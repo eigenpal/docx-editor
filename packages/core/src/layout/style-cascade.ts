@@ -48,6 +48,7 @@ import {
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
 import { numberingTabSettings, withNumberingTabRule } from './numbering-tab-rule.ts';
+import { wrappedTableSettings } from './wrapped-table-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import { styleChain, styleIdFromProps } from './style-chain.ts';
@@ -82,6 +83,8 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Keep floating tables that fit a full page together under the compatibility flag. */
+  readonly doNotBreakWrappedTables?: true;
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
@@ -449,9 +452,13 @@ export function buildStyleCascadeTable(
   const ligaturesEnabled = optionalLigaturesEnabled(settingsRoot);
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
-  const settingsCompatibility = preserveExactLineBaseline(settingsRoot)
-    ? { preserveExactLineBaseline: true as const, ...numberingTabSettings(settingsRoot) }
-    : numberingTabSettings(settingsRoot);
+  const settingsCompatibility = {
+    ...(preserveExactLineBaseline(settingsRoot)
+      ? { preserveExactLineBaseline: true as const }
+      : {}),
+    ...numberingTabSettings(settingsRoot),
+    ...wrappedTableSettings(settingsRoot),
+  };
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {

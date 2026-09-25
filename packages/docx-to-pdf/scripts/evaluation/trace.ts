@@ -18,13 +18,15 @@ import { openExportSession } from '../../src/open-session.ts';
 
 const LIMIT = 8000;
 const MAX_RECORDS = 100_000;
-const SETTINGS = {
+/** Exported only for eval tests. The fallback list must stay identical to export.ts. */
+export const SETTINGS = {
   displayMode: 'proposed' as const,
   useSystemFonts: false,
   glyphFallbacks: [
     'Noto Sans Symbols 2',
     'Noto Sans Math',
     'Noto Sans Arabic',
+    'Times New Roman',
     'Noto Sans CJK JP',
     'Twemoji Mozilla',
     'Noto Emoji',

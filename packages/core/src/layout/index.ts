@@ -230,6 +230,7 @@ export { lineSegments, type LineSegment } from './line-segments.ts';
 export type {
   AnchoredDrawingLayoutFallback,
   AnchoredDrawingRecord,
+  DrawingGroupPictureRecord,
   InlineDrawingRecord,
 } from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';
