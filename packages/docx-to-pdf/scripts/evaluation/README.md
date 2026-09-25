@@ -48,3 +48,33 @@ Layout traces return up to three nearby records, including source node IDs and r
 The browser recipe checks pointer placement, keyboard insertion, undo/redo, saved body content, and fresh layout. It uses a local demo server and blocks external browser requests. Batch mode reuses the static server and starts a fresh browser process for each document. The parent caches results using browser, recipe, font, and engine identities. It does not cover drag selection, formatting, or review operations. See [Browser eval probe](../../../../e2e/evaluation-browser.md).
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.
+
+## Fast pagination and text screening
+
+`layout-summary.ts input.docx output.json` opens the production font-backed session
+and returns page counts without painting or writing a PDF. It does not measure text
+or visual fidelity. Use the same TypeScript configuration as `export.ts`.
+
+`quick_text.py pdf input.pdf index.json.gz` extracts words without rendering pages.
+`quick_text.py measurement measurement.json.gz index.json.gz` reuses an existing
+PDF measurement. Both produce a versioned dictionary and per-page token arrays.
+The evaluator caches these indexes by PDF content identity and extraction version.
+Bump `INDEX_VERSION` when extraction or normalization changes. Matcher changes use
+an independent comparison identity and do not invalidate reference indexes.
+
+The Python `compare` entry point counts word occurrences in linear time. It reports
+page-count error, missing and extra occurrences, and the minimum number of matched
+occurrences that must move between pages. Repeated words can make the exact movement
+ambiguous. This lower bound does not replace geometric correspondence. Ordered
+page sequences distinguish rearranged text from identical text. NFC normalization
+preserves case, punctuation, hyphens, and repeated words.
+
+Run synthetic checks with:
+
+```sh
+python -m unittest discover -s packages/docx-to-pdf/scripts/evaluation -p 'test_quick_text.py'
+bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts
+```
+
+Missing or invalid inputs remain failures. Text screening does not certify visual
+fidelity. Use the regular PDF comparison for geometry, drawings, and final evidence.
