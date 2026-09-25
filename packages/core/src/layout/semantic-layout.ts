@@ -1138,6 +1138,14 @@ function layoutBlocksPass(
       styleCascade
     );
     const keys = prepared.map((entry) => entry.key);
+    const positioned = tableWrap.anchorFlow(
+      prepared,
+      contentWidth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      options.compatibilityMode
+    );
     const terminalTextTables = terminalTables.terminalTextTableGroup(
       prepared,
       contentWidth,
@@ -1165,12 +1173,12 @@ function layoutBlocksPass(
             entry.kind === 'paragraph' ? tocVerdictFor(entry.paragraph.id, tocIds) : ''
           );
 
-    // FLOW keys — what incremental resume compares. The composition, its fold order and
-    // the argument for that order live with the folds in `pagination-keeps.ts`, where the
-    // order is testable.
     const lastBlock = prepared.at(-1);
     const flow = composeFlowKeys(
-      listAutoSpacingFlowKeys(paragraphFrameFlowKeys(keys, prepared), prepared),
+      listAutoSpacingFlowKeys(
+        paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
+        prepared
+      ),
       {
         terminalTableGroup: terminalTextTables,
         ...contextualFlowInputs(prepared, styleCascade),
@@ -1186,6 +1194,7 @@ function layoutBlocksPass(
 
     return {
       framePolicy,
+      positioned,
       bodies,
       producer,
       contentWidth,
@@ -1220,6 +1229,7 @@ function layoutBlocksPass(
   }
   const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys, terminalTextTables } =
     prepass;
+  const { positionedTables, positionedTablePolicy } = prepass.positioned;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
     // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
@@ -1311,15 +1321,6 @@ function layoutBlocksPass(
     };
   }
 
-  const positionedTables = tableFloat.positionedTableAnchors(
-    prepared,
-    contentWidth,
-    styleCascade,
-    displayMode,
-    authorFilter,
-    options.compatibilityMode
-  );
-  const positionedTablePolicy = tableWrap.anchorBreakPolicy(positionedTables, prepared);
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;

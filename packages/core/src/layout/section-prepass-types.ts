@@ -1,5 +1,6 @@
 // The prepass shapes one section's block flow reads: each block prepared once per width and
 // producer, and the section-wide results kept on the session between passes.
+import type { anchorFlow } from './table-float-exclusion.ts';
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
@@ -56,6 +57,7 @@ export type PreparedBlock =
  * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
  */
 export interface SectionPrepass {
+  readonly positioned: ReturnType<typeof anchorFlow>;
   /** Frame admission depends on column policy and probe-disabled paragraph IDs. */
   readonly framePolicy: string;
   readonly bodies: readonly OoxmlElement[];

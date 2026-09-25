@@ -3,11 +3,13 @@ import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { hardBreakKind } from '../store/package/hard-break.ts';
 import { paragraphBreaksBefore } from './paragraph-style.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import {
   positionedTablesByAnchor,
+  positionedTableAnchors,
   tableFloatOriginY,
   type PositionedTableAnchor,
   type TableVerticalAnchorFrames,
@@ -235,6 +237,40 @@ function paragraphHasPageOrColumnBreak(paragraph: OoxmlElement): boolean {
     if ('children' in node) for (const child of node.children) pending.push(child);
   }
   return false;
+}
+
+/** Anchor admission is a forward dependency of the earlier table's flow checkpoint. */
+export function anchorFlow(
+  prepared: readonly PreparedBlock[],
+  width: number,
+  styles: StyleCascadeTable | undefined,
+  mode: RevisionDisplayMode,
+  authors: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
+) {
+  const positionedTables = positionedTableAnchors(
+    prepared,
+    width,
+    styles,
+    mode,
+    authors,
+    compatibilityMode
+  );
+  const positionedTablePolicy = anchorBreakPolicy(positionedTables, prepared);
+  return { positionedTables, positionedTablePolicy };
+}
+
+export function anchorFlowKeys(keys: string[], state: ReturnType<typeof anchorFlow>): string[] {
+  if (!state.positionedTables.length) return keys;
+  const flowKeys = [...keys];
+  for (const anchor of state.positionedTables) {
+    flowKeys[anchor.sourceIndex] = framedTokenJoin([
+      keys[anchor.sourceIndex]!,
+      anchor.anchorId,
+      state.positionedTablePolicy.get(anchor.table.id) ? 'split' : 'whole',
+    ]);
+  }
+  return flowKeys;
 }
 
 /** Where the body flow stands when it reaches a positioned table. */

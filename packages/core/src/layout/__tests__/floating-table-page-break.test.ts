@@ -290,3 +290,72 @@ describe('floating tables retain their anchor placement constraints', () => {
     }
   });
 });
+
+describe('retained floating-table anchor policy', () => {
+  const bodyOf = (source: ReturnType<typeof part>) => {
+    const body = source.root.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'body'
+    );
+    if (!body || body.kind === 'textValue') throw new Error('body');
+    return body;
+  };
+  const frame = p(
+    'Frame',
+    '<w:framePr w:w="400" w:h="200" w:wrap="around" w:vAnchor="text" w:hAnchor="text"/>'
+  );
+  const prefix = lead(100) + table();
+  const anchor = p('Anchor');
+  const pageAnchor = p('Anchor', '<w:pageBreakBefore/>');
+  for (const [label, before, after, changed] of [
+    ['page break before', prefix + anchor, prefix + pageAnchor, 2],
+    ['spacing before', prefix + anchor, prefix + p('Anchor', '<w:spacing w:before="200"/>'), 2],
+    [
+      'manual page break',
+      prefix + anchor,
+      prefix + anchor.replace('<w:t ', '<w:br w:type="page"/><w:t '),
+      2,
+    ],
+    [
+      'manual column break',
+      prefix + anchor,
+      prefix + anchor.replace('<w:t ', '<w:br w:type="column"/><w:t '),
+      2,
+    ],
+    ['anchor after frame', prefix + frame + anchor, prefix + frame + pageAnchor, 3],
+    ['frame becomes anchor', prefix + frame + pageAnchor, prefix + p('Frame') + pageAnchor, 2],
+  ] as const) {
+    test(`recomputes earlier table admission when ${label} changes`, () => {
+      const initial = part(before + p('Tail'));
+      const body = bodyOf(initial);
+      const replacement = bodyOf(part(after + p('Tail'))).children[changed]!;
+      const edited = {
+        ...initial,
+        root: {
+          ...initial.root,
+          children: initial.root.children.map((node) =>
+            node === body
+              ? {
+                  ...body,
+                  children: body.children.map((child, index) =>
+                    index === changed ? replacement : child
+                  ),
+                }
+              : node
+          ),
+        },
+      };
+      const session = createLayoutSession();
+      const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+      for (const [revision, source] of [initial, edited, initial, edited].entries()) {
+        const warm = layoutSemanticDocument(source, revision, { ...options, session, cache });
+        expect(warm.pages).toEqual(layoutSemanticDocument(source, revision, options).pages);
+        const unchanged = layoutSemanticDocument(source, revision + 1, {
+          ...options,
+          session,
+          cache,
+        });
+        expect(unchanged.pages).toBe(warm.pages);
+      }
+    });
+  }
+});
