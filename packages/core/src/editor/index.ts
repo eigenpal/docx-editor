@@ -429,6 +429,12 @@ export type {
   ClearRefreshHighlightsOptions,
   NavigateToChangeOptions,
 } from './document-refresh.ts';
+export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  ScrollToAnchorOptions,
+} from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
 export type {

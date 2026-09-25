@@ -143,7 +143,9 @@ function ReferenceButton({ paraId }: { paraId: string }) {
       onClick={() => {
         if (!editor?.scrollToAnchor({ paraId })) {
           // Show an unavailable-reference state in your application.
+          return;
         }
+        editor.highlightAnchor({ paraId }, { timeoutMs: 1500 });
       }}
     >
       Show reference
@@ -152,7 +154,7 @@ function ReferenceButton({ paraId }: { paraId: string }) {
 }
 ```
 
-Place this component inside `DocxEditor.Root`. Scrolling preserves selection and focus. See [Scroll to an external paragraph reference](/docs/2.x/core#scroll-to-an-external-paragraph-reference) for text matching, return values, and supported document regions.
+Place this component inside `DocxEditor.Root`. Scrolling and highlighting preserve selection and focus. For more information, see [Scroll to a paragraph reference](/docs/2.x/guides/navigation#scroll-to-a-paragraph-reference) and [Highlight a paragraph reference](/docs/2.x/guides/navigation#highlight-a-paragraph-reference).
 
 Calling `editor.snapshot()` during render does not subscribe your component. Use `useEditorState` for reactive state.
 

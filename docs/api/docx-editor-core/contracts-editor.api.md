@@ -5,6 +5,27 @@
 ```ts
 
 // @public
+export interface AnchorHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface AnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
+}
+
+// @public
 export interface AuthoredNoteNumbering {
     // (undocumented)
     readonly numFmt?: string;
@@ -27,6 +48,11 @@ export type CanResult = {
     ok: false;
     reason: string;
 };
+
+// @public
+export interface ClearAnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+}
 
 // @public
 export type ColorValue = {
@@ -453,7 +479,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor {
+export interface Editor extends EditorAnchorNavigation {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     beginHistoryGroup(): HistoryGroup;
@@ -597,7 +623,6 @@ export interface Editor {
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    scrollToAnchor(anchor: DocAnchor): boolean;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
@@ -619,6 +644,13 @@ export interface Editor {
     snapshot(options?: {
         scope?: EditorScope;
     }): EditorSnapshot;
+}
+
+// @public
+export interface EditorAnchorNavigation {
+    clearAnchorHighlight(options?: ClearAnchorHighlightOptions): void;
+    highlightAnchor(anchor: DocAnchor, options?: AnchorHighlightOptions): boolean;
+    scrollToAnchor(anchor: DocAnchor, options?: ScrollToAnchorOptions): boolean;
 }
 
 // @public
@@ -1841,6 +1873,13 @@ export interface RunFormatting {
     readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly underline?: boolean;
+}
+
+// @public
+export interface ScrollToAnchorOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly offsetPx?: number;
 }
 
 // @public

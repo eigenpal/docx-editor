@@ -4,6 +4,8 @@
 
 ```ts
 
+import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
+import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
@@ -18,6 +20,7 @@ import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
@@ -117,6 +120,7 @@ import { rulerPageBox } from '@docx-editor.dev/core/editor';
 import { RulerTick } from '@docx-editor.dev/core/editor';
 import { RulerUnit } from '@docx-editor.dev/core/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core/editor';
+import { ScrollToAnchorOptions } from '@docx-editor.dev/core/contracts/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -135,6 +139,10 @@ import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
+
+export { AnchorHighlightAnimation }
+
+export { AnchorHighlightOptions }
 
 export { CHROME_GROUPS }
 
@@ -162,6 +170,8 @@ export { ChromeSlotId }
 
 // @public
 export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
+export { ClearAnchorHighlightOptions }
 
 export { ClearRefreshHighlightsOptions }
 
@@ -2278,6 +2288,8 @@ export interface ScopedChromeAnchor {
     // (undocumented)
     readonly style: CSSProperties;
 }
+
+export { ScrollToAnchorOptions }
 
 // @public
 export const SEARCH_DEBOUNCE_MS = 150;

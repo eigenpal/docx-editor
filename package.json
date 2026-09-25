@@ -23,7 +23,8 @@
     "examples/server-agent-review",
     "python/docx-to-markdown",
     "examples/docx-to-pdf",
-    "examples/document-refresh"
+    "examples/document-refresh",
+    "examples/anchor-navigation"
   ],
   "type": "module",
   "scripts": {
@@ -149,7 +150,8 @@
     "validation:pdf": "bun packages/docx-to-pdf/scripts/validator/launch.mjs",
     "check:docs-style": "node scripts/check-docs-style.mjs",
     "check:docs": "bun run check:docs-style && bun run check:example-readmes && bun run check:docs-mdx && bun run check:docs-chrome-slots && bun run check:docs-vue-refs && bun run check:public-docs-surface",
-    "dev:refresh": "bun run --filter './examples/document-refresh' dev"
+    "dev:refresh": "bun run --filter './examples/document-refresh' dev",
+    "dev:anchors": "bun run --filter './examples/anchor-navigation' dev"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

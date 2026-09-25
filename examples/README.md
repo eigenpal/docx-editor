@@ -27,6 +27,7 @@ bun run dev:agent           # Document review agent
 bun run dev:write-agent     # Document writing agent
 bun run dev:collaboration   # Peer-to-peer collaboration
 bun run dev:server-agent-review # Server agent and shared review room
+bun run dev:anchors         # Scroll to and highlight paragraph references
 ```
 
 Set `OPENAI_API_KEY` as described in each agent example before you run `dev:agent` or `dev:write-agent`.

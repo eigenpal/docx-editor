@@ -206,7 +206,8 @@ function paragraphFloatsOutOfCell(
   const atoms = anchoredDrawingAtomsInParagraph(paragraph, layout);
   if (atoms.length === 0) return false;
   return atoms.every(({ projection }) => {
-    if (projection.hidden || projection.anchor?.behindDocument) return false;
+    // `behindDoc` only sets the paint layer; the wrap decides whether the rows move.
+    if (projection.hidden) return false;
     if (!wrapProducesExclusion(projection.wrap)) return false;
     return !anchorLaidOutInCell(projection, scope);
   });

@@ -883,13 +883,22 @@ describe('header and footer drawing exclusions in body flow', () => {
         for (const span of line.spans) expect(span.box.x).toBeGreaterThanOrEqual(80);
     }
   });
-  test('a behind-text watermark leaves body placement unchanged', () => {
-    const layout = render(
+  // `behindDoc` changes the paint layer, not the text wrap.
+  test('a behind-text header float with a square wrap displaces body text like an in-front one', () => {
+    const behind = render(
       body(paragraph('Body')),
       'header',
       furnitureStory('header', 200, 40, true)
     );
-    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.box.y).toBe(0);
+    const inFront = render(
+      body(paragraph('Body')),
+      'header',
+      furnitureStory('header', 200, 40, false)
+    );
+    const yOf = (layout: typeof behind) =>
+      paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.box.y;
+    expect(yOf(behind)).toBe(yOf(inFront));
+    expect(yOf(behind)).toBeGreaterThan(0);
   });
   test('a wrapping footer pushes overflowing body lines onto following pages', () => {
     const text = 'Body text '.repeat(100);

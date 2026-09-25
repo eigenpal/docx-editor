@@ -196,7 +196,9 @@ The default highlight is a light blue, borderless box with rounded corners. It e
 
 `highlightChanges()` returns the number of selected, available changes, including offscreen locations. A zero result means no locations were selected. Options are validated even when locations are stale or unavailable. During document replacement, highlighting returns zero and navigation returns `false`. Completion listeners can present the accepted locations.
 
-Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling:
+Pass presentation settings directly to `highlightChanges()`. Each call starts from the defaults, so reuse one options object for consistent styling. `RefreshHighlightOptions` extends `AnchorHighlightOptions`, so you can use the same options object for anchor highlights. For more information, see [Highlight a paragraph reference](/docs/2.x/guides/navigation#highlight-a-paragraph-reference).
+
+For example, configure the highlight color, duration, and animation:
 
 ```ts
 import type { RefreshHighlightOptions } from '@docx-editor.dev/react';

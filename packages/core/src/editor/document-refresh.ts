@@ -2,7 +2,8 @@ import { DocumentRefreshError } from './document-refresh-types.ts';
 export { DocumentRefreshError } from './document-refresh-types.ts';
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
-import { createRefreshHighlights } from './document-refresh-highlights.ts';
+import { createParagraphHighlights } from './paragraph-highlights.ts';
+import { revealScrollOptions } from './reveal-scroll-options.ts';
 import { refreshHostFor } from './document-refresh-host.ts';
 import { refreshCompositionActive } from './refresh-write-guard.ts';
 import { pendingSurfaceCommit } from './surface-commit-state.ts';
@@ -67,9 +68,17 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
       }
     }
   };
-  const highlights = createRefreshHighlights(editor, host, () => {
-    if (state.highlightsVisible) notify({ highlightsVisible: false });
-  });
+  const highlights = createParagraphHighlights(
+    editor,
+    host,
+    {
+      marker: 'data-docx-refresh-highlight',
+      defaultColor: 'var(--doc-refresh-highlight-color)',
+    },
+    () => {
+      if (state.highlightsVisible) notify({ highlightsVisible: false });
+    }
+  );
   const publish = (result: RefreshResult, phase?: DocumentRefreshState['phase']): RefreshResult => {
     if (phase) notify({ phase, result, recoveryAvailable: recovery !== null });
     for (const listener of resultListeners) {
@@ -373,31 +382,15 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
       notify({ highlightsVisible: false });
     },
     navigateToChange(id, options = {}) {
-      const block = options.block ?? 'center';
-      const behavior = options.behavior ?? 'instant';
-      const offsetPx = options.offsetPx ?? 24;
-      if (!['start', 'center', 'centerIfNeeded', 'nearest'].includes(block))
-        throw new TypeError('block must be start, center, centerIfNeeded, or nearest.');
-      if (!['instant', 'smooth'].includes(behavior))
-        throw new TypeError('behavior must be instant or smooth.');
       if (options.focus !== undefined && typeof options.focus !== 'boolean')
         throw new TypeError('focus must be a boolean.');
-      if (!Number.isFinite(offsetPx) || offsetPx < 0)
-        throw new RangeError('offsetPx must be finite and nonnegative.');
+      const reveal = revealScrollOptions(options, 'center', host.container());
       if (acceptedRevision !== host.revision) return false;
-      const reduced =
-        host
-          .container()
-          ?.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
-        false;
       const target = located.find((entry) => entry.change.id === id);
       if (!target?.paragraphId || target.offset === undefined) return false;
       const surface = host.surface();
       if (
-        !surface?.revealPosition(
-          { paragraphId: target.paragraphId, offset: target.offset },
-          { block, offsetPx, behavior: reduced ? 'instant' : behavior }
-        )
+        !surface?.revealPosition({ paragraphId: target.paragraphId, offset: target.offset }, reveal)
       )
         return false;
       if (options?.focus) {

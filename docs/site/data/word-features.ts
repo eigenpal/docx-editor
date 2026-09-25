@@ -1133,15 +1133,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.anchor-navigation',
-    name: 'Scroll to an external paragraph reference',
+    name: 'Scroll to and highlight paragraph references',
     category: 'collaboration',
     editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/2.x/core#scroll-to-an-external-paragraph-reference',
+    docsLink: '/docs/2.x/guides/navigation#scroll-to-a-paragraph-reference',
     notes:
-      'The browser Editor accepts DocAnchor values through scrollToAnchor. Paragraph IDs resolve without internal block IDs. Optional search and occurrence locate text within a paragraph. Scrolling preserves selection, focus, editing scope, content, and undo history. Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes are supported. Repeated headers and footers use their first laid-out occurrence. Text boxes and targets without layout positions return false. Invalid, missing, and ambiguous anchors also return false. React and Vue use the same core method.',
+      'Use scrollToAnchor with a DocAnchor to reveal a paragraph by its ID. Optional search and occurrence fields locate text within the paragraph. The block, behavior, and offsetPx options control scrolling. Scrolling supports body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes. Repeated headers and footers use their first layout occurrence. Text boxes, invalid references, missing references, ambiguous references, and targets without layout positions return false. Use highlightAnchor to highlight body paragraphs, table cells, and block content controls. Highlights use the same styling and timing options as document refresh highlights. Headers, footers, footnotes, endnotes, and text boxes return false. Both methods preserve selection, focus, document content, and undo history. Scrolling also preserves editing scope. Highlights do not affect saved files. React and Vue share these methods.',
   },
   {
     id: 'collab.clipboard',

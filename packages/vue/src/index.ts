@@ -409,12 +409,16 @@ export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 
 export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
   Editor,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  ScrollToAnchorOptions,
 } from '@docx-editor.dev/core/contracts/editor';
 export type {
   ReviewAuthorInfo,

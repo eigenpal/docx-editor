@@ -44,6 +44,30 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
     });
   }
 
+  test('a behind-text square float moves the table like an in-front one', () => {
+    const tableTop = (behindDoc: '0' | '1') => {
+      const xml = squareAnchorInCell({
+        text: TEXT,
+        layoutInCell: '0',
+        tableIndent: 2880,
+      });
+      const part = load(xml.replace('behindDoc="0"', `behindDoc="${behindDoc}"`));
+      const page = layoutSemanticDocument(part, 1, {
+        measurer,
+        inlineDrawingLayout: layoutContext(part),
+        compatibilityMode: 14,
+      }).pages[0]!;
+      expect(page.anchoredDrawings?.[0]?.behindDocument).toBe(behindDoc === '1');
+      const table = page.fragments.find((fragment) => fragment.kind === 'table') as
+        | TableFragmentRecord
+        | undefined;
+      expect(table).toBeDefined();
+      return table!.box.y;
+    };
+    expect(tableTop('1')).toBeGreaterThan(0);
+    expect(tableTop('1')).toBeCloseTo(tableTop('0'), 3);
+  });
+
   test('an in-cell float in mode 15 moves nothing', () => {
     const { table, drawing } = layout(
       { text: TEXT, layoutInCell: '0', tableIndent: 2880, wrap: 'topAndBottom' },

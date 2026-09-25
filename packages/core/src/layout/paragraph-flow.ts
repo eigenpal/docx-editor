@@ -488,7 +488,6 @@ export function breakParagraph(
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
       if (!revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter))
         continue;
-      if (atom.projection.anchor?.behindDocument) continue;
       if (
         atom.projection.wrap === 'topAndBottom' ||
         atom.projection.wrap === 'inline' ||

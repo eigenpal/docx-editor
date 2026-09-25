@@ -16,10 +16,9 @@ const projectionsByPart = new WeakMap<
 >();
 
 /** Whether an anchored drawing pushes text aside (and so can change where lines break). */
-export function anchoredDrawingWrapsText(
-  drawing: Pick<AnchoredDrawingRecord, 'behindDocument' | 'wrap'>
-): boolean {
-  return !drawing.behindDocument && !['inline', 'behind', 'inFront'].includes(drawing.wrap);
+export function anchoredDrawingWrapsText(drawing: Pick<AnchoredDrawingRecord, 'wrap'>): boolean {
+  // Keep this check aligned with `exclusionZoneFromAnchoredDrawing`.
+  return !['inline', 'behind', 'inFront'].includes(drawing.wrap);
 }
 
 export function hasFurnitureDrawingExclusions(furniture: PageFurniture | undefined): boolean {

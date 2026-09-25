@@ -17,6 +17,7 @@ import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
+import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 
 import {
@@ -2564,6 +2565,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     ...createEditorScrolling(
       () => surface,
+      () => openScheduler.flush()
+    ),
+    ...createAnchorNavigation(
+      () => editor,
+      () => refreshHost,
       () => openScheduler.flush()
     ),
 

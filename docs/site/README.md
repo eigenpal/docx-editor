@@ -30,7 +30,7 @@ category: 'Getting started' # Badge text and llms.txt group.
 
 The site provides these components without imports. The sync validates component names against this allowlist:
 
-`FrameworkTabs`, `Framework`, `DemoPlayground`, `ReadOnlyDemo`, `ModeToggleDemo`, `ToolbarCustomDemo`, `AuthorDemo`, `UIControlsDemo`, `AgentChatDemo`, `ToolbarLayoutDiagram`, `DualRenderingDiagram`, `DataFlowDiagram`, `PluginHostDiagram`, `PluginLifecycleDiagram`, `PackageStats`, `FeatureMatrix`, `FeatureSummary`, `FeatureBadge`, plus the Fumadocs defaults (`Callout`, `Cards`/`Card`, `Tabs`, `Steps`, …).
+`FrameworkTabs`, `Framework`, `DemoPlayground`, `ReadOnlyDemo`, `ModeToggleDemo`, `ToolbarCustomDemo`, `DocumentRefreshDemo`, `DocumentNavigationDemo`, `AuthorDemo`, `UIControlsDemo`, `AgentChatDemo`, `ToolbarLayoutDiagram`, `DualRenderingDiagram`, `DataFlowDiagram`, `PluginHostDiagram`, `PluginLifecycleDiagram`, `PackageStats`, `FeatureMatrix`, `FeatureSummary`, `FeatureBadge`, plus the Fumadocs defaults (`Callout`, `Cards`/`Card`, `Tabs`, `Steps`, …).
 
 ### Framework switch
 

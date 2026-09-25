@@ -11,6 +11,14 @@
 import type { ZoomMode } from './editor-zoom.ts';
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { EditorEvents } from './editor-events.ts';
+import type { EditorAnchorNavigation } from './editor-anchor.ts';
+export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  EditorAnchorNavigation,
+  ScrollToAnchorOptions,
+} from './editor-anchor.ts';
 export type { DocumentChange, EditorEvents } from './editor-events.ts';
 import type { ResolveReviewChangesOptions } from './editor-review.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
@@ -292,7 +300,7 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor {
+export interface Editor extends EditorAnchorNavigation {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -694,25 +702,7 @@ export interface Editor {
    */
   scrollToPage(pageNumber: number): boolean;
   scrollToBlock(blockId: string): boolean;
-
-  /**
-   * Reveal a paragraph by its `w14:paraId` without changing selection, focus, or editing scope.
-   * With `search`, reveal the start of the matched text. Matching follows {@link DocAnchor}.
-   * An offscreen target is centered; an already visible target does not move the viewport.
-   *
-   * Supports laid-out body, table, header, footer, footnote, and endnote paragraphs.
-   * Repeated headers and footers use their first laid-out occurrence. Text boxes are unsupported.
-   * Returns true when the target is visible or scrolling succeeds. Returns false for invalid,
-   * missing, ambiguous, or unlaid-out targets, or without a mounted, measurable scroll container.
-   * Works in viewing mode. Does not change document content or undo history.
-   *
-   * @example
-   * ```ts
-   * const revealed = editor.scrollToAnchor({ paraId: '1B4C77A2' });
-   * ```
-   * @public
-   */
-  scrollToAnchor(anchor: DocAnchor): boolean;
+  // scrollToAnchor, highlightAnchor, and clearAnchorHighlight: see EditorAnchorNavigation.
 
   getZoom(): number;
   /**

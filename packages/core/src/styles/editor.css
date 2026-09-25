@@ -248,6 +248,7 @@
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
   --doc-refresh-highlight-color: #3b82f6;
+  --doc-anchor-highlight-color: #3b82f6;
   --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
@@ -7434,7 +7435,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Keep dark document text legible beneath decorative change overlays. */
-:where(.docx-editor) [data-docx-refresh-highlight] {
+:where(.docx-editor) :is([data-docx-refresh-highlight], [data-docx-anchor-highlight]) {
   mix-blend-mode: multiply;
 }
 
