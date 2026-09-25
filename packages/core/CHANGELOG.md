@@ -1,5 +1,35 @@
 # @docx-editor.dev/core
 
+## 2.23.0
+
+### Minor Changes
+
+- d04902a: Draw vertical and horizontal lines, and draw shape outlines at their full width, inside the shape where the outline is set to sit inside it, and at the width the document theme gives them. Fixes #972
+- a2951cf: Add customizable paragraph highlights with `editor.highlightAnchor()` and `editor.clearAnchorHighlight()`. Add alignment, motion, and offset settings to `editor.scrollToAnchor()`.
+- bf776f2: Numbered paragraphs now start their first line at a tab stop between the number and the text indent, so the line wraps with the width it has. Documents that set `w:doNotUseIndentAsNumberingTabStop` use the first tab stop past the number instead of the text indent.
+- e608e2d: Right-to-left runs now render with their complex-script font, size, bold, and italic, and alignment, paste, and copy follow each paragraph's direction. A new `setParagraphDirection` command with `direction.ltr` and `direction.rtl` toolbar controls switches paragraph direction. Fixes #864
+- 6794f4d: Odd-page and even-page sections, and sections that restart page numbering when odd and even pages differ, now start on a page of the correct parity, with one empty sheet inserted when needed and marked by `PageRecord.parityBlank`. Sheets after section-end note sheets or a continuous section now continue the running page number, and `w:evenAndOddHeaders` with the value `off` now turns different odd and even pages off.
+
+### Patch Changes
+
+- e608e2d: Arabic and other joining scripts now join across a formatting change inside a word, such as a color change, in layout and in PDF export.
+- e608e2d: PDF export now joins Arabic letters when the run's font has no Arabic glyphs, and the exported text extracts as whole words in logical order.
+- b981ea6: Wrap text around floating drawings that use `behindDoc` with `wrapSquare`, `wrapTight`, or another wrapping mode. These drawings still paint behind the text, while `wrapNone` watermarks remain unchanged.
+- 0e42c85: A continuous section with a different header or footer height, or with a different first page, now continues on the sheet where the previous section ended instead of starting a new sheet.
+- e608e2d: In exported PDFs, Hebrew lines drawn in a fallback font now take that font's line height, so they no longer take the extra height of the run's own font.
+- ab460dc: Keep headings with following paragraphs when widow control or keep-lines moves those paragraphs to the next page.
+- e633def: A plain paragraph that starts with a manual page break and has text after the break no longer adds a blank page when it follows a full page.
+- cee5764: A paragraph that contains a line break outside a run now renders and stays editable, and the misplaced break is saved unchanged.
+- 390c177: A field nested inside another field's instruction no longer adds its saved result, including line breaks, to the displayed text, Find, or text reads.
+- ae1afe0: Preserve no-break space behavior across formatting runs and keep figure spaces attached to adjacent East Asian text.
+- d6c75d2: A manual page break followed by an empty section-break paragraph no longer adds a blank page before a section that starts on a new page.
+- 2eea4de: A character style on a paragraph mark now sets the height of an empty paragraph and formats the paragraph's list number, so headers and footers with styled empty paragraphs leave the correct space for body text. Text typed into such a paragraph takes the same character style.
+- e040ff8: Runs, paragraphs, tables, and pictures written with indented XML under `xml:space="preserve"` now open as editable content, so their no-break spaces, tabs, and text appear in the layout instead of disappearing.
+- e608e2d: Right-to-left paragraphs now take `w:left` indents from the right margin, place list markers on the right in right-to-left order, and number `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` lists in their own scripts. For these paragraphs, `formatting.indent` reports the `w:left` value as `left` and sets `rtl`, and the ruler mirrors its indent handles.
+- e608e2d: Tabs in right-to-left paragraphs now keep the text segments in reading order and measure tab stops from the right margin.
+- 9afb832: An empty section-break paragraph with a page break before it no longer adds a blank page after the content of its section, also when the paragraph holds only bookmarks, proofing marks, permission or comment range markers, or empty text.
+- @docx-editor.dev/i18n@2.23.0
+
 ## 2.22.0
 
 ### Minor Changes
