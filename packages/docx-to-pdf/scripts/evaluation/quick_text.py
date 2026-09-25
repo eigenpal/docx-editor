@@ -104,18 +104,29 @@ def compare_layout(reference, summary):
                     excerpts.append(word[:80])
             difference[name + "UnmatchedSample"] = excerpts
         lines = summary["text"]["pages"][page]["lines"] if page < summary["pageCount"] else []
-        samples = set(difference["candidateUnmatchedSample"])
-        difference["candidateLocations"] = [
-            {
-                "paragraphId": line["paragraphId"],
-                "story": line["story"],
-                "sourceRange": span["sourceRange"],
-                "box": span["box"],
-            }
-            for line in lines
-            if any(word[:80] in samples for word in line["text"].split())
-            for span in line["spans"]
-        ][:3]
+        reference_tokens = reference["pages"][page] if page < len(reference["pages"]) else []
+        remaining = Counter(reference["dictionary"][token] for token in reference_tokens)
+        locations = []
+        for line in lines:
+            unmatched = False
+            for raw in line["text"].split():
+                word = unicodedata.normalize("NFC", raw)
+                if remaining[word]:
+                    remaining[word] -= 1
+                else:
+                    unmatched = True
+            if unmatched and len(locations) < 3:
+                locations.append(
+                    {
+                        "paragraphId": line["paragraphId"],
+                        "story": line["story"],
+                        "precision": "line-candidate",
+                        "sourceRange": line["spans"][0]["sourceRange"] if line["spans"] else None,
+                        "box": line["spans"][0]["box"] if line["spans"] else None,
+                    }
+                )
+        difference["candidateLocations"] = locations
+        difference["locationStatus"] = "occurrence-ambiguous" if locations else "unavailable"
     return result
 
 

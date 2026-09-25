@@ -121,5 +121,26 @@ class LayoutTextTests(unittest.TestCase):
         self.assertEqual(result["firstDifferences"][0]["candidateLocations"][0]["paragraphId"], "p1")
 
 
+class RepeatedLocationTests(unittest.TestCase):
+    def test_unmatched_duplicate_does_not_point_at_matched_line(self):
+        from quick_text import compare_layout
+
+        lines = [
+            {
+                "text": "same",
+                "story": "body",
+                "paragraphId": name,
+                "spans": [{"text": "same", "sourceRange": None, "box": {"x": 0, "y": i}}],
+            }
+            for i, name in enumerate(["matched", "extra"])
+        ]
+        value = compare_layout(
+            index_pages([["same"]]),
+            {"pageCount": 1, "text": {"version": "layout-text-v1", "pages": [{"lines": lines}]}},
+        )
+        self.assertEqual(value["firstDifferences"][0]["candidateLocations"][0]["paragraphId"], "extra")
+        self.assertEqual(value["firstDifferences"][0]["locationStatus"], "occurrence-ambiguous")
+
+
 if __name__ == "__main__":
     unittest.main()
