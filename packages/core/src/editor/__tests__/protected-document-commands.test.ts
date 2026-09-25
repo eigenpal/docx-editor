@@ -332,6 +332,7 @@ for (const mode of ['forms', 'comments'] as const) {
       { type: 'toggleMark', mark: 'bold' },
       { type: 'clearFormatting' },
       { type: 'setAlignment', align: 'center' },
+      { type: 'setParagraphDirection', direction: 'rtl' },
       { type: 'setLineSpacing', rule: 'multiple', value: 2 },
       { type: 'setParagraphSpacing', beforePt: 12 },
       { type: 'setIndent', left: 120 },

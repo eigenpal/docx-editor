@@ -74,7 +74,6 @@ function layout(
     levelExtra?: string;
     suffix?: string;
     width?: number;
-    rtl?: boolean;
   } = {}
 ): SemanticLayout {
   const part = read(
@@ -83,9 +82,8 @@ function layout(
   );
   return layoutSemanticDocument(part, 1, {
     measurer,
-    numberingIndex: options.rtl
-      ? numbering('', 'tab', '<w:ind w:right="1440" w:hanging="720"/>', 'right')
-      : numbering(options.levelExtra, options.suffix),
+    // A bidi paragraph reads the same level from its leading (right) side.
+    numberingIndex: numbering(options.levelExtra, options.suffix),
     styleCascade: cascade(options.settings),
     geometry: {
       width: options.width ?? 400,
@@ -227,7 +225,7 @@ describe('right-to-left numbered paragraphs mirror the same rule', () => {
       `<w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Text</w:t></w:r></w:p>`;
     const width = 400;
     const end = (pPr: string) => {
-      const line = firstParagraph(layout(rtl(pPr), { width, rtl: true })).lines[0]!;
+      const line = firstParagraph(layout(rtl(pPr), { width })).lines[0]!;
       return Math.max(...line.spans.map((span) => span.box.x + span.box.width));
     };
     expect(end('')).toBe(width - 72);

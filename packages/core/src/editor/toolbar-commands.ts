@@ -86,6 +86,8 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'alignment.center': { type: 'setAlignment', align: 'center' },
   'alignment.right': { type: 'setAlignment', align: 'right' },
   'alignment.justify': { type: 'setAlignment', align: 'justify' },
+  'direction.ltr': { type: 'setParagraphDirection', direction: 'ltr' },
+  'direction.rtl': { type: 'setParagraphDirection', direction: 'rtl' },
   'list.bullet': { type: 'toggleList', kind: 'bullet' },
   'list.numbered': { type: 'toggleList', kind: 'ordered' },
   'list.indent': { type: 'adjustIndent', direction: 'increase' },
@@ -602,7 +604,8 @@ export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
     command?.type === 'toggleParagraphMarks' ||
     command?.type === 'toggleDocumentProtection' ||
     command?.type === 'setReviewDisplayMode' ||
-    command?.type === 'setAlignment'
+    command?.type === 'setAlignment' ||
+    command?.type === 'setParagraphDirection'
   );
 }
 

@@ -82,7 +82,23 @@ export interface ShapeInput {
   /** Exact UAX #9 embedding/isolate level; direction is its parity projection. */
   readonly bidiLevel: number;
   readonly environment: ShapingEnvironment;
+  /**
+   * Logical text around `text` that the shaper reads for contextual forms but never
+   * shapes: HarfBuzz pre- and post-context. A word split across two formatting runs joins
+   * across the split only when each half sees the other's letters. At most
+   * {@link MAX_SHAPING_CONTEXT} UTF-16 units each; glyphs and clusters cover `text` alone.
+   */
+  readonly context?: ShapingContext;
 }
+
+/** Pre- and post-context for one shaping call. See {@link ShapeInput.context}. @public */
+export interface ShapingContext {
+  readonly before: string;
+  readonly after: string;
+}
+
+/** Longest context on either side, in UTF-16 units. Joining needs only the nearest letters. @public */
+export const MAX_SHAPING_CONTEXT = 16;
 
 /**
  * One positioned glyph.

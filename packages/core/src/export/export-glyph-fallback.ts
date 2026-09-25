@@ -1,5 +1,6 @@
 import { shapeExportClusterFallback } from './export-cluster-fallback.ts';
 import { orderFallbackFacesForCluster } from './export-color-font.ts';
+import { orderFacesForScript } from './export-script-support.ts';
 import { shapeExportHyphenFallback } from './export-hyphen-fallback.ts';
 import { synthesizeExportSmallCaps } from './export-small-caps.ts';
 // Optional export fallback over admitted faces. Measurement and PDF glyph publication
@@ -49,6 +50,8 @@ export function withExportGlyphFallbacks(
         memo.input.text === input.text &&
         memo.input.fontSizeHalfPoints === input.fontSizeHalfPoints &&
         memo.input.bidiLevel === input.bidiLevel &&
+        memo.input.context?.before === input.context?.before &&
+        memo.input.context?.after === input.context?.after &&
         memo.input.environment === input.environment
       )
         return memo.run;
@@ -64,14 +67,21 @@ export function withExportGlyphFallbacks(
       return primary;
     // Preserve the authored face around missing symbols. Moving an entire Latin/CJK
     // run to a fallback also changes its supported letters, spaces and line breaks.
+    // Hebrew letters in an Arabic face fall back the same way: the face keeps drawing the
+    // spaces and punctuation it has, so its line height still applies to the line.
     // Joining scripts retain whole-run fallback so font boundaries do not sever joins.
-    if (/^(Latn|Cyrl|Grek|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script)) {
+    if (/^(Latn|Cyrl|Grek|Hebr|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script)) {
       const mixed = shapeExportClusterFallback(compatible, input, primary, fonts);
       if (mixed) return mixed;
     }
     // Color faces go first for emoji presentation and last otherwise, so a dingbat stays a
-    // symbol glyph and an emoji-default pictograph gets its color face.
-    for (const font of orderFallbackFacesForCluster(fonts, input.text)) {
+    // symbol glyph and an emoji-default pictograph gets its color face. Within that, a face
+    // that declares the run's script goes first: covering Arabic letters is not shaping
+    // them, and a math face that only maps them draws every letter isolated.
+    for (const font of orderFacesForScript(
+      orderFallbackFacesForCluster(fonts, input.text),
+      input.environment.script
+    )) {
       if (
         font.hash === input.environment.font.hash &&
         font.faceIndex === input.environment.font.faceIndex

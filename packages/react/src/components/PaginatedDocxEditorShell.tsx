@@ -155,9 +155,15 @@ export function PaginatedDocxEditorShell({
           editor.setRunProperty('strike', { val: '0' });
           editor.setRunProperty('vertAlign', { val: 'baseline' });
           return;
+        case 'setRtl':
+        case 'setLtr':
+          // The same write as the `direction.*` chrome slots and `setParagraphDirection`.
+          return editor.setParagraphProperty('bidi', undefined, {
+            paragraphDirection: action === 'setRtl' ? 'rtl' : 'ltr',
+          });
         default:
-          // Lists, indent, links and direction are deferred lanes. Doing nothing visibly is
-          // honest; approximating them would write OOXML the engine cannot round-trip.
+          // Lists, indent and links are deferred lanes. Doing nothing visibly is honest;
+          // approximating them would write OOXML the engine cannot round-trip.
           return;
       }
     }
@@ -191,7 +197,12 @@ export function PaginatedDocxEditorShell({
         return name ? editor.setRunProperty('highlight', { val: name }) : undefined;
       }
       case 'alignment':
-        return editor.setParagraphProperty('jc', { val: String(action.value) });
+        // A physical edge: a right-to-left paragraph reaches its right margin with `left`.
+        return editor.setParagraphProperty(
+          'jc',
+          { val: String(action.value) },
+          { physicalAlignment: true }
+        );
       case 'lineSpacing':
         // The picker already speaks TWIPS (240 = single). Multiplying again turned "1.5
         // lines" into 360 lines.

@@ -16,12 +16,13 @@ function level(attrs: string) {
   if (!p.ok) throw Error(p.reason);
   return resolveNumberingLevel(buildNumberingIndex(p.part.root), '1', 0)!.level.indent;
 }
-test('direct logical indents use inherited bidi and override numbering physical sides', () => {
+test('direct indents use inherited bidi and override the level side by side', () => {
   expect(
     mergeListIndent(level('w:right="720"'), [bidi], [ind({ start: '1440', end: '360' })])
   ).toMatchObject({ left: 18, right: 72 });
+  // The level's trailing `w:right` stands on the left; the direct leading side is on the right.
   expect(mergeListIndent(level('w:right="720"'), [], [bidi, ind({ start: '1440' })])).toMatchObject(
-    { left: 0, right: 72 }
+    { left: 36, right: 72 }
   );
 });
 test('inherited logical indents follow final direct paragraph direction', () => {
@@ -42,22 +43,23 @@ test('numbering levels preserve logical provenance until final paragraph directi
   expect(mergeListIndent(raw, [bidi])).toMatchObject({ left: 18, right: 36 });
   expect(mergeListIndent(raw, [])).toMatchObject({ left: 36, right: 18 });
 });
-test('physical sides take precedence over logical sides within each tier', () => {
+test('`w:left` and `w:right` take precedence over `w:start` and `w:end` within each tier', () => {
+  // `w:left` is the leading indent in either direction, so it lands on the right here.
   const raw = level('w:left="240" w:right="480" w:start="720" w:end="360"');
-  expect(mergeListIndent(raw, [bidi])).toMatchObject({ left: 12, right: 24 });
+  expect(mergeListIndent(raw, [bidi])).toMatchObject({ left: 24, right: 12 });
   expect(
     mergeListIndent(
       level('w:start="720"'),
       [bidi],
       [ind({ left: '200', right: '400', start: '800', end: '600' })]
     )
-  ).toMatchObject({ left: 10, right: 20 });
+  ).toMatchObject({ left: 20, right: 10 });
 });
-test('numbering logical sides override inherited indents on their resolved physical side', () => {
+test('numbering sides override inherited indents on the same logical side', () => {
   expect(
     mergeListIndent(level('w:start="720"'), [bidi, ind({ left: '180', right: '1440' })])
-  ).toMatchObject({ left: 9, right: 36 });
+  ).toMatchObject({ left: 72, right: 36 });
   expect(
     mergeListIndent(level('w:end="720"'), [bidi, ind({ left: '1440', right: '180' })])
-  ).toMatchObject({ left: 36, right: 9 });
+  ).toMatchObject({ left: 36, right: 72 });
 });

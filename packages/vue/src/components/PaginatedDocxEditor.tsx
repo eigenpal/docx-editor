@@ -46,7 +46,11 @@ export interface PaginatedDocxEditorHandle {
   setParagraphProperty(
     localName: string,
     attributes?: Record<string, string | null>,
-    options?: { readonly mergeAttributes?: boolean }
+    options?: {
+      readonly mergeAttributes?: boolean;
+      readonly physicalAlignment?: boolean;
+      readonly paragraphDirection?: 'ltr' | 'rtl';
+    }
   ): void;
   formatting(): SurfaceFormatting | null;
   sectionProperties(): SectionProperties | null;
@@ -154,7 +158,11 @@ export const PaginatedDocxEditor = defineComponent({
       setParagraphProperty: (
         localName: string,
         attributes?: Record<string, string | null>,
-        options?: { readonly mergeAttributes?: boolean }
+        options?: {
+          readonly mergeAttributes?: boolean;
+          readonly physicalAlignment?: boolean;
+          readonly paragraphDirection?: 'ltr' | 'rtl';
+        }
       ) => surfaceRef.value?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.value?.formatting() ?? null,
       sectionProperties: () => surfaceRef.value?.sectionProperties() ?? null,

@@ -126,6 +126,19 @@ describe('the effective indent read', () => {
     expect(surface.formatting().indent).toMatchObject({ left: 720, right: 360, firstLine: 0 });
   });
 
+  test('a right-to-left paragraph reports its sides as `w:left` and `w:right` name them', () => {
+    // Layout puts `w:left` on the right margin here. The read stays logical so the ruler and
+    // the dialog write back to the attribute they read from.
+    const surface = mount(para('body', `<w:bidi/>${IND('w:left="720" w:right="360"')}`));
+    caretIn(surface);
+    expect(surface.formatting().indent).toMatchObject({ left: 720, right: 360, rtl: true });
+    surface.setIndent({ left: 1080 });
+    expect(ownIndent(surface)).toMatchObject({ left: '1080', right: '360' });
+    const ltr = mount(para('body', IND('w:left="720"')));
+    caretIn(ltr);
+    expect(ltr.formatting().indent?.rtl).toBeUndefined();
+  });
+
   test('a UNIFORM two-paragraph selection reports the indent, not null', () => {
     // The regression that matters: agreeing over a freshly built object with `===` reports
     // every multi-paragraph selection as mixed, so Select All would hide all four handles.

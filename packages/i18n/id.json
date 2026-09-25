@@ -69,7 +69,8 @@
       "listFormatting": "Pemformatan Daftar",
       "image": "Gambar",
       "table": "Tabel",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

@@ -46,7 +46,10 @@ export type ListMarkerAlign = 'left' | 'center' | 'right';
  * must not overwrite an inherited `hanging` with a synthesized zero.
  */
 export interface NumberingLevelIndent {
-  /** Authored physical/logical sides, in points, before paragraph direction resolves them. */
+  /**
+   * The sides as the level spells them, in points. `left` and `start` both name the leading
+   * indent, and `right` and `end` the trailing one; `left`/`right` below hold those two.
+   */
   readonly authored?: {
     readonly left?: number;
     readonly right?: number;

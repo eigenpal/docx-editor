@@ -43,17 +43,19 @@ export function prepareParagraphBreakInputs(
   // Word supplies a left tab at a hanging paragraph's text origin. An authored stop
   // at that position takes precedence; later custom stops must not swallow this tab.
   // It stays marked as implied: the numbering suffix places the indent by its own rule.
-  const { left, hanging, firstLine } = inputs.indent;
+  // Stops count from the leading margin, which is the right one in a right-to-left paragraph.
+  const { hanging, firstLine } = inputs.indent;
+  const leading = paragraphIsRtl(inputs.props) ? inputs.indent.right : inputs.indent.left;
   if (
     (hanging > 0 || firstLine < 0) &&
-    left > 0 &&
-    !tabStops.stops.some((stop) => stop.positionPt === left && !stop.numberingOnly)
+    leading > 0 &&
+    !tabStops.stops.some((stop) => stop.positionPt === leading && !stop.numberingOnly)
   ) {
     tabStops = {
       ...tabStops,
       stops: [
         ...tabStops.stops,
-        { positionPt: left, alignment: 'left' as const, implied: true as const },
+        { positionPt: leading, alignment: 'left' as const, implied: true as const },
       ].sort((a, b) => a.positionPt - b.positionPt),
     };
   }

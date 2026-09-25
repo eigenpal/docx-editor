@@ -4,6 +4,7 @@ import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { paragraphAlignment } from '../paragraph-flow.ts';
+import { jcValueForAlignment } from '../paragraph-alignment.ts';
 import { spanOffsetX, hitTestPage, lineEndOffset } from '../semantic-hit-test.ts';
 import { paragraphIsRtl, reorderBidiSpans } from '../rtl-paragraph.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
@@ -33,6 +34,8 @@ function layout(text: string, pPr = '', table = false, width = 120, rPr = '') {
   );
 }
 
+const bidiJc = (val: string) => [{ localName: 'bidi' }, { localName: 'jc', attributes: { val } }];
+
 test('inherited bidi gives logical start alignment and permits an explicit off override', () => {
   expect(paragraphIsRtl([{ localName: 'bidi' }])).toBe(true);
   expect(
@@ -45,10 +48,23 @@ test('inherited bidi gives logical start alignment and permits an explicit off o
   expect(
     paragraphAlignment([{ localName: 'bidi' }, { localName: 'jc', attributes: { val: 'end' } }])
   ).toBe('left');
-  expect(
-    paragraphAlignment([{ localName: 'bidi' }, { localName: 'jc', attributes: { val: 'left' } }])
-  ).toBe('left');
+  // Word 16 reads `left`/`right` as the leading and trailing edges of a bidi paragraph.
+  expect(paragraphAlignment(bidiJc('left'))).toBe('right');
+  expect(paragraphAlignment(bidiJc('right'))).toBe('left');
+  expect(paragraphAlignment(bidiJc('lowKashida'))).toBe('both');
+  expect(paragraphAlignment([{ localName: 'jc', attributes: { val: 'left' } }])).toBe('left');
   expect(linesOf(layout('abc', '<w:bidi w:val="0"/>'))[0]!.contentX).toBe(0);
+});
+
+test('a physical alignment request is spelled per paragraph direction', () => {
+  expect(jcValueForAlignment('right', true)).toBe('left');
+  expect(jcValueForAlignment('left', true)).toBe('right');
+  expect(jcValueForAlignment('right', false)).toBe('right');
+  expect(jcValueForAlignment('justify', true)).toBe('both');
+  for (const align of ['left', 'right', 'center', 'both'] as const) {
+    const val = jcValueForAlignment(align, true);
+    expect(paragraphAlignment(bidiJc(val))).toBe(align);
+  }
 });
 
 test.each([false, true])(
@@ -158,9 +174,12 @@ test('logical RTL indents apply to the inherited leading and trailing sides', ()
   expect(line.box.x).toBe(12);
   expect(line.box.width).toBe(72);
   expect(Math.max(...line.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(84);
-  const physical = linesOf(layout('مرحبا', '<w:ind w:left="240" w:right="480"/>'))[0]!;
-  expect(physical.box.x).toBe(12);
-  expect(Math.max(...physical.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(96);
+  // `w:left` is the transitional spelling of `w:start`: the leading (right) side here.
+  const transitional = linesOf(layout('مرحبا', '<w:ind w:left="240" w:right="480"/>'))[0]!;
+  expect(transitional.box.x).toBe(24);
+  expect(Math.max(...transitional.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(
+    108
+  );
 });
 
 test('justified RTL spans stretch authored spaces in the native text band', () => {

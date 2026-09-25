@@ -69,7 +69,8 @@
       "listFormatting": "Formatowanie listy",
       "image": "Obraz",
       "table": "Tabela",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

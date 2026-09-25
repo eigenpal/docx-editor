@@ -24,6 +24,7 @@ import type { ReactElement } from 'react';
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
+  alignmentAfterDirectionChange,
   changedFields,
   formatInches,
   inchesToTwips,
@@ -72,6 +73,7 @@ function ParagraphDialogRoot({
   const { format, isEnabled, apply } = useParagraphFormat();
 
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
+  const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
   const [indentLeft, setIndentLeft] = useState(0);
   const [indentRight, setIndentRight] = useState(0);
   const [special, setSpecial] = useState<SpecialIndent>('none');
@@ -120,6 +122,7 @@ function ParagraphDialogRoot({
     if (seeded.current || format === null) return;
     const seed = seedFields(format);
     setAlignment(seed.alignment);
+    setDirection(seed.direction);
     setIndentLeft(seed.indentLeft);
     setIndentRight(seed.indentRight);
     setSpecial(seed.special);
@@ -183,6 +186,7 @@ function ParagraphDialogRoot({
             seed,
             {
               alignment,
+              direction,
               indentLeft,
               indentRight,
               special,
@@ -227,6 +231,7 @@ function ParagraphDialogRoot({
     mixed,
     clearedAllTabStops,
     alignment,
+    direction,
     indentLeft,
     indentRight,
     special,
@@ -360,6 +365,7 @@ function ParagraphDialogRoot({
 
   const values: ParagraphDialogFields = {
     alignment,
+    direction,
     indentLeft,
     indentRight,
     special,
@@ -376,8 +382,17 @@ function ParagraphDialogRoot({
     tabStops,
     clearedAllTabStops,
   };
+  // A new direction trades the leading and trailing edges, so the Alignment field follows
+  // it and shows what OK will produce, the same result as the toolbar's direction buttons.
+  const changeDirection = (next: 'ltr' | 'rtl'): void => {
+    const opened = seedMixedRef.current;
+    if (next !== direction && !opened.direction && !opened.alignment)
+      setAlignment(alignmentAfterDirectionChange);
+    setDirection(next);
+  };
   const setters = {
     alignment: setAlignment,
+    direction: changeDirection,
     indentLeft: setIndentLeft,
     indentRight: setIndentRight,
     special: setSpecial,
@@ -491,6 +506,32 @@ function ParagraphDialogRoot({
                       <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
                       <option value="right">{t('dialogs.paragraph.alignRight')}</option>
                       <option value="justify">{t('dialogs.paragraph.alignJustify')}</option>
+                    </select>
+                  </div>
+                  <div
+                    data-docx-part="field"
+                    data-docx-field="direction"
+                    className="docx-dialog__row"
+                  >
+                    <label className="docx-dialog__label" htmlFor={`${fieldId}-direction`}>
+                      {t('dialogs.paragraph.direction')}
+                    </label>
+                    <select
+                      id={`${fieldId}-direction`}
+                      className="docx-dialog__input"
+                      // Empty when the selection mixes directions, like Alignment.
+                      value={mixed.direction ? '' : direction}
+                      onChange={(event) => {
+                        resolve('direction');
+                        changeDirection(event.target.value as 'ltr' | 'rtl');
+                      }}
+                      aria-label={t('dialogs.paragraph.direction')}
+                    >
+                      {mixed.direction ? (
+                        <option value="">{t('dialogs.paragraph.mixed')}</option>
+                      ) : null}
+                      <option value="rtl">{t('dialogs.paragraph.directionRtl')}</option>
+                      <option value="ltr">{t('dialogs.paragraph.directionLtr')}</option>
                     </select>
                   </div>
 

@@ -61,6 +61,7 @@ import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import { noteIdsOf, renderNoteList, shippedNoteIds } from './clipboard-html-write-notes.ts';
 import { renderHtmlTable } from './clipboard-html-write-table.ts';
+import { wordTabStopsCss } from './clipboard-html-tab-stops.ts';
 import {
   WORD_HIGHLIGHT_COLORS,
   WORD_JC_TO_TEXT_ALIGN,
@@ -226,14 +227,21 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   return { css: rules.join(';'), vanish: false, vertAlign, lang, rtl };
 }
 
-function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolean): string {
+function paragraphCssOf(
+  sources: readonly OoxmlElement[],
+  omitLeftMargin: boolean,
+  rtl = false
+): string {
   const rules: string[] = [];
   const jc = wmlVal(lastProperty(sources, 'jc'));
   const align =
     jc !== undefined && Object.hasOwn(WORD_JC_TO_TEXT_ALIGN, jc)
       ? WORD_JC_TO_TEXT_ALIGN[jc]
       : undefined;
-  if (align) rules.push(`text-align:${align}`);
+  if (align)
+    rules.push(
+      `text-align:${rtl && align !== 'center' && align !== 'justify' ? (align === 'left' ? 'right' : 'left') : align}`
+    );
 
   const before = parseIntValue(foldAttribute(sources, 'spacing', 'before'));
   if (before !== null && before >= 0) rules.push(`margin-top:${ptFromTwips(before)}`);
@@ -271,49 +279,15 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
       hanging = null;
     }
   }
-  if (!omitLeftMargin && left !== null) rules.push(`margin-left:${ptFromTwips(left)}`);
-  if (right !== null) rules.push(`margin-right:${ptFromTwips(right)}`);
+  if (!omitLeftMargin && left !== null)
+    rules.push(`margin-${rtl ? 'right' : 'left'}:${ptFromTwips(left)}`);
+  if (right !== null) rules.push(`margin-${rtl ? 'left' : 'right'}:${ptFromTwips(right)}`);
   if (hanging !== null && hanging !== 0) rules.push(`text-indent:${ptFromTwips(-hanging)}`);
   else if (firstLine !== null && firstLine !== 0)
     rules.push(`text-indent:${ptFromTwips(firstLine)}`);
 
-  const tabs = lastProperty(sources, 'tabs');
-  if (tabs) {
-    const values: string[] = [];
-    for (const child of tabs.children) {
-      if (!isElement(child) || child.localName !== 'tab') continue;
-      const val = wmlVal(child);
-      const pos = parseIntValue(attributeValueOf(child, 'pos', WML_NAMESPACE_URI));
-      if (
-        pos === null ||
-        pos < 0 ||
-        (val !== 'left' &&
-          val !== 'center' &&
-          val !== 'right' &&
-          val !== 'decimal' &&
-          val !== 'bar')
-      ) {
-        continue;
-      }
-      const leader = wmlVal(child, 'leader');
-      // The read side accepts every token here, so the engine's own round trip
-      // keeps middleDot and heavy leaders too.
-      const cssLeader =
-        leader === 'dot'
-          ? 'dotted'
-          : leader === 'hyphen'
-            ? 'dashed'
-            : leader === 'underscore'
-              ? 'lined'
-              : leader === 'middleDot'
-                ? 'middledot'
-                : leader === 'heavy'
-                  ? 'heavy'
-                  : '';
-      values.push(`${val}${cssLeader ? ` ${cssLeader}` : ''} ${ptFromTwips(pos)}`);
-    }
-    if (values.length > 0) rules.push(`tab-stops:${values.join(' ')}`);
-  }
+  const tabStops = wordTabStopsCss(lastProperty(sources, 'tabs'));
+  if (tabStops) rules.push(tabStops);
 
   if (toggleOn(sources, 'pageBreakBefore')) rules.push('page-break-before:always');
   if (toggleOn(sources, 'keepNext')) rules.push('page-break-after:avoid');
@@ -752,7 +726,7 @@ function renderParagraph(
   const pPrNode = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const pPr = pPrNode && isElement(pPrNode) ? pPrNode : null;
   const sources = paragraphPropertySources(ctx.styles, pPr, ctx.tablePPr);
-  const css = paragraphCssOf(sources, options.asListItem);
+  const css = paragraphCssOf(sources, options.asListItem, toggleOn(sources, 'bidi'));
   const inner = renderInline(ctx, paragraph.children, pPr, fields);
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
   const dirAttr = toggleOn(sources, 'bidi') ? ' dir="rtl"' : '';

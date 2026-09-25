@@ -163,7 +163,7 @@ A handle belongs to one editor and mounted document. Loading a document, detachi
 
 #### Supported commands and history outcomes
 
-Grouping supports `toggleMark`, `setMarkAttr`, `setAlignment`, `clearFormatting`, `setLineSpacing`, `setParagraphSpacing`, `setParagraphStyle`, and `setParagraphFormat`. Other command families reject `historyGroup` before changing the document. These include text and structural edits, images, hyperlinks, notes, header/footer lifecycle, review, protection, form fields, and content controls. Those commands can create undo entries that cover multiple document parts or apply changes asynchronously. Omit `historyGroup` to run them with their default history behavior.
+Grouping supports `toggleMark`, `setMarkAttr`, `setAlignment`, `setParagraphDirection`, `clearFormatting`, `setLineSpacing`, `setParagraphSpacing`, `setParagraphStyle`, and `setParagraphFormat`. Other command families reject `historyGroup` before changing the document. These include text and structural edits, images, hyperlinks, notes, header/footer lifecycle, review, protection, form fields, and content controls. Those commands can create undo entries that cover multiple document parts or apply changes asynchronously. Omit `historyGroup` to run them with their default history behavior.
 
 For supported commands, inspect `result.history?.kind`. A _story_ in this table is a document region, such as the body, a header, or a footnote.
 

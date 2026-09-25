@@ -61,11 +61,13 @@ export function shapeLayoutStyleRun(
   style: ResolvedRunStyle,
   text: string
 ): ShapedRun {
+  const context = style.shaping?.context;
   return shaper.shape({
     text,
     fontSizeHalfPoints: layoutRunHalfPointsOf(style),
     bidiLevel: style.shaping?.direction === 'rtl' ? 1 : 0,
     environment: runShapingEnvironment(environment, font, style),
+    ...(context ? { context } : {}),
   });
 }
 

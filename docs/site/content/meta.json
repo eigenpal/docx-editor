@@ -45,6 +45,7 @@
     "guides/images",
     "guides/custom-styles",
     "guides/fonts",
+    "guides/right-to-left",
     "guides/dark-mode",
     "---Export formats---",
     "guides/export",

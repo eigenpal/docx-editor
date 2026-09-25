@@ -59,6 +59,7 @@ const PARAGRAPH_PROPERTIES = [
   ['pageBreakBefore', '<w:pageBreakBefore/>'],
   ['contextualSpacing', '<w:contextualSpacing/>'],
   ['shd', '<w:shd w:val="clear" w:fill="F2F2F2"/>'],
+  ['bidi', '<w:bidi/>'],
 ];
 
 const UNKNOWN_DRAWING =

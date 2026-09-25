@@ -1906,6 +1906,7 @@ export interface ListMarkerRecord {
     readonly numId: string;
     readonly ordinal?: number;
     readonly picture?: ListMarkerPictureRecord;
+    readonly pieces?: readonly Pick<ListMarkerRecord, 'text' | 'style' | 'box'>[];
     // (undocumented)
     readonly style: ResolvedRunStyle;
     // (undocumented)
@@ -1971,6 +1972,9 @@ export const MAX_PARAGRAPH_SPACING_PT: number;
 
 // @public
 export const MAX_SDT_NESTING = 32;
+
+// @public
+export const MAX_SHAPING_CONTEXT = 16;
 
 // @public
 export const MAX_STYLE_BASED_ON_DEPTH = 32;
@@ -2956,6 +2960,12 @@ export interface ResolvedRunStyle {
     readonly caps: boolean;
     readonly characterSpacingPt: number;
     readonly color: string | null;
+    readonly complexLane?: {
+        readonly bold: boolean;
+        readonly fontFamily: string | null;
+        readonly fontSizePt: number;
+        readonly italic: boolean;
+    };
     // (undocumented)
     readonly doubleStrike: boolean;
     // (undocumented)
@@ -2969,6 +2979,13 @@ export interface ResolvedRunStyle {
     readonly italic: boolean;
     readonly kerningEnabled?: boolean;
     readonly kerningMinPt: number;
+    readonly latinLane?: {
+        readonly bold: boolean;
+        readonly fontFamily: string | null;
+        readonly fontFamilyEastAsia: string | null;
+        readonly fontSizePt: number;
+        readonly italic: boolean;
+    };
     readonly ligatures?: {
         readonly contextual: boolean;
         readonly discretionary: boolean;
@@ -2978,6 +2995,7 @@ export interface ResolvedRunStyle {
     readonly shading: string | null;
     readonly shaping?: {
         readonly baseLevel: number;
+        readonly context?: ShapingContext;
         readonly direction: 'ltr' | 'rtl';
         readonly level: number;
         readonly runDirection?: 'ltr' | 'rtl';
@@ -3991,12 +4009,21 @@ export interface ShapedVerticalMetrics {
 // @public
 export interface ShapeInput {
     readonly bidiLevel: number;
+    readonly context?: ShapingContext;
     // (undocumented)
     readonly environment: ShapingEnvironment;
     // (undocumented)
     readonly fontSizeHalfPoints: number;
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface ShapingContext {
+    // (undocumented)
+    readonly after: string;
+    // (undocumented)
+    readonly before: string;
 }
 
 // @public

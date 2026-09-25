@@ -501,7 +501,7 @@
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
-    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker."
+    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin."
   },
   "Word.Paragraph#leftIndent": {
     "status": "partial",

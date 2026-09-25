@@ -1086,28 +1086,28 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 // @public
 export const DocxEditorParagraphDialog: typeof ParagraphDialogRoot & {
     Apply: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Body: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Cancel: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Error: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Field: (props: DialogPartProps & {
-        name: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
+        name: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
     }) => react.ReactNode;
     Footer: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Header: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
     Title: (props: DialogPartProps & {
-        name?: "alignment" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
+        name?: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue" | undefined;
     }) => string | number | bigint | boolean | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | react.ReactPortal | ReactElement<unknown, string | react.JSXElementConstructor<any>> | Iterable<react.ReactNode> | null | undefined> | react.JSX.Element | null;
 };
 
@@ -1394,6 +1394,8 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Italic: ToolbarPartComponent;
     // (undocumented)
+    readonly LeftToRight: ToolbarPartComponent;
+    // (undocumented)
     readonly LineSpacing: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Link: ToolbarPartComponent;
@@ -1405,6 +1407,8 @@ export interface DocxEditorToolbarNamespace {
     readonly Redo: ToolbarPartComponent;
     // (undocumented)
     readonly Reviewers: typeof ToolbarReviewers;
+    // (undocumented)
+    readonly RightToLeft: ToolbarPartComponent;
     // (undocumented)
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
@@ -2074,6 +2078,8 @@ export interface PaginatedDocxEditorHandle {
     selectAll(): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
+        readonly paragraphDirection?: 'ltr' | 'rtl';
+        readonly physicalAlignment?: boolean;
     }): void;
     // (undocumented)
     setRunProperty(localName: string, attributes?: Record<string, string>): void;

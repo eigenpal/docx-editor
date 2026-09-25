@@ -123,16 +123,19 @@ export interface SurfaceFormatPainterDeps {
  */
 function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
   const onOff = (on: boolean): { val: string } => ({ val: on ? '1' : '0' });
-  const halfPoints = String(Math.max(2, Math.min(3276, Math.round(style.fontSizePt * 2))));
+  const halfPointsOf = (pt: number) => String(Math.max(2, Math.min(3276, Math.round(pt * 2))));
+  // Word's painter copies each lane into its own properties. A `w:rtl` or `w:cs` source
+  // shows its complex-script lane and keeps its Latin one in `latinLane`; every source
+  // carries its complex-script lane in `complexLane`, so an LTR source run from an Arabic
+  // document still hands its `w:szCs` and `w:bCs` to an Arabic target.
+  const latin = style.latinLane ?? style;
+  const complex = style.complexLane ?? style;
+  const halfPoints = halfPointsOf(latin.fontSizePt);
   const properties: SurfaceProperty[] = [
-    { localName: 'b', attributes: onOff(style.bold) },
-    { localName: 'i', attributes: onOff(style.italic) },
-    // The complex-script twins take the Latin answer, because the resolver keeps ONE bold
-    // and one italic: `w:bCs` is not separately resolved, so there is nothing else to copy.
-    // Left out they would survive the paint, and a run that reached the target already
-    // carrying `w:bCs` would stay bold in every complex script.
-    { localName: 'bCs', attributes: onOff(style.bold) },
-    { localName: 'iCs', attributes: onOff(style.italic) },
+    { localName: 'b', attributes: onOff(latin.bold) },
+    { localName: 'i', attributes: onOff(latin.italic) },
+    { localName: 'bCs', attributes: onOff(complex.bold) },
+    { localName: 'iCs', attributes: onOff(complex.italic) },
     {
       // `w:u` carries two settings, and `mergedMultiSettingProperty` merges it ATTRIBUTE by
       // attribute — so an omitted `w:color` is the target's colour kept, one level below the
@@ -158,7 +161,7 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
     { localName: 'color', attributes: { val: style.color ?? 'auto' } },
     { localName: 'highlight', attributes: { val: style.highlight ?? 'none' } },
     { localName: 'sz', attributes: { val: halfPoints } },
-    { localName: 'szCs', attributes: { val: halfPoints } },
+    { localName: 'szCs', attributes: { val: halfPointsOf(complex.fontSizePt) } },
     // Back into the units the ATTRIBUTES carry. The resolver hands every measurement over in
     // points; `w:spacing` on a run is twips, `w:position` and `w:kern` are half-points, and
     // `w:w` is a percentage (see `resolveRunStyle`).
@@ -179,14 +182,16 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
   // starts on CJK text writes the East Asian face into `w:eastAsia` — never into the
   // target's Latin slots. A source with no resolved East Asian face leaves the target's
   // `w:eastAsia` alone, for the same reason a CJK list marker keeps its own face when the
-  // Latin text beside it changes. The complex-script face is not resolved yet, so `w:cs`
-  // stays untouched.
-  if (style.fontFamily || style.fontFamilyEastAsia) {
+  // Latin text beside it changes. `w:cs` is written only when the source's cascade names a
+  // complex-script face, never the Times New Roman default standing in for none.
+  const complexFace = style.complexLane?.fontFamily ?? null;
+  if (latin.fontFamily || latin.fontFamilyEastAsia || complexFace) {
     properties.push({
       localName: 'rFonts',
       attributes: {
-        ...(style.fontFamily ? { ascii: style.fontFamily, hAnsi: style.fontFamily } : {}),
-        ...(style.fontFamilyEastAsia ? { eastAsia: style.fontFamilyEastAsia } : {}),
+        ...(latin.fontFamily ? { ascii: latin.fontFamily, hAnsi: latin.fontFamily } : {}),
+        ...(latin.fontFamilyEastAsia ? { eastAsia: latin.fontFamilyEastAsia } : {}),
+        ...(complexFace ? { cs: complexFace } : {}),
       },
     });
   }

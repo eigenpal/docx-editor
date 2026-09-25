@@ -149,7 +149,15 @@ function useIndentDrag(): IndentDrag {
   const indent = useMemo(
     () =>
       pending ??
-      (stored ? { left: stored.left, right: stored.right, firstLine: stored.firstLine } : null),
+      (stored
+        ? {
+            left: stored.left,
+            right: stored.right,
+            firstLine: stored.firstLine,
+            // A right-to-left paragraph's handles sit on the mirrored axis.
+            ...(stored.rtl ? { rtl: true } : {}),
+          }
+        : null),
     [pending, stored]
   );
 

@@ -69,7 +69,8 @@
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
       "table": "Tabela",
-      "format": null
+      "format": null,
+      "direction": null
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -338,7 +339,10 @@
       "refused": null,
       "tabMixed": null,
       "mixed": null,
-      "notShown": null
+      "notShown": null,
+      "direction": null,
+      "directionLtr": null,
+      "directionRtl": null
     }
   },
   "comments": {

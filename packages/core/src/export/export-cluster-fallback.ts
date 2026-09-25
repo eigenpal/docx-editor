@@ -25,8 +25,11 @@ export function shapeExportClusterFallback(
 ): ShapedRun | null {
   if (!primary.clusters.length || primary.clusters.length > MAX_FALLBACK_CLUSTERS) return null;
   const shape = (font: ResolvedFont, text: string) => {
+    // A group is a slice of the run, so the run's context does not border it. Groups shape
+    // without context; joining scripts never take this path.
+    const { context: _context, ...plain } = input;
     const next = {
-      ...input,
+      ...plain,
       text,
       environment: createShapingEnvironment({ ...input.environment, font }),
     };
@@ -42,6 +45,18 @@ export function shapeExportClusterFallback(
     // shapes the pair together and can honour the emoji or text presentation it asks for.
     const previousGroup = groups.at(-1);
     if (/^[\uFE0E\uFE0F]$/.test(text) && previousGroup && previousGroup.end === cluster.textStart) {
+      previousGroup.end = cluster.textEnd;
+      continue;
+    }
+    // A space between Hebrew words that fell back stays with them, so the words keep the
+    // fallback face's line height; punctuation still takes the authored face.
+    if (
+      input.environment.script === 'Hebr' &&
+      /^\s+$/u.test(text) &&
+      previousGroup &&
+      previousGroup.font !== input.environment.font &&
+      previousGroup.end === cluster.textStart
+    ) {
       previousGroup.end = cluster.textEnd;
       continue;
     }

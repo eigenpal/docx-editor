@@ -28,12 +28,15 @@ test.each(['center', 'right'] as const)(
   }
 );
 
+// Word spells a bidi paragraph's physical RIGHT edge `left`: it is the leading edge.
+const jcFor = (alignment: 'center' | 'right') => (alignment === 'right' ? 'left' : alignment);
+
 test.each(['center', 'right'] as const)(
   'RTL %s anchors visible text after moving its wrapped space to the left',
   (alignment) => {
     const read = readOoxmlPart(
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
-      <w:p><w:pPr><w:bidi/><w:jc w:val="${alignment}"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>אב גד הו</w:t></w:r></w:p>
+      <w:p><w:pPr><w:bidi/><w:jc w:val="${jcFor(alignment)}"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>אב גד הו</w:t></w:r></w:p>
       </w:body></w:document>`,
       { name: '/word/document.xml', contentType: 'app/xml' }
     );

@@ -1,0 +1,86 @@
+---
+title: 'Right-to-left text'
+description: 'Render and edit Arabic, Hebrew, Persian, and Urdu documents, and switch paragraph direction from the toolbar, the keyboard, or code.'
+category: 'Guides'
+seoTitle: 'Right-to-left and bidirectional text'
+---
+
+The editor lays out right-to-left (RTL) and mixed-direction text with the rules Word uses. You can open Arabic, Hebrew, Persian, and Urdu documents, edit them, and change the direction of any paragraph.
+
+## How the editor reads direction
+
+A DOCX file stores direction at two levels, and the editor keeps them separate.
+
+| Property | Scope | Effect |
+| --- | --- | --- |
+| `w:bidi` | Paragraph | Sets the base direction. Lines start at the right margin, and list markers and indents follow the direction. |
+| `w:rtl` | Run | Orders numbers and punctuation right to left, and selects the run's complex-script formatting. |
+
+Alignment and indents name the leading and trailing sides of a paragraph. In an RTL paragraph, `w:jc="left"` aligns to the right margin, and `w:ind w:left` indents from the right. First-line and hanging indents count from the right indent. The kashida justification values justify the paragraph.
+
+List levels follow the same rule. In an RTL paragraph, a level's `w:ind w:left` indents from the right margin, and `w:lvlJc="left"` puts the right edge of the marker on its position. The marker text reads right to left, so `1.` shows its period on the left. The `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` formats number in their own scripts.
+
+Tab stops count from the right margin, and the text on each side of a tab stays in reading order.
+
+The ruler mirrors for an RTL paragraph: the first-line, hanging, and **Before text** handles sit on the right, and the **After text** handle sits on the left. The Paragraph dialog's **Before text** and **After text** fields edit `w:ind w:left` and `w:ind w:right`.
+
+### Complex-script formatting
+
+A run that has `w:rtl` or `w:cs` uses its complex-script properties for every character, digits and Latin letters included:
+
+- `w:rFonts w:cs` or `w:cstheme` selects the font. With neither, the run uses Times New Roman.
+- `w:szCs` sets the size. With no `w:szCs`, the run is 10 pt.
+- `w:bCs` and `w:iCs` set bold and italic.
+
+`w:sz`, `w:b`, and `w:i` have no effect on such a run. A run without `w:rtl` or `w:cs` uses the Latin properties, even for Arabic or Hebrew characters. Word 16 renders the same way.
+
+When you format a run that has its own `w:rtl` or `w:cs`, the editor writes both halves of each pair. For example, **Bold** writes `<w:b/><w:bCs/>` on such a run and `<w:b/>` on a left-to-right (LTR) run. A run that takes `w:rtl` only from a character style receives only the Latin property.
+
+## Change paragraph direction
+
+You can change the direction of the paragraphs in the selection in four ways:
+
+- **Toolbar**: the **Left-to-right text** and **Right-to-left text** buttons follow the alignment control. A mixed selection shows neither button as pressed.
+- **Format menu**: the same two commands follow the alignment rows.
+- **Paragraph dialog**: the **Direction** setting.
+- **Keyboard**: press Ctrl+Right Shift for RTL and Ctrl+Left Shift for LTR. The command runs when you release the keys. If you press another key or click before you release them, the command does not run. Press Control, not Command, on macOS. The shortcuts work only in a story that already contains RTL paragraphs or runs, because Ctrl+Shift also switches keyboard layouts on Windows.
+
+The command changes only the paragraph direction. It does not change the text, the run direction, or `w:jc`. A paragraph aligned to its start moves to the other margin. Paragraphs in table cells change too.
+
+## Change direction from code
+
+Use the `setParagraphDirection` command. It applies to every paragraph that the selection touches and creates one undo step.
+
+```ts
+import type { Editor } from '@docx-editor.dev/core';
+
+function makeRightToLeft(editor: Editor) {
+  const command = { type: 'setParagraphDirection', direction: 'rtl' } as const;
+  const permission = editor.can(command);
+  return permission.ok ? editor.exec(command) : permission;
+}
+```
+
+The command writes these values:
+
+| Request | Paragraph already in that direction | Otherwise |
+| --- | --- | --- |
+| `'rtl'` | No change | `<w:bidi/>` |
+| `'ltr'` | No change | Removes the paragraph's own `w:bidi`. If an RTL paragraph style would still apply, writes `<w:bidi w:val="0"/>` instead. |
+
+Protected and read-only documents refuse the command, like other paragraph formatting. The `setParagraphFormat` command also accepts `direction`.
+
+To read the direction at the selection, use the formatting snapshot. `direction` is absent when the selected paragraphs disagree, and `disagrees.direction` is then `true`.
+
+```ts
+const formatting = editor.snapshot().formatting;
+const direction = formatting?.direction ?? (formatting?.disagrees?.direction ? 'mixed' : 'ltr');
+```
+
+To build your own buttons, use the `direction.ltr` and `direction.rtl` [chrome slots](/docs/2.x/guides/chrome-slots#alignment-direction-lists-and-formatting).
+
+## Limits
+
+- The editor does not add `w:rtl` to typed text. Text that you type in an RTL run keeps that run's direction.
+- Section direction (`w:sectPr/w:bidi`) and run direction wrappers (`w:dir`, `w:bdo`) do not change layout.
+- The editor interface does not mirror for RTL languages.

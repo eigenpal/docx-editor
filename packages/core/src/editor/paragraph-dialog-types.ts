@@ -20,6 +20,8 @@ export interface ParagraphFormatRead {
    * comes out of `format` can go straight back into `apply`.
    */
   readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
+  /** Base direction (`w:bidi` through the cascade); null when the selection mixes them. */
+  readonly direction: 'ltr' | 'rtl' | null;
   readonly spaceBeforePt: number | null;
   readonly spaceAfterPt: number | null;
   readonly lineSpacing: {
@@ -48,6 +50,7 @@ export interface ParagraphFormatRead {
    */
   readonly disagrees: {
     readonly alignment: boolean;
+    readonly direction: boolean;
     readonly spaceBeforePt: boolean;
     readonly spaceAfterPt: boolean;
     readonly lineSpacing: boolean;
@@ -74,6 +77,8 @@ export interface ParagraphFormatRead {
  */
 export interface ParagraphFormatUpdate {
   readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+  /** Word's Direction. `ltr` overrides a right-to-left style with `w:bidi w:val="0"`. */
+  readonly direction?: 'ltr' | 'rtl';
   readonly spaceBeforePt?: number | null;
   readonly spaceAfterPt?: number | null;
   readonly lineSpacing?: {

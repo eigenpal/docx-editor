@@ -200,6 +200,7 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
@@ -241,6 +242,7 @@ export interface Paragraph {
 export interface ParagraphDisagreements {
     // (undocumented)
     readonly alignment: boolean;
+    readonly direction: boolean;
     // (undocumented)
     readonly lineSpacing: boolean;
     // (undocumented)
@@ -271,6 +273,7 @@ export interface ParagraphFormatCommand {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     // (undocumented)
     contextualSpacing?: boolean;
+    direction?: 'ltr' | 'rtl';
     indentFirstLineTwips?: number | null;
     // (undocumented)
     indentLeftTwips?: number | null;
@@ -364,6 +367,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;

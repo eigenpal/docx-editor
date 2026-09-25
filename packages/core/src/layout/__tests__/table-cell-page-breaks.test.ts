@@ -178,6 +178,21 @@ describe('manual page breaks inside table cells', () => {
     expect(cellCaret(result, 7).x).toBeCloseTo(cellCaret(control, 6).x, 6);
   });
 
+  test.each(['left', 'right', 'center', 'decimal'])(
+    'an RTL %s tab ignores a page break inside its numeric segment',
+    (alignment) => {
+      const pPr = `<w:pPr><w:bidi/><w:tabs><w:tab w:val="${alignment}" w:pos="3000"/></w:tabs></w:pPr>`;
+      const control = cellParagraph(layout(table(paragraph('<w:tab/>' + text('1234.5'), pPr))));
+      const result = cellParagraph(
+        layout(table(paragraph('<w:tab/>' + text('12') + pageBreak + text('34.5'), pPr)))
+      );
+      expect(result.lines).toHaveLength(1);
+      const tabBox = (p: typeof control) => p.lines[0]!.spans.find((s) => s.text === '\t')!.box;
+      expect(tabBox(result)).toEqual(tabBox(control));
+      expect(result.lines[0]!.box.width).toBeCloseTo(control.lines[0]!.box.width, 6);
+    }
+  );
+
   test('a space before an ignored break is not line-end whitespace when text follows', () => {
     const bold = run(text('Alpha'), '<w:b/>');
     const control = cellParagraph(layout(table(`<w:p>${bold}${run(text(' Beta'))}</w:p>`)));

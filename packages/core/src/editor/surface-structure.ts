@@ -34,6 +34,7 @@ import {
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
+import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 import type {
   PaginatedSurface,
   SurfaceParagraphFormat,
@@ -703,8 +704,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // step and the page repaints once. Firing a command per field would leave the user
       // pressing Ctrl+Z five times and would paint four intermediate layouts on the way.
       const entries: ParagraphPropertyEdit[] = [];
+      // Direction BEFORE alignment: the alignment entry spells its edge against the
+      // direction this same dialog submission leaves the paragraph in.
+      if (update.direction !== undefined) {
+        entries.push({ localName: 'bidi', paragraphDirection: update.direction });
+      }
       if (update.alignment !== undefined) {
-        entries.push({ localName: 'jc', attributes: { val: update.alignment } });
+        entries.push({
+          localName: 'jc',
+          attributes: { val: update.alignment },
+          physicalAlignment: true,
+        });
       }
       const spacing: Record<string, string | null> = {
         ...spacingSideAttributes('before', update.spaceBeforePt),
@@ -755,7 +765,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           });
         }
-        for (const entry of entries) {
+        const cascaded = paragraphPropertiesOf(currentLayout.value, paragraphId);
+        const original = direct;
+        let wrote = false;
+        for (const rawEntry of entries) {
+          const entry = directionalParagraphEntry(rawEntry, cascaded, properties, original);
+          if (!entry) continue;
+          wrote = true;
+          if (entry.remove) {
+            properties = properties.filter((property) => property.localName !== entry.localName);
+            continue;
+          }
           const merged = entry.mergeAttributes
             ? {
                 ...(properties.find((property) => property.localName === entry.localName)
@@ -777,7 +797,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
         // doing nothing. Defence in depth: the header test pins the part identity, and this
         // makes a repeat of that mistake harmless for edits that name no property.
-        if (entries.length > 0 || wantsIndent) {
+        if (wrote || wantsIndent) {
           ops.push({ op: 'setParagraphProperties', paragraphId, properties });
         }
         if (wantsTabStops) {

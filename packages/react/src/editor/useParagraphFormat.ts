@@ -43,6 +43,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
   const flags = formatting.paragraphFlags ?? EMPTY_FLAGS;
   return {
     alignment: formatting.alignment === 'both' ? 'justify' : (formatting.alignment ?? null),
+    direction: formatting.direction ?? null,
     spaceBeforePt: formatting.spaceBeforePt ?? null,
     spaceAfterPt: formatting.spaceAfterPt ?? null,
     lineSpacing: formatting.lineSpacing ?? null,
@@ -63,6 +64,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
       // Defaulted rather than spread: `disagrees` is optional on the snapshot, and an
       // undefined member reads as false by accident rather than by decision.
       alignment: formatting.disagrees?.alignment ?? false,
+      direction: formatting.disagrees?.direction ?? false,
       spaceBeforePt: formatting.disagrees?.spaceBeforePt ?? false,
       spaceAfterPt: formatting.disagrees?.spaceAfterPt ?? false,
       lineSpacing: formatting.disagrees?.lineSpacing ?? false,
@@ -83,6 +85,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
  */
 const DISAGREEMENT_KEYS: readonly (keyof ParagraphFormatRead['disagrees'])[] = [
   'alignment',
+  'direction',
   'spaceBeforePt',
   'spaceAfterPt',
   'lineSpacing',
@@ -99,6 +102,7 @@ const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null
   if (a === null || b === null) return a === b;
   return (
     a.alignment === b.alignment &&
+    a.direction === b.direction &&
     a.spaceBeforePt === b.spaceBeforePt &&
     a.spaceAfterPt === b.spaceAfterPt &&
     a.lineSpacing?.rule === b.lineSpacing?.rule &&

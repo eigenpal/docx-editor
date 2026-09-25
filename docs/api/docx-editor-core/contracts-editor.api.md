@@ -754,7 +754,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     selectTableRegion: {
         region: 'table' | 'row' | 'column';
     };
-    // (undocumented)
     setAlignment: {
         align: 'left' | 'center' | 'right' | 'justify';
     };
@@ -826,6 +825,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         pageHeight?: number;
         pageWidth?: number;
         scope?: 'document' | 'section';
+    };
+    setParagraphDirection: {
+        direction: 'ltr' | 'rtl';
     };
     setParagraphFormat: ParagraphFormatCommand;
     setParagraphSpacing: {
@@ -1397,6 +1399,7 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
@@ -1495,6 +1498,7 @@ export interface Paragraph {
 export interface ParagraphDisagreements {
     // (undocumented)
     readonly alignment: boolean;
+    readonly direction: boolean;
     // (undocumented)
     readonly lineSpacing: boolean;
     // (undocumented)
@@ -1525,6 +1529,7 @@ export interface ParagraphFormatCommand {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     // (undocumented)
     contextualSpacing?: boolean;
+    direction?: 'ltr' | 'rtl';
     indentFirstLineTwips?: number | null;
     // (undocumented)
     indentLeftTwips?: number | null;
@@ -1845,6 +1850,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;

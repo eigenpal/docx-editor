@@ -1690,6 +1690,7 @@ function paintListMarker(
   glyph.style.paddingTop = `${leading * scale}px`;
   glyph.style.lineHeight = `${(glyphBand - leading) * scale}px`;
   applyRunFaceStyle(glyph, marker.style, ctx);
+  if (marker.pieces) glyph.dir = 'rtl'; // A right-to-left marker: `1.` shows as `.1`.
   mountRunText(document, glyph, marker.text, marker.style, scale);
   element.append(glyph);
   return element;

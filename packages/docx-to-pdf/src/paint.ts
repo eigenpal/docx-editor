@@ -358,6 +358,11 @@ export async function paint(
   };
   // PDF extractors expect glyphs in visual order within each physical line.
   // Retain logical Unicode separately in one ActualText region for the complete line.
+  //
+  // Not for a line with right-to-left text. MuPDF and Poppler lay ActualText characters out
+  // over the glyphs as if they were visual and reverse them, so a logical Arabic or Hebrew
+  // line extracted scrambled or backwards. Without it they read each glyph's own ToUnicode
+  // in visual order and reorder the line themselves, as they do for LibreOffice's PDFs.
   const pageGroups = new Map<number, Map<object, SemanticSpanVisit[]>>();
   for (const visit of spans) {
     let lines = pageGroups.get(visit.page.index);
@@ -372,7 +377,7 @@ export async function paint(
     }
     group.push(visit);
   }
-  const lineStarts = new Map<SemanticSpanVisit, string>();
+  const lineStarts = new Map<SemanticSpanVisit, string | null>();
   spans.length = 0;
   for (const lines of pageGroups.values())
     for (const group of lines.values()) {
@@ -382,11 +387,18 @@ export async function paint(
       const logical =
         (markerText ? markerText + ' ' : '') +
         group.map((v) => v.span.equation?.fallbackText ?? v.span.text).join('');
+      const rightToLeft = group.some((v) => (v.span.style.shaping?.level ?? 0) % 2 === 1);
       group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
-      lineStarts.set(group[0]!, logical);
+      lineStarts.set(group[0]!, rightToLeft ? null : logical);
       for (const visit of group) spans.push(visit);
     }
   let activeOut: string[] | undefined;
+  // The buffer of the line being painted, which receives that line's outline glyphs.
+  let lineOut: string[] | undefined;
+  const placeOutlines = (): void => {
+    const outlines = text.takeOutlines();
+    if (outlines && lineOut) lineOut.push(outlines);
+  };
   const markersByPage = new Map<number, Set<object>>();
   for (let i = 0; i < spans.length; i++) {
     if (i % 128 === 0) await work.yield();
@@ -394,9 +406,13 @@ export async function paint(
       page = pages[visit.page.index]!,
       out = outFor(visit);
     if (lineStarts.has(visit)) {
+      placeOutlines();
+      lineOut = out;
       if (activeOut) activeOut.push('EMC');
-      activeOut = out;
-      out.push(`/Span << /ActualText <FEFF${unicodeHex(lineStarts.get(visit) ?? '')}> >> BDC`);
+      const logical = lineStarts.get(visit);
+      activeOut = logical === null ? undefined : out;
+      if (logical !== null)
+        out.push(`/Span << /ActualText <FEFF${unicodeHex(logical ?? '')}> >> BDC`);
     }
     let markers = markersByPage.get(visit.page.index);
     if (!markers) {
@@ -423,27 +439,29 @@ export async function paint(
         : '';
       if (picture) out.push(picture);
       else
-        out.push(
-          text.paint(
-            {
-              ...visit,
-              span: {
-                ...visit.span,
-                text: marker.text,
-                style: marker.style,
-                box: marker.box,
-                link: undefined,
-                revisions: undefined,
+        // A right-to-left paragraph's marker comes as visual pieces, one per direction run.
+        for (const piece of marker.pieces ?? [marker])
+          out.push(
+            text.paint(
+              {
+                ...visit,
+                span: {
+                  ...visit.span,
+                  text: piece.text,
+                  style: piece.style,
+                  box: piece.box,
+                  link: undefined,
+                  revisions: undefined,
+                },
+                absoluteBox: {
+                  ...piece.box,
+                  x: piece.box.x + visit.storyOrigin.x,
+                  y: piece.box.y + visit.storyOrigin.y,
+                },
               },
-              absoluteBox: {
-                ...marker.box,
-                x: marker.box.x + visit.storyOrigin.x,
-                y: marker.box.y + visit.storyOrigin.y,
-              },
-            },
-            page
-          )
-        );
+              page
+            )
+          );
     }
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)
@@ -461,6 +479,7 @@ export async function paint(
     if (clipping) out.push('Q');
     linkAnnotation(doc, page, visit, names);
   }
+  placeOutlines();
   if (activeOut) activeOut.push('EMC');
   // Draw grouped character borders after highlights, which may otherwise cover an
   // earlier run's edge. Geometry and grouping are shared with the screen painter.

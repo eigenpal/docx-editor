@@ -12,11 +12,11 @@
     "headerFooterLifecycle": 6,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 70,
-    "chromeCommandWired": 39,
+    "chromeSlots": 72,
+    "chromeCommandWired": 41,
     "chromeProbe": 6,
     "acceptedRunProperties": 19,
-    "acceptedParagraphProperties": 12,
+    "acceptedParagraphProperties": 13,
     "insertableContentControlTypes": 5,
     "imageWrapTargets": 9,
     "storyScopeKinds": 3,
@@ -309,7 +309,8 @@
         "widowControl",
         "pageBreakBefore",
         "contextualSpacing",
-        "shd"
+        "shd",
+        "bidi"
       ]
     },
     "setTableCellBorders": {
@@ -552,6 +553,7 @@
       "storyParity": "same",
       "commandExposure": [
         "setAlignment",
+        "setParagraphDirection",
         "setLineSpacing",
         "setParagraphSpacing",
         "setIndent",
@@ -564,6 +566,8 @@
         "alignment.center",
         "alignment.right",
         "alignment.justify",
+        "direction.ltr",
+        "direction.rtl",
         "list.lineSpacing",
         "styles.style",
         "paragraph.dialog"
@@ -1250,6 +1254,8 @@
       "alignment.center",
       "alignment.right",
       "alignment.justify",
+      "direction.ltr",
+      "direction.rtl",
       "list.bullet",
       "list.numbered",
       "list.outdent",
@@ -1315,6 +1321,8 @@
       "alignment.center",
       "alignment.right",
       "alignment.justify",
+      "direction.ltr",
+      "direction.rtl",
       "list.bullet",
       "list.numbered",
       "list.outdent",

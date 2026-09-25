@@ -132,9 +132,19 @@ export function execEditorCommand(
       break;
     case 'setAlignment':
       // The contract says `justify`; `w:jc` spells it `both`.
-      mounted.setParagraphProperty('jc', {
-        val: command.align === 'justify' ? 'both' : command.align,
-      });
+      // A physical edge, as the button shows it; the writer spells it per paragraph direction.
+      mounted.setParagraphProperties([
+        {
+          localName: 'jc',
+          attributes: { val: command.align === 'justify' ? 'both' : command.align },
+          physicalAlignment: true,
+        },
+      ]);
+      break;
+    case 'setParagraphDirection':
+      mounted.setParagraphProperties([
+        { localName: 'bidi', paragraphDirection: command.direction },
+      ]);
       break;
     case 'setParagraphStyle': {
       // The styleId must name a paragraph style the DOCUMENT defines: writing a dangling
@@ -172,6 +182,7 @@ export function execEditorCommand(
         ...(command.alignment !== undefined
           ? { alignment: command.alignment === 'justify' ? ('both' as const) : command.alignment }
           : {}),
+        ...(command.direction !== undefined ? { direction: command.direction } : {}),
         ...(command.spaceBeforePt !== undefined ? { spaceBeforePt: command.spaceBeforePt } : {}),
         ...(command.spaceAfterPt !== undefined ? { spaceAfterPt: command.spaceAfterPt } : {}),
         ...(command.lineSpacing !== undefined ? { lineSpacing: command.lineSpacing } : {}),

@@ -85,9 +85,18 @@ export function placeableContentSuffixes(
   return suffixes;
 }
 
+/** Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and their presentation forms. */
+const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
+
 /**
- * Width of the text an aligned tab positions: up to the next tab or break. A page break
- * the line ignores (`pageBreaksIgnored`, a table cell) adds no width and does not end it.
+ * The text after a tab, up to the next tab or break: its width, and where a decimal stop
+ * aligns it. An ignored page break adds no width and does not end the segment.
+ *
+ * `decimalOffset` is the advance before the first `.`, or the whole width when there is none.
+ * `rtlDecimalOffset` is the same point measured from the segment's LEADING (right) edge, for a
+ * right-to-left paragraph, whose stops count from the right margin. Digits keep left-to-right
+ * order there, so the point's left edge still sits on the stop and the text after it lies on
+ * the leading side; a point after a right-to-left letter reads the other way.
  */
 export function measureFollowingTabSegment(
   pieces: readonly Piece[],
@@ -95,39 +104,56 @@ export function measureFollowingTabSegment(
   offsetInPiece: number,
   measurer: TextMeasurer,
   pageBreaksIgnored = false
-): { width: number; decimalOffset: number } {
+): { width: number; decimalOffset: number; rtlDecimalOffset: number } {
   let width = 0;
   let decimalOffset = 0;
   let sawDecimal = false;
+  let afterRightToLeftLetter = false;
+  const result = () => ({
+    width,
+    decimalOffset: sawDecimal ? decimalOffset : width,
+    rtlDecimalOffset:
+      !sawDecimal || afterRightToLeftLetter
+        ? sawDecimal
+          ? decimalOffset
+          : width
+        : width - decimalOffset,
+  });
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     const style = styleForFontSlot(piece.style, piece.fontSlot);
     const from = index === pieceIndex ? offsetInPiece : 0;
-    for (let cursor = from; cursor < piece.text.length; ) {
-      const ch = piece.text[cursor]!;
-      if (ch === PAGE_BREAK_CHAR && pageBreaksIgnored) {
-        cursor += 1;
-        continue;
-      }
-      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) {
-        return { width, decimalOffset: sawDecimal ? decimalOffset : width };
-      }
-      // Walk one code unit; surrogate pairs measure as two units under the fixed measurer
-      // contract (UTF-16), matching how source offsets are counted elsewhere.
-      const next = cursor + 1;
-      const glyph = piece.text.slice(cursor, next);
-      const advance = measurer.measure(displayText(glyph, style), style);
-      if (!sawDecimal && ch === '.') {
-        sawDecimal = true;
-        // Decimal point itself sits ON the stop — offset is the advance before it.
-      } else if (!sawDecimal) {
-        decimalOffset += advance;
-      }
-      width += advance;
-      cursor = next;
+    let to = from;
+    while (to < piece.text.length) {
+      const ch = piece.text[to]!;
+      if (ch === '\t' || ch === '\n' || (ch === PAGE_BREAK_CHAR && !pageBreaksIgnored)) break;
+      to += 1;
     }
+    // Measure each piece's slice whole, so a joining script (Arabic) measures as shaped
+    // and not as a sum of isolated letters.
+    const visibleSlice = (end: number) => {
+      const slice = piece.text.slice(from, end);
+      return pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice;
+    };
+    const measure = (end: number) =>
+      end > from ? measurer.measure(displayText(visibleSlice(end), style), style) : 0;
+    const segmentWidth = measure(to);
+    if (!sawDecimal) {
+      const dot = piece.text.indexOf('.', from);
+      if (dot !== -1 && dot < to) {
+        sawDecimal = true;
+        const preceding = visibleSlice(dot).at(-1);
+        afterRightToLeftLetter = preceding !== undefined && RIGHT_TO_LEFT_LETTER.test(preceding);
+        // Decimal point itself sits ON the stop — offset is the advance before it.
+        decimalOffset += measure(dot);
+      } else {
+        decimalOffset += segmentWidth;
+      }
+    }
+    width += segmentWidth;
+    if (to < piece.text.length) return result();
   }
-  return { width, decimalOffset: sawDecimal ? decimalOffset : width };
+  return result();
 }
 
 /**

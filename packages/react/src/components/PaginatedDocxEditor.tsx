@@ -68,12 +68,17 @@ export interface PaginatedDocxEditorHandle {
    * `options.mergeAttributes` keeps the attributes the call does not name, for the
    * properties carrying several independent settings in one element — `w:spacing` holds the
    * line rule AND the space before and after, so a line-spacing pick without it deleted the
-   * paragraph's spacing.
+   * paragraph's spacing. `physicalAlignment` and `paragraphDirection` spell `w:jc` and
+   * `w:bidi` per paragraph direction.
    */
   setParagraphProperty(
     localName: string,
     attributes?: Record<string, string | null>,
-    options?: { readonly mergeAttributes?: boolean }
+    options?: {
+      readonly mergeAttributes?: boolean;
+      readonly physicalAlignment?: boolean;
+      readonly paragraphDirection?: 'ltr' | 'rtl';
+    }
   ): void;
   /** Formatting at the selection, for a toolbar to reflect. */
   formatting(): SurfaceFormatting | null;
@@ -161,7 +166,7 @@ export function PaginatedDocxEditor({
       setParagraphProperty: (
         localName: string,
         attributes?: Record<string, string | null>,
-        options?: { readonly mergeAttributes?: boolean }
+        options?: Parameters<PaginatedDocxEditorHandle['setParagraphProperty']>[2]
       ) => surfaceRef.current?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.current?.formatting() ?? null,
       sectionProperties: () => surfaceRef.current?.sectionProperties() ?? null,

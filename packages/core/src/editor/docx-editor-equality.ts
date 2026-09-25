@@ -39,6 +39,7 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   superscript: true,
   subscript: true,
   alignment: true,
+  direction: true,
   styleId: true,
   lineSpacing: true,
   spaceBeforePt: true,
@@ -59,6 +60,7 @@ void COMPARED_FORMATTING_KEYS;
  */
 const COMPARED_DISAGREEMENT_KEYS: readonly (keyof ParagraphDisagreements)[] = [
   'alignment',
+  'direction',
   'spaceBeforePt',
   'spaceAfterPt',
   'lineSpacing',
@@ -85,6 +87,7 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.fontFamily !== b.fontFamily ||
     a.fontSizePt !== b.fontSizePt ||
     a.alignment !== b.alignment ||
+    a.direction !== b.direction ||
     a.styleId !== b.styleId ||
     a.spaceBeforePt !== b.spaceBeforePt ||
     a.spaceAfterPt !== b.spaceAfterPt ||
@@ -100,6 +103,7 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.indent?.mixed.left !== b.indent?.mixed.left ||
     a.indent?.mixed.right !== b.indent?.mixed.right ||
     a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine ||
+    a.indent?.rtl !== b.indent?.rtl ||
     // Field by field for the same reason as `indent`: a fresh object every derive, so a
     // reference compare would report every tick as a change.
     a.paragraphFlags?.contextualSpacing !== b.paragraphFlags?.contextualSpacing ||

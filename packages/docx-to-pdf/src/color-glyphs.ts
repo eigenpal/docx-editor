@@ -3,8 +3,9 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import type { FontkitFont, FontkitPathCommand } from 'fontkit';
-import { number as n, Work } from './context.ts';
+import type { FontkitFont, FontkitGlyph, FontkitPathCommand } from 'fontkit';
+import { ExportResourceError } from '@docx-editor.dev/core/export';
+import { number as n, PdfWorkLimitError, Work } from './context.ts';
 
 /** One palette layer of a color glyph, as PDF path operators in font units plus its fill. */
 export interface ColorGlyphLayer {
@@ -31,6 +32,91 @@ export type ColorGlyph =
 /** Bounds on a file-derived color font: layers and outline points are both attacker-sized. */
 const MAX_LAYERS = 256;
 const MAX_COMMANDS = 8192;
+/** Composite nesting and expanded points a glyph may reach before fontkit builds its path. */
+const MAX_COMPOSITE_DEPTH = 8;
+const MAX_EXPANDED_POINTS = MAX_COMMANDS;
+
+/** A decoded TrueType glyph as fontkit's `_decode` returns it; fontkit does not type it. */
+interface DecodedGlyph {
+  readonly points?: readonly unknown[];
+  readonly components?: readonly { readonly glyphID: number }[];
+}
+
+const pathSafety = new WeakMap<object, boolean>();
+
+/**
+ * Whether fontkit may build this glyph's path.
+ *
+ * fontkit expands a TrueType composite by recursing through its components with no depth
+ * limit and no cache, and it counts nothing until the whole path exists. A composite that
+ * names itself overflows the stack; a chain whose components each name the next glyph twice
+ * doubles the work per level, and depth 18 blocked the event loop for 110 seconds. The
+ * export deadline cannot interrupt inside fontkit, so the tree is measured first: every
+ * glyph's expanded point count once, with the nesting, cycles and total bounded. Keyed by
+ * glyph object, which fontkit caches per id.
+ */
+function pathIsSafe(font: FontkitFont, glyph: FontkitGlyph): boolean {
+  const cached = pathSafety.get(glyph);
+  if (cached !== undefined) return cached;
+  let safe: boolean;
+  try {
+    const { points, height } = expanded(font, glyph, 0, new Map(), new Set());
+    safe = points <= MAX_EXPANDED_POINTS && height <= MAX_COMPOSITE_DEPTH;
+  } catch {
+    safe = false;
+  }
+  pathSafety.set(glyph, safe);
+  return safe;
+}
+
+/**
+ * The points a glyph expands to and the nesting below it, or Infinity past a bound. Memoized
+ * per glyph within one walk, so a shared component is decoded once; the height travels with
+ * it, so a subtree first met near the top still counts its full depth lower down.
+ */
+function expanded(
+  font: FontkitFont,
+  glyph: FontkitGlyph,
+  depth: number,
+  memo: Map<object, { points: number; height: number }>,
+  open: Set<object>
+): { points: number; height: number } {
+  const cached = memo.get(glyph);
+  if (cached) return cached;
+  if (depth > MAX_COMPOSITE_DEPTH || open.has(glyph)) return { points: Infinity, height: Infinity };
+  const decode = (glyph as unknown as { _decode?: () => DecodedGlyph | null })._decode;
+  // Only `glyf` faces nest glyphs; a CFF glyph has no components.
+  if (typeof decode !== 'function') return { points: 0, height: 0 };
+  const decoded = decode.call(glyph);
+  // Every visit costs at least one, so a fan-out of empty leaves (fontkit decodes each
+  // occurrence again) cannot hide exponential work behind a zero point count.
+  let points = (decoded?.points?.length ?? 0) + 1;
+  let height = 0;
+  open.add(glyph);
+  for (const component of decoded?.components ?? []) {
+    const child = expanded(font, font.getGlyph(component.glyphID), depth + 1, memo, open);
+    points += child.points;
+    height = Math.max(height, child.height + 1);
+    if (points > MAX_EXPANDED_POINTS || height > MAX_COMPOSITE_DEPTH) break;
+  }
+  open.delete(glyph);
+  const result = { points, height };
+  memo.set(glyph, result);
+  return result;
+}
+
+/** A glyph's path commands, or null when the glyph is unsafe to expand or fontkit fails. */
+function boundedPathCommands(
+  font: FontkitFont,
+  glyph: FontkitGlyph
+): readonly FontkitPathCommand[] | null {
+  if (!pathIsSafe(font, glyph)) return null;
+  try {
+    return glyph.path.commands;
+  } catch {
+    return null;
+  }
+}
 
 const cache = new WeakMap<FontkitFont, Map<number, ColorGlyph>>();
 
@@ -51,7 +137,15 @@ export function colorGlyph(font: FontkitFont, glyphId: number, work: Work): Colo
   }
   const known = byGlyph.get(glyphId);
   if (known) return known;
-  const result = readColorGlyph(font, glyphId, work);
+  let result: ColorGlyph;
+  try {
+    result = readColorGlyph(font, glyphId, work);
+  } catch (error) {
+    // A malformed color table is refused for this glyph, never for the whole export. The
+    // work budget's own errors still end the export.
+    if (error instanceof PdfWorkLimitError || error instanceof ExportResourceError) throw error;
+    result = { kind: 'refused', reason: 'the color glyph could not be read' };
+  }
   byGlyph.set(glyphId, result);
   return result;
 }
@@ -59,14 +153,18 @@ export function colorGlyph(font: FontkitFont, glyphId: number, work: Work): Colo
 function readColorGlyph(font: FontkitFont, glyphId: number, work: Work): ColorGlyph {
   const glyph = font.getGlyph(glyphId);
   const layers = glyph.layers;
-  if (!layers || layers.length === 0)
-    return { kind: 'none', outlined: glyph.path.commands.length > 0 };
+  if (!layers || layers.length === 0) {
+    // An outline too deep or too large to expand counts as one, so the writer reports it.
+    const commands = boundedPathCommands(font, glyph);
+    return { kind: 'none', outlined: commands === null || commands.length > 0 };
+  }
   if (layers.length > MAX_LAYERS)
     return { kind: 'refused', reason: `${layers.length} layers exceed the ${MAX_LAYERS} allowed` };
   const out: ColorGlyphLayer[] = [];
   for (const layer of layers) {
     work.tick();
-    const path = pathOperators(layer.glyph.path.commands, work);
+    const commands = boundedPathCommands(font, layer.glyph);
+    const path = commands && pathOperators(commands, work);
     if (path === null)
       return { kind: 'refused', reason: 'a layer outline is malformed or too long' };
     if (!path) continue;
@@ -78,6 +176,25 @@ function readColorGlyph(font: FontkitFont, glyphId: number, work: Work): ColorGl
     });
   }
   return { kind: 'layers', layers: out };
+}
+
+const outlines = new WeakMap<FontkitFont, Map<number, string | null>>();
+
+/**
+ * One glyph's monochrome outline as PDF path operators in font units, or null when it is
+ * malformed or over the bound. `''` for a glyph with no outline. Memoized per face.
+ */
+export function glyphOutline(font: FontkitFont, glyphId: number, work: Work): string | null {
+  let byGlyph = outlines.get(font);
+  if (!byGlyph) {
+    byGlyph = new Map();
+    outlines.set(font, byGlyph);
+  }
+  if (byGlyph.has(glyphId)) return byGlyph.get(glyphId)!;
+  const commands = boundedPathCommands(font, font.getGlyph(glyphId));
+  const path = commands && pathOperators(commands, work);
+  byGlyph.set(glyphId, path);
+  return path;
 }
 
 function clampByte(value: number): number {

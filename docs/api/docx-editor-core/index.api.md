@@ -240,6 +240,24 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: "formattingBar.groups.alignment";
 }, {
     readonly controls: readonly [{
+        readonly id: "ltr";
+        readonly labelKey: "toolbar.leftToRight";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly id: "rtl";
+        readonly labelKey: "toolbar.rightToLeft";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }];
+    readonly id: "direction";
+    readonly labelKey: "formattingBar.groups.direction";
+}, {
+    readonly controls: readonly [{
         readonly id: "bullet";
         readonly labelKey: "lists.bulletList";
         readonly paths: readonly string[];
@@ -781,7 +799,7 @@ export interface ChromePrintOptions {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1613,7 +1631,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     selectTableRegion: {
         region: 'table' | 'row' | 'column';
     };
-    // (undocumented)
     setAlignment: {
         align: 'left' | 'center' | 'right' | 'justify';
     };
@@ -1685,6 +1702,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         pageHeight?: number;
         pageWidth?: number;
         scope?: 'document' | 'section';
+    };
+    setParagraphDirection: {
+        direction: 'ltr' | 'rtl';
     };
     setParagraphFormat: ParagraphFormatCommand;
     setParagraphSpacing: {
@@ -2392,6 +2412,7 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
@@ -2520,6 +2541,7 @@ export interface Paragraph {
 export interface ParagraphDisagreements {
     // (undocumented)
     readonly alignment: boolean;
+    readonly direction: boolean;
     // (undocumented)
     readonly lineSpacing: boolean;
     // (undocumented)
@@ -2550,6 +2572,7 @@ export interface ParagraphFormatCommand {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     // (undocumented)
     contextualSpacing?: boolean;
+    direction?: 'ltr' | 'rtl';
     indentFirstLineTwips?: number | null;
     // (undocumented)
     indentLeftTwips?: number | null;
@@ -2902,6 +2925,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;

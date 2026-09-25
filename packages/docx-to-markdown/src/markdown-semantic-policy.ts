@@ -80,6 +80,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
   runStyle: {
     fontFamily: 'layout-only',
     fontFamilyEastAsia: 'layout-only',
+    latinLane: 'layout-only',
+    complexLane: 'layout-only',
     shaping: 'layout-only',
     fontSizePt: 'layout-only',
     color: 'explicitly-omitted',
@@ -170,6 +172,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     numFmt: 'represented',
     ordinal: 'represented',
     picture: 'layout-only',
+    pieces: 'layout-only',
   } satisfies Record<keyof ListMarkerRecord, MarkdownFieldPolicy>,
   table: {
     kind: 'represented',

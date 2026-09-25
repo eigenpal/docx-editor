@@ -99,6 +99,8 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'alignment.center': { parity: 'same' },
   'alignment.right': { parity: 'same' },
   'alignment.justify': { parity: 'same' },
+  'direction.ltr': { parity: 'same' },
+  'direction.rtl': { parity: 'same' },
   'list.bullet': { parity: 'same' },
   'list.numbered': { parity: 'same' },
 

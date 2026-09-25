@@ -25,6 +25,7 @@ import {
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
+  alignmentAfterDirectionChange,
   changedFields,
   formatInches,
   inchesToTwips,
@@ -78,6 +79,7 @@ const ParagraphDialogImpl = defineComponent({
     const paragraph = useParagraphFormat();
 
     const alignment = ref<'left' | 'center' | 'right' | 'justify'>('left');
+    const direction = ref<'ltr' | 'rtl'>('ltr');
     const indentLeft = ref(0);
     const indentRight = ref(0);
     const special = ref<SpecialIndent>('none');
@@ -127,6 +129,7 @@ const ParagraphDialogImpl = defineComponent({
         if (seeded.value || format === null) return;
         const seed = seedFields(format);
         alignment.value = seed.alignment;
+        direction.value = seed.direction;
         indentLeft.value = seed.indentLeft;
         indentRight.value = seed.indentRight;
         special.value = seed.special;
@@ -194,6 +197,7 @@ const ParagraphDialogImpl = defineComponent({
               seed,
               {
                 alignment: alignment.value,
+                direction: direction.value,
                 indentLeft: indentLeft.value,
                 indentRight: indentRight.value,
                 special: special.value,
@@ -229,8 +233,16 @@ const ParagraphDialogImpl = defineComponent({
       refused.value = true;
     };
 
+    // A new direction trades the leading and trailing edges, so the Alignment field follows
+    // it and shows what OK will produce, the same result as the toolbar's direction buttons.
+    const changeDirection = (next: 'ltr' | 'rtl'): void => {
+      if (next !== direction.value && !seedMixed.value.direction && !seedMixed.value.alignment)
+        alignment.value = alignmentAfterDirectionChange(alignment.value);
+      direction.value = next;
+    };
     const fields = {
       alignment,
+      direction,
       indentLeft,
       indentRight,
       special,
@@ -258,7 +270,8 @@ const ParagraphDialogImpl = defineComponent({
       errors: computed(() => (refused.value ? { form: t('dialogs.paragraph.refused') } : {})),
       isEnabled: paragraph.isEnabled,
       setValue: (name, value) => {
-        (fields[name] as { value: unknown }).value = value;
+        if (name === 'direction') changeDirection(value as 'ltr' | 'rtl');
+        else (fields[name] as { value: unknown }).value = value;
         if (name === 'lineRule')
           lineValue.value =
             value === seedRef.value?.lineRule
@@ -418,6 +431,28 @@ const ParagraphDialogImpl = defineComponent({
                     <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
                     <option value="right">{t('dialogs.paragraph.alignRight')}</option>
                     <option value="justify">{t('dialogs.paragraph.alignJustify')}</option>
+                  </select>
+                </div>
+                <div data-docx-part="field" data-docx-field="direction" class="docx-dialog__row">
+                  <label class="docx-dialog__label" for={`${fieldId}-direction`}>
+                    {t('dialogs.paragraph.direction')}
+                  </label>
+                  <select
+                    id={`${fieldId}-direction`}
+                    class="docx-dialog__input"
+                    // Empty when the selection mixes directions, like Alignment.
+                    value={mixed.value.direction ? '' : direction.value}
+                    onChange={(event) => {
+                      resolve('direction');
+                      changeDirection((event.target as HTMLSelectElement).value as 'ltr' | 'rtl');
+                    }}
+                    aria-label={t('dialogs.paragraph.direction')}
+                  >
+                    {mixed.value.direction ? (
+                      <option value="">{t('dialogs.paragraph.mixed')}</option>
+                    ) : null}
+                    <option value="rtl">{t('dialogs.paragraph.directionRtl')}</option>
+                    <option value="ltr">{t('dialogs.paragraph.directionLtr')}</option>
                   </select>
                 </div>
 

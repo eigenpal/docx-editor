@@ -10,6 +10,8 @@ import type { RevisionBatchResult } from './editor.ts';
 /** Which paragraph-level reads the selection disagrees about. @public */
 export interface ParagraphDisagreements {
   readonly alignment: boolean;
+  /** The selection mixes left-to-right and right-to-left paragraphs. */
+  readonly direction: boolean;
   readonly spaceBeforePt: boolean;
   readonly spaceAfterPt: boolean;
   readonly lineSpacing: boolean;
@@ -42,6 +44,11 @@ export interface ParagraphFlags {
  */
 export interface ParagraphFormatCommand {
   alignment?: 'left' | 'center' | 'right' | 'justify';
+  /**
+   * Paragraph base direction (`w:bidi`), Word's Direction setting. `ltr` writes an explicit
+   * off value where a style would otherwise make the paragraph right-to-left.
+   */
+  direction?: 'ltr' | 'rtl';
   spaceBeforePt?: number | null;
   spaceAfterPt?: number | null;
   lineSpacing?: { rule: 'multiple' | 'exact' | 'atLeast'; value: number } | null;
@@ -255,8 +262,16 @@ export interface RunFormatting {
   // alignment or paragraph style of its own.
   readonly superscript?: boolean;
   readonly subscript?: boolean;
-  /** Paragraph alignment at the selection. `both` is OOXML's spelling of justify. */
+  /**
+   * Paragraph alignment at the selection, as a PHYSICAL edge. `both` is OOXML's spelling of
+   * justify. A right-to-left paragraph with no `w:jc` reads `right`.
+   */
   readonly alignment?: 'left' | 'center' | 'right' | 'both';
+  /**
+   * Paragraph base direction at the selection (`w:bidi` through the style cascade). Absent
+   * when the selection's paragraphs disagree; `disagrees.direction` then says so.
+   */
+  readonly direction?: 'ltr' | 'rtl';
   /** Paragraph style id (`w:pStyle`) at the selection. */
   readonly styleId?: string;
   /**
@@ -332,9 +347,12 @@ export interface RunFormatting {
  * not know the cell.
  */
 export interface IndentFormatting {
-  /** Left indent, signed. Negative pulls text into the margin, as Word allows. */
+  /**
+   * Leading indent (`w:left`), signed: the left one, or the right one in a right-to-left
+   * paragraph. Negative pulls text into the margin, as Word allows.
+   */
   readonly left: number;
-  /** Right indent, signed. */
+  /** Trailing indent (`w:right`), signed: the right one, or the left one right to left. */
   readonly right: number;
   /** First-line offset from {@link left}, signed. Negative is a hanging indent. */
   readonly firstLine: number;
@@ -344,6 +362,11 @@ export interface IndentFormatting {
     readonly right: boolean;
     readonly firstLine: boolean;
   };
+  /**
+   * The first selected paragraph reads right to left, so `left` and the first line sit on
+   * the right margin. Absent for a left-to-right paragraph.
+   */
+  readonly rtl?: true;
 }
 
 /** A table: its rows, and the table style they resolve through. */

@@ -6,6 +6,7 @@ import { itemizeScriptFontSlots } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { MAX_SHAPING_CONTEXT, type ShapingContext } from './shaped-run.ts';
 
 export function paragraphIsRtl(props: readonly OoxmlProperty[]): boolean {
   let rtl = false;
@@ -68,7 +69,10 @@ export function bidiPieces(
     !pieces.some((piece) => runIsRtl(piece.props))
   )
     return pieces;
-  // Atom and tab placement have separate advances and are not ordinary text runs.
+  // Atom placement has separate advances and is not an ordinary text run. A tab is: it is a
+  // segment separator (UAX #9 class S), so it takes the paragraph level below and the text
+  // on each side of it resolves as usual. Bailing out on tabs left every tab-aligned RTL form
+  // label unshaped and in left-to-right order.
   if (
     pieces.some(
       (p) =>
@@ -77,8 +81,7 @@ export function bidiPieces(
         p.equation ||
         p.positionalTab ||
         p.measureText !== undefined ||
-        p.end - p.start !== p.text.length ||
-        p.text.includes('\t')
+        p.end - p.start !== p.text.length
     )
   )
     return pieces;
@@ -97,12 +100,15 @@ export function bidiPieces(
       return pieces;
     }
     for (const item of items) {
+      // UAX #9 L1: a segment separator is reset to the paragraph embedding level.
+      const separator = /^\t+$/u.test(piece.text.slice(item.from, item.to));
+      const level = separator ? (rtl ? 1 : 0) : item.bidiLevel;
       const style = {
         ...piece.style,
         shaping: {
           script: item.script,
-          direction: item.direction,
-          level: item.bidiLevel,
+          direction: separator ? (rtl ? ('rtl' as const) : ('ltr' as const)) : item.direction,
+          level,
           baseLevel: rtl ? 1 : 0,
           ...(usesRunGroups
             ? { runDirection: runIsRtl(piece.props) ? ('rtl' as const) : ('ltr' as const) }
@@ -119,8 +125,111 @@ export function bidiPieces(
     }
     offset += piece.text.length;
   }
+  return withJoiningContext(result);
+}
+
+/** Scripts whose letters change form with their neighbours (Unicode joining types). */
+const JOINING_SCRIPTS: ReadonlySet<string> = new Set([
+  'Adlm',
+  'Arab',
+  'Mand',
+  'Mong',
+  'Nkoo',
+  'Phag',
+  'Rohg',
+  'Syrc',
+]);
+
+/**
+ * Give each joining-script piece the neighbouring text it joins with.
+ *
+ * A word split into two formatting runs (a colour change mid-word) is shaped as two pieces,
+ * and each half drew its boundary letter in an isolated or final form. HarfBuzz joins across
+ * the split when each half sees the other's letters as context. The context reaches the
+ * measurer and the exporters through the style, so width and paint shape the same way.
+ *
+ * Bounded: only adjacent pieces at the same bidi level, only for joining scripts, only when
+ * no whitespace sits at the boundary, and at most {@link MAX_SHAPING_CONTEXT} units on each
+ * side. Only the edge word carries the outside context. Line breaks come later; a word does
+ * not break mid-word, so a boundary inside one keeps both halves on one line. Context changes
+ * glyph forms only: a kern or cursive offset between the two halves is not applied.
+ */
+function withJoiningContext(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
+  if (!pieces.some((piece) => JOINING_SCRIPTS.has(piece.style.shaping?.script ?? ''))) {
+    return pieces;
+  }
+  const levelOf = (piece: FieldAwarePiece | undefined) => piece?.style.shaping?.level;
+  const result: FieldAwarePiece[] = [];
+  pieces.forEach((piece, index) => {
+    const shaping = piece.style.shaping;
+    if (!shaping || !JOINING_SCRIPTS.has(shaping.script)) {
+      result.push(piece);
+      return;
+    }
+    const previous = pieces[index - 1];
+    const next = pieces[index + 1];
+    // Nothing joins across whitespace, so a boundary with a space on either side needs none.
+    const before =
+      previous &&
+      levelOf(previous) === shaping.level &&
+      previous.end === piece.start &&
+      !BREAKS_JOINING.test(previous.text.slice(-1)) &&
+      !BREAKS_JOINING.test(piece.text.slice(0, 1))
+        ? previous.text.slice(-MAX_SHAPING_CONTEXT)
+        : '';
+    const after =
+      next &&
+      levelOf(next) === shaping.level &&
+      next.start === piece.end &&
+      !BREAKS_JOINING.test(piece.text.slice(-1)) &&
+      !BREAKS_JOINING.test(next.text.slice(0, 1))
+        ? next.text.slice(0, MAX_SHAPING_CONTEXT)
+        : '';
+    if (!before && !after) {
+      result.push(piece);
+      return;
+    }
+    // The outside context belongs to the edge WORD only. Every slice layout measures and
+    // every span paint shapes inherits its piece's style, so a piece-wide context made the
+    // later words of the piece shape as if joined to the neighbour run. The piece is split at
+    // its first and last whitespace; the pieces between keep the plain style. A literal piece
+    // splits freely: piece boundaries are not break opportunities.
+    const text = piece.text;
+    const slice = (from: number, to: number, context?: ShapingContext): void => {
+      if (to <= from) return;
+      result.push({
+        ...piece,
+        text: text.slice(from, to),
+        start: piece.start + from,
+        end: piece.start + to,
+        style: context ? { ...piece.style, shaping: { ...shaping, context } } : piece.style,
+      });
+    };
+    const first = text.search(BREAKS_JOINING);
+    if (first === -1) {
+      // One word: it reads both sides.
+      slice(0, text.length, { before, after });
+      return;
+    }
+    let last = text.length - 1;
+    while (!BREAKS_JOINING.test(text[last]!)) last--;
+    // Inside the piece, each edge word reads its real neighbours, which start or end with
+    // the whitespace that stops the join.
+    const head = before ? first : 0;
+    const tail = after ? last + 1 : text.length;
+    if (before) slice(0, head, { before, after: text.slice(head, head + MAX_SHAPING_CONTEXT) });
+    slice(head, tail);
+    if (after)
+      slice(tail, text.length, {
+        before: text.slice(Math.max(0, tail - MAX_SHAPING_CONTEXT), tail),
+        after,
+      });
+  });
   return result;
 }
+
+/** Characters no joining script joins across. */
+const BREAKS_JOINING = /\s/u;
 
 function bidiOrder(
   spans: readonly StyleSpanRecord[],
@@ -138,6 +247,15 @@ function bidiOrder(
     index--
   )
     levels[index] = rtl ? 1 : 0;
+  return visualOrderOfLevels(levels, start, end);
+}
+
+/** UAX #9 L2 over `levels[start, end)`: the source indices in visual (left-to-right) order. */
+export function visualOrderOfLevels(
+  levels: readonly number[],
+  start = 0,
+  end = levels.length
+): number[] {
   const order = Array.from({ length: end - start }, (_, index) => start + index);
   let maximum = 0;
   let lowestOdd = Infinity;

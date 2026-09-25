@@ -420,6 +420,7 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
@@ -501,6 +502,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;

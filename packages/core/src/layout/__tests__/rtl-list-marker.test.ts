@@ -18,9 +18,11 @@ function fixture(
   region: { width?: number; frame?: boolean; columns?: boolean } = {}
 ) {
   const width = region.width ?? 200;
+  // The same level serves both directions: `w:left` and `lvlJc="left"` name the LEADING side,
+  // which is the right margin in a bidi paragraph.
   const numberingIndex = buildNumberingIndex(
     part(
-      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="${marker}"/><w:lvlJc w:val="${rtl ? 'right' : 'left'}"/><w:suff w:val="${suffix}"/><w:pPr><w:ind w:${rtl ? 'right' : 'left'}="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`
+      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="${marker}"/><w:lvlJc w:val="left"/><w:suff w:val="${suffix}"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`
     ).root
   );
   const paragraph = `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}${region.frame ? '<w:framePr w:x="400" w:y="600" w:w="1000"/>' : ''}<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>مرحبا عالم مرحبا عالم مرحبا عالم</w:t></w:r></w:p>`;

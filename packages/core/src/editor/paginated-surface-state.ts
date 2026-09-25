@@ -38,6 +38,8 @@ export interface SurfaceFormatting {
   readonly color: string | null;
   readonly highlight: string | null;
   readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+  /** Paragraph base direction through the cascade; null when the selection mixes them. */
+  readonly direction: 'ltr' | 'rtl' | null;
   readonly styleId: string | null;
   /**
    * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two

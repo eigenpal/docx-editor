@@ -54,6 +54,8 @@ export {
   type ShapingEnvironmentInput,
   type ShapingEnvironment,
   type ShapeInput,
+  type ShapingContext,
+  MAX_SHAPING_CONTEXT,
   type ShapedGlyph,
   type GlyphOutline,
   type ShapedCluster,

@@ -1039,7 +1039,22 @@ export interface EditorCommands
    * character style leaves that style's face on it.
    */
   clearFormatting: Record<never, never>;
+  /**
+   * Physical alignment on every paragraph the selection touches. A right-to-left paragraph
+   * reaches its right margin with `w:jc="left"`, so the written value follows each
+   * paragraph's direction.
+   */
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
+  /**
+   * Word's Left-to-Right and Right-to-Left Text Direction: the base direction (`w:bidi`) of
+   * every paragraph the selection touches, table cells included. `rtl` writes `w:bidi`.
+   * `ltr` removes a direct `w:bidi`, and writes `w:bidi w:val="0"` only where a style would
+   * otherwise make the paragraph right-to-left. Run text, run direction (`w:rtl`)
+   * and `w:jc` are untouched: alignment and indents are leading and trailing sides, so a
+   * start-aligned paragraph moves to the other margin with its direction.
+   * A paragraph already in the requested direction is left as it is.
+   */
+  setParagraphDirection: { direction: 'ltr' | 'rtl' };
   /**
    * Word's Line Spacing, on every paragraph the selection touches.
    *

@@ -624,3 +624,92 @@ describe('the Paragraph dialog', () => {
     expect(editor().snapshot().canUndo).toBe(false);
   });
 });
+
+describe('the Paragraph dialog Direction field', () => {
+  const direction = (view: ReturnType<typeof render>) =>
+    field(view, 'Direction') as HTMLSelectElement;
+
+  test('seeds the current direction, and OK writes the one you pick', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha', '<w:bidi/>'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(direction(view).value).toBe('rtl');
+
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'ltr' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting?.direction).toBe('ltr');
+  });
+
+  test('a paragraph with no w:bidi opens as left-to-right, and Right-to-left writes w:bidi', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(direction(view).value).toBe('ltr');
+
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(xmlOf(editor())).toContain('<w:bidi');
+    expect(editor().snapshot().formatting?.direction).toBe('rtl');
+  });
+
+  test('Direction trades the Alignment field edge and moves the paragraph like the toolbar', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    const alignment = field(view, 'Alignment') as HTMLSelectElement;
+    expect(alignment.value).toBe('left');
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    // The start edge is now the right one, and the field says so before OK.
+    expect(alignment.value).toBe('right');
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting).toMatchObject({ direction: 'rtl', alignment: 'right' });
+    // Same XML as the toolbar button: the stored alignment is untouched.
+    expect(xmlOf(editor())).not.toContain('<w:jc');
+  });
+
+  test('a mixed selection opens blank, stays mixed if untouched, and resolves when set', async () => {
+    const { view, editor, openDialog, close } = mountDialog(p('one', '<w:bidi/>') + p('two'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(editor().snapshot().formatting?.disagrees?.direction).toBe(true);
+    expect(direction(view).value).toBe('');
+
+    // Untouched: OK writes nothing, so the paragraphs keep their own directions.
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().canUndo).toBe(false);
+    await close();
+
+    await openDialog();
+    expect(direction(view).value).toBe('');
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting?.direction).toBe('rtl');
+    expect(editor().snapshot().formatting?.disagrees?.direction).toBe(false);
+  });
+});

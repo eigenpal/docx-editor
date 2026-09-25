@@ -72,6 +72,7 @@ export const signedFirstLineOf = (kind: SpecialIndent, magnitudeTwips: number): 
  */
 export interface ParagraphDialogFields {
   alignment: 'left' | 'center' | 'right' | 'justify';
+  direction: 'ltr' | 'rtl';
   indentLeft: number;
   indentRight: number;
   special: SpecialIndent;
@@ -104,6 +105,7 @@ export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields {
   const firstLine = format.indentFirstLineTwips;
   return {
     alignment: format.alignment ?? 'left',
+    direction: format.direction ?? 'ltr',
     indentLeft: format.indentLeftTwips ?? 0,
     indentRight: format.indentRightTwips ?? 0,
     special: specialOf(firstLine),
@@ -141,6 +143,7 @@ export interface ParagraphDialogMixed {
   /** The selection's paragraphs carry DIFFERENT tab stops, so the list shows none of them. */
   readonly tabStops: boolean;
   readonly alignment: boolean;
+  readonly direction: boolean;
   readonly indentLeft: boolean;
   readonly indentRight: boolean;
   readonly special: boolean;
@@ -167,6 +170,7 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed = {
   pageBreakBefore: false,
   tabStops: false,
   alignment: false,
+  direction: false,
   indentLeft: false,
   indentRight: false,
   special: false,
@@ -193,6 +197,7 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
     // states it", and treating the second as the first told a single paragraph — the
     // commonest case in a real document — that it disagreed with itself.
     alignment: format.disagrees.alignment,
+    direction: format.disagrees.direction,
     // `indentUnknown` is a table paragraph: the engine measures indents from the cell's
     // content edge and reports none, because a ruler drawn against the page margin cannot
     // place them. The control cannot show a value either, so it shows none — blank, and
@@ -270,7 +275,18 @@ export function changedFields(
   const resolved = (key: keyof ParagraphDialogMixed): boolean =>
     seedMixed[key] && !currentMixed[key];
 
-  if (seed.alignment !== current.alignment || resolved('alignment'))
+  if (seed.direction !== current.direction || resolved('direction'))
+    take('direction', current.direction);
+  // An Alignment field that only followed a direction change (see
+  // `alignmentAfterDirectionChange`) shows where the stored `w:jc` now lands; writing it would
+  // restate the same edge, so it is not a change. That swap happens only when neither field
+  // was mixed on open.
+  const followedDirection =
+    !seedMixed.direction &&
+    !seedMixed.alignment &&
+    seed.direction !== current.direction &&
+    current.alignment === alignmentAfterDirectionChange(seed.alignment);
+  if ((seed.alignment !== current.alignment && !followedDirection) || resolved('alignment'))
     take('alignment', current.alignment);
   if (seed.indentLeft !== current.indentLeft || resolved('indentLeft'))
     take('indentLeftTwips', current.indentLeft);
@@ -322,6 +338,19 @@ export function changedFields(
     take('tabStops', current.tabStops);
 
   return moved ? update : null;
+}
+
+/**
+ * The physical alignment a paragraph shows after its direction flips, with its stored
+ * `w:jc` unchanged: leading and trailing edges trade sides. A dialog applies this to its
+ * Alignment field when Direction changes, so the field shows what OK will produce, the same
+ * result as the toolbar's direction buttons.
+ * @public
+ */
+export function alignmentAfterDirectionChange(
+  alignment: ParagraphDialogFields['alignment']
+): ParagraphDialogFields['alignment'] {
+  return alignment === 'left' ? 'right' : alignment === 'right' ? 'left' : alignment;
 }
 
 /** Add one stop, replacing any stop already at that position, and keep the list sorted. * @public

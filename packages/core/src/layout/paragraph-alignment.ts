@@ -12,34 +12,55 @@ const OVERFLOW_TOLERANCE_PT = 0.001;
 /** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
 export type Alignment = 'left' | 'center' | 'right' | 'both';
 
+/**
+ * The PHYSICAL alignment of a paragraph.
+ *
+ * In a bidi paragraph Word reads `left` and `right` as the leading and trailing edges, the
+ * same as `start` and `end`: `<w:bidi/><w:jc w:val="left"/>` sits at the right margin
+ * (verified against Word 16 PDF output). The kashida and Thai variants justify.
+ */
 export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
   const rtl = paragraphIsRtl(props);
-  let alignment: Alignment = rtl ? 'right' : 'left';
+  const leading: Alignment = rtl ? 'right' : 'left';
+  const trailing: Alignment = rtl ? 'left' : 'right';
+  let alignment: Alignment = leading;
   for (const property of props) {
     if (property.localName !== 'jc') continue;
     switch (property.attributes?.val) {
-      // Logical start/end follow the resolved paragraph direction.
       case 'center':
         alignment = 'center';
         break;
       case 'right':
-        alignment = 'right';
-        break;
-      case 'start':
-        alignment = rtl ? 'right' : 'left';
-        break;
       case 'end':
-        alignment = rtl ? 'left' : 'right';
+        alignment = trailing;
         break;
       case 'both':
       case 'distribute':
+      case 'lowKashida':
+      case 'mediumKashida':
+      case 'highKashida':
+      case 'thaiDistribute':
         alignment = 'both';
         break;
       default:
-        alignment = 'left';
+        alignment = leading;
     }
   }
   return alignment;
+}
+
+/**
+ * The `w:jc` value that puts a paragraph at a PHYSICAL edge, the inverse of
+ * {@link paragraphAlignment}: a bidi paragraph reaches its right margin with `left`.
+ */
+export function jcValueForAlignment(
+  alignment: 'left' | 'center' | 'right' | 'justify' | 'both',
+  rtl: boolean
+): string {
+  if (alignment === 'center') return 'center';
+  if (alignment === 'justify' || alignment === 'both') return 'both';
+  if (!rtl) return alignment;
+  return alignment === 'left' ? 'right' : 'left';
 }
 
 /**

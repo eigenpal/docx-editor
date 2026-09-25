@@ -15,6 +15,7 @@ const GROUPABLE = new Set<EditorCommand['type']>([
   'toggleMark',
   'setMarkAttr',
   'setAlignment',
+  'setParagraphDirection',
   'clearFormatting',
   'setLineSpacing',
   'setParagraphSpacing',

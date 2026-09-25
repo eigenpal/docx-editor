@@ -34,9 +34,18 @@ export class EmbeddedFace {
    * glyph, and the page carries the text in its line's `ActualText` instead.
    */
   readonly colorLayers: boolean;
+  /**
+   * Whether the face's own outlines are bold or slanted. A bold or italic run drawn in a
+   * face that is not (a single-weight face, or a substituted regular) gets Word's synthetic
+   * style at paint; a real bold or italic face draws as it is.
+   */
+  readonly bold: boolean;
+  readonly slanted: boolean;
   /** The family this face was admitted under, for legacy symbol-encoding extraction. */
   private readonly family: string;
   private readonly subset: ReturnType<FontkitFont['createSubset']>;
+  /** A `glyf` face, whose subset has a `loca` table; see {@link encodeSubset}. */
+  private readonly trueType: boolean;
   private readonly codes = new Map<string, number>();
   private readonly rows: { cid: number; text: string }[] = [];
   private readonly widths = new Map<number, number>();
@@ -56,9 +65,28 @@ export class EmbeddedFace {
       throw new Error('Variable fonts require an exact static instance');
     this.font = font;
     this.colorLayers = Boolean(font.COLR && font.CPAL);
+    // fontkit parses both tables but does not type them.
+    const tables = font as unknown as {
+      readonly 'OS/2'?: {
+        readonly usWeightClass?: number;
+        readonly fsSelection?: { bold?: boolean; italic?: boolean; oblique?: boolean };
+      };
+      readonly head?: { readonly macStyle?: { bold?: boolean; italic?: boolean } };
+    };
+    const os2 = tables['OS/2'];
+    const macStyle = tables.head?.macStyle;
+    this.bold =
+      (os2?.usWeightClass ?? 400) >= 600 || Boolean(os2?.fsSelection?.bold || macStyle?.bold);
+    this.slanted =
+      Boolean(os2?.fsSelection?.italic || os2?.fsSelection?.oblique || macStyle?.italic) ||
+      (Number.isFinite(font.italicAngle) && font.italicAngle !== 0);
     this.family = admitted.request.family;
     this.strike = strikeMetrics(admitted);
     this.subset = font.createSubset();
+    this.trueType = Boolean(
+      (font as unknown as { directory?: { tables?: Record<string, unknown> } }).directory?.tables
+        ?.glyf
+    );
     this.ref = doc.context.nextRef();
     this.name = `F${index}`;
   }
@@ -80,7 +108,7 @@ export class EmbeddedFace {
     let code = this.codes.get(key);
     if (code === undefined) {
       if (this.rows.length >= 65534) throw new Error('Font character code limit exceeded');
-      const cid = this.subset.includeGlyph(glyph);
+      const cid = this.cidFor(glyph, text);
       if (!Number.isInteger(cid) || cid < 0 || cid > 65535)
         throw new Error('Invalid subset glyph identifier');
       code = this.rows.length + 1;
@@ -89,6 +117,61 @@ export class EmbeddedFace {
       this.widths.set(cid, (this.font.getGlyph(glyph).advanceWidth * 1000) / this.font.unitsPerEm);
     }
     return hex(code);
+  }
+  /** The text each subset glyph first extracted as; see {@link cidFor}. */
+  private readonly cidText = new Map<number, string>();
+  /**
+   * The subset glyph for one (glyph, text) pair.
+   *
+   * An Arabic face draws BEH, TEH, NOON and YEH on one dotless base glyph and adds the dots
+   * as separate glyphs, so one glyph extracts as several letters. Codes already differ per
+   * letter, but MuPDF resolves `ToUnicode` per CID, so one shared CID read every such letter
+   * as the last one mapped. The subset takes the glyph again under a new CID, the way
+   * LibreOffice's writer does. Both fontkit subsets write one entry per listed glyph: a
+   * TrueType subset one `glyf` record, a CFF subset one charstring under a single charset
+   * range, so the CID is the subset index either way.
+   *
+   * Bounded: no copy once the copies and every glyph composites could still pull in could
+   * reach 65535, where the glyph count and component ids wrap. A TrueType subset with copies
+   * is written with long `loca` offsets (see `encodeSubset`).
+   */
+  private cidFor(glyph: number, text: string): number {
+    const known = (this.subset as unknown as { mapping: Record<number, number> }).mapping[glyph];
+    if (known === undefined) {
+      const cid = this.subset.includeGlyph(glyph);
+      this.cidText.set(cid, text);
+      return cid;
+    }
+    const glyphs = (this.subset as unknown as { glyphs?: number[] }).glyphs;
+    if (this.cidText.get(known) === text || !Array.isArray(glyphs)) return known;
+    if (glyphs.length + this.font.numGlyphs >= 65535) return known;
+    // `encode` caches codes per (glyph, text), so each pair reaches here once.
+    glyphs.push(glyph);
+    this.copies += 1;
+    const cid = glyphs.length - 1;
+    this.cidText.set(cid, text);
+    return cid;
+  }
+  /** Glyphs the subset lists more than once; see {@link cidFor}. */
+  private copies = 0;
+  /**
+   * Encode the subset. A TrueType face with short `loca` offsets can address 131070 bytes of
+   * `glyf`, and fontkit copies the face's format into the subset; copies can pass that, and
+   * the offsets then wrap and later glyphs draw other glyphs' outlines. fontkit reads the
+   * format from the face's parsed `loca` (whose offsets are already decoded, so the format
+   * no longer affects reads), so it says long while the subset encodes.
+   */
+  private encodeSubset(): Uint8Array {
+    const loca = (this.font as unknown as { loca?: { version?: number } }).loca;
+    if (!this.trueType || this.copies === 0 || !loca || loca.version !== 0) {
+      return this.subset.encode();
+    }
+    loca.version = 1;
+    try {
+      return this.subset.encode();
+    } finally {
+      loca.version = 0;
+    }
   }
   /**
    * A code that draws this face's space and extracts as `text`: the carrier for characters
@@ -119,7 +202,7 @@ export class EmbeddedFace {
   async finish(work: Work): Promise<void> {
     if (this.colorLayers) return;
     await work.yield();
-    const bytes = this.subset.encode();
+    const bytes = this.encodeSubset();
     work.check();
     const cff = bytes[0] === 1 && bytes[1] === 0;
     const ctx = this.doc.context;
@@ -184,6 +267,8 @@ export class EmbeddedFace {
         )
       )
     );
+    // Only glyphs with text are written as text; glyphs without are filled as outlines by the
+    // text writer, so no code needs a placeholder character.
     const mappings = this.rows.flatMap((row, i) =>
       row.text ? [`<${hex(i + 1)}> <${unicodeHex(row.text)}>`] : []
     );

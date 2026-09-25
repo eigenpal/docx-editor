@@ -318,23 +318,31 @@ function firstLineOffsetOf(
   return found;
 }
 
-/** Whether any `w:ind` in the list states left (or its `w:start` spelling). */
-function statesLeft(props: readonly OoxmlProperty[], rtl = false): boolean {
+/** Whether any `w:ind` in the list states the leading indent (`w:left` or `w:start`). */
+function statesLeading(props: readonly OoxmlProperty[]): boolean {
   return props.some(
     (property) =>
       property.localName === 'ind' &&
-      (property.attributes?.left !== undefined ||
-        property.attributes?.[rtl ? 'end' : 'start'] !== undefined)
+      (property.attributes?.left !== undefined || property.attributes?.start !== undefined)
   );
 }
 
-function statesRight(props: readonly OoxmlProperty[], rtl = false): boolean {
+/** Whether any `w:ind` in the list states the trailing indent (`w:right` or `w:end`). */
+function statesTrailing(props: readonly OoxmlProperty[]): boolean {
   return props.some(
     (property) =>
       property.localName === 'ind' &&
-      (property.attributes?.right !== undefined ||
-        property.attributes?.[rtl ? 'start' : 'end'] !== undefined)
+      (property.attributes?.right !== undefined || property.attributes?.end !== undefined)
   );
+}
+
+/** Whether any `w:ind` in the list states the physical left side in this direction. */
+function statesLeft(props: readonly OoxmlProperty[], rtl: boolean): boolean {
+  return rtl ? statesTrailing(props) : statesLeading(props);
+}
+
+function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
+  return rtl ? statesLeading(props) : statesTrailing(props);
 }
 
 /**
@@ -358,19 +366,22 @@ export function mergeListIndent(
 ): NumberingLevelIndent {
   const rtl = paragraphIsRtl([...inherited, ...direct]);
   const direction: OoxmlProperty = { localName: 'bidi', attributes: { val: rtl ? '1' : '0' } };
-  if (levelIndent.authored) {
-    const sides = levelIndent.authored;
-    const left = sides.left ?? (rtl ? sides.end : sides.start);
-    const right = sides.right ?? (rtl ? sides.start : sides.end);
+  // A level's `left`/`right` are its leading and trailing indents (`w:left` or `w:start`,
+  // `w:right` or `w:end`); a right-to-left paragraph puts the leading one on the right.
+  if (rtl) {
     levelIndent = {
       ...levelIndent,
-      left: left ?? 0,
-      right: right ?? 0,
-      stated: {
-        left: left !== undefined,
-        right: right !== undefined,
-        firstLineOffset: levelIndent.stated?.firstLineOffset ?? false,
-      },
+      left: levelIndent.right,
+      right: levelIndent.left,
+      ...(levelIndent.stated
+        ? {
+            stated: {
+              ...levelIndent.stated,
+              left: levelIndent.stated.right,
+              right: levelIndent.stated.left,
+            },
+          }
+        : {}),
     };
   }
   // A level built by hand (a unit test, not a file) carries no presence record; it then

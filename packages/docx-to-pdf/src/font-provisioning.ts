@@ -62,6 +62,11 @@ export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
   'Noto Sans Symbols 2',
   'Noto Sans Math',
   'Noto Sans Arabic',
+  // Hebrew, and Latin, Greek or Cyrillic letters the faces above lack. A missing glyph falls
+  // back to Times New Roman in the reference renderer. A host without it resolves the packaged
+  // Liberation Serif, whose Latin letters share its widths but whose Hebrew runs about 12%
+  // wider, so Hebrew in that face can wrap earlier.
+  'Times New Roman',
   // Prefer available Word CJK faces; packaged Noto remains the portable fallback.
   'SimSun',
   'Batang',
@@ -210,13 +215,18 @@ const substituteFor = (family: string): string | undefined => {
  *
  * Word does the same when a document names a font the machine lacks: it picks a face of the
  * same class and renders. The class is read from the name, which is all a resolver sees:
- * monospaced names to Liberation Mono, serif names to Liberation Serif, everything else to
- * Liberation Sans. The metrics are not the missing font's, and the export says so with an
- * information diagnostic, but the page shows the text.
+ * monospaced names to Liberation Mono, symbol names to Noto Sans Symbols 2, serif names to
+ * Liberation Serif, everything else to Liberation Sans. The metrics are not the missing font's,
+ * and the export says so with an information diagnostic, but the page shows the text.
+ *
+ * A symbol name must not get a text face: `Segoe UI Symbol` heads the glyph fallback list, and
+ * a Liberation Sans stand-in there drew every Hebrew letter an Arabic face lacks in Liberation
+ * Sans, before the Times New Roman entry was reached.
  */
 export function genericSubstituteFor(family: string): string {
   const name = canonicalFamily(family).family;
   if (/mono|courier|consol|menlo|typewriter|\bcode\b|fixed/i.test(name)) return 'Liberation Mono';
+  if (/symbol/i.test(name)) return 'Noto Sans Symbols 2';
   if (/sans/i.test(name)) return 'Liberation Sans';
   if (
     /serif|roman|garamond|georgia|times|book|baskerville|cambria|minion|palatino|century|didot|caslon|constantia|sagona|lora|merriweather|playfair|charter|bodoni|perpetua|rockwell|goudy|bembo|sabon|antiqua/i.test(
