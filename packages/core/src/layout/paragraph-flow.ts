@@ -135,6 +135,12 @@ export interface ParagraphFlowOptions {
    * The marker never deepens the line below its baseline ({@link listMarkerFirstLineMetrics}).
    */
   readonly firstLineMarkerAscent?: number;
+  /**
+   * Page breaks that open the paragraph pass the first-line slot (offset and marker floors) on
+   * to the first line after them, where body layout publishes the list marker. A continuation
+   * from `startOffset` keeps the slot only when nothing but page breaks precedes it.
+   */
+  readonly firstLineAfterLeadingBreaks?: boolean;
   /** Re-break only the unplaced suffix when an unequal-width column follows. */
   readonly startOffset?: number;
   /** Text column bounds in indentLeft coordinates. Margin-relative positional tabs use these
@@ -251,6 +257,8 @@ import {
   coalesceIdeographicSpans,
   frozenLine,
   growLineMetrics,
+  holdsOnlyPageBreak,
+  onlyPageBreaksBefore,
   pendingLineFlowExtent,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
@@ -331,11 +339,6 @@ export function breakParagraph(
   if (cached) return cached;
 
   const lineSpacing = flow?.lineSpacing ?? SINGLE_LINE_SPACING;
-  // The first line starts `firstLineOffset` from the paragraph's left indent — right for
-  // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
-  const firstLineOffset = flow?.firstLineOffset ?? 0;
-  const markerBaselineFloor = flow?.firstLineMinimumBaseline ?? 0;
-  const markerAscent = Math.max(0, flow?.firstLineMarkerAscent ?? 0);
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -374,6 +377,15 @@ export function breakParagraph(
     );
   const allPieces = bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph));
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
+  const carriesSlot = flow?.firstLineAfterLeadingBreaks === true;
+  const slotOpen =
+    startOffset === 0 || (carriesSlot && onlyPageBreaksBefore(allPieces, startOffset));
+  // The first line starts `firstLineOffset` from the paragraph's left indent — right for
+  // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent. A
+  // continuation from `startOffset` is no first line, unless only leading breaks precede it.
+  const firstLineOffset = slotOpen ? (flow?.firstLineOffset ?? 0) : 0;
+  const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
+  const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   // A zero-width projected piece at the start offset (a `w:sym` glyph, a field-code atom)
   // owns no model text, so `end <= startOffset` would drop it. At the paragraph start no
   // earlier fragment can have painted it, so it always stays; a continuation keeps it only
@@ -596,8 +608,13 @@ export function breakParagraph(
     return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
   };
 
+  // Whether the line being built takes the first-line slot: the first line, or the first
+  // after page breaks that open the paragraph when the slot carries past them. Kept as state,
+  // so a run of leading breaks costs one check per break line.
+  let firstLineOpen = true;
+  const opensFirstLine = (): boolean => firstLineOpen;
   // Where the line being built starts, and how much room it has. Only the first differs.
-  const lineOffset = (): number => (lines.length === 0 ? firstLineOffset : 0);
+  const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
   const baseLineAvailable = (): number => Math.max(1, available - lineOffset());
 
@@ -980,7 +997,9 @@ export function breakParagraph(
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the
     // text's alone. Only the paragraph's first line carries a marker.
-    if (lines.length === 0 && markerAscent > line.baseline) {
+    const firstLine = opensFirstLine();
+    if (firstLine && firstLineOffset !== 0) line.firstLineOffset = firstLineOffset;
+    if (firstLine && markerAscent > line.baseline) {
       const raised = markerAscent - line.baseline;
       line.baseline = markerAscent;
       line.height += raised;
@@ -1001,7 +1020,7 @@ export function breakParagraph(
       : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
-    const floored = lines.length === 0 && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
+    const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
     const markerFloor = Math.max(0, floored - line.baseline);
     line.baseline += markerFloor;
     // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
@@ -1027,6 +1046,7 @@ export function breakParagraph(
     if (sites.length > 0) line.changeSites = sites;
     recordWrapSegment();
     lines.push(line);
+    firstLineOpen = false;
     wordStartSpan = -1;
     wordStartWidth = 0;
     alignedTabRight = 0;
@@ -1193,8 +1213,11 @@ export function breakParagraph(
       });
       growLineMetrics(line, breakMetrics);
       line.end = piece.end;
+      const slotLine: boolean = firstLineOpen;
       closeLine();
-      lines[lines.length - 1]!.pageBreakAfter = true;
+      const closed = lines[lines.length - 1]!;
+      closed.pageBreakAfter = true;
+      firstLineOpen = carriesSlot && slotLine && holdsOnlyPageBreak(closed);
       // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
       // remainder publishes no line on the page the break opened: Word Online puts the
       // following block flush at the top of that page, which `paragraph-spacing-borders`

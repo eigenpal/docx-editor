@@ -194,7 +194,7 @@ import {
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
-import { createListFirstLineMetrics, publishListMarker } from './list-marker.ts';
+import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
@@ -1632,7 +1632,7 @@ function layoutBlocksPass(
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
-  const { firstLineOffsetOf, firstLineFloorOf } = createListFirstLineMetrics(listItems, measurer);
+  const firstLineSlotOf = createListFirstLineMetrics(listItems, measurer);
 
   const { rememberBreakKey, releasePlacedBreaks } = createParagraphBreakRetention(cache);
 
@@ -1738,8 +1738,7 @@ function layoutBlocksPass(
       styleCascade,
       tabStops: entry.tabStops,
       flow: {
-        firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
-        ...(startOffset === 0 ? firstLineFloorOf(entry) : {}),
+        ...firstLineSlotOf(entry),
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
@@ -2085,7 +2084,6 @@ function layoutBlocksPass(
     // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
     // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
     // the next tab stop past an overflowing one (§17.9.30).
-    let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
     // bordered block in Word — the box opens above the first and closes below the last, and
@@ -2137,6 +2135,7 @@ function layoutBlocksPass(
     // A blank paragraph-level `w:sectPr` is the section break, not content. It cannot open a
     // sheet merely because its line misses the bottom; the next section's break owns that.
     const sectionMark = paragraphSectionNode(paragraph) !== undefined;
+    const markerStart = markerLineStart(lines);
     const marksSectionBreak = sectionMark && paintsNothing(entry, lines);
     const collapsedMark = sectionMark && !frame && collapsesSectionMark(index, lines);
     const holdsSheet = (): boolean =>
@@ -2163,7 +2162,6 @@ function layoutBlocksPass(
       alignment = next.alignment;
       available = next.available;
       markRunProperties = next.markRunProperties;
-      firstLineOffset = startOffset === 0 ? firstLineOffsetOf(next) : 0;
       // Export caches release superseded suffixes; live caches retain their normal
       // memo policy. Otherwise a long paragraph keeps a full pending-line tree for
       // every page it crosses, even after those lines have been published.
@@ -2458,17 +2456,18 @@ function layoutBlocksPass(
       // becomes; the identity has to stay what the document HAS, or an edit in the merged half
       // addresses a position the store does not hold.
       const mergedLines = mergeBoundaries ? remapMergedLines(pending, mergeBoundaries) : null;
-      const rawMarker =
-        fragmentIndex === 0
-          ? publishListMarker(
-              listItem,
-              measurer,
-              pending[0],
-              0,
-              rtl ? indent.left + available + indent.right : undefined,
-              options.inlineDrawingLayout?.pictureBulletResource
-            )
-          : undefined;
+      const holdsMarker =
+        markerStart === undefined ? fragmentIndex === 0 : pending[0]!.range.start === markerStart;
+      const rawMarker = holdsMarker
+        ? publishListMarker(
+            listItem,
+            measurer,
+            pending[0],
+            0,
+            rtl ? indent.left + available + indent.right : undefined,
+            options.inlineDrawingLayout?.pictureBulletResource
+          )
+        : undefined;
       const marker = rawMarker
         ? { ...rawMarker, box: { ...rawMarker.box, x: rawMarker.box.x + regionX } }
         : undefined;
@@ -2781,14 +2780,15 @@ function layoutBlocksPass(
       if (keptBreakLine) {
         cursorY = Math.min(cursorY, Math.max(0, contentHeight() - pendingLine.height));
       }
-      const lineIndent = columnX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
-      const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+      const firstLineOffset = pendingLine.firstLineOffset ?? 0;
+      const lineIndent = columnX + indent.left + (rtl ? 0 : firstLineOffset);
+      const lineAvailableWidth = Math.max(1, available - firstLineOffset);
       const placedSpans = pendingLine.spans.map((span) => ({
         ...span,
         range: { ...span.range, paragraphId },
         box: {
           ...span.box,
-          x: span.box.x + columnX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
+          x: span.box.x + columnX - (rtl ? firstLineOffset : 0),
           y: cursorY,
         },
       }));

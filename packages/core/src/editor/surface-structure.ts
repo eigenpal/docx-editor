@@ -21,7 +21,7 @@ import {
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
-import { fragmentHolding } from '../layout/line-segments.ts';
+import { markerHolding } from '../layout/line-segments.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
 import {
   lineSpacingAttributes,
@@ -338,11 +338,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   function markerOf(paragraphId: string): ListMarkerRecord | null {
     // Paragraphs inside table cells are nested under table/row/cell records rather than
     // published as top-level page fragments, and a resolved display mode publishes a merged
-    // run under the survivor's name alone. `fragmentHolding` covers both: it walks the same
+    // run under the survivor's name alone. `markerHolding` covers both: it walks the same
     // canonical recursive walk, and falls back to the paragraphs a fragment DRAWS when no
     // fragment carries the name. Without that, the caret in the absorbed half of a merged
     // list item read as "not a list item", so Tab inserted a tab instead of demoting it.
-    return fragmentHolding(currentLayout.value, paragraphId)?.marker ?? null;
+    return markerHolding(currentLayout.value, paragraphId);
   }
 
   /**

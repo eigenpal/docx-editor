@@ -8,6 +8,7 @@ import type { StyleSpanRecord } from './semantic-records.ts';
 import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
+import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 
 export interface PendingLine {
   readonly spans: StyleSpanRecord[];
@@ -43,6 +44,11 @@ export interface PendingLine {
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
   /**
+   * The first-line offset this line was broken with: the paragraph's first line, and the
+   * first line after page breaks that open it ({@link holdsOnlyPageBreak}). Absent when zero.
+   */
+  firstLineOffset?: number;
+  /**
    * The horizontal passage a float left this line, when that passage is narrower than the
    * paragraph's measure and holds the whole line.
    *
@@ -68,6 +74,29 @@ export function growLineMetrics(
   const descent = Math.max(line.height - line.baseline, metrics.height - metrics.baseline);
   line.baseline = Math.max(line.baseline, metrics.baseline);
   line.height = line.baseline + descent;
+}
+
+/** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */
+export function onlyPageBreaksBefore(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number
+): boolean {
+  let seen = false;
+  for (const piece of pieces) {
+    if (piece.start >= offset) continue;
+    if (piece.text !== PAGE_BREAK_CHAR) return false;
+    seen = true;
+  }
+  return seen;
+}
+
+/** Whether a line holds nothing but the page break that ends it. */
+export function holdsOnlyPageBreak(line: PendingLine): boolean {
+  return (
+    line.pageBreakAfter === true &&
+    line.drawings.length === 0 &&
+    line.spans.every((span) => span.text === '' || span.text === PAGE_BREAK_CHAR)
+  );
 }
 
 /**
@@ -248,6 +277,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.firstLineOffset ? { firstLineOffset: line.firstLineOffset } : {}),
     ...(line.wrapSegment ? { wrapSegment: Object.freeze({ ...line.wrapSegment }) } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
