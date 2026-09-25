@@ -348,7 +348,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
+      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized, right-aligned auto-sized over a text line, and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
   },
   {
     id: 'paragraphs.hyphenation',
