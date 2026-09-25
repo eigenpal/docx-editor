@@ -83,3 +83,8 @@ bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts
 
 Missing or invalid inputs remain failures. Text screening does not certify visual
 fidelity. Use the regular PDF comparison for geometry, drawings, and final evidence.
+
+`layout-worker.ts` accepts newline-delimited JSON requests with `input` and `output`
+paths. It returns one status per request and disposes each document session. The
+caller controls process recycling, memory limits, deadlines, and concurrent workers.
+The process shares only the engine's existing caches between requests.
