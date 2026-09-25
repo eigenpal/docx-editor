@@ -60,16 +60,17 @@ function pageLabel(editor: Editor): string {
 
 ### Navigate the document
 
-The editor instance moves the reader without user input. It shows pages and headings, scrolls to paragraph references, highlights them temporarily, and finds and selects text:
+Use the editor instance to navigate pages and headings, scroll to paragraph references, and select text. You can also highlight paragraph references:
 
 ```ts
 editor.scrollToPage(3);
 editor.scrollToAnchor({ paraId: '1B4C77A2' });
 editor.highlightAnchor({ paraId: '1B4C77A2' }, { timeoutMs: 1500 });
-editor.selectMatch(editor.findMatches('Acme GmbH')[0]);
+const match = editor.findMatches('Acme GmbH')[0];
+if (match) editor.selectMatch(match);
 ```
 
-For every method, option, and result, see [Navigate a document](/docs/2.x/guides/navigation).
+For more information, see [Navigate a document](/docs/2.x/guides/navigation).
 
 ### Group one gesture into one undo step
 

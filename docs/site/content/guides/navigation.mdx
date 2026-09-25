@@ -1,12 +1,12 @@
 ---
 title: 'Navigate a document'
-description: 'Go to pages and headings, find text, and scroll to and highlight paragraph references with the editor API.'
+description: 'Build page controls, search, and paragraph highlights with the editor API.'
 category: 'Guides'
 ---
 
-Use the editor API to move the reader through a document from your own interface. You can build page controls, an outline, a search panel, or a list of review findings. The editor scrolls, selects text, and shows temporary highlights. You do not need internal DOM access.
+Use the editor API to build page controls, an outline, a search panel, or review findings. These methods scroll, select text, and highlight paragraphs without direct DOM access.
 
-These methods belong to the browser `Editor` API. They are host methods; they do not extend the Office.js-shaped document model.
+These methods belong to the browser `Editor` API, separate from the Office.js-shaped document model.
 
 | Method | Purpose | Moves the selection |
 | --- | --- | --- |
@@ -20,15 +20,15 @@ These methods belong to the browser `Editor` API. They are host methods; they do
 | `selectMatch(match)` | Select a match and show it. | Yes |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
 
-## Try the effects
+## Try document navigation
 
-This simulation demonstrates each method with sample text. It does not load the editor. The runnable [DOCX paragraph reference example](/examples/anchor-navigation) uses a real document and the public API.
+This simulation uses sample text without loading the editor. To try the public API with a document, run the [DOCX paragraph reference example](/examples/anchor-navigation).
 
 <DocumentNavigationDemo />
 
 ## Get the editor instance
 
-Call these methods on the editor instance. In React and Vue, get it through `useDocxEditor()` inside the editor root. React returns an instance or `null`. Vue returns a shallow ref.
+In React and Vue, call `useDocxEditor()` inside `DocxEditor.Root` to get the editor instance. React returns an instance or `null`. Vue returns a shallow ref.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -68,7 +68,7 @@ function goToEnd() {
 </Framework>
 </FrameworkTabs>
 
-Place these components inside `DocxEditor.Root`. If you use the core package directly, call the methods on the instance that `createDocxEditor()` returns.
+If you use the core package directly, call these methods on the instance that `createDocxEditor()` returns.
 
 ## Go to a page
 
@@ -86,7 +86,7 @@ if (!editor.scrollToPage(current + 1)) {
 
 `scrollToPage()` puts the top of the page near the top of the viewport, with 24 pixels of space. It returns `false` for a page number that is not a positive integer or does not exist. Without a measurable viewport, `getCurrentPage('viewport')` returns the caret page.
 
-## Jump to a heading
+## Go to a heading
 
 `getOutline()` returns the headings in document order. Each entry has `text`, `level`, and `blockId`. Pass the `blockId` to `scrollToBlock()` to show the heading:
 
@@ -100,13 +100,13 @@ for (const heading of editor.getOutline()) {
 }
 ```
 
-`scrollToBlock()` puts the heading near the top of the viewport. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. Read the outline again after you load another document.
+`scrollToBlock()` puts the heading near the top of the viewport. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. After you load another document, read the outline again.
 
 ## Scroll to a paragraph reference
 
-Use `editor.scrollToAnchor(anchor)` when your application stores a paragraph's `w14:paraId`, such as a reference from a review card or a server response. You do not need an internal block ID.
+To scroll to a paragraph by its `w14:paraId`, use `editor.scrollToAnchor(anchor)`. You can store this ID with a review finding or receive it from a server.
 
-To get paragraph IDs from the open document, read the `paragraphs` query. Keep each `paraId` with the finding that refers to it:
+Query `paragraphs` to get IDs from the open document. Store each `paraId` with its finding:
 
 ```ts
 const paragraphs = editor.query({ type: 'paragraphs' });
@@ -126,11 +126,11 @@ function revealReference(editor: Editor, anchor: DocAnchor): boolean {
 
 const revealed = revealReference(editor, { paraId: '1B4C77A2' });
 if (!revealed) {
-  // Show an unavailable-reference state in your application.
+  // Tell the user that the reference is unavailable.
 }
 ```
 
-The method preserves selection, focus, editing scope, document content, and undo history. It also works in viewing mode. By default, it scrolls vertically to center an offscreen target and leaves an already visible target in place.
+The method preserves selection, focus, editing scope, document content, and undo history. It also works in viewing mode. By default, it centers an offscreen target vertically. If the target is visible, it does not scroll.
 
 To reveal a phrase within a paragraph, include `search`:
 
@@ -142,9 +142,9 @@ const revealed = editor.scrollToAnchor({
 });
 ```
 
-Paragraph IDs match without case sensitivity. Search text matches exactly, with case sensitivity. Without `occurrence`, the phrase must appear exactly once. `occurrence` is a positive, one-based match number. The method reveals the start of the matched text, including when the paragraph spans pages.
+Paragraph ID matching ignores case. Search text matching is exact and case-sensitive. Without `occurrence`, the phrase must appear exactly once. `occurrence` is a positive, one-based match number. The method reveals the start of the matched text, including when the paragraph spans pages.
 
-Use paragraph IDs from the document open in the editor. The method commits pending typing, and then resolves the anchor against that document on each call. After you fetch document bytes, call `editor.load(bytes)` before scrolling. A pending local document mount completes before anchor resolution.
+Use paragraph IDs from the document open in the editor. Each call commits pending typing before it resolves the anchor against the open document. After you fetch document bytes, call `editor.load(bytes)` before scrolling. The editor completes any pending local document mount before resolving the anchor.
 
 | Result  | Meaning                                                                            |
 | ------- | ---------------------------------------------------------------------------------- |
@@ -152,13 +152,13 @@ Use paragraph IDs from the document open in the editor. The method commits pendi
 | `false` | The anchor is invalid, missing, ambiguous, unsupported, or has no layout position. |
 | `false` | The editor has no mounted document or measurable scroll container.                 |
 
-A `false` result does not select another paragraph or use a partial text match. Check the return value instead of assuming every stored reference remains valid.
+Check the return value to detect invalid references. The method does not select another paragraph or use a partial text match.
 
-Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes support anchor scrolling. A repeated header or footer uses its first laid-out occurrence. Text-box content and document regions without layout positions return `false`.
+Body paragraphs, table cells, block content controls, headers, footers, footnotes, and endnotes support anchor scrolling. For repeated headers and footers, the method uses the first occurrence in the layout. Text boxes and document regions without layout positions return `false`.
 
 ### Control scrolling
 
-To control where the target lands, pass `ScrollToAnchorOptions` as the second argument. These fields match `NavigateToChangeOptions` in the [document refresh API](/docs/2.x/guides/document-refresh#control-change-navigation):
+To control the target position, pass `ScrollToAnchorOptions` as the second argument. These fields match `NavigateToChangeOptions` in the [document refresh API](/docs/2.x/guides/document-refresh#control-change-navigation):
 
 ```ts
 import type { ScrollToAnchorOptions } from '@docx-editor.dev/core';
@@ -181,7 +181,7 @@ The method validates options before it resolves the anchor. An invalid `block` o
 
 ## Highlight a paragraph reference
 
-Use `editor.highlightAnchor(anchor, options)` to show the reader where a reference lands. The method accepts the same `DocAnchor` as `scrollToAnchor`. It does not scroll, so call `scrollToAnchor` first:
+Use `editor.highlightAnchor(anchor, options)` to highlight a referenced paragraph. To scroll to the paragraph before highlighting it, call both methods:
 
 ```ts
 import type { DocAnchor, Editor } from '@docx-editor.dev/core';
@@ -192,9 +192,7 @@ function showReference(editor: Editor, anchor: DocAnchor): boolean {
 }
 ```
 
-By default, a light blue box with rounded corners fades in over 180 milliseconds. The box stays for three seconds and then fades out. The highlight does not move text, change the scroll position, or take focus.
-
-The highlight marks the whole paragraph. If the anchor includes `search`, the phrase must match under the same rules as `scrollToAnchor`. The editor shows one anchor highlight at a time. A new call moves the highlight to the new paragraph. Repeating a call for the same paragraph restarts the timeout without replaying the entrance.
+The highlight marks the whole paragraph without moving text or scrolling. It accepts the same `DocAnchor` and matching rules as `scrollToAnchor`, including `search`. Each call replaces the previous highlight. A call for the same paragraph restarts the timeout without repeating the fade-in animation.
 
 | Result | Meaning |
 | --- | --- |
@@ -206,7 +204,7 @@ A `false` result leaves the current highlight unchanged. Body paragraphs, table 
 
 ### Customize the highlight
 
-`AnchorHighlightOptions` has the same fields and defaults as the [document refresh highlights](/docs/2.x/guides/document-refresh#customize-highlights-and-motion), except for the color token. `RefreshHighlightOptions` extends `AnchorHighlightOptions`, so one style object works with both APIs. Each call starts from the defaults. To keep the style consistent, reuse one options object:
+`RefreshHighlightOptions` extends `AnchorHighlightOptions`. Both use the same defaults, except for the color token. For details, see [Customize highlights and motion](/docs/2.x/guides/document-refresh#customize-highlights-and-motion). Each call starts from the defaults. To apply the same style across calls and APIs, reuse an options object:
 
 ```ts
 import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
@@ -236,21 +234,21 @@ createDocumentRefresh(editor).highlightChanges(findingHighlight);
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `color` | `var(--doc-anchor-highlight-color)` | A CSS color or a CSS variable. The theme token defaults to blue. |
-| `opacity` | `0.14` | Fill opacity between `0` and `1`. Borders and class decoration keep their own alpha. |
+| `color` | `var(--doc-anchor-highlight-color)` | A CSS color or variable. The theme token defaults to light blue. |
+| `opacity` | `0.14` | Fill opacity between `0` and `1`. Borders and CSS class styles keep their own opacity. |
 | `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
 | `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
 | `borderWidth` | `0` | Border width in CSS pixels at 100% zoom. |
 | `borderColor` | Same as `color` | CSS border color, independent of fill opacity. |
 | `borderStyle` | `'solid'` | Use `'solid'`, `'dashed'`, or `'dotted'`. |
 | `className` | Omitted | Add CSS classes for shadows, outlines, or background patterns. |
-| `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep the highlight until cleared. |
+| `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep the highlight until you clear it. |
 | `animation` | `true` | A 180-millisecond opacity fade. Use `false` for immediate changes. |
-| `animation.durationMs` | `180` | Entrance and default exit duration, from `0` to `10000` milliseconds. |
-| `animation.exitDurationMs` | Same as `durationMs` | Exit duration for the timeout and for `clearAnchorHighlight()`. |
-| `animation.easing` | `--doc-motion-ease-out` | CSS timing function for both fades. CSS variables are not accepted. |
+| `animation.durationMs` | `180` | Fade-in and default fade-out duration, from `0` to `10000` milliseconds. |
+| `animation.exitDurationMs` | Same as `durationMs` | Fade-out duration after the timeout or a `clearAnchorHighlight()` call. |
+| `animation.easing` | `--doc-motion-ease-out` | CSS timing function for both fades. The method rejects CSS variables. |
 
-To change the default color of every anchor highlight, set the theme token in your application CSS. This token is separate from `--doc-refresh-highlight-color`, so each highlight type can have its own color:
+Set `--doc-anchor-highlight-color` in your application CSS to change the default color. This token is separate from `--doc-refresh-highlight-color`:
 
 ```css
 .docx-editor {
@@ -258,7 +256,7 @@ To change the default color of every anchor highlight, set the theme token in yo
 }
 ```
 
-The method validates options before it resolves the anchor. An invalid option throws even when the paragraph does not exist. Invalid numeric settings throw `RangeError`. Invalid colors, border styles, or animation settings throw `TypeError`.
+The method validates options before it resolves the anchor. Invalid numeric settings throw `RangeError`, even when the paragraph does not exist. Invalid colors, border styles, or animation settings throw `TypeError`.
 
 ### Control timing and dismissal
 
@@ -273,11 +271,11 @@ editor.clearAnchorHighlight({ animation: false });
 editor.clearAnchorHighlight({ animation: { durationMs: 125 } });
 ```
 
-`clearAnchorHighlight()` uses the exit duration and easing from the last `highlightAnchor()` call. It validates its options even when nothing is highlighted. Loading or replacing the document removes the highlight immediately. Local edits keep the highlight on the same paragraph.
+`clearAnchorHighlight()` uses the exit duration and easing from the last `highlightAnchor()` call. It validates options even without a highlight. Loading or replacing the document removes the highlight immediately. Local edits keep the highlight on the same paragraph.
 
-The highlight does not change selection, focus, document content, or undo history. It never enters saved files. Anchor highlights and refresh highlights use separate overlays, so dismissing one does not dismiss the other. Reduced-motion preferences limit fades to 125 milliseconds. Color alone does not explain a finding, so show a text label with each highlighted reference.
+The highlight does not change selection, focus, document content, or undo history. The editor excludes it from saved files. Anchor highlights and refresh highlights use separate overlays, so dismissing one does not dismiss the other. Reduced-motion preferences limit fades to 125 milliseconds. Give each highlighted reference a text label to explain the finding without relying on color.
 
-If the highlight must start after the target is visible, keep the default `'instant'` scroll behavior. With `behavior: 'smooth'`, the entrance can play before the scroll ends.
+If the highlight must start after the target is visible, keep the default `'instant'` scroll behavior. With `behavior: 'smooth'`, the highlight can fade in before scrolling ends.
 
 ## Find and select text
 
@@ -297,20 +295,21 @@ function showMatch(index: number) {
 }
 
 nextButton.addEventListener('click', () => {
+  if (!matches.length) return;
   current = (current + 1) % matches.length;
   showMatch(current);
 });
 ```
 
-Each `TextMatch` includes the matched `text`, and it can include `contextBefore` and `contextAfter` for a results list. The `scope` field names the header, footer, or note that contains a match. Finding text is a read: it does not move the selection.
+Each `TextMatch` includes the matched `text`. It can include `contextBefore` and `contextAfter` for a results list. The `scope` field names the header, footer, or note that contains a match. Finding text does not move the selection.
 
 `selectMatch()` selects the match and shows it. If the match is in a header, footer, or note, the editor opens that region first. A match in a text box selects the text box drawing. The method does not move focus. It returns an `ExecResult`; check `ok` before you update your interface.
 
-Matches name positions in the current document. Find again after the document changes.
+Matches refer to positions in the open document. After the document changes, search again.
 
 ## Move the caret to a reference
 
-`scrollToAnchor` never moves the caret. To place the caret at a paragraph reference, run the `setSelection` command with the same anchor, and then focus the editor:
+To move the caret to a paragraph reference, run `setSelection` with the same anchor. Then focus the editor:
 
 ```ts
 const result = editor.exec({
@@ -320,11 +319,11 @@ const result = editor.exec({
 if (result.ok) editor.focus();
 ```
 
-The command places a collapsed caret at the start of the paragraph or the matched text. It uses the same matching rules as `scrollToAnchor`.
+The command places the caret at the start of the paragraph or the matched text. It uses the same matching rules as `scrollToAnchor`.
 
 ## Run the example
 
-The [DOCX paragraph reference example](/examples/anchor-navigation) combines these calls in one React panel beside a live document. It lets you choose a reference, an effect, a highlight style, a duration, and scroll settings. The panel shows the calls for the current settings.
+The [DOCX paragraph reference example](/examples/anchor-navigation) includes a React panel beside a live document. You can choose a reference, an effect, a highlight style, a duration, and scroll settings. The panel shows the corresponding API calls.
 
 From the repository root, run:
 

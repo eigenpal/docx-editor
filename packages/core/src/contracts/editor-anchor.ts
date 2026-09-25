@@ -13,13 +13,13 @@ export interface ScrollToAnchorOptions {
   readonly offsetPx?: number;
 }
 
-/** Opacity fade settings. Reduced motion caps fades at 125ms. @public */
+/** Opacity fade settings. Reduced motion limits fades to 125 milliseconds. @public */
 export interface AnchorHighlightAnimation {
   /** Fade duration in milliseconds. Default: 180. Must be finite and between 0 and 10000. */
   readonly durationMs?: number;
   /** Automatic and explicit exit fade duration. Defaults to durationMs. Range: 0 through 10000. */
   readonly exitDurationMs?: number;
-  /** CSS timing function for both fades. Defaults to --doc-motion-ease-out. CSS variables are not accepted here. */
+  /** CSS timing function for both fades. Defaults to --doc-motion-ease-out. This option does not accept CSS variables. */
   readonly easing?: string;
 }
 
@@ -45,11 +45,11 @@ export interface AnchorHighlightOptions {
   readonly borderColor?: string;
   /** Border pattern. Default: solid. */
   readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
-  /** Optional CSS classes for extra decoration, such as shadows or patterns. Geometry remains engine-owned. */
+  /** Optional CSS classes for shadows or patterns. The editor controls highlight placement and size. */
   readonly className?: string;
-  /** Milliseconds before dismissal starts. Default: 3000. Null keeps highlights until cleared. Maximum: 2147483647. */
+  /** Milliseconds before dismissal starts. Default: 3000. Set `null` to keep highlights until you dismiss them. Maximum: 2147483647. */
   readonly timeoutMs?: number | null;
-  /** Default: true, a 180ms fade. False disables motion. Repeated calls do not replay the entrance. */
+  /** Default: true, a 180-millisecond fade. False disables motion. Repeated calls for the same paragraph do not restart the fade. */
   readonly animation?: boolean | AnchorHighlightAnimation;
 }
 
@@ -69,7 +69,8 @@ export interface EditorAnchorNavigation {
    * Supports laid-out body, table, header, footer, footnote, and endnote paragraphs.
    * Repeated headers and footers use their first laid-out occurrence. Text boxes are unsupported.
    * Returns true when the target is visible or scrolling succeeds. Returns false for invalid,
-   * missing, ambiguous, or unlaid-out targets, or without a mounted, measurable scroll container.
+   * missing, or ambiguous targets, or targets without layout positions.
+   * Also returns false without a mounted, measurable scroll container.
    * Invalid options throw `TypeError` or `RangeError`. Works in viewing mode.
    * Does not change document content or undo history.
    *
@@ -85,11 +86,12 @@ export interface EditorAnchorNavigation {
    * Matching follows `scrollToAnchor`; `search` must resolve, and the whole paragraph is marked.
    * A new call replaces the previous anchor highlight. Repeating a call resets its timeout.
    *
-   * Supports laid-out body, table, and block content control paragraphs. Returns false for invalid,
-   * missing, ambiguous, or unlaid-out targets, headers, footers, notes, and text boxes, or
-   * without a mounted document. A false result leaves the current highlight unchanged.
-   * Options are validated first: invalid numbers throw `RangeError`; invalid colors, border
-   * styles, or animation settings throw `TypeError`.
+   * Supports body, table, and block content control paragraphs with layout positions.
+   * Returns false for invalid, missing, or ambiguous targets, or targets without layout positions.
+   * Also returns false for headers, footers, notes, and text boxes, or without a mounted document.
+   * A false result leaves the current highlight unchanged.
+   * The method validates options first. Invalid numbers throw `RangeError`.
+   * Invalid colors, border styles, or animation settings throw `TypeError`.
    *
    * The highlight never changes selection, focus, document content, or undo history. Loading or
    * replacing the document removes it.

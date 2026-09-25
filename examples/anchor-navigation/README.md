@@ -1,6 +1,6 @@
 # DOCX paragraph reference example
 
-Scroll to a paragraph reference, highlight it, or both, from one React panel. Choose the reference, effect, highlight style, duration, and scroll settings, and see the result in the document.
+Use a React panel to scroll to a paragraph reference, highlight it, or both. Choose the reference, effect, highlight style, duration, and scroll settings to see the result in the document.
 
 ## Run the example
 
@@ -18,7 +18,7 @@ Open `http://localhost:5181`.
 
 1. In **Reference**, select a finding, and then select **Show reference**. The editor scrolls to the paragraph and highlights it.
 2. In **Effect**, select **Scroll only** or **Highlight only** to see each method alone.
-3. In **Highlight style**, select a preset. The green preset adds a CSS class for a glow.
+3. In **Highlight style**, select a preset. The **Green glow (CSS class)** preset adds a glow through a CSS class.
 4. In **Highlight duration**, select **Until cleared**. The highlight stays until you select **Clear highlight**.
 5. Select the header reference or the missing paragraph to see an unavailable result.
 
@@ -26,8 +26,10 @@ The panel shows the `scrollToAnchor` and `highlightAnchor` calls for the current
 
 ## How it works
 
-Each reference is a `DocAnchor`: a paragraph's `w14:paraId`, with optional `search` text and `occurrence`. A review tool or server stores this address with its finding. The example builds a sample agreement in the browser, so it needs no server.
+Each reference is a `DocAnchor`: a paragraph's `w14:paraId`, with optional `search` text and `occurrence`. A review tool or server stores this reference with its finding. The example builds a sample agreement in the browser without a server.
 
-`editor.scrollToAnchor(anchor, options)` moves the viewport. `editor.highlightAnchor(anchor, options)` adds a temporary overlay to the paragraph. Neither method changes selection, focus, document content, or undo history. Headers, footers, and notes support scrolling but not highlights, so the header reference scrolls and then reports that no highlight is available.
+`editor.scrollToAnchor(anchor, options)` moves the viewport. `editor.highlightAnchor(anchor, options)` adds a temporary highlight to the paragraph. Both methods preserve selection, focus, document content, and undo history.
+
+Headers, footers, and notes support scrolling but not highlights. When you select the header reference, the editor scrolls to it. The panel reports that the highlight is unavailable.
 
 For more information, see [Navigate a document](https://docx-editor.dev/docs/2.x/guides/navigation).
