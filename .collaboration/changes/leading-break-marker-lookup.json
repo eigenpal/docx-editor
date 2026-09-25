@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "List editing reads the marker only from the first paragraph fragment.",
+  "after": "List editing reads the marker from its content fragment after leading page breaks.",
+  "reason": "The change selects a layout marker for existing editing commands. Shared data, operations, identities, and synchronization rules do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/leading-page-break-numbered.test.ts",
+    "packages/core/src/editor/__tests__/list-separator-enter.test.ts",
+    "packages/core/src/editor/__tests__/list-numbering-tab-stop-editing.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

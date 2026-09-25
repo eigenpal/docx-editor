@@ -216,6 +216,22 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).toContain('| A\\|B | 2 |');
   });
 
+  test('numbers a list item that opens with a page break on the page of its text', async () => {
+    const numbering =
+      `<w:numbering xmlns:w="${W}">` +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
+    const list = (text: string, lead = '') =>
+      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${lead}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const result = await exportMarkdown(
+      docx(list('One') + list('Two', '<w:r><w:br w:type="page"/></w:r>'), numbering)
+    );
+    // The document view keeps one item; the page view numbers it where its text is.
+    expect(result.markdown).toStartWith('1. One\n\n2.');
+    expect(result.markdown).toEndWith('Two');
+    expect(result.pages.map((page) => page.markdown.trim())).toEqual(['1. One', '2. Two']);
+  });
+
   test('does not turn preserved paragraph spacing or table-cell outlines into GFM blocks', async () => {
     const table =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>' +

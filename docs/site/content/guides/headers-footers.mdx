@@ -38,7 +38,9 @@ Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr` ov
 
 A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
 
-This support covers a simple, single-line `PAGE` frame and a single-line empty or `PAGE` anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, paragraph spacing, and additional content keep the ordinary flow behavior.
+A right-aligned `PAGE` frame can also sit over the footer text line. The frame uses `w:wrap="none"`, `w:hAnchor="margin"`, and `w:xAlign="right"`, and the next paragraph holds plain text in the same style. The page value ends at the right margin, one line band with the text. The frame adds no footer height unless its own line is taller. The text paragraph keeps its indents and its style's spacing. If the text reaches under the page value, the footer keeps the ordinary flow behavior.
+
+This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, direct paragraph spacing, and additional content keep the ordinary flow behavior.
 
 ## Per-section headers and footers
 

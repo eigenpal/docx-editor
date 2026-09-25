@@ -282,7 +282,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Space before, space after, and line spacing (single, multiple, exactly, at least) all reach pagination. A 1.5-spaced or double-spaced document breaks pages where Word breaks them. The paragraph mark size counts in the last line metrics, like Word. A character style on the paragraph mark sets the height of an empty paragraph and of the empty line after a trailing line break, and formats the list number. Text typed into an empty paragraph takes that character style. The style does not make a line with text or an inline picture taller. Contextual spacing drops the gap between neighbours of the same style in body text and table cells, including implicit default styles. Line-unit paragraph margins use 12pt units or the section grid pitch. Numbering-level paragraph properties participate in layout. The Paragraph dialog sets contextual spacing. Automatic spacing (w:beforeAutospacing, w:afterAutospacing) uses 14pt in body paragraphs and at list boundaries. Adjacent items in the same list suppress automatic spacing, including nested levels. Lists suppress automatic leading space at section start. Table cells suppress automatic spacing.',
+      'Space before, space after, and line spacing (single, multiple, exactly, at least) all reach pagination. A 1.5-spaced or double-spaced document breaks pages where Word breaks them. The paragraph mark size counts in the last line metrics, like Word. A character style on the paragraph mark sets the height of an empty paragraph and of the empty line after a trailing line break, and formats the list number. Text typed into an empty paragraph takes that character style. The style does not make a line with text or an inline picture taller. Contextual spacing drops the gap between neighbours of the same style in body text and table cells, including implicit default styles. Line-unit paragraph margins use 12pt units or the section grid pitch. In a section with a document line grid, each body line takes whole grid lines with its text centered. Paragraphs that turn off grid snapping and paragraphs with exact or at-least line spacing keep their own line height. Table cells snap only with the adjustLineHeightInTable compatibility option. Headers, footers, notes, and text boxes do not snap. Numbering-level paragraph properties participate in layout. The Paragraph dialog sets contextual spacing. Automatic spacing (w:beforeAutospacing, w:afterAutospacing) uses 14pt in body paragraphs and at list boundaries. Adjacent items in the same list suppress automatic spacing, including nested levels. Lists suppress automatic leading space at section start. Table cells suppress automatic spacing at their outer edges. Adjacent space after and space before collapse to the larger of the two. If the document sets w:doNotUseHTMLParagraphAutoSpacing, they add up instead, in body text, table cells, headers, footers, notes, and text boxes, and automatic spacing is a fixed 5pt before and 10pt after.',
   },
   {
     id: 'paragraphs.pagination',
@@ -348,7 +348,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
+      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized, right-aligned auto-sized over a text line, and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
   },
   {
     id: 'paragraphs.hyphenation',
@@ -524,7 +524,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'tbRl and btLr cell text renders through writing-mode and round-trips. You cannot set it from the UI.',
+      'tbRl and btLr cell text renders through writing-mode and round-trips. btLr text wraps at the row height, does not make the row taller, and is clipped at the cell width. You cannot set it from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
@@ -725,7 +725,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`. When a plain paragraph starts with a manual page break and has text after the break, the text starts on the next page, even when the current page has no room for another line. Paragraphs with only a page break, list numbering, borders, shading, or anchored floating tables, text frames, or drawings keep the ordinary rule, so after a full page their text starts one page later.',
+      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`. When a paragraph starts with a manual page break and has text after the break, the text starts on the next page, even when the current page has no room for another line. A list number or bullet goes to the next page with the text. Paragraphs with only a page break, borders, shading, or anchored floating tables, text frames, or drawings keep the ordinary rule, so after a full page their text starts one page later.',
   },
   {
     id: 'layout.sections',

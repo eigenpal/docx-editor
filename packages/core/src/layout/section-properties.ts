@@ -112,7 +112,7 @@ export interface SectionPageNumbering {
  * inherited.
  */
 export interface SectionProperties {
-  /** Active document grid line pitch for line-unit paragraph margins. */
+  /** Active document grid line pitch: line-unit paragraph margins and line snapping. */
   readonly gridLinePitchTwips?: number;
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
@@ -363,7 +363,9 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   const equalWidth = cols ? onOffAttribute(cols, 'equalWidth', true) : true;
 
   return {
-    ...((gridType === 'lines' || gridType === 'linesAndChars') && gridPitch > 0
+    // Every grid type but `default` has a line pitch (ST_DocGrid); an absent type is no grid.
+    ...((gridType === 'lines' || gridType === 'linesAndChars' || gridType === 'snapToChars') &&
+    gridPitch > 0
       ? { gridLinePitchTwips: gridPitch }
       : {}),
     pageSize: { widthTwips: width, heightTwips: height },
@@ -405,7 +407,12 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   };
 }
 
-/** The body-level `w:sectPr`, which is the last child of `w:body`. */
+/** A section's active line-grid pitch in points, or `undefined` when it has no line grid. */
+export function sectionLineGridPt(section: SectionProperties | undefined): number | undefined {
+  const pitch = section?.gridLinePitchTwips;
+  return pitch === undefined ? undefined : pitch / 20;
+}
+
 /**
  * The body-level `w:sectPr`, which governs the FINAL section.
  *

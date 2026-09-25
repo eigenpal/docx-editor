@@ -96,7 +96,7 @@ export interface SemanticLayoutOptions {
   readonly evenAndOddHeaders?: boolean;
   /** Authored column count/gap for anchored `relativeFrom="column"` frame resolution. */
   readonly sectionColumns?: SectionColumns;
-  /** Section grid pitch used for line-unit paragraph margins. */
+  /** Active section line-grid pitch: line-unit margins and line snapping. Absent: no grid. */
   readonly paragraphLineUnitPt?: number;
   /**
    * This section's resolved `w:pgBorders`, for the frame each of its sheets publishes.
