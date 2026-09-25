@@ -6,6 +6,7 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { isOutOfFlowTableFragment } from '../table-float-position.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import type { ParagraphFragmentRecord, TableFragmentRecord } from '../semantic-records.ts';
@@ -177,4 +178,54 @@ test('a spanning table that fits the room left stays whole on its anchor page', 
   expect(isOutOfFlowTableFragment(floating!)).toBe(true);
   expect(floating!.rows).toHaveLength(4);
   expect(floating!.box.y).toBe(20);
+});
+
+const cascadeWithFlag = (content: string) => {
+  const read = readOoxmlPart(
+    `<w:settings xmlns:w="${W}" xmlns:x="urn:other"><w:compat>${content}</w:compat></w:settings>`,
+    { name: '/word/settings.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  return buildStyleCascadeTable(null, undefined, read.part.root);
+};
+
+describe('wrapped-table compatibility setting', () => {
+  for (const value of [undefined, '1', 'true', 'on', '0', 'false', 'off']) {
+    test(`reads the on/off value ${String(value)}`, () => {
+      const enabled = value === undefined || ['1', 'true', 'on'].includes(value);
+      const cascade = cascadeWithFlag(
+        `<w:doNotBreakWrappedTables${value === undefined ? '' : ` w:val="${value}"`}/>`
+      );
+      const result = layoutSemanticDocument(part(lead(100) + table() + p('Anchor')), 0, {
+        ...options,
+        styleCascade: cascade,
+      });
+      expect(tablesOn(result, 0)).toHaveLength(enabled ? 0 : 1);
+      expect(isOutOfFlowTableFragment(tablesOn(result, 1)[0]!)).toBe(enabled);
+    });
+  }
+
+  test('ignores foreign and nested compatibility elements', () => {
+    for (const content of [
+      '<x:doNotBreakWrappedTables/>',
+      '<x:wrapper><w:doNotBreakWrappedTables/></x:wrapper>',
+    ]) {
+      expect(cascadeWithFlag(content).doNotBreakWrappedTables).toBeUndefined();
+    }
+  });
+
+  test('changing the setting invalidates retained page placement', () => {
+    const source = part(lead(100) + table() + p('Anchor'));
+    const enabled = cascadeWithFlag('<w:doNotBreakWrappedTables/>');
+    const disabled = cascadeWithFlag('<w:doNotBreakWrappedTables w:val="0"/>');
+    expect(enabled.cacheToken).not.toBe(disabled.cacheToken);
+    const session = createLayoutSession();
+    const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+    for (const styleCascade of [disabled, enabled, disabled]) {
+      const warm = layoutSemanticDocument(source, 0, { ...options, styleCascade, session, cache });
+      const fresh = layoutSemanticDocument(source, 0, { ...options, styleCascade });
+      expect(warm.pages).toEqual(fresh.pages);
+      expect(tablesOn(warm, 0)).toHaveLength(styleCascade === enabled ? 0 : 1);
+    }
+  });
 });

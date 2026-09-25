@@ -4162,6 +4162,7 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly doNotBreakWrappedTables?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;

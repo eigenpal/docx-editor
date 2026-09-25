@@ -234,6 +234,7 @@ export function admitsAtAnchor(
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
   const band = floatingTableBand(table, flow.width, deps);
   if (band > flow.bottom) return false;
+  if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return band <= flow.bottom - flow.top || !breaksAtPageBottom(table, deps, flow);
 }
 
