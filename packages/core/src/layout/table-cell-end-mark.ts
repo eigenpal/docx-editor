@@ -32,7 +32,8 @@ function endMarkBox(
     deps.styleCascade,
     deps.listItems?.get(paragraph.id),
     cell.styleFormatting,
-    true
+    true,
+    deps.paragraphLineUnitPt
   );
   // The floor also stands under a cell with content, so it reads the mark WITHOUT its
   // character style (`paragraph-mark-run.ts`). An empty end paragraph's own line has it.

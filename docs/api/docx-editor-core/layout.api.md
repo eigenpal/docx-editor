@@ -59,6 +59,7 @@ export function appliedSpaceBefore(before: number, previousAfter: number, atTopO
 export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: number, naturalBaseline: number): {
     baseline: number;
     height: number;
+    trailing?: number;
 };
 
 // @public
@@ -2650,6 +2651,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    readonly gridPitch?: number;
     readonly preserveExactBaseline?: true;
     // (undocumented)
     readonly rule: LineSpacingRule;
@@ -4178,6 +4180,7 @@ export interface StrikeoutStrokePt {
 
 // @public
 export interface StyleCascadeTable {
+    readonly adjustLineHeightInTable?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;

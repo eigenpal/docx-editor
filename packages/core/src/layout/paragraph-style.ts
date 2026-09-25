@@ -12,6 +12,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { borderStrokeWidthPt } from './border-metrics.ts';
+import { gridLineBox } from './line-grid.ts';
 
 /** Only an explicitly formatted paragraph mark can enlarge a non-empty final line. */
 export function paragraphHasDirectMarkFormatting(paragraph: OoxmlNode): boolean {
@@ -135,6 +136,11 @@ export interface ParagraphLineSpacing {
   readonly value: number;
   /** Legacy noExtraLineSpacing: retain the natural baseline within an exact-height box. */
   readonly preserveExactBaseline?: true;
+  /**
+   * Active section line-grid pitch in points (`w:docGrid/@w:linePitch`). Present only when
+   * the paragraph snaps to the grid; only with `auto`. See `line-grid.ts`.
+   */
+  readonly gridPitch?: number;
 }
 
 /** Single spacing: what a paragraph that says nothing gets. */
@@ -417,12 +423,22 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
  *
  * Exact-height boxes place their baseline at 80% of the height; the legacy
  * noExtraLineSpacing switch instead preserves the face baseline within the box.
+ *
+ * An `auto` line of a snapping paragraph under an active line grid takes whole pitches
+ * instead ({@link gridLineBox}); `trailing` then names the extra below the grid line.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
   naturalHeight: number,
   naturalBaseline: number
-): { height: number; baseline: number } {
+): { height: number; baseline: number; trailing?: number } {
+  if (spacing.gridPitch !== undefined && spacing.gridPitch > 0 && spacing.rule === 'auto') {
+    return gridLineBox(
+      { ...spacing, gridPitch: spacing.gridPitch },
+      naturalHeight,
+      naturalBaseline
+    );
+  }
   const height =
     spacing.rule === 'auto'
       ? naturalHeight * (spacing.value / 240)

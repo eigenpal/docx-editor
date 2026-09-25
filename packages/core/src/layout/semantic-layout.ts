@@ -160,6 +160,7 @@ import {
   enumerateDocumentSectionsFromBlocks,
   geometryOfSection,
   paragraphSectionNode,
+  sectionLineGridPt,
 } from './section-properties.ts';
 import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
 import { resolveSectionColumns } from './section-columns.ts';
@@ -348,7 +349,7 @@ export function layoutSemanticDocument(
       ...opts,
       geometry,
       furniture,
-      paragraphLineUnitPt: (section?.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(section?.properties),
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(section?.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
@@ -980,7 +981,7 @@ function layoutBlocksPass(
           width: availableWidth,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
+          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? '-'}`,
         }),
       };
     } else {
@@ -1063,7 +1064,7 @@ function layoutBlocksPass(
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
+          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? '-'}`,
         }),
       };
     }
@@ -1101,7 +1102,7 @@ function layoutBlocksPass(
       : (options.projectionEpoch ?? '');
   const framePolicy =
     sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
-    `|${options.paragraphLineUnitPt ?? 12}`;
+    `|${options.paragraphLineUnitPt ?? '-'}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
   const prepassInputsValid =
     prepassMemo != null &&
