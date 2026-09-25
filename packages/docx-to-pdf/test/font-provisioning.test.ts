@@ -235,6 +235,8 @@ test('the stand-in origin covers what nothing else did, after the embedded fonts
   expect(genericSubstituteFor('Noto Sans Serif Thing')).toBe('Liberation Sans');
   expect(genericSubstituteFor('Consolas')).toBe('Liberation Mono');
   expect(genericSubstituteFor('Aptos')).toBe('Liberation Sans');
+  // A symbol face stands in for a symbol name, so it never takes letters from a text fallback.
+  expect(genericSubstituteFor('Segoe UI Symbol')).toBe('Noto Sans Symbols 2');
   // Sagona has no face anywhere: a packaged serif stands in for all four faces. Arial is
   // covered by an earlier origin and is left alone.
   const result = await standInFonts({

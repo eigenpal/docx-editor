@@ -48,6 +48,18 @@ export function shapeExportClusterFallback(
       previousGroup.end = cluster.textEnd;
       continue;
     }
+    // A space between Hebrew words that fell back stays with them, so the words keep the
+    // fallback face's line height; punctuation still takes the authored face.
+    if (
+      input.environment.script === 'Hebr' &&
+      /^\s+$/u.test(text) &&
+      previousGroup &&
+      previousGroup.font !== input.environment.font &&
+      previousGroup.end === cluster.textStart
+    ) {
+      previousGroup.end = cluster.textEnd;
+      continue;
+    }
     if (
       primary.glyphs.slice(cluster.glyphStart, cluster.glyphEnd).some((glyph) => glyph.id === 0)
     ) {

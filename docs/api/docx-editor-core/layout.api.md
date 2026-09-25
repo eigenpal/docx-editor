@@ -1900,6 +1900,7 @@ export interface ListMarkerRecord {
     readonly numId: string;
     readonly ordinal?: number;
     readonly picture?: ListMarkerPictureRecord;
+    readonly pieces?: readonly Pick<ListMarkerRecord, 'text' | 'style' | 'box'>[];
     // (undocumented)
     readonly style: ResolvedRunStyle;
     // (undocumented)

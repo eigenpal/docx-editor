@@ -103,6 +103,7 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.indent?.mixed.left !== b.indent?.mixed.left ||
     a.indent?.mixed.right !== b.indent?.mixed.right ||
     a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine ||
+    a.indent?.rtl !== b.indent?.rtl ||
     // Field by field for the same reason as `indent`: a fresh object every derive, so a
     // reference compare would report every tick as a change.
     a.paragraphFlags?.contextualSpacing !== b.paragraphFlags?.contextualSpacing ||

@@ -784,12 +784,23 @@ export function formattingAt(
   // its handles somewhere, and hiding them for Select All — the commonest indent gesture —
   // is worse than showing the first paragraph's truth, which is what Word shows.
   const indent = ((): SurfaceFormatting['indent'] => {
-    const entries = touchedParagraphs.map((id) => paragraphIndentOf(layout, id));
+    // Layout publishes physical sides; the contract's are logical, as `w:left` and `w:right`
+    // are, so a right-to-left paragraph reports its right indent as `left`.
+    const rtlOf = (id: string) => paragraphDirectionOf(paragraphPropertiesOf(layout, id)) === 'rtl';
+    const entries = touchedParagraphs.map((id) => {
+      const entry = paragraphIndentOf(layout, id);
+      if (!entry || !rtlOf(id)) return entry;
+      return {
+        ...entry,
+        indent: { ...entry.indent, left: entry.indent.right, right: entry.indent.left },
+      };
+    });
     const first = entries[0];
     if (!first) return null;
     // Inside a table the value is correct but unplaceable: it is measured from the cell's
     // content edge, and a ruler drawn against the page margin does not know the cell.
     if (entries.some((entry) => entry === null || entry.inTable)) return null;
+    const rtl = rtlOf(touchedParagraphs[0]!);
     // Points to twips at this boundary, so one representation crosses into the contract.
     const twips = (points: number): number => Math.round(points * 20);
     // ONE signed first-line offset, hanging-wins (ECMA-376 §17.3.1.12) — the two spellings
@@ -809,6 +820,7 @@ export function formattingAt(
         right: resolved.some((entry) => twips(entry.indent.right) !== right),
         firstLine: resolved.some((entry) => signedFirstLine(entry.indent) !== firstLine),
       },
+      ...(rtl ? { rtl } : {}),
     };
   })();
 

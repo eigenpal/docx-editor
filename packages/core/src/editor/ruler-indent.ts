@@ -38,6 +38,11 @@ export interface RulerIndent {
   readonly left: number;
   readonly right: number;
   readonly firstLine: number;
+  /**
+   * The paragraph reads right to left. Its `left` indent is then the LEADING one, on the
+   * right margin, and its first-line offset counts from there, so the ruler axis mirrors.
+   */
+  readonly rtl?: boolean;
 }
 
 /** The page the handles are placed against. Twips. */
@@ -59,15 +64,29 @@ export interface RulerDragOptions {
   readonly precise?: boolean;
 }
 
+/** The same page seen from its right sheet edge, for a right-to-left paragraph. */
+const mirrored = (page: RulerPageMetrics): RulerPageMetrics => ({
+  pageWidth: page.pageWidth,
+  leftMargin: page.rightMargin,
+  rightMargin: page.leftMargin,
+});
+
 const clamp = (value: number, low: number, high: number): number =>
   high < low ? low : value < low ? low : value > high ? high : value;
 
-/** Where a handle sits, in twips from the page's LEFT SHEET EDGE (not the margin). */
+/**
+ * Where a handle sits, in twips from the page's LEFT SHEET EDGE (not the margin).
+ *
+ * With `indent.rtl`, `indent.left` is the leading indent and sits on the right margin.
+ */
 export function handlePosition(
   handle: RulerIndentHandle,
   indent: RulerIndent,
   page: RulerPageMetrics
 ): number {
+  if (indent.rtl) {
+    return page.pageWidth - handlePosition(handle, { ...indent, rtl: false }, mirrored(page));
+  }
   switch (handle) {
     case 'firstLine':
       return page.leftMargin + indent.left + indent.firstLine;
@@ -108,6 +127,16 @@ export function dragIndent(
   page: RulerPageMetrics,
   options: RulerDragOptions = {}
 ): RulerIndent {
+  if (indent.rtl) {
+    const next = dragIndent(
+      handle,
+      page.pageWidth - positionTwips,
+      { ...indent, rtl: false },
+      mirrored(page),
+      options
+    );
+    return { ...next, rtl: true };
+  }
   const x = snapTwips(positionTwips, options.unit ?? 'inch', options.precise ?? false);
   const rightEdge = page.pageWidth - page.rightMargin - indent.right;
   const leadingLeft = page.leftMargin + indent.left + Math.max(0, indent.firstLine);

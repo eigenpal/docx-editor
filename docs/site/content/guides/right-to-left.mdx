@@ -16,7 +16,13 @@ A DOCX file stores direction at two levels, and the editor keeps them separate.
 | `w:bidi` | Paragraph | Sets the base direction. Lines start at the right margin, and list markers and indents follow the direction. |
 | `w:rtl` | Run | Orders numbers and punctuation right to left, and selects the run's complex-script formatting. |
 
-Alignment and indents name the leading and trailing sides of a paragraph. In an RTL paragraph, `w:jc="left"` aligns to the right margin, and `w:ind w:left` indents from the right. The kashida justification values justify the paragraph.
+Alignment and indents name the leading and trailing sides of a paragraph. In an RTL paragraph, `w:jc="left"` aligns to the right margin, and `w:ind w:left` indents from the right. First-line and hanging indents count from the right indent. The kashida justification values justify the paragraph.
+
+List levels follow the same rule. In an RTL paragraph, a level's `w:ind w:left` indents from the right margin, and `w:lvlJc="left"` puts the right edge of the marker on its position. The marker text reads right to left, so `1.` shows its period on the left. The `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` formats number in their own scripts.
+
+Tab stops count from the right margin, and the text on each side of a tab stays in reading order.
+
+The ruler mirrors for an RTL paragraph: the first-line, hanging, and **Before text** handles sit on the right, and the **After text** handle sits on the left. The Paragraph dialog's **Before text** and **After text** fields edit `w:ind w:left` and `w:ind w:right`.
 
 ### Complex-script formatting
 

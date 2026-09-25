@@ -49,3 +49,21 @@ test('the exported Hebrew is drawn, not dropped', async () => {
   const result = await exportPdf(input, { fonts, useSystemFonts: false });
   expect(result.diagnostics.filter((entry) => entry.code === 'missing-glyph')).toEqual([]);
 });
+
+test('without system fonts, the default fallbacks draw Hebrew in the Times New Roman stand-in', async () => {
+  // No `Segoe UI Symbol` here: its stand-in is a symbol face and must not take the Hebrew.
+  const opened = await openExportSession(input, { useSystemFonts: false });
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    const layout = await opened.session.layout();
+    const shaped = new Set<string>();
+    forEachSemanticSpan(layout, (visit) => {
+      if (!/[֐-׿]/.test(visit.span.text)) return;
+      const run = opened.session.shapeLaidOutText(visit.span);
+      for (const font of run?.fonts ?? (run ? [run.font] : [])) shaped.add(font.family);
+    });
+    expect([...shaped]).toEqual(['Liberation Serif']);
+  } finally {
+    opened.session.dispose();
+  }
+});

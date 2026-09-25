@@ -2534,6 +2534,7 @@ export interface RulerIndent {
     readonly left: number;
     // (undocumented)
     readonly right: number;
+    readonly rtl?: boolean;
 }
 
 // @public

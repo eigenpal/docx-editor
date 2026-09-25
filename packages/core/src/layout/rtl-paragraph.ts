@@ -247,6 +247,15 @@ function bidiOrder(
     index--
   )
     levels[index] = rtl ? 1 : 0;
+  return visualOrderOfLevels(levels, start, end);
+}
+
+/** UAX #9 L2 over `levels[start, end)`: the source indices in visual (left-to-right) order. */
+export function visualOrderOfLevels(
+  levels: readonly number[],
+  start = 0,
+  end = levels.length
+): number[] {
   const order = Array.from({ length: end - start }, (_, index) => start + index);
   let maximum = 0;
   let lowestOdd = Infinity;

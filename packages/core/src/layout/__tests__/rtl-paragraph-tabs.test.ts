@@ -71,6 +71,32 @@ describe('tabs in a right-to-left paragraph', () => {
     expect(texts[2]!.right).toBe(400 - 72);
   });
 
+  test('a hanging indent supplies a stop at the leading indent', () => {
+    const tabbed = run('أ') + tab + run('الكلية');
+    const [, hanging] = textSpans(spans('<w:bidi/><w:ind w:left="1080" w:hanging="360"/>', tabbed));
+    expect(hanging!.right).toBe(400 - 54);
+    // The trailing (left) indent is no stop.
+    const [, trailing] = textSpans(
+      spans('<w:bidi/><w:ind w:left="360" w:right="1080" w:hanging="360"/>', tabbed)
+    );
+    expect(trailing!.right).toBe(400 - 18);
+  });
+
+  test('a decimal stop puts the left edge of the point on the stop', () => {
+    const decimal = '<w:bidi/><w:tabs><w:tab w:val="decimal" w:pos="2880"/></w:tabs>';
+    const number = '<w:r><w:t>1234.5</w:t></w:r>';
+    const [, digits] = textSpans(spans(decimal, run('أ') + tab + number));
+    // `1234` lies left of the stop at 256, `.5` right of it (11pt text: 5.45pt a character).
+    const char = (6 * 11) / 12;
+    expect(digits).toMatchObject({
+      left: Math.round(256 - 4 * char),
+      right: Math.round(256 + 2 * char),
+    });
+    // With no point, the text ends on the stop, as at a right stop.
+    const [, word] = textSpans(spans(decimal, run('أ') + tab + run('الكلية')));
+    expect(word!.left).toBe(256);
+  });
+
   test('a right stop measures a joined segment as a whole', () => {
     // A measurer where each letter alone is wider than the joined word, as with Arabic
     // isolated forms. The segment's trailing edge must still land on the stop.

@@ -439,27 +439,29 @@ export async function paint(
         : '';
       if (picture) out.push(picture);
       else
-        out.push(
-          text.paint(
-            {
-              ...visit,
-              span: {
-                ...visit.span,
-                text: marker.text,
-                style: marker.style,
-                box: marker.box,
-                link: undefined,
-                revisions: undefined,
+        // A right-to-left paragraph's marker comes as visual pieces, one per direction run.
+        for (const piece of marker.pieces ?? [marker])
+          out.push(
+            text.paint(
+              {
+                ...visit,
+                span: {
+                  ...visit.span,
+                  text: piece.text,
+                  style: piece.style,
+                  box: piece.box,
+                  link: undefined,
+                  revisions: undefined,
+                },
+                absoluteBox: {
+                  ...piece.box,
+                  x: piece.box.x + visit.storyOrigin.x,
+                  y: piece.box.y + visit.storyOrigin.y,
+                },
               },
-              absoluteBox: {
-                ...marker.box,
-                x: marker.box.x + visit.storyOrigin.x,
-                y: marker.box.y + visit.storyOrigin.y,
-              },
-            },
-            page
-          )
-        );
+              page
+            )
+          );
     }
     const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill)

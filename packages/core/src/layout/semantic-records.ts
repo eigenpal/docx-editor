@@ -585,11 +585,8 @@ export interface ListMarkerRecord {
    */
   readonly level: number;
   /**
-   * The `w:numId` this marker resolved through.
-   *
-   * Published with the level because the two together are what identifies a list: whether
-   * a demote is even possible depends on which levels THIS definition declares, and a
-   * document may hold several lists whose level 0 looks identical.
+   * The `w:numId` this marker resolved through. With the level it identifies a list: whether
+   * a demote is possible depends on which levels THIS definition declares.
    */
   readonly numId: string;
   /** `w:numFmt` of the resolved level — `bullet` or a numbering format. */
@@ -606,6 +603,11 @@ export interface ListMarkerRecord {
    * why both are published rather than one replacing the other.
    */
   readonly picture?: ListMarkerPictureRecord;
+  /**
+   * In a right-to-left paragraph: `text` in VISUAL order, one piece per direction run, each
+   * styled at its bidi level. Paint draws these instead of `text`, which stays logical.
+   */
+  readonly pieces?: readonly Pick<ListMarkerRecord, 'text' | 'style' | 'box'>[];
 }
 
 /**

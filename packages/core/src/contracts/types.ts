@@ -347,9 +347,12 @@ export interface RunFormatting {
  * not know the cell.
  */
 export interface IndentFormatting {
-  /** Left indent, signed. Negative pulls text into the margin, as Word allows. */
+  /**
+   * Leading indent (`w:left`), signed: the left one, or the right one in a right-to-left
+   * paragraph. Negative pulls text into the margin, as Word allows.
+   */
   readonly left: number;
-  /** Right indent, signed. */
+  /** Trailing indent (`w:right`), signed: the right one, or the left one right to left. */
   readonly right: number;
   /** First-line offset from {@link left}, signed. Negative is a hanging indent. */
   readonly firstLine: number;
@@ -359,6 +362,11 @@ export interface IndentFormatting {
     readonly right: boolean;
     readonly firstLine: boolean;
   };
+  /**
+   * The first selected paragraph reads right to left, so `left` and the first line sit on
+   * the right margin. Absent for a left-to-right paragraph.
+   */
+  readonly rtl?: true;
 }
 
 /** A table: its rows, and the table style they resolve through. */

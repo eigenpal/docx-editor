@@ -67,8 +67,10 @@ export function withExportGlyphFallbacks(
       return primary;
     // Preserve the authored face around missing symbols. Moving an entire Latin/CJK
     // run to a fallback also changes its supported letters, spaces and line breaks.
+    // Hebrew letters in an Arabic face fall back the same way: the face keeps drawing the
+    // spaces and punctuation it has, so its line height still applies to the line.
     // Joining scripts retain whole-run fallback so font boundaries do not sever joins.
-    if (/^(Latn|Cyrl|Grek|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script)) {
+    if (/^(Latn|Cyrl|Grek|Hebr|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script)) {
       const mixed = shapeExportClusterFallback(compatible, input, primary, fonts);
       if (mixed) return mixed;
     }

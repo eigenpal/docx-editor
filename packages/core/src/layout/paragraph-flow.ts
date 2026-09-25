@@ -1,7 +1,10 @@
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import { markPendingLineWrapAdvances, growPendingLineDrawingExtent } from './pending-line.ts';
-import { shouldIncludeParagraphMarkHeight } from './paragraph-mark-metrics.ts';
+import {
+  paragraphMarkSampleText,
+  shouldIncludeParagraphMarkHeight,
+} from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import { fitsWithSpaceShrink, opensWithHangingSpace } from './paragraph-space-shrink.ts';
@@ -288,11 +291,13 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
   const rtl = paragraphIsRtl(props);
   for (const property of props) {
     if (property.localName !== 'ind') continue;
-    // Logical indents follow paragraph direction; explicit physical sides win.
-    const rawLeft =
-      property.attributes?.left ?? (rtl ? property.attributes?.end : property.attributes?.start);
-    const rawRight =
-      property.attributes?.right ?? (rtl ? property.attributes?.start : property.attributes?.end);
+    // `w:left` and `w:start` are two spellings of the LEADING indent, and `w:right` and
+    // `w:end` of the trailing one: in a right-to-left paragraph `w:left` indents from the
+    // right margin (§17.3.1.12). The result is physical, so the sides swap there.
+    const leading = property.attributes?.left ?? property.attributes?.start;
+    const trailing = property.attributes?.right ?? property.attributes?.end;
+    const rawLeft = rtl ? trailing : leading;
+    const rawRight = rtl ? leading : trailing;
     const twipsLeft = indentTwips(rawLeft);
     const twipsRight = indentTwips(rawRight);
     if (twipsLeft !== null) left = twipsToPoints(twipsLeft);
@@ -970,7 +975,8 @@ export function breakParagraph(
       shouldIncludeParagraphMarkHeight(growthProps, inheritedRunProperties, line.spans)
     ) {
       // Extra mark height stays below the glyph baseline, so a cover page keeps its rhythm.
-      line.height = Math.max(line.height, measurer.lineMetrics(growthStyle).height);
+      const sample = paragraphMarkSampleText(line.spans, growthStyle);
+      line.height = Math.max(line.height, measurer.lineMetrics(growthStyle, sample).height);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the
@@ -1318,7 +1324,7 @@ export function breakParagraph(
           positional === null ? stopX : currentX,
           destination.positionPt,
           segment.width,
-          segment.decimalOffset
+          paragraphRtl && positional === null ? segment.rtlDecimalOffset : segment.decimalOffset
         );
         line.spans.push({
           range: spanRange,

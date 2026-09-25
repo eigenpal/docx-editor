@@ -26,15 +26,15 @@ function read(xml: string, name: string): OoxmlPart {
   return result.part;
 }
 
-// Marker slot at 42pt (left 150pt, hanging 108pt); the paragraph box starts at 150pt.
-function numbering(rtl = false) {
-  const side = rtl ? 'right' : 'left';
+// Marker slot at 42pt (left 150pt, hanging 108pt); the paragraph box starts at 150pt. A
+// right-to-left paragraph reads the same level from its leading (right) side.
+function numbering() {
   return buildNumberingIndex(
     read(
       `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">` +
         `<w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="(%1)"/>` +
-        `<w:lvlJc w:val="${rtl ? 'right' : 'left'}"/><w:pPr>` +
-        `<w:ind w:${side}="3000" w:hanging="2160"/></w:pPr>` +
+        `<w:lvlJc w:val="left"/><w:pPr>` +
+        `<w:ind w:left="3000" w:hanging="2160"/></w:pPr>` +
         `<w:rPr><w:sz w:val="22"/></w:rPr></w:lvl></w:abstractNum>` +
         `<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`,
       '/word/numbering.xml'
@@ -50,14 +50,14 @@ const numbered = (pPr = '') =>
   `<w:p><w:pPr>${pPr}<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>` +
   `<w:tabs><w:tab w:val="num" w:pos="1418"/></w:tabs></w:pPr>${run(TEXT)}</w:p>`;
 
-function layout(body: string, rtl = false): SemanticLayout {
+function layout(body: string): SemanticLayout {
   const part = read(
     `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
     '/word/document.xml'
   );
   return layoutSemanticDocument(part, 1, {
     measurer,
-    numberingIndex: numbering(rtl),
+    numberingIndex: numbering(),
     geometry: { width: 400, height: 400, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
   });
 }
@@ -147,7 +147,7 @@ describe('a press on first-line text left of the paragraph box', () => {
 describe('a right-to-left first line right of the paragraph box', () => {
   test('resolves to that paragraph', () => {
     const body = plain('previous paragraph words', '<w:bidi/>') + numbered('<w:bidi/>');
-    const result = layout(body, true);
+    const result = layout(body);
     const paragraph = target(result);
     const line = paragraph.lines[0]!;
     const right = Math.max(...line.spans.map((span) => span.box.x + span.box.width));

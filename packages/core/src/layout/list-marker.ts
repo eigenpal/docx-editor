@@ -7,6 +7,7 @@ import type { LayoutBox, ListMarkerRecord } from './semantic-records.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { firstLineShift, listMarkerBox, listMarkerWidth } from './list-marker-geometry.ts';
+import { rtlListMarkerPieces } from './list-marker-bidi.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 
 /**
@@ -19,15 +20,15 @@ export type ListPictureBulletResolver = (
   relationshipId: string
 ) => { readonly ownerPartName: string; readonly resource: ImageResourceState } | null;
 
-/** Use a left-to-right local axis for list slot and suffix calculations. */
+/**
+ * Use a mirrored left-to-right local axis for list slot and suffix calculations.
+ *
+ * `w:lvlJc` mirrors with the axis, as `w:jc` does in a bidi paragraph: `left` puts the
+ * marker's leading (right) edge on the slot, so it keeps its value here.
+ */
 function directionalItem(item: ResolvedListItem, rtl: boolean): ResolvedListItem {
   if (!rtl) return item;
-  return {
-    ...item,
-    indent: { ...item.indent, left: item.indent.right, right: item.indent.left },
-    markerAlign:
-      item.markerAlign === 'left' ? 'right' : item.markerAlign === 'right' ? 'left' : 'center',
-  };
+  return { ...item, indent: { ...item.indent, left: item.indent.right, right: item.indent.left } };
 }
 
 export function directionalListFirstLineShift(
@@ -182,19 +183,20 @@ export function publishListMarker(
           },
         }
       : {};
+  const markerBox = { x, y: box.y, width: box.width, height: box.height };
+  const pieces =
+    rtlExtent !== undefined && !('picture' in picture)
+      ? rtlListMarkerPieces(item.markerText, item.markerStyle, markerBox, measurer)
+      : undefined;
   return {
     text: item.markerText,
     style: item.markerStyle,
-    box: {
-      x,
-      y: box.y,
-      width: box.width,
-      height: box.height,
-    },
+    box: markerBox,
     level: item.ilvl,
     numId: item.numId,
     numFmt: item.numFmt,
     ...(item.ordinal === undefined ? {} : { ordinal: item.ordinal }),
     ...picture,
+    ...(pieces ? { pieces } : {}),
   };
 }

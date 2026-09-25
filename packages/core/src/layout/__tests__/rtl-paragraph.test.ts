@@ -174,9 +174,12 @@ test('logical RTL indents apply to the inherited leading and trailing sides', ()
   expect(line.box.x).toBe(12);
   expect(line.box.width).toBe(72);
   expect(Math.max(...line.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(84);
-  const physical = linesOf(layout('مرحبا', '<w:ind w:left="240" w:right="480"/>'))[0]!;
-  expect(physical.box.x).toBe(12);
-  expect(Math.max(...physical.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(96);
+  // `w:left` is the transitional spelling of `w:start`: the leading (right) side here.
+  const transitional = linesOf(layout('مرحبا', '<w:ind w:left="240" w:right="480"/>'))[0]!;
+  expect(transitional.box.x).toBe(24);
+  expect(Math.max(...transitional.spans.map((span) => span.box.x + span.box.width))).toBeCloseTo(
+    108
+  );
 });
 
 test('justified RTL spans stretch authored spaces in the native text band', () => {
