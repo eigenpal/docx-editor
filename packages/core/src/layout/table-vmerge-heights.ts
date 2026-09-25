@@ -80,8 +80,8 @@
 //   below the table. One span length per head row is planned; the rest size their own row;
 // - a span every row of which is `hRule="exact"` and too short for the merged content. It is
 //   the one span knowably unable to hold its own head, so the head keeps sizing its own row
-//   and the exact height clips it there, which is what Word draws. Such spans are decided one
-//   head at a time, since whether a head fits is a question about that head alone.
+//   and the exact height clips it there. Every head that fits the fixed rows detaches
+//   together; a head that does not fit stays in its row.
 //
 // Those first two together mean accepted spans never PARTIALLY overlap: two either cover
 // disjoint rows or exactly the same rows, and the latter were decided, grown and are withdrawn
@@ -133,7 +133,8 @@ export interface VMergeRowHeights {
   /**
    * Points the span needs below its head row's top, with accepted spans folded in. A span
    * sharing its head row and end row with others answers for the whole group: the tallest
-   * of their heads, over rows measured with all of them detached. `atYPt` is where the head row is about to be placed; passing it measures the merged
+   * of their heads, over rows measured with all of them detached.
+   * `atYPt` is where the head row is about to be placed; passing it measures the merged
    * content under whatever wrap bands really cross the row instead of position-free.
    */
   heightOf(span: VMergeSpan, atYPt?: number): number;
@@ -369,8 +370,8 @@ export function planVMergeRowHeights(
    * at a time left every head but the first sizing the head row, and the first span's rows
    * then carried that head's height a second time below it.
    *
-   * A span no row of which can grow is decided alone: whether its head fits is a
-   * per-head question there (see the shapes declined above).
+   * Fixed-row spans are measured per head. Admission detaches all heads that fit those
+   * rows together, while heads that do not fit keep their original clipping.
    */
   const groupOf = (span: VMergeSpan): readonly VMergeSpan[] =>
     lastGrowableRow(span) === undefined ? [span] : (coextensive.get(span) ?? [span]);
@@ -461,7 +462,16 @@ export function planVMergeRowHeights(
       // The whole group joins at once: the floors above were measured with every one of its
       // heads out of the head row, so admitting only some would leave the rest sizing a row
       // those floors do not describe.
-      const group = groupOf(span);
+      // Fixed rows keep their floors when another fitting head detaches. Heads that do
+      // not fit stay in their original row, where its exact height clips them.
+      const group =
+        growable === undefined
+          ? (coextensive.get(span) ?? [span]).filter(
+              (member) =>
+                member === span ||
+                (!acceptedSpans.has(member) && contentOf(member, atYPt) <= covered + EPSILON_PT)
+            )
+          : groupOf(span);
       for (const member of group) {
         acceptedSpans.add(member);
         acceptedHeadIds.add(member.headCellId);

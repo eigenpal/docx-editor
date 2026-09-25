@@ -534,3 +534,36 @@ test('merge preflight remeasures the outer top inset after an occurrence changes
   first = false;
   expect(plan.heightOf(span, 0)).toBe(interior);
 });
+
+describe('coextensive merges over fixed rows', () => {
+  test('both heads paint every line that fits their shared span', () => {
+    for (const [a, b] of [
+      [1, 2],
+      [2, 1],
+      [2, 2],
+    ]) {
+      const lines = (prefix: string, count: number) =>
+        Array.from({ length: count }, (_, index) => p(`${prefix}${index}`)).join('');
+      const result = layoutTiny(
+        loadPart(
+          `<w:tbl><w:tblPr/><w:tr>${exactRow(500)}` +
+            tc(lines('A', a!), RESTART) +
+            tc(lines('B', b!), RESTART) +
+            '</w:tr>' +
+            `<w:tr>${exactRow(500)}${tc(p(''), CONTINUE)}${tc(p(''), CONTINUE)}</w:tr></w:tbl>`
+        )
+      );
+      expect(result.pages).toHaveLength(1);
+      const table = tablesOf(result, 0)[0]!;
+      expect(table.box.height).toBeCloseTo(50, 3);
+      const painted = table.rows
+        .flatMap((row) => row.cells)
+        .flatMap((cell) => cell.blocks)
+        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+        .flatMap((line) => line.spans)
+        .map((span) => span.text);
+      for (let i = 0; i < a!; i += 1) expect(painted).toContain(`A${i}`);
+      for (let i = 0; i < b!; i += 1) expect(painted).toContain(`B${i}`);
+    }
+  });
+});

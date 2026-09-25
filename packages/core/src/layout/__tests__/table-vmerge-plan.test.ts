@@ -256,7 +256,7 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(1)!.heightFloorPt).toBe(58);
   });
 
-  test('merges over rows that cannot grow are still decided one head at a time', () => {
+  test('merges over fixed rows leave an oversized head clipped', () => {
     // Every row is exact, so whether a head fits is a question about that head alone: the
     // short one detaches, and the tall one stays in its row to be clipped there.
     const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
@@ -270,6 +270,25 @@ describe('the vMerge plan hands out heights, never positions', () => {
     const plan = planVMergeRowHeights(rows, probe)!;
     for (const span of plan.spansAt(0)) plan.accept(span);
     expect([...(plan.rowOptions(0)!.detachedSpanHeightPtByCellId ?? []).keys()]).toEqual(['fits']);
+  });
+
+  test('every fitting head shares the same fixed-row span', () => {
+    const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
+      ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;
+    const rows = [
+      exact('r0', [filled('a', 0), filled('b', 1)]),
+      exact('r1', [cell('c0', 0, true), cell('c1', 1, true)]),
+    ];
+    const probe = (probed: SemanticTableRow, detached?: ReadonlySet<string>) =>
+      probed.height.rule === 'exact' ? 20 : probeFrom({ a: 15, b: 30 })(probed, detached);
+    const plan = planVMergeRowHeights(rows, probe)!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect([...(plan.rowOptions(0)!.detachedSpanHeightPtByCellId ?? [])]).toEqual([
+      ['a', 40],
+      ['b', 40],
+    ]);
+    expect(plan.rowOptions(0)!.heightFloorPt).toBe(20);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(20);
   });
 
   test('a span no row of which can grow is declined rather than handed a short box', () => {
