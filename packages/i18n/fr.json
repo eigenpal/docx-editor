@@ -978,5 +978,62 @@
     "scrolled": null,
     "processingLabel": null,
     "sampleEdited": null
+  },
+  "anchorNavigation": {
+    "clear": null,
+    "cleared": null,
+    "code": null,
+    "description": null,
+    "done": {
+      "both": null,
+      "highlight": null,
+      "scroll": null
+    },
+    "duration": null,
+    "durations": {
+      "default": null,
+      "manual": null,
+      "short": null
+    },
+    "effect": null,
+    "effects": {
+      "both": null,
+      "highlight": null,
+      "scroll": null
+    },
+    "highlightFailed": null,
+    "highlightOnlyFailed": null,
+    "motion": null,
+    "motions": {
+      "instant": null,
+      "smooth": null
+    },
+    "position": null,
+    "positions": {
+      "center": null,
+      "centerIfNeeded": null,
+      "start": null,
+      "nearest": null
+    },
+    "ready": null,
+    "reference": null,
+    "references": {
+      "fee": null,
+      "header": null,
+      "law": null,
+      "liability": null,
+      "missing": null,
+      "payment": null
+    },
+    "scrollFailed": null,
+    "show": null,
+    "style": null,
+    "styles": {
+      "amber": null,
+      "default": null,
+      "glow": null,
+      "instant": null
+    },
+    "title": null
   }
 }

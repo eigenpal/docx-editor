@@ -978,5 +978,62 @@
     "scrolled": "Document updated. Scrolled to the changed paragraph.",
     "processingLabel": "Processing",
     "sampleEdited": "Your edits stay in the document. Reset the sample to run this demo again."
+  },
+  "anchorNavigation": {
+    "title": "Paragraph references",
+    "description": "Choose a finding and an effect. The editor scrolls to the paragraph, highlights it, or both.",
+    "reference": "Reference",
+    "effect": "Effect",
+    "style": "Highlight style",
+    "duration": "Highlight duration",
+    "position": "Scroll position",
+    "motion": "Scroll motion",
+    "show": "Show reference",
+    "clear": "Clear highlight",
+    "code": "Calls for these settings",
+    "ready": "Choose a reference, and then select Show reference.",
+    "cleared": "The highlight is cleared.",
+    "scrollFailed": "This reference is unavailable. The document did not move.",
+    "highlightFailed": "Scrolled to the reference. Highlights support body paragraphs and table cells only.",
+    "highlightOnlyFailed": "This reference cannot receive a highlight. Highlights support body paragraphs and table cells only.",
+    "references": {
+      "payment": "Payment terms",
+      "fee": "Annual support fee (table cell)",
+      "liability": "Second \"Supplier\" in the liability clause",
+      "law": "\"State of New York\" in governing law",
+      "header": "Draft notice (header)",
+      "missing": "Deleted paragraph (missing)"
+    },
+    "effects": {
+      "both": "Scroll and highlight",
+      "scroll": "Scroll only",
+      "highlight": "Highlight only"
+    },
+    "styles": {
+      "default": "Default blue",
+      "amber": "Amber with a dashed border",
+      "glow": "Green glow (CSS class)",
+      "instant": "Default blue without a fade"
+    },
+    "durations": {
+      "short": "1.5 seconds",
+      "default": "3 seconds",
+      "manual": "Until cleared"
+    },
+    "positions": {
+      "centerIfNeeded": "Center if needed",
+      "center": "Center",
+      "start": "Top of the viewport",
+      "nearest": "Nearest edge"
+    },
+    "motions": {
+      "instant": "Instant",
+      "smooth": "Smooth"
+    },
+    "done": {
+      "both": "Scrolled to the reference and highlighted it.",
+      "scroll": "Scrolled to the reference.",
+      "highlight": "Highlighted the reference. If it is offscreen, scroll to see it."
+    }
   }
 }

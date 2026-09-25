@@ -145,6 +145,8 @@ function showReference(editor: Editor, anchor: DocAnchor): boolean {
 
 By default, a light blue box with rounded corners fades in over 180 milliseconds. The box stays for three seconds and then fades out. The highlight does not move text, change the scroll position, or take focus.
 
+To try each effect, style, and scroll setting on a live document, run the [DOCX paragraph reference example](/examples/anchor-navigation).
+
 The highlight marks the whole paragraph. If the anchor includes `search`, the phrase must match under the same rules as `scrollToAnchor`. The editor shows one anchor highlight at a time. A new call moves the highlight to the new paragraph. Repeating a call for the same paragraph restarts the timeout without replaying the entrance.
 
 | Result | Meaning |

@@ -1,0 +1,33 @@
+# DOCX paragraph reference example
+
+Scroll to a paragraph reference, highlight it, or both, from one React panel. Choose the reference, effect, highlight style, duration, and scroll settings, and see the result in the document.
+
+## Run the example
+
+From the repository root, run:
+
+```bash
+bun install
+bun run build:packages
+bun run dev:anchors
+```
+
+Open `http://localhost:5181`.
+
+## Try it
+
+1. In **Reference**, select a finding, and then select **Show reference**. The editor scrolls to the paragraph and highlights it.
+2. In **Effect**, select **Scroll only** or **Highlight only** to see each method alone.
+3. In **Highlight style**, select a preset. The green preset adds a CSS class for a glow.
+4. In **Highlight duration**, select **Until cleared**. The highlight stays until you select **Clear highlight**.
+5. Select the header reference or the missing paragraph to see an unavailable result.
+
+The panel shows the `scrollToAnchor` and `highlightAnchor` calls for the current settings.
+
+## How it works
+
+Each reference is a `DocAnchor`: a paragraph's `w14:paraId`, with optional `search` text and `occurrence`. A review tool or server stores this address with its finding. The example builds a sample agreement in the browser, so it needs no server.
+
+`editor.scrollToAnchor(anchor, options)` moves the viewport. `editor.highlightAnchor(anchor, options)` adds a temporary overlay to the paragraph. Neither method changes selection, focus, document content, or undo history. Headers, footers, and notes support scrolling but not highlights, so the header reference scrolls and then reports that no highlight is available.
+
+For more information, see [Highlight an external paragraph reference](https://docx-editor.dev/docs/2.x/core#highlight-an-external-paragraph-reference).
