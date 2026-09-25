@@ -200,6 +200,50 @@ describe('bottom-to-top table cell text', () => {
       expect(heights[0]).toBeLessThan(50);
     });
 
+    test('a minimum row height gives centred turned text its authored line length', () => {
+      const result = layout(
+        table(
+          `<w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr>` +
+            `${cell(turned, upright('center', 'label'))}${cell('', paragraph('side'))}</w:tr>`
+        )
+      );
+      expect(firstTable(result).rows[0]!.box.height).toBeCloseTo(150, 3);
+      const line = turnedParagraph(result).lines[0]!;
+      const first = line.spans[0]!.box;
+      const last = line.spans.at(-1)!.box;
+      expect(first.x - line.box.x).toBeGreaterThan(50);
+      expect(first.x - line.box.x).toBeCloseTo(
+        line.box.x + line.box.width - last.x - last.width,
+        3
+      );
+    });
+
+    test('a positional tab does not give an auto row an unbounded line length', () => {
+      for (const alignment of ['right', 'center']) {
+        const content = `<w:p><w:r><w:ptab w:alignment="${alignment}" w:relativeTo="margin"/><w:t>label</w:t></w:r></w:p>`;
+        for (const merged of [false, true]) {
+          const result = layout(
+            table(
+              `<w:tr>${cell(turned + (merged ? '<w:vMerge w:val="restart"/>' : ''), content)}` +
+                `${cell('', paragraph('side'))}</w:tr>` +
+                (merged
+                  ? `<w:tr>${cell(turned + '<w:vMerge/>', paragraph(''))}${cell('', paragraph('next'))}</w:tr>`
+                  : '')
+            )
+          );
+          expect(result.pages).toHaveLength(1);
+          expect(finite(firstTable(result))).toBe(true);
+          expect(firstTable(result).box.height).toBeLessThan(100);
+          expect(
+            turnedParagraph(result)
+              .lines.flatMap((line) => line.spans)
+              .map((span) => span.text)
+              .join('')
+          ).toContain('label');
+        }
+      }
+    });
+
     test('an exact row still aligns the turned text along its fixed height', () => {
       const result = layout(
         table(

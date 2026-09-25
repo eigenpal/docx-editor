@@ -1399,9 +1399,9 @@ export function layoutRowFragmentBounded(
           flowLeft,
           cellX + Math.max(0, cellMaxBottom - rowTop) - topInset,
           exactHeightPt !== undefined || isDetached || cell.vMergeContinue,
-          (right) => flowTo(right, measuringFlowDeps(flowDeps, true)).blocks
+          (right) => flowTo(right, measuringFlowDeps(flowDeps, true)).blocks,
+          isContinuation ? 0 : (atLeastHeightPt ?? 0)
         );
-
     const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
       cell,
       flowRight - flowLeft,

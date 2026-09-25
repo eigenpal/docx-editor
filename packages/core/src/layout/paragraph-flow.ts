@@ -1298,7 +1298,7 @@ export function breakParagraph(
             ? authored.alignment === 'left'
               ? nextTabDestination(tabStops, currentX, rightEdge)
               : authored
-            : positional.positionPt > currentX
+            : Number.isFinite(positional.positionPt) && positional.positionPt > currentX
               ? positional
               : {
                   // The stop changes; the LEADER is the element's own and survives it.
