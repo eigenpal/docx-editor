@@ -70,3 +70,13 @@ Run synthetic checks with:
 python -m unittest discover -s packages/docx-to-pdf/scripts/evaluation -p 'test_quick_text.py'
 bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts packages/docx-to-pdf/scripts/evaluation/layout-worker.test.ts
 ```
+
+For Node 24.2 or later, load source aliases before starting the worker:
+
+```sh
+node --experimental-transform-types \
+  --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
+  packages/docx-to-pdf/scripts/evaluation/layout-worker.ts
+```
+
+This development command uses the checkout's TypeScript dependency and source configuration.
