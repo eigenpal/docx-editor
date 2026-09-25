@@ -27,7 +27,7 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { stripAnchorSinksForProbe, withoutAnchorSinks } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
@@ -114,9 +114,9 @@ import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import {
-  blockInlineRight,
   cellFlowBox,
   layOutWaitingBottomToTopCells,
+  rememberBottomToTopRelayouts,
   waitsForRowHeight,
 } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
@@ -1336,14 +1336,16 @@ export function layoutRowFragmentBounded(
     readonly complete: boolean;
     readonly fitted: boolean;
     readonly nestedSplitBlocked: boolean;
-    readonly flowTo?: (right: number) => ReturnType<typeof flowBlocksInBoxBounded>;
+    readonly flowTo?: (
+      right: number,
+      relayout?: boolean
+    ) => ReturnType<typeof flowBlocksInBoxBounded>;
   }
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
   // Continuation and waiting `btLr` cells size no row; alone, their end marks do.
-  const waits = (cell: SemanticTableCell): boolean =>
-    waitsForRowHeight(cell, exactHeightPt !== undefined && detachedSpans?.has(cell.id) !== true);
+  const waits = waitsForRowHeight;
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   let rowBottom = rowTop;
@@ -1391,7 +1393,7 @@ export function layoutRowFragmentBounded(
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
-    const flowTo = (right: number): ReturnType<typeof flowBlocksInBoxBounded> =>
+    const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
       flowBlocksInBoxBounded(
         cell.blocks,
         flowLeft,
@@ -1399,7 +1401,7 @@ export function layoutRowFragmentBounded(
         contentTop,
         contentMaxBottom,
         depth,
-        flowDeps,
+        relayout ? withoutAnchorSinks(flowDeps) : flowDeps,
         cursor,
         cell.styleFormatting,
         true,
@@ -1441,11 +1443,9 @@ export function layoutRowFragmentBounded(
           ? continuationPt > 0
             ? rowTop + topInset + continuationPt + insets.bottom
             : rowTop
-          : vertical && fitted
-            ? rowTop + topInset + (blockInlineRight(blocks, flowLeft) - flowLeft) + insets.bottom
-            : fitted
-              ? contentBottom + insets.bottom
-              : rowTop + topInset + defaultLineHeight + insets.bottom
+          : fitted
+            ? contentBottom + insets.bottom
+            : rowTop + topInset + defaultLineHeight + insets.bottom
       )
     );
     if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
@@ -1523,9 +1523,7 @@ export function layoutRowFragmentBounded(
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
-  const pageRoom = detachedBottomPt - rowTop;
-  const turned = layOutWaitingBottomToTopCells(flowed, rowHeight, vMerge, pageRoom);
-  if (turned && markSizedRow) anyFitted = true;
+  if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;
@@ -1573,6 +1571,7 @@ export function layoutRowFragmentBounded(
       : flowed.map((entry) => entry.nextCursor);
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
+  rememberBottomToTopRelayouts(flowed, cells);
   flushDeferred(cells, rowTop, rowHeight);
 
   return {

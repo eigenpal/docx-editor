@@ -540,7 +540,7 @@ export function paginateTableInFlow(
     // fragment above merged content already flowed against this page. See the break-site
     // table in `table-vmerge-heights.ts` for why the others stay open to a covered row.
     const heldByOpenSpan =
-      vMerge?.heightFloorPt !== undefined && vMerge.detachedSpanHeightPtByCellId === undefined;
+      vMerge !== undefined && vMerge.detachedSpanHeightPtByCellId === undefined;
 
     /**
      * Repeating headers is admissible only when this exact row state can progress below them.

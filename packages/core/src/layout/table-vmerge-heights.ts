@@ -108,12 +108,6 @@ export interface RowVMergeLayoutOptions {
   readonly detachedSpanHeightPtByCellId?: ReadonlyMap<string, number>;
   /** Minimum finished height: the row's own height plus any surplus the span put on it. */
   readonly heightFloorPt?: number;
-  /**
-   * `btLr` merge heads in this row whose span was NOT accepted, with the height of the rows
-   * they cover. `btLr` text never sizes a row, so such a head still lays its text along the
-   * whole merge rather than along its own row; it stays in its row and is not detached.
-   */
-  readonly bottomToTopSpanHeightPtByCellId?: ReadonlyMap<string, number>;
 }
 
 /** One `w:vMerge` chain: the head cell and the rows it covers. */
@@ -458,19 +452,7 @@ export function planVMergeRowHeights(
       }
     },
     rowOptions: (rowIndex) => {
-      // A declined or unadmitted `btLr` head keeps its row but still needs its merge's length.
-      let bottomToTopSpanHeightPtByCellId: Map<string, number> | undefined;
-      for (const span of spansByRow.get(rowIndex) ?? []) {
-        if (acceptedSpans.has(span) || headBySpan.get(span)!.cell.textDirection !== 'btLr') {
-          continue;
-        }
-        bottomToTopSpanHeightPtByCellId ??= new Map<string, number>();
-        bottomToTopSpanHeightPtByCellId.set(span.headCellId, coveredPtOf(span));
-      }
-      const bottomToTop = bottomToTopSpanHeightPtByCellId
-        ? { bottomToTopSpanHeightPtByCellId }
-        : undefined;
-      if (!coveredRows.has(rowIndex)) return bottomToTop;
+      if (!coveredRows.has(rowIndex)) return undefined;
       // Derived now, not at accept: every span heading this row has been decided by the
       // time the row is placed, so this is the first moment the heights are all settled.
       let detachedSpanHeightPtByCellId: Map<string, number> | undefined;
@@ -487,7 +469,6 @@ export function planVMergeRowHeights(
       // recorded, which only a decline can leave behind.
       return {
         ...(detachedSpanHeightPtByCellId ? { detachedSpanHeightPtByCellId } : {}),
-        ...bottomToTop,
         heightFloorPt: plannedFloorPt.get(rowIndex) ?? floorOf(rowIndex),
       };
     },

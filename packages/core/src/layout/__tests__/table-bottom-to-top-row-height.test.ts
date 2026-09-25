@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { layoutTableFragment } from '../semantic-table-layout.ts';
+import { readTableStructure } from '../semantic-table.ts';
 import type {
   LineRecord,
   SemanticLayout,
@@ -302,5 +304,114 @@ describe('bottom-to-top merge heads and page ends', () => {
     const turnedRow = heights(turned(paragraph(words(6))));
     expect(turnedRow).toHaveLength(2);
     expect(turnedRow).toEqual(heights(plain(paragraph('h'))));
+  });
+});
+
+describe('bottom-to-top merge heads in their final fragment', () => {
+  const restart = '<w:vMerge w:val="restart"/>';
+  const carry = '<w:vMerge/>';
+  const short = 'w:val="500"';
+  const kept = (cells: string, height = short): string =>
+    `<w:tr><w:trPr><w:cantSplit/><w:trHeight ${height}/></w:trPr>${cells}</w:tr>`;
+  const header = (cells: string): string =>
+    `<w:tr><w:trPr><w:tblHeader/><w:trHeight ${short}/></w:trPr>${cells}</w:tr>`;
+
+  test('lays a merged head in repeated header rows along the whole header group', () => {
+    const body = Array.from({ length: 60 }, (_, index) =>
+      row(plain(paragraph(`b${index}`)) + plain(paragraph('c')))
+    ).join('');
+    const result = layout(
+      table(
+        header(turned(paragraph(words(12)), restart) + plain(paragraph('h0'))) +
+          header(turned('<w:p/>', carry) + plain(paragraph('h1'))) +
+          header(turned('<w:p/>', carry) + plain(paragraph('h2'))) +
+          body
+      )
+    );
+    const fragments = tables(result);
+    expect(fragments.length).toBeGreaterThan(1);
+    for (const fragment of fragments) {
+      const head = fragment.rows[0]!.cells[0]!;
+      expect(fragment.rows.slice(0, 3).map((entry) => entry.box.height)).toEqual([25, 25, 25]);
+      expect(head.box.height).toBeCloseTo(75, 3);
+      expect(longestLine(head)).toBeGreaterThan(25);
+      expect(longestLine(head)).toBeLessThanOrEqual(75 + 0.001);
+      expect(wordCount(head)).toBeGreaterThan(3);
+      expect(wordCount(head)).toBe(wordCount(fragments[0]!.rows[0]!.cells[0]!));
+    }
+  });
+
+  test('keeps a declined head inside its fragment when a covered row moves to the next page', () => {
+    const neighbour = Array.from({ length: 20 }, (_, index) => paragraph(`n${index}`)).join('');
+    const result = layout(
+      filler(40) +
+        table(
+          kept(
+            turned(paragraph(words(30)), restart) + plain(paragraph('a0')) + plain(paragraph('x'))
+          ) +
+            kept(turned('<w:p/>', carry) + plain(paragraph('a1')) + plain(paragraph('x'))) +
+            kept(
+              turned('<w:p/>', carry) + turned(paragraph('inner'), restart) + plain(paragraph('x'))
+            ) +
+            kept(turned('<w:p/>', carry) + turned('<w:p/>', carry) + plain(paragraph('x'))) +
+            kept(turned('<w:p/>', carry) + plain(paragraph('a4')) + plain(neighbour)),
+          3
+        )
+    );
+    const [first, second] = tables(result);
+    expect(first!.rows).toHaveLength(4);
+    for (const entry of first!.rows) expect(entry.box.height).toBeCloseTo(25, 3);
+    const head = first!.rows[0]!.cells[0]!;
+    expect(head.box.height).toBeCloseTo(100, 3);
+    expect(longestLine(head)).toBeGreaterThan(25);
+    expect(longestLine(head)).toBeLessThanOrEqual(100 + 0.001);
+    expect(wordCount(second!.rows[0]!.cells[0]!)).toBe(0);
+  });
+
+  test('gives a declined head in exact rows the same merge length as an accepted one', () => {
+    const exact = 'w:val="500" w:hRule="exact"';
+    const merged = (inner: boolean): TableCellFragmentRecord => {
+      const second = inner ? turned(paragraph('inner'), restart) : plain(paragraph('a2'));
+      const third = inner ? turned('<w:p/>', carry) : plain(paragraph('a3'));
+      const rows =
+        row(
+          turned(paragraph(words(12)), restart) + plain(paragraph('a0')) + plain(paragraph('x')),
+          exact
+        ) +
+        row(turned('<w:p/>', carry) + plain(paragraph('a1')) + plain(paragraph('x')), exact) +
+        row(turned('<w:p/>', carry) + second + plain(paragraph('x')), exact) +
+        row(turned('<w:p/>', carry) + third + plain(paragraph('x')), exact);
+      return rowsOf(layout(table(rows, 3)))[0]!.cells[0]!;
+    };
+    expect(textOf(merged(true))).toBe(textOf(merged(false)));
+    expect(longestLine(merged(true))).toBeGreaterThan(25);
+  });
+
+  test('lays a merged head along its merge in a table placed in one pass', () => {
+    const part = loadPart(
+      table(
+        row(turned(paragraph(words(12)), restart) + plain(paragraph('a')), short) +
+          row(turned('<w:p/>', carry) + plain(paragraph('b')), short) +
+          row(turned('<w:p/>', carry) + plain(paragraph('c')), short)
+      )
+    );
+    const body = part.root.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'body'
+    );
+    if (!body || body.kind === 'textValue') throw new Error('body');
+    const node = body.children.find((child) => child.kind === 'table')!;
+    const structure = readTableStructure(node, 468, 0)!;
+    let id = 0;
+    const deps = {
+      measurer: createFixedMeasurer(),
+      producer: 'one-pass-test',
+      nextLineId: () => `line-${id++}`,
+    };
+    const { fragment } = layoutTableFragment(structure, 0, 0, 0, 'table', 0, deps);
+    const head = fragment.rows[0]!.cells[0]!;
+    expect(fragment.rows.map((entry) => entry.box.height)).toEqual([25, 25, 25]);
+    expect(longestLine(head)).toBeGreaterThan(25);
+    expect(longestLine(head)).toBeLessThanOrEqual(75 + 0.001);
+    expect(wordCount(head)).toBeGreaterThan(3);
   });
 });
