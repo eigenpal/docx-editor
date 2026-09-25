@@ -1341,10 +1341,9 @@ export function layoutRowFragmentBounded(
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Continuation cells and waiting `btLr` cells size no row. A row of only those takes its
-  // end-of-cell paragraphs instead — see `cellContinuationHeight` and `waitsForRowHeight`.
+  // Continuation and waiting `btLr` cells size no row; alone, their end marks do.
   const waits = (cell: SemanticTableCell): boolean =>
-    waitsForRowHeight(cell, exactHeightPt !== undefined || detachedSpans?.has(cell.id) === true);
+    waitsForRowHeight(cell, exactHeightPt !== undefined && detachedSpans?.has(cell.id) !== true);
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   let rowBottom = rowTop;
@@ -1524,8 +1523,9 @@ export function layoutRowFragmentBounded(
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
-  // Beside other content, waiting `btLr` text is no progress of its own: the row's is.
-  if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
+  const pageRoom = detachedBottomPt - rowTop;
+  const turned = layOutWaitingBottomToTopCells(flowed, rowHeight, vMerge, pageRoom);
+  if (turned && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;

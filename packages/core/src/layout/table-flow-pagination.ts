@@ -32,7 +32,7 @@ import {
   prepareRepeatedHeaderBorderPlan,
   type RepeatedHeaderBorderPlan,
 } from './repeated-header-border-metrics.ts';
-import type { CellContentInsets } from './table-cell-geometry.ts';
+import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import {
@@ -522,15 +522,25 @@ export function paginateTableInFlow(
     const pageHoldsRow = (): boolean =>
       naturalHeight <= Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) + 0.001;
     // `btLr` text takes its line length from the whole row, so such a row also moves whole to
-    // a page that can hold it rather than split (`bottomToTopTextKeepsRowWhole`).
-    const keepsWhole = row.cantSplit || bottomToTopTextKeepsRowWhole(row);
+    // a page that can hold it when its authored minimum does not fit the room below `top`
+    // (`bottomToTopTextKeepsRowWhole`).
+    const keepsWholeAt = (top: number): boolean =>
+      row.cantSplit ||
+      bottomToTopTextKeepsRowWhole(
+        row,
+        contentHeight() - top,
+        (cell) =>
+          tableDeps.cellContentInsets?.get(cell.id) ??
+          cellContentInsets(cell, structure.cellSpacingPt === 0),
+        tableDeps.cellMinimumContentInsets
+      );
 
     // A row an accepted span covers does not take the whole-row MOVE: alone among the
     // breaks below, that one is an optimization rather than a recovery, and it ends the
     // fragment above merged content already flowed against this page. See the break-site
     // table in `table-vmerge-heights.ts` for why the others stay open to a covered row.
     const heldByOpenSpan =
-      vMerge !== undefined && vMerge.detachedSpanHeightPtByCellId === undefined;
+      vMerge?.heightFloorPt !== undefined && vMerge.detachedSpanHeightPtByCellId === undefined;
 
     /**
      * Repeating headers is admissible only when this exact row state can progress below them.
@@ -546,7 +556,10 @@ export function paginateTableInFlow(
       // authored box is structural progress even though it places no text. Mirror that path before
       // asking the bounded probe, whose `fitted` flag deliberately means content progress.
       if (!isContinuation && naturalHeight <= remaining + 0.001) return true;
-      if (!isContinuation && (row.height.rule === 'exact' || (keepsWhole && pageHoldsRow()))) {
+      if (
+        !isContinuation &&
+        (row.height.rule === 'exact' || (keepsWholeAt(bodyTop) && pageHoldsRow()))
+      ) {
         return false;
       }
       return probeRowFragmentProgress(
@@ -600,7 +613,7 @@ export function paginateTableInFlow(
         naturalHeight <= contentHeight() + 0.001 &&
         flow.cursorY + naturalHeight > contentHeight() + 0.001 &&
         flow.cursorY > 0 &&
-        (keepsWhole ||
+        (keepsWholeAt(flow.cursorY) ||
           row.height.rule === 'exact' ||
           !probeRowFragmentProgress(
             row,

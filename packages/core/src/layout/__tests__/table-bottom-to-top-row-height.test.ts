@@ -226,3 +226,81 @@ describe('bottom-to-top cell text and row height', () => {
     expect(rowsOf(result)[0]!.box.height).toBeCloseTo(10 * LINE, 3);
   });
 });
+
+describe('bottom-to-top merge heads and page ends', () => {
+  const restart = '<w:vMerge w:val="restart"/>';
+  const carry = '<w:vMerge/>';
+  const short = 'w:val="500"';
+
+  test('lays a declined head along its merge when another merge starts inside it', () => {
+    const rows = [
+      row(
+        turned(paragraph(words(4)), restart) + plain(paragraph('a0')) + plain(paragraph('x')),
+        short
+      ),
+      row(turned('<w:p/>', carry) + plain(paragraph('a1')) + plain(paragraph('x')), short),
+      row(
+        turned('<w:p/>', carry) + turned(paragraph(words(4)), restart) + plain(paragraph('x')),
+        short
+      ),
+      row(turned('<w:p/>', carry) + turned('<w:p/>', carry) + plain(paragraph('x')), short),
+      ...[4, 5, 6, 7].map((index) =>
+        row(turned('<w:p/>', carry) + plain(paragraph(`a${index}`)) + plain(paragraph('x')), short)
+      ),
+    ];
+    const placed = rowsOf(layout(table(rows.join(''), 3)));
+    expect(placed.map((entry) => entry.box.height)).toEqual(Array(8).fill(25));
+    const head = placed[0]!.cells[0]!;
+    expect(wordCount(head)).toBe(4);
+    expect(longestLine(head)).toBeGreaterThan(25);
+    expect(longestLine(head)).toBeLessThanOrEqual(200 + 0.001);
+    expect(wordCount(placed[2]!.cells[1]!)).toBe(4);
+  });
+
+  test('lays both heads along their merges when two merges start in one row', () => {
+    const rows = [
+      row(
+        turned(paragraph(words(4)), restart) +
+          turned(paragraph(words(4)), restart) +
+          plain(paragraph('x')),
+        short
+      ),
+      ...[1, 2, 3].map(() =>
+        row(turned('<w:p/>', carry) + turned('<w:p/>', carry) + plain(paragraph('x')), short)
+      ),
+    ];
+    const placed = rowsOf(layout(table(rows.join(''), 3)));
+    expect(placed.map((entry) => entry.box.height)).toEqual([25, 25, 25, 25]);
+    expect(wordCount(placed[0]!.cells[0]!)).toBe(4);
+    expect(wordCount(placed[0]!.cells[1]!)).toBe(4);
+  });
+
+  test('clips an accepted head over auto rows instead of continuing it on new pages', () => {
+    const rows =
+      row(turned(paragraph(words(12)), restart) + plain(paragraph('r0'))) +
+      row(turned('<w:p/>', carry) + plain(paragraph('r1'))) +
+      row(turned('<w:p/>', carry) + plain(paragraph('r2')));
+    const result = layout(table(rows));
+    expect(result.pages).toHaveLength(1);
+    const placed = rowsOf(result);
+    expect(placed).toHaveLength(3);
+    expect(placed.every((entry) => entry.isContinuation === undefined)).toBe(true);
+    for (const entry of placed) expect(entry.box.height).toBeCloseTo(LINE, 3);
+    const head = placed[0]!.cells[0]!;
+    expect(wordCount(head)).toBeGreaterThan(0);
+    expect(wordCount(head)).toBeLessThan(12);
+    expect(longestLine(head)).toBeLessThanOrEqual(3 * LINE + 0.001);
+  });
+
+  test('splits a minimum-height row with turned text when the minimum fits the page end', () => {
+    const neighbour = Array.from({ length: 20 }, (_, index) => paragraph(`n${index}`)).join('');
+    const heights = (first: string): number[] => {
+      const result = layout(filler(40) + table(row(first + plain(neighbour), 'w:val="2000"')));
+      expect(result.pages[0]!.fragments.some((fragment) => fragment.kind === 'table')).toBe(true);
+      return rowsOf(result).map((entry) => entry.box.height);
+    };
+    const turnedRow = heights(turned(paragraph(words(6))));
+    expect(turnedRow).toHaveLength(2);
+    expect(turnedRow).toEqual(heights(plain(paragraph('h'))));
+  });
+});

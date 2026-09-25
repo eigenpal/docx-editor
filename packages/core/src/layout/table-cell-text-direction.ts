@@ -8,6 +8,8 @@ import type {
 import type { CaretGeometry } from './semantic-interaction.ts';
 import type { CellPlaceCursor } from './semantic-table-layout.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
+import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 
@@ -84,12 +86,22 @@ interface WaitingCellEntry {
  */
 export function layOutWaitingBottomToTopCells<T extends WaitingCellEntry>(
   entries: T[],
-  rowHeight: number
+  rowHeight: number,
+  /** Merges this row heads: a head lays its text along the merge when that is taller. */
+  vMerge: RowVMergeLayoutOptions | undefined,
+  /** Room from the row top to the page bottom; a merge never lays text past it. */
+  pageRoomPt: number
 ): boolean {
   let fitted = false;
   for (const [index, entry] of entries.entries()) {
     if (!entry.flowTo) continue;
-    const flow = entry.flowTo(entry.x + rowHeight - entry.insets.top);
+    const id = entry.cell.id;
+    const merge =
+      vMerge?.detachedSpanHeightPtByCellId?.get(id) ??
+      vMerge?.bottomToTopSpanHeightPtByCellId?.get(id);
+    const span = Math.min(merge ?? 0, pageRoomPt);
+    const room = Number.isFinite(span) ? Math.max(rowHeight, span) : rowHeight;
+    const flow = entry.flowTo(entry.x + room - entry.insets.top);
     fitted ||= flow.fitted;
     entries[index] = {
       ...entry,
@@ -118,16 +130,22 @@ function finishedCellCursor(cell: SemanticTableCell): CellPlaceCursor {
  * Whether `btLr` text keeps its row whole when a fresh page can hold the row.
  *
  * A split at a page end gives the text only that page's share of the row as its line
- * length and clips the rest. A row with an authored minimum, or a row that only end marks
- * size, moves whole instead. A row that no page can hold still splits.
+ * length and clips the rest. A row that only end marks size moves whole. A row with an
+ * authored minimum moves whole when that minimum, padded by the row's margins, does not fit
+ * `roomPt`; when it fits, the row splits like any other. A row no page can hold still splits.
  */
-export function bottomToTopTextKeepsRowWhole(row: SemanticTableRow): boolean {
+export function bottomToTopTextKeepsRowWhole(
+  row: SemanticTableRow,
+  roomPt: number,
+  insetsOf: (cell: SemanticTableCell) => CellContentInsets,
+  minimumInsets?: RowMinimumInsetMap
+): boolean {
   if (row.height.rule === 'exact') return false;
   if (!row.cells.some((cell) => waitsForRowHeight(cell, false))) return false;
-  return (
-    row.height.rule === 'atLeast' ||
-    row.cells.every((cell) => cell.vMergeContinue || cell.textDirection === 'btLr')
-  );
+  if (row.cells.every((cell) => cell.vMergeContinue || cell.textDirection === 'btLr')) return true;
+  if (row.height.rule !== 'atLeast') return false;
+  const cells = row.cells.map((cell) => ({ cell, insets: insetsOf(cell) }));
+  return authoredRowMinimumFloorPt(row.height.valuePt, cells, minimumInsets) > roomPt + 0.001;
 }
 
 /** Supported `w:textDirection` value, with horizontal layout as the safe default. */
