@@ -405,12 +405,16 @@ export {
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
   Editor,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  ScrollToAnchorOptions,
 } from '@docx-editor.dev/core/contracts/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 

@@ -13,6 +13,27 @@ export interface AnchorFrameOrigin {
 }
 
 // @public
+export interface AnchorHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface AnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
+}
+
+// @public
 export function applyTableChromePick(draft: TableChromeDraft, slot: TableChromeSlotId, value: unknown): TableChromePick | null;
 
 // @public
@@ -912,9 +933,12 @@ export function chromeSlotId(group: {
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
 
 // @public
-export interface ClearRefreshHighlightsOptions {
-    readonly animation?: boolean | RefreshHighlightAnimation;
+export interface ClearAnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
 }
+
+// @public
+export type ClearRefreshHighlightsOptions = ClearAnchorHighlightOptions;
 
 // @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
@@ -1709,11 +1733,9 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
 
 // @public
-export interface NavigateToChangeOptions {
-    readonly behavior?: 'instant' | 'smooth';
+export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
     readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
     readonly focus?: boolean;
-    readonly offsetPx?: number;
 }
 
 // @public
@@ -2327,26 +2349,12 @@ export interface RefreshChangeInput {
 export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
 
 // @public
-export interface RefreshHighlightAnimation {
-    readonly durationMs?: number;
-    readonly easing?: string;
-    readonly exitDurationMs?: number;
-}
+export type RefreshHighlightAnimation = AnchorHighlightAnimation;
 
 // @public
-export interface RefreshHighlightOptions {
-    readonly animation?: boolean | RefreshHighlightAnimation;
-    readonly borderColor?: string;
-    readonly borderRadius?: number;
-    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
-    readonly borderWidth?: number;
+export interface RefreshHighlightOptions extends AnchorHighlightOptions {
     readonly changeIds?: readonly string[];
-    readonly className?: string;
-    readonly color?: string;
     readonly includePrevious?: boolean;
-    readonly opacity?: number;
-    readonly padding?: number;
-    readonly timeoutMs?: number | null;
 }
 
 // @public
@@ -2586,6 +2594,13 @@ export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly Paragra
 
 // @public
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
+
+// @public
+export interface ScrollToAnchorOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly offsetPx?: number;
+}
 
 // @public
 export type SectionAnchor =

@@ -1,7 +1,6 @@
 import { paragraphFragmentsOf } from '../layout/semantic-record-queries.ts';
 import { paragraphContentBounds } from '../layout/paragraph-content-bounds.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
-import type { LocatedChange } from './document-refresh-changes.ts';
 import type { RefreshHost } from './document-refresh-host.ts';
 import type {
   ClearRefreshHighlightsOptions,
@@ -9,7 +8,6 @@ import type {
   RefreshHighlightOptions,
 } from './document-refresh-types.ts';
 
-const DEFAULT_COLOR = 'var(--doc-refresh-highlight-color)';
 const DEFAULT_EASING = 'cubic-bezier(0.23, 1, 0.32, 1)';
 
 function numberOption(value: number | undefined, fallback: number, name: string, max = Infinity) {
@@ -47,23 +45,37 @@ interface Band {
   exiting: boolean;
 }
 
-/** Keyed presentation nodes survive selection, zoom, and virtualization without replaying motion. */
-export function createRefreshHighlights(
+/** Paragraphs to present. Other fields are ignored. */
+type HighlightTarget = { readonly paragraphId?: string };
+
+/** Each owner marks its own overlays and themes them through its own color token. */
+export interface ParagraphHighlightKind {
+  readonly marker: 'data-docx-refresh-highlight' | 'data-docx-anchor-highlight';
+  readonly defaultColor: string;
+}
+
+/**
+ * Temporary paragraph overlays shared by refresh changes and anchor references. Each owner
+ * keeps one instance, so neither dismisses the other's overlays. Keyed presentation nodes
+ * survive selection, zoom, and virtualization without replaying motion.
+ */
+export function createParagraphHighlights(
   editor: DocxEditorInstance,
-  host: RefreshHost,
+  host: Pick<RefreshHost, 'surface' | 'container'>,
+  { marker, defaultColor }: ParagraphHighlightKind,
   onTimeout: () => void
 ) {
-  let selected: readonly LocatedChange[] = [];
+  let selected: readonly HighlightTarget[] = [];
   const bands = new Map<string, Band>();
   let seen = new Set<string>();
   let observer: MutationObserver | null = null;
   let media: MediaQueryList | null = null;
-  let color = DEFAULT_COLOR;
+  let color = defaultColor;
   let opacity = 0.14;
   let padding = 4;
   let radius = 6;
   let borderWidth = 0;
-  let borderColor = DEFAULT_COLOR;
+  let borderColor = defaultColor;
   let borderStyle = 'solid';
   let className = '';
   let duration = 180;
@@ -125,7 +137,7 @@ export function createRefreshHighlights(
       options.timeoutMs === null
         ? null
         : numberOption(options.timeoutMs, 3000, 'timeoutMs', 2147483647);
-    const nextColor = options.color ?? DEFAULT_COLOR;
+    const nextColor = options.color ?? defaultColor;
     const nextBorderWidth = numberOption(options.borderWidth, 0, 'borderWidth');
     const nextBorderColor = options.borderColor ?? nextColor;
     const nextBorderStyle = options.borderStyle ?? 'solid';
@@ -300,7 +312,7 @@ export function createRefreshHighlights(
         if (!band) {
           const element = container.ownerDocument.createElement('div');
           element.setAttribute('data-docx-marker', '');
-          element.setAttribute('data-docx-refresh-highlight', '');
+          element.setAttribute(marker, '');
           element.setAttribute('contenteditable', 'false');
           element.setAttribute('aria-hidden', 'true');
           element.style.cssText = 'position:absolute;pointer-events:none;box-sizing:border-box;';
@@ -370,7 +382,7 @@ export function createRefreshHighlights(
     if (selected.length) paint();
   });
   return {
-    show(changes: readonly LocatedChange[], options: RefreshHighlightOptions = {}) {
+    show(changes: readonly HighlightTarget[], options: RefreshHighlightOptions = {}) {
       // Validate the complete request before changing visible presentation.
       const {
         nextOpacity,

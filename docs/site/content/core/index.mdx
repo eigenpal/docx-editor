@@ -77,7 +77,7 @@ if (!revealed) {
 }
 ```
 
-The method preserves selection, focus, editing scope, document content, and undo history. It also works in viewing mode. It scrolls vertically to center an offscreen target and leaves an already visible target in place. It does not highlight text.
+The method preserves selection, focus, editing scope, document content, and undo history. It also works in viewing mode. By default, it scrolls vertically to center an offscreen target and leaves an already visible target in place. To show the reader where the target is, see [Highlight an external paragraph reference](#highlight-an-external-paragraph-reference).
 
 To reveal a phrase within a paragraph, include `search`:
 
@@ -105,7 +105,130 @@ Body paragraphs, table cells, block content controls, headers, footers, footnote
 
 Use `editor.exec({ type: 'setSelection', anchor })` when you also want to move the caret. Use `scrollToBlock(blockId)` when you already have an internal block ID, such as an outline entry. `scrollToAnchor` belongs to the browser `Editor` API; it does not extend the Office.js-shaped document model.
 
-React and Vue expose this method through `useDocxEditor`. See the [React hook](/docs/2.x/react/hooks#usedocxeditor) and [Vue composable](/docs/2.x/vue/composables#usedocxeditor).
+React and Vue expose this method through `useDocxEditor`. For more information, see the [React hook](/docs/2.x/react/hooks#usedocxeditor) and the [Vue composable](/docs/2.x/vue/composables#usedocxeditor).
+
+#### Control scrolling
+
+To control where the target lands, pass `ScrollToAnchorOptions` as the second argument. These fields match `NavigateToChangeOptions` in the [document refresh API](/docs/2.x/guides/document-refresh#control-change-navigation):
+
+```ts
+import type { ScrollToAnchorOptions } from '@docx-editor.dev/core';
+
+const scroll: ScrollToAnchorOptions = {
+  block: 'start',
+  behavior: 'smooth',
+  offsetPx: 48,
+};
+editor.scrollToAnchor({ paraId: '1B4C77A2' }, scroll);
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `block` | `'centerIfNeeded'` | Use `'start'`, `'center'`, `'centerIfNeeded'`, or `'nearest'`. `'centerIfNeeded'` keeps the viewport still when the target is visible. |
+| `behavior` | `'instant'` | Use `'smooth'` for an animated scroll. Reduced-motion preferences make it instant. |
+| `offsetPx` | `24` | Nonnegative edge padding for `'start'` and `'nearest'`, in CSS pixels. |
+
+The method validates options before it resolves the anchor. An invalid `block` or `behavior` value throws `TypeError`. An invalid `offsetPx` value throws `RangeError`. The method returns when scrolling starts. It does not wait for a smooth scroll to finish.
+
+### Highlight an external paragraph reference
+
+Use `editor.highlightAnchor(anchor, options)` to show the reader where a reference lands. The method accepts the same `DocAnchor` as `scrollToAnchor`. It does not scroll, so call `scrollToAnchor` first:
+
+```ts
+import type { DocAnchor, Editor } from '@docx-editor.dev/core';
+
+function showReference(editor: Editor, anchor: DocAnchor): boolean {
+  if (!editor.scrollToAnchor(anchor)) return false;
+  return editor.highlightAnchor(anchor, { timeoutMs: 1500 });
+}
+```
+
+By default, a light blue box with rounded corners fades in over 180 milliseconds. The box stays for three seconds and then fades out. The highlight does not move text, change the scroll position, or take focus.
+
+The highlight marks the whole paragraph. If the anchor includes `search`, the phrase must match under the same rules as `scrollToAnchor`. The editor shows one anchor highlight at a time. A new call moves the highlight to the new paragraph. Repeating a call for the same paragraph restarts the timeout without replaying the entrance.
+
+| Result | Meaning |
+| --- | --- |
+| `true` | The paragraph has a body layout position and receives the highlight, even when it is offscreen. |
+| `false` | The anchor is invalid, missing, ambiguous, unsupported, or has no layout position. |
+| `false` | The editor has no mounted document, or a document refresh is replacing it. |
+
+A `false` result leaves the current highlight unchanged. Body paragraphs, table cells, and block content controls support highlights. Headers, footers, footnotes, endnotes, and text boxes return `false`.
+
+#### Customize the highlight
+
+`AnchorHighlightOptions` has the same fields and defaults as the [document refresh highlights](/docs/2.x/guides/document-refresh#customize-highlights-and-motion), except for the color token. `RefreshHighlightOptions` extends `AnchorHighlightOptions`, so one style object works with both APIs. Each call starts from the defaults. To keep the style consistent, reuse one options object:
+
+```ts
+import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
+import type { AnchorHighlightOptions } from '@docx-editor.dev/core';
+
+const findingHighlight: AnchorHighlightOptions = {
+  color: 'var(--finding-fill)',
+  borderColor: 'var(--finding-border)',
+  borderWidth: 2,
+  borderStyle: 'dashed',
+  opacity: 0.2,
+  padding: 6,
+  borderRadius: 8,
+  className: 'finding-target',
+  timeoutMs: 1500,
+  animation: {
+    durationMs: 180,
+    exitDurationMs: 400,
+    easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+  },
+};
+
+editor.highlightAnchor({ paraId: '1B4C77A2', search: 'Acme GmbH' }, findingHighlight);
+// The same object styles document refresh highlights.
+createDocumentRefresh(editor).highlightChanges(findingHighlight);
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `color` | `var(--doc-anchor-highlight-color)` | A CSS color or a CSS variable. The theme token defaults to blue. |
+| `opacity` | `0.14` | Fill opacity between `0` and `1`. Borders and class decoration keep their own alpha. |
+| `padding` | `4` | Extra space on each edge, in CSS pixels at 100% zoom. |
+| `borderRadius` | `6` | Corner radius in CSS pixels at 100% zoom. |
+| `borderWidth` | `0` | Border width in CSS pixels at 100% zoom. |
+| `borderColor` | Same as `color` | CSS border color, independent of fill opacity. |
+| `borderStyle` | `'solid'` | Use `'solid'`, `'dashed'`, or `'dotted'`. |
+| `className` | Omitted | Add CSS classes for shadows, outlines, or background patterns. |
+| `timeoutMs` | `3000` | Milliseconds before dismissal starts. Use `null` to keep the highlight until cleared. |
+| `animation` | `true` | A 180-millisecond opacity fade. Use `false` for immediate changes. |
+| `animation.durationMs` | `180` | Entrance and default exit duration, from `0` to `10000` milliseconds. |
+| `animation.exitDurationMs` | Same as `durationMs` | Exit duration for the timeout and for `clearAnchorHighlight()`. |
+| `animation.easing` | `--doc-motion-ease-out` | CSS timing function for both fades. CSS variables are not accepted. |
+
+To change the default color of every anchor highlight, set the theme token in your application CSS. This token is separate from `--doc-refresh-highlight-color`, so each highlight type can have its own color:
+
+```css
+.docx-editor {
+  --doc-anchor-highlight-color: #f59e0b;
+}
+```
+
+The method validates options before it resolves the anchor. An invalid option throws even when the paragraph does not exist. Invalid numeric settings throw `RangeError`. Invalid colors, border styles, or animation settings throw `TypeError`.
+
+#### Control timing and dismissal
+
+The timeout starts after each `highlightAnchor()` call. A timeout of `0` starts the dismissal on the next timer task. To keep the highlight until you dismiss it, use `timeoutMs: null`:
+
+```ts
+editor.highlightAnchor(anchor, { timeoutMs: null });
+
+// For example, when the reader closes the finding:
+editor.clearAnchorHighlight();
+editor.clearAnchorHighlight({ animation: false });
+editor.clearAnchorHighlight({ animation: { durationMs: 125 } });
+```
+
+`clearAnchorHighlight()` uses the exit duration and easing from the last `highlightAnchor()` call. It validates its options even when nothing is highlighted. Loading or replacing the document removes the highlight immediately. Local edits keep the highlight on the same paragraph.
+
+The highlight does not change selection, focus, document content, or undo history. It never enters saved files. Anchor highlights and refresh highlights use separate overlays, so dismissing one does not dismiss the other. Reduced-motion preferences limit fades to 125 milliseconds. Color alone does not explain a finding, so show a text label with each highlighted reference.
+
+If the highlight must start after the target is visible, keep the default `'instant'` scroll behavior. With `behavior: 'smooth'`, the entrance can play before the scroll ends.
 
 ### Group one gesture into one undo step
 

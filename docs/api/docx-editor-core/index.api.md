@@ -5,6 +5,27 @@
 ```ts
 
 // @public
+export interface AnchorHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface AnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
+}
+
+// @public
 export interface ApplyResult {
     // (undocumented)
     doc: DocxDocument;
@@ -763,6 +784,11 @@ export interface ChromePrintOptions {
 export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
+export interface ClearAnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+}
+
+// @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
@@ -1312,7 +1338,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor {
+export interface Editor extends EditorAnchorNavigation {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     beginHistoryGroup(): HistoryGroup;
@@ -1456,7 +1482,6 @@ export interface Editor {
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    scrollToAnchor(anchor: DocAnchor): boolean;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
@@ -1478,6 +1503,13 @@ export interface Editor {
     snapshot(options?: {
         scope?: EditorScope;
     }): EditorSnapshot;
+}
+
+// @public
+export interface EditorAnchorNavigation {
+    clearAnchorHighlight(options?: ClearAnchorHighlightOptions): void;
+    highlightAnchor(anchor: DocAnchor, options?: AnchorHighlightOptions): boolean;
+    scrollToAnchor(anchor: DocAnchor, options?: ScrollToAnchorOptions): boolean;
 }
 
 // @public
@@ -2914,6 +2946,13 @@ export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, 
 
 // @public (undocumented)
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
+
+// @public
+export interface ScrollToAnchorOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly offsetPx?: number;
+}
 
 // @public
 export interface Section {
