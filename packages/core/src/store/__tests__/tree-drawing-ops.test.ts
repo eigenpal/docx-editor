@@ -354,6 +354,77 @@ describe('sets drawing wrap', () => {
     });
   });
 
+  test('wrap changes keep inherited anchor distances for sides the old wrap omits', () => {
+    const project = (part: OoxmlPart) =>
+      projectDrawing(drawingOf(part), {
+        ownerPartName: metadata.name,
+        supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
+        limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+      });
+    const distances = (part: OoxmlPart) => {
+      const projection = project(part);
+      return projection.wrapGeometry?.distancesEmu ?? projection.inlineDistancesEmu;
+    };
+    const wrapAttrs = (part: OoxmlPart) => {
+      const anchor = drawingOf(part).children[0] as OoxmlElement;
+      const wrap = anchor.children.find(
+        (c) => c.kind !== 'textValue' && c.localName.startsWith('wrap')
+      ) as OoxmlElement;
+      return wrap.attributes.filter((a) => a.localName.startsWith('dist')).map((a) => a.localName);
+    };
+    const anchorAttrs = (distances: string) =>
+      `${distances} simplePos="0" behindDoc="0" locked="0" relativeHeight="952500" allowOverlap="1" layoutInCell="1"`;
+    const tightWrap = (attrs: string) =>
+      `<wp:wrapTight wrapText="bothSides" ${attrs}><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="0" y="21600"/><wp:lineTo x="21600" y="21600"/><wp:lineTo x="21600" y="0"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>`;
+    const cases: readonly { source: string; wrap: ImageWrapTarget; kept: string[] }[] = [
+      {
+        source: anchoredPictureDrawing({
+          wrap: '<wp:wrapSquare wrapText="bothSides"/>',
+          anchorAttrs: anchorAttrs('distT="0" distB="0" distL="114300" distR="114300"'),
+        }),
+        wrap: 'squareLeft',
+        kept: [],
+      },
+      {
+        source: anchoredPictureDrawing({
+          wrap: tightWrap('distL="10" distR="20"'),
+          anchorAttrs: anchorAttrs('distT="50800" distB="50800" distL="0" distR="0"'),
+        }),
+        wrap: 'square',
+        kept: ['distL', 'distR'],
+      },
+      {
+        source: anchoredPictureDrawing({
+          wrap: '<wp:wrapSquare wrapText="bothSides" distT="4294967291"/>',
+          anchorAttrs: anchorAttrs('distT="12700" distB="25400" distL="38100" distR="50800"'),
+        }),
+        wrap: 'topAndBottom',
+        kept: ['distT'],
+      },
+      { source: inlinePictureDrawing(), wrap: 'square', kept: [] },
+    ];
+    for (const { source, wrap, kept } of cases) {
+      const part = parse(source);
+      const next = apply(part, { op: 'setDrawingWrap', drawingNodeId: drawingOf(part).id, wrap });
+      expect(distances(next)).toEqual(distances(part));
+      expect(wrapAttrs(next)).toEqual(kept);
+    }
+    // wrapNone carries no distances, so the anchor values apply after a change to square.
+    const front = parse(
+      anchoredPictureDrawing({
+        wrap: '<wp:wrapNone/>',
+        anchorAttrs: anchorAttrs('distT="1" distB="2" distL="3" distR="4"'),
+      })
+    );
+    const square = apply(front, {
+      op: 'setDrawingWrap',
+      drawingNodeId: drawingOf(front).id,
+      wrap: 'square',
+    });
+    expect(distances(square)).toEqual({ top: 1, right: 4, bottom: 2, left: 3 });
+    expect(wrapAttrs(square)).toEqual([]);
+  });
+
   test('behind and inFront both use wrapNone differing only by behindDoc', () => {
     const behindPart = parse(
       anchoredPictureDrawing({ wrap: '<wp:wrapSquare wrapText="bothSides"/>' })

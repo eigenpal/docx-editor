@@ -1068,31 +1068,32 @@ function wrapSchemaAttributes(
   spec: ReturnType<typeof wrapTargetToAnchorSpec>,
   existing: OoxmlElement | null
 ): OoxmlAttribute[] {
-  const distances = existing
-    ? readDistanceTexts(existing)
-    : { top: '0', right: '0', bottom: '0', left: '0' };
+  // Wrap-side distances are optional. One the old wrap element lacks stays absent, so the
+  // anchor distance keeps applying to that side after the edit.
+  const distances: Partial<DistanceTexts> = existing ? readDistanceTexts(existing) : {};
   const attrs: OoxmlAttribute[] = (existing?.attributes ?? []).filter(
     (attribute) => attribute.namespaceUri !== ''
   );
+  const pushDistances = (...sides: readonly (readonly [string, keyof DistanceTexts])[]) => {
+    for (const [name, side] of sides) {
+      const value = distances[side];
+      if (value !== undefined) attrs.push(attr(name, value));
+    }
+  };
   switch (wrapLocalName) {
     case 'wrapNone':
       break;
     case 'wrapSquare':
-      attrs.push(
-        attr('distT', distances.top),
-        attr('distB', distances.bottom),
-        attr('distL', distances.left),
-        attr('distR', distances.right)
-      );
+      pushDistances(['distT', 'top'], ['distB', 'bottom'], ['distL', 'left'], ['distR', 'right']);
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTight':
     case 'wrapThrough':
-      attrs.push(attr('distL', distances.left), attr('distR', distances.right));
+      pushDistances(['distL', 'left'], ['distR', 'right']);
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTopAndBottom':
-      attrs.push(attr('distT', distances.top), attr('distB', distances.bottom));
+      pushDistances(['distT', 'top'], ['distB', 'bottom']);
       break;
   }
   return attrs;
@@ -1143,14 +1144,22 @@ type DistanceTexts = { top: string; right: string; bottom: string; left: string 
 
 /**
  * Copied text distances keep their `xsd:unsignedInt` spelling, including the two's-complement
- * form of a negative distance; a missing or malformed value is written as 0.
+ * form of a negative distance. A malformed value becomes 0, which is how it reads; a missing
+ * one is undefined.
  */
-function readDistanceTexts(element: OoxmlElement): DistanceTexts {
-  const read = (name: string): string => {
+function readDistanceTexts(element: OoxmlElement): Partial<DistanceTexts> {
+  const read = (name: string): string | undefined => {
     const value = schemaAttributeValue(element.attributes, name);
-    return value !== undefined && /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
+    if (value === undefined) return undefined;
+    return /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
   };
   return { top: read('distT'), right: read('distR'), bottom: read('distB'), left: read('distL') };
+}
+
+/** `wp:anchor` and `wp:inline` have no fallback, so a missing distance is written as 0. */
+function readRootDistanceTexts(element: OoxmlElement): DistanceTexts {
+  const { top = '0', right = '0', bottom = '0', left = '0' } = readDistanceTexts(element);
+  return { top, right, bottom, left };
 }
 
 function defaultPositionChildren(nextId: () => string, projection: DrawingProjection): OoxmlNode[] {
@@ -1255,7 +1264,7 @@ function buildAnchoredRoot(
   const position = defaultPositionChildren(nextId, projection);
   const inlineDistances =
     inlineOrAnchor.kind === 'inlineDrawing' || inlineOrAnchor.localName === 'inline'
-      ? readDistanceTexts(inlineOrAnchor)
+      ? readRootDistanceTexts(inlineOrAnchor)
       : { top: '0', right: '0', bottom: '0', left: '0' };
   const preservedAnchorAttrs = inlineOrAnchor.attributes.filter(
     (attribute) => attribute.namespaceUri !== ''
@@ -1286,7 +1295,7 @@ function buildAnchoredRoot(
 
 function buildInlineRoot(anchor: OoxmlElement, nextId: () => string): OoxmlElement {
   const shared = sharedAnchorChildren(anchor);
-  const inlineDistances = readDistanceTexts(anchor);
+  const inlineDistances = readRootDistanceTexts(anchor);
   return {
     id: nextId(),
     kind: 'inlineDrawing',
