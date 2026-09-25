@@ -291,7 +291,11 @@ export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
   const y = Math.max(box.y, region.y);
   const right = Math.min(box.x + box.width, region.x + region.width);
   const bottom = Math.min(box.y + box.height, region.y + region.height);
-  if (right <= x || bottom <= y) {
+  // A box with no width (or height) of its own, such as a straight vertical line, stays when
+  // it lies inside the region; a box that had size and lost it all is empty.
+  const emptyX = box.width > 0 ? right <= x : right < x;
+  const emptyY = box.height > 0 ? bottom <= y : bottom < y;
+  if (emptyX || emptyY) {
     return Object.freeze({ x, y, width: 0, height: 0 });
   }
   return Object.freeze({ x, y, width: right - x, height: bottom - y });

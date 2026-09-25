@@ -227,6 +227,7 @@ export {
   type StoryParagraphFragmentContext,
 } from './export-traversal.ts';
 export { lineSegments, type LineSegment } from './line-segments.ts';
+export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export type {
   AnchoredDrawingLayoutFallback,
   AnchoredDrawingRecord,

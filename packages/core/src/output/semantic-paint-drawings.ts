@@ -10,9 +10,11 @@ import type {
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { applyDrawingBilevelFilter } from './drawing-bilevel-filter.ts';
+import { applyInsetStroke, vectorShapeViewport } from './vector-shape-svg.ts';
 import { drawingFilterStyle } from './drawing-lum-filter.ts';
 import type { DrawingPoint } from '../layout/drawing-geometry.ts';
-import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
+import { cssTransformForDrawingImage, finite } from '../layout/drawing-geometry.ts';
+import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
 import type {
   LayoutBox,
   PageRecord,
@@ -514,37 +516,46 @@ function paintVectorShape(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   ctx: DrawingPaintContext,
+  ink: LayoutBox,
   origin?: LayoutBox
 ): HTMLElement {
   const shape = drawing.vectorShape!;
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-shape';
   outer.dataset.drawingNodeId = drawing.drawingNodeId;
-  positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
+  const paint = drawing.paintBounds;
+  positionedBox(outer, paint, ctx.scale, origin);
 
   const content = drawing.geometry.contentBounds;
-  const paint = drawing.paintBounds;
   const frame = document.createElement('div');
   frame.className = 'docx-drawing-image-frame';
   frame.style.position = 'absolute';
-  frame.style.left = `${(content.x - paint.x) * ctx.scale}px`;
-  frame.style.top = `${(content.y - paint.y) * ctx.scale}px`;
-  frame.style.width = `${content.width * ctx.scale}px`;
-  frame.style.height = `${content.height * ctx.scale}px`;
+  // Where an outline reaches past the extent, a negative inset widens the clip past
+  // `paintBounds` without another element. The frame then takes no pointer events, so the
+  // outer box stays the target that layout hit testing matches.
+  if (ink !== paint) {
+    const reach = (value: number) => `${finiteStyle(-value * ctx.scale)}px`;
+    outer.style.overflow = 'visible';
+    outer.style.clipPath = `inset(${reach(paint.y - ink.y)} ${reach(
+      ink.x + ink.width - (paint.x + paint.width)
+    )} ${reach(ink.y + ink.height - (paint.y + paint.height))} ${reach(paint.x - ink.x)})`;
+    frame.style.pointerEvents = 'none';
+  }
+  const viewport = vectorShapeViewport(shape, content);
+  frame.style.left = `${(viewport.frame.x - paint.x) * ctx.scale}px`;
+  frame.style.top = `${(viewport.frame.y - paint.y) * ctx.scale}px`;
+  frame.style.width = `${viewport.frame.width * ctx.scale}px`;
+  frame.style.height = `${viewport.frame.height * ctx.scale}px`;
 
   const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-  svg.setAttribute(
-    'viewBox',
-    `0 0 ${finiteStyle(Math.max(1, shape.extentEmu.cx))} ${finiteStyle(Math.max(1, shape.extentEmu.cy))}`
-  );
+  svg.setAttribute('viewBox', viewport.viewBox.map(finiteStyle).join(' '));
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
   svg.style.display = 'block';
-  // A non-root `<svg>` clips to its viewport by default. Line-end triangles can extend past
-  // the authored extent; Word records that overhang in `wp:effectExtent`, which layout folds
-  // into `paintBounds`, so the clip belongs to the outer box alone. A file with no effect
-  // extent still clips at the extent, which is what Word shows for it too.
+  // A non-root `<svg>` clips to its viewport by default, so the clip belongs to the outer box
+  // alone: `paintBounds`, which carries `wp:effectExtent`, widened by the inset where stroked
+  // ink reaches past the extent.
   svg.style.overflow = 'visible';
 
   // `components` is the paint authority and is always non-empty; the top-level `fillHex`
@@ -567,6 +578,9 @@ function paintVectorShape(
     if (component.strokeHex !== null) {
       path.setAttribute('stroke', `#${component.strokeHex}`);
       path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
+      if (component.strokeInset) {
+        applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
+      }
       if (component.strokeAlpha < 1) {
         path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
       }
@@ -746,7 +760,11 @@ function paintDrawingRecordElement(
   origin?: LayoutBox
 ): HTMLElement | null {
   if (drawing.accessibility.hidden) return null;
-  if (drawing.paintBounds.width <= 0 || drawing.paintBounds.height <= 0) return null;
+  // A straight line's paint box can have no width; its stroke still paints.
+  const painted = drawing.vectorShape
+    ? vectorShapeInkClip(drawing, drawing.paintBounds)
+    : drawing.paintBounds;
+  if (painted.width <= 0 || painted.height <= 0) return null;
 
   if (
     drawing.kind === 'anchoredDrawing' &&
@@ -757,7 +775,7 @@ function paintDrawingRecordElement(
   }
 
   if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) {
-    return paintVectorShape(document, drawing, ctx, origin);
+    return paintVectorShape(document, drawing, ctx, painted, origin);
   }
 
   const { resource } = drawing;

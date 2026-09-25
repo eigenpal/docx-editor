@@ -718,6 +718,64 @@ describe('wps vector shape projection', () => {
     ][0]!.vectorShape!;
     expect(shape.strokeHex).toBe('4472C4');
     expect(shape.strokeWidthEmu).toBe(25_400);
+    expect(shape.components[0]!.strokeInset).toBeUndefined();
+
+    // An inset theme line marks the outline inset.
+    const insetMatrix = readOoxmlPart(
+      `<a:ln xmlns:a="${A}" w="25400" algn="in">` +
+        '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+        '</a:ln>',
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!insetMatrix.ok) throw new Error(insetMatrix.reason);
+    const inset = [
+      ...indexInlineDrawingProjectionsInPart(part, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(inset.components[0]!.strokeInset).toBe(true);
+
+    // A direct line with its own fill still inherits the theme line's alignment.
+    const ownFill = parsePart(
+      `<w:p><w:r>${drawing.replace(
+        '</wps:spPr>',
+        '<a:ln><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></wps:spPr>'
+      )}</w:r></w:p>`
+    );
+    const inherited = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(inherited.strokeHex).toBe('FF0000');
+    expect(inherited.components[0]!.strokeInset).toBe(true);
+    // The width inherits the same way: the direct line names none, so the theme's applies.
+    expect(inherited.strokeWidthEmu).toBe(25_400);
+    // And the theme line keeps its attributes when its colour cannot resolve.
+    const unresolved = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(unresolved.strokeHex).toBe('FF0000');
+    expect(unresolved.strokeWidthEmu).toBe(25_400);
+    expect(unresolved.components[0]!.strokeInset).toBe(true);
+    // A theme entry that is not a line carries no line attributes.
+    const notLine = readOoxmlPart(
+      `<a:solidFill xmlns:a="${A}" w="254000" algn="in"><a:schemeClr val="phClr"/></a:solidFill>`,
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!notLine.ok) throw new Error(notLine.reason);
+    const odd = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => notLine.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(odd.strokeWidthEmu).toBe(12_700);
+    expect(odd.components[0]!.strokeInset).toBeUndefined();
   });
 
   test('an out-of-range colour transform refuses the vector payload', () => {
@@ -830,6 +888,31 @@ describe('wps vector shape projection', () => {
     expect(story!.verticalAnchor).toBe('top');
     // Empty bodyPr means the OOXML inset defaults, not zero.
     expect(story!.insetsEmu).toEqual({ top: 45_720, right: 91_440, bottom: 45_720, left: 91_440 });
+
+    // A text box outline with its own fill but no width takes the theme line's width.
+    const theme = readOoxmlPart(
+      `<a:ln xmlns:a="${A}" w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>`,
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!theme.ok) throw new Error(theme.reason);
+    const outlined = parsePart(
+      `<w:p><w:r>${drawing
+        .replace(
+          '</wps:spPr>',
+          '<a:ln><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:ln></wps:spPr>'
+        )
+        .replace(
+          '<wps:bodyPr/>',
+          '<wps:style><a:lnRef idx="1"/></wps:style><wps:bodyPr/>'
+        )}</w:r></w:p>`
+    );
+    const box = [
+      ...indexInlineDrawingProjectionsInPart(outlined, {
+        resolveStyleMatrixReference: () => theme.part.root,
+      }).values(),
+    ][0]!.textboxStory!;
+    expect(box.strokeHex).toBe('0000FF');
+    expect(box.strokeWidthEmu).toBe(6350);
   });
 
   test('a wps txbx without txbxContent projects no story and keeps the placeholder path', () => {

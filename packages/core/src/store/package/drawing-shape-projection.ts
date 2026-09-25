@@ -2,20 +2,22 @@
 // stories. Split from drawing-projection.ts, which owns the drawing walk, MC selection, and
 // the assembled DrawingProjection; this module is pure direct-child reads with no walk state.
 
-import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
+import { parseEmu, findDirectChild, readSize } from './drawing-shape-readers.ts';
 export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
 import {
   collapseSchemaWhitespace,
   parseSchemaBoolean,
   schemaAttributeValue,
+  WPS_NAMESPACE_URI,
 } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
+import { transformComponent } from './drawing-group-transform.ts';
+import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 
-const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const WPG_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const WPG_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
@@ -117,6 +119,12 @@ export interface VectorShapeComponent {
   readonly strokeHex: string | null;
   readonly strokeAlpha: number;
   readonly strokeWidthEmu: number;
+  /**
+   * The outline sits inside the closed geometry (`a:ln algn="in"`): painters draw it at twice
+   * its width clipped to the path, so the authored width stays inside the shape and adds no
+   * reach past the extent. Set only for a closed outline with area.
+   */
+  readonly strokeInset?: boolean;
 }
 
 /**
@@ -390,21 +398,11 @@ function readStyleReference(
   referenceName: 'fillRef' | 'lnRef',
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): { readonly color: ShapeColor; readonly strokeWidthEmu?: number } | null {
-  const style = findDirectChild(wsp.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
-    localName: 'style',
-  });
-  const reference = style
-    ? findDirectChild(style.children, {
-        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-        localName: referenceName,
-      })
-    : null;
-  const color = reference?.children.find(isElement);
-  const rawIndex = reference ? schemaAttributeValue(reference.attributes, 'idx') : undefined;
-  if (!color || !rawIndex || !/^\d{1,4}$/.test(rawIndex)) return null;
-  const index = Number(rawIndex);
+): { readonly color: ShapeColor; readonly matrix?: OoxmlElement } | null {
+  const reference = readStyleReferenceIndex(wsp, referenceName);
+  const color = reference?.color;
+  if (!reference || !color) return null;
+  const index = reference.index;
   const placeholder = resolveColorNode(color, resolveSchemeColor);
   const matrix = resolveStyleMatrixReference?.(
     referenceName === 'fillRef' ? 'fill' : 'line',
@@ -427,10 +425,9 @@ function readStyleReference(
   }
   const lineFill = directFill(matrix, resolveSchemeColor, placeholder);
   if (!lineFill.present || !lineFill.color) return null;
-  return {
-    color: lineFill.color,
-    strokeWidthEmu: parseEmu(schemaAttributeValue(matrix.attributes, 'w')) ?? 12_700,
-  };
+  // Width and alignment come from `readLineProperties`, which inherits them per attribute;
+  // it reuses this theme line rather than resolving it again.
+  return { color: lineFill.color, matrix };
 }
 
 function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
@@ -508,12 +505,11 @@ function projectWspComponent(
       : readStyleReference(wsp, 'lnRef', resolveSchemeColor, resolveStyleMatrixReference);
   const stroke =
     authoredStroke?.present === true ? authoredStroke.color : (styleStroke?.color ?? null);
-  const strokeWidthEmu =
+  const line =
     stroke !== null
-      ? ((ln ? parseEmu(schemaAttributeValue(ln.attributes, 'w')) : null) ??
-        styleStroke?.strokeWidthEmu ??
-        12_700)
-      : 0;
+      ? readLineProperties(wsp, ln, resolveStyleMatrixReference, styleStroke?.matrix)
+      : null;
+  const strokeWidthEmu = line?.widthEmu ?? 0;
   if (fill === null && stroke === null) return null;
 
   const subpaths: { x: number; y: number }[][] = [];
@@ -533,19 +529,13 @@ function projectWspComponent(
       if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || child.localName !== 'path') {
         return null;
       }
-      const pathW = parseEmu(schemaAttributeValue(child.attributes, 'w')) ?? extent.cx;
-      const pathH = parseEmu(schemaAttributeValue(child.attributes, 'h')) ?? extent.cy;
-      if (pathW <= 0 || pathH <= 0) return null;
-      if (
-        !readShapePathPolygons(
-          child,
-          extent.cx / pathW,
-          extent.cy / pathH,
-          subpaths,
-          pointBudget,
-          closed
-        )
-      ) {
+      const pathW = readSize(schemaAttributeValue(child.attributes, 'w'), extent.cx);
+      const pathH = readSize(schemaAttributeValue(child.attributes, 'h'), extent.cy);
+      if (pathW === null || pathH === null) return null;
+      const scaleX = pathScale(extent.cx, pathW);
+      const scaleY = pathScale(extent.cy, pathH);
+      if (scaleX === null || scaleY === null) return null;
+      if (!readShapePathPolygons(child, scaleX, scaleY, subpaths, pointBudget, closed)) {
         return null;
       }
     }
@@ -614,37 +604,49 @@ function projectWspComponent(
     strokeHex: stroke?.hex ?? null,
     strokeAlpha: stroke?.alpha ?? 1,
     strokeWidthEmu,
-  };
-}
-
-function transformComponent(
-  component: VectorShapeComponent,
-  offset: Readonly<{ x: number; y: number }>,
-  scaleX: number,
-  scaleY: number
-): VectorShapeComponent {
-  return {
-    ...component,
-    subpathsEmu: component.subpathsEmu.map((path) =>
-      path.map((point) => ({
-        x: offset.x + point.x * scaleX,
-        y: offset.y + point.y * scaleY,
-      }))
-    ),
-    strokeWidthEmu: component.strokeWidthEmu * ((Math.abs(scaleX) + Math.abs(scaleY)) / 2),
-    ...(component.arrowheadsEmu
-      ? {
-          arrowheadsEmu: component.arrowheadsEmu.map((path) =>
-            path.map((point) => ({
-              x: offset.x + point.x * scaleX,
-              y: offset.y + point.y * scaleY,
-            }))
-          ),
-        }
+    // Only a closed outline with area can sit inside its geometry: a line, or a closed path
+    // collapsed onto a line, stays centred, or the clip to its own path would remove it.
+    ...(line?.alignment === 'in' && subpathsClosed.every(Boolean) && polygons.every(enclosesArea)
+      ? { strokeInset: true }
       : {}),
   };
 }
 
+/** Whether a closed path encloses any area (shoelace), so that clipping to it leaves ink. */
+function enclosesArea(points: readonly Readonly<{ x: number; y: number }>[]): boolean {
+  let twiceArea = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const a = points[index]!;
+    const b = points[(index + 1) % points.length]!;
+    twiceArea += a.x * b.y - b.x * a.y;
+  }
+  // Relative to the path's own box, so child units of any size work; what remains below this
+  // is rounding on a collinear path, not an inside.
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  }
+  const box = (maxX - minX) * (maxY - minY);
+  return box > 0 && Math.abs(twiceArea) > box * 1e-9;
+}
+
+/** How a path coordinate space maps onto a shape axis; a zero space fits only a zero axis. */
+function pathScale(size: number, space: number): number | null {
+  if (space > 0) return size / space;
+  return size === 0 ? 0 : null;
+}
+
+/**
+ * A group child's offset and extent. A straight vertical or horizontal line has zero width or
+ * height, so a zero axis is valid. The child's own geometry checks still decide whether it
+ * paints. A negative extent is invalid and refuses.
+ */
 function childTransform(wsp: OoxmlElement): {
   readonly offset: Readonly<{ x: number; y: number }>;
   readonly extent: Readonly<{ cx: number; cy: number }>;
@@ -671,9 +673,9 @@ function childTransform(wsp: OoxmlElement): {
         localName: 'ext',
       })
     : null;
-  const cx = ext ? parseEmu(schemaAttributeValue(ext.attributes, 'cx')) : null;
-  const cy = ext ? parseEmu(schemaAttributeValue(ext.attributes, 'cy')) : null;
-  if (cx === null || cy === null || cx <= 0 || cy <= 0) return null;
+  const cx = ext ? readSize(schemaAttributeValue(ext.attributes, 'cx'), null) : null;
+  const cy = ext ? readSize(schemaAttributeValue(ext.attributes, 'cy'), null) : null;
+  if (cx === null || cy === null) return null;
   return {
     offset: {
       x: off ? (parseEmu(schemaAttributeValue(off.attributes, 'x'), false) ?? 0) : 0,
@@ -694,7 +696,8 @@ export function projectVectorShape(
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): VectorShapeProjection | null {
   void compatibilityMode;
-  if (extent.cx <= 0 || extent.cy <= 0) return null;
+  // A straight vertical or horizontal line has a zero width or height; both zero is empty.
+  if (extent.cx < 0 || extent.cy < 0 || (extent.cx === 0 && extent.cy === 0)) return null;
   const pointBudget = { remaining: MAX_VECTOR_SHAPE_POINTS };
   const wsp = findWspInAnchor(anchor);
   let components: VectorShapeComponent[] = [];
@@ -751,9 +754,13 @@ export function projectVectorShape(
     const chOffY = childOffset
       ? (parseEmu(schemaAttributeValue(childOffset.attributes, 'y'), false) ?? 0)
       : 0;
-    const chExtX = parseEmu(schemaAttributeValue(childExtent.attributes, 'cx'));
-    const chExtY = parseEmu(schemaAttributeValue(childExtent.attributes, 'cy'));
-    if (chExtX === null || chExtY === null || chExtX <= 0 || chExtY <= 0) return null;
+    const chExtX = readSize(schemaAttributeValue(childExtent.attributes, 'cx'), null);
+    const chExtY = readSize(schemaAttributeValue(childExtent.attributes, 'cy'), null);
+    if (chExtX === null || chExtY === null) return null;
+    // Rules that share one x (or y) give the group a zero child extent on that axis. Every
+    // child then sits at the group's origin on that axis, whatever the group's own extent.
+    const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
+    const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
     let childCount = 0;
     for (const child of group.children) {
       if (!isElement(child)) continue;
@@ -783,11 +790,11 @@ export function projectVectorShape(
         transformComponent(
           component,
           {
-            x: ((transform.offset.x - chOffX) * extent.cx) / chExtX,
-            y: ((transform.offset.y - chOffY) * extent.cy) / chExtY,
+            x: (transform.offset.x - chOffX) * scaleX,
+            y: (transform.offset.y - chOffY) * scaleY,
           },
-          extent.cx / chExtX,
-          extent.cy / chExtY
+          scaleX,
+          scaleY
         )
       );
     }
@@ -897,9 +904,7 @@ export function projectTextboxStory(
     (authoredStroke?.present === true ? authoredStroke.color?.hex : styleStroke?.color.hex) ?? null;
   const strokeWidthEmu =
     strokeHex !== null
-      ? ((ln ? parseEmu(schemaAttributeValue(ln.attributes, 'w')) : null) ??
-        styleStroke?.strokeWidthEmu ??
-        12_700)
+      ? readLineProperties(wsp, ln, resolveStyleMatrixReference, styleStroke?.matrix).widthEmu
       : 0;
 
   return {

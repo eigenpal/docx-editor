@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Drawing projection refused shapes with a zero extent axis and read outline width only from a direct line or a theme line that supplied the colour.",
+  "after": "Drawing projection admits straight lines with one zero extent axis, marks inset outlines, and inherits outline width and alignment from the theme line attribute by attribute.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it does not change saved XML.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-vector-shape-zero-axis.test.ts",
+    "packages/core/src/store/__tests__/drawing-vector-shape.test.ts"
+  ],
+  "changeset": "group-zero-width-lines",
+  "migration": null
+}

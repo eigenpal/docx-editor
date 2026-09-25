@@ -14,6 +14,17 @@ export function parseEmu(value: string | undefined, clamp = true): number | null
   return parsed;
 }
 
+/**
+ * A non-negative size in EMU; `fallback` when the value is absent or not a number; null when
+ * it is negative. The clamped `parseEmu` read turns a negative value into 0, which would admit
+ * an invalid size as a zero-width line, so the sign is checked first.
+ */
+export function readSize(raw: string | undefined, fallback: number | null): number | null {
+  const signed = parseEmu(raw, false);
+  if (signed === null) return fallback;
+  return signed < 0 ? null : Math.min(signed, MAX_EMU);
+}
+
 export function findDirectChild(
   nodes: readonly OoxmlNode[],
   options: {

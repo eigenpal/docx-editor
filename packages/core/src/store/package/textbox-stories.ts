@@ -1,7 +1,7 @@
 import { segmentsOf } from '../store/tree-op-segments.ts';
 // Lightweight text-box story enumeration for search and other read-only derivations.
 
-import { MAX_XML_DEPTH, schemaAttributeValue } from './ooxml-drawing-rules.ts';
+import { MAX_XML_DEPTH, schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import {
   anchorHidesDrawing,
   emptyNamespaceScope,
@@ -24,7 +24,6 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 
-const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const WPS_GRAPHIC_DATA_URI = WPS_NAMESPACE_URI;
 
 /** One searchable text-box story and the drawing location that can reveal it. */

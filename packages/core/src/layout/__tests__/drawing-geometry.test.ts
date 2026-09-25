@@ -292,3 +292,49 @@ test('clipping preserves the original image transform corners for exporters', ()
   expect(clipped.imageTransformCorners).toEqual(geometry.transformedCorners);
   expect(clipped.transformedCorners).not.toEqual(geometry.transformedCorners);
 });
+
+test('a straight line keeps its length through geometry and region clips', () => {
+  const geometry = computeDrawingGeometry({
+    extentWidth: 0,
+    extentHeight: 72,
+    anchorX: 180,
+    anchorY: 468,
+    effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+    crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    transform: {
+      rotationDegrees: 0,
+      flipHorizontal: false,
+      flipVertical: false,
+      offsetEmu: { x: 0, y: 0 },
+      extentEmu: { cx: 0, cy: 0 },
+    },
+    presetGeometry: null,
+  });
+  expect(geometry.paintBounds).toEqual({ x: 180, y: 468, width: 0, height: 72 });
+  // Inside a region the line stays; a region beside it leaves nothing.
+  const inside = clipGeometryToRegion(geometry, { x: 100, y: 400, width: 200, height: 100 });
+  expect(inside.paintBounds).toEqual({ x: 180, y: 468, width: 0, height: 32 });
+  const beside = clipGeometryToRegion(geometry, { x: 200, y: 400, width: 100, height: 200 });
+  expect(beside.paintBounds.height).toBe(0);
+  // A box with size that a region shaves to nothing is still empty.
+  const shaved = clipGeometryToRegion(
+    computeDrawingGeometry({
+      extentWidth: 20,
+      extentHeight: 20,
+      anchorX: 0,
+      anchorY: 0,
+      effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      transform: {
+        rotationDegrees: 0,
+        flipHorizontal: false,
+        flipVertical: false,
+        offsetEmu: { x: 0, y: 0 },
+        extentEmu: { cx: 0, cy: 0 },
+      },
+      presetGeometry: null,
+    }),
+    { x: 20, y: 0, width: 50, height: 50 }
+  );
+  expect(shaved.paintBounds).toEqual({ x: 20, y: 0, width: 0, height: 0 });
+});

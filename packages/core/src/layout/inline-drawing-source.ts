@@ -269,6 +269,8 @@ export function vectorShapeLayoutToken(
       component.strokeHex ?? '',
       String(component.strokeAlpha),
       String(component.strokeWidthEmu),
+      // An inset outline paints inside its geometry, at twice the width under a clip.
+      component.strokeInset === true ? 'in' : '',
       String(component.subpathsEmu.length)
     );
     const subpaths = component.subpathsEmu;

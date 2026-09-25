@@ -6,7 +6,8 @@
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
 const WML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+export const WPS_NAMESPACE_URI =
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const DRAWINGML_MAIN_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WP_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const PIC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';

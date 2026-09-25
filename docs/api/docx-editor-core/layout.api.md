@@ -4564,6 +4564,7 @@ export interface VectorShapeComponent {
     readonly strokeAlpha: number;
     // (undocumented)
     readonly strokeHex: string | null;
+    readonly strokeInset?: boolean;
     // (undocumented)
     readonly strokeWidthEmu: number;
     readonly subpathsClosed?: readonly boolean[];
@@ -4573,6 +4574,9 @@ export interface VectorShapeComponent {
         y: number;
     }>[])[];
 }
+
+// @public
+export function vectorShapeInkClip(drawing: InlineDrawingRecord | AnchoredDrawingRecord, bounds: LayoutBox): LayoutBox;
 
 // @public
 export interface VectorShapeProjection {

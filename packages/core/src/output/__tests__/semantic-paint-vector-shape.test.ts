@@ -126,6 +126,151 @@ describe('vector shape paint', () => {
     expect((d.match(/Z/g) ?? []).length).toBe(2);
   });
 
+  test('an edge rule widens the paint clip, not the pointer target', () => {
+    const base = shapeRecord();
+    const rule = [
+      { x: 0, y: 0 },
+      { x: 0, y: EXTENT.cy },
+    ];
+    const record = {
+      ...base,
+      vectorShape: {
+        ...vectorShape(),
+        components: [
+          {
+            subpathsEmu: [rule],
+            subpathsClosed: [false],
+            fillHex: null,
+            fillAlpha: 1,
+            strokeHex: '000000',
+            strokeAlpha: 1,
+            strokeWidthEmu: 25_400,
+          },
+        ],
+      },
+    } as InlineDrawingRecord;
+    const element = paintDrawingRecord(
+      document,
+      record,
+      { scale: 2, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
+      null
+    )!;
+    // The pointer target keeps the published bounds that layout hit testing matches.
+    expect(element.style.left).toBe('0px');
+    expect(parseFloat(element.style.width)).toBeCloseTo(base.paintBounds.width * 2, 6);
+    expect(element.style.pointerEvents).toBe('auto');
+    expect(element.style.overflow).toBe('visible');
+    // Half of a 2pt rule is 1pt, 2px at scale 2, on the left side only. No extra element.
+    expect(element.style.clipPath).toBe('inset(0px 0px 0px -2px)');
+    expect(element.children).toHaveLength(1);
+    const frame = element.querySelector<HTMLElement>('.docx-drawing-image-frame')!;
+    expect(frame.parentElement).toBe(element);
+    expect(frame.style.left).toBe('0px');
+    expect(frame.style.pointerEvents).toBe('none');
+    expect(record.paintBounds).toEqual(base.paintBounds);
+
+    // A shape whose ink stays inside clips at its box and keeps frame pointer events.
+    const plain = paintDrawingRecord(
+      document,
+      base,
+      { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
+      null
+    )!;
+    expect(plain.style.overflow).toBe('hidden');
+    expect(plain.style.clipPath).toBe('');
+    expect(plain.querySelector<HTMLElement>('.docx-drawing-image-frame')!.style.pointerEvents).toBe(
+      ''
+    );
+  });
+
+  test('a standalone vertical line paints in a frame at its length scale', () => {
+    const base = shapeRecord();
+    const height = 72;
+    const line = [
+      { x: 0, y: 0 },
+      { x: 0, y: height * EMU_PER_POINT },
+    ];
+    const content = { x: 0, y: 0, width: 0, height };
+    const record = {
+      ...base,
+      paintBounds: content,
+      hitBounds: content,
+      geometry: { ...base.geometry, contentBounds: content, paintBounds: content },
+      vectorShape: {
+        ...vectorShape(),
+        extentEmu: { cx: 0, cy: height * EMU_PER_POINT },
+        components: [
+          {
+            subpathsEmu: [line],
+            subpathsClosed: [false],
+            fillHex: null,
+            fillAlpha: 1,
+            strokeHex: '000000',
+            strokeAlpha: 1,
+            strokeWidthEmu: 25_400,
+          },
+        ],
+      },
+    } as InlineDrawingRecord;
+    const element = paintDrawingRecord(
+      document,
+      record,
+      { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
+      null
+    )!;
+    expect(element).not.toBeNull();
+    // A 2pt rule reaches 1pt either side of its zero-width box.
+    expect(element.style.clipPath).toBe('inset(0px -1px 0px -1px)');
+    const frame = element.querySelector<HTMLElement>('.docx-drawing-image-frame')!;
+    // The frame spans one stroke width either side, at the line's 1pt-per-12700-EMU scale.
+    expect(frame.style.left).toBe('-2px');
+    expect(frame.style.width).toBe('4px');
+    expect(frame.querySelector('svg')!.getAttribute('viewBox')).toBe(
+      `-25400 0 50800 ${72 * 12700}`
+    );
+  });
+
+  test('an inset outline strokes at twice its width, clipped to its own geometry', () => {
+    const base = shapeRecord();
+    const square = [
+      { x: 0, y: 0 },
+      { x: EXTENT.cx, y: 0 },
+      { x: EXTENT.cx, y: EXTENT.cy },
+      { x: 0, y: EXTENT.cy },
+    ];
+    const record = {
+      ...base,
+      vectorShape: {
+        ...vectorShape(),
+        components: [
+          {
+            subpathsEmu: [square],
+            subpathsClosed: [true],
+            fillHex: null,
+            fillAlpha: 1,
+            strokeHex: '000000',
+            strokeAlpha: 1,
+            strokeWidthEmu: 12_700,
+            strokeInset: true,
+          },
+        ],
+      },
+    } as InlineDrawingRecord;
+    const element = paintDrawingRecord(
+      document,
+      record,
+      { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
+      null
+    )!;
+    const path = element.querySelector('svg > path')!;
+    expect(path.getAttribute('stroke-width')).toBe('25400');
+    const clipId = /^url\(#(.+)\)$/.exec(path.getAttribute('clip-path')!)![1]!;
+    const clip = element.querySelector(`clipPath[id="${clipId}"] path`)!;
+    expect(clip.getAttribute('d')).toBe(path.getAttribute('d'));
+    // The ink stays inside, so the paint clip does not grow.
+    expect(element.style.clipPath).toBe('');
+  });
+
   test('paints grouped components with independent colours and opacity', () => {
     const base = shapeRecord();
     const firstPath = vectorShape().subpathsEmu[0]!;

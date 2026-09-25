@@ -633,7 +633,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. Other payloads reserve their extent with a placeholder.',
+      'Solid rectangles, ellipses, diagonal lines, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. An outline keeps its full width past the edge of the drawing. An inset outline (algn=in) draws inside its geometry. Vertical and horizontal lines render, standalone or inside a group. Other payloads reserve their extent with a placeholder.',
   },
   {
     id: 'images.legacy-vml',

@@ -161,15 +161,21 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
   'issue-705-anchored-header-letterhead.docx': {
     // Seven MC-wrapped letterhead textboxes (one body, six header) surfaced when textbox
     // stories became renderable payloads; all were invisible before textbox-story-layout.
-    drawingCount: 7,
+    // The header also has a standalone horizontal line with `cy="0"`, which projects as a
+    // vector shape since zero-height lines draw (#972).
+    drawingCount: 8,
     pageCount: 1,
     readyCount: 0,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(7);
-      expect(projections.every((p) => p.textboxStory !== null)).toBe(true);
-      expect(projections.every((p) => p.picture === null && p.vectorShape === null)).toBe(true);
-      expect(projections.filter((p) => p.ownerPartName === '/word/document.xml')).toHaveLength(1);
+      expect(projections).toHaveLength(8);
+      const textboxes = projections.filter((p) => p.textboxStory !== null);
+      expect(textboxes).toHaveLength(7);
+      expect(textboxes.every((p) => p.picture === null && p.vectorShape === null)).toBe(true);
+      expect(textboxes.filter((p) => p.ownerPartName === '/word/document.xml')).toHaveLength(1);
+      const line = projections.find((p) => p.vectorShape !== null);
+      expect(line?.vectorShape?.extentEmu).toEqual({ cx: 107_950, cy: 0 });
+      expect(line?.vectorShape?.strokeHex).toBe('00445E');
     },
   },
   'wrap-none-positioned-image-demo.docx': {
