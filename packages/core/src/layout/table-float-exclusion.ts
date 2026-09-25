@@ -13,8 +13,10 @@ import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
   layoutTableFragment,
+  measureRowHeight,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
@@ -201,6 +203,81 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     (structure.float.distances?.bottom ?? 0);
   widths?.set(width, band);
   return band;
+}
+
+/** Where the body flow stands when it reaches a positioned table. */
+export interface FloatAdmissionFlow {
+  readonly zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
+  readonly page: number;
+  /** The narrowest column. The table must fit whichever column its anchor reaches. */
+  readonly width: number;
+  readonly frames: TableAnchorFrames;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/**
+ * True when a positioned table waits for its anchor paragraph and is placed there whole.
+ *
+ * Row pagination places the table instead when earlier objects wrap its cells, or when its
+ * band is taller than a page. It also places a text-relative table that spans its column
+ * and does not fit the room left, when its opening rows do fit there. That table breaks at
+ * the page bottom, and its remaining rows continue at the top of the next page. No text can
+ * stand beside it, so the flow resumes below its last row. When the opening rows do not fit,
+ * the table still moves whole with its anchor.
+ */
+export function admitsAtAnchor(
+  table: OoxmlElement,
+  deps: TableFlowDeps,
+  flow: FloatAdmissionFlow
+): boolean {
+  if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
+  const band = floatingTableBand(table, flow.width, deps);
+  if (band > flow.bottom) return false;
+  return band <= flow.bottom - flow.top || !breaksAtPageBottom(table, deps, flow);
+}
+
+function breaksAtPageBottom(
+  table: OoxmlElement,
+  deps: TableFlowDeps,
+  flow: FloatAdmissionFlow
+): boolean {
+  const structure = readTableStructure(
+    table,
+    flow.width,
+    0,
+    deps.styleCascade,
+    deps.displayMode,
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
+  );
+  const float = structure?.float;
+  // A negative offset collides with earlier text. Only anchor placement displaces it.
+  if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
+  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
+  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  const column = flow.frames.text;
+  if (
+    left - distances.left > column.left ||
+    left + width + distances.right < column.left + column.width
+  )
+    return false;
+  // The opening rows are the header prefix, which moves as one group, and the first body row.
+  let top = flow.top + float.yPt;
+  for (const [index, row] of structure.rows.entries()) {
+    top += measureRowHeight(
+      row,
+      structure.columnWidthsPt,
+      left,
+      0,
+      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
+      structure.cellSpacingPt
+    );
+    if (top > flow.bottom + 0.001) return false;
+    if (!row.isHeader) return true;
+  }
+  return false;
 }
 
 function probeTableHeight(

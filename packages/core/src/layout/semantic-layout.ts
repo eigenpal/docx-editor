@@ -2043,14 +2043,14 @@ function layoutBlocksPass(
       if (
         positionedTableIds.has(entry.table.id) &&
         !furnitureHasWrap &&
-        !tableWrap.hasEarlierCellExclusions(
-          entry.table,
-          options.drawingExclusionZonesByPage,
-          tableDeps,
-          pages.length
-        ) &&
-        tableWrap.floatingTableBand(entry.table, Math.min(...columns.widths), tableDeps) <=
-          contentHeight()
+        tableWrap.admitsAtAnchor(entry.table, tableDeps, {
+          zones: options.drawingExclusionZonesByPage,
+          page: pages.length,
+          width: Math.min(...columns.widths),
+          frames: anchorFrames(),
+          top: cursorY,
+          bottom: contentHeight(),
+        })
       ) {
         positionedFlow.add(pendingFloatIds, entry.table.id);
         continue;
