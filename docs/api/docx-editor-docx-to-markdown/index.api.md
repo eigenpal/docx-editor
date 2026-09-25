@@ -381,6 +381,7 @@ export interface InlineDrawingRecord {
     readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupPicture?: true;
     // (undocumented)
     readonly height: number;
     // (undocumented)

@@ -168,6 +168,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Drawing content | Status |
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
+| One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
 | Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder |
 | Anchored text boxes | Render the story read-only and clip it to the extent |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
@@ -177,6 +178,19 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Tracked image insertion and deletion | Record the change in suggesting mode |
 | Tracked image property edits | Stay unavailable in suggesting mode |
 | Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
+
+## Pictures in shape groups
+
+A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape members. For example, a scanned letterhead page can sit behind the text with ruled lines drawn over it. The editor and PDF export render the picture in its own frame inside the group, then render the group's shapes over it.
+
+The picture renders only if all of these conditions are true:
+
+- The group holds exactly one picture, and the picture comes before every shape member.
+- The picture is not rotated or flipped, and it has a rectangle geometry and a stretched fill.
+- The picture has no image effects, such as grayscale or transparency.
+- Every other member of the group is a supported solid shape.
+
+If a condition is false, the editor treats the group as an unsupported group. Picture commands, such as resize and replace, do not apply to a picture in a group. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
 
 ## Find text in text boxes
 

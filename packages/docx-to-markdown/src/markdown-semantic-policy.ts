@@ -239,6 +239,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     transform: 'layout-only',
     placeholderGraphicKind: 'explicitly-omitted',
     vectorShape: 'explicitly-omitted',
+    groupPicture: 'layout-only',
     revisions: 'explicitly-omitted',
   } satisfies Record<keyof InlineDrawingRecord, MarkdownFieldPolicy>,
   anchoredDrawing: {
@@ -262,6 +263,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     transform: 'layout-only',
     placeholderGraphicKind: 'explicitly-omitted',
     vectorShape: 'explicitly-omitted',
+    groupPicture: 'layout-only',
     revisions: 'explicitly-omitted',
     anchorParagraphId: 'layout-only',
     horizontalFrame: 'layout-only',

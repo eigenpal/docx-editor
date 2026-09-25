@@ -742,6 +742,36 @@ export function drawingGeometryFromProjection(options: {
     offsetEmu: Object.freeze({ x: 0, y: 0 }),
     extentEmu: Object.freeze({ cx: 0, cy: 0 }),
   });
+  const groupPicture = options.projection.groupPicture;
+  if (groupPicture) {
+    // The drawing's own frame stays the extent box: the group's vector members, the clip,
+    // the hit area, and wrap all use it. Only the image corners move to the member's frame.
+    const frame = computeDrawingGeometry({
+      extentWidth: options.extentWidth,
+      extentHeight: options.extentHeight,
+      anchorX: options.anchorX,
+      anchorY: options.anchorY,
+      effectExtentEmu: options.projection.effectExtentEmu,
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      transform: defaultTransform,
+      presetGeometry: null,
+    });
+    const extent = options.projection.extentEmu;
+    const scaleX = extent.cx > 0 ? options.extentWidth / extent.cx : 0;
+    const scaleY = extent.cy > 0 ? options.extentHeight / extent.cy : 0;
+    const member = groupPicture.frameEmu;
+    const image = computeDrawingGeometry({
+      extentWidth: member.cx * scaleX,
+      extentHeight: member.cy * scaleY,
+      anchorX: options.anchorX + member.x * scaleX,
+      anchorY: options.anchorY + member.y * scaleY,
+      effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+      crop: groupPicture.crop,
+      transform: defaultTransform,
+      presetGeometry: null,
+    });
+    return Object.freeze({ ...frame, imageTransformCorners: image.transformedCorners });
+  }
   return computeDrawingGeometry({
     extentWidth: options.extentWidth,
     extentHeight: options.extentHeight,

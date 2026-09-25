@@ -165,10 +165,26 @@ export class ImageWriter {
       this.work.report('drawing', message, visit.page.index);
       return '';
     };
-    if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
+    if (d.vectorShape) {
+      const vector = paintVectorShape(this.doc, page, visit, this.work);
+      if (!d.groupPicture) return vector;
+      // A group picture sits below the group's vector members.
+      const picture = await this.paintPicture(visit, page, report);
+      return picture ? `${picture}\n${vector}` : vector;
+    }
     if (d.kind === 'anchoredDrawing' && d.textboxStory)
       return report('Textbox story not routed through paintTextbox');
-    if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
+    if (d.placeholderGraphicKind && !d.groupPicture)
+      return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
+    return this.paintPicture(visit, page, report);
+  }
+
+  private async paintPicture(
+    visit: SemanticDrawingVisit,
+    page: PDFPage,
+    report: (message: string) => string
+  ): Promise<string> {
+    const d = visit.drawing;
     const bytes = this.session.validatedImageBytes(d);
     if (!bytes || d.resource.kind !== 'ready') return report('Image has no validated raster bytes');
     const mime = d.resource.mime;

@@ -632,7 +632,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. Other payloads reserve their extent with a placeholder.',
+      'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. A shape group can also hold one embedded picture below its shapes. The picture must be unrotated, unflipped, and rectangular, and it must have no image effects. It renders in its own frame, in the editor and in PDF export. Other payloads reserve their extent with a placeholder.',
   },
   {
     id: 'images.legacy-vml',
