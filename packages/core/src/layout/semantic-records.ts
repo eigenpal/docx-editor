@@ -694,13 +694,12 @@ export interface TableRowFragmentRecord {
   readonly rowIndex: number;
   /** True when the authored row resolves `w:tblHeader`, including its first occurrence. */
   readonly isHeaderRow: boolean;
-  /**
-   * True for a `w:tblHeader` row RE-EMITTED at the top of a continuation page. Painted,
-   * but excluded from interaction walks so each caret stop exists exactly once.
-   */
+  /** True for a `w:tblHeader` row repeated atop a continuation page; not an interaction stop. */
   readonly isHeaderRepeat: boolean;
   /** True when this record continues a row split at a line boundary; same `id` as its head. */
   readonly isContinuation?: boolean;
+  /** True when the rest of this row continues in the next fragment: the head of a split row. */
+  readonly hasContinuation?: boolean;
   /** True for a `w:cantSplit` or exact-height row: it stays whole where a page holds it. */
   readonly placesWhole?: boolean;
   readonly cells: readonly TableCellFragmentRecord[];

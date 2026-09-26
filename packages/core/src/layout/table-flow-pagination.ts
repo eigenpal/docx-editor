@@ -792,8 +792,9 @@ export function paginateTableInFlow(
         // already published its anchored drawings and spent its line ids; throwing it away
         // to re-place would leave a float positioned by a layout that never happened.
         const hasMore = placed.remainder !== null;
-        rows.push(placed.record);
-        rememberInsets(placed.record, placementDeps);
+        const record = hasMore ? splitHead(placed.record) : placed.record;
+        rows.push(record);
+        rememberInsets(record, placementDeps);
         sourceRows.push(hasMore ? { ...row } : row);
         flow.cursorY = placed.bottom;
         if (!hasMore) break;
@@ -934,8 +935,9 @@ export function paginateTableInFlow(
       // A continued cell redraws its edges at the page boundary. Clone partial
       // occurrences so finalization does not remeasure the entire source row.
       const source = isContinuation || hasMore ? { ...row } : row;
-      rows.push(placed.record);
-      rememberInsets(placed.record, placementDeps);
+      const record = hasMore ? splitHead(placed.record) : placed.record;
+      rows.push(record);
+      rememberInsets(record, placementDeps);
       sourceRows.push(source);
       flow.cursorY = placed.bottom;
 
@@ -950,4 +952,9 @@ export function paginateTableInFlow(
   closeTableFragment();
   if (outOfFlow) flow.cursorY = bodyCursorY;
   return { outOfFlow };
+}
+
+/** A row fragment whose rest continues on the next page: the head of a split row. */
+function splitHead(record: TableRowFragmentRecord): TableRowFragmentRecord {
+  return { ...record, hasContinuation: true };
 }

@@ -23,7 +23,8 @@
 // the next page below that line: a direct horizontal cell line, in a row that does not place
 // whole (`w:cantSplit`, an exact height; `placesWhole` on the record), with a legal break in
 // every cell and content left below it ({@link referenceRowCut}). The band then ends at that
-// break, the note stays whole on the reference page, and the rest of the row moves. Every
+// break, the note stays whole on the reference page, and the rest of the row moves. A row
+// the paginator already split at the page end (`hasContinuation`) takes the line itself. Every
 // other row budgets below its whole box, which includes the cells' space after, bottom
 // margins, and a minimum height. An eviction always moves the whole row: `top` is the row's.
 // The reserve pass evicts a row only when its note would place fewer than two lines below the
@@ -58,9 +59,9 @@ export interface TableReferenceRowBand {
   readonly top: number;
   /**
    * When the row can continue on the next page below the reference line, the lowest legal
-   * split point that keeps that line ({@link referenceRowCut}); else the row box's bottom,
-   * which includes the cells' space after, bottom margins, and a minimum row height. Notes
-   * budget below it.
+   * split point that keeps that line ({@link referenceRowCut}), or the line itself in a row
+   * already split at the page end; else the row box's bottom, which includes the cells' space
+   * after, bottom margins, and a minimum row height. Notes budget below it.
    */
   readonly bottom: number;
   /**
@@ -85,7 +86,8 @@ export interface TableReferenceRowBand {
 export function tableReferenceRowBand(
   page: PageRecord,
   table: TableFragmentRecord,
-  ref: NoteRefSite
+  ref: NoteRefSite,
+  compatibilityMode?: number
 ): TableReferenceRowBand | 'table' | null {
   if (table.floatingWrap || isOutOfFlowFragment(table) || table.nestingDepth !== 0) {
     return blocksOwn([table], ref) ? 'table' : null;
@@ -113,7 +115,14 @@ export function tableReferenceRowBand(
       !previous.isHeaderRow &&
       !rowKeepsWithNext(previous) &&
       stacksInOneColumn(page);
-    const cut = lineBottom === undefined ? null : referenceRowCut(row, cell, lineBottom);
+    // A row the paginator split at the page end already continues below its reference line,
+    // whatever its keeps say: its rest opens the next page.
+    const cut =
+      lineBottom === undefined
+        ? null
+        : row.hasContinuation === true
+          ? lineBottom
+          : referenceRowCut(row, cell, lineBottom, compatibilityMode);
     const bottom = cut ?? top + row.box.height;
     const endsPage = endsPageFlow(page, table, row);
     return { top, bottom, blockTop: top - headerHeight, evictable, endsPage, row };

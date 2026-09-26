@@ -4456,6 +4456,7 @@ export interface TableRowFragmentRecord {
     // (undocumented)
     readonly cells: readonly TableCellFragmentRecord[];
     readonly changeSites?: readonly RevisionAttribution[];
+    readonly hasContinuation?: boolean;
     readonly id: string;
     readonly isContinuation?: boolean;
     readonly isHeaderRepeat: boolean;

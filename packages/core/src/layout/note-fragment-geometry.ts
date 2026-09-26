@@ -226,25 +226,27 @@ export interface NoteReferenceLineBand {
  * Memoized per fragments-array identity and ref object identity: the reserve pass asks for
  * the same page's bands as `bodyPage` and again as the previous page's hold-out neighbour,
  * every reflow round, and both the fragment arrays and the ref objects are identity-stable
- * across rounds.
+ * across rounds. One memo per cell split rule: table bands read cell widow control only in
+ * compatibility mode 15 and later, as the table paginator does.
  */
-const referenceLineBandMemos = new WeakMap<
-  readonly BlockFragmentRecord[],
-  WeakMap<object, NoteReferenceLineBand>
->();
+const referenceLineBandMemos = [false, true].map(
+  () => new WeakMap<readonly BlockFragmentRecord[], WeakMap<object, NoteReferenceLineBand>>()
+);
 
 export function noteReferenceLineBandPt(
   page: PageRecord,
-  ref: { readonly paragraphId: string; readonly atomOffset: number }
+  ref: { readonly paragraphId: string; readonly atomOffset: number },
+  compatibilityMode?: number
 ): NoteReferenceLineBand {
-  let perPage = referenceLineBandMemos.get(page.fragments);
+  const memos = referenceLineBandMemos[(compatibilityMode ?? 0) >= 15 ? 1 : 0]!;
+  let perPage = memos.get(page.fragments);
   if (!perPage) {
     perPage = new WeakMap();
-    referenceLineBandMemos.set(page.fragments, perPage);
+    memos.set(page.fragments, perPage);
   }
   const cached = perPage.get(ref);
   if (cached) return cached;
-  const band = computeReferenceLineBand(page, ref);
+  const band = computeReferenceLineBand(page, ref, compatibilityMode);
   perPage.set(ref, band);
   return band;
 }
@@ -259,17 +261,20 @@ export function noteReferenceLineBandPt(
  */
 export function anyOrphanPairBand(
   page: PageRecord,
-  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
+  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[],
+  compatibilityMode?: number
 ): boolean {
   for (const ref of refs) {
-    if (noteReferenceLineBandPt(page, ref).preserveOrphanLine === true) return true;
+    const band = noteReferenceLineBandPt(page, ref, compatibilityMode);
+    if (band.preserveOrphanLine === true) return true;
   }
   return false;
 }
 
 function computeReferenceLineBand(
   page: PageRecord,
-  ref: { readonly paragraphId: string; readonly atomOffset: number }
+  ref: { readonly paragraphId: string; readonly atomOffset: number },
+  compatibilityMode: number | undefined
 ): NoteReferenceLineBand {
   let top = 0;
   let bottom = 0;
@@ -307,7 +312,7 @@ function computeReferenceLineBand(
       }
       continue;
     }
-    const row = tableReferenceRowBand(page, block, ref);
+    const row = tableReferenceRowBand(page, block, ref, compatibilityMode);
     if (row === null) continue;
     const band =
       row === 'table'

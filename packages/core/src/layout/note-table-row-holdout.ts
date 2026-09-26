@@ -58,7 +58,7 @@ export function tableRowHoldOutNeed(
   const pulled: { readonly ref: HoldOutRef; readonly band: TableReferenceRowBand }[] = [];
   for (const ref of candidates) {
     if (!rowOwnsReference(row, ref)) continue;
-    const band = tableReferenceRowBand(nextPage, table, ref);
+    const band = tableReferenceRowBand(nextPage, table, ref, args.opts.compatibilityMode);
     if (band === null || band === 'table' || band.row !== row) return 0;
     pulled.push({ ref, band });
   }

@@ -120,13 +120,15 @@ interface Laid {
   readonly refs: ReturnType<typeof buildPageRefHits>;
   /** The reserves the layout was laid under, by page index. */
   readonly reserves: ReadonlyMap<number, number>;
+  readonly compatibilityMode?: number;
 }
 
 function layoutProbe(
   body: string,
   notes: ReadonlyMap<number, number>,
   session = createLayoutSession(),
-  revision = 1
+  revision = 1,
+  compatibilityMode?: number
 ): Laid {
   const loaded = readOoxmlPackage(probeDocx(body, notes));
   if (!loaded.ok) throw new Error(loaded.reason);
@@ -142,12 +144,14 @@ function layoutProbe(
     documentEndnoteProps: en,
     measurer,
     producer: 'footnote-table-row-bands',
+    compatibilityMode,
   };
   const layout = layoutSemanticDocument(part, revision, {
     measurer,
     notes: input,
     session,
     producer: 'footnote-table-row-bands',
+    compatibilityMode,
   });
   const used = session.notePageBottomReserves ?? new Map<number, number>();
   const collected = collectNoteReferences(part);
@@ -164,6 +168,7 @@ function layoutProbe(
     layout,
     refs,
     reserves: used,
+    compatibilityMode,
     fixedPoint: computed.stable && footnoteReservesEqual(computed.reserves, used),
   };
 }
@@ -213,7 +218,7 @@ function bandOf(laid: Laid, noteId: number) {
   const ref = laid.refs.find((hit) => hit.noteId === noteId)!;
   for (const page of laid.layout.pages) {
     const body = bodyOnlyPage(page);
-    const band = noteReferenceLineBandPt(body, ref);
+    const band = noteReferenceLineBandPt(body, ref, laid.compatibilityMode);
     if (band.bottom > 0) {
       const table = body.fragments.find((f): f is TableFragmentRecord => f.kind === 'table')!;
       return { page: page.index, band, table };
@@ -494,7 +499,8 @@ describe('a multi-line referencing row', () => {
 describe('legal breaks inside a multi-line referencing row', () => {
   // Row 5's first cell holds one paragraph of several lines, and its second cell cites a
   // four-line note from its only line. One line of intro leaves three note lines below the
-  // whole row and five below the reference line.
+  // whole row and five below the reference line. Cell paragraphs follow widow control only in
+  // compatibility mode 15 and later, so these probes name their mode.
   const refs = new Map([[5, 1]]);
   const notes = new Map([[1, 4]]);
   const body = (first: string) =>
@@ -503,7 +509,7 @@ describe('legal breaks inside a multi-line referencing row', () => {
     TAIL;
 
   test('a paragraph without widow control breaks below the reference line', () => {
-    const laid = layoutProbe(body(para('R5a', 3)), notes);
+    const laid = layoutProbe(body(para('R5a', 3)), notes, createLayoutSession(), 1, 15);
     expect(pages(laid.layout)).toEqual([
       'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1',
       'R5a3 R6a R6b R7a R7b R8a R8b TAIL | ',
@@ -515,7 +521,13 @@ describe('legal breaks inside a multi-line referencing row', () => {
   test('a three-line paragraph under widow control keeps the row whole', () => {
     // Widow control allows no break in three lines, so the row stays whole and the note
     // splits below it.
-    const laid = layoutProbe(body(para('R5a', 3, { widow: true })), notes);
+    const laid = layoutProbe(
+      body(para('R5a', 3, { widow: true })),
+      notes,
+      createLayoutSession(),
+      1,
+      15
+    );
     expect(pages(laid.layout)).toEqual([
       'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
       'R7a R7b R8a R8b TAIL | 1c',
@@ -528,7 +540,13 @@ describe('legal breaks inside a multi-line referencing row', () => {
   });
 
   test('a paragraph that keeps its lines together keeps the row whole', () => {
-    const laid = layoutProbe(body(para('R5a', 3, { keepLines: true })), notes);
+    const laid = layoutProbe(
+      body(para('R5a', 3, { keepLines: true })),
+      notes,
+      createLayoutSession(),
+      1,
+      15
+    );
     expect(pages(laid.layout)).toEqual([
       'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
       'R7a R7b R8a R8b TAIL | 1c',
@@ -537,13 +555,36 @@ describe('legal breaks inside a multi-line referencing row', () => {
     expect(laid.fixedPoint).toBe(true);
   });
 
-  test('widow control moves the band to the first legal break', () => {
-    // Four lines under widow control break only after the second line, so the band ends there.
-    const laid = layoutProbe(body(para('R5a', 4, { widow: true })), notes);
-    const { band } = bandOf(laid, 1);
-    expect(band.bottom - band.top).toBeCloseTo(28, 3);
-    expect(pages(laid.layout)[0]).toBe('INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1');
+  test('widow control moves the split to the first legal break', () => {
+    // Four lines under widow control break only after the second line, so the note budgets
+    // below that break and the row splits there.
+    const laid = layoutProbe(
+      body(para('R5a', 4, { widow: true })),
+      notes,
+      createLayoutSession(),
+      1,
+      15
+    );
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1',
+      'R5a3 R5a4 R6a R6b R7a R7b R8a R8b TAIL | ',
+    ]);
     expect(noteLines(laid.layout, 0, 1)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('in compatibility mode 14 a cell paragraph under widow control breaks anywhere', () => {
+    const laid = layoutProbe(
+      body(para('R5a', 3, { widow: true })),
+      notes,
+      createLayoutSession(),
+      1,
+      14
+    );
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1',
+      'R5a3 R6a R6b R7a R7b R8a R8b TAIL | ',
+    ]);
     expect(laid.fixedPoint).toBe(true);
   });
 });
@@ -622,6 +663,51 @@ describe('a row that cannot continue below its reference line', () => {
     expect(row.box.height).toBeCloseTo(25, 3);
     expect(row.placesWhole).toBeUndefined();
     expect(noteLines(laid.layout, 0, 1)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});
+
+describe('a referencing row that splits at the page end', () => {
+  /** The notes whose first fragment opens on each page. */
+  const openings = (layout: SemanticLayout) =>
+    layout.pages.map((page) =>
+      (page.footnotes?.notes ?? []).filter((n) => !n.continuation).map((n) => n.noteId)
+    );
+
+  for (const where of ['first', 'last'] as const) {
+    test(`a row that cannot split but fits no page keeps its note (reference ${where})`, () => {
+      // Row 3 has w:cantSplit and 16 lines, so it splits on a fresh page anyway.
+      const second =
+        where === 'first' ? cite('R3b', 1) + para('R3c', 3) : para('R3c', 3) + cite('R3b', 1);
+      const tall = rows(5, new Map(), (n, spec) =>
+        n === 3 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R3a', 16), second } : spec
+      );
+      for (const mode of [14, 15]) {
+        const laid = layoutProbe(INTRO + tbl(tall) + TAIL, new Map([[1, 2]]), undefined, 1, mode);
+        const refPage = pages(laid.layout).findIndex((text) => text.includes('R3b1'));
+        expect(openings(laid.layout)[refPage]).toEqual([1]);
+        expect(laid.fixedPoint).toBe(true);
+      }
+    });
+  }
+
+  test('a paragraph that keeps its lines together keeps its note when the row splits', () => {
+    // Row 5 holds a six-line w:keepLines paragraph that reaches past the page end, so the
+    // paginator splits it there. The note fits below the reference line.
+    const kept = rows(8, new Map([[5, 1]]), (n, spec) =>
+      n === 5 ? { ...spec, first: para('R5a', 6, { keepLines: true }) } : spec
+    );
+    const laid = layoutProbe(
+      para('INTRO', 3) + tbl(kept) + TAIL,
+      new Map([[1, 2]]),
+      undefined,
+      1,
+      15
+    );
+    const refPage = pages(laid.layout).findIndex((text) => text.includes('R5b1'));
+    expect(refPage).toBe(0);
+    expect(openings(laid.layout)[0]).toEqual([1]);
+    expect(noteLines(laid.layout, 0, 1)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
   });
 });

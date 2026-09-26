@@ -1143,7 +1143,8 @@ function buildFootnoteArea(
     // alone: a reserve reaching an earlier (lower, other-column) reference line pushes it on.
     // Attach mode cannot move the body, so it also caps the room by every placed note's
     // budget: the stack never enters the full box of a reference line whose note starts here.
-    const band = options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref);
+    const band =
+      options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref, input.compatibilityMode);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
@@ -1185,7 +1186,6 @@ function buildFootnoteArea(
       : availableForNotes;
     const cap = options?.reserveBandOf ? refBudget : Math.min(refBudget, placedBudget);
     const room = Math.max(0, cap - stackHeight);
-    // Keep-whole eviction ({@link evictsReferenceLine}): the reserve reaches the line's top.
     if (
       band &&
       evictsReferenceLine(band, laid, room, {
@@ -2172,7 +2172,7 @@ function computeFootnoteReservesWithPolicy(
     // BEFORE the page-local cache short-circuit below, so a cached page still answers it.
     // Every reference the refinement can reach is some page's own page-bottom ref (the
     // hold-out's frontier is the next page's, and that page is visited here too).
-    orphanCandidates = orphanCandidates || anyOrphanPairBand(bodyPage, pageBottomRefs);
+    orphanCandidates ||= anyOrphanPairBand(bodyPage, pageBottomRefs, input.compatibilityMode);
     // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
     const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
@@ -2257,7 +2257,7 @@ function computeFootnoteReservesWithPolicy(
       {
         reserveColumnBudget: true,
         allowOrphanDeferral,
-        reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref),
+        reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref, input.compatibilityMode),
         separatorCache,
         noteLayoutCache,
         evictionAllowed:

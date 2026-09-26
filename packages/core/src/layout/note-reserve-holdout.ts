@@ -139,7 +139,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   let frontier: { readonly top: number; readonly bottom: number } | undefined;
   let frontierRef: HoldOutRef | undefined;
   for (const ref of candidates) {
-    const band = noteReferenceLineBandPt(nextBody, ref);
+    const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
     if (band.bottom <= band.top) continue;
     if (!frontier || band.bottom < frontier.bottom - 0.001) {
       frontier = band;
@@ -173,7 +173,11 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   }
   if (!owningBlock) return 0;
   const independentAhead = opensWithIndependentBlock(nextBody.fragments, owningAt);
-  const orphanPairFrontier = noteReferenceLineBandPt(nextBody, frontierRef).preserveOrphanLine;
+  const orphanPairFrontier = noteReferenceLineBandPt(
+    nextBody,
+    frontierRef,
+    args.opts.compatibilityMode
+  ).preserveOrphanLine;
   const ownReserve = args.ownReservePt ?? args.existingAreaHeight;
   const flowBottom = fragmentFlowBottom(bodyPage.fragments);
   const strandsOrphanNote =
@@ -249,7 +253,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     // offset applies only to a LINE-precise band — a fallback fragment band (merged or
     // projected offsets, `evictable: false`) spans the whole block and would over-subtract
     // it; the guard never evicts those, so the bare column is their complement.
-    const band = noteReferenceLineBandPt(nextBody, ref);
+    const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
     const inBlockOffset = band.evictable ? band.bottom - band.blockTop : 0;
     if (laid.flowHeight > columnBudget - inBlockOffset + 0.001) continue;
     pulledNotesHeight += laid.flowHeight;
