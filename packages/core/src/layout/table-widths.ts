@@ -245,10 +245,11 @@ function applyWidthClaims(
   seed: readonly (number | undefined)[],
   claims: readonly CellWidthClaim[],
   columnCount: number,
-  tableWidthPt: number
+  tableWidthPt: number,
+  fixedGrid: boolean
 ): (number | undefined)[] {
-  // A stated total is what makes the authored grid a settled layout rather than a seed.
-  const gridIsSettled = tableWidthPt > 0;
+  // A stated total or a complete fixed grid makes the authored columns settled.
+  const gridIsSettled = tableWidthPt > 0 || fixedGrid;
   const settled: (number | undefined)[] = [];
   for (let index = 0; index < columnCount; index += 1) settled.push(seed[index]);
 
@@ -342,7 +343,15 @@ export function resolveColumnWidthsPt(input: {
         : 0;
 
   const seed = gridColumnWidthsPt(input.gridCols);
-  const settled = applyWidthClaims(seed, input.claims, columnCount, statedTableWidth);
+  // Fixed tables can retain stale cell preferences after their grid is resized. With no
+  // positive table width, taking the maximum expands an otherwise complete fixed grid.
+  // Keep incomplete grids on the existing claim-resolution path so cells can fill gaps.
+  const fixedGrid =
+    input.layoutFixed &&
+    statedTableWidth <= 0 &&
+    seed.length >= columnCount &&
+    seed.every((width) => width !== undefined);
+  const settled = applyWidthClaims(seed, input.claims, columnCount, statedTableWidth, fixedGrid);
 
   let stated = 0;
   let unsettled = 0;

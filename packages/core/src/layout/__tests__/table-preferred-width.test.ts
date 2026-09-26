@@ -553,6 +553,40 @@ describe('structure memoization over immutable table nodes', () => {
   });
 });
 
+describe('complete fixed grids without a positive table width', () => {
+  for (const tableWidth of ['', '<w:tblW w:w="0" w:type="auto"/>']) {
+    test(`retains unequal columns despite uniform cell preferences: ${tableWidth || 'absent'}`, () => {
+      const table = tableNode(
+        `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/>${tableWidth}</w:tblPr>` +
+          `${grid(1200, 1800, 4200)}<w:tr>` +
+          `${cell(tcW('2400'))}${cell(tcW('2400'))}${cell(tcW('2400'))}</w:tr></w:tbl>`
+      );
+      const before = JSON.stringify(table);
+      expect(readTableStructure(table, CONTENT_WIDTH_PT, 0)!.columnWidthsPt).toEqual([60, 90, 210]);
+      expect(JSON.stringify(table)).toBe(before);
+    });
+  }
+
+  test('keeps claim reconciliation when the fixed grid is incomplete', () => {
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol/></w:tblGrid>' +
+        `<w:tr>${cell(tcW('2400'))}${cell(tcW('2400'))}</w:tr></w:tbl>`
+    );
+    expect(structure.columnWidthsPt).toEqual([120, 120]);
+  });
+
+  test('preserves a complete grid under a merged cell preference', () => {
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+        `${grid(1200, 1800, 4200)}<w:tr>` +
+        cell('<w:tcPr><w:gridSpan w:val="2"/><w:tcW w:w="4800" w:type="dxa"/></w:tcPr>') +
+        `${cell(tcW('2400'))}</w:tr></w:tbl>`
+    );
+    expect(structure.columnWidthsPt).toEqual([60, 90, 210]);
+  });
+});
+
 describe('a stated w:tblW makes the authored grid the settled layout', () => {
   // `template-with-hf-rule.docx`, the four-column "HISTÓRICO DE REVISÕES" table. Both the
   // grid and the cell preferences total the stated 9026 twips, and they disagree column by
