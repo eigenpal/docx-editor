@@ -235,6 +235,70 @@ function strandedNotes(probe: Probe, layout: SemanticLayout): string[] {
   return problems;
 }
 
+describe('footnote hold-out release', () => {
+  // US Letter, 1 in margins, 648 pt of body. Page 2 ends with a full note area and 14 pt of
+  // body slack. Page 3 opens with an independent paragraph whose first line needs 15 pt of
+  // it, so nothing on page 3 can return to page 2. A release there changes no body line, but
+  // it drops a hold that the reflow loop needs to settle the pages after it, and the loop
+  // then published notes 2 and 7 without a head. The keepLines paragraph after it carries
+  // both of those notes.
+  const paragraphs: Paragraph[] = [
+    { lines: 12, widowControl: true, keepNext: true, spacing: 'w:line="520" w:lineRule="atLeast"' },
+    { lines: 12, widowControl: true },
+    { lines: 1, spacing: 'w:after="160" w:line="259" w:lineRule="auto"' },
+    { lines: 20, keepLines: true, spacing: 'w:line="520" w:lineRule="atLeast"' },
+    { lines: 2, widowControl: true },
+    { lines: 3, widowControl: true, spacing: 'w:line="480" w:lineRule="exact"' },
+  ];
+  const probe: Probe = {
+    paragraphs,
+    refs: { 4: [8], 14: [4], 15: [1, 5], 21: [3], 26: [6], 33: [2, 7] },
+    notes: { 1: 20, 2: 20, 3: 8, 4: 4, 5: 4, 6: 8, 7: 16, 8: 12 },
+  };
+
+  test('keeps a hold that no paragraph on the next page can use', () => {
+    const { layout } = layoutProbe(probe);
+    expect(pages(layout).slice(0, 2)).toEqual(['L01..L14 | 8 4', 'L15..L21 | 1 5 3']);
+    expect(strandedNotes(probe, layout)).toEqual([]);
+  });
+
+  test('a warm pass after the keepLines edit matches a clean layout', () => {
+    const session = createLayoutSession();
+    const before: Probe = {
+      ...probe,
+      paragraphs: paragraphs.map((p, i) => (i === 3 ? { ...p, keepLines: false } : p)),
+    };
+    layoutProbe(before, session, 1);
+    const warm = layoutProbe(probe, session, 2);
+    const clean = layoutProbe(probe);
+    expect(pages(warm.layout)).toEqual(pages(clean.layout));
+    expect(strandedNotes(probe, warm.layout)).toEqual([]);
+  });
+
+  // Page 1's long note pushes filler lines forward in a later round. Page 3 then opens with
+  // an independent one-line paragraph (L24) and a widow-controlled paragraph whose second
+  // line (L26) cites a 20-line note. Releasing the hold ahead of L24 lets the opening pair
+  // follow it back to page 2, where the orphan-pair phase keeps the pair and moves the whole
+  // note to page 3 without a head. The hold stays, and the note starts beside L26.
+  const orphanPair: Probe = {
+    paragraphs: [
+      ...Array.from({ length: 24 }, () => ({ lines: 1 })),
+      { lines: 6, widowControl: true },
+      ...Array.from({ length: 25 }, () => ({ lines: 1 })),
+    ],
+    refs: { 3: [1], 12: [3], 26: [2] },
+    notes: { 1: 32, 2: 12, 3: 4 },
+  };
+
+  test('keeps the hold when the reference sits on an opening orphan pair', () => {
+    const session = createLayoutSession();
+    const { layout } = layoutProbe(orphanPair, session);
+    expect(strandedNotes(orphanPair, layout)).toEqual([]);
+    expect(settles(orphanPair, session, layout)).toBe(true);
+    expect(pages(layoutProbe(orphanPair).layout)).toEqual(pages(layout));
+  });
+});
+
 describe('footnote attach floor across columns', () => {
   // Two columns. L09 ends column 1 and cites note 3; L14 sits higher in column 2 and cites
   // note 1. Note 1 lays out after note 3, and its own line would let the stack rise into

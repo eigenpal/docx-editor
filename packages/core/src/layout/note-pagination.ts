@@ -2185,13 +2185,14 @@ function computeFootnoteReservesWithPolicy(
     // it reads the NEIGHBOUR page, and a memo entry that must enumerate foreign inputs by
     // hand is how stale reserves happen; the scan starts from a memoized page-refs answer
     // and lays notes through the pass cache.
-    const holdOutFor = (existingAreaHeight: number): number =>
+    const holdOutFor = (existingAreaHeight: number, ownReservePt: number): number =>
       anyPageBottomFootnoteRefs
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
             allowOrphanDeferral,
             existingAreaHeight,
+            ownReservePt,
             usedReservePt,
             pageBottomRefsOf,
             footnotesPart: input.footnotesPart,
@@ -2214,7 +2215,7 @@ function computeFootnoteReservesWithPolicy(
       // reference was evicted) answers section 0 here, and skipping it would let the
       // next page's opening reference pull back and reopen the eviction orbit. The
       // hold-out filters pulled refs by their OWN section's position.
-      recordReserve(page.index, holdOutFor(0), maxArea);
+      recordReserve(page.index, holdOutFor(0, 0), maxArea);
       continue;
     }
 
@@ -2231,7 +2232,8 @@ function computeFootnoteReservesWithPolicy(
         pageRefsEqual(fnRefs, cached.pageRefs)
       ) {
         for (const reason of cached.reasons) reasons.push(reason);
-        recordReserve(page.index, Math.max(cached.reserve, holdOutFor(cached.areaHeight)), maxArea);
+        const held = holdOutFor(cached.areaHeight, cached.reserve);
+        recordReserve(page.index, Math.max(cached.reserve, held), maxArea);
         continue;
       }
     }
@@ -2291,7 +2293,7 @@ function computeFootnoteReservesWithPolicy(
         reasons: reasons.slice(reasonsBefore),
       });
     }
-    recordReserve(page.index, Math.max(localNeeded, holdOutFor(areaHeight)), maxArea);
+    recordReserve(page.index, Math.max(localNeeded, holdOutFor(areaHeight, localNeeded)), maxArea);
   }
 
   // Stable only when the body has already left enough room for the measured reserve.

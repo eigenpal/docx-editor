@@ -10,6 +10,7 @@ import {
   fragmentCursorBottomPt,
   noteReferenceLineBandPt,
 } from './note-fragment-geometry.ts';
+import { splitNoteFragments } from './note-splitting.ts';
 import {
   layoutNoteCached,
   type LayoutNoteStoryOptions,
@@ -45,6 +46,11 @@ export interface HoldOutArgs {
   readonly nextPage: PageRecord | undefined;
   /** Height of `bodyPage`'s existing note area (0 when it has none). */
   readonly existingAreaHeight: number;
+  /**
+   * The reserve `bodyPage` needs for its own references, eviction included (defaults to
+   * `existingAreaHeight`). A released hold leaves the page this reserve.
+   */
+  readonly ownReservePt?: number;
   /** The reserve `bodyPage` was laid under (for the observed-refusal test), if known. */
   readonly usedReservePt: number | undefined;
   /**
@@ -91,7 +97,13 @@ export interface HoldOutArgs {
  * it back. Holding would freeze the page at whatever height an earlier round left it, and
  * content an upstream page pushes forward would pile up in front of the reference. If the
  * reference line then returns too, the page's own eviction moves it out again, and the
- * next round finds the group at the page top. The release applies only where both pages
+ * next round finds the group at the page top. The release applies only when the block's
+ * smallest movable head fits beside the page's own reserve: a release nothing can use
+ * changes no body line, but it drops a hold the reflow loop may need to settle an orbit
+ * further down. It also does not apply when the reference sits on the second line of an
+ * opening pair that could follow the block back while its note could not start there: the
+ * orphan-pair phase would keep that pair with its eviction off, and the note would move to
+ * a later page without a head. The release applies only where both pages
  * stack their blocks in one column; lines returning to a multi-column page may change
  * column, which this test cannot predict, so those pages keep the hold. The demand charges
  * every pulled reference in the OWNING BLOCK, not just the frontier line's — a
@@ -160,16 +172,31 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     }
   }
   if (!owningBlock) return 0;
+  const independentAhead = opensWithIndependentBlock(nextBody.fragments, owningAt);
+  const orphanPairFrontier = noteReferenceLineBandPt(nextBody, frontierRef).preserveOrphanLine;
+  const ownReserve = args.ownReservePt ?? args.existingAreaHeight;
+  const flowBottom = fragmentFlowBottom(bodyPage.fragments);
+  const strandsOrphanNote =
+    independentAhead &&
+    orphanPairFrontier === true &&
+    orphanPairNoteStrands(args, owningBlock, nextBody, frontierRef, flowBottom, ownReserve);
   if (
-    opensWithIndependentBlock(nextBody.fragments, owningAt) &&
+    independentAhead &&
+    !strandsOrphanNote &&
     stacksInOneColumn(bodyPage) &&
     stacksInOneColumn(nextBody)
   ) {
-    return 0;
+    const head = independentHeadHeight(nextBody.fragments, owningAt);
+    if (head !== null && flowBottom + head + ownReserve <= contentHeight + 0.001) {
+      return 0;
+    }
   }
   // Release a settled hold only when the preceding body plus this opening pair
   // actually fits beside its existing notes. The incoming second-line note can
   // continue, but this policy must never reclaim space occupied by earlier notes.
+  // With an independent block ahead, the release also pulls that block, and a note the
+  // strict placement kept whole beside its reference would start on a later page; the
+  // hold stays when the note could not start beside the returning pair.
   //
   // DELIBERATELY the painted flow bottom ({@link fragmentFlowBottom}), not the fit-rule
   // bottom every other budget in this file uses, and DELIBERATELY without
@@ -180,7 +207,8 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // not "correct" either to match the neighbours without re-measuring the corpus.
   if (
     args.allowOrphanDeferral &&
-    noteReferenceLineBandPt(nextBody, frontierRef).preserveOrphanLine &&
+    orphanPairFrontier &&
+    !strandsOrphanNote &&
     fragmentFlowBottom(bodyPage.fragments) +
       frontier.bottom -
       firstBodyContentTopPt(nextBody) +
@@ -271,6 +299,82 @@ function opensWithIndependentBlock(fragments: PageRecord['fragments'], owningAt:
     if (!paragraphKeeps(block.props).keepNext) return true;
   }
   return false;
+}
+
+/**
+ * Whether the opening pair of the owning block could follow the blocks ahead of it back to
+ * the previous page while its second-line note could not start there. The pair returns when
+ * everything above it, down to the glyph band of its second line, fits beside the page's own
+ * reserve. The orphan-pair phase then keeps the pair with its eviction off, and a note with
+ * no room below the reference line's full box moves to a later page without a head.
+ */
+function orphanPairNoteStrands(
+  args: HoldOutArgs,
+  owningBlock: ParagraphFragmentRecord,
+  nextBody: PageRecord,
+  frontierRef: HoldOutRef,
+  flowBottom: number,
+  ownReserve: number
+): boolean {
+  const line = owningBlock.lines[1];
+  if (!line) return false;
+  const contentHeight = args.bodyPage.contentBox.height;
+  const shift = flowBottom - firstBodyContentTopPt(nextBody);
+  const glyphBottom =
+    line.box.y + line.box.height - Math.min(line.trailingSpacing ?? 0, line.box.height);
+  if (shift + glyphBottom + ownReserve > contentHeight + 0.001) return false;
+  const laid = layoutNoteCached(
+    args.footnotesPart,
+    frontierRef.noteId,
+    args.bodyPage.contentBox.width,
+    args.opts,
+    args.noteLayoutCache
+  );
+  if (!laid) return false;
+  const area = Math.max(args.existingAreaHeight, args.plainSeparatorHeight);
+  const room = contentHeight - (shift + line.box.y + line.box.height) - area;
+  return splitNoteFragments(laid, Math.max(0, room)).head.length === 0;
+}
+
+/**
+ * Height (pt) the next page's opening blocks need on the previous page before any of them
+ * can return there: the first block's smallest head that may move, from the page's first
+ * line plus its applied before-spacing down to the glyph band of the head's last line (the
+ * body fit rule lets that line's trailing depth cross the reserve). The head is one line;
+ * under widow control it is the opening pair of a paragraph that starts here (the whole
+ * paragraph when it has fewer than four lines) and it leaves at least two lines of a
+ * paragraph that ends here; under `w:keepLines` it is the whole paragraph when the paragraph
+ * sits whole on the page (one that already splits returns line by line). A head that
+ * completes a `w:keepNext` paragraph takes the next block's head as well. Null when the head
+ * reaches the owning block, whose lines return only with the reference.
+ */
+function independentHeadHeight(
+  fragments: PageRecord['fragments'],
+  owningAt: number
+): number | null {
+  let top: number | undefined;
+  for (let index = 0; index < owningAt; index += 1) {
+    const block = fragments[index]!;
+    if (block.kind !== 'paragraph' || block.positionedFrame || block.outOfFlow) continue;
+    const lines = block.lines;
+    if (lines.length === 0) continue;
+    top ??= lines[0]!.box.y - (block.fragmentIndex === 0 ? block.spacing.before : 0);
+    const keeps = paragraphKeeps(block.props);
+    const count = lines.length;
+    let take = 1;
+    const whole = block.fragmentIndex === 0 && block.paragraphEnd === true;
+    if (keeps.keepLines && whole) take = count;
+    else if (keeps.widowControl && block.fragmentIndex === 0) {
+      take = whole && count < 4 ? count : Math.min(2, count);
+    } else if (keeps.widowControl && block.paragraphEnd && count < 3) take = count;
+    const last = lines[take - 1]!;
+    if (take < count || !block.paragraphEnd || !keeps.keepNext) {
+      return (
+        last.box.y + last.box.height - Math.min(last.trailingSpacing ?? 0, last.box.height) - top
+      );
+    }
+  }
+  return null;
 }
 
 /**
