@@ -74,7 +74,7 @@ import {
 import {
   adjustedBreakIndex,
   composeFlowKeys,
-  keepNextGroupNeed,
+  keepNextChains,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
 } from './pagination-keeps.ts';
@@ -1974,6 +1974,21 @@ function layoutBlocksPass(
     const mark = emptySectionMarkAt(at, lines);
     return mark !== undefined && !breaksBeforeAt(at, mark);
   };
+  // `w:keepNext` chains. Members measure at THIS column's width (a memo hit when equal).
+  const keepChains = keepNextChains(
+    {
+      blocks: prepared,
+      linesFor: (at) => {
+        const member = prepareBlock(bodies[at]!, columnWidth());
+        return member.kind === 'paragraph' ? breakBlock(member, at) : [];
+      },
+      skipBlock: (at) =>
+        prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || collapsesSectionMark(at)),
+      breaksBefore: (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
+      sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
+    },
+    options.compatibilityMode
+  );
   let converged = false;
   let convergedAt = prepared.length;
   /** Whole pages the convergence tail moved by; reused checkpoints shift with it. */
@@ -2229,7 +2244,6 @@ function layoutBlocksPass(
     }
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
-    let keepTailAt = -1; // A keepNext head breaks here to keep its successor.
     if (!frame) {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
       const emptyStyle =
@@ -2277,37 +2291,17 @@ function layoutBlocksPass(
         );
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
-        // Members measure at THIS column's width; equal widths re-prepare into a memo hit.
-        const keep = keepNextGroupNeed(
-          {
-            blocks: prepared,
-            start: index,
-            carry: previousSpaceAfter,
-            linesFor: (at) => {
-              const member = prepareBlock(bodies[at]!, columnWidth());
-              return member.kind === 'paragraph' ? breakBlock(member, at) : [];
-            },
-            skipBlock: (at) =>
-              prepared[at]?.kind === 'paragraph' &&
-              (!!prepared[at].frame || collapsesSectionMark(at)),
-            breaksBefore: (at) =>
-              prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
-            sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
-          },
-          {
-            cursorY,
-            contentHeight: contentHeight(),
-            lead,
-            topExtent,
-            pricedLead: collapsedMark
-              ? 0
-              : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter),
-            freshLead: firstParagraphOfSection || breaksBeforeAt(index, entry) ? spacing.before : 0,
-            compatibilityMode: options.compatibilityMode,
-          }
-        );
-        if (keep) needed = Math.max(needed, keep.need);
-        if (keep?.tailLines) keepTailAt = lines.length - keep.tailLines;
+        const need = keepChains.need(index, previousSpaceAfter, {
+          cursorY,
+          contentHeight: contentHeight(),
+          lead,
+          topExtent,
+          pricedLead: collapsedMark
+            ? 0
+            : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter),
+          freshLead: firstParagraphOfSection || breaksBeforeAt(index, entry) ? spacing.before : 0,
+        });
+        if (need !== null) needed = Math.max(needed, need);
       }
       if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
         advanceColumn();
@@ -2329,6 +2323,8 @@ function layoutBlocksPass(
     // overhangs the bottom margin by the height of its own frame.
     if (topExtent > 0) cursorY += topExtent;
     firstParagraphOfSection = false;
+    // A kept paragraph that splits early breaks before this line; any other break clears it.
+    let keepTailAt = keepChains.tailBreak(index, lines.length, cursorY, contentHeight());
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
@@ -2701,7 +2697,7 @@ function layoutBlocksPass(
         !frame && lineIndex === 0 && cursorY + lineExtent > contentHeight() && leadingBreak();
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
-        (fragmentIndex === 0 && lineIndex === keepTailAt) ||
+        lineIndex === keepTailAt ||
         (!frame &&
           cursorY + lineExtent > contentHeight() &&
           !holdsSheet() &&
@@ -2714,6 +2710,7 @@ function layoutBlocksPass(
                 tail <=
                 contentHeight())));
       if (overflowsPage) {
+        keepTailAt = -1;
         if (
           !regionHasFragments() &&
           skipBefore > 0 &&

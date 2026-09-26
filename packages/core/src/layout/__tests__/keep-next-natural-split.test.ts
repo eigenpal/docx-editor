@@ -22,8 +22,11 @@ import {
   DEFAULT_PARAGRAPH_KEEPS,
   keepNextGroupHeight,
   keepNextGroupNeed,
+  keepNextPlan,
+  keepNextTailLines,
 } from '../pagination-keeps.ts';
 import type { PageGeometry, PageRecord } from '../semantic-records.ts';
+import { layoutContext, load as anchoredLoad } from './anchored-drawing-test-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -77,6 +80,10 @@ const pageLines = (pages: readonly PageRecord[]): string[][] =>
 /** `names('A', 1, 4)` is `['A1', 'A2', 'A3', 'A4']`. */
 const names = (name: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${name}${from + i}`);
+
+/** A 6-line kept A, a 4-line kept B, then C of `c` lines and a one-line tail. */
+const chainTail = (c: number) =>
+  para('A', 6, KEEP_NEXT) + para('B', 4, KEEP_NEXT) + para('C', c) + para('TAIL', 1);
 
 const chain = (prefix: number, a: number, aPr = KEEP_NEXT, b = 4, bPr = KEEP_NEXT) =>
   para('P', prefix) + para('A', a, aPr) + para('B', b, bPr) + para('C', 4) + para('TAIL', 1);
@@ -250,26 +257,55 @@ describe('the priced group height', () => {
         return lines[index]!;
       },
     };
-    expect(keepNextGroupNeed(look, at())).toEqual({ need: 14 * 8, tailLines: 0 });
+    expect(keepNextGroupNeed(look, at())).toBe(14 * 8);
     // Priced twice: here (A whole, B opening) and on a fresh page (A, B, C opening).
     expect(rooms).toEqual([0, 1, 0, 1, 2]);
   });
 
-  test('from Word 2013 on, a whole-fitting head gives its last two lines instead', () => {
+  test('from Word 2013 on, a whole-fitting head stays and gives its last two lines', () => {
     const look = { blocks, start: 0, carry: 0, linesFor: (index: number) => lines[index]! };
-    expect(keepNextGroupNeed(look, at(15))).toEqual({ need: 0, tailLines: 2 });
-    expect(keepNextGroupNeed(look, at(14))).toEqual({ need: 14 * 8, tailLines: 0 });
+    expect(keepNextGroupNeed(look, at(15))).toBeNull();
+    expect(keepNextGroupNeed(look, at(14))).toBe(14 * 8);
+    const placed = { ...look, headLead: 0 };
+    expect(keepNextTailLines(placed, 14 * 7, 14 * 12, 15)).toBe(2);
+    expect(keepNextTailLines(placed, 14 * 7, 14 * 12, 14)).toBe(0);
+    // With room for the successor opening, nothing splits early.
+    expect(keepNextTailLines(placed, 14 * 8, 14 * 12, 15)).toBe(0);
   });
 
-  test('without widow control the Word 2013 head gives one line', () => {
+  test('without widow control the Word 2013 paragraph gives one line', () => {
     const open = [{ ...blocks[0]!, keeps: { ...blocks[0]!.keeps, widowControl: false } }];
     const look = {
       blocks: [...open, blocks[1]!, blocks[2]!],
       start: 0,
       carry: 0,
+      headLead: 0,
       linesFor: (index: number) => lines[index]!,
     };
-    expect(keepNextGroupNeed(look, at(15))).toEqual({ need: 0, tailLines: 1 });
+    expect(keepNextTailLines(look, 14 * 7, 14 * 12, 15)).toBe(1);
+  });
+
+  test('the last priced line fits with its trailing spacing past the room', () => {
+    // A's last line carries 7pt below its glyph band, so A fits 84 - 7 = 77pt whole.
+    const trailing = heights(6).map((line, i) =>
+      i === 5 ? { ...line, trailingSpacing: 7 } : line
+    );
+    const look = {
+      blocks,
+      start: 0,
+      carry: 0,
+      linesFor: (i: number) => [trailing, ...lines.slice(1)][i]!,
+    };
+    expect(keepNextPlan(look, 77)).toEqual({ height: 14 * 6 + 28, lastWhole: 0 });
+    // One point less and A no longer fits whole, so it splits at its two-line opening.
+    expect(keepNextPlan(look, 76)).toEqual({ height: 28, lastWhole: -1 });
+  });
+
+  test('the last member that fits whole before an overflow is reported', () => {
+    const look = { blocks, start: 0, carry: 0, linesFor: (index: number) => lines[index]! };
+    // A (6) and B (4) fit 10 lines; C's opening needs 2 more.
+    expect(keepNextPlan(look, 14 * 11)).toEqual({ height: 14 * 12, lastWhole: 1 });
+    expect(keepNextPlan(look, 14 * 12)).toEqual({ height: 14 * 12, lastWhole: 1 });
   });
 });
 
@@ -325,6 +361,134 @@ describe('Word 2013 layout splits a kept head that fits whole', () => {
       ...names('B', 1, 2),
     ]);
   });
+});
+
+describe('chains priced where placement puts them', () => {
+  const lay15 = (body: string, mode = 15) => lay(load(body), 1, { compatibilityMode: mode });
+  const DOUBLE = '<w:spacing w:before="0" w:after="0" w:line="480" w:lineRule="auto"/>';
+  /** A 4-line kept paragraph whose double-spaced last line fits only with its trailing space. */
+  const doubleKept = () =>
+    para('A', 4, KEEP_NEXT)
+      .replace(SPACING, DOUBLE)
+      .replaceAll('<w:t>', '<w:t xml:space="preserve">');
+  const autoBody = () => para('P', 5) + doubleKept() + para('B', 4) + para('TAIL', 1);
+
+  test('a kept paragraph that fits only with its trailing space moves whole with its successor', () => {
+    // Double-spaced A leaves no room for the tail line on page 2 here.
+    expect(pageLines(lay(load(autoBody())).pages).slice(0, 2)).toEqual([
+      names('P', 1, 5),
+      [...names('A', 1, 4), ...names('B', 1, 4)],
+    ]);
+  });
+
+  test('in Word 2013 layout the same paragraph gives its last two lines instead', () => {
+    expect(pageLines(lay15(autoBody()).pages)).toEqual([
+      [...names('P', 1, 5), ...names('A', 1, 2)],
+      [...names('A', 3, 4), ...names('B', 1, 4), 'TAIL1'],
+    ]);
+  });
+
+  test('a member that fits whole behind an unsplittable head gives its last lines', () => {
+    const body = para('P', 4) + para('H', 1, KEEP_NEXT) + chainTail(1);
+    expect(pageLines(lay15(body).pages)).toEqual([
+      [...names('P', 1, 4), 'H1', ...names('A', 1, 4)],
+      [...names('A', 5, 6), ...names('B', 1, 4), 'C1', 'TAIL1'],
+    ]);
+  });
+
+  test('the member split applies behind a three-line head too, and not before Word 2013', () => {
+    const body = para('P', 2) + para('H', 3, KEEP_NEXT) + chainTail(1);
+    expect(pageLines(lay15(body).pages)).toEqual([
+      [...names('P', 1, 2), ...names('H', 1, 3), ...names('A', 1, 4)],
+      [...names('A', 5, 6), ...names('B', 1, 4), 'C1', 'TAIL1'],
+    ]);
+    expect(pageLines(lay15(body, 14).pages)).toEqual([
+      names('P', 1, 2),
+      [...names('H', 1, 3), ...names('A', 1, 6), ...names('B', 1, 2)],
+      [...names('B', 3, 4), 'C1', 'TAIL1'],
+    ]);
+  });
+
+  test('the last whole member before the overflow is the one that splits', () => {
+    const body =
+      para('P', 1) +
+      para('A', 6, KEEP_NEXT) +
+      para('B', 4, KEEP_NEXT) +
+      para('C', 4, KEEP_NEXT) +
+      para('D', 3) +
+      para('TAIL', 1);
+    expect(pageLines(lay15(body).pages)).toEqual([
+      ['P1', ...names('A', 1, 6), ...names('B', 1, 2)],
+      [...names('B', 3, 4), ...names('C', 1, 4), ...names('D', 1, 3), 'TAIL1'],
+    ]);
+    expect(pageLines(lay(load(body)).pages)).toEqual([
+      ['P1'],
+      [...names('A', 1, 6), ...names('B', 1, 4), ...names('C', 1, 2)],
+      [...names('C', 3, 4), ...names('D', 1, 3), 'TAIL1'],
+    ]);
+  });
+
+  test('in Word 2013 layout the chain is priced again after a member splits', () => {
+    const body = para('P', 8) + para('A', 6, KEEP_NEXT) + para('B', 9, KEEP_NEXT) + para('C', 4);
+    expect(pageLines(lay15(body + para('TAIL', 1)).pages)).toEqual([
+      [...names('P', 1, 8), ...names('A', 1, 4)],
+      [...names('A', 5, 6), ...names('B', 1, 7)],
+      [...names('B', 8, 9), ...names('C', 1, 4), 'TAIL1'],
+    ]);
+  });
+
+  test('space before suppressed after a page break is not priced for an early split', () => {
+    const opening = para('P', 3).replace('<w:t>P3</w:t>', '<w:t>P3</w:t><w:br w:type="page"/>');
+    const head = para('A', 6, KEEP_NEXT).replace('w:before="0"', 'w:before="280"');
+    const body = opening + head + para('B', 6, '<w:keepLines/>') + para('TAIL', 1);
+    expect(pageLines(lay15(body).pages)).toEqual([
+      names('P', 1, 3),
+      [...names('A', 1, 6), ...names('B', 1, 6)],
+      ['TAIL1'],
+    ]);
+  });
+});
+
+describe('a head that moves for another reason keeps no early split', () => {
+  const NS =
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  /** A 95pt `wrapTopAndBottom` picture `offsetPt` below the top of a one-line paragraph. */
+  const band = (offsetPt: number) =>
+    `<w:p><w:pPr>${SPACING}</w:pPr><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" ` +
+    'distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" ' +
+    'relativeHeight="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column">' +
+    '<wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph">' +
+    `<wp:posOffset>${offsetPt * 12_700}</wp:posOffset></wp:positionV>` +
+    '<wp:extent cx="1270000" cy="1206500"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:wrapTopAndBottom/><wp:docPr id="1" name="band"/><wp:cNvGraphicFramePr/><a:graphic>' +
+    '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+    '<pic:nvPicPr><pic:cNvPr id="1" name="band.png"/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+    '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="1206500"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData>' +
+    '</a:graphic></wp:anchor></w:drawing></w:r><w:r><w:t>Z1</w:t></w:r></w:p>';
+
+  // 75pt moves A before placement (its first line cannot clear the band); 84pt lets A1 fit
+  // above the band, and widow control then retreats A whole from inside the line loop.
+  for (const offsetPt of [75, 84]) {
+    test(`a head moved by a picture band at ${offsetPt}pt places whole on the next page`, () => {
+      const xml = `<w:document ${NS}><w:body>${band(offsetPt)}${para('P', 4)}${chainTail(4)}</w:body></w:document>`;
+      const part = anchoredLoad(xml);
+      const pages = lay(part, 1, {
+        compatibilityMode: 15,
+        inlineDrawingLayout: layoutContext(part),
+      });
+      expect(pageLines(pages.pages)).toEqual([
+        ['Z1', ...names('P', 1, 4)],
+        [...names('A', 1, 6), ...names('B', 1, 4), ...names('C', 1, 2)],
+        [...names('C', 3, 4), 'TAIL1'],
+      ]);
+    });
+  }
 });
 
 describe('edits, save and reopen', () => {
