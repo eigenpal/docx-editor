@@ -1,5 +1,6 @@
 import type { ResolvedRunStyle } from './run-style.ts';
-import type { TextMeasurer } from './semantic-records.ts';
+import { lineBandText } from './pending-line.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { styleForFontSlot, type FontSlot } from './script-itemization.ts';
 
 /** A character that draws text: not a space, tab, break, or object placeholder. */
@@ -23,11 +24,11 @@ const TEXT_GLYPH = /[^ \t\n\r\f\v\uFFFC]/u;
  * smaller glyph size.
  */
 export function scriptLineFloor(
-  spans: readonly {
+  spans: readonly (Pick<StyleSpanRecord, 'noteSeparator' | 'fieldAtom'> & {
     readonly text: string;
     readonly style: ResolvedRunStyle;
     readonly fontSlot?: FontSlot;
-  }[],
+  })[],
   markVerticalAlign: ResolvedRunStyle['verticalAlign'],
   measurer: Pick<TextMeasurer, 'lineMetrics'>
 ): number {
@@ -37,7 +38,8 @@ export function scriptLineFloor(
     const fullSize = { ...span.style, verticalAlign: markVerticalAlign };
     floor = Math.max(
       floor,
-      measurer.lineMetrics(styleForFontSlot(fullSize, span.fontSlot), span.text).height
+      measurer.lineMetrics(styleForFontSlot(fullSize, span.fontSlot), lineBandText(span, span.text))
+        .height
     );
   }
   return floor;

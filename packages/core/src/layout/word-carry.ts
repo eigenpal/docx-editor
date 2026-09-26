@@ -2,7 +2,7 @@
 // that module stays inside its line budget; it is the only consumer.
 
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
-import { growLineMetricsForText, type PendingLine } from './pending-line.ts';
+import { growLineMetricsForText, lineBandText, type PendingLine } from './pending-line.ts';
 import { displayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -88,7 +88,7 @@ function relayWord(context: WordCarryContext, carried: readonly StyleSpanRecord[
     // An ignored cell page break adds no height, as when first placed.
     if (context.pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) continue;
     const style = styleForFontSlot(span.style, span.fontSlot);
-    const text = span.noteSeparator ? undefined : displayText(span.text, style);
+    const text = lineBandText(span, displayText(span.text, style));
     growLineMetricsForText(line, context.measurer.lineMetrics(style, text), span.text);
   }
 }

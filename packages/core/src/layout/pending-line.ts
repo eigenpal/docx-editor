@@ -156,6 +156,21 @@ export function growLineMetricsForText(
 }
 
 /**
+ * The text whose shaped faces set a span's line band, or undefined for the run's own face.
+ *
+ * A note separator is a rule and a legacy FORMCHECKBOX is a drawn box of its `w:size`. Neither
+ * is a glyph, so a fallback face picked to cover the placeholder text must not size the line:
+ * the checkbox's ballot-box placeholder otherwise took a symbol or CJK face's band, about 1.7 em
+ * where the run's own face gives 1.15 em.
+ */
+export function lineBandText(
+  item: Pick<StyleSpanRecord, 'noteSeparator' | 'fieldAtom'>,
+  text: string
+): string | undefined {
+  return item.noteSeparator || item.fieldAtom?.formControl?.kind === 'checkbox' ? undefined : text;
+}
+
+/**
  * Every {@link StyleSpanRecord} field outside range, text and box, as a checked record:
  * a new field fails to compile here until it is added (blocking the merge below when it
  * differs) or consciously exempted beside range/text/box in the `Exclude`.

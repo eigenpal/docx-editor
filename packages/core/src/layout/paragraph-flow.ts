@@ -265,6 +265,7 @@ import {
   growLineMetrics,
   growLineMetricsForText,
   holdsOnlyPageBreak,
+  lineBandText,
   isHeightlessWhitespace,
   onlyPageBreaksBefore,
   pendingLineFlowExtent,
@@ -1258,7 +1259,7 @@ export function breakParagraph(
       if (candidate.length === 0) continue;
       const metrics = measurer.lineMetrics(
         faceStyle,
-        piece.noteSeparator ? undefined : displayText(candidate, faceStyle)
+        lineBandText(piece, displayText(candidate, faceStyle))
       );
       exclusionProbe.setMetrics(metrics);
       const spanRange = layoutOwned
@@ -1617,7 +1618,7 @@ export function breakParagraph(
       if (remaining.length > 0) {
         const metrics = measurer.lineMetrics(
           faceStyle,
-          piece.noteSeparator ? undefined : displayText(remaining, faceStyle)
+          lineBandText(piece, displayText(remaining, faceStyle))
         );
         const span: StyleSpanRecord = {
           range: layoutOwned
