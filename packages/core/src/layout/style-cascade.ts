@@ -2,7 +2,7 @@ import { applicationParagraphDefaults } from './application-paragraph-defaults.t
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
-import { appliesNumberingDirectly } from './numbering-level-tier.ts';
+import { numberingLevelRank } from './numbering-level-tier.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 import { adjustLineHeightInTable, withLineGrid } from './line-grid.ts';
 import { adjacentParagraphSpacingSettings } from './adjacent-paragraph-spacing.ts';
@@ -603,10 +603,10 @@ function cascadeParagraphWithNumbering(
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
-  // Level spacing, alignment, tabs, borders and shading sit below the whole chain unless the
-  // paragraph applies the numbering itself. List indents rank separately, directly below the
-  // style that declares the numbering (`numberingLevelTiers`).
-  const directNumbering = appliesNumberingDirectly(directPPr);
+  // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
+  // the whole chain when that is the paragraph's own. List indents use the same rank
+  // (`numberingLevelTiers`).
+  const levelRank = numberingPPr ? numberingLevelRank(chain, directPPr) : chain.length;
   const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&
@@ -617,23 +617,24 @@ function cascadeParagraphWithNumbering(
         ])
       : properties;
 
+  const chainProperties = chain.map((style) => styleProperties(style, style.paragraphProperties));
   const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
-    ...(!directNumbering ? propertiesOf(numberingPPr) : []),
-    ...chain.flatMap((style) => styleProperties(style, style.paragraphProperties)),
-    ...(directNumbering ? propertiesOf(numberingPPr) : []),
+    ...chainProperties.slice(0, levelRank).flat(),
+    ...propertiesOf(numberingPPr),
+    ...chainProperties.slice(levelRank).flat(),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
   if (tableCellStyle) paragraphPropertyNodes.push(...tableCellStyle.paragraphPropertyNodes);
-  if (numberingPPr && !directNumbering) paragraphPropertyNodes.push(numberingPPr);
-  for (const style of chain) {
+  chain.forEach((style, index) => {
+    if (index === levelRank && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
-  }
-  if (numberingPPr && directNumbering) paragraphPropertyNodes.push(numberingPPr);
+  });
+  if (levelRank === chain.length && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
   if (directPPr) paragraphPropertyNodes.push(directPPr);
 
   const directMarkRun = findRunProperties(

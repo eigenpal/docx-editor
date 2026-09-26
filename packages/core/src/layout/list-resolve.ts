@@ -350,20 +350,19 @@ function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
  * The effective indent of a list paragraph: `inherited`, then the numbering LEVEL, then
  * `direct`, per attribute.
  *
- * Word applies a level's `w:pPr/w:ind` between the paragraph style and the paragraph's own
- * formatting, per attribute — and the ordering matters on real documents. A converted
- * agreement numbers its `(a)` items with a level stating `left=1512 hanging=738` under a
- * `ListParagraph` style stating `left=775 hanging=624`, and states only `hanging="737"` on
- * the paragraph itself. Reading the flattened cascade as "the paragraph's indent" gave the
- * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
- * indent step to the left of where Word puts it.
+ * A level's `w:pPr/w:ind` applies per attribute between the two tiers, and the ordering
+ * matters on real documents. A converted agreement numbers its `(a)` items with a level
+ * stating `left=1512 hanging=738` under a `ListParagraph` style stating
+ * `left=775 hanging=624`, and states only `hanging="737"` on the paragraph itself. Reading
+ * the flattened cascade as "the paragraph's indent" gave the STYLE's 775 to a level that had
+ * overridden it, so every lettered sub-item hung a full indent step to the left of where
+ * Word puts it.
  *
- * `inherited` is what the level outranks and `direct` is what outranks it. For directly
- * applied numbering these are the style chain (after the document defaults) and the
- * paragraph's own `w:pPr`. When a style supplies the numbering, the level sits directly
- * below the style that states the `w:numId`: that style, the styles based on it and the
- * paragraph's own `w:pPr` go in `direct`, and the defaults and that style's bases go in
- * `inherited`.
+ * `inherited` is what the level outranks and `direct` is what outranks it. When the
+ * paragraph's own `w:pPr` states a `w:numPr`, these are the style chain (after the document
+ * defaults) and that `w:pPr`. Otherwise the level sits directly below the nearest style that
+ * states a `w:numPr`: that style, the styles based on it and the paragraph's own `w:pPr` go
+ * in `direct`, and the defaults and that style's bases go in `inherited`.
  */
 export function mergeListIndent(
   levelIndent: NumberingLevelIndent,

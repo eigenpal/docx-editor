@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A paragraph numbered through its style keeps the indents that the numbered style states, and the list level supplies the rest.
+In a paragraph numbered through its style, the numbered style's own indents, spacing, alignment, and tab stops override the list level, and the level overrides that style's base styles.

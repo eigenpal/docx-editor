@@ -1,10 +1,9 @@
 // Where a numbering level's indent ranks when a paragraph STYLE supplies the numbering.
 //
-// The level sits directly below the style that declares the numbering (the nearest one
-// stating `w:numId`). That style, the styles based on it and the paragraph's own `w:pPr`
-// outrank the level; the declaring style's bases and the document defaults do not. A
-// paragraph whose own `w:numPr` states `w:numId` applies the numbering directly, and the
-// level then outranks the whole chain.
+// The level sits directly below the nearest style that states a `w:numPr`, even one that
+// states only `w:ilvl`. That style, the styles based on it and the paragraph's own `w:pPr`
+// outrank the level; that style's bases and the document defaults do not. A paragraph whose
+// own `w:pPr` states a `w:numPr` puts the level above the whole chain.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -51,6 +50,8 @@ const STYLES = `<w:styles xmlns:w="${W}">
   ${style('PlainOnNumOnLeftBase', '<w:keepNext/>', 'NumOnLeftBase')}
   ${style('NumOwnFirstZero', `${NUM}<w:ind w:firstLine="0"/>`)}
   ${style('NumOwnLeftRtl', `${NUM}<w:bidi/><w:ind w:left="720"/>`)}
+  ${style('NumOwnLevel0Ind', `${NUM}<w:ind w:left="2880" w:hanging="720"/>`)}
+  ${style('Ilvl1OnNumOwnLevel0Ind', '<w:numPr><w:ilvl w:val="1"/></w:numPr>', 'NumOwnLevel0Ind')}
 </w:styles>`;
 
 function paragraph(styleId: string, directPPr = '') {
@@ -109,6 +110,10 @@ describe('list indent tier when a style supplies the numbering', () => {
     expect(indentOf('PlainOnNumOnLeftBase')).toMatchObject({ left: 144, hanging: 36 });
   });
 
+  test('a child style stating only ilvl ranks its base indent below the level', () => {
+    expect(indentOf('Ilvl1OnNumOwnLevel0Ind')).toMatchObject({ ilvl: 1, left: 252, hanging: 36 });
+  });
+
   test("the declaring style's first-line slot replaces the level's hanging", () => {
     expect(indentOf('NumOwnFirstZero')).toEqual({
       ilvl: 0,
@@ -138,10 +143,11 @@ describe('list indent tier when a style supplies the numbering', () => {
   });
 });
 
-describe('a direct numPr decides the tier by its numId', () => {
-  test('a direct numPr stating only ilvl keeps the style numbering tier', () => {
+describe('a direct numPr puts the level above the whole chain', () => {
+  test('a direct numPr stating only ilvl outranks the style indent', () => {
     const direct = '<w:numPr><w:ilvl w:val="1"/></w:numPr>';
-    expect(indentOf('NumOwnLeft', direct)).toMatchObject({ ilvl: 1, left: 36, hanging: 36 });
+    expect(indentOf('NumOwnLevel0Ind', direct)).toMatchObject({ ilvl: 1, left: 252, hanging: 36 });
+    expect(indentOf('NumOwnLeft', direct)).toMatchObject({ ilvl: 1, left: 252, hanging: 36 });
     expect(indentOf('NumOnLeftBase', direct)).toMatchObject({ ilvl: 1, left: 252, hanging: 36 });
   });
 

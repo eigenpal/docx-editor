@@ -1,10 +1,15 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { buildStyleCascadeTable, resolveParagraphLayoutInputs } from '../style-cascade.ts';
+import {
+  buildStyleCascadeTable,
+  resolveParagraphLayoutInputs,
+  type TableCellStyleFormatting,
+} from '../style-cascade.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
 import { layoutSemanticDocument, createFixedMeasurer } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { propertiesOf } from '../paragraph-flow.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const num = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
 function read(xml: string) {
@@ -14,7 +19,7 @@ function read(xml: string) {
 }
 const styles = buildStyleCascadeTable(
   read(
-    `<w:styles xmlns:w="${W}"><w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr><w:spacing w:after="240" w:line="360"/><w:jc w:val="left"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Custom"><w:basedOn w:val="Normal"/><w:pPr>${num}</w:pPr></w:style></w:styles>`
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr><w:spacing w:after="240" w:line="360"/><w:jc w:val="left"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Custom"><w:basedOn w:val="Normal"/><w:pPr>${num}</w:pPr></w:style><w:style w:type="paragraph" w:styleId="OwnFormat"><w:basedOn w:val="Normal"/><w:pPr>${num}<w:spacing w:before="0" w:after="120" w:line="240"/><w:jc w:val="center"/><w:pBdr><w:bottom w:val="nil"/></w:pBdr></w:pPr></w:style><w:style w:type="paragraph" w:styleId="TabClearBase"><w:basedOn w:val="Normal"/><w:pPr><w:tabs><w:tab w:val="clear" w:pos="2880"/></w:tabs></w:pPr></w:style><w:style w:type="paragraph" w:styleId="NumOnTabClearBase"><w:basedOn w:val="TabClearBase"/><w:pPr>${num}</w:pPr></w:style></w:styles>`
   ).root
 );
 function numbering(after = '360', override = '') {
@@ -29,11 +34,12 @@ function document(props = num) {
     `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${props}</w:pPr><w:r><w:t>Item</w:t></w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p></w:body></w:document>`
   );
 }
-function inputs(props = num, index = numbering()) {
+function inputs(props = num, index = numbering(), tableCellStyle?: TableCellStyleFormatting) {
   const part = document(props);
   const blocks = part.root.children[0]!.children as OoxmlElement[];
   const items = resolveStoryListItems(blocks, index, styles);
-  return resolveParagraphLayoutInputs(blocks[0]!, 400, styles, items.get(blocks[0]!.id));
+  const item = items.get(blocks[0]!.id);
+  return resolveParagraphLayoutInputs(blocks[0]!, 400, styles, item, tableCellStyle);
 }
 test('direct numbering applies level properties over styles; direct properties win last', () => {
   const level = inputs();
@@ -47,16 +53,50 @@ test('direct numbering applies level properties over styles; direct properties w
   expect(direct.alignment).toBe('center');
   expect(direct.lineSpacing.value).toBe(240);
 });
-test('inherited numbering lets paragraph styles override the level', () => {
+// Style numbering: the level sits directly below the style that states the `w:numPr`, the
+// same rank the list indent uses. `Normal` is a base of that style, so the level outranks it.
+test('style numbering applies level properties over the base styles of the numbered style', () => {
   const inherited = inputs('<w:pStyle w:val="Custom"/>');
-  expect(inherited.spacing).toEqual({ before: 18, after: 12 });
-  expect(inherited.alignment).toBe('left');
-  expect(inherited.lineSpacing.value).toBe(360);
+  expect(inherited.spacing).toEqual({ before: 18, after: 18 });
+  expect(inherited.alignment).toBe('right');
+  expect(inherited.lineSpacing.value).toBe(480);
+  expect(inherited.borders.bottom?.widthPt).toBe(1);
+  expect(JSON.stringify(inherited.tabStops)).toContain('144');
 });
-test('a direct numPr stating only ilvl keeps the inherited numbering tier', () => {
-  const inherited = inputs('<w:pStyle w:val="Custom"/><w:numPr><w:ilvl w:val="0"/></w:numPr>');
-  expect(inherited.spacing).toEqual({ before: 18, after: 12 });
-  expect(inherited.alignment).toBe('left');
+test('the numbered style outranks its own level properties', () => {
+  const own = inputs('<w:pStyle w:val="OwnFormat"/>');
+  expect(own.spacing).toEqual({ before: 0, after: 6 });
+  expect(own.alignment).toBe('center');
+  expect(own.lineSpacing.value).toBe(240);
+  expect(own.borders.bottom).toBeUndefined();
+});
+test('a base of the numbered style cannot clear a level tab stop', () => {
+  const tabs = inputs('<w:pStyle w:val="NumOnTabClearBase"/>');
+  expect(JSON.stringify(tabs.tabStops)).toContain('144');
+});
+test('a direct numPr stating only ilvl puts the level above the whole chain', () => {
+  const ilvlOnly = inputs('<w:pStyle w:val="Custom"/><w:numPr><w:ilvl w:val="0"/></w:numPr>');
+  expect(ilvlOnly.spacing).toEqual({ before: 18, after: 18 });
+  expect(ilvlOnly.alignment).toBe('right');
+  const own = inputs('<w:pStyle w:val="OwnFormat"/><w:numPr><w:ilvl w:val="0"/></w:numPr>');
+  expect(own.spacing).toEqual({ before: 18, after: 18 });
+  expect(own.alignment).toBe('right');
+});
+test('a table style stays below the level for both kinds of numbering', () => {
+  const pPr = read(
+    `<w:pPr xmlns:w="${W}"><w:jc w:val="center"/><w:pBdr><w:bottom w:val="nil"/></w:pBdr></w:pPr>`
+  ).root;
+  const cell = {
+    paragraphProperties: propertiesOf(pPr),
+    paragraphPropertyNodes: [pPr],
+    runProperties: [],
+  };
+  for (const props of [num, '<w:pStyle w:val="Custom"/>']) {
+    const resolved = inputs(props, numbering(), cell);
+    expect(resolved.alignment).toBe('right');
+    expect(resolved.borders.bottom?.widthPt).toBe(1);
+  }
+  expect(inputs('<w:pStyle w:val="OwnFormat"/>', numbering(), cell).alignment).toBe('center');
 });
 test('level overrides replace the base paragraph formatting', () => {
   const override =
