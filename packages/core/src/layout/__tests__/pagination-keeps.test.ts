@@ -700,20 +700,20 @@ describe('keepNextFlowKeys folds over the other folds', () => {
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head splices in the AUGMENTED successor key, so a verdict flip under it moves
     // the head's own key too. Folded the other way round the head would carry a bare `p`.
-    expect(flow[0]).toBe('h~kn~p~cs~10');
+    expect(flow[0]).toBe('h~kn~7:p~cs~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its border-group verdict', () => {
     const folded = borderGroupFlowKeys(['h', 'p'], () => 'box');
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head carries its OWN group verdict too, then the successor's whole folded key.
-    expect(flow[0]).toBe('h~bg~01~kn~p~bg~10');
+    expect(flow[0]).toBe('h~bg~01~kn~7:p~bg~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its TOC verdict', () => {
     const folded = tocFieldFlowKeys(['h', 'p'], (index) => (index === 1 ? '110' : ''));
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
-    expect(flow[0]).toBe('h~kn~p~toc~110');
+    expect(flow[0]).toBe('h~kn~9:p~toc~110.');
   });
 });
 
@@ -744,7 +744,7 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
       });
     const before = fold('empty');
     const after = fold('bookmarked');
-    expect(before[0]).toBe(`lead~kn~${before[1]}`);
+    expect(before[0]).toBe(`lead~kn~${before[1]!.length}:${before[1]}`);
     for (let index = 0; index < keys.length; index++) expect(after[index]).not.toBe(before[index]);
   });
 
@@ -766,8 +766,9 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(successor).toContain('~bg~');
     expect(successor).toContain('~toc~110');
     expect(successor).toContain('~mk~M1');
-    // The whole finished successor key, spliced verbatim — the order test proper.
-    expect(composed[0]).toBe(`a~kn~${successor}`);
+    // The whole finished successor key, spliced verbatim — the order test proper. The
+    // trailing `.` records that the successor is the story's last block.
+    expect(composed[0]).toBe(`a~kn~${successor.length}:${successor}.`);
   });
 
   test('the composition equals the folds applied by hand with keepNext LAST', () => {
@@ -792,7 +793,7 @@ test('keep-next keys carry the next ordinary chain through positioned frames', (
       (index) => index === 1
     );
   const before = fold('short');
-  expect(before[0]).toBe('heading~kn~anchor~kn~short');
+  expect(before[0]).toBe('heading~kn~-6:anchor5:short.');
   expect(before[1]).toBe('positioned');
   expect(fold('long')[0]).not.toBe(before[0]);
 });

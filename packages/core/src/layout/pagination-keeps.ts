@@ -430,8 +430,9 @@ function shortestOpeningLines(
  * `w:keepNext` makes a paragraph's PLACEMENT depend on the block after it, so its own key no
  * longer describes where it lands. Editing the body text under a heading would otherwise put
  * the first changed block at the body, and a resume starting there would keep a decision the
- * heading took against the old body. Folding the successor's flow key in moves the first
- * changed block back to the head of the chain — the first block whose placement can move.
+ * heading took against the old body. Folding in the keys of the blocks its placement reads
+ * moves the first changed block back to the head of the chain — the first block whose
+ * placement can move.
  *
  * Bounded by {@link MAX_KEEP_NEXT_CHAIN}, so a document declaring `w:keepNext` on every
  * paragraph cannot grow a key linear in its own length. Returns the input array unchanged
@@ -596,12 +597,26 @@ export function sectionMarkFlowKeys(keys: string[], endsWithSectionMark: boolean
 }
 
 /**
- * Flow keys that carry a `w:keepNext` chain's SUCCESSOR KEY.
+ * Flow keys that carry the keys of every block a `w:keepNext` paragraph's placement reads.
  *
- * RUN THIS FOLD LAST. It is the only one that splices a neighbour's whole key into a
+ * RUN THIS FOLD LAST. It is the only one that splices neighbours' whole keys into a
  * block's own, so every other fold has to have finished: run it first and a chain head
  * carries its members' pre-fold keys, and a head that never re-places when a member's
  * marker text or contextual verdict moves is a stale keep-next group.
+ *
+ * Every kept block prices its own chain ({@link keepNextPlan}), the head when it decides to
+ * move and each member when it decides to split early, so each one folds its OWN window:
+ * the raw keys of the blocks that pricing can read. A window folded recursively from the
+ * successor's key would have to restart somewhere to stay bounded, and a block just past the
+ * restart would drop out of the keys of the blocks that still price it. The window matches
+ * the lookahead: it spends a slot on each positioned frame, which contributes only a skip
+ * marker, ends after the first block that keeps nothing, and stops at the chain cap. A
+ * trailing `.` records that the window reached the story's last block, whose position
+ * decides whether it ends the chain and whether a section mark keeps its page break.
+ *
+ * Each key grows by at most {@link MAX_KEEP_NEXT_CHAIN} - 1 unfolded keys, so a document
+ * declaring `w:keepNext` on every paragraph costs work linear in its length, and no single
+ * key grows with it.
  */
 export function keepNextFlowKeys(
   keys: string[],
@@ -609,18 +624,22 @@ export function keepNextFlowKeys(
   skipBlock?: (index: number) => boolean
 ): string[] {
   let flow = keys;
-  let chain = 0;
-  let next = -1;
-  for (let index = keys.length - 1; index >= 0; index -= 1) {
-    if (skipBlock?.(index)) continue;
-    if (next >= 0 && keepsNext(index) && chain < MAX_KEEP_NEXT_CHAIN) {
-      if (flow === keys) flow = [...keys];
-      flow[index] = `${keys[index]}~kn~${flow[next]}`;
-      chain += 1;
-    } else {
-      chain = 0;
+  for (let index = 0; index < keys.length - 1; index += 1) {
+    if (!keepsNext(index) || skipBlock?.(index)) continue;
+    let window = '';
+    let last = index;
+    for (let at = index + 1; at < keys.length && at - index < MAX_KEEP_NEXT_CHAIN; at += 1) {
+      last = at;
+      if (skipBlock?.(at)) {
+        window += '-';
+        continue;
+      }
+      window += `${keys[at]!.length}:${keys[at]}`;
+      if (!keepsNext(at)) break;
     }
-    next = index;
+    if (last === keys.length - 1) window += '.';
+    if (flow === keys) flow = [...keys];
+    flow[index] = `${keys[index]}~kn~${window}`;
   }
   return flow;
 }
