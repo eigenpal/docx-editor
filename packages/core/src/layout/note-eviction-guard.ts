@@ -9,10 +9,14 @@ import { rowContinuesOn } from './note-table-reference-band.ts';
 import type { PageRecord } from './semantic-records.ts';
 
 /**
- * Note lines a split head must place below a table row reference for the row to stay.
- * With fewer, the row moves to the next page with its note.
+ * Note lines a split head must place below a reference for the reference to stay while its
+ * note continues. With fewer, the reference moves to the next page with its note. Applies
+ * to table rows and to the second line of an opening orphan pair.
  */
-export const TABLE_ROW_SPLIT_NOTE_MIN_LINES = 2;
+export const SPLIT_NOTE_MIN_LINES = 2;
+
+/** {@link SPLIT_NOTE_MIN_LINES} for a table row reference. */
+export const TABLE_ROW_SPLIT_NOTE_MIN_LINES = SPLIT_NOTE_MIN_LINES;
 
 export interface EvictionGuardContext {
   /** The reserve pass's carry-independent note column ({@link noteColumnBudgetPt}). */
@@ -48,7 +52,11 @@ export interface EvictionGuardContext {
  *   moves the whole row, and at its destination the rest of the row fills the band again;
  * - a table row reference whose note would place at least
  *   {@link TABLE_ROW_SPLIT_NOTE_MIN_LINES} lines below it: the row stays and the note
- *   continues on the next page.
+ *   continues on the next page;
+ * - in the orphan-pair phase, a reference on the second line of an opening pair whose note
+ *   would place at least {@link SPLIT_NOTE_MIN_LINES} lines below it: the pair stays and the
+ *   note continues. With fewer lines the pair moves with its note, so no note starts on a
+ *   later page than its reference.
  * Multi-column sections are a known approximation: an eviction for a column-1 reference
  * also shortens column 2; refs above the eviction point still reserve, and the loop
  * otherwise degrades to the envelope/exhaustion exit.
@@ -62,7 +70,11 @@ export function evictsReferenceLine(
   return (
     band.evictable &&
     context.evictionAllowed !== false &&
-    !(context.allowOrphanDeferral && band.preserveOrphanLine) &&
+    !(
+      context.allowOrphanDeferral &&
+      band.preserveOrphanLine &&
+      splitNoteHead(laid, room, context.fullNoteColumn).lines >= SPLIT_NOTE_MIN_LINES
+    ) &&
     laid.flowHeight > room + 0.001 &&
     laid.flowHeight <= context.keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
     band.top > context.firstContentTop + 0.001 &&
