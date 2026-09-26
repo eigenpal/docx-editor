@@ -61,18 +61,8 @@ export type LocaleStrings = typeof enJson;
  *
  * @public
  */
-export type LocaleCode =
-  | 'en'
-  | 'de'
-  | 'es'
-  | 'fr'
-  | 'he'
-  | 'hi'
-  | 'id'
-  | 'pl'
-  | 'pt-BR'
-  | 'tr'
-  | 'zh-CN';
+// prettier-ignore
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;

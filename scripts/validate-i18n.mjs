@@ -136,6 +136,8 @@ function renderGeneratedBlock(codes) {
   lines.push(' *');
   lines.push(' * @public');
   lines.push(' */');
+  // Keep the generated union stable as locales extend it past the formatter width.
+  lines.push('// prettier-ignore');
   lines.push(`export type LocaleCode = ${sorted.map((c) => `'${c}'`).join(' | ')};`);
   lines.push('');
   for (const code of sorted) {
