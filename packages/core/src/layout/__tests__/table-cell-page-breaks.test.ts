@@ -154,6 +154,46 @@ describe('manual page breaks inside table cells', () => {
     expect(lines).toEqual(['Alpha ', 'Beta\fKappaLambda ', 'sit']);
   });
 
+  test('a larger ignored break adds no height when a wrapped word moves across lines', () => {
+    const control = layout(table(paragraph(text('Alpha BetaKappaLambda sit')), 2000));
+    const bigBreak = run(pageBreak, largeFont);
+    // The break moves to the next line inside the word that wraps.
+    const carried = layout(
+      table(`<w:p>${run(text('Alpha Beta'))}${bigBreak}${run(text('KappaLambda sit'))}</w:p>`, 2000)
+    );
+    // The break stays on the line that the wrapped word leaves.
+    const kept = layout(
+      table(
+        `<w:p>${run(text('Alpha'))}${bigBreak}${run(text(' Beta'))}${run(text('KappaLambda sit'))}</w:p>`,
+        2000
+      )
+    );
+    const lines = (result: SemanticLayout) =>
+      cellParagraph(result).lines.map((line) => [
+        line.spans.map((span) => span.text).join(''),
+        line.box.y,
+        line.box.height,
+        line.baseline,
+      ]);
+    expect(lines(carried)).toEqual([
+      ['Alpha ', ...lines(control)[0]!.slice(1)],
+      ['Beta\fKappaLambda ', ...lines(control)[1]!.slice(1)],
+      lines(control)[2]!,
+    ]);
+    expect(lines(kept)).toEqual([
+      ['Alpha\f ', ...lines(control)[0]!.slice(1)],
+      lines(control)[1]!,
+      lines(control)[2]!,
+    ]);
+    expect(textPlacement(carried)).toEqual(textPlacement(control));
+    expect(textPlacement(kept)).toEqual(textPlacement(control));
+    // Offsets after the break keep their source positions: `K` is offset 11, not 10.
+    const [k, c] = [cellCaret(carried, 11), cellCaret(control, 10)];
+    expect([k.x, k.y, k.height]).toEqual([c.x, c.y, c.height]);
+    expect(cellParagraph(carried).box.height).toBe(cellParagraph(control).box.height);
+    expect(cellParagraph(kept).box.height).toBe(cellParagraph(control).box.height);
+  });
+
   test('a justified line that wraps after an ignored break stretches as without the break', () => {
     const pPr = '<w:pPr><w:jc w:val="both"/></w:pPr>';
     const words = 'Loremipsumdolorsit amet';

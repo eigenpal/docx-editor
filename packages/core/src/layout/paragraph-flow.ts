@@ -1519,26 +1519,23 @@ export function breakParagraph(
           line.end = wordStartEnd;
           line.height = 0;
           line.baseline = 0;
-          for (const span of line.spans) {
-            const spanMetrics = measurer.lineMetrics(
-              styleForFontSlot(span.style, span.fontSlot),
-              span.noteSeparator ? undefined : span.text
-            );
-            growLineMetricsForText(line, spanMetrics, span.text);
-          }
+          // An ignored cell page break adds no height on either line, as when first placed.
+          const regrow = (span: StyleSpanRecord): void => {
+            if (pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) return;
+            const style = styleForFontSlot(span.style, span.fontSlot);
+            const metrics = measurer.lineMetrics(style, span.noteSeparator ? undefined : span.text);
+            growLineMetricsForText(line, metrics, span.text);
+          };
+          for (const span of line.spans) regrow(span);
           closeLine();
           for (const span of carried) {
             applyNarrowWrapSkipIfNeeded(span.text, styleForFontSlot(span.style, span.fontSlot));
-            const spanMetrics = measurer.lineMetrics(
-              styleForFontSlot(span.style, span.fontSlot),
-              span.noteSeparator ? undefined : span.text
-            );
             line.spans.push({
               ...span,
               box: { ...span.box, x: lineOrigin() + line.width },
             });
             line.width += span.box.width;
-            growLineMetricsForText(line, spanMetrics, span.text);
+            regrow(span);
             line.end = span.range.end;
           }
           wordStartSpan = 0;
