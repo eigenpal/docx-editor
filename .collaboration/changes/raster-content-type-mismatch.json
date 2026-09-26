@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A raster part with a different declared raster type painted a placeholder.",
+  "after": "The byte signature selects the raster decoder and MIME type. Format-class mismatches remain refused.",
+  "reason": "This local rendering rule does not change stored fields, operations, journal entries, or the wire format.",
+  "tests": [
+    "packages/core/src/store/__tests__/image-resources.test.ts",
+    "packages/core/src/store/__tests__/drawing-fixtures.test.ts"
+  ],
+  "changeset": "raster-content-type-mismatch",
+  "migration": null
+}

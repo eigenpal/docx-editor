@@ -198,8 +198,9 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
     assertResourceKinds: (kinds) => {
       expect(kinds.filter((kind) => kind === 'external')).toHaveLength(2);
-      expect(kinds).toContain('unrenderable');
-      expect(kinds).toContain('ready');
+      // `spoof.jpg` has PNG bytes, so its raster signature selects the decoder.
+      expect(kinds.filter((kind) => kind === 'ready')).toHaveLength(2);
+      expect(kinds).not.toContain('unrenderable');
     },
   },
   'images-wrap-sides.docx': {
