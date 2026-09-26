@@ -1,4 +1,5 @@
 import { growLineMetrics, type PendingLine } from './pending-line.ts';
+import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { borderStrokeWidthPt } from './border-metrics.ts';
@@ -117,14 +118,19 @@ export function growRunBorderLineMetrics(
   }
 }
 
-/** Natural text band for automatic spacing when an unscaled image shares the line. */
+/**
+ * Natural text band for automatic spacing when an unscaled image shares the line. An ignored
+ * cell page break adds no height here, as it adds none when first placed.
+ */
 export function textBandHeightWithBorders(
   spans: PendingLine['spans'],
   measurer: TextMeasurer,
-  fallback: number
+  fallback: number,
+  pageBreaksIgnored = false
 ): number {
   const band = { height: 0, baseline: 0, spans };
   for (const span of spans) {
+    if (pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) continue;
     growLineMetrics(
       band,
       measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot), span.text)

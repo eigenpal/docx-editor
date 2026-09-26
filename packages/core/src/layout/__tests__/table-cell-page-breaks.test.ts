@@ -37,6 +37,14 @@ const squareAnchor =
   '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
   '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
   '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+/** A 10 x 8 pt inline picture. */
+const smallInline =
+  '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="127000" cy="101600"/>' +
+  '<wp:docPr id="2" name="inline"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+  '<pic:nvPicPr><pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="127000" cy="101600"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+  '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
 
 function part(body: string) {
   const result = readOoxmlPart(`<w:document ${NAMESPACES}><w:body>${body}</w:body></w:document>`, {
@@ -139,6 +147,36 @@ describe('manual page breaks inside table cells', () => {
     expect(cellParagraph(lineBreak).lines[0]!.box.height).toBeGreaterThan(
       control.lines[0]!.box.height
     );
+  });
+
+  test('a larger ignored break adds no height beside an inline picture with auto spacing', () => {
+    const pPr = '<w:pPr><w:spacing w:line="276" w:lineRule="auto"/></w:pPr>';
+    const cell = (breakRun: string) =>
+      layout(
+        table(
+          `<w:p>${pPr}${smallInline}${run(text('Alpha'))}${breakRun}${run(text('Beta'))}</w:p>`
+        ),
+        true
+      );
+    const lines = (result: SemanticLayout) =>
+      cellParagraph(result).lines.map((line) => [line.box.y, line.box.height, line.baseline]);
+    const control = cell('');
+    const result = cell(run(pageBreak, largeFont));
+    expect(lines(result)).toEqual(lines(control));
+    expect(cellParagraph(result).box.height).toBe(cellParagraph(control).box.height);
+    // A manual line break run still sizes the text band of the line that it ends.
+    const lineBreak = cell(run('<w:br/>', largeFont));
+    expect(lines(lineBreak)[0]![1]).toBeGreaterThan(lines(control)[0]![1]!);
+    // A body page break run still sizes the line that it ends.
+    const body = (breakRun: string) => {
+      const first = layout(
+        `<w:p>${pPr}${smallInline}${run(text('Alpha'))}${breakRun}${run(text('Beta'))}</w:p>`,
+        true
+      ).pages[0]!.fragments[0]!;
+      if (first.kind !== 'paragraph') throw new Error('Expected paragraph');
+      return first.lines[0]!.box.height;
+    };
+    expect(body(run(pageBreak, largeFont))).toBeGreaterThan(body(run(pageBreak)));
   });
 
   test('an ignored break is not a wrap opportunity', () => {

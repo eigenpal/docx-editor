@@ -989,7 +989,7 @@ export function breakParagraph(
       line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
     const spacingBase = scalesTextBandOnly
-      ? textBandHeightWithBorders(line.spans, measurer, metrics.height)
+      ? textBandHeightWithBorders(line.spans, measurer, metrics.height, pageBreaksIgnored)
       : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
