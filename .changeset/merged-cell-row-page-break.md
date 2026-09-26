@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Keep merged cell text within its table fragment when a later row starts a new page.
+A table row that continues a vertical merge in any column ignores "Page break before" and keeps its placement.
