@@ -699,11 +699,10 @@ export interface TableRowFragmentRecord {
    * but excluded from interaction walks so each caret stop exists exactly once.
    */
   readonly isHeaderRepeat: boolean;
-  /**
-   * True when this record continues a row that already emitted content on a prior page
-   * (cell content fragmented at a paragraph/line boundary). Same `id` as the lead fragment.
-   */
+  /** True when this record continues a row split at a line boundary; same `id` as its head. */
   readonly isContinuation?: boolean;
+  /** True for a `w:cantSplit` or exact-height row: it stays whole where a page holds it. */
+  readonly placesWhole?: boolean;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
 }

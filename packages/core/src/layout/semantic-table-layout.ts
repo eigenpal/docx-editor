@@ -1591,6 +1591,7 @@ export function layoutRowFragmentBounded(
       isHeaderRow: row.isHeader,
       isHeaderRepeat,
       ...(isContinuation ? { isContinuation: true as const } : {}),
+      ...(row.cantSplit || row.height.rule === 'exact' ? { placesWhole: true as const } : {}),
       cells,
       box: { x: left, y: rowTop, width: total, height: rowHeight },
     },

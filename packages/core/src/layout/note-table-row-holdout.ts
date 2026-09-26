@@ -3,11 +3,7 @@
 import { bodyCursorBottomPt } from './note-fragment-geometry.ts';
 import { layoutNoteCached } from './note-layout.ts';
 import type { HoldOutArgs, HoldOutRef } from './note-reserve-holdout.ts';
-import {
-  HELD_RESERVE_TOLERANCE_PT,
-  noteColumnBudgetPt,
-  RESERVE_BOUNDARY_BACKOFF_PT,
-} from './note-reserves.ts';
+import { noteColumnBudgetPt, RESERVE_BOUNDARY_BACKOFF_PT } from './note-reserves.ts';
 import { splitNoteHead, TABLE_ROW_SPLIT_NOTE_MIN_LINES } from './note-eviction-guard.ts';
 import {
   rowKeepsWithNext,
@@ -22,13 +18,11 @@ import type { PageRecord, TableFragmentRecord } from './semantic-records.ts';
 /**
  * Reserve (pt) `bodyPage` must keep so the table row that opens `nextPage` stays there.
  *
- * The row counterpart of the paragraph hold-out ({@link holdOutReserveNeed}). A row moves
- * whole to the next page in two ways: the reserve evicts it because its note would place
- * fewer than two lines below the reference ({@link evictsReferenceLine}), or its note fits
- * whole below the reference line and the row cannot continue below that line (`w:cantSplit`,
- * an exact height), so the body pass moves it with its note. Once it has moved, the source
- * page no longer sees its reference, the note stack alone under-claims, and the next round
- * pulls the row back. When the row cannot return with its notes, the source page claims its
+ * The row counterpart of the paragraph hold-out ({@link holdOutReserveNeed}). A reserve evicts
+ * a table row whose note would place fewer than two lines below the row's band
+ * ({@link evictsReferenceLine}), and the row moves whole. Once it has moved, the source page no
+ * longer sees its reference, the note stack alone under-claims, and the next round pulls the
+ * row back. When the returning row would be evicted again, the source page claims its
  * remaining slack so the move reproduces itself.
  *
  * Zero, so the row may return, unless every part of that move holds: both pages stack in one
@@ -36,19 +30,15 @@ import type { PageRecord, TableFragmentRecord } from './semantic-records.ts';
  * not keep with the next; the next page opens with that table's continuation, and its
  * first body row is whole (not the rest of a split row) and carries a page-bottom
  * reference in a proven row band. Rows ahead of the reference row return on their own, so
- * a later reference row holds nothing. A slack that cannot seat the row down to its first
- * reference line needs no reserve to keep the row out. A note the eviction guard would
- * split anyway (taller than the note column minus the header rows and the row above its
- * reference) does not count.
+ * a later reference row holds nothing. A source page whose own notes leave no room for the
+ * row down to its first band bottom needs no reserve to keep the row out. A note the
+ * eviction guard would split anyway (taller than the note column minus the header rows and
+ * the row above its reference) does not count.
  *
- * The return replays the eviction guard with the row below the source page's body. A row
- * that can continue below its reference line returns at least down to that line, and it
- * stays unless a note would evict it again. A row that places whole returns only when it
- * fits beside the source page's notes, and it stays only when its own notes fit too. The
- * fragments cannot tell the two kinds apart, so where the answers differ the body pass's
- * answer decides, as in the paragraph hold-out: a source page that was offered room down
- * to the reference line and still ended above the row holds a row that places whole, and
- * a page already held at this value keeps the hold.
+ * The return replays the eviction guard with the row below the source page's body and its
+ * band as the next page reports it: the lowest legal split that keeps the reference line in a
+ * row that can continue below it ({@link referenceRowCut}), else the whole row. The hold
+ * stands only when a note would evict the row again.
  */
 export function tableRowHoldOutNeed(
   args: HoldOutArgs,
@@ -77,12 +67,13 @@ export function tableRowHoldOutNeed(
   const contentHeight = bodyPage.contentBox.height;
   const bodyBottom = bodyCursorBottomPt(bodyPage);
   const slack = contentHeight - bodyBottom;
-  // The row's content down to its first reference line: the least of it that can return
-  // with a reference. A slack below that needs no reserve to keep the row out, and
-  // publishing one for every naturally full page would churn the reserve fingerprints.
+  // The least of the row that can return with a reference: down to its first band bottom
+  // (the reference line in a row that continues below it, else the whole row). A page whose
+  // own notes leave no room for that needs no reserve to keep the row out, and publishing
+  // one for every naturally full page would churn the reserve fingerprints.
   let seat = Number.POSITIVE_INFINITY;
   for (const { band } of pulled) seat = Math.min(seat, band.bottom - row.box.y);
-  if (slack < seat - 0.001) return 0;
+  if (slack - args.existingAreaHeight < seat - 0.001) return 0;
 
   const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
   const fullNoteColumn = Math.max(0, contentHeight - args.plainSeparatorHeight);
@@ -99,7 +90,7 @@ export function tableRowHoldOutNeed(
     );
     if (!laid) continue;
     if (laid.flowHeight > columnBudget - (band.bottom - band.blockTop) + 0.001) continue;
-    // The guard's room on return: below the reference line, under the source page's notes.
+    // The guard's room on return: below the band, under the source page's notes.
     const room = Math.max(
       0,
       contentHeight - (bodyBottom + band.bottom - row.box.y) - area - stacked
@@ -115,28 +106,8 @@ export function tableRowHoldOutNeed(
     }
     stacked += head.height;
   }
-  if (!evicts && stacked <= 0) return 0;
-
   // Backed off like the eviction reserve, so the body budget lands inside the row.
-  const hold = Math.max(0, slack - RESERVE_BOUNDARY_BACKOFF_PT);
-  // A row that returns down to its reference line stays unless a note evicts it again.
-  const splitAnswer = evicts ? hold : 0;
-  // A row that returns only whole needs room beside the source page's notes first; then
-  // it stays unless a note evicts it or its notes push it out again.
-  const wholeAnswer =
-    bodyBottom + row.box.height + area > contentHeight + 0.001
-      ? 0
-      : evicts || bodyBottom + row.box.height + area + stacked > contentHeight + 0.001
-        ? hold
-        : 0;
-  if (splitAnswer === wholeAnswer) return splitAnswer;
-  const { usedReservePt } = args;
-  if (usedReservePt === undefined) return 0;
-  if (Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT) return hold;
-  // Offered room down to the reference line, the body pass still ended above the row: the
-  // row places whole.
-  const offeredGap = Math.max(0, contentHeight - usedReservePt - bodyBottom);
-  return seat <= offeredGap + 0.001 ? wholeAnswer : splitAnswer;
+  return evicts ? Math.max(0, slack - RESERVE_BOUNDARY_BACKOFF_PT) : 0;
 }
 
 function lastInFlowFragment(page: PageRecord): PageRecord['fragments'][number] | undefined {

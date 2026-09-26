@@ -19,13 +19,15 @@
 // A vertical merge in ANOTHER cell does not disqualify the row: the paginator already
 // carries a merge across a page break between two of its rows.
 //
-// Inside the row, notes budget below the reference LINE when it is a direct horizontal cell
-// line. A splittable row then continues on the next page below that line, and its note
-// stays whole on the reference page. A row that places whole (`w:cantSplit`, an exact
-// height) cannot leave the line behind, so the body pass moves it with its note, and the
-// row hold-out keeps it there. An eviction always moves the whole row: `top` is the row's.
-// The reserve pass evicts a row only when its note would place fewer than two lines below
-// the reference ({@link evictsReferenceLine}); otherwise the note splits.
+// Inside the row, notes budget below the reference LINE only when the row can continue on
+// the next page below that line: a direct horizontal cell line, in a row that does not place
+// whole (`w:cantSplit`, an exact height; `placesWhole` on the record), with a legal break in
+// every cell and content left below it ({@link referenceRowCut}). The band then ends at that
+// break, the note stays whole on the reference page, and the rest of the row moves. Every
+// other row budgets below its whole box, which includes the cells' space after, bottom
+// margins, and a minimum height. An eviction always moves the whole row: `top` is the row's.
+// The reserve pass evicts a row only when its note would place fewer than two lines below the
+// band ({@link evictsReferenceLine}); otherwise the note splits.
 //
 // `evictable` additionally needs the row to be movable as one unit to the next page without
 // recreating the same shape there: it must not continue a split row, a body row of this
@@ -37,6 +39,7 @@
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentOwnsPosition, lineSegments, segmentOwnsAtomOffset } from './line-segments.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
+import { referenceRowCut } from './note-table-row-cut.ts';
 import type {
   BlockFragmentRecord,
   PageRecord,
@@ -54,9 +57,10 @@ export interface TableReferenceRowBand {
   /** The row's top: an eviction moves the whole row. */
   readonly top: number;
   /**
-   * The reference line's bottom for a direct horizontal cell line, else the row's bottom.
-   * Notes budget below it; a splittable row continues on the next page below that line,
-   * and a row that places whole moves with its note.
+   * When the row can continue on the next page below the reference line, the lowest legal
+   * split point that keeps that line ({@link referenceRowCut}); else the row box's bottom,
+   * which includes the cells' space after, bottom margins, and a minimum row height. Notes
+   * budget below it.
    */
   readonly bottom: number;
   /**
@@ -109,7 +113,8 @@ export function tableReferenceRowBand(
       !previous.isHeaderRow &&
       !rowKeepsWithNext(previous) &&
       stacksInOneColumn(page);
-    const bottom = lineBottom ?? top + row.box.height;
+    const cut = lineBottom === undefined ? null : referenceRowCut(row, cell, lineBottom);
+    const bottom = cut ?? top + row.box.height;
     const endsPage = endsPageFlow(page, table, row);
     return { top, bottom, blockTop: top - headerHeight, evictable, endsPage, row };
   }

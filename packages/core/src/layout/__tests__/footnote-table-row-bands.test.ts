@@ -491,6 +491,141 @@ describe('a multi-line referencing row', () => {
   });
 });
 
+describe('legal breaks inside a multi-line referencing row', () => {
+  // Row 5's first cell holds one paragraph of several lines, and its second cell cites a
+  // four-line note from its only line. One line of intro leaves three note lines below the
+  // whole row and five below the reference line.
+  const refs = new Map([[5, 1]]);
+  const notes = new Map([[1, 4]]);
+  const body = (first: string) =>
+    para('INTRO', 1) +
+    tbl(rows(8, refs, (n, spec) => (n === 5 ? { ...spec, first } : spec))) +
+    TAIL;
+
+  test('a paragraph without widow control breaks below the reference line', () => {
+    const laid = layoutProbe(body(para('R5a', 3)), notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1',
+      'R5a3 R6a R6b R7a R7b R8a R8b TAIL | ',
+    ]);
+    expect(bandOf(laid, 1).band.bottom - bandOf(laid, 1).band.top).toBeCloseTo(14, 3);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a three-line paragraph under widow control keeps the row whole', () => {
+    // Widow control allows no break in three lines, so the row stays whole and the note
+    // splits below it.
+    const laid = layoutProbe(body(para('R5a', 3, { widow: true })), notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
+      'R7a R7b R8a R8b TAIL | 1c',
+    ]);
+    const { band, table } = bandOf(laid, 1);
+    const row = table.rows.find((r) => r.rowIndex === 4)!;
+    expect(band.bottom).toBeCloseTo(row.box.y + row.box.height, 3);
+    expect(noteLines(laid.layout, 0, 1)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a paragraph that keeps its lines together keeps the row whole', () => {
+    const laid = layoutProbe(body(para('R5a', 3, { keepLines: true })), notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
+      'R7a R7b R8a R8b TAIL | 1c',
+    ]);
+    expect(noteLines(laid.layout, 0, 1)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('widow control moves the band to the first legal break', () => {
+    // Four lines under widow control break only after the second line, so the band ends there.
+    const laid = layoutProbe(body(para('R5a', 4, { widow: true })), notes);
+    const { band } = bandOf(laid, 1);
+    expect(band.bottom - band.top).toBeCloseTo(28, 3);
+    expect(pages(laid.layout)[0]).toBe('INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1');
+    expect(noteLines(laid.layout, 0, 1)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});
+
+describe('a row that cannot continue below its reference line', () => {
+  // Row 5 cites a long note. The row cannot split below the reference line, so the note
+  // budgets below the whole row box, and the row stays when two note lines fit there.
+  const refs = new Map([[5, 1]]);
+  /** An empty paragraph of exact height `pt`, which shifts the table by that much. */
+  const spacer = (pt: number) =>
+    `<w:p><w:pPr><w:widowControl w:val="0"/><w:spacing w:before="0" w:after="0" ` +
+    `w:line="${pt * 20}" w:lineRule="exact"/></w:pPr></w:p>`;
+  /** Every cell paragraph gets 8pt space after, so each one-line row is 22pt tall. */
+  const after8 = (xml: string) =>
+    xml.replaceAll('w:after="0" w:line="280"', 'w:after="160" w:line="280"');
+  const rowBand = (laid: Laid) => {
+    const { band, table } = bandOf(laid, 1);
+    const row = table.rows.find((r) => r.rowIndex === 4)!;
+    expect(band.bottom).toBeCloseTo(row.box.y + row.box.height, 3);
+    return row;
+  };
+
+  test('a row that cannot split keeps three lines and splits the note', () => {
+    const kept = rows(8, refs, (n, spec) =>
+      n === 5 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R5a', 3) } : spec
+    );
+    const laid = layoutProbe(para('INTRO', 1) + tbl(kept) + TAIL, new Map([[1, 4]]));
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
+      'R7a R7b R8a R8b TAIL | 1c',
+    ]);
+    expect(rowBand(laid).placesWhole).toBe(true);
+    expect(noteLines(laid.layout, 0, 1)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('an exact-height row keeps its height and splits the note', () => {
+    const exact = rows(8, refs, (n, spec) =>
+      n === 5 ? { ...spec, trPr: '<w:trHeight w:val="600" w:hRule="exact"/>' } : spec
+    );
+    const laid = layoutProbe(INTRO + tbl(exact) + TAIL, new Map([[1, 6]]));
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 | 1',
+      'R6a R6b R7a R7b R8a R8b TAIL | 1c',
+    ]);
+    expect(rowBand(laid).box.height).toBeCloseTo(30, 3);
+    expect(noteLines(laid.layout, 0, 1)).toBe(3);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('rows with space after keep it below the reference line', () => {
+    // The 13pt spacer leaves two note lines below row 5, counting its space after.
+    const laid = layoutProbe(spacer(13) + after8(tbl(rows(9, refs))) + TAIL, new Map([[1, 6]]));
+    expect(pages(laid.layout)[0]).toBe('R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 | 1');
+    expect(noteLines(laid.layout, 0, 1)).toBe(2);
+    expect(rowBand(laid).box.height).toBeCloseTo(22, 3);
+    expect(laid.fixedPoint).toBe(true);
+    // With a 5pt spacer, two lines fit below the space after and three below the line. The
+    // row keeps its space after, so the note places two lines.
+    const tight = layoutProbe(spacer(5) + after8(tbl(rows(9, refs))) + TAIL, new Map([[1, 6]]));
+    expect(pages(tight.layout)[0]).toBe('R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 | 1');
+    expect(noteLines(tight.layout, 0, 1)).toBe(2);
+    expect(tight.fixedPoint).toBe(true);
+  });
+
+  test('an at-least row keeps its minimum height and splits the note', () => {
+    const atLeast = rows(9, refs, (n, spec) =>
+      n === 5 ? { ...spec, trPr: '<w:trHeight w:val="500" w:hRule="atLeast"/>' } : spec
+    );
+    const laid = layoutProbe(spacer(1) + tbl(atLeast) + TAIL, new Map([[1, 6]]));
+    expect(pages(laid.layout)).toEqual([
+      'R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 R6a R6b | 1',
+      'R7a R7b R8a R8b R9a R9b TAIL | 1c',
+    ]);
+    const row = rowBand(laid);
+    expect(row.box.height).toBeCloseTo(25, 3);
+    expect(row.placesWhole).toBeUndefined();
+    expect(noteLines(laid.layout, 0, 1)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});
+
 describe('rows that keep the whole-table band', () => {
   const refs = new Map([[5, 1]]);
   const notes = new Map([[1, 1]]);

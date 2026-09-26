@@ -4460,6 +4460,7 @@ export interface TableRowFragmentRecord {
     readonly isContinuation?: boolean;
     readonly isHeaderRepeat: boolean;
     readonly isHeaderRow: boolean;
+    readonly placesWhole?: boolean;
     // (undocumented)
     readonly revisionAuthor?: string;
     // (undocumented)

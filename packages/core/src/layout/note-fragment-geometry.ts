@@ -193,9 +193,9 @@ export function firstBodyContentTopPt(page: PageRecord): number {
  *
  * A ref inside a body table takes its ROW's band ({@link tableReferenceRowBand}): the row
  * box is in page-content coordinates and the row moves to the next page as one unit, with
- * `blockTop` above it by the header rows that repeat there. The bottom is the reference
- * line's own bottom where the line is a direct horizontal cell line, so the rest of a
- * splittable row can continue on the next page. Where the row cannot be proven the band
+ * `blockTop` above it by the header rows that repeat there. The bottom is the lowest legal
+ * split that keeps the reference line where the row can continue on the next page below it
+ * (`referenceRowCut`), else the row box's bottom. Where the row cannot be proven the band
  * ({@link tableReferenceRowBand} lists the cases), the band is the TABLE fragment's box.
  *
  * `evictable` is false when the geometry cannot support that move: a table ref outside a
