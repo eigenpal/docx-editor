@@ -127,6 +127,8 @@ describe('a word split across runs is placed as the same text in one run', () =>
       'an inline picture beside a float',
       { prefix: float(0, 60) + inline(30, 20), text: TEXT, cell: 3000 },
     ],
+    ['a float that leaves the word but not its space', { prefix: float(0, 400), text: TEXT }],
+    ['a float at the left of a wider cell', { prefix: float(0, 60), text: TEXT, cell: 2400 }],
     [
       'a word wider than the passage beside the float',
       {
@@ -186,5 +188,30 @@ describe('a word split across runs is placed as the same text in one run', () =>
       inlineDrawingLayout: layoutContext(edited.part),
     });
     expect(JSON.parse(JSON.stringify(incremental))).toEqual(JSON.parse(JSON.stringify(clean)));
+  });
+});
+
+describe('a word that moves to a line where only its ink fits', () => {
+  const lines = (shape: Shape) => {
+    const result = layout(shape, run(shape.text));
+    const block = result.pages[0]!.fragments[0]!;
+    const p = block.kind === 'table' ? block.rows[0]!.cells[0]!.blocks[0]! : block;
+    if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
+    return p.lines.map((line) => line.spans.map((span) => span.text).join(''));
+  };
+
+  test('hangs its trailing space instead of starting the next line with it', () => {
+    // A 27.5 pt cell holds `Alpha` (27.3 pt) but not `Alpha `.
+    expect(lines({ prefix: '', text: 'xx Alpha sit', cell: 570 })).toEqual([
+      'xx ',
+      'Alpha ',
+      'sit',
+    ]);
+    expect(lines({ prefix: '', text: 'xx Alpha ', cell: 570 })).toEqual(['xx ', 'Alpha ']);
+    expect(lines({ prefix: float(0, 400), text: 'xx AlphaBetaGam sit amet' })).toEqual([
+      'xx ',
+      'AlphaBetaGam ',
+      'sit amet',
+    ]);
   });
 });

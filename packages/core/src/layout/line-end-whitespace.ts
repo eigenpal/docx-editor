@@ -1,5 +1,6 @@
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import type { StyleSpanRecord } from './semantic-records.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 /** Spaces Word may hang/clip at a line end instead of wrapping onto a new line. */
 export function isCollapsibleLineEndWhitespace(text: string): boolean {
@@ -32,6 +33,12 @@ interface ClippedWordEnd {
   readonly length: number;
   readonly visibleWidth: number;
   readonly width: number;
+}
+
+/** The advance of a word without its trailing spaces; undefined when it has none, or no ink. */
+export function wordInkWidth(text: string, measure: (text: string) => number): number | undefined {
+  const ink = withoutTrailingSpaces(text);
+  return ink.length === 0 || ink.length === text.length ? undefined : measure(ink);
 }
 
 /** Price only the ink when a word fits but its trailing separator crosses the margin. */

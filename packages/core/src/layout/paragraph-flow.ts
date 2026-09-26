@@ -1381,16 +1381,22 @@ export function breakParagraph(
         boundary === piece.text.length &&
         pieces[pieceIndex + 1] !== undefined &&
         cjkBreaks?.decision(pieces[pieceIndex + 1]!, 0) === 'forbidden';
-      const clippedWordEnd =
-        !layoutOwned && piece.measureText === undefined && !protectedEnd
+      const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !protectedEnd;
+      const naturalWidth = width;
+      const measureFace = (text: string) =>
+        measurer.measure(displayText(text, faceStyle), faceStyle);
+      // Against the line the word lands on: it may move before it is placed.
+      const clipWordEndAtPen = () =>
+        clipsWordEnd
           ? lineEndSpaces.clipWordEnd(
               candidate,
-              width,
+              naturalWidth,
               lineAvailable() - line.width,
-              (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
+              measureFace,
               OVERFLOW_TOLERANCE_PT
             )
           : undefined;
+      let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
       const hangs =
         typography.overflowPunctuation &&
@@ -1476,15 +1482,21 @@ export function breakParagraph(
           ) &&
           holdsContent())
       ) {
+        // Trailing spaces hang at a line end, so only the word's ink needs room where it goes.
+        const inkWidth =
+          clipsWordEnd && !opticalFit
+            ? lineEndSpaces.wordInkWidth(candidate, measureFace)
+            : undefined;
+        const placeWidth = inkWidth ?? fitWidth;
         if (openDecision === 'forbidden' && (wordStartSpan < 0 || wordOpensLine())) {
           // Keep the protected seam on this line. The chop below may still use later safe
           // cuts inside an oversized Latin word; only its leading fragment must stay here.
         } else if (opensWord || wordStartSpan < 0) {
-          if (tryAdvanceToNextPassage() && line.width + fitWidth <= lineAvailable() + 0.001) {
+          if (tryAdvanceToNextPassage() && line.width + placeWidth <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
           } else {
             closeLine();
-            if (!ensurePlacementWidth(fitWidth)) continue;
+            if (!ensurePlacementWidth(placeWidth)) continue;
             wordStartSpan = 0;
             wordStartWidth = 0;
             wordStartEnd = line.end;
@@ -1496,12 +1508,16 @@ export function breakParagraph(
           const start = carryPartialWord(
             wordCarry,
             { span: wordStartSpan, width: wordStartWidth, end: wordStartEnd, ...wordStartMetrics },
-            fitWidth
+            placeWidth
           );
           wordStartSpan = start.span;
           wordStartWidth = start.width;
           wordStartEnd = start.end;
           wordStartMetrics = { height: start.height, baseline: start.baseline };
+        }
+        if (inkWidth !== undefined) {
+          clippedWordEnd = clipWordEndAtPen();
+          width = clippedWordEnd?.width ?? naturalWidth;
         }
       } else if (!holdsContent() && fitWidth > lineAvailable() + 0.001) {
         if (!ensurePlacementWidth(fitWidth)) continue;
