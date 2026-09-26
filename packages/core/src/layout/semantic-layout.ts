@@ -2631,7 +2631,7 @@ function layoutBlocksPass(
             appliedSkipByLineIndex,
             fragmentBefore
           );
-      // Word can let auto/atLeast spacing below the glyph band cross the bottom text
+      // Word can let auto spacing below the glyph band cross the bottom text
       // margin. The painted line keeps its full box; only the pagination budget drops that
       // trailing external depth.
       const lineExtent =

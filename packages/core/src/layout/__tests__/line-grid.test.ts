@@ -129,10 +129,12 @@ describe('line box under an active line grid', () => {
     expect(applyLineSpacing({ ...atLeast, value: 20 }, 14, 11.2)).toEqual({
       height: 20,
       baseline: 11.2 + 6,
+      trailing: 0,
     });
     expect(applyLineSpacing({ ...atLeast, value: 10 }, 14, 11.2)).toEqual({
       height: 14,
       baseline: 11.2,
+      trailing: 0,
     });
   });
 

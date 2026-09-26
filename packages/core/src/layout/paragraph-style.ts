@@ -474,8 +474,9 @@ export function applyLineSpacing(
   if (delta < 0) {
     return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
   }
-  // atLeast: grow the box UPWARD, so the glyph band keeps its depth below the baseline.
-  if (spacing.rule === 'atLeast') return { height, baseline: naturalBaseline + delta };
+  // atLeast: grow the box UPWARD, so the glyph band keeps its depth below the baseline. The
+  // growth is above the band, so none of it may hang below the bottom text margin.
+  if (spacing.rule === 'atLeast') return { height, baseline: naturalBaseline + delta, trailing: 0 };
   // auto: grow the box downward; baseline stays put.
   return { height, baseline: naturalBaseline };
 }

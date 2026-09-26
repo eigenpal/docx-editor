@@ -95,8 +95,8 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 /**
  * Body bottom (content-relative pt) the note passes BUDGET against.
  *
- * MINUS each paragraph's trailing after-spacing and its last line's trailing `auto` /
- * `atLeast` depth: the page-fit decision admits a line without charging either (the
+ * MINUS each paragraph's trailing after-spacing and its last line's trailing `auto`
+ * depth: the page-fit decision admits a line without charging either (the
  * after-spacing moves to the next page with the flow, and the depth below the glyph band
  * may cross the bottom of the text area), but the fragment BOX includes both — so a page
  * whose last line carries either "uses" more height here than the fit rule budgeted, the

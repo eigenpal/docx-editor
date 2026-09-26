@@ -1,4 +1,4 @@
-// The body fit rule lets a page's last line carry its trailing `auto` / `atLeast` depth
+// The body fit rule lets a page's last line carry its trailing `auto` depth
 // past the bottom of the text area. The note passes measure the body the same way, so a
 // note the reserve fit whole is not split or carried at attach time. A reference line
 // still needs its full box above its note.
