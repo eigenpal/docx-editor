@@ -869,11 +869,18 @@ export function breakParagraph(
   /** The last character emitted, which decides whether the NEXT span may open a line. */
   let lastEmitted = '';
 
+  /**
+   * Band of the runs that hold this line's placed inline pictures. Under `auto` spacing it is
+   * the text band of a line without text: never the paragraph's run cascade or its mark.
+   */
+  let pictureRunBand: { height: number; baseline: number } | undefined;
   const growLineMetricsForDrawing = (
     style: ResolvedRunStyle,
     measure: ReturnType<typeof measureInlineDrawing>
   ): { extentTopY: number } => {
     const textMetrics = measurer.lineMetrics(style);
+    pictureRunBand ??= { height: 0, baseline: 0 };
+    growLineMetrics(pictureRunBand, textMetrics);
     const layout = inlineDrawingVerticalLayout(
       textMetrics.baseline,
       line.height || textMetrics.height,
@@ -952,7 +959,12 @@ export function breakParagraph(
       line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
     const spacingBase = scalesTextBandOnly
-      ? textBandHeightWithBorders(line.spans, measurer, metrics.height, pageBreaksIgnored)
+      ? textBandHeightWithBorders(
+          line.spans,
+          measurer,
+          pictureRunBand?.height ?? metrics.height,
+          pageBreaksIgnored
+        )
       : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
@@ -986,6 +998,7 @@ export function breakParagraph(
     wordStartSpan = -1;
     wordStartWidth = 0;
     alignedTabRight = 0;
+    pictureRunBand = undefined;
     line = {
       spans: [],
       drawings: [],
