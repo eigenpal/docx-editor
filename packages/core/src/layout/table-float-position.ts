@@ -3,6 +3,7 @@
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { marginInset } from './page-body-margins.ts';
 
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -308,11 +309,13 @@ export function bodyTableVerticalAnchorFrames(
   cursorY: number,
   marginTop: number
 ): TableVerticalAnchorFrames {
+  // `marginTop` is the signed authored value; the margin frame starts at its size.
+  const top = marginInset(marginTop);
   return {
     text: { top: cursorY, height: Math.max(0, input.contentHeight - cursorY) },
     margin: {
-      top: marginTop - input.contentInsetTop,
-      height: Math.max(0, input.pageHeight - marginTop - input.marginBottom),
+      top: top - input.contentInsetTop,
+      height: Math.max(0, input.pageHeight - top - input.marginBottom),
     },
     page: { top: -input.contentInsetTop, height: input.pageHeight },
   };

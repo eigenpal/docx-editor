@@ -8,6 +8,7 @@ import {
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { holdsOnlyPageBreak } from './pending-line.ts';
+import { marginInset } from './page-body-margins.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
 
 type BodyAnchorFrameBase = Omit<
@@ -39,7 +40,7 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     pageHeight: geometry.height,
     marginLeft: geometry.margin.left,
     marginRight: geometry.margin.right,
-    marginBottom: geometry.margin.bottom,
+    marginBottom: marginInset(geometry.margin.bottom),
     // Effective insets keep page-relative anchors stable when tall furniture moves body text.
     contentInsetTop: insets.top,
     contentInsetBottom: insets.bottom,

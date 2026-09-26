@@ -1412,7 +1412,7 @@ function layoutBlocksPass(
     for (const fragment of paragraphFrames.publish(
       {
         page: { x: -geometry.margin.left, y: -inset },
-        margin: { x: 0, y: geometry.margin.top - inset },
+        margin: { x: 0, y: Math.abs(geometry.margin.top) - inset },
         text: { x: columnLeft(), y: anchorY },
       },
       anchorId,

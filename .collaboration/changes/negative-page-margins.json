@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Layout read a negative w:pgMar top or bottom as a small inset that any header or footer exceeded, so tall page furniture pushed the text down. Page setup writes that kept an authored negative margin checked the signed sum against the page height.",
+  "after": "Layout reads a negative w:pgMar top or bottom as an exact inset of its absolute value that page furniture does not move. Page setup writes check the absolute values, so a write the read side would treat as a page with no text area is refused.",
+  "reason": "The change reads existing section XML differently during layout and tightens one local validation check. It adds no shared state, operations, snapshot fields, or protocol messages, and it does not change any saved attribute value.",
+  "tests": [
+    "packages/core/src/layout/__tests__/negative-page-margins.test.ts",
+    "packages/core/src/store/__tests__/tree-ops.test.ts"
+  ],
+  "changeset": "negative-page-margins",
+  "migration": null
+}

@@ -26,6 +26,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { parsePageBorders, type SectionPageBorders } from './page-borders.ts';
+import { marginInset } from './page-body-margins.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -652,6 +653,9 @@ function enumerateSectionsUncached(
  *
  * The gutter is added to the LEFT margin: it is binding allowance, extra space on the inner
  * edge, and folding it into the content width instead would silently narrow every line.
+ *
+ * Top and bottom keep the authored sign of `w:pgMar`: a negative value is an exact inset that
+ * header and footer height never moves. Read them through `page-body-margins.ts`.
  */
 export function geometryOfSection(section: SectionProperties): PageGeometry {
   const width = twipsToPoints(asTwips(section.pageSize.widthTwips));
@@ -662,8 +666,11 @@ export function geometryOfSection(section: SectionProperties): PageGeometry {
   const bottom = twipsToPoints(asTwips(section.margins.bottomTwips));
 
   // A page whose margins exceed it has no content area at all, and paginating into a
-  // zero-height column never terminates. Fall back rather than hang.
-  if (width - left - right <= 0 || height - top - bottom <= 0) return DEFAULT_PAGE_GEOMETRY;
+  // zero-height column never terminates. Fall back rather than hang. Top and bottom keep
+  // their authored sign (a negative one is exact, not smaller), so the test reads the insets.
+  if (width - left - right <= 0 || height - marginInset(top) - marginInset(bottom) <= 0) {
+    return DEFAULT_PAGE_GEOMETRY;
+  }
   return {
     width,
     height,
