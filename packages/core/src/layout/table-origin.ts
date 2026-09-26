@@ -34,11 +34,12 @@ export function positionedTableOriginX(
 /**
  * Where a table's left edge sits inside the box that contains it.
  *
- * Ordinary left-aligned tables start at their indent; centered/right-aligned tables
- * use the remaining width. `outerRuleOffsetPt` then moves the grid inward by half the
- * outer side rule where the table puts that rule's outer edge on the aligned edge. A
- * verified legacy content-aligned table instead aligns the leading cell's content edge
- * with the text column, without changing its indent.
+ * Ordinary left-aligned tables start at their indent, which may be negative. Centered and
+ * right-aligned left-to-right tables use the remaining width and ignore the indent.
+ * `outerRuleOffsetPt` then moves the grid inward by half the outer side rule where the
+ * table puts that rule's outer edge on the aligned edge. A verified legacy content-aligned
+ * table instead aligns the leading cell's content edge with the text column, without
+ * changing its indent.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
   if (structure.legacyContentAlignment && structure.alignment === 'left')
@@ -53,8 +54,11 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
     return structure.bidiVisual && slack > 0
       ? Math.max(0, slack - structure.indentPt)
       : slack + ruleOffset;
-  if (slack <= 0) return ruleOffset;
-  return (structure.bidiVisual ? 0 : Math.min(structure.indentPt, slack)) + ruleOffset;
+  if (structure.bidiVisual) return ruleOffset;
+  // A negative indent pulls the table into the leading margin whatever its width. A positive
+  // one stops at the slack, so it cannot push a table past the trailing edge.
+  const indent = structure.indentPt;
+  return (indent < 0 ? indent : Math.min(indent, Math.max(0, slack))) + ruleOffset;
 }
 
 /**

@@ -56,6 +56,7 @@ import {
   gridColumnElements,
   preferredLengthPt,
   readPreferredWidth,
+  readTableIndentPt,
   resolveColumnWidthsPt,
   type CellWidthClaim,
   type PreferredWidth,
@@ -136,9 +137,8 @@ const MAX_CELL_CONDITION_SETS = 256;
 export type TableAlignment = 'left' | 'center' | 'right';
 
 /**
- * Ceiling on `w:tblInd`, so a stated indent cannot push a table off the sheet. Read through
- * the same unsigned path as every other width here: a negative indent (Word pulls a table
- * into the margin with one) is rejected rather than applied.
+ * Bound on the size of `w:tblInd` in either direction. The indent is signed and has its own
+ * reader (`readTableIndentPt`); the table widths and margins stay unsigned.
  */
 const MAX_TABLE_INDENT_PT = 31_680 / 20;
 
@@ -287,7 +287,8 @@ export interface SemanticTableStructure {
   /**
    * `w:tblInd` (17.4.50) in points — "this indentation should shift the table into the text
    * margin by the specified amount". Applies to a left-aligned table; `w:jc` decides the
-   * placement outright for the other two.
+   * placement outright for the other two. Negative on a top-level left-to-right table, which
+   * the indent pulls into the leading margin; never negative on a nested or bidiVisual table.
    */
   readonly indentPt: number;
   /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
@@ -800,7 +801,7 @@ function readTableStructureUncached(
     const styleLayout = childNamed(node, 'tblLayout');
     if (styleLayout) styleLayoutFixed = attributeValue(styleLayout, 'type') === 'fixed';
     styleIndentPt =
-      preferredLengthPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
+      readTableIndentPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
     styleAlignment = readTableAlignment(node) ?? styleAlignment;
     styleCellSpacingPt =
       preferredLengthPt(childNamed(node, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
@@ -813,10 +814,13 @@ function readTableStructureUncached(
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'
     : (styleLayoutFixed ?? false);
-  const indentPt =
-    preferredLengthPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
+  const statedIndentPt =
+    readTableIndentPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
     styleIndentPt ??
     0;
+  // Captured controls pull a top-level left-to-right table into the margin by a negative
+  // indent. A nested or bidiVisual table keeps a non-negative indent until controls cover it.
+  const indentPt = depth === 0 && !bidiVisual ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.

@@ -425,7 +425,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
+      'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry. A table indent moves a left-aligned table. A negative indent moves the table into the left margin, also when the table is wider than the text column. A positive indent stops where the table would pass the right margin. Centered and right-aligned tables ignore the indent. Nested and right-to-left tables ignore a negative indent. A zero indent on a table overrides the indent of its table style.',
   },
   {
     id: 'tables.rtl',
