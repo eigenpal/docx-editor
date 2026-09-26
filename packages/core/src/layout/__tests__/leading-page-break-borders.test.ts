@@ -1,6 +1,7 @@
 // A bordered or shaded paragraph that opens with a page break. The lines holding only the
 // break draw no rule and take no space before; the text after the break opens the box on the
-// next sheet. Shading fills each break line where it sits, even past the text area.
+// next sheet, with the space before it would take there. Shading fills each break line where
+// it sits, even past the text area.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -98,31 +99,59 @@ describe('a bordered paragraph that opens with a page break', () => {
     }
   }
 
-  test('moves its space before to the text in 2013 and later modes', () => {
-    for (const count of [8, 12]) {
-      const plain = lay(load(fill(count) + leading('after', '', { before: 240 })), 15);
-      const [plainBreak, plainText] = fragmentsAt(plain, count);
-      expect(plainBreak!.fragment.lines[0]!.box.y).toBe(count === 12 ? 156 : 112);
-      expect(plainText!.fragment.spacing.before).toBe(12);
-      expect(plainText!.fragment.lines[0]!.box.y).toBe(12);
-      const ruled = lay(load(fill(count) + leading('after', TOP, { before: 240 })), 15);
-      const [, text] = fragmentsAt(ruled, count);
-      expect(sides(text!.fragment)).toEqual(['top@12']);
-      expect(text!.fragment.lines[0]!.box.y).toBe(13);
+  test('moves its space before to the text in every mode', () => {
+    for (const mode of [undefined, 11, 12, 14, 15]) {
+      for (const count of [8, 12]) {
+        const plain = lay(load(fill(count) + leading('after', '', { before: 240 })), mode);
+        const [plainBreak, plainText] = fragmentsAt(plain, count);
+        expect(plainBreak!.fragment.lines[0]!.box.y).toBe(count === 12 ? 156 : 112);
+        expect(plainText!.fragment.spacing.before).toBe(12);
+        expect(plainText!.fragment.lines[0]!.box.y).toBe(12);
+        const ruled = lay(load(fill(count) + leading('after', TOP, { before: 240 })), mode);
+        const [, text] = fragmentsAt(ruled, count);
+        expect(sides(text!.fragment)).toEqual(['top@12']);
+        expect(text!.fragment.lines[0]!.box.y).toBe(13);
+      }
     }
   });
 
-  test('drops its space before in earlier modes', () => {
-    for (const mode of [undefined, 11, 14]) {
-      const plain = lay(load(fill(12) + leading('after', '', { before: 240 })), mode);
-      const [plainBreak, plainText] = fragmentsAt(plain, 12);
-      expect(plainBreak!.fragment.lines[0]!.box.y).toBe(156);
-      expect(plainText!.fragment.lines[0]!.box.y).toBe(0);
-      const ruled = lay(load(fill(12) + leading('after', TOP, { before: 240 })), mode);
-      const [, text] = fragmentsAt(ruled, 12);
-      expect(sides(text!.fragment)).toEqual(['top@0']);
-      expect(text!.fragment.lines[0]!.box.y).toBe(1);
-    }
+  // The space before collapses with the space after of the paragraph above, as it would
+  // without the break, even though that space after ends the previous sheet.
+  const spaced = (text: string, attributes: string) =>
+    `<w:p><w:pPr><w:spacing ${attributes} w:line="280" w:lineRule="exact"/></w:pPr>` +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const spacedBreak = (attributes: string) =>
+    `<w:p><w:pPr><w:spacing ${attributes} w:line="280" w:lineRule="exact"/></w:pPr>${br}` +
+    '<w:r><w:t>after</w:t></w:r></w:p>';
+  const textTop = (body: string, position: number) => {
+    const [, text] = fragmentsAt(lay(load(body), 15), position);
+    return text!.fragment.lines[0]!.box.y;
+  };
+
+  test('collapses the moved space before with the space after above', () => {
+    const above = fill(10) + spaced('above', 'w:before="0" w:after="240"');
+    expect(textTop(above + spacedBreak('w:before="240" w:after="0"'), 11)).toBe(0);
+    expect(textTop(above + spacedBreak('w:before="360" w:after="0"'), 11)).toBe(6);
+  });
+
+  test('moves an automatic space before, collapsed the same way', () => {
+    const auto = spacedBreak('w:before="100" w:beforeAutospacing="1" w:after="0"');
+    expect(textTop(fill(12) + auto, 12)).toBe(14);
+    const autoAbove = spaced('above', 'w:before="0" w:after="100" w:afterAutospacing="1"');
+    expect(textTop(fill(10) + autoAbove + auto, 11)).toBe(0);
+  });
+
+  test('collapses the space after of the moved text with the next paragraph', () => {
+    const layout = lay(
+      load(
+        fill(12) +
+          spacedBreak('w:before="0" w:after="240"') +
+          spaced('next', 'w:before="240" w:after="0"')
+      )
+    );
+    const [next] = fragmentsAt(layout, 13);
+    expect(next!.page).toBe(1);
+    expect(next!.fragment.lines[0]!.box.y).toBe(26);
   });
 
   test('draws no rule on the empty sheet of repeated breaks', () => {

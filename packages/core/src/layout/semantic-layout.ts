@@ -89,8 +89,7 @@ import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak } from './pending-line.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
-import { joinsBorderGroup, leadingBreakGroupFlowKeys } from './leading-break-border-group.ts';
+import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
@@ -726,6 +725,7 @@ function layoutBlocksPass(
   const bodyPageFieldContext: BodyPageFieldContext = Object.freeze(
     options.bodyPageNumberFormat !== undefined ? { format: options.bodyPageNumberFormat } : {}
   );
+  const leadingBreakGroups = createLeadingBreakGroups(options, bodyPageFieldContext);
 
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
@@ -1177,7 +1177,7 @@ function layoutBlocksPass(
 
     const lastBlock = prepared.at(-1);
     const flow = composeFlowKeys(
-      leadingBreakGroupFlowKeys(
+      leadingBreakGroups.flowKeys(
         listAutoSpacingFlowKeys(
           paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
           prepared
@@ -1681,7 +1681,7 @@ function layoutBlocksPass(
         entry.styleId !== null &&
         flowNeighbourStyle(entry.paragraph, -1, previous, styleCascade) === entry.styleId;
       const before = entry.contextualSpacing && sameStyle ? 0 : entry.spacing.before;
-      const continuesBorder = joinsBorderGroup(previous, entry);
+      const continuesBorder = leadingBreakGroups.joins(previous, entry);
       paragraphSpaceBefore = appliedSpaceBefore(
         before,
         previousSpaceAfter,
@@ -2154,8 +2154,8 @@ function layoutBlocksPass(
     // each interior boundary carries `w:between` or nothing. Applying a box to three selected
     // paragraphs in Word draws one box, not three, and this is why.
     // A paragraph that opens with a page break leaves the group: its text opens a new box.
-    const continuesAbove = joinsBorderGroup(previousEntry, entry);
-    const continuesBelow = joinsBorderGroup(entry, nextEntry);
+    const continuesAbove = leadingBreakGroups.joins(previousEntry, entry);
+    const continuesBelow = leadingBreakGroups.joins(entry, nextEntry);
     const topEdge = continuesAbove ? undefined : borders.top;
     // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
     const closingEdge = continuesBelow ? borders.between : borders.bottom;
@@ -2203,6 +2203,7 @@ function layoutBlocksPass(
       (marksSectionBreak && columnRegionBottom === undefined && columnIndex + 1 >= columns.count);
     // Floating tables and text frames anchor at the paragraph start, which would stay behind.
     const leadingBreak = (): boolean =>
+      leadingBreakGroups.admits(previousEntry, entry) &&
       paragraphFrames.checkpoint() === undefined &&
       !tableFloat.positionedTablesByAnchor(positionedTables).has(paragraphId) &&
       opensWithPageBreak(entry, lines, options.inlineDrawingLayout);
@@ -2314,6 +2315,10 @@ function layoutBlocksPass(
     // Lines holding only a leading page break take no space before and draw no rule. Both
     // open the text after the breaks, on its own sheet.
     let breakLinesOnly = !frame && leadingBreak();
+    // Collapsed with the space after above, in every mode: the text keeps what it would get.
+    const textBefore = breakLinesOnly
+      ? collapsedSpaceBefore(spacing.before, previousSpaceAfter)
+      : 0;
     const appliedBefore = breakLinesOnly
       ? 0
       : appliedSpaceBefore(
@@ -2826,14 +2831,16 @@ function layoutBlocksPass(
         } else flushPage();
         fragmentBefore = 0;
         fragmentTopExtent = 0;
-        if (breakLinesOnly && !isLastLine && !holdsOnlyPageBreak(lines[lineIndex + 1]!)) {
-          // The text opens here: space before (2013+ modes only), then its own top rule.
+        // Text after leading breaks opens here with its space before and its own top rule. It
+        // starts on this sheet, so its space after collapses with the next paragraph as usual.
+        endedWithPageBreak =
+          !breakLinesOnly || isLastLine || holdsOnlyPageBreak(lines[lineIndex + 1]!);
+        if (!endedWithPageBreak) {
           breakLinesOnly = false;
-          fragmentBefore = isWord2013OrLaterMode(options.compatibilityMode) ? spacing.before : 0;
+          fragmentBefore = textBefore;
           fragmentTopExtent = paragraphBorderExtentPt(borders.top);
           cursorY += fragmentBefore + fragmentTopExtent;
         }
-        endedWithPageBreak = true;
         if (!isLastLine && (priorPageHadExclusions || pageExclusionZones().length > 0)) {
           rebreakInCurrentColumn(pendingLine.end, cursorY);
           appliedSkipByLineIndex.clear();
