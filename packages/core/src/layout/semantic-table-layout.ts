@@ -1654,6 +1654,8 @@ export function measureRowHeight(
  * a float positioned by a layout that never happened. The second matters just as much —
  * un-planning the ROW alone leaves the span accepted, so the surplus it put below is still
  * handed out while the head sizes its own row again, reserving the merged height twice.
+ * It returns the row's options after the withdrawal: none, or the floor an enclosing merge
+ * still needs when the row is a nested head.
  *
  * A caller with no sink it can undo must not pass a `vMerge` at all.
  */
@@ -1666,7 +1668,7 @@ export function layoutOnePassRow(
   deps: TableFlowDeps,
   isHeaderRepeat: boolean,
   vMerge: RowVMergeLayoutOptions | undefined,
-  rollback: () => void
+  rollback: () => RowVMergeLayoutOptions | undefined
 ): LayoutRowBoundedResult {
   const place = (options: RowVMergeLayoutOptions | undefined): LayoutRowBoundedResult =>
     layoutRowFragment(
@@ -1682,8 +1684,7 @@ export function layoutOnePassRow(
     );
   const placed = place(vMerge);
   if (placed.remainder === null || vMerge === undefined) return placed;
-  rollback();
-  return place(undefined);
+  return place(rollback());
 }
 
 /**

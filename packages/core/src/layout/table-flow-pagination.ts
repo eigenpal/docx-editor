@@ -553,12 +553,12 @@ export function paginateTableInFlow(
         tableDeps.cellMinimumContentInsets
       );
 
-    // A row an accepted span covers does not take the whole-row MOVE: alone among the
-    // breaks below, that one is an optimization rather than a recovery, and it ends the
-    // fragment above merged content already flowed against this page. See the break-site
-    // table in `table-vmerge-heights.ts` for why the others stay open to a covered row.
-    const heldByOpenSpan =
-      vMerge !== undefined && vMerge.detachedSpanHeightPtByCellId === undefined;
+    // A row an accepted span covers below its head, a nested head row included, does not
+    // take the whole-row MOVE: alone among the breaks below, that one is an optimization
+    // rather than a recovery, and it ends the fragment above merged content already flowed
+    // against this page. See the break-site table in `table-vmerge-heights.ts` for why the
+    // others stay open to a covered row.
+    const heldByOpenSpan = vMerge?.coveredFromAbove === true;
 
     /**
      * Repeating headers is admissible only when this exact row state can progress below them.

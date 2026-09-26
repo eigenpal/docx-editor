@@ -126,6 +126,7 @@ export function emitNestedTable(
       () => {
         nestedDeferred.length = deferredBefore;
         vMergePlan?.withdrawAt(rowIndex);
+        return vMergePlan?.rowOptions(rowIndex);
       }
     );
     rawRows.push(placed.record);
