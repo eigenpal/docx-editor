@@ -611,10 +611,7 @@ function cascadeParagraphWithNumbering(
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&
     style.styleId === table.defaultParagraphStyleId
-      ? legacyTableDefaultProperties(properties, [
-          ...table.docDefaultsRun,
-          ...tableCellStyle.runProperties,
-        ])
+      ? legacyTableDefaultProperties(properties, tableCellStyle.runProperties)
       : properties;
 
   const chainProperties = chain.map((style) => styleProperties(style, style.paragraphProperties));
