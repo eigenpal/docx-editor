@@ -6,6 +6,7 @@ import {
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
+  anchorsTopAndBottomDrawing,
   drawingZonesAtLinePlacement,
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
@@ -128,6 +129,7 @@ import {
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
+  ownTopAndBottomSkip,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
@@ -1673,6 +1675,7 @@ function layoutBlocksPass(
     // spacing and the opening border here; measuring at that cursor can wrap a line
     // around an already-cleared float, or let it paint through one below the gap.
     let paragraphStartY = placedParagraphStartY ?? cursorY;
+    let paragraphSpaceBefore = 0;
     if (placedParagraphStartY === undefined && startOffset === 0 && !entry.frame) {
       const previous = prepared[entryIndex - 1];
       const sameStyle =
@@ -1683,21 +1686,24 @@ function layoutBlocksPass(
         entry.borderGroupKey !== '' &&
         previous?.kind === 'paragraph' &&
         previous.borderGroupKey === entry.borderGroupKey;
+      paragraphSpaceBefore = appliedSpaceBefore(
+        before,
+        previousSpaceAfter,
+        cursorY === 0 && !regionHasFragments(),
+        firstParagraphOfSection || breaksBeforeAt(entryIndex, entry)
+      );
       paragraphStartY +=
-        appliedSpaceBefore(
-          before,
-          previousSpaceAfter,
-          cursorY === 0 && !regionHasFragments(),
-          firstParagraphOfSection || breaksBeforeAt(entryIndex, entry)
-        ) + paragraphBorderExtentPt(continuesBorder ? undefined : entry.borders.top);
+        paragraphSpaceBefore +
+        paragraphBorderExtentPt(continuesBorder ? undefined : entry.borders.top);
     }
     const allPageZones = entry.frame ? [] : pageExclusionZones();
+    const selection = { omittedAnchor };
     const pageZones = paragraphDrawingWrap.select(
       entry,
       entryIndex,
       flowColumnIndex,
       allPageZones,
-      { omittedAnchor, spaceBefore: Math.max(0, paragraphStartY - cursorY) }
+      selection
     );
     // Breaks publish column-local spans; placement adds the column origin once.
     const localPageZones =
@@ -1718,6 +1724,11 @@ function layoutBlocksPass(
         exclusionToken,
         paragraphStartY,
         anchorParagraphStartY,
+        paragraphSpaceBefore,
+        anchorsTopAndBottom: anchorsTopAndBottomDrawing(
+          entry.paragraph,
+          options.inlineDrawingLayout
+        ),
         columnIndex: flowColumnIndex,
         startOffset,
       });
@@ -1761,6 +1772,7 @@ function layoutBlocksPass(
           columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,
         paragraphStartY,
         anchorParagraphStartY,
+        ...(paragraphSpaceBefore > 0 ? { paragraphSpaceBefore } : {}),
         ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       },
@@ -1818,21 +1830,24 @@ function layoutBlocksPass(
     fragmentFirstLine: number,
     fragmentParagraphStartY: number,
     pendingLine: PendingLine,
-    appliedSkipByLineIndex: ReadonlyMap<number, number>
+    appliedSkipByLineIndex: ReadonlyMap<number, number>,
+    spaceBefore: number
   ): number => {
     if (anchorLineSkipsExclusion(entry.paragraph, options.inlineDrawingLayout, pendingLine))
       return 0;
+    // Own bands frame from above the spacing before, as `paragraph-flow` synthesizes them.
     const zones = placementZonesForLine(
       entry,
       entryIndex,
       brokenLines,
       lineIndex,
       fragmentFirstLine,
-      fragmentParagraphStartY,
+      fragmentParagraphStartY - spaceBefore,
       appliedSkipByLineIndex
     );
+    const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
-      zones.length > 0 ? topAndBottomSkipBeforeLine(cursorY, pendingLine.height, zones) : 0;
+      zones.length > 0 ? topAndBottomSkipBeforeLine(cursorY, pendingLine.height, zones, above) : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
   };
@@ -2323,27 +2338,6 @@ function layoutBlocksPass(
       ? mergeBoundariesOf(mergeGroup, displayMode, authorFilter)
       : null;
 
-    /**
-     * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
-     *
-     * The placement skip mixes two sources: bands inherited from earlier paragraphs, which
-     * genuinely move this paragraph down the page, and a band from an anchor inside it, which
-     * only moves its text away from a picture pinned to the paragraph origin. Re-running the
-     * clearance with the inherited zones alone isolates the second.
-     */
-    const ownTopAndBottomSkipOnFirstLine = (): number => {
-      const firstLine = pending[0];
-      if (!firstLine) return 0;
-      const applied = fragmentFirstLineSkip;
-      if (applied <= 0.001) return 0;
-      const inherited = topAndBottomSkipBeforeLine(
-        fragmentParagraphStartY,
-        firstLine.box.height,
-        pageExclusionZonesForEntry(entry, index)
-      );
-      return Math.max(0, applied - inherited);
-    };
-
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
@@ -2563,7 +2557,10 @@ function layoutBlocksPass(
           // moved this paragraph for real, and the anchor travels with it.
           const anchorTop =
             top -
-            ownTopAndBottomSkipOnFirstLine() -
+            ownTopAndBottomSkip(fragmentFirstLineSkip, fragmentParagraphStartY, pending[0], {
+              inheritedZones: pageExclusionZonesForEntry(entry, index),
+              spaceAbove: fragmentBefore,
+            }) -
             paragraphDrawingWrap.displacement(pages.length, paragraphId);
           publishLines = pending;
           publishParagraphBox = {
@@ -2686,7 +2683,8 @@ function layoutBlocksPass(
             fragmentFirstLine,
             fragmentParagraphStartY,
             pendingLine,
-            appliedSkipByLineIndex
+            appliedSkipByLineIndex,
+            fragmentBefore
           );
       // Word can let auto/atLeast spacing below the glyph band cross the bottom text
       // margin. The painted line keeps its full box; only the pagination budget drops that

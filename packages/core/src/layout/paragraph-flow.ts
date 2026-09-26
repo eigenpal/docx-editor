@@ -200,6 +200,8 @@ export interface ParagraphFlowOptions {
   readonly paragraphStartY?: number;
   /** Anchor origin before displacement that its own wrap caused in a preceding paragraph. */
   readonly anchorParagraphStartY?: number;
+  /** Spacing applied above the first line; `paragraphStartY` already includes it. */
+  readonly paragraphSpaceBefore?: number;
   /** Active exclusion zones on the current page while breaking. */
   readonly pageExclusionZones?: readonly ExclusionZone[];
   /** When breaking inside a table cell, the cell content box for anchored frame resolution. */
@@ -251,6 +253,8 @@ import {
   coalesceIdeographicSpans,
   frozenLine,
   growLineMetrics,
+  growLineMetricsForText,
+  isHeightlessWhitespace,
   pendingLineFlowExtent,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
@@ -583,7 +587,10 @@ export function breakParagraph(
             drawingLayout: flow.inlineDrawingLayout,
             contentLeft,
             contentRight,
-            paragraphStartY: flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0,
+            // `positionV relativeFrom="paragraph"` measures from above the spacing before.
+            paragraphStartY:
+              (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
+              (flow.paragraphSpaceBefore ?? 0),
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             cellAnchorScope: flow.cellAnchorScope,
@@ -620,6 +627,7 @@ export function breakParagraph(
   } = createLineExclusionClearance({
     line: () => line,
     top: currentLineTopY,
+    spaceAbove: () => (lines.length === 0 ? (flow?.paragraphSpaceBefore ?? 0) : 0),
     zones: activeExclusionZones,
     left: () => Math.max(contentLeft, lineOrigin()),
     right: wrapRight,
@@ -956,7 +964,8 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
-    const empty = line.spans.length === 0 && line.drawings.length === 0;
+    const empty =
+      line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
     const metrics = measurer.lineMetrics(empty ? emptyStyle : growthStyle);
     // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
     // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
@@ -1352,7 +1361,7 @@ export function breakParagraph(
           ...paragraphSpanMetadata(piece),
         });
         line.width += width;
-        growLineMetrics(line, metrics);
+        growLineMetricsForText(line, metrics, '\t');
         line.end = layoutOwned ? piece.end : piece.start + boundary;
         // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
         // previous word recorded here made the following text a CONTINUATION of it, and an
@@ -1516,7 +1525,7 @@ export function breakParagraph(
               styleForFontSlot(span.style, span.fontSlot),
               span.noteSeparator ? undefined : span.text
             );
-            growLineMetrics(line, spanMetrics);
+            growLineMetricsForText(line, spanMetrics, span.text);
           }
           closeLine();
           for (const span of carried) {
@@ -1530,7 +1539,7 @@ export function breakParagraph(
               box: { ...span.box, x: lineOrigin() + line.width },
             });
             line.width += span.box.width;
-            growLineMetrics(line, spanMetrics);
+            growLineMetricsForText(line, spanMetrics, span.text);
             line.end = span.range.end;
           }
           wordStartSpan = 0;
@@ -1588,7 +1597,7 @@ export function breakParagraph(
               ...paragraphSpanMetadata(piece),
             });
             line.width += prefix.width;
-            growLineMetrics(line, metrics);
+            growLineMetricsForText(line, metrics, prefix.text);
             line.end = prefix.modelStart + prefix.text.length;
           },
           closeLine,
@@ -1640,7 +1649,7 @@ export function breakParagraph(
         if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
-        growLineMetrics(line, metrics);
+        growLineMetricsForText(line, metrics, remaining);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
       }
       lastEmitted = candidate;
