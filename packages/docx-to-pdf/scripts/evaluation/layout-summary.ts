@@ -19,6 +19,7 @@ export async function summarizePages(source: Uint8Array) {
         'Noto Sans Symbols 2',
         'Noto Sans Math',
         'Noto Sans Arabic',
+        'Times New Roman',
         'Noto Sans CJK JP',
         'Twemoji Mozilla',
         'Noto Emoji',

@@ -34,7 +34,7 @@ Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow
 
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
-Exports and traces use the same explicit glyph fallback list, in this order: `Noto Sans Symbols 2`, `Noto Sans Math`, `Noto Sans Arabic`, `Times New Roman`, `Noto Sans CJK JP`, `Twemoji Mozilla`, and `Noto Emoji`. This list replaces the renderer's default list. Without system fonts, `Times New Roman` resolves to the packaged Liberation Serif. It supplies Hebrew for right-to-left runs whose complex-script face has no Hebrew. Keep the list identical in `export.ts` and `trace.ts`; `export.test.ts` compares both settings on text that reaches every face.
+Exports, traces, and fast summaries use the same explicit glyph fallback list, in this order: `Noto Sans Symbols 2`, `Noto Sans Math`, `Noto Sans Arabic`, `Times New Roman`, `Noto Sans CJK JP`, `Twemoji Mozilla`, and `Noto Emoji`. This list replaces the renderer's default list. Without system fonts, `Times New Roman` resolves to the packaged Liberation Serif. It supplies Hebrew for right-to-left runs whose complex-script face has no Hebrew. Keep the list identical in `export.ts`, `trace.ts`, and `layout-summary.ts`; `export.test.ts` compares the settings on text that reaches every face.
 
 Measurements include word positions, page dimensions, color signatures, and drawing metadata. Comparisons reuse the text movement algorithm in `pdf-visual-diff.py`. Object counts alone never establish missing visible content. Visual screening uses a 144 by 192 RGB signature with local regions. Older 48 by 64 grayscale measurements remain readable. Detailed evidence uses 144 DPI and processes at most three pages. `firstDivergence` identifies a measured location with explicit confidence and coordinate space. Text excerpts are bounded and untrusted.
 
@@ -50,18 +50,11 @@ The evaluator owns caching, application reference capture, feature grouping, and
 
 ## Layout and text checks
 
-`layout-summary.ts input.docx output.json` records page counts, logical text, and source locations.
-It uses the export session without creating a PDF. Use the TypeScript configuration shown for `export.ts`.
-`layout-worker.ts` accepts the same paths in newline-delimited JSON requests.
-The caller must enforce process time and memory limits.
+`layout-summary.ts input.docx output.json` records page counts, logical text, and source locations. It uses the export session without creating a PDF. Use the TypeScript configuration shown for `export.ts`. `layout-worker.ts` accepts the same paths in newline-delimited JSON requests. The caller must enforce process time and memory limits.
 
-`quick_text.py pdf input.pdf index.json.gz` creates a text index.
-Use `measurement` instead of `pdf` to read an existing compressed measurement.
-Indexes and comparisons have separate version identities.
+`quick_text.py pdf input.pdf index.json.gz` creates a text index. Use `measurement` instead of `pdf` to read an existing compressed measurement. Indexes and comparisons have separate version identities.
 
-These checks report pagination and text differences. Logical text and PDF extraction can differ.
-Repeated words make occurrence locations ambiguous. Layout positions precede paint transforms.
-Use PDF evidence for visual validation. Failed or missing inputs never count as passes.
+These checks report pagination and text differences. Logical text and PDF extraction can differ. Repeated words make occurrence locations ambiguous. Layout positions precede paint transforms. Use PDF evidence for visual validation. Failed or missing inputs never count as passes.
 
 Run synthetic checks with:
 

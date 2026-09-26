@@ -14,6 +14,8 @@ import { exportPdf } from '../../src/index.ts';
 import { openExportSession } from '../../src/open-session.ts';
 import { docx } from '../../test/fixture.ts';
 import { SETTINGS } from './trace.ts';
+import { summarizePages } from './layout-summary.ts';
+import { recordLayoutText } from './layout-text.ts';
 
 // A right-to-left run takes its complex-script face. Noto Sans Arabic has no Hebrew, so the
 // Hebrew letters depend on a Hebrew face in the evaluation fallback list. The second
@@ -113,4 +115,18 @@ test('a caller list without a Hebrew face replaces the defaults and reports the 
   const result = await exportPdf(input, { ...exportOptions, ...SETTINGS, glyphFallbacks });
   expect(missingGlyphs(result.diagnostics).length).toBeGreaterThan(0);
   expect(hebrewLetters(await pdfText(result.bytes))).toBe(0);
+});
+
+test('the fast summary uses the export font profile for mixed scripts', async () => {
+  const summary = await summarizePages(input);
+  const opened = await openExportSession(input, SETTINGS);
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    const layout = await opened.session.layout();
+    expect(summary.pageCount).toBe(layout.pages.length);
+    expect(summary.text).toEqual(recordLayoutText(layout));
+    expect(summary.fontResolution).toEqual(opened.session.fontResolution);
+  } finally {
+    opened.session.dispose();
+  }
 });
