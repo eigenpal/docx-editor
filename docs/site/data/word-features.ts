@@ -293,7 +293,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'w:keepNext, w:keepLines, w:widowControl and w:pageBreakBefore all reach pagination, and the Paragraph dialog sets each of them. Keep-with-next groups account for the following paragraph’s keep-lines and widow-control requirements when the group fits on a page. A value a style supplies reads through the cascade, so a checkbox shows what is in force rather than only what the paragraph authors itself.',
+      'w:keepNext, w:keepLines, w:widowControl and w:pageBreakBefore all reach pagination, and the Paragraph dialog sets each of them. Keep-with-next groups account for the following paragraph’s keep-lines and widow-control requirements when the group fits on a page. A kept paragraph that does not fit in the space left on a page splits there if its own keep-lines and widow-control settings allow it, and its last lines open the next page with the following paragraph. In documents that use Word 2013 or later layout, a kept paragraph that fits but leaves no room for the following paragraph also splits, and its last lines move with that paragraph. Earlier layout modes move the kept paragraph whole. A value a style supplies reads through the cascade, so a checkbox shows what is in force rather than only what the paragraph authors itself.',
   },
   {
     id: 'paragraphs.indentation',

@@ -318,9 +318,14 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
   });
 
   test('a chain that cannot fit a page of its own is abandoned, and everything is still placed', () => {
-    // The kept-with paragraph is twelve lines: no page can hold the group.
-    const body = fillers(4) + one('h1', '<w:keepNext/>') + multi(12, '<w:keepNext/>') + one('end');
+    // The kept-with paragraph is twelve lines that may not split: no page can hold the group.
+    const body =
+      fillers(4) +
+      one('h1', '<w:keepNext/>') +
+      multi(12, '<w:keepNext/><w:keepLines/>') +
+      one('end');
     const layout = lay(body);
+    expect(linesPerPage(layout.pages)[0]).toBe(5);
     expect(linesPerPage(layout.pages).reduce((a, b) => a + b, 0)).toBe(4 + 1 + 12 + 1);
   });
 

@@ -20,6 +20,7 @@
 // by `w:cantSplit`. A body keep-next chain cannot price a table and stops there.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 
 /**
@@ -159,6 +160,13 @@ export interface KeepNextBlock {
   readonly keeps?: ParagraphKeeps;
 }
 
+/** The slice of a laid-out line {@link keepNextGroupHeight} reads. */
+export interface KeepNextLine {
+  readonly height: number;
+  readonly pageBreakAfter?: boolean;
+  readonly columnBreakAfter?: boolean;
+}
+
 /**
  * Flow height a `w:keepNext` chain starting at `start` needs to hold together (§17.3.1.15).
  *
@@ -181,19 +189,23 @@ export interface KeepNextBlock {
  * `sumAdjacentSpacing` adds each member's before-spacing to the after-spacing above it rather
  * than collapsing the two, for documents with `w:doNotUseHTMLParagraphAutoSpacing`. `carry`
  * is then already zero, because the flow cursor carries no collapsible after-spacing.
+ *
+ * `room` is the flow height left for the group, in the same units as the result. A kept
+ * member that cannot fit whole in it and may split under its own rules breaks naturally:
+ * its last line then opens the next page with its successor, so the keep holds without
+ * moving it. The group ends there at the member's shortest legal opening. A member that
+ * fits whole still needs its successor's opening beside it, so the chain continues.
+ * A member with an authored page or column break keeps the whole opening before the break.
  */
 export function keepNextGroupHeight(
   blocks: readonly KeepNextBlock[],
   start: number,
   carry: number,
-  linesFor: (index: number) => readonly {
-    readonly height: number;
-    readonly pageBreakAfter?: boolean;
-    readonly columnBreakAfter?: boolean;
-  }[],
+  linesFor: (index: number) => readonly KeepNextLine[],
   skipBlock?: (index: number) => boolean,
   breaksBefore?: (index: number) => boolean,
-  sumAdjacentSpacing = false
+  sumAdjacentSpacing = false,
+  room = Number.POSITIVE_INFINITY
 ): number | null {
   let total = 0;
   let after = carry;
@@ -210,26 +222,139 @@ export function keepNextGroupHeight(
     const lines = linesFor(index);
     const hardBreak = lines.findIndex((line) => line.pageBreakAfter || line.columnBreakAfter);
     const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;
+    const openingLines = shortestOpeningLines(lines.length, openingLength, block.keeps);
     // The story's LAST block keeps with nothing, so it terminates the chain however authored.
     if (!block.keeps.keepNext || index + 1 >= blocks.length) {
-      let openingLines = 1;
-      if (block.keeps.keepLines) openingLines = openingLength;
-      else if (block.keeps.widowControl) {
-        openingLines =
-          lines.length < MIN_LINES_EITHER_SIDE * 2
-            ? openingLength
-            : Math.min(MIN_LINES_EITHER_SIDE, openingLength);
-      }
       for (let line = 0; line < openingLines; line += 1) total += lines[line]?.height ?? 0;
       return total;
     }
-    for (let line = 0; line < openingLength; line += 1) total += lines[line]!.height;
+    let whole = 0;
+    for (let line = 0; line < openingLength; line += 1) whole += lines[line]!.height;
+    // A natural split carries this member's last line to its successor's page.
+    if (hardBreak < 0 && openingLines < lines.length && total + whole > room) {
+      for (let line = 0; line < openingLines; line += 1) total += lines[line]!.height;
+      return total;
+    }
+    total += whole;
     // An authored page or column break ends this page's keep group.
     if (hardBreak >= 0) return total;
     total += block.spacing.after;
     after = block.spacing.after;
   }
   return null;
+}
+
+/** The chain lookahead {@link keepNextGroupNeed} runs: {@link keepNextGroupHeight}'s inputs. */
+export interface KeepNextLookahead {
+  readonly blocks: readonly KeepNextBlock[];
+  readonly start: number;
+  readonly carry: number;
+  readonly linesFor: (index: number) => readonly KeepNextLine[];
+  readonly skipBlock?: (index: number) => boolean;
+  readonly breaksBefore?: (index: number) => boolean;
+  readonly sumAdjacentSpacing?: boolean;
+}
+
+/** Where a `w:keepNext` head sits, for {@link keepNextGroupNeed}. */
+export interface KeepNextPlacement {
+  readonly cursorY: number;
+  readonly contentHeight: number;
+  /** Space before the head beside the current content. */
+  readonly lead: number;
+  /** Space before the head that the priced group includes. */
+  readonly pricedLead: number;
+  /** Space before the head at the top of a fresh page. */
+  readonly freshLead: number;
+  readonly topExtent: number;
+  /** `w:compatSetting` `compatibilityMode`; 15 or more is Word 2013 and later layout. */
+  readonly compatibilityMode: number | undefined;
+}
+
+/**
+ * How a `w:keepNext` head places: reserve `need` of flow height, or move to the next page
+ * when it does not fit. When `tailLines` is above zero, the head instead stays and breaks
+ * before its last `tailLines` lines, which open the next page with its successor.
+ */
+export interface KeepNextDecision {
+  readonly need: number;
+  readonly tailLines: number;
+}
+
+/**
+ * Decide a `w:keepNext` head's placement, or null when the chain is abandoned.
+ *
+ * The group is priced for the room left here, because a member that cannot fit whole here
+ * may split naturally. Natural page movement suppresses the head's before spacing, so that
+ * destination is priced separately. A group that must move is priced again for a fresh
+ * page, where members split later. A group that cannot fit a fresh page is abandoned, and
+ * the head places by its own fit.
+ *
+ * A group that fits a fresh page but not here moves the head whole in layout before Word
+ * 2013. From Word 2013 on, a head that fits whole here and may split stays, and gives its
+ * last lines to the next page: two under widow control, otherwise one. `w:keepLines` and
+ * short paragraphs still move whole.
+ */
+export function keepNextGroupNeed(
+  look: KeepNextLookahead,
+  at: KeepNextPlacement
+): KeepNextDecision | null {
+  const price = (room: number) =>
+    keepNextGroupHeight(
+      look.blocks,
+      look.start,
+      look.carry,
+      look.linesFor,
+      look.skipBlock,
+      look.breaksBefore,
+      look.sumAdjacentSpacing,
+      room + at.pricedLead
+    );
+  const here = at.contentHeight - at.cursorY - at.lead - at.topExtent;
+  const group = price(here);
+  if (group === null) return null;
+  const need = group - at.pricedLead + at.lead + at.topExtent;
+  if (at.cursorY + need <= at.contentHeight) return { need, tailLines: 0 };
+  const fresh = price(at.contentHeight - at.freshLead - at.topExtent);
+  if (fresh === null || fresh - at.pricedLead + at.freshLead + at.topExtent > at.contentHeight) {
+    return null;
+  }
+  const tailLines = isWord2013OrLaterMode(at.compatibilityMode)
+    ? headTailLines(look, here + at.pricedLead)
+    : 0;
+  return tailLines > 0 ? { need: 0, tailLines } : { need, tailLines: 0 };
+}
+
+/** Last lines a head that fits whole in `room` gives to the next page, or 0 if it cannot split. */
+function headTailLines(look: KeepNextLookahead, room: number): number {
+  const head = look.blocks[look.start];
+  if (!head?.spacing || !head.keeps) return 0;
+  const lines = look.linesFor(look.start);
+  if (lines.some((line) => line.pageBreakAfter || line.columnBreakAfter)) return 0;
+  if (shortestOpeningLines(lines.length, lines.length, head.keeps) >= lines.length) return 0;
+  let total = look.sumAdjacentSpacing
+    ? head.spacing.before
+    : Math.max(head.spacing.before, look.carry) - look.carry;
+  for (const line of lines) total += line.height;
+  if (total > room) return 0;
+  return head.keeps.widowControl ? MIN_LINES_EITHER_SIDE : 1;
+}
+
+/**
+ * Lines a paragraph must place before a page break, given its own keeps.
+ *
+ * `openingLength` stops at an authored page or column break. Under widow control a
+ * paragraph with fewer than four lines cannot split, so its whole opening is returned.
+ */
+function shortestOpeningLines(
+  lineCount: number,
+  openingLength: number,
+  keeps: ParagraphKeeps
+): number {
+  if (keeps.keepLines) return openingLength;
+  if (!keeps.widowControl) return Math.min(1, openingLength);
+  return lineCount < MIN_LINES_EITHER_SIDE * 2
+    ? openingLength
+    : Math.min(MIN_LINES_EITHER_SIDE, openingLength);
 }
 
 /**
