@@ -3,10 +3,10 @@
 
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
-  bodyFitBottomPt,
+  bodyCursorBottomPt,
   firstBodyContentTopPt,
   fragmentFlowBottom,
-  fragmentFitBottomPt,
+  fragmentCursorBottomPt,
   noteReferenceLineBandPt,
 } from './note-fragment-geometry.ts';
 import {
@@ -124,7 +124,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
 
   const refLineHeight = frontier.bottom - frontier.top;
 
-  const bodyBottom = bodyFitBottomPt(bodyPage);
+  const bodyBottom = bodyCursorBottomPt(bodyPage);
   const contentHeight = bodyPage.contentBox.height;
   // A slack that cannot seat even the pulled line needs no reserve to stay out — and
   // publishing one for every naturally full page would churn the reserve fingerprints
@@ -179,7 +179,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // paragraph's fit bottom (a `w:keepLines`/keep-with-next group returns only as one
   // piece). Which quantum the body pass actually uses is not readable off the fragments.
   const lineBandHeight = Math.max(0, frontier.bottom - firstContentTop);
-  const blockBandHeight = Math.max(0, fragmentFitBottomPt(owningBlock) - firstContentTop);
+  const blockBandHeight = Math.max(0, fragmentCursorBottomPt(owningBlock) - firstContentTop);
 
   const contentWidth = bodyPage.contentBox.width;
   const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);

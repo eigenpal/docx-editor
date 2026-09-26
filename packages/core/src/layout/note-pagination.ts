@@ -996,8 +996,10 @@ function buildFootnoteArea(
      * it, stably. The TOP is where the reserve reaches when the note cannot even start in
      * that room: Word keeps a footnote whole with its reference, so the reference's LINE
      * moves to the next page instead of the note splitting (see the eviction branch in the
-     * reference loop). Only read with {@link reserveColumnBudget}; attach passes size from
-     * real body slack.
+     * reference loop). Attach passes omit it: they size from real body slack, and the
+     * BOTTOM still bounds each note by its reference line's full box there, because the
+     * slack ends at the fit bottom ({@link bodyFitBottomPt}), which may sit inside the last
+     * line's box.
      */
     readonly reserveBandOf?: (ref: PageRefHit) => NoteReferenceLineBand;
     readonly separatorCache?: NoteSeparatorCache;
@@ -1133,10 +1135,13 @@ function buildFootnoteArea(
       reasons.push('note-count-limit');
       break;
     }
-    // Reserve mode tightens each note's budget to ITS reference's floor; the stack may not
-    // rise above any line that cites into it. Later references sit lower, so their budgets
-    // only shrink.
-    const band = options?.reserveBandOf?.(ref);
+    // Each note's budget ends at ITS reference's floor; the stack may not rise above any
+    // line that cites into it. Later references sit lower, so their budgets only shrink.
+    // Attach mode reads the same band the reserve pass used: its slack ends at the fit
+    // bottom, which may sit inside the last line's box, and a split note's head must not
+    // rise into a reference line the reserve pass kept clear. Its eviction guard stays off
+    // (`keepWholeBudget` is 0).
+    const band = options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
