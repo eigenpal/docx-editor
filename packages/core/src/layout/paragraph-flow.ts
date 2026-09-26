@@ -20,12 +20,9 @@ import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 
 import {
   PAGE_BREAK_CHAR,
-  twips,
-  twipsToPoints,
   type DocumentProperties,
   type OoxmlNode,
   type OoxmlProperty,
-  type Twips,
 } from '@docx-editor.dev/core/store';
 import {
   propertiesOfRunContainer,
@@ -200,6 +197,8 @@ export interface ParagraphFlowOptions {
   readonly paragraphStartY?: number;
   /** Anchor origin before displacement that its own wrap caused in a preceding paragraph. */
   readonly anchorParagraphStartY?: number;
+  /** Spacing applied above the first line; `paragraphStartY` already includes it. */
+  readonly paragraphSpaceBefore?: number;
   /** Active exclusion zones on the current page while breaking. */
   readonly pageExclusionZones?: readonly ExclusionZone[];
   /** When breaking inside a table cell, the cell content box for anchored frame resolution. */
@@ -251,6 +250,8 @@ import {
   coalesceIdeographicSpans,
   frozenLine,
   growLineMetrics,
+  growLineMetricsForText,
+  isHeightlessWhitespace,
   pendingLineFlowExtent,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
@@ -263,48 +264,7 @@ export {
   type PendingLine,
 };
 
-/**
- * Soft ceiling on an indent, in twips (31_680 ≈ 22"), matching the paragraph-spacing and
- * tab-position bounds. `w:ind` is attacker-controlled and flows straight into `rightEdge`
- * and the available line width, so an unbounded value reaches paint geometry.
- */
-export const MAX_PARAGRAPH_INDENT_TWIPS = 31_680;
-
-export function indentTwips(raw: string | undefined): Twips | null {
-  // Up to 9 digits so an oversized authored value reaches the clamp rather than being read
-  // as a measurement; a longer digit string is garbage, and `Number` turns enough of them
-  // into `Infinity`, which then poisons every width derived from it.
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return null;
-  const authored = Number(raw);
-  if (!Number.isFinite(authored)) return null;
-  if (authored > MAX_PARAGRAPH_INDENT_TWIPS) return twips(MAX_PARAGRAPH_INDENT_TWIPS);
-  if (authored < -MAX_PARAGRAPH_INDENT_TWIPS) return twips(-MAX_PARAGRAPH_INDENT_TWIPS);
-  return twips(authored);
-}
-
-export function paragraphIndent(props: readonly OoxmlProperty[]): {
-  left: number;
-  right: number;
-} {
-  let left = 0;
-  let right = 0;
-  const rtl = paragraphIsRtl(props);
-  for (const property of props) {
-    if (property.localName !== 'ind') continue;
-    // `w:left` and `w:start` are two spellings of the LEADING indent, and `w:right` and
-    // `w:end` of the trailing one: in a right-to-left paragraph `w:left` indents from the
-    // right margin (§17.3.1.12). The result is physical, so the sides swap there.
-    const leading = property.attributes?.left ?? property.attributes?.start;
-    const trailing = property.attributes?.right ?? property.attributes?.end;
-    const rawLeft = rtl ? trailing : leading;
-    const rawRight = rtl ? leading : trailing;
-    const twipsLeft = indentTwips(rawLeft);
-    const twipsRight = indentTwips(rawRight);
-    if (twipsLeft !== null) left = twipsToPoints(twipsLeft);
-    if (twipsRight !== null) right = twipsToPoints(twipsRight);
-  }
-  return { left, right };
-}
+export { indentTwips, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndent } from './paragraph-indent.ts';
 
 export { alignDrawings } from './pending-line.ts';
 
@@ -591,7 +551,10 @@ export function breakParagraph(
             drawingLayout: flow.inlineDrawingLayout,
             contentLeft,
             contentRight,
-            paragraphStartY: flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0,
+            // `positionV relativeFrom="paragraph"` measures from above the spacing before.
+            paragraphStartY:
+              (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
+              (flow.paragraphSpaceBefore ?? 0),
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             cellAnchorScope: flow.cellAnchorScope,
@@ -628,6 +591,7 @@ export function breakParagraph(
   } = createLineExclusionClearance({
     line: () => line,
     top: currentLineTopY,
+    spaceAbove: () => (lines.length === 0 ? (flow?.paragraphSpaceBefore ?? 0) : 0),
     zones: activeExclusionZones,
     left: () => Math.max(contentLeft, lineOrigin()),
     right: wrapRight,
@@ -964,7 +928,8 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
-    const empty = line.spans.length === 0 && line.drawings.length === 0;
+    const empty =
+      line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
     const metrics = measurer.lineMetrics(empty ? emptyStyle : growthStyle);
     // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
     // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
@@ -1367,7 +1332,7 @@ export function breakParagraph(
           ...paragraphSpanMetadata(piece),
         });
         line.width += width;
-        growLineMetrics(line, metrics);
+        growLineMetricsForText(line, metrics, '\t');
         line.end = layoutOwned ? piece.end : piece.start + boundary;
         // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
         // previous word recorded here made the following text a CONTINUATION of it, and an
@@ -1536,7 +1501,7 @@ export function breakParagraph(
               styleForFontSlot(span.style, span.fontSlot),
               span.noteSeparator ? undefined : span.text
             );
-            growLineMetrics(line, spanMetrics);
+            growLineMetricsForText(line, spanMetrics, span.text);
           }
           closeLine();
           for (const span of carried) {
@@ -1550,7 +1515,7 @@ export function breakParagraph(
               box: { ...span.box, x: lineOrigin() + line.width },
             });
             line.width += span.box.width;
-            growLineMetrics(line, spanMetrics);
+            growLineMetricsForText(line, spanMetrics, span.text);
             line.end = span.range.end;
           }
           wordStartSpan = 0;
@@ -1608,7 +1573,7 @@ export function breakParagraph(
               ...paragraphSpanMetadata(piece),
             });
             line.width += prefix.width;
-            growLineMetrics(line, metrics);
+            growLineMetricsForText(line, metrics, prefix.text);
             line.end = prefix.modelStart + prefix.text.length;
           },
           closeLine,
@@ -1660,7 +1625,7 @@ export function breakParagraph(
         if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
-        growLineMetrics(line, metrics);
+        growLineMetricsForText(line, metrics, remaining);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
       }
       lastEmitted = candidate;

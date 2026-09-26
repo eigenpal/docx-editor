@@ -66,6 +66,7 @@ export class DrawingExclusionConvergenceError extends Error {
 
 export {
   MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS,
+  ownTopAndBottomSkip,
   topAndBottomSkipBeforeLine,
 } from './top-and-bottom-clearance.ts';
 

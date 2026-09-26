@@ -63,10 +63,9 @@ export function createParagraphDrawingWrap(options: {
       selection: {
         readonly placement?: boolean;
         readonly omittedAnchor?: string;
-        readonly spaceBefore?: number;
       } = {}
     ): readonly ExclusionZone[] {
-      const { placement = false, omittedAnchor, spaceBefore = 0 } = selection;
+      const { placement = false, omittedAnchor } = selection;
       return zones
         .filter((zone) => {
           if (zone.anchorParagraphId === omittedAnchor) return false;
@@ -94,7 +93,8 @@ export function createParagraphDrawingWrap(options: {
         .map((zone) => {
           if (placement || !followingAnchor(zone, index)) return zone;
           // Include the trailing gap in the predecessor's wrap probe, without adding
-          // that gap to every line's height or moving the published picture.
+          // that gap to every line's height or moving the published picture. The spacing
+          // before its first line is `topAndBottomSkipBeforeLine`'s `spaceAbove`.
           const next = options.paragraphAt(index + 1);
           const after =
             entry.contextualSpacing && entry.styleId !== null && entry.styleId === next?.styleId
@@ -105,9 +105,6 @@ export function createParagraphDrawingWrap(options: {
             wrapDistances: {
               ...zone.input.wrapDistances,
               top: zone.input.wrapDistances.top + after,
-              bottom:
-                zone.input.wrapDistances.bottom +
-                (zone.input.mode === 'topAndBottom' ? spaceBefore : 0),
             },
           };
           // Recompute from the same arithmetic as the scanline reader: subtracting the

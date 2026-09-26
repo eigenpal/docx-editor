@@ -88,6 +88,14 @@ function headerFooterOccurrenceOwner(
  */
 const MAX_STORY_GEOMETRIES_PER_PART = 8;
 
+/** A header measures from the sheet top, a footer (`w:ftr` root) from the sheet bottom. */
+function storyDistanceOf(
+  part: OoxmlPart,
+  geometry: { readonly headerDistance?: number; readonly footerDistance?: number }
+): number | undefined {
+  return part.root.localName === 'ftr' ? geometry.footerDistance : geometry.headerDistance;
+}
+
 /** Build section-aware header/footer layout from a neutral document view. @public */
 export function createDocumentFurnitureSource(
   options: CreateDocumentFurnitureSourceOptions
@@ -119,6 +127,7 @@ export function createDocumentFurnitureSource(
     marginBottom: number;
     marginLeft: number;
     marginRight: number;
+    storyDistance: number | undefined;
     producer: string;
     projectionEpoch: string;
     revisionAuthorFilterKey: string;
@@ -204,7 +213,8 @@ export function createDocumentFurnitureSource(
         entry.marginTop === geometry.margin.top &&
         entry.marginBottom === geometry.margin.bottom &&
         entry.marginLeft === geometry.margin.left &&
-        entry.marginRight === geometry.margin.right
+        entry.marginRight === geometry.margin.right &&
+        entry.storyDistance === storyDistanceOf(part, geometry)
     );
     if (
       cached &&
@@ -244,6 +254,7 @@ export function createDocumentFurnitureSource(
         marginRight: geometry.margin.right,
         marginTop: geometry.margin.top,
         marginBottom: geometry.margin.bottom,
+        storyDistance: storyDistanceOf(part, geometry),
       },
       view.documentProperties(),
       {
@@ -267,6 +278,7 @@ export function createDocumentFurnitureSource(
       marginBottom: geometry.margin.bottom,
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
+      storyDistance: storyDistanceOf(part, geometry),
       producer,
       projectionEpoch,
       revisionAuthorFilterKey,
