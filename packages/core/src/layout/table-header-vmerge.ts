@@ -29,7 +29,7 @@ import {
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { measuringFlowDeps } from './table-probe-deps.ts';
-import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 
 /** One occurrence of the header group, planned at the top it is about to be placed at. */
 export interface HeaderGroupPlan {
@@ -129,11 +129,10 @@ export function planHeaderGroup(
   let heightPt = 0;
   for (let index = 0; index < count; index += 1) {
     const y = top + heightPt;
-    const settled = settle(
-      index,
-      y,
-      admitVMergeSpansAt(plan, index, y, Number.POSITIVE_INFINITY, insideGroup)
-    );
+    for (const span of plan.spansAt(index)) {
+      if (insideGroup(span)) plan.accept(span, y);
+    }
+    const settled = settle(index, y, plan.rowOptions(index));
     heightPt += settled.heightPt ?? unplannedHeightOf(index, y);
   }
   return {
