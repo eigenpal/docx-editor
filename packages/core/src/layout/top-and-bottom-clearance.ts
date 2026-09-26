@@ -131,3 +131,24 @@ export function topAndBottomBandAnchorY(
   if (offset === null) return anchorLineY;
   return anchorLineY + offset;
 }
+
+/**
+ * The skip before a line that bands of its own paragraph's anchors cause.
+ *
+ * `withOwn` holds the inherited zones plus the paragraph's own bands. Inherited bands may be
+ * absent in the next page or column. This skip is not: it moves with the line, and each fresh
+ * region repeats it.
+ */
+export function travellingTopAndBottomSkip(
+  lineTopY: number,
+  lineHeight: number,
+  spaceAbove: number,
+  zones: {
+    readonly inherited: readonly ExclusionZone[];
+    readonly withOwn: readonly ExclusionZone[];
+  }
+): number {
+  const withOwn = topAndBottomSkipBeforeLine(lineTopY, lineHeight, zones.withOwn, spaceAbove);
+  const inherited = topAndBottomSkipBeforeLine(lineTopY, lineHeight, zones.inherited, spaceAbove);
+  return Math.max(0, withOwn - inherited);
+}

@@ -68,6 +68,7 @@ export {
   MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS,
   ownTopAndBottomSkip,
   topAndBottomSkipBeforeLine,
+  travellingTopAndBottomSkip,
 } from './top-and-bottom-clearance.ts';
 
 export interface ExclusionZone {

@@ -130,6 +130,7 @@ import {
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
+  travellingTopAndBottomSkip,
   ownTopAndBottomSkip,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
@@ -137,6 +138,7 @@ import {
 } from './drawing-exclusion.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
 import { bodyLineId } from './body-line-id.ts';
+import { syntheticAnchorLines } from './anchor-frame-lines.ts';
 import {
   drawingSourceOrderInPart,
   drawingTokenForTableBlockMemo,
@@ -1854,6 +1856,32 @@ function layoutBlocksPass(
     return Math.max(live, breakSkip);
   };
 
+  /**
+   * The part of a fragment's first-line skip that its own `wrapTopAndBottom` anchors cause.
+   * When it and the line exceed an empty region, moving on only adds blank pages.
+   */
+  const ownBandSkip = (
+    entry: PreparedParagraph,
+    entryIndex: number,
+    brokenLines: readonly PendingLine[],
+    lineIndex: number,
+    fragmentParagraphStartY: number,
+    spaceBefore: number
+  ): number =>
+    travellingTopAndBottomSkip(cursorY, brokenLines[lineIndex]!.height, spaceBefore, {
+      inherited: pageExclusionZonesForEntry(entry, entryIndex),
+      // The zones the next line would see: the page's, plus the bands of this line's anchors.
+      withOwn: placementZonesForLine(
+        entry,
+        entryIndex,
+        brokenLines,
+        lineIndex + 1,
+        lineIndex,
+        fragmentParagraphStartY - spaceBefore,
+        new Map()
+      ),
+    });
+
   const tableVerticalFrames = (anchorY: number) =>
     tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
 
@@ -2573,53 +2601,27 @@ function layoutBlocksPass(
             width: available,
             height,
           };
-          publishColumnBox = anchorColumnBox({
-            x: columnX + indent.left,
-            y: anchorTop,
-            width: available,
-            height,
-          });
+          publishColumnBox = anchorColumnBox(publishParagraphBox);
         } else {
           const origin = paragraphAnchorOrigin ?? {
             columnX,
             columnWidth: columnWidth(),
             startY: top,
           };
-          let syntheticY = origin.startY;
-          publishLines = lines.map((brokenLine, brokenIndex) => {
-            const lineRecord = {
-              id: `anchor-line-${brokenIndex}`,
-              range: { paragraphId, start: brokenLine.start, end: brokenLine.end },
-              box: {
-                x: origin.columnX + indent.left,
-                y: syntheticY,
-                width: available,
-                height: brokenLine.height,
-              },
-              // Synthetic frame geometry only — these lines are never aligned, painted or
-              // caret-tested, so the content origin is just where their spans were placed.
-              contentX:
-                brokenLine.spans.length > 0
-                  ? brokenLine.spans[0]!.box.x + origin.columnX
-                  : origin.columnX + indent.left,
-              baseline: brokenLine.baseline,
-              leading: brokenLine.leading,
-              trailingSpacing: brokenLine.trailingSpacing,
-              spans: brokenLine.spans.map((span) => ({
-                ...span,
-                box: { ...span.box, x: span.box.x + origin.columnX, y: syntheticY },
-              })),
-            };
-            syntheticY += brokenLine.height + (brokenLine.exclusionSkipBefore ?? 0);
-            return lineRecord;
-          });
+          const synthetic = syntheticAnchorLines(
+            lines,
+            origin,
+            { left: origin.columnX + indent.left, width: available },
+            paragraphId
+          );
+          publishLines = synthetic.lines;
           const paragraphTop =
             origin.startY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
           publishParagraphBox = {
             x: origin.columnX + indent.left,
             y: paragraphTop,
             width: available,
-            height: Math.max(syntheticY - paragraphTop, pending[0]?.box.height ?? 0),
+            height: Math.max(synthetic.bottom - paragraphTop, pending[0]?.box.height ?? 0),
           };
           publishColumnBox = anchorColumnBox(publishParagraphBox);
         }
@@ -2707,7 +2709,9 @@ function layoutBlocksPass(
         (pending.length > 0 ||
           pageFragments.length > 0 ||
           ((pages.length > 0 || (furnitureHasWrap && skipBefore > 0)) &&
-            Math.max(0, pendingLine.height - pendingLine.trailingSpacing) + tail <=
+            ownBandSkip(entry, index, lines, lineIndex, fragmentParagraphStartY, fragmentBefore) +
+              Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
+              tail <=
               contentHeight()));
       if (overflowsPage) {
         if (
