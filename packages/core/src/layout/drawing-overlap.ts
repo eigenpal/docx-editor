@@ -151,7 +151,11 @@ export function resolveOverlapDisplacement(
     const stillOverlaps = placed.some((existing) =>
       paintBoundsOverlap(existing.paintBounds, candidate.paintBounds)
     );
+    // Only a displaced drawing defers for the page bottom. One that hits nothing keeps its
+    // authored position, also when that position reaches into the bottom margin or the page
+    // edge: re-deferring it could never fit, and only added blank pages until the budget ran out.
     const pastPageBottom =
+      candidate !== drawing &&
       candidate.paintBounds.y + candidate.paintBounds.height > options.contentHeight + EPSILON;
     if (stillOverlaps || pastPageBottom) {
       // The next page has none of this page's blockers: carry the authored x there.
