@@ -21,7 +21,7 @@ concurrency:
 jobs:
   sync:
     if: startsWith(github.event.label.name, 'area:') || startsWith(github.event.label.name, 'priority:')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
       - name: Reconcile Area and Priority from labels
