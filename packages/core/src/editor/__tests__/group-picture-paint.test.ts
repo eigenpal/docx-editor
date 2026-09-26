@@ -266,8 +266,9 @@ describe('a drawing group stroke in the effect extent', () => {
         const record = groupRecord(surface)!;
         expect(record.paintBounds.height).toBeCloseTo(605);
         const painted = container.querySelector<HTMLElement>('.docx-drawing')!;
-        // The outer box ends at the paint bounds, which include the 5pt effect extent.
-        expect(painted.style.clipPath).toBe('');
+        // The outer box ends at the paint bounds, which include the 5pt effect extent. The
+        // 10pt outline keeps its full width, so the clip reaches 5pt past each side edge.
+        expect(painted.style.clipPath).toBe('inset(0px -5px 0px -5px)');
         expect(painted.style.height).toBe('605px');
         const frames = painted.querySelectorAll<HTMLElement>('.docx-drawing-image-frame');
         const vector = frames[frames.length - 1]!;
