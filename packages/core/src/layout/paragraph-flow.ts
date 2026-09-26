@@ -6,11 +6,7 @@ import {
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
 } from './pending-line.ts';
-import {
-  paragraphMarkSampleText,
-  pieceDrawsText,
-  shouldIncludeParagraphMarkHeight,
-} from './paragraph-mark-metrics.ts';
+import { scriptLineFloor } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
@@ -426,22 +422,21 @@ export function breakParagraph(
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
     markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
-  // A line without text that the mark still grows (`paragraph-mark-metrics.ts`) reads it
-  // WITHOUT its character style (`paragraph-mark-run.ts`); an empty line reads `emptyStyle`.
-  const growthProps = markRunPropertiesWithoutCharacterStyle(markProps);
-  const growthStyle =
-    growthProps === markProps ? emptyStyle : resolveRunStyle(growthProps, flow?.themeFonts);
-  // Before its first piece a line is estimated from the mark, and only an empty paragraph's
-  // line has no piece to come. The mark never grows a line with text, so a paragraph with
-  // text is estimated from its runs' cascade instead.
-  const lineStartStyle =
-    pieces.length === 0
+  // A line with content never takes the mark's size (`paragraph-mark-metrics.ts`). The
+  // estimate of a line before its first piece reads the runs' cascade; only an empty
+  // paragraph's line, which has no piece to come, reads the mark.
+  const cascadeStyle =
+    markProps === inheritedRunProperties
       ? emptyStyle
-      : markProps === inheritedRunProperties || !pieces.some(pieceDrawsText)
-        ? growthStyle
-        : inheritedRunProperties.length === 0
-          ? DEFAULT_RUN_STYLE
-          : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
+      : inheritedRunProperties.length === 0
+        ? DEFAULT_RUN_STYLE
+        : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
+  // The floor of a script line reads the mark WITHOUT its character style
+  // (`paragraph-mark-run.ts`).
+  const unstyledMark = markRunPropertiesWithoutCharacterStyle(markProps);
+  const scriptFloorMark =
+    unstyledMark === markProps ? emptyStyle : resolveRunStyle(unstyledMark, flow?.themeFonts);
+  const lineStartStyle = pieces.length === 0 ? emptyStyle : cascadeStyle;
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -915,7 +910,7 @@ export function breakParagraph(
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
-    const metrics = measurer.lineMetrics(empty ? emptyStyle : growthStyle);
+    const metrics = measurer.lineMetrics(empty ? emptyStyle : cascadeStyle);
     // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
     // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
     let glyphBaseline = line.baseline;
@@ -923,16 +918,10 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-      // A line with text never reserves the mark's height (`paragraph-mark-metrics.ts`).
-    } else if (
-      options?.includeParagraphMark &&
-      !flow?.paragraphMarkIsCellEnd &&
-      measurer.hasResolvedFont?.(growthStyle) !== false &&
-      shouldIncludeParagraphMarkHeight(growthProps, inheritedRunProperties, line.spans)
-    ) {
-      // Extra mark height stays below the glyph baseline, so a cover page keeps its rhythm.
-      const sample = paragraphMarkSampleText(line.spans, growthStyle);
-      line.height = Math.max(line.height, measurer.lineMetrics(growthStyle, sample).height);
+    } else if (options?.includeParagraphMark && !flow?.paragraphMarkIsCellEnd) {
+      // A script line's floor stays below the glyph baseline, so a cover page keeps its rhythm.
+      const floor = scriptLineFloor(line.spans, scriptFloorMark, cascadeStyle, measurer);
+      line.height = Math.max(line.height, floor);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the

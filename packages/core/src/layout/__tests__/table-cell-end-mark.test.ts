@@ -13,7 +13,10 @@ const measurer: TextMeasurer = {
 };
 const paragraph = (text: string, mark = 20, run = '') =>
   `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/>${run}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
-/** A superscript line still takes a mark's height, so it shows which role the mark had. */
+/**
+ * A superscript line keeps the 10pt line of its run cascade as a floor, not the mark's 20pt,
+ * except under a cell's end mark, so it shows which role the mark had.
+ */
 const superscript = (text: string) => paragraph(text, 20, '<w:vertAlign w:val="superscript"/>');
 const table = (content: string, cellProperties = '', rowProperties = '') =>
   `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((side) => `<w:${side} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr>${rowProperties}</w:trPr><w:tc><w:tcPr>${cellProperties}</w:tcPr>${content}</w:tc></w:tr></w:tbl>`;
@@ -123,7 +126,7 @@ test('vertical cells keep their existing rotated paragraph-marker geometry', () 
     linesOf(run(table(paragraph('Small'), '<w:textDirection w:val="btLr"/>')))[0]!.box.height
   ).toBe(5);
   const result = run(table(superscript('Small'), '<w:textDirection w:val="btLr"/>'));
-  expect(linesOf(result)[0]!.box.height).toBe(20);
+  expect(linesOf(result)[0]!.box.height).toBe(10);
 });
 
 test('the same paragraph cannot reuse a break from a different cell-end role', () => {
@@ -141,7 +144,7 @@ test('the same paragraph cannot reuse a break from a different cell-end role', (
       ? layoutRowFragment(row, [100], 0, 0, false, 0, deps).record.cells[0]!.blocks[0]!
       : flowBlocksInBox([paragraphNode], 0, 100, 0, 0, deps).blocks[0]!;
     if (placed.kind !== 'paragraph') throw new Error('paragraph');
-    expect(placed.lines[0]!.box.height).toBe(end ? 5 : 20);
+    expect(placed.lines[0]!.box.height).toBe(end ? 5 : 10);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
 });
