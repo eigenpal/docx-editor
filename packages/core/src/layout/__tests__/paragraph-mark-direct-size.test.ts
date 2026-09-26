@@ -290,7 +290,7 @@ describe('a line with other content under a direct mark', () => {
 describe('the estimate of a line before its content', () => {
   // The band starts 20pt down, below a 13.8pt line but above the 27.6pt mark line. A square
   // zone elsewhere on the page keeps the early estimate from being re-measured.
-  const zones = () => {
+  const zones = (bandTop = 20) => {
     const square = squareWrapZone({
       anchorParagraphId: 'other',
       top: 60,
@@ -301,12 +301,12 @@ describe('the estimate of a line before its content', () => {
     const band = {
       ...square,
       drawingNodeId: 'band',
-      y: 20,
-      verticalBand: { x: 0, y: 20, width: 180, height: 20 },
+      y: bandTop,
+      verticalBand: { x: 0, y: bandTop, width: 180, height: 20 },
       input: {
         ...square.input,
         mode: 'topAndBottom' as const,
-        contentBounds: { x: 0, y: 20, width: 180, height: 20 },
+        contentBounds: { x: 0, y: bandTop, width: 180, height: 20 },
       },
     };
     return [band, square];
@@ -370,6 +370,75 @@ describe('the estimate of a line before its content', () => {
     );
     expect(first!.exclusionSkipBefore).toBeUndefined();
     expect(first!.height).toBeCloseTo(line(12), 5);
+  });
+
+  type RunProperty = { localName: string; attributes?: Record<string, string> };
+  const cascade12: readonly RunProperty[] = [{ localName: 'sz', attributes: { val: '24' } }];
+  const size = (halfPoints: number): RunProperty => ({
+    localName: 'sz',
+    attributes: { val: String(halfPoints) },
+  });
+  /** First line of one paragraph under a 12pt cascade, with the band `bandTop` down. */
+  const firstLine = (
+    content: string,
+    markRunProperties: readonly RunProperty[],
+    bandTop: number,
+    lineMeasurer = measurer
+  ) => {
+    const node = (body(paragraph(content)).root.children[0] as OoxmlElement).children[0]!;
+    const [first] = breakParagraph(
+      node,
+      'p',
+      0,
+      180,
+      lineMeasurer,
+      undefined,
+      null,
+      cascade12,
+      undefined,
+      undefined,
+      undefined,
+      { pageExclusionZones: zones(bandTop), paragraphStartY: 0, markRunProperties }
+    );
+    return first!;
+  };
+  const small = run('Alpha', '<w:sz w:val="16"/>');
+
+  test('8pt text under an 8pt mark stays above a band the 12pt cascade line crosses', () => {
+    // The band starts 11pt down: below the 9.2pt line, above the 13.8pt cascade line.
+    const marked = firstLine(small, [...cascade12, size(16)], 11);
+    expect(marked.exclusionSkipBefore).toBeUndefined();
+    expect(marked.height).toBeCloseTo(line(8), 5);
+  });
+
+  test('a mark larger than the cascade leaves the estimate at the cascade', () => {
+    const marked = firstLine(small, [...cascade12, size(48)], 20);
+    expect(marked.exclusionSkipBefore).toBeUndefined();
+    expect(marked.height).toBeCloseTo(line(8), 5);
+  });
+
+  test('an empty paragraph still reads the whole mark', () => {
+    expect(firstLine('', [...cascade12, size(16)], 11).exclusionSkipBefore).toBeUndefined();
+    const large = firstLine('', [...cascade12, size(48)], 20);
+    expect(large.exclusionSkipBefore).toBeGreaterThan(0);
+    expect(large.height).toBeCloseTo(line(24), 5);
+  });
+
+  test('a smaller mark in a taller face leaves the estimate at the cascade', () => {
+    // The 8pt mark face measures 23pt, taller than the 13.8pt cascade line.
+    const tallFace: TextMeasurer = {
+      measure: measurer.measure,
+      lineMetrics: (style) => {
+        const metrics = measurer.lineMetrics(style);
+        return style.fontFamily === 'Tall'
+          ? { height: metrics.height * 2.5, baseline: metrics.baseline * 2.5 }
+          : metrics;
+      },
+    };
+    const face = { localName: 'rFonts', attributes: { ascii: 'Tall', hAnsi: 'Tall' } };
+    const marked = firstLine(small, [...cascade12, face, size(16)], 20, tallFace);
+    expect(marked.exclusionSkipBefore).toBeUndefined();
+    expect(marked.height).toBeCloseTo(line(8), 5);
   });
 });
 

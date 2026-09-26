@@ -422,9 +422,7 @@ export function breakParagraph(
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
     markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
-  // A line with content never takes the mark's size (`paragraph-mark-metrics.ts`). The
-  // estimate of a line before its first piece reads the runs' cascade; only an empty
-  // paragraph's line, which has no piece to come, reads the mark.
+  // A line with content never takes the mark's size (`paragraph-mark-metrics.ts`).
   const cascadeStyle =
     markProps === inheritedRunProperties
       ? emptyStyle
@@ -434,9 +432,18 @@ export function breakParagraph(
   // The floor of a script line reads the mark's vertical alignment WITHOUT its character style
   // (`paragraph-mark-run.ts`).
   const unstyledMark = markRunPropertiesWithoutCharacterStyle(markProps);
-  const scriptFloorMark =
+  const unstyledMarkStyle =
     unstyledMark === markProps ? emptyStyle : resolveRunStyle(unstyledMark, flow?.themeFonts);
-  const lineStartStyle = pieces.length === 0 ? emptyStyle : cascadeStyle;
+  // Before its first piece a line is estimated from the shorter of the unstyled mark and the
+  // runs' cascade: a small direct mark usually carries the size of its runs, and a taller one
+  // never grows the line. Heights, not sizes, compare, since faces differ. Only an empty
+  // paragraph's line, which has no piece to come, reads the whole mark.
+  const lineStartStyle =
+    pieces.length === 0
+      ? emptyStyle
+      : measurer.lineMetrics(unstyledMarkStyle).height < measurer.lineMetrics(cascadeStyle).height
+        ? unstyledMarkStyle
+        : cascadeStyle;
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -920,7 +927,7 @@ export function breakParagraph(
       glyphBaseline = metrics.baseline;
     } else if (options?.includeParagraphMark && !flow?.paragraphMarkIsCellEnd) {
       // A script line's floor stays below the glyph baseline, so a cover page keeps its rhythm.
-      const floor = scriptLineFloor(line.spans, scriptFloorMark.verticalAlign, measurer);
+      const floor = scriptLineFloor(line.spans, unstyledMarkStyle.verticalAlign, measurer);
       line.height = Math.max(line.height, floor);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
