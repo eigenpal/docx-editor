@@ -275,8 +275,8 @@ export function layoutHeaderFooterStory(
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const pageFrame = readHeaderPageFrame(part);
   const detected = detectStoryPageFields(part.root);
-  // An `inside`/`outside` frame moves with the page number's parity, so the story needs a
-  // page context even when no page field is detected in it.
+  // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
+  // context even when no page field is detected in it.
   const needs = pageFrame?.parity ? { ...detected, hasPageParity: true } : detected;
   const contextCache = createBoundedContextCache(
     maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
@@ -568,7 +568,14 @@ export function layoutHeaderFooterStory(
       // alone never saw. Keep the ordinary flow rather than guess at that interaction.
       placed =
         pendingAnchoredDrawings.length === 0
-          ? placeHeaderPageFrame(pageFrame, framed, flow, contentWidth, pageNumber, decideFrame)
+          ? placeHeaderPageFrame(
+              pageFrame,
+              framed,
+              flow,
+              contentWidth,
+              effectiveCtx?.sheetNumber ?? pageNumber,
+              decideFrame
+            )
           : null;
       if (decideFrame) frameAdmitted = placed !== null;
     }

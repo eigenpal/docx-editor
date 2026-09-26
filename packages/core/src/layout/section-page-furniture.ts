@@ -108,6 +108,7 @@ export function createSectionPageFurniture(
       pageNumber,
       pageCount: Math.max(pageNumber, inputs.pageCount() + 1),
       sectionPageCount: index + 1,
+      sheetNumber: pageNumber,
     };
     const insets = inputs.insetsFor(index);
     const layoutForPage = (fields: FieldPageContext): HeaderFooterStoryLayout => {

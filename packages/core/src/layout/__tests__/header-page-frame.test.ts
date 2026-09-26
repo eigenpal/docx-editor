@@ -1,7 +1,7 @@
 // A header whose first paragraph is an auto-sized text frame (`w:vAnchor="text"`) holding the
 // page number. The frame takes no place in the story flow: the paragraph after it opens the
 // header, and the frame sits in that paragraph's band at the margin `w:xAlign` names. `inside`
-// and `outside` follow the parity of the displayed page number.
+// and `outside` follow the parity of the physical sheet, not the displayed page number.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -13,6 +13,8 @@ import {
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { readHeaderPageFrame } from '../header-page-frame.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { finalizePageFieldProjection } from '../field-page-furniture.ts';
+import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument, type PageFurniture } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { hitTestFragments } from '../semantic-hit-test.ts';
@@ -55,8 +57,13 @@ function headerPart(content: string, root = 'hdr'): OoxmlPart {
 const lay = (content: string, root = 'hdr') =>
   layoutHeaderFooterStory(headerPart(content, root), WIDTH, measurer, 'header-frame');
 
-const onPage = (story: ReturnType<typeof lay>, pageNumber: number) =>
-  story.withPageContext({ pageNumber, pageCount: 200, sectionPageCount: 200 });
+const onPage = (story: ReturnType<typeof lay>, pageNumber: number, sheetNumber?: number) =>
+  story.withPageContext({
+    pageNumber,
+    pageCount: 200,
+    sectionPageCount: 200,
+    ...(sheetNumber !== undefined ? { sheetNumber } : {}),
+  });
 
 function paragraphs(blocks: readonly BlockFragmentRecord[]): ParagraphFragmentRecord[] {
   return blocks.map((block) => {
@@ -182,6 +189,24 @@ describe('a PAGE frame that opens a header', () => {
     expect(projected.flowHeight).toBe(story.flowHeight);
   });
 
+  test('the physical sheet picks the side, whatever number the frame displays', () => {
+    const story = lay(body);
+    // Displayed 1 on sheets 1 and 2, displayed 2 on sheet 3: a restart on the second sheet.
+    const placed = [
+      [1, 1],
+      [1, 2],
+      [2, 3],
+    ].map(
+      ([pageNumber, sheetNumber]) =>
+        paragraphs(onPage(story, pageNumber!, sheetNumber).fragments)[0]!
+    );
+    expect(placed.map(textOf)).toEqual(['1', '1', '2']);
+    expect(placed.map((frame) => ink(frame).left)).toEqual([0, WIDTH - CHAR, 0]);
+    // The same displayed value on two parities is two layouts, not one cached for both.
+    expect(onPage(story, 1, 2)).not.toBe(onPage(story, 1, 1));
+    expect(onPage(story, 1, 4)).toBe(onPage(story, 1, 2));
+  });
+
   test('page contexts cache by value, and a repeated context reuses its layout', () => {
     const story = lay(body);
     expect(onPage(story, 7)).toBe(onPage(story, 7));
@@ -236,6 +261,9 @@ describe('a frame placed by parity without a page field', () => {
     expect(onPage(story, 4)).toBe(even);
     expect(ink(paragraphs(odd.fragments)[0]!).left).toBe(0);
     expect(ink(paragraphs(even.fragments)[0]!).right).toBe(WIDTH);
+    // The sheet decides the parity; the displayed number does not.
+    expect(onPage(story, 1, 2)).toBe(even);
+    expect(onPage(story, 2, 3)).toBe(odd);
   });
 
   test('a left, center or right frame reads no page context', () => {
@@ -294,7 +322,7 @@ describe('placement on document pages', () => {
       return { text: textOf(frame!), left: ink(frame!).left, anchorY: running!.box.y };
     });
 
-  test('a section that restarts its numbering places by its displayed number', () => {
+  test('a section that restarts its numbering places by the physical sheet', () => {
     // Section 1 has one page. Section 2 starts on physical page 2 and restarts at 1.
     const bodyXml = (restart: string) =>
       `<w:p><w:pPr>${sectPr()}</w:pPr><w:r><w:t>one</w:t></w:r></w:p>` +
@@ -313,18 +341,91 @@ describe('placement on document pages', () => {
       { text: '2', left: WIDTH - CHAR, anchorY: 0 },
       { text: '3', left: 0, anchorY: 0 },
     ]);
+    // Sheet 2 displays 1 and is still an even sheet, so `inside` takes the right margin.
     expect(frames(lay2('<w:pgNumType w:start="1"/>'))).toEqual([
       { text: '1', left: 0, anchorY: 0 },
-      { text: '1', left: 0, anchorY: 0 },
-      { text: '2', left: WIDTH - CHAR, anchorY: 0 },
+      { text: '1', left: WIDTH - CHAR, anchorY: 0 },
+      { text: '2', left: 0, anchorY: 0 },
     ]);
-    // A frame with no page field still follows the displayed number's parity on each page.
+    // A frame with no page field follows the sheet's parity too.
     const draft = furniture(framed(frameProperties(), '<w:r><w:t>DRAFT</w:t></w:r>') + anchor);
     const drafted = layoutSemanticDocument(documentPart(bodyXml('<w:pgNumType w:start="1"/>')), 1, {
       measurer,
       sectionFurniture: [draft, draft],
     });
-    expect(frames(drafted).map((frame) => frame.left)).toEqual([0, 0, WIDTH - 5 * CHAR]);
+    expect(frames(drafted).map((frame) => frame.left)).toEqual([0, WIDTH - 5 * CHAR, 0]);
+  });
+
+  test('a published header re-projects when its sheet moves but its number does not', () => {
+    const bodyXml =
+      `<w:p><w:pPr>${sectPr()}</w:pPr><w:r><w:t>one</w:t></w:r></w:p>` +
+      text('two') +
+      sectPr('<w:pgNumType w:start="1"/>');
+    const header = furniture(body);
+    const published = layoutSemanticDocument(documentPart(bodyXml), 1, {
+      measurer,
+      sectionFurniture: [header, header],
+    });
+    expect(frames(published).map((frame) => [frame.text, frame.left])).toEqual([
+      ['1', 0],
+      ['1', WIDTH - CHAR],
+    ]);
+    // Reused sheets that trade places: the same records, the same displayed number and page
+    // count, another sheet. Only the sheet parity moved, and each header must follow it.
+    const [first, second] = published.pages;
+    const swapped = finalizePageFieldProjection({
+      ...published,
+      revision: 2,
+      pages: [
+        { ...second!, index: 0 },
+        { ...first!, index: 1 },
+      ],
+    });
+    expect(swapped.pages[0]!.header).not.toBe(second!.header);
+    expect(swapped.pages[1]!.header).not.toBe(first!.header);
+    expect(frames(swapped).map((frame) => [frame.text, frame.left])).toEqual([
+      ['1', 0],
+      ['1', WIDTH - CHAR],
+    ]);
+  });
+
+  test('an edit that adds a sheet before a restarted section flips its frames', () => {
+    const session = createLayoutSession();
+    const header = furniture(body);
+    const bodyXml = (breaks: number) =>
+      `<w:p><w:r><w:t>one</w:t></w:r></w:p>` +
+      pageBreak.repeat(breaks) +
+      `<w:p><w:pPr>${sectPr()}</w:pPr><w:r><w:t>end</w:t></w:r></w:p>` +
+      text('two') +
+      pageBreak +
+      text('three') +
+      sectPr('<w:pgNumType w:start="1"/>');
+    const run = (breaks: number, revision: number) =>
+      frames(
+        layoutSemanticDocument(documentPart(bodyXml(breaks)), revision, {
+          measurer,
+          session,
+          sectionFurniture: [header, header],
+        })
+      ).map((frame) => [frame.text, frame.left]);
+    const left = 0,
+      right = WIDTH - CHAR;
+    expect(run(0, 1)).toEqual([
+      ['1', left],
+      ['1', right],
+      ['2', left],
+    ]);
+    expect(run(1, 2)).toEqual([
+      ['1', left],
+      ['2', right],
+      ['1', left],
+      ['2', right],
+    ]);
+    expect(run(0, 3)).toEqual([
+      ['1', left],
+      ['1', right],
+      ['2', left],
+    ]);
   });
 
   test('even and default variants each place their own frame', () => {
@@ -435,6 +536,24 @@ describe('structures that keep the ordinary flow', () => {
       );
       expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
     }
+  });
+
+  test('a wide header is refused before its children are queued', () => {
+    const part = headerPart(body);
+    const children = Array.from({ length: 5000 }, () => part.root.children[1]!);
+    let queued = 0;
+    const iterate = children[Symbol.iterator].bind(children);
+    Object.defineProperty(children, Symbol.iterator, {
+      value: function* () {
+        for (const child of iterate()) {
+          queued += 1;
+          yield child;
+        }
+      },
+    });
+    const wide = { ...part, root: { ...part.root, children } } as unknown as OoxmlPart;
+    expect(readHeaderPageFrame(wide)).toBeNull();
+    expect(queued).toBe(0);
   });
 
   test('a footer is left to the footer lanes', () => {

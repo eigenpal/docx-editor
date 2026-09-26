@@ -3,8 +3,9 @@
 // `w:framePr` with `w:vAnchor="text"` positions the frame from the top of the paragraph after
 // it (ECMA-376 17.3.1.11), so the frame paragraph takes no place in the story flow: the next
 // paragraph opens the header, and the frame shares its band at the margin that `w:xAlign`
-// names. `inside` and `outside` resolve against the page number: an odd page puts `inside` at
-// the left margin and an even page puts it at the right margin.
+// names. `inside` and `outside` resolve against the physical sheet, not the displayed page
+// number: an odd sheet puts `inside` at the left margin and an even sheet puts it at the right
+// margin, also after a numbering restart.
 //
 // The lane is bounded. It accepts one frame, first in the part, followed by an ordinary
 // paragraph. The frame holds one PAGE field or plain text. Anything else keeps the ordinary
@@ -43,7 +44,7 @@ export interface HeaderPageFrame {
   readonly align: FrameAlignment;
   /** `w:y` in points, below the top of the anchor paragraph. */
   readonly y: number;
-  /** True for `inside` and `outside`: the placement changes with the page number's parity. */
+  /** True for `inside` and `outside`: the placement changes with the sheet's parity. */
   readonly parity: boolean;
 }
 
@@ -67,9 +68,11 @@ function framePropertyCount(part: OoxmlPart): number | null {
     frames = 0;
   while (stack.length) {
     const { node, depth } = stack.pop()!;
-    if (++visited + stack.length > MAX_NODES || depth > MAX_DEPTH) return null;
+    if (++visited > MAX_NODES || depth > MAX_DEPTH) return null;
     if (node.kind === 'textValue') continue;
     if (isW(node, 'framePr')) frames++;
+    // Refuse before pushing, so one wide element cannot grow the stack past the bound.
+    if (visited + stack.length + node.children.length > MAX_NODES) return null;
     for (const child of node.children) stack.push({ node: child, depth: depth + 1 });
   }
   return frames;
@@ -208,8 +211,8 @@ function meetsFrame(
 
 type Side = 'left' | 'center' | 'right';
 
-function sideOf(align: FrameAlignment, pageNumber: number): Side {
-  const odd = Math.abs(pageNumber % 2) === 1;
+function sideOf(align: FrameAlignment, sheetNumber: number): Side {
+  const odd = Math.abs(sheetNumber % 2) === 1;
   if (align === 'inside') return odd ? 'left' : 'right';
   if (align === 'outside') return odd ? 'right' : 'left';
   return align;
@@ -222,8 +225,11 @@ function sideOf(align: FrameAlignment, pageNumber: number): Side {
  * story. Returns null when the frame or the band is outside the lane; the caller then keeps
  * the ordinary flow. Both paragraphs stay addressable, and the source is never rewritten.
  *
+ * `sheetNumber` is the 1-based physical sheet. It picks the side of an `inside` or `outside`
+ * frame; the frame's text comes from the displayed number the caller already laid out.
+ *
  * `checkBand` tests the band on every side the frame can take, so the answer does not change
- * with the page number. The caller asks once, without a page context, and places the frame on
+ * with the sheet. The caller asks once, without a page context, and places the frame on
  * each page without asking again: the story height must not change from page to page, because
  * the body's content box is sized from the story laid out without a page context.
  */
@@ -232,7 +238,7 @@ export function placeHeaderPageFrame<T extends { blocks: BlockFragmentRecord[]; 
   framed: { readonly blocks: readonly BlockFragmentRecord[] },
   rest: T,
   contentWidth: number,
-  pageNumber: number,
+  sheetNumber: number,
   checkBand: boolean
 ): T | null {
   const [fragment] = framed.blocks;
@@ -269,14 +275,14 @@ export function placeHeaderPageFrame<T extends { blocks: BlockFragmentRecord[]; 
     width,
     height: fragment.box.height,
   });
-  const box = boxAt(sideOf(frame.align, pageNumber));
+  const box = boxAt(sideOf(frame.align, sheetNumber));
   // The frame starts in the anchor's first line: the only band this lane has evidence for.
   const firstLine = anchor.lines[0];
   if (!firstLine || box.y >= firstLine.box.y + firstLine.box.height) return null;
   if (checkBand) {
     const sides: readonly Side[] = frame.parity
       ? ['left', 'right']
-      : [sideOf(frame.align, pageNumber)];
+      : [sideOf(frame.align, sheetNumber)];
     if (sides.some((side) => meetsFrame(rest.blocks, boxAt(side), anchor.paragraphId))) return null;
   }
   const moved = translateParagraphFragment(fragment, box.x - ink.left, box.y - fragment.box.y);
