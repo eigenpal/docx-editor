@@ -27,7 +27,8 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
 }
 
 /**
- * Only an ordinary word followed by a space can borrow existing inter-word space.
+ * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
+ * existing inter-word space.
  *
  * A word that straddles a source-run seam — a quoted bold term, a semicolon left in
  * the next run — overflows on a later piece than the one that opened it. The kept
@@ -36,10 +37,11 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
  * alternative. Their defaults are the values the caller already holds when the
  * overflowing candidate opens the word, so that path measures exactly as before.
  *
- * `spaceFollows` says the next character is a space, in this run or at the start of
- * the next one. A candidate without its own space is then a complete word: a space in
- * its own run, or one split off by East Asian break rules, hangs at the line end
- * exactly as a space inside the candidate would.
+ * `wordEnds` says the next character is a space, in this run or at the start of the
+ * next one, or that only hanging spaces remain in the paragraph. A candidate without its
+ * own space is then a complete word: a space in its own run, or one split off by East
+ * Asian break rules, hangs at the line end exactly as a space inside the candidate would,
+ * and the paragraph's last word borrows space as any other word does.
  */
 export function fitsWithSpaceShrink(
   spans: readonly StyleSpanRecord[],
@@ -50,11 +52,11 @@ export function fitsWithSpaceShrink(
   available: number,
   wordStart: number = spans.length,
   wordStartWidth: number = lineWidth,
-  spaceFollows = false
+  wordEnds = false
 ): boolean {
   const ownSpace = /^[^\s]+ $/u.test(candidate);
   if (
-    !(ownSpace || (spaceFollows && /^[^\s]+$/u.test(candidate))) ||
+    !(ownSpace || (wordEnds && /^[^\s]+$/u.test(candidate))) ||
     spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
   )
     return false;
@@ -77,6 +79,64 @@ export function fitsWithSpaceShrink(
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
   const compression = spaceWidth / (spaceWidth - needed);
   return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+}
+
+/**
+ * Whether the candidate ending at `boundary` of `pieces[pieceIndex]` is the paragraph's
+ * last word: only plain U+0020 spaces follow it, and they hang at the line end.
+ *
+ * One backward scan finds where that closing run of spaces begins. Any other piece (a
+ * field result, positional tab, drawing, equation, note mark or anchor) ends the scan
+ * after itself, so no word before it is last. A tab, hard break or page break in plain
+ * text is not a space either, and ends the scan the same way.
+ */
+export function paragraphEndAt(
+  pieces: readonly FieldAwarePiece[]
+): (pieceIndex: number, boundary: number) => boolean {
+  let tailPiece = 0;
+  let tailOffset = 0;
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]!;
+    if (
+      piece.projected ||
+      piece.positionalTab ||
+      piece.measureText !== undefined ||
+      piece.end - piece.start !== piece.text.length ||
+      piece.inlineDrawing ||
+      piece.anchoredAtom ||
+      piece.equation ||
+      piece.noteSeparator ||
+      piece.fieldAtom
+    ) {
+      tailPiece = index + 1;
+      break;
+    }
+    let offset = piece.text.length;
+    while (offset > 0 && piece.text[offset - 1] === ' ') offset -= 1;
+    if (offset > 0) {
+      tailPiece = index;
+      tailOffset = offset;
+      break;
+    }
+  }
+  return (pieceIndex, boundary) =>
+    pieceIndex > tailPiece || (pieceIndex === tailPiece && boundary >= tailOffset);
+}
+
+/**
+ * Whether the last line of a justified paragraph may compress its spaces. Only a final
+ * plain word admitted by {@link fitsWithSpaceShrink} makes that line overflow, so the line
+ * keeps the same guards: no tab, float passage advance or equation, and a final span of
+ * ordinary text. Any other overflow keeps its natural widths. A last line never expands.
+ */
+export function lastLineMayShrink(spans: readonly StyleSpanRecord[], slotEnd: number): boolean {
+  const last = spans[slotEnd];
+  return (
+    last !== undefined &&
+    !last.projected &&
+    /^[^\s]+ *$/u.test(last.text) &&
+    !spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
+  );
 }
 
 /**

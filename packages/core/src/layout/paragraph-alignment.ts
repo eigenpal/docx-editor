@@ -1,4 +1,4 @@
-import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
+import { lastLineMayShrink, shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -239,13 +239,10 @@ function alignLogicalSpans(
     if (paragraphRtl) rtlTrailingAdvance = trailing;
   }
   const slack = available - used;
-  if (slack < -0.001 && alignment === 'both' && !isLastLine)
-    return shrinkJustifiedSpans(
-      spans,
-      -slack,
-      measurer,
-      hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
-    );
+  const slotEnd = hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1;
+  // The paragraph's last word may borrow inter-word space too, so its line compresses.
+  if (slack < -0.001 && alignment === 'both' && (!isLastLine || lastLineMayShrink(spans, slotEnd)))
+    return shrinkJustifiedSpans(spans, -slack, measurer, slotEnd);
   if (slack <= 0) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.

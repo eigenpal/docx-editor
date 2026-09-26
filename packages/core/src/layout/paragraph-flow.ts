@@ -12,7 +12,11 @@ import {
 } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
-import { fitsWithSpaceShrink, opensWithHangingSpace } from './paragraph-space-shrink.ts';
+import {
+  fitsWithSpaceShrink,
+  opensWithHangingSpace,
+  paragraphEndAt,
+} from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
 export {
@@ -403,6 +407,7 @@ export function breakParagraph(
     canFitCjkOptically(allPieces);
   const opticalCompression = opticalParagraph && !preserveColonAdvances;
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
+  const endsParagraph = paragraphEndAt(pieces);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const fitCjkOptically = createCjkOpticalFitter(
     pieces,
@@ -1465,7 +1470,8 @@ export function breakParagraph(
             !flow.pageExclusionZones?.length &&
             sameParagraphAnchorStarts.length === 0 &&
             line.drawings.length === 0 &&
-            placeableSuffixes[pieceIndex]![boundary] === 1 &&
+            (placeableSuffixes[pieceIndex]![boundary] === 1 ||
+              endsParagraph(pieceIndex, boundary)) &&
             fitsWithSpaceShrink(
               line.spans,
               candidate,
@@ -1475,9 +1481,10 @@ export function breakParagraph(
               lineAvailable(),
               opensWord ? line.spans.length : wordStartSpan,
               opensWord ? line.width : wordStartWidth,
-              boundary < piece.text.length
-                ? !layoutOwned && piece.text[boundary] === ' '
-                : opensWithHangingSpace(pieces[pieceIndex + 1])
+              endsParagraph(pieceIndex, boundary) ||
+                (boundary < piece.text.length
+                  ? !layoutOwned && piece.text[boundary] === ' '
+                  : opensWithHangingSpace(pieces[pieceIndex + 1]))
             )
           ) &&
           holdsContent())
