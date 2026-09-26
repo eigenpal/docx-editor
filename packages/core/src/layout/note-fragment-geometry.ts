@@ -9,6 +9,7 @@ import type {
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
+import { tableReferenceRowBand } from './note-table-reference-band.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -94,13 +95,18 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 /**
  * Body bottom (content-relative pt) the note passes BUDGET against.
  *
- * MINUS each paragraph's trailing after-spacing: the page-fit decision admits a paragraph
- * without charging its `w:spacing w:after` (it moves to the next page with the flow), but
- * the fragment BOX includes it — so a page whose last paragraph carries after-spacing
- * "uses" more height here than the fit rule budgeted, the reserve the reflow settles on
- * under-claims by that amount, and the attach pass splits a note the reserve fit whole.
- * Word lets the footnote area rise into that blank band the same way. PLACEMENT of an
- * area that hangs off the body keeps {@link fragmentFlowBottom} unless the room is needed.
+ * MINUS each paragraph's trailing after-spacing and its last line's trailing `auto`
+ * depth: the page-fit decision admits a line without charging either (the
+ * after-spacing moves to the next page with the flow, and the depth below the glyph band
+ * may cross the bottom of the text area), but the fragment BOX includes both — so a page
+ * whose last line carries either "uses" more height here than the fit rule budgeted, the
+ * reserve the reflow settles on under-claims by that amount, and the attach pass splits
+ * or carries a note the reserve fit whole. The footnote area rises into that blank band
+ * instead. PLACEMENT of an area that hangs off the body keeps {@link fragmentFlowBottom}
+ * unless the room is needed.
+ *
+ * A reference line does not get this allowance: its note must start below the line's
+ * full box ({@link noteReferenceLineBandPt}), which both note passes enforce per reference.
  */
 export function bodyFitBottomPt(page: PageRecord): number {
   let bottom = 0;
@@ -110,11 +116,36 @@ export function bodyFitBottomPt(page: PageRecord): number {
   return bottom;
 }
 
-/** One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing. */
-export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
+/**
+ * Body bottom (content-relative pt) where the next body line would start: each fragment's
+ * box minus a paragraph's trailing after-spacing, keeping the last line's full box. The
+ * hold-out measures pulled lines from here, because a returning line starts below the whole
+ * box of the line above it.
+ */
+export function bodyCursorBottomPt(page: PageRecord): number {
+  let bottom = 0;
+  for (const fragment of page.fragments) {
+    bottom = Math.max(bottom, fragmentCursorBottomPt(fragment));
+  }
+  return bottom;
+}
+
+/** One fragment's {@link bodyCursorBottomPt}: its box minus a paragraph's after-spacing. */
+export function fragmentCursorBottomPt(fragment: BlockFragmentRecord): number {
   if (isOutOfFlowFragment(fragment)) return 0;
   const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
   return fragment.box.y + fragment.box.height - trailingAfter;
+}
+
+/**
+ * One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing and
+ * its last line's trailing depth, which the body fit rule leaves out of the budget.
+ */
+export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
+  const bottom = fragmentCursorBottomPt(fragment);
+  if (fragment.kind !== 'paragraph') return bottom;
+  const last = fragment.lines[fragment.lines.length - 1];
+  return bottom - (last ? Math.min(last.trailingSpacing ?? 0, last.box.height) : 0);
 }
 
 /**
@@ -160,10 +191,16 @@ export function firstBodyContentTopPt(page: PageRecord): number {
  * reference's own line, so the next pass finds the reference — and lays its note whole —
  * on the page the shrunken body pushes it to.
  *
- * `evictable` is false when the line's geometry cannot support that move: a ref inside a
- * table (nested line geometry is not in page-content coordinates; the band is the TABLE
- * fragment's box, and evicting a whole table for one note is not the conservative reading),
- * and a ref no fragment on this page owns (band zero).
+ * A ref inside a body table takes its ROW's band ({@link tableReferenceRowBand}): the row
+ * box is in page-content coordinates and the row moves to the next page as one unit, with
+ * `blockTop` above it by the header rows that repeat there. The bottom is the lowest legal
+ * split that keeps the reference line where the row can continue on the next page below it
+ * (`referenceRowCut`), else the row box's bottom. Where the row cannot be proven the band
+ * ({@link tableReferenceRowBand} lists the cases), the band is the TABLE fragment's box.
+ *
+ * `evictable` is false when the geometry cannot support that move: a table ref outside a
+ * provably movable row (evicting a whole table for one note is not the conservative
+ * reading), and a ref no fragment on this page owns (band zero).
  */
 export interface NoteReferenceLineBand {
   /** Top of the referencing line (content-relative pt); reserve past this evicts the line. */
@@ -176,31 +213,40 @@ export interface NoteReferenceLineBand {
   readonly evictable: boolean;
   /** Retain the opening orphan pair even when its second line's note must start later. */
   readonly preserveOrphanLine?: boolean;
+  /**
+   * The band of a body-table row ({@link tableReferenceRowBand}). The row moves only when
+   * its note would place fewer than two lines below the reference; otherwise the note splits.
+   */
+  readonly tableRow?: true;
+  /** The referencing row's id when that row ends the page's flow (`endsPage`). */
+  readonly endsPageRowId?: string;
 }
 
 /**
  * Memoized per fragments-array identity and ref object identity: the reserve pass asks for
  * the same page's bands as `bodyPage` and again as the previous page's hold-out neighbour,
  * every reflow round, and both the fragment arrays and the ref objects are identity-stable
- * across rounds.
+ * across rounds. One memo per cell split rule: table bands read cell widow control and
+ * `w:keepLines` only in compatibility mode 15 and later.
  */
-const referenceLineBandMemos = new WeakMap<
-  readonly BlockFragmentRecord[],
-  WeakMap<object, NoteReferenceLineBand>
->();
+const referenceLineBandMemos = [false, true].map(
+  () => new WeakMap<readonly BlockFragmentRecord[], WeakMap<object, NoteReferenceLineBand>>()
+);
 
 export function noteReferenceLineBandPt(
   page: PageRecord,
-  ref: { readonly paragraphId: string; readonly atomOffset: number }
+  ref: { readonly paragraphId: string; readonly atomOffset: number },
+  compatibilityMode?: number
 ): NoteReferenceLineBand {
-  let perPage = referenceLineBandMemos.get(page.fragments);
+  const memos = referenceLineBandMemos[(compatibilityMode ?? 0) >= 15 ? 1 : 0]!;
+  let perPage = memos.get(page.fragments);
   if (!perPage) {
     perPage = new WeakMap();
-    referenceLineBandMemos.set(page.fragments, perPage);
+    memos.set(page.fragments, perPage);
   }
   const cached = perPage.get(ref);
   if (cached) return cached;
-  const band = computeReferenceLineBand(page, ref);
+  const band = computeReferenceLineBand(page, ref, compatibilityMode);
   perPage.set(ref, band);
   return band;
 }
@@ -215,23 +261,28 @@ export function noteReferenceLineBandPt(
  */
 export function anyOrphanPairBand(
   page: PageRecord,
-  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
+  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[],
+  compatibilityMode?: number
 ): boolean {
   for (const ref of refs) {
-    if (noteReferenceLineBandPt(page, ref).preserveOrphanLine === true) return true;
+    const band = noteReferenceLineBandPt(page, ref, compatibilityMode);
+    if (band.preserveOrphanLine === true) return true;
   }
   return false;
 }
 
 function computeReferenceLineBand(
   page: PageRecord,
-  ref: { readonly paragraphId: string; readonly atomOffset: number }
+  ref: { readonly paragraphId: string; readonly atomOffset: number },
+  compatibilityMode: number | undefined
 ): NoteReferenceLineBand {
   let top = 0;
   let bottom = 0;
   let blockTop = 0;
   let evictable = false;
   let preserveOrphanLine = false;
+  let tableRow = false;
+  let endsPageRowId: string | undefined;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
       if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
@@ -249,6 +300,8 @@ function computeReferenceLineBand(
         // A split-capable paragraph needs two opening lines on this page. Its note
         // may continue before sacrificing that pair; explicit keepLines and short
         // unsplittable paragraphs still move together with their references.
+        tableRow = false;
+        endsPageRowId = undefined;
         preserveOrphanLine =
           evictable &&
           line?.index === 1 &&
@@ -259,14 +312,20 @@ function computeReferenceLineBand(
       }
       continue;
     }
-    if (tableOwnsAnyRef(block, [ref])) {
-      const blockBottom = block.box.y + block.box.height;
-      if (blockBottom > bottom) {
-        top = block.box.y;
-        bottom = blockBottom;
-        evictable = false;
-        preserveOrphanLine = false;
-      }
+    const row = tableReferenceRowBand(page, block, ref, compatibilityMode);
+    if (row === null) continue;
+    const band =
+      row === 'table'
+        ? { top: block.box.y, bottom: block.box.y + block.box.height, blockTop, evictable: false }
+        : row;
+    if (band.bottom > bottom) {
+      top = band.top;
+      bottom = band.bottom;
+      blockTop = band.blockTop;
+      evictable = band.evictable;
+      preserveOrphanLine = false;
+      tableRow = row !== 'table';
+      endsPageRowId = row !== 'table' && row.endsPage ? row.row.id : undefined;
     }
   }
   const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
@@ -281,6 +340,8 @@ function computeReferenceLineBand(
     // would be zero, and the reference's note would be neither placed nor carried.
     evictable: evictable && clampedBottom > clampedTop,
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
+    ...(tableRow ? { tableRow: true } : {}),
+    ...(endsPageRowId !== undefined ? { endsPageRowId } : {}),
   };
 }
 
@@ -296,36 +357,6 @@ function referenceLineBand(
     }
   }
   return null;
-}
-
-function tableOwnsAnyRef(
-  table: Extract<BlockFragmentRecord, { kind: 'table' }>,
-  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
-): boolean {
-  const visit = (blocks: readonly BlockFragmentRecord[]): boolean => {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph') {
-        for (const ref of refs) {
-          if (fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) return true;
-        }
-        continue;
-      }
-      for (const row of block.rows) {
-        if (row.isHeaderRepeat) continue;
-        for (const cell of row.cells) {
-          if (visit(cell.blocks)) return true;
-        }
-      }
-    }
-    return false;
-  };
-  for (const row of table.rows) {
-    if (row.isHeaderRepeat) continue;
-    for (const cell of row.cells) {
-      if (visit(cell.blocks)) return true;
-    }
-  }
-  return false;
 }
 
 /** Remove note-pass output before recomputing it from canonical references. */

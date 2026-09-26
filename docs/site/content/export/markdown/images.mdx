@@ -195,7 +195,7 @@ The resolver gets a separate byte copy. Mutations cannot corrupt returned assets
 
 ## Output limits
 
-Extraction covers validated ready images published by layout, including the body, headers, footers, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.
+Extraction covers validated ready images published by layout, including the body, headers, footers, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings. A shape group is omitted as one drawing, even when it holds a picture; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.
 
 Inline and anchored images appear at their source paragraph positions, including table cells. Anchors within projected field results follow the field; display text cannot provide an exact source position. Decorative images have empty alternative text. Text-box content and note separators remain outside Markdown, although their image bytes and occurrences remain available. Unplaced anchors use an explicit `image-placement-fallback` warning. The logical document and affected page emit separate fallback warnings; page warnings include `pageNumber`. Cropping, rotation, and drawing effects are not reproduced.
 

@@ -97,7 +97,9 @@ export function pageFieldPlaceholder(
  *
  * `pageNumber` is the displayed PAGE value after section `w:pgNumType/@w:start` (1-based).
  * `pageCount` is document NUMPAGES. `sectionPageCount` is SECTIONPAGES for the attached
- * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE.
+ * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE. `sheetNumber` is
+ * the 1-based physical sheet, which a restart does not renumber: it decides which margin an
+ * `inside` or `outside` header frame takes.
  *
  * A new field here must also join `sameFieldPageContext` below, or finalize compares two
  * contexts that differ in it as equal and keeps a reused story's stale text.
@@ -109,6 +111,8 @@ export interface FieldPageContext {
   readonly sectionPageCount?: number;
   /** Authored ST_NumberFormat for PAGE; absent → decimal. */
   readonly format?: string;
+  /** 1-based physical sheet; absent → `pageNumber` (single-section callers). */
+  readonly sheetNumber?: number;
 }
 
 /**
@@ -169,9 +173,11 @@ export interface PageFieldSource {
   readonly format?: string;
 }
 
-/** True when any allowlisted page field is present. */
+/** True when any allowlisted page field is present, or the story places by page parity. */
 export function storyNeedsPageFields(needs: StoryPageFieldNeeds): boolean {
-  return needs.hasPage || needs.hasNumPages || needs.hasSectionPages;
+  return (
+    needs.hasPage || needs.hasNumPages || needs.hasSectionPages || needs.hasPageParity === true
+  );
 }
 
 /**
@@ -195,6 +201,8 @@ export function fieldPageContextToken(
   }
   if (needs.hasNumPages) parts.push(`n${context.pageCount}`);
   if (needs.hasSectionPages) parts.push(`s${context.sectionPageCount ?? context.pageCount}`);
+  // The sheet's parity, not the PAGE value's: a restart shows one value on sheets of both.
+  if (needs.hasPageParity) parts.push(`o${(context.sheetNumber ?? context.pageNumber) & 1}`);
   return `|fld:${parts.join('/')}`;
 }
 
@@ -619,7 +627,8 @@ function sameFieldPageContext(a: FieldPageContext, b: FieldPageContext): boolean
     a.pageNumber === b.pageNumber &&
     a.pageCount === b.pageCount &&
     (a.sectionPageCount ?? a.pageCount) === (b.sectionPageCount ?? b.pageCount) &&
-    a.format === b.format
+    a.format === b.format &&
+    (a.sheetNumber ?? a.pageNumber) === (b.sheetNumber ?? b.pageNumber)
   );
 }
 
@@ -696,6 +705,7 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
       pageCount,
       sectionPageCount: source?.sectionPageCount ?? pageCount,
       ...(source?.format ? { format: source.format } : {}),
+      sheetNumber: page.index + 1,
     };
     const project = (
       story: HeaderFooterStoryRecord | undefined

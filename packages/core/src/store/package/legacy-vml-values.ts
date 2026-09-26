@@ -31,6 +31,16 @@ export function points(value: string | undefined): number {
     { pt: 1, in: 72, cm: 72 / 2.54, mm: 72 / 25.4, px: 0.75 }[match[2]?.toLowerCase() ?? 'pt']!
   );
 }
+/**
+ * A VML text distance in points. Writers spell a tiny negative distance with an exponent
+ * (`-1e-4mm`); a negative distance leaves no gap, so it reads as 0. NaN when malformed.
+ */
+export function wrapDistancePoints(value: string): number {
+  const match = value.match(/^(-?(?:\d+(?:\.\d*)?|\.\d+))(?:e([+-]?\d{1,3}))?(pt|in|cm|mm|px)?$/i);
+  if (!match) return NaN;
+  const scaled = points(match[1]! + (match[3] ?? '')) * 10 ** Number(match[2] ?? 0);
+  return Number.isFinite(scaled) ? Math.max(0, scaled) : NaN;
+}
 export function pair(value: string): [number, number] | null {
   const values = value
     .trim()

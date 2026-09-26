@@ -1379,12 +1379,13 @@ function createImageResourceCacheInternal(
   ): Promise<ImageResourceState> => {
     ensureActive();
     if (projection.legacyGraphic) return resolveLegacyGraphic(projection);
-    if (!projection.picture) {
+    const picture = projection.picture ?? projection.groupPicture;
+    if (!picture) {
       return unrenderable(null, 'unknown', 'non-picture-graphic');
     }
-    const linked = projection.picture.linkedRelationshipId;
+    const linked = picture.linkedRelationshipId;
     if (linked) return resolveLinked(projection.ownerPartName, linked);
-    const embedded = projection.picture.embeddedRelationshipId;
+    const embedded = picture.embeddedRelationshipId;
     if (!embedded) return unrenderable(null, 'unknown', 'unsupported-format');
     return resolveEmbedded(projection.ownerPartName, embedded);
   };

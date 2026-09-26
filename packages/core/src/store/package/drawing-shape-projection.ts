@@ -4,13 +4,17 @@
 
 import { parseEmu, findDirectChild, readSize } from './drawing-shape-readers.ts';
 export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
-import { findDirectKind, isElement } from './drawing-projection-walk.ts';
+import { isElement } from './drawing-projection-walk.ts';
 import {
-  collapseSchemaWhitespace,
-  parseSchemaBoolean,
-  schemaAttributeValue,
-  WPS_NAMESPACE_URI,
-} from './ooxml-drawing-rules.ts';
+  findGraphicData,
+  isGroupPropertyChild,
+  MAX_GROUP_SHAPE_CHILDREN,
+  readDrawingGroupFrame,
+  schemaAngleIsZero,
+  schemaFlagIsSet,
+  schemaFlagIsUnset,
+} from './drawing-group-frame.ts';
+import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
@@ -18,12 +22,9 @@ import { transformComponent } from './drawing-group-transform.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 
-const WPG_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-const WPG_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
 const MAX_VECTOR_SHAPE_POINTS = 1024;
-const MAX_GROUP_SHAPE_CHILDREN = 128;
 const ELLIPSE_POINTS = 32;
 
 export type ShapeSchemeColorResolver = (scheme: string) => string | null;
@@ -31,49 +32,6 @@ export type ShapeStyleMatrixResolver = (
   kind: 'fill' | 'line',
   index: number
 ) => OoxmlElement | null;
-
-/**
- * An `xsd:boolean` attribute read fail-closed.
- *
- * Only a legal `0`/`false` and an absent attribute mean "not set"; every other spelling —
- * `TRUE`, `yes`, `2` — is schema-invalid, and the sender chose it, so it refuses the shape
- * rather than painting as if the flag were unset. The collapse inside
- * {@link parseSchemaBoolean} is load-bearing here: comparing the raw string would refuse a
- * shape Word paints, which is the one way a fail-closed read can be worse than the
- * permissive one it replaced.
- */
-function schemaFlagIsUnset(value: string | undefined): boolean {
-  return value === undefined || parseSchemaBoolean(value) === false;
-}
-
-/**
- * The complement of {@link schemaFlagIsUnset}: an `xsd:boolean` that legally reads true.
- *
- * A value that is neither set nor unset is schema-invalid. The `a:xfrm` check refuses the
- * shape on one, so the flip reads further down only ever see a legal spelling. A picture
- * flip, which the engine can paint either way, does not go through here: it reads
- * `parseSchemaBoolean(...) ?? false` and treats an invalid spelling as unset rather than
- * dropping the picture.
- */
-function schemaFlagIsSet(value: string | undefined): boolean {
-  return parseSchemaBoolean(value) === true;
-}
-
-/**
- * `rot` on an `a:xfrm`, tested for "not rotated".
- *
- * `ST_Angle` derives from `xsd:int`, so it carries the same collapse facet as `xsd:boolean`
- * and the same freedom over sign and leading zeros: ` 0 `, `00`, `+0` and `-0` are all a
- * zero rotation. Comparing the raw string to `'0'` refused every one of them and dropped the
- * shape to a placeholder. A non-zero angle still refuses — the engine cannot paint a rotated
- * vector shape — and so does anything that is not a legal `xsd:int`.
- */
-function schemaAngleIsZero(value: string | undefined): boolean {
-  if (value === undefined) return true;
-  const collapsed = collapseSchemaWhitespace(value);
-  // Bounded digit count: `rot` is an int, and this only ever compares it against zero.
-  return /^[+-]?\d{1,12}$/.test(collapsed) && Number(collapsed) === 0;
-}
 
 /**
  * The renderable subset of a `wps:wsp` non-picture graphic, or of one bounded `wpg:wgp`
@@ -430,25 +388,6 @@ function readStyleReference(
   return { color: lineFill.color, matrix };
 }
 
-function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
-  // Non-picture graphic payloads demote to generic nodes even under a typed
-  // `drawingGraphic`, so the generic lookup is always in play here.
-  const graphic =
-    findDirectKind(anchor.children, 'drawingGraphic') ??
-    findDirectChild(anchor.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'graphic',
-    });
-  if (!graphic) return null;
-  const data =
-    findDirectKind(graphic.children, 'drawingGraphicData') ??
-    findDirectChild(graphic.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'graphicData',
-    });
-  return data;
-}
-
 /** The `wps:wsp` under the anchor's graphic data, or null when the payload is something else. */
 function findWspInAnchor(anchor: OoxmlElement): OoxmlElement | null {
   const data = findGraphicData(anchor);
@@ -687,13 +626,17 @@ function childTransform(wsp: OoxmlElement): {
 
 /**
  * Renderable-subset projection of direct `wps:wsp` and one bounded `wpg:wgp` group.
+ *
+ * `groupPictureNodeId` names the one group member the group picture projection paints; it is
+ * skipped here. Every other member must be a supported `wps:wsp`, or the group refuses.
  */
 export function projectVectorShape(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
   compatibilityMode: boolean,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupPictureNodeId?: string
 ): VectorShapeProjection | null {
   void compatibilityMode;
   // A straight vertical or horizontal line has a zero width or height; both zero is empty.
@@ -712,70 +655,22 @@ export function projectVectorShape(
     if (!component) return null;
     components = [component];
   } else {
-    const data = findGraphicData(anchor);
-    if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPG_GRAPHIC_DATA_URI) return null;
-    const group = findDirectChild(data.children, {
-      namespaceUri: WPG_NAMESPACE_URI,
-      localName: 'wgp',
-    });
-    const groupProperties = group
-      ? findDirectChild(group.children, {
-          namespaceUri: WPG_NAMESPACE_URI,
-          localName: 'grpSpPr',
-        })
-      : null;
-    const xfrm = groupProperties
-      ? findDirectChild(groupProperties.children, {
-          namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-          localName: 'xfrm',
-        })
-      : null;
-    const childOffset = xfrm
-      ? findDirectChild(xfrm.children, {
-          namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-          localName: 'chOff',
-        })
-      : null;
-    const childExtent = xfrm
-      ? findDirectChild(xfrm.children, {
-          namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-          localName: 'chExt',
-        })
-      : null;
-    if (!group || !childExtent) return null;
-    if (xfrm) {
-      if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
-      if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
-      if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
-    }
-    const chOffX = childOffset
-      ? (parseEmu(schemaAttributeValue(childOffset.attributes, 'x'), false) ?? 0)
-      : 0;
-    const chOffY = childOffset
-      ? (parseEmu(schemaAttributeValue(childOffset.attributes, 'y'), false) ?? 0)
-      : 0;
-    const chExtX = readSize(schemaAttributeValue(childExtent.attributes, 'cx'), null);
-    const chExtY = readSize(schemaAttributeValue(childExtent.attributes, 'cy'), null);
-    if (chExtX === null || chExtY === null) return null;
+    const frame = readDrawingGroupFrame(anchor);
+    if (!frame) return null;
+    const { x: chOffX, y: chOffY } = frame.childOffsetEmu;
+    const { cx: chExtX, cy: chExtY } = frame.childExtentEmu;
     // Rules that share one x (or y) give the group a zero child extent on that axis. Every
     // child then sits at the group's origin on that axis, whatever the group's own extent.
     const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
     const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
     let childCount = 0;
-    for (const child of group.children) {
-      if (!isElement(child)) continue;
-      if (
-        child.namespaceUri === WPG_NAMESPACE_URI &&
-        (child.localName === 'cNvPr' ||
-          child.localName === 'cNvGrpSpPr' ||
-          child.localName === 'grpSpPr')
-      ) {
-        continue;
-      }
-      // One group level is the enforced nesting cap. Do not paint a partial nested group.
-      if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
+    for (const child of frame.group.children) {
+      if (!isElement(child) || isGroupPropertyChild(child)) continue;
       childCount += 1;
       if (childCount > MAX_GROUP_SHAPE_CHILDREN) return null;
+      if (child.id === groupPictureNodeId) continue;
+      // One group level is the enforced nesting cap. Do not paint a partial nested group.
+      if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
       const transform = childTransform(child);
       if (!transform) return null;
       const component = projectWspComponent(

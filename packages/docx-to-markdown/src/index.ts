@@ -98,6 +98,7 @@ export type {
   AnchoredDrawingRecord,
   DrawingAccessibility,
   DrawingGeometry,
+  DrawingGroupPictureRecord,
   DrawingHorizontalReferenceFrame,
   DrawingTransform,
   DrawingVerticalReferenceFrame,

@@ -33,11 +33,12 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { hasSymbolPua, mapSymbolPuaText } from './symbol-encoding.ts';
+import { hasSymbolPua, mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
+import { numberingLevelTiers } from './numbering-level-tier.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
@@ -346,18 +347,22 @@ function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
 }
 
 /**
- * The effective indent of a list paragraph: STYLE, then the numbering LEVEL, then DIRECT.
+ * The effective indent of a list paragraph: `inherited`, then the numbering LEVEL, then
+ * `direct`, per attribute.
  *
- * Word applies a level's `w:pPr/w:ind` between the paragraph style and the paragraph's own
- * formatting, per attribute — and the ordering matters on real documents. A converted
- * agreement numbers its `(a)` items with a level stating `left=1512 hanging=738` under a
- * `ListParagraph` style stating `left=775 hanging=624`, and states only `hanging="737"` on
- * the paragraph itself. Reading the flattened cascade as "the paragraph's indent" gave the
- * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
- * indent step to the left of where Word puts it.
+ * A level's `w:pPr/w:ind` applies per attribute between the two tiers, and the ordering
+ * matters on real documents. A converted agreement numbers its `(a)` items with a level
+ * stating `left=1512 hanging=738` under a `ListParagraph` style stating
+ * `left=775 hanging=624`, and states only `hanging="737"` on the paragraph itself. Reading
+ * the flattened cascade as "the paragraph's indent" gave the STYLE's 775 to a level that had
+ * overridden it, so every lettered sub-item hung a full indent step to the left of where
+ * Word puts it.
  *
- * `inherited` is the cascade WITHOUT the paragraph's own `w:pPr` (defaults, table cell style,
- * style chain); `direct` is that `w:pPr` alone.
+ * `inherited` is what the level outranks and `direct` is what outranks it. When the
+ * paragraph's own `w:pPr` states a `w:numPr`, these are the style chain (after the document
+ * defaults) and that `w:pPr`. Otherwise the level sits directly below the nearest style that
+ * states a `w:numPr`: that style, the styles based on it and the paragraph's own `w:pPr` go
+ * in `direct`, and the defaults and that style's bases go in `inherited`.
  */
 export function mergeListIndent(
   levelIndent: NumberingLevelIndent,
@@ -464,8 +469,9 @@ export function walkStoryParagraphs(
 interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
-  readonly inheritedParagraphProperties: readonly OoxmlProperty[];
-  readonly directProps: readonly OoxmlProperty[];
+  /** Properties below and above the numbering level, from `numberingLevelTiers`. */
+  readonly belowLevel: readonly OoxmlProperty[];
+  readonly aboveLevel: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
   readonly perLevel: WeakMap<
     object,
@@ -484,11 +490,17 @@ function paragraphListPrelude(
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+  const numPr = readNumPr(nodes);
+  // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
+  const tiers =
+    numPr && styleCascade && cascaded
+      ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
+      : { below: [], above: propertiesOf(pPr) };
   const prelude: ParagraphListPrelude = {
     styleCascade,
-    numPr: readNumPr(nodes),
-    inheritedParagraphProperties: cascaded?.inheritedParagraphProperties ?? [],
-    directProps: propertiesOf(pPr),
+    numPr,
+    belowLevel: tiers.below,
+    aboveLevel: tiers.above,
     inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
     perLevel: new WeakMap(),
   };
@@ -525,13 +537,8 @@ export function resolveStoryListItems(
 
     let levelDerived = prelude.perLevel.get(advanced.level);
     if (!levelDerived) {
-      // Split, not flattened: the level's indent outranks the STYLE's and is outranked by
-      // the paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
-      const indent = mergeListIndent(
-        advanced.level.indent,
-        prelude.inheritedParagraphProperties,
-        prelude.directProps
-      );
+      // Split, not flattened: the merge needs the tiers below and above the level apart.
+      const indent = mergeListIndent(advanced.level.indent, prelude.belowLevel, prelude.aboveLevel);
       const markerProps = cascadeRunProperties(
         prelude.inheritedMarkProps,
         advanced.level.runProperties,
@@ -548,7 +555,8 @@ export function resolveStoryListItems(
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same
     // string; doing it in the painter would size the marker box for a glyph nobody draws.
-    const markerText = mapSymbolPuaText(
+    const mapMarker = advanced.level.numFmt === 'bullet' ? mapSymbolBulletText : mapSymbolPuaText;
+    const markerText = mapMarker(
       advanced.markerText,
       authoredMarkerStyle.fontFamily,
       isFontAvailable

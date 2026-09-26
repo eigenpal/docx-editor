@@ -57,6 +57,8 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
+import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
+import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -94,6 +96,8 @@ export interface HeaderFooterPageContext {
   readonly marginRight: number;
   readonly marginTop: number;
   readonly marginBottom: number;
+  /** `w:pgMar/@w:header` for a header, `@w:footer` for a footer: the story edge's distance. */
+  readonly storyDistance?: number;
 }
 
 /** Per-sheet geometry needed to resolve header/footer anchors before wrap and clipping. */
@@ -269,7 +273,11 @@ export function layoutHeaderFooterStory(
 ): HeaderFooterStoryLayout {
   if (inputs?.showFieldCodes) producer += '|field-codes';
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
-  const needs = detectStoryPageFields(part.root);
+  const pageFrame = readHeaderPageFrame(part);
+  const detected = detectStoryPageFields(part.root);
+  // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
+  // context even when no page field is detected in it.
+  const needs = pageFrame?.parity ? { ...detected, hasPageParity: true } : detected;
   const contextCache = createBoundedContextCache(
     maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
   );
@@ -278,6 +286,7 @@ export function layoutHeaderFooterStory(
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
   const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
+  const floatingSplit = splitFloatingStoryTables(blocks);
   // The story's own list-item map, resolved once per layout of this part.
   //
   // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
@@ -291,6 +300,8 @@ export function layoutHeaderFooterStory(
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
+  // Whether the header frame lane holds, decided once by the layout without a page context.
+  let frameAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
@@ -371,7 +382,7 @@ export function layoutHeaderFooterStory(
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,
         ownerPartName: part.name,
-        storyKind: part.name.includes('ftr') ? 'footer' : 'header',
+        storyKind: part.root.localName === 'ftr' ? 'footer' : 'header',
       });
     };
 
@@ -423,134 +434,181 @@ export function layoutHeaderFooterStory(
 
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
+    // A floating table needs the page geometry to find its anchor. Without it, it stays in flow.
+    const floatingGeometry =
+      floatingSplit.floating.length > 0 &&
+      hfPageContext &&
+      (effectiveCtx?.storyTop !== undefined || hfPageContext.storyDistance !== undefined)
+        ? hfPageContext
+        : undefined;
+    const flowBlocks = floatingGeometry ? floatingSplit.flowBlocks : blocks;
+    const plainDeps = () => ({
+      measurer,
+      cache,
+      producer:
+        producer +
+        token +
+        (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+        (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+      nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
+      styleCascade,
+      ...(listItems ? { listItems } : {}),
+      pageContext: effectiveCtx,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      compatibilityMode: inputs?.compatibilityMode,
+      tableNestingOffset: 1 as const,
+      displayMode,
+      ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
+      ...(documentProperties ? { documentProperties } : {}),
+      ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+      ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+      showFieldCodes: inputs?.showFieldCodes,
+      ...(inputs?.projectionTokenForParagraph
+        ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+        : {}),
+      ...(inputs?.projectionTokenForTable
+        ? { projectionTokenForTable: inputs.projectionTokenForTable }
+        : {}),
+    });
     // Before mode 15 Word runs header and footer text outside tables under their own logos;
     // the cells read it through `CellAnchorScope.anchorsWrapText`.
     const anchorsWrapText = isWord2013OrLaterMode(inputs?.compatibilityMode);
+    const collect = (drawings: readonly AnchoredDrawingRecord[]) => {
+      pendingAnchoredDrawings.push(...drawings);
+    };
+    const drawingDeps = (collectAnchoredDrawings: typeof collect) => ({
+      ...plainDeps(),
+      hostedStory,
+      anchorsWrapText,
+      inlineDrawingLayout,
+      anchorFrameBase,
+      pageContentClip: () => {
+        const frame = anchorFrameBase();
+        return effectiveCtx?.storyTop !== undefined
+          ? Object.freeze({
+              x: -frame.marginLeft,
+              y: -effectiveCtx.storyTop,
+              width: frame.pageWidth,
+              height: frame.pageHeight,
+            })
+          : pageClipRegion(frame);
+      },
+      collectAnchoredDrawings,
+      columnBoxForParagraph: (paragraphBox: LayoutBox) =>
+        Object.freeze({
+          x: 0,
+          y: paragraphBox.y,
+          width: contentWidth,
+          height: paragraphBox.height,
+        }),
+      pageExclusionZones: () => exclusionZones,
+      ...(drawingTokenForParagraph
+        ? { drawingTokenForParagraph }
+        : drawingLayoutToken
+          ? { drawingLayoutToken }
+          : {}),
+    });
 
-    if (inlineDrawingLayout) {
-      let converged = false;
-      for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
-        pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
-        lineCounter = 0;
-        flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
-          measurer,
-          cache,
-          producer:
-            producer +
-            token +
-            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-            (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-          nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
-          styleCascade,
-          ...(listItems ? { listItems } : {}),
-          hostedStory,
-          pageContext: effectiveCtx,
-          ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-          compatibilityMode: inputs?.compatibilityMode,
-          anchorsWrapText,
-          tableNestingOffset: 1,
-          displayMode,
-          ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-          ...(documentProperties ? { documentProperties } : {}),
-          ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
-          ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
-          showFieldCodes: inputs?.showFieldCodes,
-          ...(inputs?.projectionTokenForParagraph
-            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-            : {}),
-          ...(inputs?.projectionTokenForTable
-            ? { projectionTokenForTable: inputs.projectionTokenForTable }
-            : {}),
-          inlineDrawingLayout,
-          anchorFrameBase,
-          pageContentClip: () => {
-            const frame = anchorFrameBase();
-            return effectiveCtx?.storyTop !== undefined
-              ? Object.freeze({
-                  x: -frame.marginLeft,
-                  y: -effectiveCtx.storyTop,
-                  width: frame.pageWidth,
-                  height: frame.pageHeight,
-                })
-              : pageClipRegion(frame);
-          },
-          collectAnchoredDrawings: (drawings) => {
-            pendingAnchoredDrawings.push(...drawings);
-          },
-          columnBoxForParagraph: (paragraphBox) =>
-            Object.freeze({
-              x: 0,
-              y: paragraphBox.y,
-              width: contentWidth,
-              height: paragraphBox.height,
-            }),
-          pageExclusionZones: () => exclusionZones,
-          ...(drawingTokenForParagraph
-            ? { drawingTokenForParagraph }
-            : drawingLayoutToken
-              ? { drawingLayoutToken }
-              : {}),
-          ...(inputs?.projectionTokenForParagraph
-            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-            : {}),
-          ...(inputs?.projectionTokenForTable
-            ? { projectionTokenForTable: inputs.projectionTokenForTable }
-            : {}),
-        });
-        const nextZones = collectExclusionZonesFromDrawings(
-          pendingAnchoredDrawings,
-          inlineDrawingLayout,
-          0,
-          contentWidth
-        );
-        if (nextZones.length === 0) {
-          converged = true;
+    const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
+      exclusionZones = Object.freeze([]);
+      if (inlineDrawingLayout) {
+        let converged = false;
+        for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+          pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
+          lineCounter = firstLine;
+          flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
+          const nextZones = collectExclusionZonesFromDrawings(
+            pendingAnchoredDrawings,
+            inlineDrawingLayout,
+            0,
+            contentWidth
+          );
+          if (nextZones.length === 0) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
+          if (
+            pass > 0 &&
+            exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)
+          ) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
           exclusionZones = nextZones;
-          break;
         }
-        if (pass > 0 && exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)) {
-          converged = true;
-          exclusionZones = nextZones;
-          break;
+        if (!converged) {
+          throw new DrawingExclusionConvergenceError(
+            `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
+          );
         }
-        exclusionZones = nextZones;
+      } else {
+        lineCounter = firstLine;
+        flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, plainDeps());
       }
-      if (!converged) {
-        throw new DrawingExclusionConvergenceError(
-          `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
-        );
-      }
-    } else {
-      flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
-        measurer,
-        cache,
-        producer:
-          producer +
-          token +
-          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-          (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-        nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
-        styleCascade,
-        ...(listItems ? { listItems } : {}),
-        pageContext: effectiveCtx,
-        ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-        compatibilityMode: inputs?.compatibilityMode,
-        tableNestingOffset: 1,
-        displayMode,
-        ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-        ...(documentProperties ? { documentProperties } : {}),
-        ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
-        ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
-        showFieldCodes: inputs?.showFieldCodes,
-        ...(inputs?.projectionTokenForParagraph
-          ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-          : {}),
-        ...(inputs?.projectionTokenForTable
-          ? { projectionTokenForTable: inputs.projectionTokenForTable }
-          : {}),
-      });
+    };
+
+    // The frame lays out alone, first, so its line keeps the first line id of the story.
+    const frameBlock =
+      floatingSplit.floating.length === 0 &&
+      pageFrame &&
+      flowBlocks[0]?.id === pageFrame.frameId &&
+      flowBlocks[1]?.id === pageFrame.anchorId
+        ? flowBlocks[0]
+        : undefined;
+    let placed: typeof flow | null = null;
+    const decideFrame = effectiveCtx === undefined;
+    if (frameBlock && !decideFrame && frameAdmitted === undefined) layoutOnce(undefined);
+    if (pageFrame && frameBlock && (decideFrame || frameAdmitted)) {
+      flowStory([frameBlock], 0);
+      const framed = flow;
+      flowStory(flowBlocks.slice(1), lineCounter);
+      // An anchored drawing wraps the story around its own exclusion, which the frame laid out
+      // alone never saw. Keep the ordinary flow rather than guess at that interaction.
+      placed =
+        pendingAnchoredDrawings.length === 0
+          ? placeHeaderPageFrame(
+              pageFrame,
+              framed,
+              flow,
+              contentWidth,
+              effectiveCtx?.sheetNumber ?? pageNumber,
+              decideFrame
+            )
+          : null;
+      if (decideFrame) frameAdmitted = placed !== null;
     }
+    if (placed) flow = placed;
+    else flowStory(flowBlocks, 0);
 
+    if (floatingGeometry) {
+      // A footer's top edge depends on its own flow height, which the floating tables leave.
+      const storyTop =
+        effectiveCtx?.storyTop ??
+        (part.root.localName === 'ftr'
+          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance! - flow.bottom
+          : floatingGeometry.storyDistance!);
+      const frames = { ...floatingGeometry, contentWidth, storyTop };
+      flow = {
+        blocks: placeFloatingStoryTables(
+          flow.blocks,
+          flow.bottom,
+          floatingSplit.floating,
+          frames,
+          (table, left, top, placed) =>
+            flowBlocksInBox(
+              [table],
+              left,
+              left + Math.max(1, contentWidth),
+              top,
+              0,
+              inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+            ).blocks
+        ),
+        bottom: flow.bottom,
+      };
+    }
     flow = positionLegacyFooterPageFrame(part, flow, contentWidth, hfPageContext);
     const story: HeaderFooterStoryLayout = {
       partName: part.name,

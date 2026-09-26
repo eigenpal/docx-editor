@@ -65,16 +65,16 @@ function partOf(xml: string, name: string): OoxmlPart {
 }
 
 /** Two bulleted levels: level 0 in Symbol, level 1 in Wingdings, both private-use. */
-function numbering(): OoxmlPart {
+function numbering(wingdingsText = WINGDINGS_PUA_SQUARE, wingdingsFormat = 'bullet'): OoxmlPart {
   const level = (ilvl: number, family: string, lvlText: string): string =>
-    `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="bullet"/>` +
+    `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="${ilvl === 1 ? wingdingsFormat : 'bullet'}"/>` +
     `<w:lvlText w:val="${lvlText}"/><w:lvlJc w:val="left"/>` +
     `<w:pPr><w:ind w:left="${720 * (ilvl + 1)}" w:hanging="360"/></w:pPr>` +
     `<w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}" w:hint="default"/></w:rPr></w:lvl>`;
   return partOf(
     `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1">` +
       level(0, 'Symbol', SYMBOL_PUA_BULLET) +
-      level(1, 'Wingdings', WINGDINGS_PUA_SQUARE) +
+      level(1, 'Wingdings', wingdingsText) +
       `</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`,
     '/word/numbering.xml'
   );
@@ -92,15 +92,48 @@ function body(): OoxmlPart {
   );
 }
 
-function fragments(measurer: TextMeasurer) {
+function fragments(
+  measurer: TextMeasurer,
+  wingdingsText = WINGDINGS_PUA_SQUARE,
+  wingdingsFormat = 'bullet'
+) {
   const layout = layoutSemanticDocument(body(), 1, {
     measurer,
-    numberingIndex: buildNumberingIndex(numbering().root),
+    numberingIndex: buildNumberingIndex(numbering(wingdingsText, wingdingsFormat).root),
   });
   return paragraphFragmentsOf(layout.pages[0]!);
 }
 
 describe('an admitted symbol face reaching a numbering marker', () => {
+  test('a byte-encoded square uses the same fallback as its private-use form', () => {
+    const byte = fragments(faceMeasurer([]), 'o')[1]!;
+    const pua = fragments(faceMeasurer([]), '\uf06f')[1]!;
+    expect(byte.marker?.text).toBe('□');
+    expect(byte.marker?.style.fontFamily).toBeNull();
+    expect(byte.marker).toEqual(pua.marker);
+    expect(byte.lines).toEqual(pua.lines);
+  });
+
+  test('an available symbol face keeps an authored byte code', () => {
+    const marker = fragments(faceMeasurer(['Wingdings']), 'o')[1]!.marker!;
+    expect(marker.text).toBe('o');
+    expect(marker.style.fontFamily).toBe('Wingdings');
+  });
+
+  test('a literal label in a decimal format does not use the byte-bullet fallback', () => {
+    const marker = fragments(faceMeasurer([]), 'o', 'decimal')[1]!.marker!;
+    expect(marker.text).toBe('o');
+    expect(marker.style.fontFamily).toBe('Wingdings');
+  });
+
+  test('unknown and multi-character byte markers keep their authored face', () => {
+    for (const text of ['z', 'oz', 'o ']) {
+      const marker = fragments(faceMeasurer([]), text)[1]!.marker!;
+      expect(marker.text).toBe(text);
+      expect(marker.style.fontFamily).toBe('Wingdings');
+    }
+  });
+
   test('no symbol face keeps the Unicode translation and the plain line', () => {
     const [symbol, wingdings, plain] = fragments(faceMeasurer([]));
     expect(symbol!.marker?.text).toBe(UNICODE_BULLET);

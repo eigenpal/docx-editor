@@ -2,7 +2,10 @@ import { applicationParagraphDefaults } from './application-paragraph-defaults.t
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
+import { numberingLevelRank } from './numbering-level-tier.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
+import { adjustLineHeightInTable, withLineGrid } from './line-grid.ts';
+import { adjacentParagraphSpacingSettings } from './adjacent-paragraph-spacing.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -48,6 +51,7 @@ import {
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
 import { numberingTabSettings, withNumberingTabRule } from './numbering-tab-rule.ts';
+import { wrappedTableSettings } from './wrapped-table-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import { styleChain, styleIdFromProps } from './style-chain.ts';
@@ -68,6 +72,7 @@ import {
 } from './style-definition-reader.ts';
 
 export { isValidStyleId } from './style-definition-reader.ts';
+export { collapsingSpaceAfter } from './adjacent-paragraph-spacing.ts';
 export type { StyleDefinition } from './style-definition-reader.ts';
 
 export { MAX_STYLE_BASED_ON_DEPTH } from './style-chain.ts';
@@ -82,12 +87,21 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Keep floating tables that fit a full page together under the compatibility flag. */
+  readonly doNotBreakWrappedTables?: true;
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
+  /** `w:adjustLineHeightInTable`: cell paragraphs snap to the section line grid too. */
+  readonly adjustLineHeightInTable?: true;
   /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
   readonly ignoreIndentAsNumberingTabStop?: true;
+  /**
+   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and automatic
+   * spacing is a fixed 5pt before and 10pt after.
+   */
+  readonly fixedParagraphSpacing?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -131,12 +145,7 @@ export interface StyleCascadeTable {
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
   readonly paragraphProperties: readonly OoxmlProperty[];
-  /**
-   * The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits.
-   *
-   * Numbering needs the two tiers apart: a level's `w:pPr/w:ind` outranks the style's and is
-   * outranked by the paragraph's own, and a flattened list cannot say which is which.
-   */
+  /** The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits. */
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
@@ -449,9 +458,15 @@ export function buildStyleCascadeTable(
   const ligaturesEnabled = optionalLigaturesEnabled(settingsRoot);
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
-  const settingsCompatibility = preserveExactLineBaseline(settingsRoot)
-    ? { preserveExactLineBaseline: true as const, ...numberingTabSettings(settingsRoot) }
-    : numberingTabSettings(settingsRoot);
+  const settingsCompatibility = {
+    ...(preserveExactLineBaseline(settingsRoot)
+      ? { preserveExactLineBaseline: true as const }
+      : {}),
+    ...(adjustLineHeightInTable(settingsRoot) ? { adjustLineHeightInTable: true as const } : {}),
+    ...numberingTabSettings(settingsRoot),
+    ...wrappedTableSettings(settingsRoot),
+    ...adjacentParagraphSpacingSettings(settingsRoot),
+  };
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
@@ -588,34 +603,35 @@ function cascadeParagraphWithNumbering(
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
-  const directNumbering = directProps.some((property) => property.localName === 'numPr');
+  // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
+  // the whole chain when that is the paragraph's own. List indents use the same rank
+  // (`numberingLevelTiers`).
+  const levelRank = numberingPPr ? numberingLevelRank(chain, directPPr) : chain.length;
   const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&
     style.styleId === table.defaultParagraphStyleId
-      ? legacyTableDefaultProperties(properties, [
-          ...table.docDefaultsRun,
-          ...tableCellStyle.runProperties,
-        ])
+      ? legacyTableDefaultProperties(properties, tableCellStyle.runProperties)
       : properties;
 
+  const chainProperties = chain.map((style) => styleProperties(style, style.paragraphProperties));
   const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
-    ...(!directNumbering ? propertiesOf(numberingPPr) : []),
-    ...chain.flatMap((style) => styleProperties(style, style.paragraphProperties)),
-    ...(directNumbering ? propertiesOf(numberingPPr) : []),
+    ...chainProperties.slice(0, levelRank).flat(),
+    ...propertiesOf(numberingPPr),
+    ...chainProperties.slice(levelRank).flat(),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
   if (tableCellStyle) paragraphPropertyNodes.push(...tableCellStyle.paragraphPropertyNodes);
-  if (numberingPPr && !directNumbering) paragraphPropertyNodes.push(numberingPPr);
-  for (const style of chain) {
+  chain.forEach((style, index) => {
+    if (index === levelRank && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
-  }
-  if (numberingPPr && directNumbering) paragraphPropertyNodes.push(numberingPPr);
+  });
+  if (levelRank === chain.length && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
   if (directPPr) paragraphPropertyNodes.push(directPPr);
 
   const directMarkRun = findRunProperties(
@@ -821,6 +837,9 @@ export interface ParagraphLayoutInputs {
  *
  * `inTableCell` is asked for separately because a cell paragraph may have no table style to
  * inherit at all, and `w:beforeAutospacing` still needs to know it is in a cell.
+ *
+ * `lineUnitPt` is the section's ACTIVE line-grid pitch. It sizes line-unit paragraph margins
+ * and snaps the paragraph's lines to the grid; absent means no grid and the fixed 12pt unit.
  */
 export function resolveParagraphLayoutInputs(
   paragraph: OoxmlElement,
@@ -829,7 +848,7 @@ export function resolveParagraphLayoutInputs(
   listItem?: import('./list-resolve.ts').ResolvedListItem,
   tableCellStyle?: TableCellStyleFormatting,
   inTableCell = false,
-  lineUnitPt = 12
+  lineUnitPt?: number
 ): ParagraphLayoutInputs {
   const pPr = findParagraphProperties(paragraph);
   const numberingPPr = numberingParagraphProperties(listItem);
@@ -924,11 +943,24 @@ export function resolveParagraphLayoutInputs(
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell, lineUnitPt }),
-    lineSpacing: {
-      ...paragraphLineSpacing(props),
-      ...(styleCascade?.preserveExactLineBaseline ? { preserveExactBaseline: true as const } : {}),
-    },
+    spacing: paragraphSpacing(props, {
+      inList: listItem !== undefined,
+      inTableCell,
+      lineUnitPt,
+      fixedAutoSpacing: styleCascade?.fixedParagraphSpacing === true,
+    }),
+    lineSpacing: withLineGrid(
+      {
+        ...paragraphLineSpacing(props),
+        ...(styleCascade?.preserveExactLineBaseline
+          ? { preserveExactBaseline: true as const }
+          : {}),
+      },
+      props,
+      lineUnitPt,
+      inTableCell,
+      styleCascade?.adjustLineHeightInTable === true
+    ),
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,

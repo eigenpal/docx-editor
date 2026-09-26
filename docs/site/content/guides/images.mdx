@@ -74,6 +74,8 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
 
+The wrap element controls text flow, and `@behindDoc` controls only paint order. If a picture uses `@behindDoc="1"` with a wrap element other than `wrapNone`, text wraps around the picture, and the picture paints behind the text. `SelectedImageState.wrap` reports the wrap mode for that picture.
+
 Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
@@ -168,7 +170,8 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Drawing content | Status |
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
-| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder |
+| One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
+| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), they are not shown |
 | Anchored text boxes | Render the story read-only and clip it to the extent |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
@@ -177,6 +180,26 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Tracked image insertion and deletion | Record the change in suggesting mode |
 | Tracked image property edits | Stay unavailable in suggesting mode |
 | Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
+
+## Pictures in shape groups
+
+A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape members. For example, a scanned letterhead page can sit behind the text with ruled lines drawn over it. The editor and PDF export render the picture in its own frame inside the group, then render the group's shapes over it.
+
+The picture renders only if all of these conditions are true:
+
+- The group holds exactly one picture, and the picture comes before every shape member.
+- The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
+- The picture has no image effects, such as grayscale or transparency.
+- The picture frame overlaps the group's area and extends no more than one group width or height past it.
+- Every other member of the group is a supported solid shape.
+
+If a condition is false, the group is an unsupported group. Word stores most groups in alternative content (`mc:AlternateContent`). An unsupported group in alternative content is not shown. Other unsupported groups show a labeled placeholder.
+
+A group renders completely or not at all. While the picture loads, the editor renders the group's shapes alone. If the picture cannot load, the editor and PDF export treat the group as an unsupported group. For example, the picture is missing, linked, damaged, or over a decode limit. PDF export embeds PNG and JPEG pictures only. If a group in alternative content holds a picture in another format, PDF export leaves the group out and reports an `information` diagnostic. PDF export reports other groups that it cannot render as `unsupported`.
+
+The picture is clipped to the group's area. The group's shapes can extend into the effect extent (`wp:effectExtent`), as the shapes of a group without a picture can.
+
+Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
 
 ## Find text in text boxes
 

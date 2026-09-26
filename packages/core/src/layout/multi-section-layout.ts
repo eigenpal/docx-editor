@@ -25,6 +25,7 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,
   type DocumentSection,
+  sectionLineGridPt,
   type SectionColumns,
 } from './section-properties.ts';
 import { pageBordersFingerprint } from './page-borders.ts';
@@ -557,7 +558,7 @@ export function layoutMultiSectionDocument(
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
-      paragraphLineUnitPt: (section.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(section.properties),
       ...(section.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
         : {}),
@@ -733,7 +734,7 @@ export function layoutMultiSectionDocument(
       ...rest,
       retainKeys,
       geometry,
-      paragraphLineUnitPt: (sections[0]?.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(sections[0]?.properties),
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(sections[0]?.properties.pageBorders
         ? { sectionPageBorders: sections[0].properties.pageBorders }

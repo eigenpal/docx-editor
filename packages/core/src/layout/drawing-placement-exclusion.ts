@@ -7,6 +7,27 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { synthesizeParagraphTopAndBottomZones, type ExclusionZone } from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
 
+const topAndBottomAnchorMemo = new WeakMap<OoxmlElement, boolean>();
+
+/**
+ * True when the paragraph anchors a `wrapTopAndBottom` drawing. Its own band then depends on
+ * the paragraph's spacing before, so the break cache must key that spacing.
+ */
+export function anchorsTopAndBottomDrawing(
+  paragraph: OoxmlElement,
+  context: InlineDrawingLayoutContext | undefined
+): boolean {
+  if (!context) return false;
+  let value = topAndBottomAnchorMemo.get(paragraph);
+  if (value === undefined) {
+    value = anchoredDrawingAtomsInParagraph(paragraph, context).some(
+      (atom) => atom.projection.wrap === 'topAndBottom'
+    );
+    topAndBottomAnchorMemo.set(paragraph, value);
+  }
+  return value;
+}
+
 /** Placeholder lines preceding a floating atom do not inherit its placement skip. */
 export function anchorLineSkipsExclusion(
   paragraph: OoxmlElement,

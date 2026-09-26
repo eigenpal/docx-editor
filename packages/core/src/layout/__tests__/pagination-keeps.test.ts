@@ -318,9 +318,14 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
   });
 
   test('a chain that cannot fit a page of its own is abandoned, and everything is still placed', () => {
-    // The kept-with paragraph is twelve lines: no page can hold the group.
-    const body = fillers(4) + one('h1', '<w:keepNext/>') + multi(12, '<w:keepNext/>') + one('end');
+    // The kept-with paragraph is twelve lines that may not split: no page can hold the group.
+    const body =
+      fillers(4) +
+      one('h1', '<w:keepNext/>') +
+      multi(12, '<w:keepNext/><w:keepLines/>') +
+      one('end');
     const layout = lay(body);
+    expect(linesPerPage(layout.pages)[0]).toBe(5);
     expect(linesPerPage(layout.pages).reduce((a, b) => a + b, 0)).toBe(4 + 1 + 12 + 1);
   });
 
@@ -328,10 +333,11 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
     expect(linesPerPage(lay(fillers(4) + one('tail', '<w:keepNext/>')).pages)).toEqual([5]);
   });
 
-  test('a keepNext paragraph followed by a table is left alone — a table cannot be priced', () => {
+  test('a keepNext paragraph followed by a table moves with the table opening', () => {
+    // The table's first row has no room beside the heading, so both start the next page.
     const table = `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
     const layout = lay(fillers(4) + one('heading', '<w:keepNext/>') + table);
-    expect(linesPerPage(layout.pages)[0]).toBe(5);
+    expect(linesPerPage(layout.pages)[0]).toBe(4);
   });
 });
 
@@ -695,20 +701,20 @@ describe('keepNextFlowKeys folds over the other folds', () => {
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head splices in the AUGMENTED successor key, so a verdict flip under it moves
     // the head's own key too. Folded the other way round the head would carry a bare `p`.
-    expect(flow[0]).toBe('h~kn~p~cs~10');
+    expect(flow[0]).toBe('h~kn~7:p~cs~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its border-group verdict', () => {
     const folded = borderGroupFlowKeys(['h', 'p'], () => 'box');
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head carries its OWN group verdict too, then the successor's whole folded key.
-    expect(flow[0]).toBe('h~bg~01~kn~p~bg~10');
+    expect(flow[0]).toBe('h~bg~01~kn~7:p~bg~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its TOC verdict', () => {
     const folded = tocFieldFlowKeys(['h', 'p'], (index) => (index === 1 ? '110' : ''));
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
-    expect(flow[0]).toBe('h~kn~p~toc~110');
+    expect(flow[0]).toBe('h~kn~9:p~toc~110.');
   });
 });
 
@@ -739,7 +745,7 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
       });
     const before = fold('empty');
     const after = fold('bookmarked');
-    expect(before[0]).toBe(`lead~kn~${before[1]}`);
+    expect(before[0]).toBe(`lead~kn~${before[1]!.length}:${before[1]}`);
     for (let index = 0; index < keys.length; index++) expect(after[index]).not.toBe(before[index]);
   });
 
@@ -761,8 +767,9 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(successor).toContain('~bg~');
     expect(successor).toContain('~toc~110');
     expect(successor).toContain('~mk~M1');
-    // The whole finished successor key, spliced verbatim — the order test proper.
-    expect(composed[0]).toBe(`a~kn~${successor}`);
+    // The whole finished successor key, spliced verbatim — the order test proper. The
+    // trailing `.` records that the successor is the story's last block.
+    expect(composed[0]).toBe(`a~kn~${successor.length}:${successor}.`);
   });
 
   test('the composition equals the folds applied by hand with keepNext LAST', () => {
@@ -787,7 +794,7 @@ test('keep-next keys carry the next ordinary chain through positioned frames', (
       (index) => index === 1
     );
   const before = fold('short');
-  expect(before[0]).toBe('heading~kn~anchor~kn~short');
+  expect(before[0]).toBe('heading~kn~-6:anchor5:short.');
   expect(before[1]).toBe('positioned');
   expect(fold('long')[0]).not.toBe(before[0]);
 });

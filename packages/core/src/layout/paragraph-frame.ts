@@ -145,10 +145,18 @@ export function positionParagraphFrame(
 ): ParagraphFragmentRecord {
   const dx = origins[frame.horizontalAnchor].x + frame.x;
   const dy = origins[frame.verticalAnchor].y + frame.y;
+  return { ...translateParagraphFragment(fragment, dx, dy), outOfFlow: true };
+}
+
+/** Move every box a paragraph fragment publishes, including its marker and inline drawings. */
+export function translateParagraphFragment(
+  fragment: ParagraphFragmentRecord,
+  dx: number,
+  dy: number
+): ParagraphFragmentRecord {
   const move = (box: LayoutBox): LayoutBox => ({ ...box, x: box.x + dx, y: box.y + dy });
   return {
     ...fragment,
-    outOfFlow: true,
     box: move(fragment.box),
     ...(fragment.shadingBox ? { shadingBox: move(fragment.shadingBox) } : {}),
     ...(fragment.bottomBorder

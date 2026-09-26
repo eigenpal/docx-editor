@@ -322,9 +322,9 @@ export interface LineRecord {
   /** Distance from the line box top to the text baseline. */
   readonly baseline: number;
   /**
-   * Space ABOVE the glyph band inside {@link box} (exact centering, not auto/atLeast).
+   * Space ABOVE the glyph band inside {@link box} (exact centering, atLeast growth).
    *
-   * `auto` / `atLeast` extras grow the box BELOW the glyphs — paint puts that depth in
+   * `auto` extras grow the box BELOW the glyphs — paint puts that depth in
    * padding-bottom. {@link baseline} is measured from the line top and already includes
    * this above-band when present.
    *
@@ -333,18 +333,18 @@ export interface LineRecord {
    */
   readonly leading: number;
   /**
-   * Auto/atLeast line-spacing depth BELOW the glyph band, inside {@link box}.
+   * Auto line-spacing depth BELOW the glyph band, inside {@link box}.
    *
-   * The complement of {@link leading}: exact spacing centres the glyphs and moves the
-   * baseline down, while auto/atLeast leave the band at the top and grow the box beneath it.
+   * The complement of {@link leading}: exact centres the glyphs and atLeast grows the box
+   * above them, while auto leaves the band at the top and grows the box beneath it.
    * So the band a consumer needs is `box.height - trailingSpacing - leading`, and
-   * subtracting `leading` alone is right only under the exact rule.
+   * subtracting `leading` alone is right only under exact and atLeast.
    *
    * A line WITH spans carries its band in the span heights too. An empty paragraph carries
    * nothing, which is why the caret, paint's `padding-bottom` and the content-control
    * boundary all need this published rather than recovered from the box.
    *
-   * Zero under the exact rule and on lines holding drawings, where the box is authored.
+   * Zero under exact and atLeast, and on lines holding drawings (the box is authored).
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
@@ -694,16 +694,14 @@ export interface TableRowFragmentRecord {
   readonly rowIndex: number;
   /** True when the authored row resolves `w:tblHeader`, including its first occurrence. */
   readonly isHeaderRow: boolean;
-  /**
-   * True for a `w:tblHeader` row RE-EMITTED at the top of a continuation page. Painted,
-   * but excluded from interaction walks so each caret stop exists exactly once.
-   */
+  /** True for a `w:tblHeader` row repeated atop a continuation page; not an interaction stop. */
   readonly isHeaderRepeat: boolean;
-  /**
-   * True when this record continues a row that already emitted content on a prior page
-   * (cell content fragmented at a paragraph/line boundary). Same `id` as the lead fragment.
-   */
+  /** True when this record continues a row split at a line boundary; same `id` as its head. */
   readonly isContinuation?: boolean;
+  /** True when the rest of this row continues in the next fragment: the head of a split row. */
+  readonly hasContinuation?: boolean;
+  /** True for a `w:cantSplit` or exact-height row: it stays whole where a page holds it. */
+  readonly placesWhole?: boolean;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
 }

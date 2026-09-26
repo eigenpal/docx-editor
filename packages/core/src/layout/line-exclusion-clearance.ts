@@ -69,33 +69,41 @@ export function relocateLineForExclusionGrowth(
 export function createLineExclusionClearance(context: {
   line: () => PendingLine;
   top: () => number;
+  /** Paragraph spacing above the line; see {@link topAndBottomSkipBeforeLine}. */
+  spaceAbove?: () => number;
   zones: () => readonly ExclusionZone[];
   left: () => number;
   right: number;
   emptyStyle: ResolvedRunStyle;
   measurer: TextMeasurer;
   lineSpacing: ParagraphLineSpacing;
+  /** Whether the line holds content; see {@link lineHoldsContent}. */
+  holdsContent: () => boolean;
 }) {
   let appliedLine: PendingLine | undefined;
+  /** The line whose only skip is the estimate taken before it had content. */
+  let estimatedLine: PendingLine | undefined;
   const applyTopAndBottomSkipIfNeeded = (): void => {
     const line = context.line();
-    if (appliedLine === line || line.spans.length > 0 || line.drawings.length > 0) return;
+    if (appliedLine === line || context.holdsContent()) return;
     const zones = context.zones();
     if (zones.length === 0) return;
     const metrics = context.measurer.lineMetrics(context.emptyStyle);
     const skip = topAndBottomSkipBeforeLine(
       context.top(),
       line.height > 0 ? line.height : metrics.height,
-      zones
+      zones,
+      context.spaceAbove?.() ?? 0
     );
     if (skip > 0.001) {
       appliedLine = line;
+      estimatedLine = line;
       line.exclusionSkipBefore = skip;
     }
   };
   const applyNarrowWrapSkipIfNeeded = (text: string, style: ResolvedRunStyle): void => {
     const line = context.line();
-    if (line.spans.length > 0 || line.drawings.length > 0) return;
+    if (context.holdsContent()) return;
     applyTopAndBottomSkipIfNeeded();
     const zones = context.zones();
     if (zones.length === 0) return;
@@ -117,11 +125,12 @@ export function createLineExclusionClearance(context: {
       line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
       line.width = 0;
       appliedLine = line;
+      estimatedLine = undefined;
     }
   };
   const applyInlineObjectSkipIfNeeded = (width: number, height: number): void => {
     const line = context.line();
-    const hasContent = line.spans.length > 0 || line.drawings.length > 0;
+    const hasContent = context.holdsContent();
     applyTopAndBottomSkipIfNeeded();
     const zones = context.zones();
     if (zones.length === 0) return;
@@ -139,16 +148,24 @@ export function createLineExclusionClearance(context: {
       line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
       if (!hasContent) line.width = 0;
       appliedLine = line;
+      estimatedLine = undefined;
     }
   };
   const finalizeTopAndBottomClearance = (): void => {
     const line = context.line();
     const zones = context.zones();
     if (zones.length === 0) return;
-    const skip = Math.max(
-      topAndBottomSkipBeforeLine(context.top(), line.height, zones),
-      line.exclusionSkipBefore ?? 0
+    const final = topAndBottomSkipBeforeLine(
+      context.top(),
+      line.height,
+      zones,
+      context.spaceAbove?.() ?? 0
     );
+    // The early skip measured the paragraph mark, not the placed runs. When only full-width
+    // bands are in play, the final height decides, so a line that ends up clear stays put.
+    const estimateOnly =
+      estimatedLine === line && zones.every((zone) => zone.input.mode === 'topAndBottom');
+    const skip = estimateOnly ? final : Math.max(final, line.exclusionSkipBefore ?? 0);
     if (skip > 0.001) line.exclusionSkipBefore = skip;
     else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
   };

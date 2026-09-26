@@ -12,6 +12,7 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
+import { verticalMarginInsets } from './page-body-margins.ts';
 import {
   enumerateDocumentSections,
   geometryOfSection,
@@ -88,6 +89,14 @@ function headerFooterOccurrenceOwner(
  */
 const MAX_STORY_GEOMETRIES_PER_PART = 8;
 
+/** A header measures from the sheet top, a footer (`w:ftr` root) from the sheet bottom. */
+function storyDistanceOf(
+  part: OoxmlPart,
+  geometry: { readonly headerDistance?: number; readonly footerDistance?: number }
+): number | undefined {
+  return part.root.localName === 'ftr' ? geometry.footerDistance : geometry.headerDistance;
+}
+
 /** Build section-aware header/footer layout from a neutral document view. @public */
 export function createDocumentFurnitureSource(
   options: CreateDocumentFurnitureSourceOptions
@@ -119,6 +128,7 @@ export function createDocumentFurnitureSource(
     marginBottom: number;
     marginLeft: number;
     marginRight: number;
+    storyDistance: number | undefined;
     producer: string;
     projectionEpoch: string;
     revisionAuthorFilterKey: string;
@@ -193,6 +203,8 @@ export function createDocumentFurnitureSource(
     const currentCompatibilityMode = compatibilityMode?.();
     const authoredPart = !background.isImplicitPart(part);
     const drawingLayoutToken = authoredPart ? (drawingLayoutTokenForPart?.(part.name) ?? '') : '';
+    // The story's margin frames sit at the text extents, which a signed margin gives by size.
+    const margins = verticalMarginInsets(geometry);
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
     const projectLink = linkProjectors.projectLinkForPart(part.name);
@@ -201,10 +213,11 @@ export function createDocumentFurnitureSource(
       (entry) =>
         entry.width === width &&
         entry.pageHeight === geometry.height &&
-        entry.marginTop === geometry.margin.top &&
-        entry.marginBottom === geometry.margin.bottom &&
+        entry.marginTop === margins.top &&
+        entry.marginBottom === margins.bottom &&
         entry.marginLeft === geometry.margin.left &&
-        entry.marginRight === geometry.margin.right
+        entry.marginRight === geometry.margin.right &&
+        entry.storyDistance === storyDistanceOf(part, geometry)
     );
     if (
       cached &&
@@ -242,8 +255,9 @@ export function createDocumentFurnitureSource(
         pageHeight: geometry.height,
         marginLeft: geometry.margin.left,
         marginRight: geometry.margin.right,
-        marginTop: geometry.margin.top,
-        marginBottom: geometry.margin.bottom,
+        marginTop: margins.top,
+        marginBottom: margins.bottom,
+        storyDistance: storyDistanceOf(part, geometry),
       },
       view.documentProperties(),
       {
@@ -263,10 +277,11 @@ export function createDocumentFurnitureSource(
     const entry: StoryMemoEntry = {
       width,
       pageHeight: geometry.height,
-      marginTop: geometry.margin.top,
-      marginBottom: geometry.margin.bottom,
+      marginTop: margins.top,
+      marginBottom: margins.bottom,
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
+      storyDistance: storyDistanceOf(part, geometry),
       producer,
       projectionEpoch,
       revisionAuthorFilterKey,

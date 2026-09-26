@@ -290,7 +290,7 @@ export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boole
   return false;
 }
 
-function hitAnchoredDrawingAtPoint(
+export function hitAnchoredDrawingAtPoint(
   drawings: readonly AnchoredDrawingRecord[] | undefined,
   point: HitPoint,
   pageIndex: number,
@@ -1058,7 +1058,7 @@ export function caretBoxOnLine(
     // draws a double-spaced empty line a caret twice the height of the text it would type.
     //
     // Both numbers are READ, never recovered from the box: `leading` is the `exact`-rule
-    // space above the band and `trailingSpacing` is the `auto`/`atLeast` depth below it.
+    // space above the band and `trailingSpacing` is the `auto` depth below it.
     // Subtracting `leading` alone was right only while every rule put its extra above — the
     // rules that put it below leave `leading` at zero, so the whole spaced box read as text.
     const leading = line.leading ?? 0;
@@ -1100,8 +1100,10 @@ export function caretBoxOnLine(
         break;
       }
       // Trailing edge of a tab/field: downstream affinity — same model offset as the next
-      // span's start, but the visual insertion point belongs with the following text.
-      if (next && next.range.start === offset && usesPublishedAdvance(span)) {
+      // span's start, but the visual insertion point belongs with the following text. So too
+      // after a page break with text beside it, which only a table cell (that ignores it) has.
+      const ignoredBreak = span.text === PAGE_BREAK_CHAR && span.box.width === 0;
+      if (next && next.range.start === offset && (usesPublishedAdvance(span) || ignoredBreak)) {
         chosen = next;
         break;
       }

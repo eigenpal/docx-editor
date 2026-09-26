@@ -8,6 +8,7 @@ import type { StyleSpanRecord } from './semantic-records.ts';
 import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
+import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 
 export interface PendingLine {
   readonly spans: StyleSpanRecord[];
@@ -38,10 +39,21 @@ export interface PendingLine {
   columnBreakAfter?: boolean;
   /** An authored line break (`w:br` textWrapping or `w:cr`), never an automatic wrap. */
   manualBreakAfter?: true;
+  /**
+   * The flow kept the paragraph's last word on this line by borrowing inter-word space.
+   * Alignment compresses a paragraph's last line only when this is set, never for another
+   * overflow such as hanging punctuation.
+   */
+  spaceShrink?: true;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /**
+   * The first-line offset this line was broken with: the paragraph's first line, and the
+   * first line after page breaks that open it ({@link holdsOnlyPageBreak}). Absent when zero.
+   */
+  firstLineOffset?: number;
   /**
    * The horizontal passage a float left this line, when that passage is narrower than the
    * paragraph's measure and holds the whole line.
@@ -68,6 +80,94 @@ export function growLineMetrics(
   const descent = Math.max(line.height - line.baseline, metrics.height - metrics.baseline);
   line.baseline = Math.max(line.baseline, metrics.baseline);
   line.height = line.baseline + descent;
+}
+
+/** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */
+export function onlyPageBreaksBefore(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number
+): boolean {
+  let seen = false;
+  for (const piece of pieces) {
+    if (piece.start >= offset) continue;
+    if (piece.text !== PAGE_BREAK_CHAR) return false;
+    seen = true;
+  }
+  return seen;
+}
+
+/**
+ * Whether a line holds anything that the next word must follow. A page break that a table
+ * cell ignores has no extent, so a line that holds only such breaks is still at its start.
+ */
+export function lineHoldsContent(
+  line: Pick<PendingLine, 'spans' | 'drawings'>,
+  pageBreaksIgnored: boolean
+): boolean {
+  if (line.drawings.length > 0 || (line.spans.length > 0 && !pageBreaksIgnored)) return true;
+  return line.spans.some((span) => span.text !== PAGE_BREAK_CHAR);
+}
+
+/**
+ * Ignored page breaks before a line's first content sit where that content starts, after
+ * the float passages and clearances the pen took to reach it. They stay put on a line that
+ * holds nothing else.
+ */
+export function placeLeadingIgnoredBreaks(line: PendingLine, pageBreaksIgnored: boolean): void {
+  if (!pageBreaksIgnored || line.spans[0]?.text !== PAGE_BREAK_CHAR) return;
+  const text = line.spans.find((span) => span.text !== PAGE_BREAK_CHAR);
+  let start = text?.range.start ?? Infinity;
+  let x = text?.box.x;
+  for (const drawing of line.drawings) {
+    if (drawing.start < start) [start, x] = [drawing.start, drawing.advanceStart];
+  }
+  if (x === undefined) return;
+  for (let index = 0; line.spans[index]?.text === PAGE_BREAK_CHAR; index += 1) {
+    const span = line.spans[index]!;
+    if (span.range.start < start) line.spans[index] = { ...span, box: { ...span.box, x } };
+  }
+}
+
+/** Whether a line holds nothing but the page break that ends it. */
+export function holdsOnlyPageBreak(line: PendingLine): boolean {
+  return (
+    line.pageBreakAfter === true &&
+    line.drawings.length === 0 &&
+    line.spans.every((span) => span.text === '' || span.text === PAGE_BREAK_CHAR)
+  );
+}
+
+/**
+ * Spaces (U+0020) and tabs take no line height, whatever their size, underline or tab leader.
+ * A line that holds only them measures as an empty line: the paragraph mark sets its height.
+ * A no-break space still counts, and so does a line break.
+ */
+export function isHeightlessWhitespace(text: string): boolean {
+  return text.length > 0 && /^[ \t]+$/.test(text);
+}
+
+/** {@link growLineMetrics} for a placed span; {@link isHeightlessWhitespace} text leaves the box. */
+export function growLineMetricsForText(
+  line: { height: number; baseline: number },
+  metrics: { readonly height: number; readonly baseline: number },
+  text: string
+): void {
+  if (!isHeightlessWhitespace(text)) growLineMetrics(line, metrics);
+}
+
+/**
+ * The text whose shaped faces set a span's line band, or undefined for the run's own face.
+ *
+ * A note separator is a rule and a legacy FORMCHECKBOX is a drawn box of its `w:size`. Neither
+ * is a glyph, so a fallback face picked to cover the placeholder text must not size the line:
+ * the checkbox's ballot-box placeholder otherwise took a symbol or CJK face's band, about 1.7 em
+ * where the run's own face gives 1.15 em.
+ */
+export function lineBandText(
+  item: Pick<StyleSpanRecord, 'noteSeparator' | 'fieldAtom'>,
+  text: string
+): string | undefined {
+  return item.noteSeparator || item.fieldAtom?.formControl?.kind === 'checkbox' ? undefined : text;
 }
 
 /**
@@ -246,8 +346,10 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
+    ...(line.spaceShrink ? { spaceShrink: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.firstLineOffset ? { firstLineOffset: line.firstLineOffset } : {}),
     ...(line.wrapSegment ? { wrapSegment: Object.freeze({ ...line.wrapSegment }) } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),

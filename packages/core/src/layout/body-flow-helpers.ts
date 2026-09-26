@@ -7,7 +7,10 @@ import {
 } from './drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import { holdsOnlyPageBreak } from './pending-line.ts';
+import { marginInset } from './page-body-margins.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
 type BodyAnchorFrameBase = Omit<
   DrawingAnchorFrameContext,
@@ -38,7 +41,7 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     pageHeight: geometry.height,
     marginLeft: geometry.margin.left,
     marginRight: geometry.margin.right,
-    marginBottom: geometry.margin.bottom,
+    marginBottom: marginInset(geometry.margin.bottom),
     // Effective insets keep page-relative anchors stable when tall furniture moves body text.
     contentInsetTop: insets.top,
     contentInsetBottom: insets.bottom,
@@ -102,9 +105,12 @@ const lineHoldsContent = (line: PendingLine): boolean =>
  * nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
  * the page it starts on, and the break then starts the content on the next sheet.
  *
- * A list marker, border, shading, or anchored drawing is content on the first line, so those
- * paragraphs keep the ordinary fit rule. So does a paragraph with nothing after the break.
- * Layout also keeps that rule when the paragraph anchors floating tables or text frames.
+ * A list marker is not content there: it moves to the first line after the break. Borders,
+ * shading, and space before are not either: the break line draws no rule, the space before
+ * and the top rule open the text on the next sheet, and shading fills the break line where
+ * it would sit. An anchored drawing is content, so those paragraphs keep the ordinary fit
+ * rule. So does a paragraph with nothing after the break, and one that anchors floating
+ * tables or text frames.
  */
 export function opensWithPageBreak(
   entry: PaintableParagraph,
@@ -115,9 +121,21 @@ export function opensWithPageBreak(
   return (
     first !== undefined &&
     first.start === 0 &&
-    first.pageBreakAfter === true &&
-    !lineHoldsContent(first) &&
+    holdsOnlyPageBreak(first) &&
     lines.some((line, index) => index > 0 && lineHoldsContent(line)) &&
-    paragraphPaintsNothing(entry, [], drawingContext)
+    !(drawingContext && anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0)
   );
+}
+
+/**
+ * A kept break line's shading fills where the line would sit, below the band that holds it,
+ * and stops at the page edge.
+ */
+export function atKeptBreakY(
+  box: LayoutBox,
+  kept: { readonly y: number; readonly clip: LayoutBox } | undefined
+): LayoutBox {
+  if (kept === undefined) return box;
+  const height = Math.min(box.height, kept.clip.y + kept.clip.height - kept.y);
+  return { ...box, y: kept.y, height: Math.max(height, 0) };
 }

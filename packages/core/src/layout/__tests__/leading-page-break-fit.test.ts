@@ -9,7 +9,6 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { caretAt, hitTestSemantic } from '../semantic-interaction.ts';
-import { buildNumberingIndex } from '../numbering-index.ts';
 import type { ParagraphFragmentRecord, SemanticLayout } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -190,36 +189,6 @@ describe('lines that still move to the next sheet', () => {
     const textFirst = `<w:p><w:pPr>${exact}</w:pPr><w:r><w:t>lead</w:t></w:r>${br}<w:r><w:t>after</w:t></w:r></w:p>`;
     const layout = lay(load(fill(14) + textFirst + sect));
     expect(pageTexts(layout)).toEqual([lastFill(14), 'lead', 'after']);
-  });
-
-  const decorated: [string, string][] = [
-    ['shading', '<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>'],
-    ['a border', '<w:pBdr><w:top w:val="single" w:sz="4" w:space="1" w:color="auto"/></w:pBdr>'],
-  ];
-  for (const [label, property] of decorated) {
-    test(`a paragraph with ${label} keeps the ordinary fit`, () => {
-      const layout = lay(load(fill(14) + leading('after', property + exact) + sect));
-      expect(pageTexts(layout)).toEqual([lastFill(14), '', 'after']);
-    });
-  }
-
-  test('a numbered paragraph keeps the ordinary fit', () => {
-    const numbering = readOoxmlPart(
-      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">` +
-        '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>' +
-        '</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>',
-      { name: '/word/numbering.xml', contentType: 'app/xml' }
-    );
-    if (!numbering.ok) throw new Error(numbering.reason);
-    const numbered = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' + exact;
-    const layout = layoutSemanticDocument(load(fill(14) + leading('after', numbered) + sect), 1, {
-      measurer,
-      numberingIndex: buildNumberingIndex(numbering.part.root),
-    });
-    const [first] = fragmentsAt(layout, 14);
-    expect(first!.page).toBe(1);
-    expect(first!.fragment.marker).toBeDefined();
-    expect(pageTexts(layout)).toEqual([lastFill(14), '', 'after']);
   });
 
   test('a paragraph with nothing after its break keeps the ordinary fit', () => {

@@ -69,6 +69,8 @@ import {
   type NoteReferenceLineBand,
 } from './note-fragment-geometry.ts';
 import { splitNoteFragments } from './note-splitting.ts';
+import { evictsReferenceLine } from './note-eviction-guard.ts';
+import { continuedRowId } from './note-table-reference-band.ts';
 import { holdOutReserveNeed } from './note-reserve-holdout.ts';
 import { fingerprintNotesInput } from './note-input-fingerprint.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
@@ -340,6 +342,8 @@ interface NotesPassMemo {
       readonly pageRefs: readonly PageRefHit[];
       readonly marks: NoteMarkContext;
       readonly allowOrphanDeferral: boolean;
+      /** Whether the next page opens with a split row's rest ({@link continuedRowId}). */
+      readonly nextOpening: string | null;
       readonly reserve: number;
       /** The raw note-area height (hold-out's `existingAreaHeight` input). */
       readonly areaHeight: number;
@@ -996,8 +1000,7 @@ function buildFootnoteArea(
      * it, stably. The TOP is where the reserve reaches when the note cannot even start in
      * that room: Word keeps a footnote whole with its reference, so the reference's LINE
      * moves to the next page instead of the note splitting (see the eviction branch in the
-     * reference loop). Only read with {@link reserveColumnBudget}; attach passes size from
-     * real body slack.
+     * reference loop). Attach passes omit it and read the same band (see the loop).
      */
     readonly reserveBandOf?: (ref: PageRefHit) => NoteReferenceLineBand;
     readonly separatorCache?: NoteSeparatorCache;
@@ -1011,6 +1014,8 @@ function buildFootnoteArea(
      */
     readonly evictionAllowed?: boolean;
     readonly allowOrphanDeferral?: boolean;
+    /** The next page (reserve mode): whether a table row ending this page continues there. */
+    readonly nextPage?: PageRecord;
   }
 ): {
   area: NoteAreaRecord | undefined;
@@ -1128,21 +1133,24 @@ function buildFootnoteArea(
   }
 
   let evictionTopPt: number | undefined;
+  let placedBudget = Number.POSITIVE_INFINITY;
   for (const ref of pageRefs) {
     if (notes.length >= MAX_NOTES_LAID_OUT) {
       reasons.push('note-count-limit');
       break;
     }
-    // Reserve mode tightens each note's budget to ITS reference's floor; the stack may not
-    // rise above any line that cites into it. Later references sit lower, so their budgets
-    // only shrink.
-    const band = options?.reserveBandOf?.(ref);
+    // Each note's budget ends at ITS reference's floor. Reserve mode sizes by that floor
+    // alone: a reserve reaching an earlier (lower, other-column) reference line pushes it on.
+    // Attach mode cannot move the body, so it also caps the room by every placed note's
+    // budget: the stack never enters the full box of a reference line whose note starts here.
+    const band =
+      options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref, input.compatibilityMode);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
-    // their notes in this page's reserve. Only a LINE-precise band may skip: a table ref's
-    // band is the whole table box, whose bottom clears the eviction point even when the
-    // referencing row stays on this page — its note must keep reserving here.
+    // their notes in this page's reserve. Only an evictable line or row band may skip: a
+    // fallback table band is the whole table box, whose bottom clears the eviction point
+    // even when the referencing row stays on this page — its note must keep reserving here.
     // Strictly BELOW the point: an edge-to-edge line whose bottom equals the eviction top
     // is the line directly above it, which stays on the page and must keep its reserve.
     if (
@@ -1176,33 +1184,18 @@ function buildFootnoteArea(
           )
         )
       : availableForNotes;
-    const room = Math.max(0, refBudget - stackHeight);
-    // Word keeps a footnote whole with its reference: a note that cannot fit whole below
-    // its reference line — but could fit below it on the NEXT page — does not split. The
-    // reference's LINE moves to the next page instead, so the reserve must reach the
-    // line's TOP; the next reflow pass finds the reference there and lays the note whole
-    // beside it. Splitting remains for the shapes the move cannot help:
-    // - a note that does not fit the destination either — measured with the line's own
-    //   BLOCK opening the next page (`band.bottom - band.blockTop` of content above the
-    //   line), because a `w:keepLines` paragraph moves whole and a fixed column budget
-    //   would re-evict there every round, minting a chain of near-blank pages;
-    // - a reference in the page's TOPMOST body line, where pushing only re-creates the
-    //   same shape (a section-opening paragraph keeps its `w:spacing w:before` at page
-    //   top, so a fixed band threshold would re-fire there);
-    // - a line inside the minimum body band, whose eviction reserve the
-    //   {@link MIN_FOOTNOTE_BODY_BAND_PT} cap would clip into not evicting at all.
-    // Multi-column sections are a known approximation: an eviction for a column-1
-    // reference also shortens column 2; refs above the eviction point still reserve
-    // (the skip above), and the loop otherwise degrades to the envelope/exhaustion exit.
+    const cap = options?.reserveBandOf ? refBudget : Math.min(refBudget, placedBudget);
+    const room = Math.max(0, cap - stackHeight);
     if (
       band &&
-      band.evictable &&
-      options?.evictionAllowed !== false &&
-      !(options?.allowOrphanDeferral && band.preserveOrphanLine) &&
-      laid.flowHeight > room + 0.001 &&
-      laid.flowHeight <= keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
-      band.top > firstContentTop + 0.001 &&
-      band.top >= MIN_FOOTNOTE_BODY_BAND_PT
+      evictsReferenceLine(band, laid, room, {
+        keepWholeBudget,
+        firstContentTop,
+        fullNoteColumn,
+        evictionAllowed: options?.evictionAllowed,
+        allowOrphanDeferral: options?.allowOrphanDeferral,
+        nextPage: options?.nextPage,
+      })
     ) {
       evictionTopPt = evictionTopPt === undefined ? band.top : Math.min(evictionTopPt, band.top);
       continue;
@@ -1227,6 +1220,7 @@ function buildFootnoteArea(
         fragments: laid.fragments,
       });
       stackHeight += laid.flowHeight;
+      placedBudget = Math.min(placedBudget, refBudget);
     } else {
       const split = splitNoteFragments(laid, room, splitOpts);
       if (split.head.length > 0) {
@@ -1244,6 +1238,7 @@ function buildFootnoteArea(
           fragments: split.head,
         });
         stackHeight += split.headHeight;
+        placedBudget = Math.min(placedBudget, refBudget);
       }
       if (split.tail.length > 0) {
         nextCarry.set(laid.scopeId, {
@@ -2177,7 +2172,7 @@ function computeFootnoteReservesWithPolicy(
     // BEFORE the page-local cache short-circuit below, so a cached page still answers it.
     // Every reference the refinement can reach is some page's own page-bottom ref (the
     // hold-out's frontier is the next page's, and that page is visited here too).
-    orphanCandidates = orphanCandidates || anyOrphanPairBand(bodyPage, pageBottomRefs);
+    orphanCandidates ||= anyOrphanPairBand(bodyPage, pageBottomRefs, input.compatibilityMode);
     // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
     const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
@@ -2189,13 +2184,14 @@ function computeFootnoteReservesWithPolicy(
     // it reads the NEIGHBOUR page, and a memo entry that must enumerate foreign inputs by
     // hand is how stale reserves happen; the scan starts from a memoized page-refs answer
     // and lays notes through the pass cache.
-    const holdOutFor = (existingAreaHeight: number): number =>
+    const holdOutFor = (existingAreaHeight: number, ownReservePt: number): number =>
       anyPageBottomFootnoteRefs
         ? holdOutReserveNeed({
             bodyPage,
             nextPage,
             allowOrphanDeferral,
             existingAreaHeight,
+            ownReservePt,
             usedReservePt,
             pageBottomRefsOf,
             footnotesPart: input.footnotesPart,
@@ -2218,7 +2214,7 @@ function computeFootnoteReservesWithPolicy(
       // reference was evicted) answers section 0 here, and skipping it would let the
       // next page's opening reference pull back and reopen the eviction orbit. The
       // hold-out filters pulled refs by their OWN section's position.
-      recordReserve(page.index, holdOutFor(0), maxArea);
+      recordReserve(page.index, holdOutFor(0, 0), maxArea);
       continue;
     }
 
@@ -2231,10 +2227,12 @@ function computeFootnoteReservesWithPolicy(
         cached &&
         cached.marks === noteMarks &&
         cached.allowOrphanDeferral === allowOrphanDeferral &&
+        cached.nextOpening === continuedRowId(nextPage) &&
         pageRefsEqual(fnRefs, cached.pageRefs)
       ) {
         for (const reason of cached.reasons) reasons.push(reason);
-        recordReserve(page.index, Math.max(cached.reserve, holdOutFor(cached.areaHeight)), maxArea);
+        const held = holdOutFor(cached.areaHeight, cached.reserve);
+        recordReserve(page.index, Math.max(cached.reserve, held), maxArea);
         continue;
       }
     }
@@ -2259,13 +2257,14 @@ function computeFootnoteReservesWithPolicy(
       {
         reserveColumnBudget: true,
         allowOrphanDeferral,
-        reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref),
+        reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref, input.compatibilityMode),
         separatorCache,
         noteLayoutCache,
         evictionAllowed:
           !nextPage ||
           (nextPage.contentBox.width === bodyPage.contentBox.width &&
             nextPage.contentBox.height === bodyPage.contentBox.height),
+        nextPage,
       }
     );
     carry = nextCarry;
@@ -2285,6 +2284,7 @@ function computeFootnoteReservesWithPolicy(
     if (memo && carryWasEmpty && carry.size === 0) {
       memo.pageReserve.set(page, {
         allowOrphanDeferral,
+        nextOpening: continuedRowId(nextPage),
         pageRefs: fnRefs,
         marks: noteMarks,
         reserve: localNeeded,
@@ -2292,7 +2292,7 @@ function computeFootnoteReservesWithPolicy(
         reasons: reasons.slice(reasonsBefore),
       });
     }
-    recordReserve(page.index, Math.max(localNeeded, holdOutFor(areaHeight)), maxArea);
+    recordReserve(page.index, Math.max(localNeeded, holdOutFor(areaHeight, localNeeded)), maxArea);
   }
 
   // Stable only when the body has already left enough room for the measured reserve.
@@ -2726,6 +2726,10 @@ export function layoutSemanticDocumentWithNotes<
     let strictReserves: ReadonlyMap<number, number> | null = null;
     let strictReasons: NotePaginationFallbackReason[] = [];
     let converged = false;
+    let stableReserves: ReadonlyMap<number, number> | null = null;
+    let phaseEnvelope: ReadonlyMap<number, number> = usedReserves;
+    const relayout = (reserves: ReadonlyMap<number, number>): SemanticLayout =>
+      runBody({ ...optionsWithLists, noteMarks, pageBottomReserves: reserves });
     let previousPageCount = bodyLayout.pages.length;
     // Scaled with the document: legitimate cold convergence of a large document can grow
     // the page count for more consecutive rounds than a small one (the settled prefix
@@ -2743,6 +2747,7 @@ export function layoutSemanticDocumentWithNotes<
         allowOrphanDeferral
       );
       fallbackReasons = [...computed.reasons];
+      if (computed.stable) stableReserves = usedReserves;
       // Published pages must reflect the reserves used to produce them — not a later map.
       if (computed.stable && footnoteReservesEqual(computed.reserves, usedReserves)) {
         // First settle same-page reference/note reservations. Relaxing orphan pairs
@@ -2760,6 +2765,7 @@ export function layoutSemanticDocumentWithNotes<
           if (notesMemo) notesMemo.orphanPolicyPart = part;
           appliedFingerprints.clear();
           appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
+          phaseEnvelope = usedReserves;
           continue;
         }
         converged = true;
@@ -2796,24 +2802,30 @@ export function layoutSemanticDocumentWithNotes<
       if (appliedFingerprints.has(nextFp)) {
         // Shrink↔grow cycle — lock to the monotonic envelope; stop if that is not new.
         next = growFootnoteReserves(usedReserves, computed.reserves);
-        const envelopeFp = footnoteReservesFingerprint(next);
-        if (footnoteReservesEqual(next, usedReserves) || appliedFingerprints.has(envelopeFp)) {
+        const tried = (map: ReadonlyMap<number, number>): boolean =>
+          footnoteReservesEqual(map, usedReserves) ||
+          appliedFingerprints.has(footnoteReservesFingerprint(map));
+        // An unstable layout would start notes after their references: cover every map this
+        // phase adopted, then fall back to the last map whose layout left the notes room.
+        if (!computed.stable && tried(next)) next = growFootnoteReserves(phaseEnvelope, next);
+        if (tried(next)) {
           fallbackReasons.push('note-reflow-exhausted');
+          if (!computed.stable && stableReserves && stableReserves !== usedReserves) {
+            usedReserves = stableReserves;
+            bodyLayout = relayout(stableReserves);
+          }
           break;
         }
       }
 
       usedReserves = next;
+      phaseEnvelope = growFootnoteReserves(phaseEnvelope, next);
       appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
       spent.adopted += 1;
       adoptedThisPass += 1;
       // Keep the caller's session: reserve changes alter the layout context key, so
       // checkpoints from a different reserve set are not resumed — they are replaced.
-      bodyLayout = runBody({
-        ...optionsWithLists,
-        noteMarks,
-        pageBottomReserves: usedReserves,
-      });
+      bodyLayout = relayout(usedReserves);
       consecutiveGrowth = bodyLayout.pages.length > previousPageCount ? consecutiveGrowth + 1 : 0;
       previousPageCount = bodyLayout.pages.length;
       if (attempt === attemptCap - 1) {
@@ -2830,11 +2842,7 @@ export function layoutSemanticDocumentWithNotes<
       usedReserves = strictReserves;
       fallbackReasons = [...strictReasons];
       if (refinementMoved) {
-        bodyLayout = runBody({
-          ...optionsWithLists,
-          noteMarks,
-          pageBottomReserves: usedReserves,
-        });
+        bodyLayout = relayout(usedReserves);
       }
       // Settled for this part identity: the refinement had its budget and did not beat the
       // strict answer, so later passes republish instead of re-spending it. An edit

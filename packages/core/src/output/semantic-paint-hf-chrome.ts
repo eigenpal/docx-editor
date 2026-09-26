@@ -6,7 +6,7 @@
 // active-band height, and drawing hit-testing onto the nodes the painter already has —
 // the same in-place pattern as TOC hover.
 
-import type { HeaderFooterStoryRecord, PageRecord } from '../layout/semantic-records.ts';
+import type { HeaderFooterStoryRecord, LayoutBox, PageRecord } from '../layout/semantic-records.ts';
 
 export type HeaderFooterPaintChrome = {
   readonly scale: number;
@@ -43,6 +43,84 @@ export function headerFooterBandHeightPt(
   return story.kind === 'footer'
     ? Math.max(story.box.height, page.box.y + page.box.height - story.box.y)
     : Math.max(story.box.height, page.contentBox.y - story.box.y);
+}
+
+/**
+ * The part of a header or footer box outside the page's content box, or `null` if none.
+ *
+ * A negative `w:top` or `w:bottom` measures the body from the page edge, so a tall story
+ * reaches into the content box and paints over body lines.
+ */
+function headerFooterMarginPart(
+  page: PageRecord,
+  story: HeaderFooterStoryRecord
+): LayoutBox | null {
+  const { box } = story;
+  const content = page.contentBox;
+  const top = story.kind === 'header' ? box.y : Math.max(box.y, content.y + content.height);
+  const bottom =
+    story.kind === 'header' ? Math.min(box.y + box.height, content.y) : box.y + box.height;
+  return bottom > top ? { x: box.x, y: top, width: box.width, height: bottom - top } : null;
+}
+
+/** Whether a header or footer box reaches into the page's content box. */
+function headerFooterOverlapsBody(page: PageRecord, story: HeaderFooterStoryRecord): boolean {
+  const a = story.box;
+  const b = page.contentBox;
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+/**
+ * Hover chrome for a painted header or footer band: the tint target and the edit pill.
+ *
+ * A band that stays in its margin tints its own box on hover. The pill sits just outside the
+ * box and shows through `.docx-hf:hover + .docx-hf-edit-hint`, so it must follow the band.
+ *
+ * A band over body lines is marked `data-docx-hf-over-body`. While it is closed, the
+ * stylesheet makes it and every descendant transparent to the pointer. Body links, note
+ * citations, pictures and form fields then get their own events, and the pointer geometry
+ * decides when the story opens. The hover target is a separate box over the margin part
+ * only, painted before the band so the tint stays under the story ink and never covers body
+ * text. With no margin part there is no hover chrome; the activation band still opens it.
+ */
+export function appendHeaderFooterHoverChrome(
+  document: Document,
+  sheet: HTMLElement,
+  band: HTMLElement,
+  page: PageRecord,
+  story: HeaderFooterStoryRecord,
+  scale: number
+): void {
+  let anchor: LayoutBox = story.box;
+  if (headerFooterOverlapsBody(page, story)) {
+    band.dataset.docxHfOverBody = '';
+    const margin = headerFooterMarginPart(page, story);
+    if (!margin) return;
+    const hover = document.createElement('div');
+    hover.className = 'docx-hf-hover';
+    hover.dataset.docxHfHover = story.kind;
+    hover.setAttribute('contenteditable', 'false');
+    hover.style.position = 'absolute';
+    hover.style.left = `${(margin.x - page.box.x) * scale}px`;
+    hover.style.top = `${(margin.y - page.box.y) * scale}px`;
+    hover.style.width = `${margin.width * scale}px`;
+    hover.style.height = `${margin.height * scale}px`;
+    band.before(hover);
+    anchor = margin;
+  }
+  const hint = document.createElement('div');
+  hint.className = 'docx-hf-edit-hint';
+  hint.dataset.docxHfHint = story.kind;
+  hint.setAttribute('contenteditable', 'false');
+  hint.style.position = 'absolute';
+  hint.style.left = `${(anchor.x - page.box.x) * scale}px`;
+  hint.style.width = `${anchor.width * scale}px`;
+  hint.style.top =
+    story.kind === 'header'
+      ? `${(anchor.y + anchor.height - page.box.y) * scale}px`
+      : `${(anchor.y - page.box.y) * scale}px`;
+  if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
+  sheet.append(hint);
 }
 
 /** Retint furniture chrome on retained pages. Newly painted pages go through the same path. */

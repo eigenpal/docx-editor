@@ -7,6 +7,7 @@ import {
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
+import { positionRightFooterPageFrame } from './legacy-footer-right-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const isElement = (node: OoxmlNode): node is OoxmlElement => node.kind !== 'textValue';
@@ -143,7 +144,10 @@ export function positionLegacyFooterPageFrame<
 ): T {
   if (!isW(part.root, 'ftr') || !bounded(part)) return flow;
   const pair = framePair(part);
-  if (!pair) return positionFixedFooterPageFrame(part, flow, pageGeometry);
+  if (!pair) {
+    const fixed = positionFixedFooterPageFrame(part, flow, pageGeometry);
+    return fixed === flow ? positionRightFooterPageFrame(part, flow, contentWidth) : fixed;
+  }
   if (flow.blocks.length !== 2) return flow;
   const [first, empty] = flow.blocks;
   if (

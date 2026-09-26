@@ -48,6 +48,7 @@ import {
   hitTestStoryAtLocalPoint,
   isBodyContentPoint,
   scopedDocumentOrder,
+  storyHitYieldsToBody,
   storyMatchesBinding,
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
@@ -787,9 +788,24 @@ export function createPointerController(
     const sheet = sheetPoint(event.clientX, event.clientY);
     const active = host.activeHeaderFooter?.() ?? null;
     const activeNote = host.activeNote?.() ?? null;
-    const storyHit = findStoryAtSheetPoint(layout, sheet, host.pageOffsetX);
+    const bandHit = findStoryAtSheetPoint(layout, sheet, host.pageOffsetX);
+    // A story painted over body lines (negative vertical margin) gives the body precedence.
+    const yieldsToBody =
+      bandHit !== null &&
+      storyHitYieldsToBody(
+        layout,
+        bandHit,
+        sheet,
+        host.pageOffsetX,
+        active !== null && storyMatchesBinding(bandHit.story, scopeBinding(active)),
+        host.measurer()
+      );
+    const storyHit = yieldsToBody ? null : bandHit;
     const noteHit = findNoteAtSheetPoint(layout, sheet, host.pageOffsetX);
-    const furnitureDom = (event.target as Element | null)?.closest('[data-docx-hf]');
+    // The painted story can sit in front of the body text, so its element is the target too.
+    const furnitureDom = yieldsToBody
+      ? null
+      : (event.target as Element | null)?.closest('[data-docx-hf]');
     const onFurniture = Boolean(furnitureDom || storyHit);
     const target = event.target as Element | null;
     const noteRefEl = target?.closest<HTMLElement>('[data-docx-note-ref]');

@@ -63,9 +63,9 @@ export interface NumberingLevelIndent {
   /**
    * Which of these the LEVEL actually authored.
    *
-   * A level's `w:pPr/w:ind` sits between the paragraph style and direct formatting, so the
-   * merge has to tell "the level says left = 0" from "the level says nothing about left and
-   * the style's value stands". Absent (the default) reads as "says nothing", which is what a
+   * A level's `w:pPr/w:ind` sits between the formatting it outranks and the formatting that
+   * outranks it (`mergeListIndent`), so the merge has to tell "the level says left = 0" from
+   * "the level says nothing about left and the style's value stands". Absent (the default) reads as "says nothing", which is what a
    * hand-built level in a test means.
    */
   readonly stated?: {
