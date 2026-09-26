@@ -63,6 +63,10 @@ export function extractMedia(
   forEachSemanticDrawing(layout, ({ drawing, page, story, rootStory }) => {
     const resource = drawing.resource;
     if (resource.kind !== 'ready' || drawing.accessibility.hidden) return;
+    // A shape group stays opaque: its picture is one member, not the drawing, so extracting
+    // it alone would stand in for the whole group at the group's size. The group gets the
+    // omitted-drawing warning instead.
+    if (drawing.groupPicture) return;
     // Core prefixes the digest with sha256:. Use its hex digest as a portable ID.
     const id = resource.contentId.startsWith('sha256:')
       ? resource.contentId.slice(7)

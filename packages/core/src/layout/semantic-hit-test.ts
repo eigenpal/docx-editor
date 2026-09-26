@@ -1100,8 +1100,10 @@ export function caretBoxOnLine(
         break;
       }
       // Trailing edge of a tab/field: downstream affinity — same model offset as the next
-      // span's start, but the visual insertion point belongs with the following text.
-      if (next && next.range.start === offset && usesPublishedAdvance(span)) {
+      // span's start, but the visual insertion point belongs with the following text. So too
+      // after a page break with text beside it, which only a table cell (that ignores it) has.
+      const ignoredBreak = span.text === PAGE_BREAK_CHAR && span.box.width === 0;
+      if (next && next.range.start === offset && (usesPublishedAdvance(span) || ignoredBreak)) {
         chosen = next;
         break;
       }

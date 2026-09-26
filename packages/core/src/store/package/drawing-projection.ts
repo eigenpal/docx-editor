@@ -50,6 +50,12 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
+import {
+  groupVectorMembersAreBounded,
+  readGroupPicture,
+  type GroupPictureProjection,
+} from './drawing-group-picture.ts';
+import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
@@ -64,6 +70,7 @@ import {
 } from './drawing-shape-projection.ts';
 
 export type { TextboxStoryProjection, VectorShapeProjection } from './drawing-shape-projection.ts';
+export type { GroupPictureProjection } from './drawing-group-picture.ts';
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
@@ -217,6 +224,8 @@ export interface DrawingProjection {
   }> | null;
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
+  /** The picture member of a `wpg:wgp` group; `picture` stays null for a group. */
+  readonly groupPicture: GroupPictureProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
@@ -423,12 +432,6 @@ function parseSimplePosCoordinate(value: string | undefined): number | null {
   if (!Number.isInteger(parsed)) return null;
   if (parsed < ST_COORDINATE_MIN || parsed > ST_COORDINATE_MAX) return null;
   return parsed;
-}
-
-function parseCropPercent(value: string | undefined): number {
-  const parsed = parseEmu(value, false);
-  if (parsed === null || parsed <= 0) return 0;
-  return Math.min(parsed / 100_000, 1);
 }
 
 function parseDocPrId(value: string | undefined): number | null {
@@ -1284,6 +1287,7 @@ function buildUnrenderableProjection(
       anchor: null,
       picture: null,
       vectorShape: null,
+      groupPicture: null,
       textboxStory: null,
       locks: EMPTY_LOCKS,
       effects: EMPTY_EFFECTS,
@@ -1501,19 +1505,30 @@ export function projectDrawingWithState(
           allowOverlap: anchorFlag('allowOverlap') ?? true,
         })
       : null;
-  const vectorShape = pictureResult.picture
+  const groupRead = pictureResult.picture ? null : readGroupPicture(anchor, extent);
+  const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(
         anchor,
         extent,
         compatibilityMode,
         ctx.resolveSchemeColor,
-        ctx.resolveStyleMatrixReference
+        ctx.resolveStyleMatrixReference,
+        groupRead?.picture.memberNodeId
       );
+  // A group paints whole or not at all: the picture needs every other member to paint too,
+  // inside the same bounds as the picture frame.
+  const groupAdmitted =
+    groupRead !== null &&
+    (vectorMembers
+      ? groupVectorMembersAreBounded(vectorMembers, extent)
+      : !groupRead.hasOtherMembers);
+  const groupPicture = groupAdmitted ? groupRead.picture : null;
+  const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
   const textboxStory = pictureResult.picture
     ? null
     : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
-  if (vectorShape && pictureResult.diagnostic) {
+  if ((vectorShape || groupPicture) && pictureResult.diagnostic) {
     removeSupersededDrawingDiagnostic(state.diagnostics, pictureResult.diagnostic);
   }
   return freezeDrawingProjection(
@@ -1537,6 +1552,7 @@ export function projectDrawingWithState(
       anchor: anchorMeta,
       picture: pictureResult.picture,
       vectorShape,
+      groupPicture,
       textboxStory,
       locks,
       effects: pictureResult.effects,
@@ -1571,16 +1587,22 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, groups) stays
-  // invisible like its VML fallback always was — a labelled placeholder card over
+  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, unsupported
+  // groups) stays invisible like its VML fallback always was — a labelled placeholder card over
   // letterhead furniture would be noisier than what either branch renders today. Text boxes
   // carry a renderable story and pass through.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
+    projection.groupPicture === null &&
     projection.textboxStory === null
   ) {
     return null;
+  }
+  // Layout applies the same rule to a group picture whose resource fails.
+  if (projection.groupPicture) {
+    const groupPicture = Object.freeze({ ...projection.groupPicture, alternateContent: true });
+    return Object.freeze({ ...projection, groupPicture });
   }
   return projection;
 }

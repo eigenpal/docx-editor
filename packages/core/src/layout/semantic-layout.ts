@@ -57,6 +57,7 @@ import {
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './paragraph-flow.ts';
+import { lineAlignOffset } from './paragraph-alignment.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -1137,6 +1138,14 @@ function layoutBlocksPass(
       styleCascade
     );
     const keys = prepared.map((entry) => entry.key);
+    const positioned = tableWrap.anchorFlow(
+      prepared,
+      contentWidth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      options.compatibilityMode
+    );
     const terminalTextTables = terminalTables.terminalTextTableGroup(
       prepared,
       contentWidth,
@@ -1164,12 +1173,12 @@ function layoutBlocksPass(
             entry.kind === 'paragraph' ? tocVerdictFor(entry.paragraph.id, tocIds) : ''
           );
 
-    // FLOW keys — what incremental resume compares. The composition, its fold order and
-    // the argument for that order live with the folds in `pagination-keeps.ts`, where the
-    // order is testable.
     const lastBlock = prepared.at(-1);
     const flow = composeFlowKeys(
-      listAutoSpacingFlowKeys(paragraphFrameFlowKeys(keys, prepared), prepared),
+      listAutoSpacingFlowKeys(
+        paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
+        prepared
+      ),
       {
         terminalTableGroup: terminalTextTables,
         ...contextualFlowInputs(prepared, styleCascade),
@@ -1185,6 +1194,7 @@ function layoutBlocksPass(
 
     return {
       framePolicy,
+      positioned,
       bodies,
       producer,
       contentWidth,
@@ -1219,6 +1229,7 @@ function layoutBlocksPass(
   }
   const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys, terminalTextTables } =
     prepass;
+  const { positionedTables, positionedTablePolicy } = prepass.positioned;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
     // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
@@ -1310,15 +1321,6 @@ function layoutBlocksPass(
     };
   }
 
-  const positionedTables = tableFloat.positionedTableAnchors(
-    prepared,
-    contentWidth,
-    styleCascade,
-    displayMode,
-    authorFilter,
-    options.compatibilityMode
-  );
-  const positionedTableIds = new Set(positionedTables.map(({ table }) => table.id));
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
@@ -2040,16 +2042,17 @@ function layoutBlocksPass(
         }
       }
       if (
-        positionedTableIds.has(entry.table.id) &&
+        positionedTablePolicy.has(entry.table.id) &&
         !furnitureHasWrap &&
-        !tableWrap.hasEarlierCellExclusions(
-          entry.table,
-          options.drawingExclusionZonesByPage,
-          tableDeps,
-          pages.length
-        ) &&
-        tableWrap.floatingTableBand(entry.table, Math.min(...columns.widths), tableDeps) <=
-          contentHeight()
+        tableWrap.admitsAtAnchor(entry.table, tableDeps, {
+          allowBreak: columns.count === 1 && positionedTablePolicy.get(entry.table.id),
+          zones: options.drawingExclusionZonesByPage,
+          page: pages.length,
+          width: Math.min(...columns.widths),
+          frames: anchorFrames(),
+          top: cursorY,
+          bottom: contentHeight(),
+        })
       ) {
         positionedFlow.add(pendingFloatIds, entry.table.id);
         continue;
@@ -2802,18 +2805,13 @@ function layoutBlocksPass(
         alignment === 'center' || alignment === 'right' ? measure.used : undefined,
         rtl
       );
-      // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
-      // content — and so the caret — at the middle of the measure, not at the left edge.
-      const alignOffset =
-        placedSpans.length > 0 && alignedSpans.length > 0
-          ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-          : alignment !== 'left' && alignment !== 'both'
-            ? (() => {
-                const slack = measure.available - measure.used;
-                if (slack <= 0) return 0;
-                return alignment === 'center' ? slack / 2 : slack;
-              })()
-            : 0;
+      const alignOffset = lineAlignOffset(
+        placedSpans,
+        alignedSpans,
+        alignment,
+        measure.available,
+        measure.used
+      );
       const pageClip = Object.freeze({
         x: 0,
         y: 0,

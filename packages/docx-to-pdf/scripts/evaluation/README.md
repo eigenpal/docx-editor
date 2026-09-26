@@ -34,12 +34,11 @@ Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow
 
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
+Exports and traces use the same explicit glyph fallback list, in this order: `Noto Sans Symbols 2`, `Noto Sans Math`, `Noto Sans Arabic`, `Times New Roman`, `Noto Sans CJK JP`, `Twemoji Mozilla`, and `Noto Emoji`. This list replaces the renderer's default list. Without system fonts, `Times New Roman` resolves to the packaged Liberation Serif. It supplies Hebrew for right-to-left runs whose complex-script face has no Hebrew. Keep the list identical in `export.ts` and `trace.ts`; `export.test.ts` compares both settings on text that reaches every face.
+
 Measurements include word positions, page dimensions, color signatures, and drawing metadata. Comparisons reuse the text movement algorithm in `pdf-visual-diff.py`. Object counts alone never establish missing visible content. Visual screening uses a 144 by 192 RGB signature with local regions. Older 48 by 64 grayscale measurements remain readable. Detailed evidence uses 144 DPI and processes at most three pages. `firstDivergence` identifies a measured location with explicit confidence and coordinate space. Text excerpts are bounded and untrusted.
 
-The `page` operation renders one page at 144 DPI into `page.png`.
-Its `report.json` contains page dimensions in points and the PDF rotation matrix.
-Apply that matrix to measured coordinates before drawing highlights over a rotated page.
-Missing page numbers fail explicitly. The evaluator owns preview caching and navigation.
+The `page` operation renders one page at 144 DPI into `page.png`. Its `report.json` contains page dimensions in points and the PDF rotation matrix. Apply that matrix to measured coordinates before drawing highlights over a rotated page. Missing page numbers fail explicitly. The evaluator owns preview caching and navigation.
 
 Headless probes check package preservation, deterministic insertion, undo, and save/reopen. They compare modeled structure, semantic hashes, relationships, and unchanged binary hashes. The retained-layout check uses fixed metrics and body content. It excludes production font resolution, styles-part cascades, headers, footers, and actual browser input. Unsupported checks remain explicit.
 

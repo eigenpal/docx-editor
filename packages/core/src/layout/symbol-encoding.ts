@@ -139,3 +139,19 @@ export function mapSymbolPuaText(
   }
   return changed ? out : text;
 }
+
+/** Resolve single-byte Symbol and Wingdings bullets through their known glyph mapping. */
+export function mapSymbolBulletText(
+  text: string,
+  fontFamily: string | null | undefined,
+  isFamilyAvailable?: (family: string) => boolean
+): string {
+  if (text.length === 1 && isSymbolEncodedFamily(fontFamily)) {
+    const family = fontFamily!.toLowerCase();
+    if (family === 'symbol' || family === 'wingdings') {
+      const mapped = SYMBOL_FAMILIES.get(family)!.get(text.charCodeAt(0));
+      if (mapped !== undefined && isFamilyAvailable?.(fontFamily!) !== true) return mapped;
+    }
+  }
+  return mapSymbolPuaText(text, fontFamily, isFamilyAvailable);
+}

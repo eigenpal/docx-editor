@@ -371,7 +371,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. It also applies the List Paragraph style, the way Word does, which is what closes the space between consecutive items. Turning the list off leaves the paragraph in List Paragraph, and indented, as Word does; pressing Enter on an empty item leaves the list and returns to the margin. Enter within a list item continues a single blank-paragraph separator established by preceding items at the same level, including tracked breaks. Tab and the indent buttons change the level, and the marker changes with it.',
+      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. Known single-byte Symbol and Wingdings bullets use Unicode fallback when their font is unavailable. Saved numbering stays unchanged. It also applies the List Paragraph style, the way Word does, which is what closes the space between consecutive items. Turning the list off leaves the paragraph in List Paragraph, and indented, as Word does; pressing Enter on an empty item leaves the list and returns to the margin. Enter within a list item continues a single blank-paragraph separator established by preceding items at the same level, including tracked breaks. Tab and the indent buttons change the level, and the marker changes with it.',
   },
   {
     id: 'lists.numbered',
@@ -469,7 +469,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Authored merges render and round-trip. A row inserted at a boundary inside a vertical merge extends the merge by one row and keeps one cell per column. The merge and split commands are declared but refused. Column insert, delete, and resize on a merged table report the engine reason.',
+      'Authored merges render and round-trip. A vertical merge takes its height from the rows it covers, and merges that cover the same rows share that height. A row inserted at a boundary inside a vertical merge extends the merge by one row and keeps one cell per column. The merge and split commands are declared but refused. Column insert, delete, and resize on a merged table report the engine reason.',
   },
   {
     id: 'tables.page-break',
@@ -513,18 +513,18 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box, and tblpY or tblpYSpec against its vertical anchor. Body text wraps beside supported floating tables and below full-width tables, including authored text distances. Passages of a quarter inch or less remain empty, so captions and headings clear near-full-width tables. Text-anchored tables with numeric vertical offsets move with their following paragraph and do not add table height to paragraph flow. Negative offsets retain their position when clear of preceding text; intersecting tables move below that text. Page- and margin-anchored tables that span the text column move to the next page with their following paragraph when earlier text on the page cannot clear them and still leave room for that paragraph. Text-anchored tables taller than a page, marked no-overlap, using vertical alignment, or affected by earlier wrapping objects retain row pagination. Simple terminal empty anchors retain their shared-page layout. Floating-table positioning has no editing UI.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box, and tblpY or tblpYSpec against its vertical anchor. Body text wraps beside supported floating tables and below full-width tables, including authored text distances. Passages of a quarter inch or less remain empty, so captions and headings clear near-full-width tables. Text-anchored tables with numeric vertical offsets move with their following paragraph and do not add table height to paragraph flow. Negative offsets retain their position when clear of preceding text; intersecting tables move below that text. Page- and margin-anchored tables that span the text column move to the next page with their following paragraph when earlier text on the page cannot clear them and still leave room for that paragraph. Text-anchored tables taller than a page, marked no-overlap, using vertical alignment, or affected by earlier wrapping objects retain row pagination. A text-anchored table that covers the text column breaks across pages when the rest of the page cannot hold it but can hold its header rows and first body row; otherwise it moves with its following paragraph. This continuation applies to single-column sections with one table per anchor. Anchors with page or column breaks, or space before them, keep whole-table placement. Tables with text distances above or below them also keep whole-table placement. Tables that fit a full page move together when doNotBreakWrappedTables is enabled. Simple terminal empty anchors retain their shared-page layout. Floating-table positioning has no editing UI.',
   },
   {
     id: 'tables.text-direction',
     name: 'Vertical cell text (textDirection)',
     category: 'tables',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'tbRl and btLr cell text renders through writing-mode and round-trips. You cannot set it from the UI.',
+      'tbRl and btLr cell text renders through writing-mode and round-trips. An auto-height row is as tall as its btLr text. If a minimum height or other cells make the row taller, btLr text stays aligned within its measured text length. You cannot set it from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
@@ -633,7 +633,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Solid rectangles, ellipses, diagonal lines, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. An outline keeps its full width past the edge of the drawing. An inset outline (algn=in) draws inside its geometry. Vertical and horizontal lines render, standalone or inside a group. Other payloads reserve their extent with a placeholder.',
+      'Solid rectangles, ellipses, diagonal lines, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. An outline keeps its full width past the edge of the drawing. An inset outline (algn=in) draws inside its geometry. Vertical and horizontal lines render, standalone or inside a group. A shape group can also hold one embedded picture below its shapes. The picture must be unrotated, unflipped, and rectangular, and it must have no image effects. It renders in its own frame, in the editor and in PDF export. A group renders completely or not at all: when its picture cannot render, it follows the rule for unsupported groups. Other payloads reserve their extent with a placeholder.',
   },
   {
     id: 'images.legacy-vml',
@@ -725,7 +725,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`. When a plain paragraph starts with a manual page break and has text after the break, the text starts on the next page, even when the current page has no room for another line. Paragraphs with only a page break, list numbering, borders, shading, or anchored floating tables, text frames, or drawings keep the ordinary rule, so after a full page their text starts one page later.',
+      'The layout engine paginates like Word: page breaks, keep rules, and paragraphs split across pages. You can insert a hard page break, which writes `w:br w:type="page"`. Manual page breaks inside table cells retain their document offsets but do not add lines, line height, or pages. Line wrapping, tab alignment, bidirectional text order, and text wrap around floating pictures ignore them. If the font of the run has Arabic glyphs, layout measures Arabic letters on the two sides of a break as one joined word. If the font has no Arabic glyphs, the browser fallback measures each side separately, so the width can differ from the same text without the break. Manual line breaks still start a new line. When a plain paragraph starts with a manual page break and has text after the break, the text starts on the next page, even when the current page has no room for another line. Paragraphs with only a page break, list numbering, borders, shading, or anchored floating tables, text frames, or drawings keep the ordinary rule, so after a full page their text starts one page later.',
   },
   {
     id: 'layout.sections',

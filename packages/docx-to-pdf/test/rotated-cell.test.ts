@@ -79,3 +79,50 @@ test('a btLr cell paints its text turned a quarter turn, reading up the page', a
     await pdf.destroy();
   }
 });
+
+const turnedCell = (properties: string, text: string, paragraphProperties = ''): string =>
+  '<w:tc><w:tcPr><w:tcW w:w="850" w:type="dxa"/><w:textDirection w:val="btLr"/>' +
+  `${properties}</w:tcPr><w:p><w:pPr><w:ind w:left="6" w:right="6"/>${paragraphProperties}` +
+  `</w:pPr>${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p></w:tc>`;
+const turnedTable = (rows: string): string =>
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+  `<w:tblGrid><w:gridCol w:w="850"/><w:gridCol w:w="850"/></w:tblGrid>${rows}</w:tbl><w:p/>`;
+
+test.each([
+  [
+    'a centred merge head beside turned cells',
+    turnedTable(
+      '<w:tr><w:trPr><w:trHeight w:val="506"/></w:trPr>' +
+        turnedCell('<w:vMerge w:val="restart"/>', 'Head', '<w:jc w:val="center"/>') +
+        turnedCell('', 'Side', '<w:jc w:val="center"/>') +
+        '</w:tr><w:tr><w:trPr><w:trHeight w:val="506"/></w:trPr>' +
+        turnedCell('<w:vMerge/>', '') +
+        turnedCell('', 'Next', '<w:jc w:val="center"/>') +
+        '</w:tr>'
+    ),
+    ['Head', 'Side', 'Next'],
+  ],
+  [
+    'a shaded paragraph in an auto-height turned cell',
+    turnedTable(
+      '<w:tr>' +
+        turnedCell('', 'Shaded', '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>') +
+        `<w:tc><w:tcPr><w:tcW w:w="850" w:type="dxa"/></w:tcPr>${paragraph('Flat')}</w:tc>` +
+        '</w:tr>'
+    ),
+    ['Shaded', 'Flat'],
+  ],
+])('exports %s with every label', async (_name, body, labels) => {
+  const result = await exportPdf(docx(body), {
+    useSystemFonts: false,
+    fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 22 } },
+  });
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
+  try {
+    const content = await (await pdf.getPage(1)).getTextContent();
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
+    for (const label of labels) expect(text).toContain(label);
+  } finally {
+    await pdf.destroy();
+  }
+});

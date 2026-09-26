@@ -338,6 +338,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
         })
       : null,
     vectorShape: null,
+    groupPicture: null,
     textboxStory: null,
     ...(!photo
       ? { legacyGraphic: Object.freeze({ width, height, fragments: Object.freeze(fragments) }) }

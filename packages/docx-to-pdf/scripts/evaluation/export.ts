@@ -19,6 +19,7 @@ try {
       'Noto Sans Symbols 2',
       'Noto Sans Math',
       'Noto Sans Arabic',
+      'Times New Roman',
       'Noto Sans CJK JP',
       'Twemoji Mozilla',
       'Noto Emoji',

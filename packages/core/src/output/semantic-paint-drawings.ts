@@ -10,10 +10,9 @@ import type {
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { applyDrawingBilevelFilter } from './drawing-bilevel-filter.ts';
-import { applyInsetStroke, vectorShapeViewport } from './vector-shape-svg.ts';
 import { drawingFilterStyle } from './drawing-lum-filter.ts';
 import type { DrawingPoint } from '../layout/drawing-geometry.ts';
-import { cssTransformForDrawingImage, finite } from '../layout/drawing-geometry.ts';
+import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
 import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
 import type {
   LayoutBox,
@@ -28,6 +27,7 @@ import {
 } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
+import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   revisionPresentationOf,
@@ -335,6 +335,23 @@ function positionedBox(
   element.style.pointerEvents = 'auto';
 }
 
+/** The box the image fills: a group picture's member frame, else the drawing's content box. */
+function imageFrameBounds(drawing: InlineDrawingRecord | AnchoredDrawingRecord): LayoutBox {
+  const corners = drawing.groupPicture ? drawing.geometry.imageTransformCorners : undefined;
+  if (!corners || corners.length === 0) return drawing.geometry.contentBounds;
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const point of corners) {
+    left = Math.min(left, point.x);
+    top = Math.min(top, point.y);
+    right = Math.max(right, point.x);
+    bottom = Math.max(bottom, point.y);
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 function readyImagePaintSignature(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   resource: Extract<InlineDrawingRecord['resource'], { kind: 'ready' }>,
@@ -343,7 +360,7 @@ function readyImagePaintSignature(
   origin?: LayoutBox
 ): string {
   const paint = drawing.paintBounds;
-  const content = drawing.geometry.contentBounds;
+  const content = imageFrameBounds(drawing);
   const crop = cropImageStyles(drawing, resource);
   return [
     url,
@@ -418,7 +435,9 @@ function paintReadyImage(
   const elementKey = drawingElementKey(drawing, ctx);
   const outer = urlRegistry?.readyElementFor?.(elementKey) ?? document.createElement('div');
   const paintSignature = readyImagePaintSignature(drawing, resource, ctx, url, origin);
-  if (readyImagePaintSignatures.get(outer) === paintSignature) return outer;
+  // A group's vector members are rebuilt on every paint; only a lone image is reused.
+  const reusable = !drawing.vectorShape;
+  if (reusable && readyImagePaintSignatures.get(outer) === paintSignature) return outer;
   outer.className = 'docx-drawing docx-drawing-ready';
   outer.style.cssText = '';
   outer.dataset.drawingNodeId = drawing.drawingNodeId;
@@ -431,15 +450,19 @@ function paintReadyImage(
   outer.removeAttribute('tabindex');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
-  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon.
-  const clipPath = cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], drawing.paintBounds);
-  if (clipPath) outer.style.clipPath = clipPath;
-
   const inner = document.createElement('div');
   inner.className = 'docx-drawing-image-frame';
   inner.style.position = 'absolute';
-  const content = drawing.geometry.contentBounds;
+  const content = imageFrameBounds(drawing);
   const paint = drawing.paintBounds;
+  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon. A
+  // group clips only its picture there: the vector members share the outer box, which
+  // clips at the paint bounds so strokes can use the effect extent, as a lone shape does.
+  const clipPath = cssClipPathFromPolygon(
+    drawing.geometry.clipPolygon ?? [],
+    drawing.groupPicture ? content : paint
+  );
+  if (clipPath) (drawing.groupPicture ? inner : outer).style.clipPath = clipPath;
   inner.style.left = `${(content.x - paint.x) * ctx.scale}px`;
   inner.style.top = `${(content.y - paint.y) * ctx.scale}px`;
   inner.style.width = `${content.width * ctx.scale}px`;
@@ -489,6 +512,18 @@ function paintReadyImage(
   transformStage.append(cropViewport);
   inner.append(transformStage);
   outer.replaceChildren(inner);
+  if (drawing.vectorShape) {
+    const frame = vectorShapeFrame(document, drawing, ctx.scale);
+    const paintBounds = drawing.paintBounds;
+    applyVectorInkReach(
+      outer,
+      frame,
+      paintBounds,
+      vectorShapeInkClip(drawing, paintBounds),
+      ctx.scale
+    );
+    outer.append(frame);
+  }
   applyDrawingBilevelFilter(document, outer, inner, drawing.effects.bilevel);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
@@ -501,11 +536,10 @@ function paintReadyImage(
     applyAccessibility(outer, drawing, false);
   }
   urlRegistry?.rememberReadyElement?.(elementKey, outer);
-  readyImagePaintSignatures.set(outer, paintSignature);
+  if (reusable) readyImagePaintSignatures.set(outer, paintSignature);
+  else readyImagePaintSignatures.delete(outer);
   return outer;
 }
-
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
  * Paint a typed `wps:wsp` solid-geometry shape as inline SVG. Coordinates stay in the
@@ -519,91 +553,13 @@ function paintVectorShape(
   ink: LayoutBox,
   origin?: LayoutBox
 ): HTMLElement {
-  const shape = drawing.vectorShape!;
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-shape';
   outer.dataset.drawingNodeId = drawing.drawingNodeId;
   const paint = drawing.paintBounds;
   positionedBox(outer, paint, ctx.scale, origin);
-
-  const content = drawing.geometry.contentBounds;
-  const frame = document.createElement('div');
-  frame.className = 'docx-drawing-image-frame';
-  frame.style.position = 'absolute';
-  // Where an outline reaches past the extent, a negative inset widens the clip past
-  // `paintBounds` without another element. The frame then takes no pointer events, so the
-  // outer box stays the target that layout hit testing matches.
-  if (ink !== paint) {
-    const reach = (value: number) => `${finiteStyle(-value * ctx.scale)}px`;
-    outer.style.overflow = 'visible';
-    outer.style.clipPath = `inset(${reach(paint.y - ink.y)} ${reach(
-      ink.x + ink.width - (paint.x + paint.width)
-    )} ${reach(ink.y + ink.height - (paint.y + paint.height))} ${reach(paint.x - ink.x)})`;
-    frame.style.pointerEvents = 'none';
-  }
-  const viewport = vectorShapeViewport(shape, content);
-  frame.style.left = `${(viewport.frame.x - paint.x) * ctx.scale}px`;
-  frame.style.top = `${(viewport.frame.y - paint.y) * ctx.scale}px`;
-  frame.style.width = `${viewport.frame.width * ctx.scale}px`;
-  frame.style.height = `${viewport.frame.height * ctx.scale}px`;
-
-  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-  svg.setAttribute('viewBox', viewport.viewBox.map(finiteStyle).join(' '));
-  svg.setAttribute('preserveAspectRatio', 'none');
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', '100%');
-  svg.style.display = 'block';
-  // A non-root `<svg>` clips to its viewport by default, so the clip belongs to the outer box
-  // alone: `paintBounds`, which carries `wp:effectExtent`, widened by the inset where stroked
-  // ink reaches past the extent.
-  svg.style.overflow = 'visible';
-
-  // `components` is the paint authority and is always non-empty; the top-level `fillHex`
-  // and `strokeHex` describe a one-component shape only.
-  for (const component of shape.components) {
-    const path = document.createElementNS(SVG_NAMESPACE, 'path');
-    const d = component.subpathsEmu
-      .map(
-        (points, index) =>
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}${component.subpathsClosed?.[index] === false ? '' : 'Z'}`
-      )
-      .join('');
-    path.setAttribute('d', d);
-    // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
-    path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
-    path.setAttribute('fill-rule', 'evenodd');
-    if (component.fillAlpha < 1) {
-      path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
-    }
-    if (component.strokeHex !== null) {
-      path.setAttribute('stroke', `#${component.strokeHex}`);
-      path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
-      if (component.strokeInset) {
-        applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
-      }
-      if (component.strokeAlpha < 1) {
-        path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
-      }
-    }
-    svg.append(path);
-    if (component.strokeHex !== null) {
-      for (const points of component.arrowheadsEmu ?? []) {
-        const arrow = document.createElementNS(SVG_NAMESPACE, 'path');
-        arrow.setAttribute(
-          'd',
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
-        );
-        arrow.setAttribute('fill', `#${component.strokeHex}`);
-        arrow.setAttribute(
-          'fill-opacity',
-          finiteStyle(Math.max(0, Math.min(1, component.strokeAlpha)))
-        );
-        arrow.setAttribute('data-docx-line-end', 'triangle');
-        svg.append(arrow);
-      }
-    }
-  }
-  frame.append(svg);
+  const frame = vectorShapeFrame(document, drawing, ctx.scale);
+  applyVectorInkReach(outer, frame, paint, ink, ctx.scale);
   outer.append(frame);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
@@ -774,17 +730,25 @@ function paintDrawingRecordElement(
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
 
-  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) {
+  const { resource } = drawing;
+  const url =
+    resource.kind === 'ready' && ctx.imageUrlPort && urlRegistry
+      ? urlRegistry.urlForReady(resource.validatedHandle, resource.mime)
+      : null;
+  // A group paints whole or not at all. Its vector members paint alone only while the
+  // picture is pending. A picture that cannot paint turns the whole group into the refusal
+  // card of an unsupported group. Layout drops an MC-wrapped group whose resource fails, so
+  // that group never reaches this card.
+  if (drawing.groupPicture && resource.kind !== 'pending' && !url) {
+    return paintPlaceholderCard(document, drawing, ctx, origin);
+  }
+  const groupImageReady = drawing.groupPicture !== undefined && url !== null;
+  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0 && !groupImageReady) {
     return paintVectorShape(document, drawing, ctx, painted, origin);
   }
 
-  const { resource } = drawing;
   if (resource.kind === 'ready') {
-    if (!ctx.imageUrlPort || !urlRegistry) {
-      return paintPlaceholderCard(document, drawing, ctx, origin);
-    }
-    const url = urlRegistry.urlForReady(resource.validatedHandle, resource.mime);
-    if (!url) return paintPlaceholderCard(document, drawing, ctx, origin);
+    if (!url || !urlRegistry) return paintPlaceholderCard(document, drawing, ctx, origin);
     return paintReadyImage(document, drawing, ctx, url, urlRegistry, origin);
   }
 

@@ -798,6 +798,11 @@ export interface DrawingGeometry {
     readonly transformedCorners: readonly DrawingPoint[];
 }
 
+// @public
+export interface DrawingGroupPictureRecord {
+    readonly alternateContent: boolean;
+}
+
 // @public (undocumented)
 export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
 
@@ -1500,6 +1505,7 @@ export interface InlineDrawingRecord {
     readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupPicture?: DrawingGroupPictureRecord;
     // (undocumented)
     readonly height: number;
     // (undocumented)
@@ -4189,6 +4195,7 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly doNotBreakWrappedTables?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;

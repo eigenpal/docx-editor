@@ -13,6 +13,7 @@ import type {
 } from './paragraph-style.ts';
 import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
+import type { PositionedTableFlowPolicy } from './table-float-exclusion.ts';
 import type { TerminalTextTableGroup } from './terminal-table-anchor.ts';
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -56,6 +57,8 @@ export type PreparedBlock =
  * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
  */
 export interface SectionPrepass {
+  /** Anchor membership and break eligibility derived from the prepared section blocks. */
+  readonly positioned: PositionedTableFlowPolicy;
   /** Frame admission depends on column policy and probe-disabled paragraph IDs. */
   readonly framePolicy: string;
   readonly bodies: readonly OoxmlElement[];
