@@ -8,6 +8,7 @@ import {
 } from './pending-line.ts';
 import {
   paragraphMarkSampleText,
+  pieceDrawsText,
   shouldIncludeParagraphMarkHeight,
 } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
@@ -421,19 +422,26 @@ export function breakParagraph(
   if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
     return [];
   }
-  // Mark face (CT_PPr/rPr), not content inheritance — a taller mark grows the last line
-  // without shrinking BodyText runs that only inherit the paragraph style.
+  // Mark face (CT_PPr/rPr), not content inheritance: it sizes a line with nothing on it.
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
     markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
-  // A line with content, drawings included, reads the mark WITHOUT its character style
-  // (`paragraph-mark-run.ts`); only a line with nothing on it reads `emptyStyle`.
+  // A line without text that the mark still grows (`paragraph-mark-metrics.ts`) reads it
+  // WITHOUT its character style (`paragraph-mark-run.ts`); an empty line reads `emptyStyle`.
   const growthProps = markRunPropertiesWithoutCharacterStyle(markProps);
   const growthStyle =
     growthProps === markProps ? emptyStyle : resolveRunStyle(growthProps, flow?.themeFonts);
   // Before its first piece a line is estimated from the mark, and only an empty paragraph's
-  // line has no piece to come.
-  const lineStartStyle = pieces.length === 0 ? emptyStyle : growthStyle;
+  // line has no piece to come. The mark never grows a line with text, so a paragraph with
+  // text is estimated from its runs' cascade instead.
+  const lineStartStyle =
+    pieces.length === 0
+      ? emptyStyle
+      : markProps === inheritedRunProperties || !pieces.some(pieceDrawsText)
+        ? growthStyle
+        : inheritedRunProperties.length === 0
+          ? DEFAULT_RUN_STYLE
+          : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -915,8 +923,7 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-      // Nonempty text does not reserve a second, implicit paragraph-end font.
-      // Explicit paragraph-mark formatting and super/subscript paragraphs retain their floor.
+      // A line with text never reserves the mark's height (`paragraph-mark-metrics.ts`).
     } else if (
       options?.includeParagraphMark &&
       !flow?.paragraphMarkIsCellEnd &&

@@ -20,12 +20,11 @@
 //
 // ONE PLACE IS DELIBERATELY LEFT OUT: sizing a line that has content in it. A 12pt text line
 // with a 24pt mark does not grow in the reference, by direct size or by style, in body text or
-// in a table cell, and a line holding only an inline picture does not either. Layout already
-// grows such lines for a DIRECT mark (the last-line mark height, the fallback band of a
-// drawing-only line and the line-start estimate in `paragraph-flow.ts`, the end-mark floor in
-// `table-cell-end-mark.ts`), and that rule has its own fixtures. Letting the style reach them
-// would add the same growth for every styled mark, so those readers take the mark WITHOUT its
-// character style from {@link markRunPropertiesWithoutCharacterStyle}.
+// in a table cell, and a line holding only an inline picture does not grow from a styled mark
+// either. `paragraph-mark-metrics.ts` keeps every mark off a line with text. What still reads a
+// DIRECT mark next to content (the floor of a picture- or equation-only line and its estimate
+// in `paragraph-flow.ts`, the end-mark floor in `table-cell-end-mark.ts`) takes the mark
+// WITHOUT its character style from {@link markRunPropertiesWithoutCharacterStyle}.
 
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';

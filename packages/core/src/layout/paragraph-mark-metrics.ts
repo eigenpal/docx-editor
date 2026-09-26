@@ -2,16 +2,38 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot, type FontSlot } from './script-itemization.ts';
 
-/** Explicit mark formatting and script paragraphs retain their ordinary line-height floor. */
+/** A character that draws text: not a space, tab, break, or object placeholder. */
+const TEXT_GLYPH = /[^ \t\n\r\f\v\uFFFC]/u;
+
+/** Whether a paragraph piece draws text, so a line holding it never grows from the mark. */
+export function pieceDrawsText(piece: {
+  readonly text: string;
+  readonly equation?: unknown;
+  readonly inlineDrawing?: unknown;
+}): boolean {
+  return piece.equation === undefined && !piece.inlineDrawing && TEXT_GLYPH.test(piece.text);
+}
+
+/**
+ * Whether the last line's paragraph mark adds its own height below the line's glyphs.
+ *
+ * A mark never grows a line that holds text, whether its size is direct or comes from its
+ * character style: 12pt text under a 24pt mark keeps a 12pt line in body text and in a table
+ * cell, in compatibility modes 14 and 15 and with no mode set. Only a line with nothing on
+ * it takes the mark's height, and the caller sizes that line from the mark directly.
+ *
+ * Two floors remain. A super- or subscript line keeps the mark as its ordinary line-height
+ * floor, and a line holding only an inline picture or an equation keeps the floor of a
+ * directly formatted mark. Neither has a reference measurement that removes it.
+ */
 export function shouldIncludeParagraphMarkHeight(
   mark: readonly OoxmlProperty[],
   inherited: readonly OoxmlProperty[],
-  spans: readonly { readonly style: ResolvedRunStyle }[]
+  spans: readonly { readonly text: string; readonly style: ResolvedRunStyle }[]
 ): boolean {
-  return !(
-    (mark === inherited || (mark.length === 0 && inherited.length === 0)) &&
-    spans.every((span) => span.style.verticalAlign === 'baseline')
-  );
+  if (spans.some((span) => span.style.verticalAlign !== 'baseline')) return true;
+  if (spans.some((span) => TEXT_GLYPH.test(span.text))) return false;
+  return !(mark === inherited || (mark.length === 0 && inherited.length === 0));
 }
 
 /** Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and their presentation forms. */
