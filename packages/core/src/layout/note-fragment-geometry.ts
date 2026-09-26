@@ -9,6 +9,7 @@ import type {
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
+import { tableReferenceRowBand } from './note-table-reference-band.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -190,10 +191,15 @@ export function firstBodyContentTopPt(page: PageRecord): number {
  * reference's own line, so the next pass finds the reference — and lays its note whole —
  * on the page the shrunken body pushes it to.
  *
- * `evictable` is false when the line's geometry cannot support that move: a ref inside a
- * table (nested line geometry is not in page-content coordinates; the band is the TABLE
- * fragment's box, and evicting a whole table for one note is not the conservative reading),
- * and a ref no fragment on this page owns (band zero).
+ * A ref inside a body table takes its ROW's band ({@link tableReferenceRowBand}): the row
+ * box is in page-content coordinates and the row moves to the next page as one unit, with
+ * `blockTop` above it by the header rows that repeat there. Where the row cannot be proven
+ * the band ({@link tableReferenceRowBand} lists the cases), the band is the TABLE
+ * fragment's box.
+ *
+ * `evictable` is false when the geometry cannot support that move: a table ref outside a
+ * provably movable row (evicting a whole table for one note is not the conservative
+ * reading), and a ref no fragment on this page owns (band zero).
  */
 export interface NoteReferenceLineBand {
   /** Top of the referencing line (content-relative pt); reserve past this evicts the line. */
@@ -289,14 +295,18 @@ function computeReferenceLineBand(
       }
       continue;
     }
-    if (tableOwnsAnyRef(block, [ref])) {
-      const blockBottom = block.box.y + block.box.height;
-      if (blockBottom > bottom) {
-        top = block.box.y;
-        bottom = blockBottom;
-        evictable = false;
-        preserveOrphanLine = false;
-      }
+    const row = tableReferenceRowBand(page, block, ref);
+    if (row === null) continue;
+    const band =
+      row === 'table'
+        ? { top: block.box.y, bottom: block.box.y + block.box.height, blockTop, evictable: false }
+        : row;
+    if (band.bottom > bottom) {
+      top = band.top;
+      bottom = band.bottom;
+      blockTop = band.blockTop;
+      evictable = band.evictable;
+      preserveOrphanLine = false;
     }
   }
   const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
@@ -326,36 +336,6 @@ function referenceLineBand(
     }
   }
   return null;
-}
-
-function tableOwnsAnyRef(
-  table: Extract<BlockFragmentRecord, { kind: 'table' }>,
-  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
-): boolean {
-  const visit = (blocks: readonly BlockFragmentRecord[]): boolean => {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph') {
-        for (const ref of refs) {
-          if (fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) return true;
-        }
-        continue;
-      }
-      for (const row of block.rows) {
-        if (row.isHeaderRepeat) continue;
-        for (const cell of row.cells) {
-          if (visit(cell.blocks)) return true;
-        }
-      }
-    }
-    return false;
-  };
-  for (const row of table.rows) {
-    if (row.isHeaderRepeat) continue;
-    for (const cell of row.cells) {
-      if (visit(cell.blocks)) return true;
-    }
-  }
-  return false;
 }
 
 /** Remove note-pass output before recomputing it from canonical references. */

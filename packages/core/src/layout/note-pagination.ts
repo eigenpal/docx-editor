@@ -1145,9 +1145,9 @@ function buildFootnoteArea(
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
-    // their notes in this page's reserve. Only a LINE-precise band may skip: a table ref's
-    // band is the whole table box, whose bottom clears the eviction point even when the
-    // referencing row stays on this page — its note must keep reserving here.
+    // their notes in this page's reserve. Only an evictable line or row band may skip: a
+    // fallback table band is the whole table box, whose bottom clears the eviction point
+    // even when the referencing row stays on this page — its note must keep reserving here.
     // Strictly BELOW the point: an edge-to-edge line whose bottom equals the eviction top
     // is the line directly above it, which stays on the page and must keep its reserve.
     if (

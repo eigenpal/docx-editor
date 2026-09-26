@@ -43,6 +43,8 @@ A footnote stays with its reference line when both fit on one page. The editor m
 
 The note area can use the space below the text of the last body line when that line uses `auto` or `atLeast` line spacing. A line that carries a reference keeps its full line height above the note area.
 
+A reference inside a table keeps its footnote with the table row that holds it. Later rows move to the next page to make room. If the note cannot fit below its row, the row moves to the next page with the note. References in header rows, vertically merged cells, positioned tables, and rows that keep with the next row reserve room below the whole table instead.
+
 When a reference line moves to the next page, paragraphs ahead of it return to the current page if they fit. Only paragraphs that keep with the reference paragraph move with it. In multi-column sections, the editor keeps the room on the current page instead.
 
 A note splits only when it is taller than the available note column. Split note pages keep separate rectangles for painting and pointer input.

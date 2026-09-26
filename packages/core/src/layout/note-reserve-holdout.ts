@@ -21,6 +21,7 @@ import {
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
 import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps } from './pagination-keeps.ts';
+import { tableRowHoldOutNeed } from './note-table-row-holdout.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
 
@@ -72,8 +73,9 @@ export interface HoldOutArgs {
  * Zero when there is nothing to hold out: no next page, a source page whose body ends with a
  * manual page break (nothing after the break can return across it), a next page in different
  * section geometry (a pull-back across a page-size change cannot be reasoned about here), a slack
- * too small to seat even the pulled line, the next page opening with a table or holding
- * the reference deeper than {@link MAX_HOLD_OUT_SCAN_BLOCKS} paragraphs, no page-bottom
+ * too small to seat even the pulled line, a table ahead of the reference (a next page that
+ * OPENS with a table continuation takes the row hold-out, {@link tableRowHoldOutNeed}), the
+ * reference deeper than {@link MAX_HOLD_OUT_SCAN_BLOCKS} paragraphs, no page-bottom
  * footnote reference at all, or a pulled band whose notes would fit back — then the lines
  * SHOULD return; a deleted note must release its room. A note the eviction guard would
  * refuse to keep whole (taller than the note column minus the content above its line in
@@ -116,6 +118,10 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const nextBody = nextPage;
   const candidates = args.pageBottomRefsOf(nextBody);
   if (candidates.length === 0) return 0;
+  const opening = nextBody.fragments[0];
+  if (opening?.kind === 'table') {
+    return tableRowHoldOutNeed(args, bodyPage, nextBody, opening, candidates);
+  }
 
   // The EARLIEST reference line on the next page is the pull-back frontier.
   let frontier: { readonly top: number; readonly bottom: number } | undefined;
