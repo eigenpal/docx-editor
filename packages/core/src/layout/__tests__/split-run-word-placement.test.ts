@@ -215,3 +215,54 @@ describe('a word that moves to a line where only its ink fits', () => {
     ]);
   });
 });
+
+describe('a word of pieces that cannot be chopped', () => {
+  const fields = (count: number) =>
+    '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>'.repeat(count);
+  /** A square float anchored in the paragraph before the fields, 150 pt to 250 pt. */
+  const earlierFloat = `${float(150, 100)}</w:p><w:p>`;
+
+  function measured(shape: Shape, count: number) {
+    const source = part(shape, fields(count));
+    const base = createFixedMeasurer();
+    let calls = 0;
+    const measurer = {
+      ...base,
+      lineMetrics: (...args: Parameters<typeof base.lineMetrics>) => {
+        calls += 1;
+        return base.lineMetrics(...args);
+      },
+    };
+    const result = layoutSemanticDocument(source, 0, {
+      measurer,
+      inlineDrawingLayout: layoutContext(source),
+    });
+    return { calls, result };
+  }
+
+  // Each field result continues the word and overflows, so each carries the word again.
+  // Laying every span of the word again for each piece made the work quadratic.
+  test.each<[string, Shape]>([
+    ['in the body', { prefix: '', text: '' }],
+    ['in a narrow cell', { prefix: '', text: '', cell: 400 }],
+    ['beside a float', { prefix: earlierFloat, text: '' }],
+  ])('%s costs line-metric work linear in its pieces', (_name, shape) => {
+    const small = measured(shape, 200).calls;
+    const large = measured(shape, 400).calls;
+    expect(large / small).toBeLessThan(2.5);
+  });
+
+  // 27 fields fill the near passage; the 28th moves the word to the far one, which holds it.
+  test.each([28, 60])('%i fields still move to the far passage beside a float', (count) => {
+    const { result } = measured({ prefix: earlierFloat, text: '' }, count);
+    const p = result.pages[0]!.fragments[1]!;
+    if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
+    const spans = p.lines[0]!.spans;
+    expect(spans).toHaveLength(count);
+    expect(round(spans[0]!.box.x)).toBe(250);
+    for (let index = 1; index < spans.length; index++) {
+      const before = spans[index - 1]!.box;
+      expect(round(spans[index]!.box.x)).toBe(round(before.x + before.width));
+    }
+  });
+});
