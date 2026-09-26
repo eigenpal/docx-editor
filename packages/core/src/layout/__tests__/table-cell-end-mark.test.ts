@@ -5,17 +5,20 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { flowBlocksInBox, layoutRowFragment } from '../semantic-table-layout.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import type { PendingLine, TextMeasurer } from '../paragraph-flow.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from '../run-style.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+/** Script text measures at its glyph size, so a superscript line shows its floor. */
+const glyph = (style: ResolvedRunStyle) => style.fontSizePt * glyphSizeFactorOf(style);
 const measurer: TextMeasurer = {
   measure: (text, style) => text.length * style.fontSizePt * 0.5,
-  lineMetrics: (style) => ({ height: style.fontSizePt, baseline: style.fontSizePt * 0.8 }),
+  lineMetrics: (style) => ({ height: glyph(style), baseline: glyph(style) * 0.8 }),
 };
 const paragraph = (text: string, mark = 20, run = '') =>
   `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/>${run}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 /**
- * A superscript line keeps the 10pt line of its run cascade as a floor, not the mark's 20pt,
- * except under a cell's end mark, so it shows which role the mark had.
+ * A superscript line keeps the 5pt line of its full-size run as a floor, not the mark's 20pt
+ * or the 10pt cascade, except under a cell's end mark, so it shows which role the mark had.
  */
 const superscript = (text: string) => paragraph(text, 20, '<w:vertAlign w:val="superscript"/>');
 const table = (content: string, cellProperties = '', rowProperties = '') =>
@@ -126,7 +129,7 @@ test('vertical cells keep their existing rotated paragraph-marker geometry', () 
     linesOf(run(table(paragraph('Small'), '<w:textDirection w:val="btLr"/>')))[0]!.box.height
   ).toBe(5);
   const result = run(table(superscript('Small'), '<w:textDirection w:val="btLr"/>'));
-  expect(linesOf(result)[0]!.box.height).toBe(10);
+  expect(linesOf(result)[0]!.box.height).toBe(5);
 });
 
 test('the same paragraph cannot reuse a break from a different cell-end role', () => {
@@ -144,7 +147,7 @@ test('the same paragraph cannot reuse a break from a different cell-end role', (
       ? layoutRowFragment(row, [100], 0, 0, false, 0, deps).record.cells[0]!.blocks[0]!
       : flowBlocksInBox([paragraphNode], 0, 100, 0, 0, deps).blocks[0]!;
     if (placed.kind !== 'paragraph') throw new Error('paragraph');
-    expect(placed.lines[0]!.box.height).toBe(end ? 5 : 10);
+    expect(placed.lines[0]!.box.height).toBeCloseTo(end ? 5 * 0.65 : 5, 5);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
 });

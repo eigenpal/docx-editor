@@ -431,7 +431,7 @@ export function breakParagraph(
       : inheritedRunProperties.length === 0
         ? DEFAULT_RUN_STYLE
         : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
-  // The floor of a script line reads the mark WITHOUT its character style
+  // The floor of a script line reads the mark's vertical alignment WITHOUT its character style
   // (`paragraph-mark-run.ts`).
   const unstyledMark = markRunPropertiesWithoutCharacterStyle(markProps);
   const scriptFloorMark =
@@ -920,7 +920,7 @@ export function breakParagraph(
       glyphBaseline = metrics.baseline;
     } else if (options?.includeParagraphMark && !flow?.paragraphMarkIsCellEnd) {
       // A script line's floor stays below the glyph baseline, so a cover page keeps its rhythm.
-      const floor = scriptLineFloor(line.spans, scriptFloorMark, cascadeStyle, measurer);
+      const floor = scriptLineFloor(line.spans, scriptFloorMark.verticalAlign, measurer);
       line.height = Math.max(line.height, floor);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its

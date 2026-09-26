@@ -6,7 +6,10 @@
 // 24pt line, and so does the empty last line after a trailing break. Under the same mark,
 // 12pt superscript, subscript and mixed lines and a line with only a 10pt picture keep the
 // line of 12pt text too. A 12pt superscript line keeps it under an 8pt document default with
-// a 24pt or a 12pt mark, and an equation line keeps its own height.
+// a 24pt or a 12pt mark, and an equation line keeps its own height. Under a 12pt default, 8pt
+// text with an 8pt superscript keeps the line of 8pt text with an 8pt mark, a 24pt mark or no
+// mark, and so does an 8pt superscript alone; 10pt text with a 10pt superscript "1" and a
+// 10pt mark keeps the line of 10pt text.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -50,10 +53,12 @@ const body = (content: string) =>
   part(`<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body>${content}</w:body></w:document>`);
 
 /** 12pt Normal, so a paragraph without a direct mark has a 12pt mark. */
-const styles = (halfPoints = 24) => {
+const styles = (halfPoints = 24, runProperties = '') => {
   const styles = readOoxmlPart(
     `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
-      `<w:rPr><w:sz w:val="${halfPoints}"/></w:rPr></w:style></w:styles>`,
+      `<w:rPr><w:sz w:val="${halfPoints}"/>${runProperties}</w:rPr></w:style>` +
+      '<w:style w:type="character" w:styleId="FootnoteReference">' +
+      '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style></w:styles>',
     { name: '/word/styles.xml', contentType: 'app/xml' }
   );
   if (!styles.ok) throw new Error(styles.reason);
@@ -156,19 +161,72 @@ describe('a line with other content under a direct mark', () => {
   });
 
   test('a superscript line takes the size of its run, not of a smaller cascade', () => {
-    // An 8pt Normal style, a 12pt superscript run, and a 24pt or a 12pt direct mark.
+    // An 8pt Normal style, a 12pt superscript run, and a 24pt, 12pt or 8pt direct mark.
     const layout = layoutSemanticDocument(
-      body(paragraph(script('superscript')) + paragraph(script('superscript'), mark(24))),
+      body(
+        paragraph(script('superscript')) +
+          paragraph(script('superscript'), mark(24)) +
+          paragraph(script('superscript'), mark(16)) +
+          paragraph(run('Alph') + script('superscript', 'a'), mark(16))
+      ),
       1,
       { measurer, styleCascade: styles(16) }
     );
-    expect(heights(layout)).toEqual([line(12), line(12)]);
+    expect(heights(layout)).toEqual(Array(4).fill(line(12)));
   });
 
-  test('a script run smaller than the cascade keeps the ordinary floor of the cascade', () => {
-    // No probe removes this floor; the paragraph without a direct mark had it before, too.
-    const small = run('Note', '<w:sz w:val="16"/><w:vertAlign w:val="superscript"/>');
-    expect(heights(lay(paragraph(small) + paragraph(small, '')))).toEqual([line(12), line(12)]);
+  // 8pt runs under the 12pt Normal style, the way Word writes a paragraph formatted 8pt.
+  const small = (text: string) => run(text, '<w:sz w:val="16"/>');
+  const smallScript = (text: string) =>
+    run(text, '<w:sz w:val="16"/><w:vertAlign w:val="superscript"/>');
+
+  test('a script line smaller than the cascade keeps the line of its own runs', () => {
+    const layout = lay(
+      paragraph(small('Alpha'), mark(16)) +
+        paragraph(small('Alph') + smallScript('a'), mark(16)) +
+        paragraph(small('Alph') + smallScript('a'), mark(48)) +
+        paragraph(small('Alph') + smallScript('a'), '') +
+        paragraph(smallScript('Alpha'), mark(16))
+    );
+    expect(heights(layout)).toEqual(Array(5).fill(line(8)));
+  });
+
+  test('superscript applied to and removed from one character of a small line', () => {
+    const versions = [
+      paragraph(small('Alpha'), mark(16)),
+      paragraph(small('Alph') + smallScript('a'), mark(16)),
+      paragraph(small('Alpha'), mark(16)),
+    ];
+    const session = createLayoutSession();
+    const cache = createParagraphLayoutCache();
+    versions.forEach((content, index) => {
+      const options = { measurer, styleCascade: styles(), session, cache };
+      const warm = layoutSemanticDocument(body(content), index + 1, options);
+      expect(heights(warm)).toEqual([line(8)]);
+      expect(heights(warm)).toEqual(heights(lay(content)));
+    });
+  });
+
+  test('a footnote reference keeps the line of 10pt text under a 10pt mark', () => {
+    const reference = run('1', '<w:rStyle w:val="FootnoteReference"/><w:sz w:val="20"/>');
+    const layout = lay(
+      paragraph(run('Text', '<w:sz w:val="20"/>') + reference, mark(20)) +
+        paragraph(run('Text1', '<w:sz w:val="20"/>'), mark(20))
+    );
+    expect(heights(layout)).toEqual([line(10), line(10)]);
+  });
+
+  test('a right-to-left script line keeps its szCs size, not the Latin cascade size', () => {
+    // 12pt `w:sz` and 8pt `w:szCs` in Normal; the run and the mark are right-to-left.
+    const rtl = run('\u05d0\u05d1\u05d2', '<w:rtl/><w:vertAlign w:val="superscript"/>');
+    const rtlMark = (halfPoints: number) =>
+      `<w:rPr><w:rtl/><w:szCs w:val="${halfPoints}"/></w:rPr>`;
+    const layout = layoutSemanticDocument(
+      body(paragraph(rtl, rtlMark(16)) + paragraph(rtl, rtlMark(48))),
+      1,
+      { measurer, styleCascade: styles(24, '<w:szCs w:val="16"/>') }
+    );
+    expect(heights(layout)).toEqual([line(8), line(8)]);
   });
 
   test('a superscript mark keeps the floor at the smaller glyph size', () => {
