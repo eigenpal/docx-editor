@@ -287,8 +287,8 @@ export interface SemanticTableStructure {
   /**
    * `w:tblInd` (17.4.50) in points — "this indentation should shift the table into the text
    * margin by the specified amount". Applies to a left-aligned table; `w:jc` decides the
-   * placement outright for the other two. Negative on a top-level left-to-right table, which
-   * the indent pulls into the leading margin; never negative on a nested or bidiVisual table.
+   * placement outright for the other two. Negative on a top-level table, which the indent
+   * pulls into the leading margin; never negative on a nested table.
    */
   readonly indentPt: number;
   /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
@@ -818,9 +818,9 @@ function readTableStructureUncached(
     readTableIndentPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
     styleIndentPt ??
     0;
-  // Captured controls pull a top-level left-to-right table into the margin by a negative
-  // indent. A nested or bidiVisual table keeps a non-negative indent until controls cover it.
-  const indentPt = depth === 0 && !bidiVisual ? statedIndentPt : Math.max(0, statedIndentPt);
+  // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
+  // negative indent, and leave a nested table where a zero indent puts it.
+  const indentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.

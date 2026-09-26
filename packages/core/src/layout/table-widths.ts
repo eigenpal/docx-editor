@@ -172,8 +172,10 @@ export function preferredLengthPt(
  * stated zero IS a value, so it overrides a style's indent.
  *
  * The type rules follow `readPreferredWidth`: an absent type is `dxa`, a bare number under
- * `pct` or any other type states no indent, and a universal measure (`-0.5in`) carries its
- * own unit whatever the type says. A percentage states no indent.
+ * `pct` or any other type states no indent, and a universal measure carries its own unit
+ * whatever the type says. A percentage states no indent. Only the bare twips form carries a
+ * sign: a captured control places `-0.5in` half an inch INTO the column, so a universal
+ * measure reads as its magnitude.
  */
 export function readTableIndentPt(
   node: OoxmlElement | undefined,
@@ -191,7 +193,7 @@ export function readTableIndentPt(
   } else {
     const universal = /^([-+]?\d{1,9}(?:\.\d{1,4})?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
     if (!universal) return undefined;
-    pt = Number(universal[1]) * MEASURE_UNIT_PT[universal[2]!]!;
+    pt = Math.abs(Number(universal[1])) * MEASURE_UNIT_PT[universal[2]!]!;
   }
   if (!Number.isFinite(pt)) return undefined;
   // `+ 0` turns a stated `-0` into zero.

@@ -12,8 +12,9 @@ import type { TableFragmentRecord } from '../semantic-records.ts';
 
 // `w:tblInd` is a signed offset. Captured controls in compatibility modes 14 and 15 move a
 // left-aligned table by -10, 0 and +10pt for -200, 0 and +200 twips, and leave centered and
-// right-aligned tables where they are. An over-wide left table keeps a negative indent too,
-// so it is pulled into the leading margin rather than overflowing the trailing one.
+// right-aligned tables where they are. The whole indent applies whatever the table width, a
+// bidiVisual table mirrors it, a nested table ignores a negative one, and a stated zero
+// overrides the style.
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LIMIT = 1584;
 
@@ -145,10 +146,12 @@ describe('readTableIndentPt', () => {
     expect(read('w:w="200" w:type="dxa"')).toBe(10);
     expect(read('w:w="+200"')).toBe(10);
     expect(read('w:w="-200"')).toBe(-10);
-    expect(read('w:w="-0.5in" w:type="dxa"')).toBe(-36);
-    expect(read('w:w="-12pt" w:type="pct"')).toBe(-12);
-    expect(read('w:w="-1pc"')).toBe(-12);
-    expect(read('w:w="-2.54cm"')).toBeCloseTo(-72, 10);
+    // A universal measure reads as its magnitude: a captured `-0.5in` sits at +36pt.
+    expect(read('w:w="-0.5in" w:type="dxa"')).toBe(36);
+    expect(read('w:w="0.5in"')).toBe(36);
+    expect(read('w:w="-12pt" w:type="pct"')).toBe(12);
+    expect(read('w:w="+1pc"')).toBe(12);
+    expect(read('w:w="-2.54cm"')).toBeCloseTo(72, 10);
   });
 
   test('a stated zero is a value, and a stated -0 is zero', () => {
@@ -193,7 +196,7 @@ describe('readTableIndentPt', () => {
   test('clamps to the bound in both directions', () => {
     expect(read('w:w="-999999999"')).toBe(-LIMIT);
     expect(read('w:w="999999999"')).toBe(LIMIT);
-    expect(read('w:w="-999999999.9999in"')).toBe(-LIMIT);
+    expect(read('w:w="-999999999.9999in"')).toBe(LIMIT);
     expect(readTableIndentPt(undefined, LIMIT)).toBeUndefined();
   });
 });
@@ -235,6 +238,86 @@ describe('captured controls: a signed indent moves only a left-aligned table', (
   });
 });
 
+describe('follow-up captured controls', () => {
+  // Same page as the first set. Mode 15 values are the captured text left edges from the
+  // margin; mode 14 compares deltas against a stated zero because its fixed tables carry the
+  // unrelated 5.4pt offset. An invalid indent type in mode 14 has no stated indent, and its
+  // captured edge (5.32pt) is where that offset is absent.
+  const style = (id: string, w: string) =>
+    `<w:style w:type="table" w:styleId="${id}"><w:name w:val="${id}"/>` +
+    `<w:tblPr>${indent(w)}</w:tblPr></w:style>`;
+  const styles = stylesTable(style('Pull', '-200') + style('Push', '200'));
+  const edge = (shape: Shape, mode: number) =>
+    textLeft(
+      layoutSemanticDocument(documentPart(tableXml(shape)), 0, {
+        compatibilityMode: mode,
+        measurer: createFixedMeasurer(6, 12),
+        styleCascade: styles,
+        geometry: GEOMETRY,
+      })
+    );
+  const wide = [3700, 3700];
+  const cases: readonly (readonly [string, Shape, number])[] = [
+    ['over-wide fixed -600', { cols: wide, indent: indent('-600') }, -23],
+    ['over-wide fixed +600', { cols: wide, indent: indent('600') }, 37],
+    ['over-wide autofit -600', { cols: wide, fixed: false, indent: indent('-600') }, -23],
+    ['over-wide autofit 0', { cols: wide, fixed: false, indent: indent('0') }, 7],
+    ['over-wide autofit +600', { cols: wide, fixed: false, indent: indent('600') }, 37],
+    ['+1200 past the slack', { indent: indent('1200') }, 67],
+    ['-0.5in', { indent: indent('-0.5in') }, 43],
+    ['style -200', { style: 'Pull' }, -3.08],
+    ['style -200, direct 0', { style: 'Pull', indent: indent('0') }, 7],
+    ['style +200, direct 0', { style: 'Push', indent: indent('0') }, 7],
+    ['style +200, direct -200', { style: 'Push', indent: indent('-200') }, -3.08],
+    ['pct type -200', { indent: indent('-200', 'pct') }, 7],
+    ['nil type -200', { indent: indent('-200', 'nil') }, 7],
+  ];
+  for (const [name, shape, captured] of cases) {
+    test(name, () => {
+      expect(Math.abs(edge(shape, 15) - captured)).toBeLessThan(0.25);
+      if (shape.indent?.includes('"pct"') || shape.indent?.includes('"nil"')) {
+        expect(Math.abs(edge(shape, 14) - 5.32)).toBeLessThan(0.25);
+        return;
+      }
+      const cols = shape.cols;
+      const zero = edge({ ...(cols ? { cols } : {}), fixed: shape.fixed, indent: indent('0') }, 14);
+      expect(edge(shape, 14) - zero).toBeCloseTo(captured - 7, 0);
+    });
+  }
+
+  test('a bidiVisual table measures a signed indent from its leading edge', () => {
+    for (const mode of [14, 15]) {
+      for (const jc of [undefined, 'left', 'right']) {
+        const at = (w: string) =>
+          edge({ jc, indent: indent(w), extra: '<w:bidiVisual/>' }, mode) -
+          edge({ jc, indent: indent('0'), extra: '<w:bidiVisual/>' }, mode);
+        // Captured: -200 moves the leading-aligned table 10pt right, +200 10pt left; a table
+        // aligned to its trailing edge (`jc="right"`) ignores the indent.
+        expect(at('-200')).toBeCloseTo(jc === 'right' ? 0 : 10, 8);
+        expect(at('200')).toBeCloseTo(jc === 'right' ? 0 : -10, 8);
+      }
+    }
+  });
+
+  test('a nested table ignores a negative indent and applies a positive one', () => {
+    const inner = (w: string) =>
+      tableXml({ cols: [2000], indent: indent(w) }).replace('>C0<', '>INNER<');
+    const innerEdge = (w: string) => {
+      const outer = firstTable(layout(documentPart(tableXml({ cellBody: inner(w) })), 15));
+      const nested = outer.rows[0]!.cells[0]!.blocks.find(
+        (block): block is TableFragmentRecord => block.kind === 'table'
+      )!;
+      const paragraph = nested.rows[0]!.cells[0]!.blocks[0]!;
+      if (paragraph.kind !== 'paragraph') throw new Error('no paragraph');
+      return paragraph.lines[0]!.box.x;
+    };
+    // Captured mode 15 edges: 13.72, 13.72 and 23.8pt for -200, 0 and +200.
+    expect(Math.abs(innerEdge('-200') - 13.72)).toBeLessThan(0.25);
+    expect(Math.abs(innerEdge('0') - 13.72)).toBeLessThan(0.25);
+    expect(Math.abs(innerEdge('200') - 23.8)).toBeLessThan(0.25);
+  });
+});
+
 describe('an over-wide left table', () => {
   // 500pt of grid in a 430pt text column, 0.5pt rules.
   const wide = { cols: [5000, 5000], sz: 4 };
@@ -257,17 +340,17 @@ describe('an over-wide left table', () => {
     expect(firstTable(layout(part, 14, createLayoutSession(), 0, geometry)).box.x).toBe(-45);
   });
 
-  test('still ignores a positive indent', () => {
+  test('applies a positive indent too', () => {
     const part = documentPart(tableXml({ ...wide, fixed: false, indent: indent('900') }));
-    expect(firstTable(layout(part, 15, createLayoutSession(), 0, geometry)).box.x).toBe(0);
+    expect(firstTable(layout(part, 15, createLayoutSession(), 0, geometry)).box.x).toBe(45);
     const s = structure(tableXml({ ...wide, fixed: false, indent: indent('900') }), { width: 430 });
     expect(s.indentPt).toBe(45);
-    expect(tableOriginX(s, 430)).toBe(0);
+    expect(tableOriginX(s, 430)).toBe(45);
   });
 
-  test('a positive indent still stops at the slack of a narrower table', () => {
+  test('a positive indent past the slack of a narrower table applies in full', () => {
     const s = structure(tableXml({ indent: indent('2000') }), { mode: 14 });
-    expect(tableOriginX(s, 330)).toBe(30);
+    expect(tableOriginX(s, 330)).toBe(100);
   });
 });
 
@@ -311,7 +394,7 @@ describe('the indent cascade', () => {
   });
 });
 
-describe('placements the negative indent does not reach', () => {
+describe('placements the indent does not reach', () => {
   test('centered and right-aligned tables ignore it', () => {
     for (const jc of ['center', 'right']) {
       const pulled = structure(tableXml({ jc, indent: indent('-400') }));
@@ -327,12 +410,12 @@ describe('placements the negative indent does not reach', () => {
     expect(at(indent('-400'))).toBe(at(''));
   });
 
-  test('a bidiVisual table keeps a non-negative indent', () => {
+  test('a bidiVisual table mirrors a negative indent, or ignores it when trailing-aligned', () => {
     for (const jc of [undefined, 'right']) {
       const pulled = structure(tableXml({ jc, indent: indent('-400'), extra: '<w:bidiVisual/>' }));
       const flush = structure(tableXml({ jc, extra: '<w:bidiVisual/>' }));
-      expect(pulled.indentPt).toBe(0);
-      expect(tableOriginX(pulled, 330)).toBe(tableOriginX(flush, 330));
+      expect(pulled.indentPt).toBe(-20);
+      expect(tableOriginX(pulled, 330) - tableOriginX(flush, 330)).toBe(jc ? 0 : 20);
     }
   });
 

@@ -34,12 +34,12 @@ export function positionedTableOriginX(
 /**
  * Where a table's left edge sits inside the box that contains it.
  *
- * Ordinary left-aligned tables start at their indent, which may be negative. Centered and
- * right-aligned left-to-right tables use the remaining width and ignore the indent.
- * `outerRuleOffsetPt` then moves the grid inward by half the outer side rule where the
- * table puts that rule's outer edge on the aligned edge. A verified legacy content-aligned
- * table instead aligns the leading cell's content edge with the text column, without
- * changing its indent.
+ * Ordinary left-aligned tables start at their indent, which may be negative and is not
+ * limited to the remaining width. Centered and right-aligned left-to-right tables use the
+ * remaining width and ignore the indent. `outerRuleOffsetPt` then moves the grid inward by
+ * half the outer side rule where the table puts that rule's outer edge on the aligned edge.
+ * A verified legacy content-aligned table instead aligns the leading cell's content edge
+ * with the text column, without changing its indent.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
   if (structure.legacyContentAlignment && structure.alignment === 'left')
@@ -50,15 +50,14 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   if (structure.alignment === 'center') return slack / 2;
   // Travels with the cell insets that `withSharedGridLineSideRules` gives the same table.
   const ruleOffset = structure.outerRuleOffsetPt ?? 0;
+  // A bidiVisual table aligned to its leading (right) edge measures the indent from that edge.
   if (structure.alignment === 'right')
-    return structure.bidiVisual && slack > 0
-      ? Math.max(0, slack - structure.indentPt)
-      : slack + ruleOffset;
+    return structure.bidiVisual ? slack - structure.indentPt : slack + ruleOffset;
   if (structure.bidiVisual) return ruleOffset;
-  // A negative indent pulls the table into the leading margin whatever its width. A positive
-  // one stops at the slack, so it cannot push a table past the trailing edge.
-  const indent = structure.indentPt;
-  return (indent < 0 ? indent : Math.min(indent, Math.max(0, slack))) + ruleOffset;
+  // Captured controls apply the whole indent whatever the table width: a negative indent
+  // pulls the table into the leading margin, and a positive one can push it past the
+  // trailing edge. `readTableIndentPt` bounds the value.
+  return structure.indentPt + ruleOffset;
 }
 
 /**
