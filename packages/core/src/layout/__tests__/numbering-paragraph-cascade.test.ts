@@ -53,6 +53,11 @@ test('inherited numbering lets paragraph styles override the level', () => {
   expect(inherited.alignment).toBe('left');
   expect(inherited.lineSpacing.value).toBe(360);
 });
+test('a direct numPr stating only ilvl keeps the inherited numbering tier', () => {
+  const inherited = inputs('<w:pStyle w:val="Custom"/><w:numPr><w:ilvl w:val="0"/></w:numPr>');
+  expect(inherited.spacing).toEqual({ before: 18, after: 12 });
+  expect(inherited.alignment).toBe('left');
+});
 test('level overrides replace the base paragraph formatting', () => {
   const override =
     '<w:lvlOverride w:ilvl="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:pPr><w:spacing w:afterLines="50"/><w:jc w:val="center"/></w:pPr></w:lvl></w:lvlOverride>';

@@ -38,6 +38,7 @@ import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
+import { numberingLevelTiers } from './numbering-level-tier.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
@@ -357,11 +358,12 @@ function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
  * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
  * indent step to the left of where Word puts it.
  *
- * For directly applied numbering, `inherited` is the cascade WITHOUT the paragraph's own
- * `w:pPr` (defaults, table cell style, style chain) and `direct` is that `w:pPr` alone. When
- * the paragraph inherits its numbering from its style, the style chain moves to `direct`:
- * the numbered style's own `w:ind` then outranks the level, and the level fills only what
- * the chain leaves unstated.
+ * `inherited` is what the level outranks and `direct` is what outranks it. For directly
+ * applied numbering these are the style chain (after the document defaults) and the
+ * paragraph's own `w:pPr`. When a style supplies the numbering, the level sits directly
+ * below the style that states the `w:numId`: that style, the styles based on it and the
+ * paragraph's own `w:pPr` go in `direct`, and the defaults and that style's bases go in
+ * `inherited`.
  */
 export function mergeListIndent(
   levelIndent: NumberingLevelIndent,
@@ -468,7 +470,7 @@ export function walkStoryParagraphs(
 interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
-  /** Paragraph properties the numbering level outranks, and those that outrank it. */
+  /** Properties below and above the numbering level, from `numberingLevelTiers`. */
   readonly belowLevel: readonly OoxmlProperty[];
   readonly aboveLevel: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
@@ -489,21 +491,17 @@ function paragraphListPrelude(
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
-  const directProps = propertiesOf(pPr);
-  const inherited = cascaded?.inheritedParagraphProperties ?? [];
-  // The level sits where the paragraph cascade puts it. Numbering applied in the paragraph's
-  // own `w:pPr` outranks the whole style chain. Numbering the paragraph inherits from its
-  // style sits below that chain and above the document defaults, so the numbered style's
-  // own `w:ind` wins. `inherited` is the defaults followed by the chain: this cascade has no
-  // table cell style and no numbering in it.
-  const fromStyle =
-    styleCascade !== undefined && !directProps.some((property) => property.localName === 'numPr');
-  const defaults = fromStyle ? styleCascade.docDefaultsParagraph.length : inherited.length;
+  const numPr = readNumPr(nodes);
+  // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
+  const tiers =
+    numPr && styleCascade && cascaded
+      ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
+      : { below: [], above: propertiesOf(pPr) };
   const prelude: ParagraphListPrelude = {
     styleCascade,
-    numPr: readNumPr(nodes),
-    belowLevel: inherited.slice(0, defaults),
-    aboveLevel: [...inherited.slice(defaults), ...directProps],
+    numPr,
+    belowLevel: tiers.below,
+    aboveLevel: tiers.above,
     inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
     perLevel: new WeakMap(),
   };

@@ -2,6 +2,7 @@ import { applicationParagraphDefaults } from './application-paragraph-defaults.t
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
+import { appliesNumberingDirectly } from './numbering-level-tier.ts';
 import { preserveExactLineBaseline } from './exact-line-baseline.ts';
 import { adjustLineHeightInTable, withLineGrid } from './line-grid.ts';
 import { adjacentParagraphSpacingSettings } from './adjacent-paragraph-spacing.ts';
@@ -144,12 +145,7 @@ export interface StyleCascadeTable {
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
   readonly paragraphProperties: readonly OoxmlProperty[];
-  /**
-   * The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits.
-   *
-   * Numbering needs the tiers apart: a level's `w:pPr/w:ind` sits between them, below the
-   * paragraph's own and, unless the paragraph applies the numbering directly, below the style's.
-   */
+  /** The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits. */
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
@@ -607,7 +603,10 @@ function cascadeParagraphWithNumbering(
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
-  const directNumbering = directProps.some((property) => property.localName === 'numPr');
+  // Level spacing, alignment, tabs, borders and shading sit below the whole chain unless the
+  // paragraph applies the numbering itself. List indents rank separately, directly below the
+  // style that declares the numbering (`numberingLevelTiers`).
+  const directNumbering = appliesNumberingDirectly(directPPr);
   const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&

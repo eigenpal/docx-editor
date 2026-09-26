@@ -100,20 +100,13 @@ const NUMBERED_STYLES = `<w:styles xmlns:w="${W}">
     <w:name w:val="Numbered Body"/>
     <w:pPr><w:numPr><w:numId w:val="1"/></w:numPr><w:ind w:left="567"/></w:pPr>
   </w:style>
-  <w:style w:type="paragraph" w:styleId="IndentedBase">
-    <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="NumberedChild">
-    <w:basedOn w:val="IndentedBase"/>
-    <w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr>
-  </w:style>
 </w:styles>`;
 
-function styleNumberedItem(directPPr: string, levelInd: string, styleId = 'NumberedBody') {
+function styleNumberedItem(directPPr: string, levelInd: string) {
   const document = part(
     '/word/document.xml',
     `<w:document xmlns:w="${W}"><w:body>
-      <w:p><w:pPr><w:pStyle w:val="${styleId}"/>${directPPr}</w:pPr>
+      <w:p><w:pPr><w:pStyle w:val="NumberedBody"/>${directPPr}</w:pPr>
         <w:r><w:t>item</w:t></w:r></w:p>
     </w:body></w:document>`
   );
@@ -142,12 +135,6 @@ describe('list indent precedence when the style carries the numbering', () => {
     const { item } = styleNumberedItem('', '<w:ind w:left="6237" w:hanging="567"/>');
     expect(item.indent.right).toBe(200 / 20);
     expect(styleNumberedItem('', LEVEL).item.indent.right).toBe(300 / 20);
-  });
-
-  test('a base style of the numbered style also outranks the level', () => {
-    // The level sits below the whole style chain, the same tier its spacing and tabs use.
-    const { item } = styleNumberedItem('', LEVEL, 'NumberedChild');
-    expect(item.indent).toEqual({ left: 36, right: 15, hanging: 18, firstLine: 0 });
   });
 
   test("the paragraph's own indent still wins", () => {
