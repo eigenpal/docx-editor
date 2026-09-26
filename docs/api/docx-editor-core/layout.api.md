@@ -3833,6 +3833,7 @@ export interface SemanticTableStructure {
     readonly indentPt: number;
     readonly layoutFixed: boolean;
     readonly legacyContentAlignment?: true;
+    readonly outerRuleOffsetPt?: number;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;

@@ -58,8 +58,10 @@ test('modern side clearance participates in wrapping and survives cache reuse', 
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   const before = serializeOoxmlPart(parsed.part);
+  // Mode 16 keeps the full-stroke side clearance. A mode 15 fixed left `dxa` table shares the
+  // grid line instead (`legacy-table-side-rules.ts`).
   const options = {
-    compatibilityMode: 15,
+    compatibilityMode: 16,
     measurer: createFixedMeasurer(12.16, 12),
     session: createLayoutSession(),
   };

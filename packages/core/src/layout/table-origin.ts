@@ -35,8 +35,10 @@ export function positionedTableOriginX(
  * Where a table's left edge sits inside the box that contains it.
  *
  * Ordinary left-aligned tables start at their indent; centered/right-aligned tables
- * use the remaining width. A verified legacy content-aligned table instead aligns
- * the leading cell's content edge with the text column, without changing its indent.
+ * use the remaining width. `outerRuleOffsetPt` then moves the grid inward by half the
+ * outer side rule where the table puts that rule's outer edge on the aligned edge. A
+ * verified legacy content-aligned table instead aligns the leading cell's content edge
+ * with the text column, without changing its indent.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
   if (structure.legacyContentAlignment && structure.alignment === 'left')
@@ -45,10 +47,14 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   const slack = containerWidthPt - width;
   if (!Number.isFinite(slack)) return 0;
   if (structure.alignment === 'center') return slack / 2;
+  // Travels with the cell insets that `withSharedGridLineSideRules` gives the same table.
+  const ruleOffset = structure.outerRuleOffsetPt ?? 0;
   if (structure.alignment === 'right')
-    return structure.bidiVisual && slack > 0 ? Math.max(0, slack - structure.indentPt) : slack;
-  if (slack <= 0) return 0;
-  return structure.bidiVisual ? 0 : Math.min(structure.indentPt, slack);
+    return structure.bidiVisual && slack > 0
+      ? Math.max(0, slack - structure.indentPt)
+      : slack + ruleOffset;
+  if (slack <= 0) return ruleOffset;
+  return (structure.bidiVisual ? 0 : Math.min(structure.indentPt, slack)) + ruleOffset;
 }
 
 /**

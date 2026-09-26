@@ -69,7 +69,7 @@ for (const mode of [undefined, 11, 12, 14]) {
 test('mode changes do not reuse the legacy side-rule projection', () => {
   const { table } = source(0.5);
   const legacy = read(table, 14);
-  expect(read(table, 15).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(read(table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   expect(read(table, 14)).toEqual(legacy);
 });
 
@@ -94,7 +94,6 @@ test('compound, unequal, separated, positioned and percentage tables retain thei
 test('mode 16 keeps the modern side-rule inset, as the rendered controls show', () => {
   const { table } = source(0);
   expect(read(table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
-  expect(read(table, 15).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   expect(read(table, 14).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
 });
 
@@ -127,9 +126,9 @@ for (const fixed of [false, true]) {
 }
 
 test('mode 15 keeps the full-stroke inset for shapes its controls do not cover', () => {
+  // Left- and right-aligned `dxa` tables are covered in `modern-edge-aligned-side-rules.test.ts`.
   for (const table of [
-    source(0.5).table,
-    source(0.5, '<w:jc w:val="right"/>').table,
+    source(0.5, '', 4, 'single', 'auto').table,
     source(0.5, CENTRED, 4, 'single', 'auto').table,
     source(0.5, CENTRED, 4, 'single', 'pct').table,
     source(0.5, CENTRED, 8).table,
@@ -149,7 +148,7 @@ test('mode 15 keeps the full-stroke inset for shapes its controls do not cover',
     read(source(0.5, CENTRED).table, 15, 1).rows[0]!.cells[0]!.centeredSideRules
   ).toBeUndefined();
   expect(read(source(0.5, CENTRED).table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
-  const { part } = source(0);
+  const { part } = source(0, '', 4, 'single', 'auto');
   const inset = layout(part, 15).pages[0]!.fragments[0]!;
   if (inset.kind !== 'table') throw new Error('Expected table');
   const cell = inset.rows[0]!.cells[0]!;

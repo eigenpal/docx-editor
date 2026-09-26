@@ -458,7 +458,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them. With no compatibility mode, or mode 11, 12, or 14, simple single side rules are centered on the grid line. This applies to top-level, unpositioned, left-to-right tables without cell spacing. If the table has an absolute width, its side cell margins start at the center of the rule. In compatibility mode 15, both apply only to centered tables with an absolute width. Other tables start the side margins at the inner edge of the rule.',
+      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them. With no compatibility mode, or mode 11, 12, or 14, simple single side rules are centered on the grid line. This applies to top-level, unpositioned, left-to-right tables without cell spacing. If the table has an absolute width, its side cell margins start at the center of the rule. In compatibility mode 15, both apply to centered tables with an absolute width. They also apply to left-aligned or right-aligned tables with an absolute width and one simple rule width on every cell side. Those tables put the outer edge of the rule on the aligned edge, so the grid moves inward by half a rule. Other tables start the side margins at the inner edge of the rule.',
   },
   {
     id: 'tables.merge',
