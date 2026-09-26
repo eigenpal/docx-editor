@@ -337,6 +337,8 @@ function orphanPairNoteStrands(
   if (!laid) return false;
   const area = Math.max(args.existingAreaHeight, args.plainSeparatorHeight);
   const room = contentHeight - (shift + line.box.y + line.box.height) - area;
+  // A note that fits whole below its reference never moves the reference.
+  if (laid.flowHeight <= room + 0.001) return false;
   const fullNoteColumn = Math.max(0, contentHeight - args.plainSeparatorHeight);
   return splitNoteHead(laid, room, fullNoteColumn).lines < SPLIT_NOTE_MIN_LINES;
 }

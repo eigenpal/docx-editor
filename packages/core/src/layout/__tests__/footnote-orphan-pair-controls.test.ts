@@ -6,14 +6,19 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { resolveNotesPart } from '../../store/package/note-references.ts';
+import { collectNoteReferences, resolveNotesPart } from '../../store/package/note-references.ts';
 import {
   resolveEndnoteProperties,
   resolveFootnoteProperties,
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession } from '../layout-session.ts';
-import type { NotesLayoutInput } from '../note-pagination.ts';
+import {
+  buildPageRefHits,
+  computeFootnoteReserves,
+  provisionalNoteMarks,
+  type NotesLayoutInput,
+} from '../note-pagination.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
@@ -189,5 +194,68 @@ describe('footnote references on the second line of an opening pair', () => {
     const [first, second] = pages(layout);
     expect(first).toBe('1-23 [1 2]');
     expect(second).toMatch(/^24-\d+ \[2c\]$/);
+  });
+});
+
+describe('footnote hold-out ahead of an opening pair', () => {
+  // A stale reserve left page 1 with 22 lines, so the independent line 23 and the opening
+  // pair 24-25 (line 25 cites note 2) sit on page 2. Page 1 has room for all three lines.
+  // The hold-out decides whether page 1 keeps a reserve that holds the pair out.
+  function page1Reserve(noteLines: number, bodyLines: number): number {
+    const loaded = readOoxmlPackage(
+      probeDocx({
+        paragraphs: [
+          ...ones(bodyLines),
+          { lines: 1 },
+          { lines: 6, widowControl: true },
+          ...ones(20),
+        ],
+        refs: { [bodyLines + 3]: [2] },
+        notes: { 2: noteLines },
+        top: 1440,
+      })
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const fn = resolveFootnoteProperties(undefined, undefined);
+    const en = resolveEndnoteProperties(undefined, undefined);
+    const measurer = createFixedMeasurer();
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [fn],
+      endnotePropsBySection: [en],
+      documentFootnoteProps: fn,
+      documentEndnoteProps: en,
+      measurer,
+      producer: 'footnote-orphan-pair-controls',
+    };
+    // 648 pt of body; the stale reserve ends page 1 mid-way into line bodyLines + 1.
+    const stale = new Map([[0, 648 - 24 * bodyLines - 0.5]]);
+    const body = layoutSemanticDocument(part, 1, { measurer, pageBottomReserves: stale });
+    expect(pages(body)[0]).toBe(`1-${bodyLines}`);
+    const refs = collectNoteReferences(part);
+    const hits = buildPageRefHits(refs, new Map(refs.map((ref) => [ref.paragraphId, 0])));
+    const computed = computeFootnoteReserves(
+      body,
+      hits,
+      notes,
+      provisionalNoteMarks(hits, notes),
+      undefined,
+      stale
+    );
+    return computed.reserves.get(0) ?? 0;
+  }
+
+  test('a one-line note that fits whole releases the hold', () => {
+    // Lines 23-25 and the whole note fit page 1 with 24 pt to spare. A split of the note
+    // would place one line, below the two-line threshold, but the note does not split.
+    expect(page1Reserve(1, 22)).toBe(0);
+  });
+
+  test('a note that cannot place two lines keeps the pair out', () => {
+    // One note line of room below line 26: the independent line 24 may return, the pair
+    // may not, so the reserve ends page 1 mid-way into line 25.
+    expect(page1Reserve(3, 23)).toBeCloseTo(648 - 24 * 24 - 0.5, 3);
   });
 });
