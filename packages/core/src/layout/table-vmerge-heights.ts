@@ -104,9 +104,9 @@
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
 //
-// NOT handled: a `w:vMerge w:val="restart"` inside a leading `w:tblHeader` row. The header
-// group is placed by its own path and repeats on every continuation page, so the merge would
-// have to be re-headed per page. Filed as issue #518; those merges keep the old behavior.
+// The leading `w:tblHeader` rows are planned as their own row list, once for each place the
+// group is laid out (`table-header-vmerge.ts`). A merge that runs from a header row into the
+// body rows is planned by neither list, so its head keeps sizing its own row.
 
 import type {
   SemanticTableCell,
@@ -274,7 +274,8 @@ function collectHeads(rows: readonly SemanticTableRow[]): {
  * Plan the row heights of one table around its vertical merges.
  *
  * `rows` are the rows the caller places, in order — for a paginated table that is the BODY
- * rows, so a merge is never planned against a repeated header copy of a row. Returns `null`
+ * rows, so a merge is never planned against a repeated header copy of a row. The header rows
+ * get a plan of their own for each copy. Returns `null`
  * when no merge covers more than one row, which leaves those tables on exactly the path
  * they were on before.
  */

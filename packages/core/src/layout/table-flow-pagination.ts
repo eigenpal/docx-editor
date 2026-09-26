@@ -35,6 +35,7 @@ import {
 } from './repeated-header-border-metrics.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import {
   readTableStructure,
@@ -223,15 +224,15 @@ export function paginateTableInFlow(
     if (row.isHeader) headerRows.push(row);
     else break;
   }
+  // A merge inside the header rows is planned where the group is about to be placed, and the
+  // same plan places it; see `table-header-vmerge.ts`.
+  const headerPlanAt = (top: number): HeaderGroupPlan =>
+    planHeaderGroup(structure, headerRows, () => tableLeft, top, tableDeps, rowHeightOf);
   // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
   // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
-  let headerGroupHeight = 0;
-  for (const [index, headerRow] of headerRows.entries())
-    headerGroupHeight += rowHeightOf(
-      headerRow,
-      flow.cursorY + headerGroupHeight,
-      index === 0 ? firstRowContentDeps(structure, headerRow, tableDeps) : tableDeps
-    );
+  const initialHeaderPlan = headerPlanAt(flow.cursorY);
+  const headerGroupHeight = initialHeaderPlan.heightPt;
+  const headerMerged = initialHeaderPlan.planned;
   let initialHeaderGroupDegraded =
     headerGroupHeight > (flow.unreservedContentHeight?.() ?? contentHeight()) + 0.001;
   let repeatsEnabled = !initialHeaderGroupDegraded;
@@ -362,7 +363,10 @@ export function paginateTableInFlow(
 
     const candidate = asRepeat ? prepareRepeat?.() : undefined;
     if (candidate === null) return;
-    const groupHeight = candidate?.headerHeight ?? headerGroupHeight;
+    const planAt = (): HeaderGroupPlan | undefined =>
+      headerMerged && !candidate ? headerPlanAt(flow.cursorY) : undefined;
+    let plan = planAt();
+    let groupHeight = candidate?.headerHeight ?? plan?.heightPt ?? headerGroupHeight;
     // `breakForContinuation` already advanced to the target region before asking for a repeat.
     // If that region cannot carry the group, keep it for the pending body row instead of skipping
     // a usable nonzero-origin continuous-section column.
@@ -375,6 +379,8 @@ export function paginateTableInFlow(
       // (a continuous section shares its sheet), and a fragment box anchored at 0 would
       // stretch over whatever the earlier section already painted above the region.
       fragmentTop = flow.cursorY;
+      plan = planAt();
+      groupHeight = plan?.heightPt ?? groupHeight;
     }
 
     // A footnote reserve is advisory when it is the only obstruction to the atomic authored
@@ -397,7 +403,7 @@ export function paginateTableInFlow(
 
     const headerDeps = firstRowContentDeps(structure, headerRows[0]!, candidate?.deps ?? tableDeps);
 
-    for (const headerRow of headerRows) {
+    for (const [index, headerRow] of headerRows.entries()) {
       const placed = layoutRowFragment(
         headerRow,
         structure.columnWidthsPt,
@@ -406,7 +412,8 @@ export function paginateTableInFlow(
         asRepeat,
         0,
         headerDeps,
-        structure.cellSpacingPt
+        structure.cellSpacingPt,
+        plan?.optionsAt(index, flow.cursorY)
       );
       if (placed.bottom > placementBottom + 0.001) {
         throw new TablePaginationError(
@@ -441,7 +448,7 @@ export function paginateTableInFlow(
     if (floats) {
       flow.cursorY = floats.clear(
         flow.cursorY,
-        () => headerGroupHeight,
+        (top) => (headerMerged ? headerPlanAt(top).heightPt : headerGroupHeight),
         headerRows,
         contentHeight()
       );
