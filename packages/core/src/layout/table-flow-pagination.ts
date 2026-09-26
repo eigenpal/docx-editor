@@ -28,6 +28,7 @@ import { prepareTerminalBorderPlan, sameTerminalContent } from './table-terminal
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
+import { rowBreaksPageBefore } from './table-row-page-break.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
   type RepeatedHeaderBorderPlan,
@@ -74,6 +75,10 @@ export interface TableFlowCursor {
   readonly unreservedContentHeight?: () => number;
   /** Move to the next column, or the next page when this was the last one. */
   readonly advanceColumn: () => void;
+  /** End the page being filled, skipping any columns left on it. */
+  readonly advancePage: () => void;
+  /** Whether the page being filled holds content above `top`, including earlier columns. */
+  readonly pageHoldsContent: (top: number) => boolean;
   /** Frames a `w:tblpPr` table positions against. */
   readonly anchorFrames: () => TableAnchorFrames;
   /** Vertical frames a `w:tblpPr` table positions against. */
@@ -153,6 +158,15 @@ export function paginateTableInFlow(
     structure.float !== undefined &&
     (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
     structure.float.ySpec !== 'inline';
+  // Only a table without `w:tblpPr` honors `w:pageBreakBefore` rows (`table-row-page-break.ts`).
+  const breaksPages = structure.float === undefined;
+  if (
+    breaksPages &&
+    rowBreaksPageBefore(structure.rows[0]!, styleCascade) &&
+    flow.pageHoldsContent(flow.cursorY)
+  ) {
+    flow.advancePage();
+  }
   const bodyCursorY = flow.cursorY;
   const verticalFrames = outOfFlow ? verticalAnchorFrames() : undefined;
   const contentHeight = outOfFlow
@@ -408,9 +422,13 @@ export function paginateTableInFlow(
     repeatedPlan = candidate;
   };
 
-  const breakForContinuation = (admitsBodyAfter?: (bodyTop: number) => boolean): void => {
+  const breakForContinuation = (
+    admitsBodyAfter?: (bodyTop: number) => boolean,
+    newPage = false
+  ): void => {
     closeTableFragment();
-    advanceColumn();
+    if (newPage) flow.advancePage();
+    else advanceColumn();
     tableLeft = originX();
     // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
     // column region top on a shared sheet and 0 only when a fresh page was opened.
@@ -602,12 +620,19 @@ export function paginateTableInFlow(
       // fragment even if its own standalone measurement would fit the leftover space.
       forceNextFragment = true;
     };
-    if (!forceBreak) tryTerminalFit();
+    // Repeated headers at the page top are not content above the row; the authored ones are.
+    const startsPage =
+      breaksPages &&
+      row !== structure.rows[0] &&
+      rowBreaksPageBefore(row, styleCascade) &&
+      (rows.some((placed) => !placed.isHeaderRepeat) || flow.pageHoldsContent(fragmentTop));
+    if (!forceBreak && !startsPage) tryTerminalFit();
 
     // Ordinary rows may break between lines, but their first fragment must have room
     // to start every cell. Otherwise a short label can be orphaned on the previous
     // page while its taller neighboring cell has not started. Probe before publishing.
     if (
+      startsPage ||
       forceBreak ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
@@ -629,7 +654,7 @@ export function paginateTableInFlow(
             { requireEveryCell: true }
           )))
     ) {
-      breakForContinuation(admitsRepeatedHeaders);
+      breakForContinuation(admitsRepeatedHeaders, startsPage);
       movedToFreshPage = true;
       // A merge that did not fit the band it was offered in may fit this fresh page.
       admitSpans(bodyRowIndex);

@@ -168,7 +168,7 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
-import { resolveSectionColumns } from './section-columns.ts';
+import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotes,
@@ -1521,14 +1521,7 @@ function layoutBlocksPass(
       fragments: pageFragments,
       hasBodyPageFields,
       ...(columns.separator
-        ? {
-            columnSeparators: columns.gaps.map((gap, separatorIndex) => ({
-              x: columns.lefts[separatorIndex]! + columns.widths[separatorIndex]! + gap / 2 - 0.375,
-              y: columnRegionTop,
-              width: 0.75,
-              height: Math.max(0, usedBottom - columnRegionTop),
-            })),
-          }
+        ? { columnSeparators: columnSeparatorBoxes(columns, columnRegionTop, usedBottom) }
         : {}),
       ...(borderFrame ? { pageBorders: borderFrame } : {}),
       ...(pendingAnchoredDrawings.length > 0
@@ -1904,6 +1897,12 @@ function layoutBlocksPass(
         advanceColumn();
         flow.cursorY = cursorY;
       },
+      advancePage: () => {
+        flushPage();
+        carryDeferredToNextPage();
+        flow.cursorY = cursorY;
+      },
+      pageHoldsContent: (top) => pageFragments.length > 0 || top > 0,
       anchorFrames,
       verticalAnchorFrames: () => tableVerticalFrames(anchorY),
       styleCascade,
