@@ -10,7 +10,7 @@ import {
   fragmentCursorBottomPt,
   noteReferenceLineBandPt,
 } from './note-fragment-geometry.ts';
-import { splitNoteHead, SPLIT_NOTE_MIN_LINES } from './note-eviction-guard.ts';
+import { splitNoteFragments } from './note-splitting.ts';
 import {
   layoutNoteCached,
   type LayoutNoteStoryOptions,
@@ -100,10 +100,10 @@ export interface HoldOutArgs {
  * next round finds the group at the page top. The release applies only when the block's
  * smallest movable head fits beside the page's own reserve: a release nothing can use
  * changes no body line, but it drops a hold the reflow loop may need to settle an orbit
- * further down. When the reference sits on the second line of an opening pair that could
- * follow the block back while its note could not place {@link SPLIT_NOTE_MIN_LINES} lines
- * there, the hold shrinks to the blocks ahead of the pair instead: they return and the pair
- * stays with its note on the next page. The release applies only where both pages
+ * further down. It also does not apply when the reference sits on the second line of an
+ * opening pair that could follow the block back while its note could not start there: the
+ * orphan-pair phase would keep that pair with its eviction off, and the note would move to
+ * a later page without a head. The release applies only where both pages
  * stack their blocks in one column; lines returning to a multi-column page may change
  * column, which this test cannot predict, so those pages keep the hold. The demand charges
  * every pulled reference in the OWNING BLOCK, not just the frontier line's — a
@@ -181,16 +181,15 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const ownReserve = args.ownReservePt ?? args.existingAreaHeight;
   const flowBottom = fragmentFlowBottom(bodyPage.fragments);
   const strandsOrphanNote =
+    independentAhead &&
     orphanPairFrontier === true &&
     orphanPairNoteStrands(args, owningBlock, nextBody, frontierRef, flowBottom, ownReserve);
-  const oneColumn = stacksInOneColumn(bodyPage) && stacksInOneColumn(nextBody);
-  if (independentAhead && strandsOrphanNote && oneColumn) {
-    // The blocks ahead return; the pair stays out with its note. The reserve ends the body
-    // mid-way into the pair's first line, so the next round finds the pair at the page top.
-    const prefixBottom = owningBlock.box.y - firstBodyContentTopPt(nextBody);
-    return Math.max(0, contentHeight - flowBottom - prefixBottom - RESERVE_BOUNDARY_BACKOFF_PT);
-  }
-  if (independentAhead && !strandsOrphanNote && oneColumn) {
+  if (
+    independentAhead &&
+    !strandsOrphanNote &&
+    stacksInOneColumn(bodyPage) &&
+    stacksInOneColumn(nextBody)
+  ) {
     const head = independentHeadHeight(nextBody.fragments, owningAt);
     if (head !== null && flowBottom + head + ownReserve <= contentHeight + 0.001) {
       return 0;
@@ -199,9 +198,9 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // Release a settled hold only when the preceding body plus this opening pair
   // actually fits beside its existing notes. The incoming second-line note can
   // continue, but this policy must never reclaim space occupied by earlier notes.
-  // The pair returns only when its note can place {@link SPLIT_NOTE_MIN_LINES} lines below
-  // it there (the complement of the orphan-pair exemption in {@link evictsReferenceLine});
-  // otherwise the note would start on a later page than its reference.
+  // With an independent block ahead, the release also pulls that block, and a note the
+  // strict placement kept whole beside its reference would start on a later page; the
+  // hold stays when the note could not start beside the returning pair.
   //
   // DELIBERATELY the painted flow bottom ({@link fragmentFlowBottom}), not the fit-rule
   // bottom every other budget in this file uses, and DELIBERATELY without
@@ -307,10 +306,11 @@ function opensWithIndependentBlock(fragments: PageRecord['fragments'], owningAt:
 }
 
 /**
- * Whether the opening pair of the owning block could return to the previous page while its
- * second-line note could not place {@link SPLIT_NOTE_MIN_LINES} lines there. The pair can
- * return when everything above it, down to the glyph band of its second line, fits beside
- * the page's own reserve; the note's room ends at the reference line's full box.
+ * Whether the opening pair of the owning block could follow the blocks ahead of it back to
+ * the previous page while its second-line note could not start there. The pair returns when
+ * everything above it, down to the glyph band of its second line, fits beside the page's own
+ * reserve. The orphan-pair phase then keeps the pair with its eviction off, and a note with
+ * no room below the reference line's full box moves to a later page without a head.
  */
 function orphanPairNoteStrands(
   args: HoldOutArgs,
@@ -337,10 +337,7 @@ function orphanPairNoteStrands(
   if (!laid) return false;
   const area = Math.max(args.existingAreaHeight, args.plainSeparatorHeight);
   const room = contentHeight - (shift + line.box.y + line.box.height) - area;
-  // A note that fits whole below its reference never moves the reference.
-  if (laid.flowHeight <= room + 0.001) return false;
-  const fullNoteColumn = Math.max(0, contentHeight - args.plainSeparatorHeight);
-  return splitNoteHead(laid, room, fullNoteColumn).lines < SPLIT_NOTE_MIN_LINES;
+  return splitNoteFragments(laid, Math.max(0, room)).head.length === 0;
 }
 
 /**

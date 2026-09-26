@@ -79,10 +79,7 @@ const pageLines = (page: PageRecord) =>
 const noteIds = (page: PageRecord) => page.footnotes?.notes.map((note) => note.noteId);
 
 describe('footnote reference orphan pairs', () => {
-  test('moves an opening pair with its note when the note cannot start beside it', () => {
-    // No note line fits below Second2 on page 1. The pair moves with its note instead of
-    // leaving the note to start on page 2 without a head (measured in slack controls where
-    // the pair itself fits the page).
+  test('keeps an opening pair while its whole second-line note continues', () => {
     const { part, options } = fixture();
     const source = JSON.stringify(part);
     const layout = layoutSemanticDocument(part, 0, options);
@@ -93,11 +90,13 @@ describe('footnote reference orphan pairs', () => {
       'Filler2',
       'Filler3',
       'Earlier1',
+      'First',
+      'Second2',
     ]);
-    expect(pageLines(layout.pages[1]!)).toEqual(['First', 'Second2', 'Third', 'Fourth3']);
+    expect(pageLines(layout.pages[1]!)).toEqual(['Third', 'Fourth3']);
     expect(noteIds(layout.pages[0]!)).toEqual([1]);
     expect(noteIds(layout.pages[1]!)).toEqual([2, 3]);
-    expect(layout.pages[1]!.footnotes?.separator?.kind).toBe('separator');
+    expect(layout.pages[1]!.footnotes?.separator?.kind).toBe('continuationSeparator');
     for (let pass = 0; pass < 3; pass++) {
       expect(layoutSemanticDocument(part, 0, options).pages).toEqual(layout.pages);
     }
