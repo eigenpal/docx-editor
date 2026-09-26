@@ -90,7 +90,7 @@ describe('a word split across runs stays whole', () => {
     expect(lines.join('')).toBe('bbbbbbbbbbcccccccccc');
   });
 
-  test('a continuing run uses the next float passage before chopping', () => {
+  test('a continuing run takes its word to the passage the same text in one run takes', () => {
     const zone = squareWrapZone({
       anchorParagraphId: 'earlier-paragraph',
       top: 0,
@@ -99,24 +99,34 @@ describe('a word split across runs stays whole', () => {
       width: 24,
       contentWidth: 60,
     });
-    const lines = breakParagraph(
-      paragraph(`<w:p>${run('aa')}${run('bbb')}</w:p>`),
-      'p',
-      0,
-      60,
-      measurer,
-      undefined,
-      null,
-      [],
-      undefined,
-      undefined,
-      undefined,
-      { pageExclusionZones: [zone], paragraphStartY: 0, contentLeft: 0, contentRight: 60 }
-    );
+    const layout = (body: string) =>
+      breakParagraph(
+        paragraph(`<w:p>${body}</w:p>`),
+        'p',
+        0,
+        60,
+        measurer,
+        undefined,
+        null,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        { pageExclusionZones: [zone], paragraphStartY: 0, contentLeft: 0, contentRight: 60 }
+      );
+    const placement = (lines: ReturnType<typeof layout>) =>
+      lines.map((line) => {
+        const first = line.spans[0]!;
+        const last = line.spans.at(-1)!;
+        const text = line.spans.map((span) => span.text).join('');
+        return [text, first.box.x, last.box.x + last.box.width];
+      });
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]!.spans.map((span) => span.text).join('')).toBe('aabbb');
-    expect(lines[0]!.spans[1]!.box.x).toBe(42);
+    // The word is wider than both passages, so it fills the far one, as in one run. The
+    // part in the first run is not left before the float.
+    const split = layout(`${run('aa')}${run('bbb')}`);
+    expect(placement(split)).toEqual(placement(layout(run('aabbb'))));
+    expect(placement(split)[0]).toEqual(['aab', 42, 60]);
   });
 
   test('a tab in its own run is a break opportunity for the text after it', () => {

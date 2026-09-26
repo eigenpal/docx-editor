@@ -103,6 +103,7 @@ import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
+import { carryPartialWord, type WordCarryContext } from './word-carry.ts';
 
 /**
  * Ignore subpixel rounding from absolute tab positions converted to line-local widths.
@@ -897,6 +898,8 @@ export function breakParagraph(
   let wordStartSpan = -1;
   let wordStartWidth = 0;
   let wordStartEnd = 0;
+  /** Line metrics before the word, restored when the word moves. */
+  let wordStartMetrics = { height: 0, baseline: 0 };
   /** The last character emitted, which decides whether the NEXT span may open a line. */
   let lastEmitted = '';
 
@@ -1039,6 +1042,27 @@ export function breakParagraph(
 
   /** Whether the last thing placed was a line break, so the paragraph ends on a fresh line. */
   let trailingLineBreak = false;
+  const holdsContent = (): boolean => line.spans.length > 0 || line.drawings.length > 0;
+  /** Whether the pen snapped past a float after the word's last span, which splits the word. */
+  const penLeftWord = (): boolean => {
+    if (wordStartSpan < 0 || line.spans.length <= wordStartSpan) return false;
+    lineAvailable();
+    const last = line.spans[line.spans.length - 1]!;
+    return lineOrigin() + line.width > last.box.x + last.box.width + 0.001;
+  };
+  const wordCarry: WordCarryContext = {
+    line: () => line,
+    measurer,
+    pageBreaksIgnored,
+    holdsContent,
+    closeLine: () => closeLine(),
+    ensurePlacementWidth: (width) => ensurePlacementWidth(width),
+    tryAdvanceToNextPassage,
+    lineAvailable,
+    lineOrigin,
+    applyNarrowWrapSkipIfNeeded,
+    setProbeWidth: (width) => exclusionProbe.setWidth(width),
+  };
 
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
@@ -1390,6 +1414,7 @@ export function breakParagraph(
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
         wordStartEnd = line.end;
+        wordStartMetrics = { height: line.height, baseline: line.baseline };
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
@@ -1463,43 +1488,41 @@ export function breakParagraph(
       // bearing on its destination line. Keep the compressed advance for paint.
       const fitWidth = opticalFit ? width : (colonNaturalWidths.get(piece) ?? width);
       if (
-        !hangs &&
-        // A space after a word that borrowed inter-word space hangs on its line.
-        !(lineEndWhitespace && flow?.justifySpaceShrink) &&
-        line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
-        !(
-          flow?.justifySpaceShrink &&
-          // A word split across source runs overflows on a later piece than the one
-          // that opened it, where the open decision is `continues`. The shrink test
-          // still applies to the whole word: `wordStartSpan` says where it began.
-          (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
-          !flow.paragraphRtl &&
-          !flow.pageExclusionZones?.length &&
-          sameParagraphAnchorStarts.length === 0 &&
-          line.drawings.length === 0 &&
-          placeableSuffixes[pieceIndex]![boundary] === 1 &&
-          fitsWithSpaceShrink(
-            line.spans,
-            candidate,
-            faceStyle,
-            measurer,
-            line.width,
-            lineAvailable(),
-            opensWord ? line.spans.length : wordStartSpan,
-            opensWord ? line.width : wordStartWidth,
-            boundary < piece.text.length
-              ? !layoutOwned && piece.text[boundary] === ' '
-              : opensWithHangingSpace(pieces[pieceIndex + 1])
-          )
-        ) &&
-        (line.spans.length > 0 || line.drawings.length > 0)
+        (!opensWord && penLeftWord()) ||
+        (!hangs &&
+          // A space after a word that borrowed inter-word space hangs on its line.
+          !(lineEndWhitespace && flow?.justifySpaceShrink) &&
+          line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
+          !(
+            flow?.justifySpaceShrink &&
+            // A word split across source runs overflows on a later piece than the one
+            // that opened it, where the open decision is `continues`. The shrink test
+            // still applies to the whole word: `wordStartSpan` says where it began.
+            (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
+            !flow.paragraphRtl &&
+            !flow.pageExclusionZones?.length &&
+            sameParagraphAnchorStarts.length === 0 &&
+            line.drawings.length === 0 &&
+            placeableSuffixes[pieceIndex]![boundary] === 1 &&
+            fitsWithSpaceShrink(
+              line.spans,
+              candidate,
+              faceStyle,
+              measurer,
+              line.width,
+              lineAvailable(),
+              opensWord ? line.spans.length : wordStartSpan,
+              opensWord ? line.width : wordStartWidth,
+              boundary < piece.text.length
+                ? !layoutOwned && piece.text[boundary] === ' '
+                : opensWithHangingSpace(pieces[pieceIndex + 1])
+            )
+          ) &&
+          (line.spans.length > 0 || line.drawings.length > 0))
       ) {
         if (openDecision === 'forbidden' && wordStartSpan <= 0) {
           // Keep the protected seam on this line. The chop below may still use later safe
           // cuts inside an oversized Latin word; only its leading fragment must stay here.
-        } else if (!opensWord && wordStartSpan === 0) {
-          // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
-          tryAdvanceToNextPassage();
         } else if (opensWord || wordStartSpan < 0) {
           if (tryAdvanceToNextPassage() && line.width + fitWidth <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
@@ -1509,37 +1532,20 @@ export function breakParagraph(
             wordStartSpan = 0;
             wordStartWidth = 0;
             wordStartEnd = line.end;
+            wordStartMetrics = { height: line.height, baseline: line.baseline };
           }
         } else {
-          // Mid-word overflow: carry the whole word to the next line rather than splitting it
-          // at a run boundary. The spans already placed for it are lifted off this line, the
-          // line is closed without them, and they are re-laid at the new origin.
-          const carried = line.spans.splice(wordStartSpan);
-          line.width = wordStartWidth;
-          line.end = wordStartEnd;
-          line.height = 0;
-          line.baseline = 0;
-          // An ignored cell page break adds no height on either line, as when first placed.
-          const regrow = (span: StyleSpanRecord): void => {
-            if (pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) return;
-            const style = styleForFontSlot(span.style, span.fontSlot);
-            const metrics = measurer.lineMetrics(style, span.noteSeparator ? undefined : span.text);
-            growLineMetricsForText(line, metrics, span.text);
-          };
-          for (const span of line.spans) regrow(span);
-          closeLine();
-          for (const span of carried) {
-            applyNarrowWrapSkipIfNeeded(span.text, styleForFontSlot(span.style, span.fontSlot));
-            line.spans.push({
-              ...span,
-              box: { ...span.box, x: lineOrigin() + line.width },
-            });
-            line.width += span.box.width;
-            regrow(span);
-            line.end = span.range.end;
-          }
-          wordStartSpan = 0;
-          wordStartWidth = 0;
+          // Mid-word overflow: a run boundary is not a break opportunity, so the whole word
+          // moves to where the same text in one run would go.
+          const start = carryPartialWord(
+            wordCarry,
+            { span: wordStartSpan, width: wordStartWidth, end: wordStartEnd, ...wordStartMetrics },
+            fitWidth
+          );
+          wordStartSpan = start.span;
+          wordStartWidth = start.width;
+          wordStartEnd = start.end;
+          wordStartMetrics = { height: start.height, baseline: start.baseline };
         }
       } else if (
         line.spans.length === 0 &&
@@ -1612,6 +1618,7 @@ export function breakParagraph(
           wordStartSpan = 0;
           wordStartWidth = 0;
           wordStartEnd = line.end;
+          wordStartMetrics = { height: line.height, baseline: line.baseline };
         }
       }
       // The chop leaves its final protected group pending, including oversized groups
