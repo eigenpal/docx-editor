@@ -11,14 +11,20 @@
 // paragraphs' own widow and `w:keepLines` rules; after the last row, the opening of the
 // next body paragraph. When the group and that opening do not fit below the content already
 // on the page, the group moves to the next page, even when it cannot fit there either.
+// A row that starts a new page (`w:pageBreakBefore`) ends the group and needs no room beside
+// it, as a page break ends a paragraph keep chain. In Word 2013 and later layout, the kept
+// rows before that row go to the new page with it: the break starts the page before them.
+// Before Word 2013, header rows do not keep with the body rows.
 //
 // Header rows keep with the first body row in the same way, and a `w:keepNext` paragraph
-// before a table keeps with the header rows and that opening (`tableKeepOpening`).
+// before a table keeps with the header rows and that opening (`tableKeepOpening`). When
+// every body row keeps, the paragraph keeps through them with what follows the table.
 //
 // Limits, each placed by the ordinary row rules instead:
 // - The lookahead stops after `MAX_KEEP_NEXT_CHAIN` kept rows. A longer group moves only
 //   when those rows alone do not fit.
 // - A vertical merge that crosses the group, or a first cell that continues a merge.
+// - A keep chain reads through the kept rows of one table only (`followingKeepOpening`).
 // - A first cell that opens with a nested table.
 // - Nested tables and positioned (`w:tblpPr`) tables never keep their rows.
 
@@ -35,7 +41,7 @@ import {
 } from './revision-projection.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { propertiesOf } from './paragraph-flow.ts';
-import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps } from './pagination-keeps.ts';
+import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps, type TableKeepOpening } from './pagination-keeps.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from './style-cascade.ts';
 import { findParagraphProperties } from './style-definition-reader.ts';
 import {
@@ -44,10 +50,24 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
+import { rowBreaksPageBefore } from './table-row-page-break.ts';
+import { planHeaderGroup } from './table-header-vmerge.ts';
+import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 
 // Rows come from `readTableStructure`, which is memoized per style cascade, so one row
 // object always resolves against the same cascade.
 const rowKeeps = new WeakMap<SemanticTableRow, boolean>();
+const rowBreaks = new WeakMap<SemanticTableRow, boolean>();
+
+/** {@link rowBreaksPageBefore}, memoized per row as {@link rowKeepsWithNext} is. */
+function rowBreaksPage(row: SemanticTableRow, styleCascade: StyleCascadeTable | undefined) {
+  let breaks = rowBreaks.get(row);
+  if (breaks === undefined) {
+    breaks = rowBreaksPageBefore(row, styleCascade);
+    rowBreaks.set(row, breaks);
+  }
+  return breaks;
+}
 
 /** Whether `row` keeps with the row or paragraph after it. */
 export function rowKeepsWithNext(
@@ -78,17 +98,21 @@ function resolveRowKeep(row: SemanticTableRow, styleCascade: StyleCascadeTable |
 export interface KeptRowSource {
   readonly rows: readonly SemanticTableRow[];
   readonly keepsAt: (index: number) => boolean;
+  /** The row starts a new page (`w:pageBreakBefore`). */
+  readonly breaksAt: (index: number) => boolean;
   /** The row's whole height where the group would stand. */
   readonly heightOf: (index: number) => number;
   /** Whether the row must place whole: `w:cantSplit`, an exact height, bottom-to-top text. */
   readonly placesWhole: (index: number) => boolean;
   /** Smallest height that starts every cell of a row that may split. */
   readonly openingOf: (index: number) => number;
+  /** Whether `height` starts every cell of a row that may split: one probe, no search. */
+  readonly opensWithin: (index: number, height: number) => boolean;
   /**
-   * Opening of the body content after the table, when the group reaches the last row.
-   * `undefined` when nothing follows; `null` when that content cannot be priced.
+   * Opening of the body content after the table, when the group reaches the last row, with
+   * `room` left beside it. `undefined` when nothing follows; `null` when it cannot be priced.
    */
-  readonly following: () => number | null | undefined;
+  readonly following: (room: number) => number | null | undefined;
 }
 
 /** A priced kept group. */
@@ -104,18 +128,26 @@ export interface KeptRowGroup {
    * no successor, so the height is a lower bound on what the group needs.
    */
   readonly truncated?: true;
+  /**
+   * The row after the group starts a new page, so the group needs no successor height. In
+   * Word 2013 and later layout, that page break starts the page before the group instead.
+   */
+  readonly breaksAfter?: true;
 }
 
 /**
  * The kept group that starts at `start`, or null when the rule does not apply there.
  *
- * `start` must open the group: it keeps, and the row before it does not. Null for a group
- * whose rows or successor row continue a vertical merge, a kept last row with nothing
- * after the table, and following content that cannot be priced.
+ * `start` must open the group: it keeps, and the row before it does not keep or it starts a
+ * new page. Null for a group whose rows or successor row continue a vertical merge, a kept
+ * last row with nothing after the table, and following content that cannot be priced.
+ * A successor row that starts a new page ends the group with no successor height.
  *
- * `room` is the height left where the group would start. A successor row that fits whole
- * in what the kept rows leave of it is priced whole, which skips its opening search and
- * gives the same fit answer. Without `room`, the successor is always priced at its opening.
+ * `room` is the height left where the group would start. A successor row is then priced
+ * only as exactly as the fit against what the kept rows leave of `room` needs: whole when it
+ * fits whole there, that space when one probe starts every cell in it, otherwise whole.
+ * Without `room`, the successor is priced at its smallest opening, found by a search.
+ * The content after the table is priced for what the kept rows leave of `room`.
  */
 export function keptRowGroup(
   source: KeptRowSource,
@@ -123,10 +155,11 @@ export function keptRowGroup(
   room = Number.NEGATIVE_INFINITY
 ): KeptRowGroup | null {
   const { rows } = source;
-  if (!source.keepsAt(start) || (start > 0 && source.keepsAt(start - 1))) return null;
+  if (!source.keepsAt(start)) return null;
+  if (start > 0 && source.keepsAt(start - 1) && !source.breaksAt(start)) return null;
   let end = start;
   let truncated = false;
-  while (end + 1 < rows.length && source.keepsAt(end + 1)) {
+  while (end + 1 < rows.length && source.keepsAt(end + 1) && !source.breaksAt(end + 1)) {
     if (end + 1 - start >= MAX_KEEP_NEXT_CHAIN) {
       truncated = true;
       break;
@@ -141,24 +174,31 @@ export function keptRowGroup(
   for (let index = start; index <= end; index += 1) kept += source.heightOf(index);
   if (truncated) return { end, kept, successor: 0, truncated: true };
   let successor: number | null | undefined;
-  if (next < rows.length) successor = rowOpening(source, next, room - kept);
-  else {
-    successor = source.following();
+  if (next < rows.length) {
+    if (source.breaksAt(next)) return { end, kept, successor: 0, breaksAfter: true };
+    successor = rowOpening(source, next, room - kept);
+  } else {
+    successor = source.following(room - kept);
     if (successor === undefined) return null;
   }
   return successor === null ? null : { end, kept, successor };
 }
 
-/** Height the row at `index` needs where it starts: whole when it cannot split or fits `room`. */
+/**
+ * Height the row at `index` needs where it starts, as {@link keptRowGroup} prices a successor:
+ * exact without `room`, and with `room` exact only in whether it fits there.
+ */
 function rowOpening(source: KeptRowSource, index: number, room: number): number {
   const whole = source.heightOf(index);
-  return source.placesWhole(index) || whole <= room + 0.001 ? whole : source.openingOf(index);
+  if (source.placesWhole(index) || whole <= room + 0.001) return whole;
+  if (room === Number.NEGATIVE_INFINITY) return source.openingOf(index);
+  return room > 0.001 && source.opensWithin(index, room + 0.001) ? room : whole;
 }
 
 /**
  * Height the rows from `index` need where they start: their kept group with its successor's
- * opening, or the row's own opening when it does not keep. Undefined past the last row.
- * `room` has the meaning it has for {@link keptRowGroup}.
+ * opening, or the row's own opening when it does not keep. Undefined past the last row, and
+ * 0 for a row that starts a new page. `room` has the meaning it has for {@link keptRowGroup}.
  */
 export function rowsOpening(
   source: KeptRowSource,
@@ -166,6 +206,7 @@ export function rowsOpening(
   room = Number.NEGATIVE_INFINITY
 ): number | undefined {
   if (index >= source.rows.length) return undefined;
+  if (source.breaksAt(index)) return 0;
   const group = keptRowGroup(source, index, room);
   return group ? group.kept + group.successor : rowOpening(source, index, room);
 }
@@ -198,7 +239,7 @@ export interface KeptRowMeasure {
   /** Band of a fresh page: a `w:cantSplit` row taller than this splits anyway. */
   readonly pageHeight: number;
   readonly heightOf: (index: number) => number;
-  readonly following: () => number | null | undefined;
+  readonly following: (room: number) => number | null | undefined;
 }
 
 /**
@@ -220,33 +261,34 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
     rowAtPageStart: false,
     keepLinesOpening: true,
   };
+  const opensWithin = (index: number, height: number): boolean => {
+    const row = rows[index]!;
+    return probeRowFragmentProgress(
+      row,
+      structure.columnWidthsPt,
+      left,
+      0,
+      height,
+      false,
+      0,
+      probeDeps,
+      initialCellCursors(row),
+      structure.cellSpacingPt,
+      { requireEveryCell: true }
+    );
+  };
   return {
     rows,
     keepsAt,
+    breaksAt: (index) => rowBreaksPage(rows[index]!, deps.styleCascade),
     heightOf,
     placesWhole: (index) => {
       const row = rows[index]!;
       if (row.height.rule === 'exact') return true;
       return row.cantSplit && heightOf(index) <= measure.pageHeight + 0.001;
     },
-    openingOf: (index) => {
-      const row = rows[index]!;
-      return smallestOpening(heightOf(index), (height) =>
-        probeRowFragmentProgress(
-          row,
-          structure.columnWidthsPt,
-          left,
-          0,
-          height,
-          false,
-          0,
-          probeDeps,
-          initialCellCursors(row),
-          structure.cellSpacingPt,
-          { requireEveryCell: true }
-        )
-      );
-    },
+    openingOf: (index) => smallestOpening(heightOf(index), (height) => opensWithin(index, height)),
+    opensWithin,
     following: measure.following,
   };
 }
@@ -261,7 +303,13 @@ export interface TableKeepFlow {
 }
 
 /** A body flow block: a table is priced, anything else is not. */
-type FlowBlock = { readonly kind: string; readonly table?: OoxmlElement } | undefined;
+type FlowBlock =
+  | {
+      readonly kind: string;
+      readonly table?: OoxmlElement;
+      readonly keeps?: { readonly keepNext: boolean };
+    }
+  | undefined;
 
 const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
   readTableStructure(
@@ -286,25 +334,27 @@ interface OpeningMemo {
   readonly at: TableKeepFlow;
   readonly pageHeight: number;
   readonly deps: TableFlowDeps;
-  readonly value: number | null;
+  readonly value: TableKeepOpening | null;
 }
 const openings = new WeakMap<OoxmlElement, OpeningMemo>();
 
 /**
- * Height a `w:keepNext` paragraph before `table` needs beside it: the repeated header group,
- * then the opening of the body rows ({@link rowsOpening}). Null for what this cannot price:
- * a positioned table, and a header group that a vertical merge crosses or that is taller
- * than a page.
+ * What a `w:keepNext` paragraph before `table` needs beside it: the header rows, planned as
+ * placement plans them (`planHeaderGroup`), then the opening of the body rows
+ * ({@link rowsOpening}). Null for a positioned table and a header group taller than a page.
  *
- * A kept group that runs to the table's end prices only the first body row's own opening:
- * the content after the table is not part of this lookahead.
+ * When the kept rows run from the first body row to the table's end, `throughHeight` is the
+ * header and those rows: the chain goes on with the content after the table. A first row that
+ * starts a new page ends the chain before the table (`breaksPage`). Kept first rows that go
+ * to such a page with the row after them take the chain there too (`startsPage`, Word 2013 and
+ * later). Before Word 2013 the chain ends at the header rows of a table that has them.
  */
 export function tableKeepOpening(
   block: FlowBlock,
   at: TableKeepFlow,
   pageHeight: number,
   deps: TableFlowDeps
-): number | null {
+): TableKeepOpening | null {
   const table = block?.kind === 'table' ? block.table : undefined;
   if (!table) return null;
   const memo = openings.get(table);
@@ -331,37 +381,41 @@ function measureTableKeepOpening(
   at: TableKeepFlow,
   pageHeight: number,
   deps: TableFlowDeps
-): number | null {
+): TableKeepOpening | null {
   const structure = structureOf(table, at);
   if (!structure || structure.float || structure.rows.length === 0) return null;
-  const measure = (row: SemanticTableRow, first: boolean): number =>
-    measureRowHeight(
-      row,
-      structure.columnWidthsPt,
-      0,
-      0,
-      first ? firstRowContentDeps(structure, row, deps) : deps,
-      structure.cellSpacingPt
-    );
-  let header = 0;
-  let count = 0;
+  if (rowBreaksPage(structure.rows[0]!, at.styleCascade)) return { breaksPage: true, height: 0 };
+  const measure = (row: SemanticTableRow, rowDeps: TableFlowDeps): number =>
+    measureRowHeight(row, structure.columnWidthsPt, 0, 0, rowDeps, structure.cellSpacingPt);
+  const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
     if (!row.isHeader) break;
-    if (row.cells.some((cell) => cell.vMergeContinue)) return null;
-    header += measure(row, count === 0);
-    count += 1;
+    headerRows.push(row);
   }
+  const header = planHeaderGroup(
+    structure,
+    headerRows,
+    () => 0,
+    0,
+    deps,
+    (row, _top, rowDeps) => measure(row, rowDeps)
+  ).heightPt;
   if (header > pageHeight + 0.001) return null;
-  const rows = structure.rows.slice(count);
+  // Before Word 2013, header rows do not keep with the body rows, so the chain ends there.
+  const laterLayout = isWord2013OrLaterMode(at.compatibilityMode);
+  if (headerRows.length > 0 && !laterLayout) return { height: header };
+  const rows = structure.rows.slice(headerRows.length);
   const heights = new Map<number, number>();
   const heightOf = (index: number): number => {
     let height = heights.get(index);
     if (height === undefined) {
-      height = measure(rows[index]!, count === 0 && index === 0);
+      const first = headerRows.length === 0 && index === 0;
+      height = measure(rows[index]!, first ? firstRowContentDeps(structure, rows[0]!, deps) : deps);
       heights.set(index, height);
     }
     return height;
   };
+  let reachesEnd = false;
   const source = tableKeptRowSource({
     structure,
     rows,
@@ -369,17 +423,36 @@ function measureTableKeepOpening(
     deps,
     pageHeight,
     heightOf,
-    following: () => null,
+    // Priced without what follows the table; a group that reaches it reports `throughHeight`.
+    following: () => {
+      reachesEnd = true;
+      return null;
+    },
   });
-  return header + (rowsOpening(source, 0) ?? 0);
+  const height = header + (rowsOpening(source, 0) ?? 0);
+  // From Word 2013 on, kept first rows go to the page a following row's break starts.
+  if (laterLayout && headerRows.length === 0 && keptRowGroup(source, 0)?.breaksAfter) {
+    return { startsPage: true, height };
+  }
+  if (!reachesEnd) return { height };
+  // `following` is read only when the first group reaches the end, so this group is priced.
+  const group = keptRowGroup({ ...source, following: () => 0 }, 0);
+  return group ? { height, throughHeight: header + group.kept } : { height };
 }
 
 /** A body flow's table keep answers, bound to its revision view and compatibility mode. */
 export interface TableKeepDecisions {
   /** {@link tableEndsKept} at the flow's first column width. */
   endsKept(block: FlowBlock): boolean;
+  /** Whether `block` is a paragraph that keeps with the table after it. */
+  keptBefore(block: FlowBlock): boolean;
   /** {@link tableKeepOpening} at the width of the column being filled. */
-  opening(block: FlowBlock, width: number, pageHeight: number, deps: TableFlowDeps): number | null;
+  opening(
+    block: FlowBlock,
+    width: number,
+    pageHeight: number,
+    deps: TableFlowDeps
+  ): TableKeepOpening | null;
 }
 
 /** Bind {@link tableEndsKept} and {@link tableKeepOpening} to one body flow. */
@@ -401,6 +474,7 @@ export function tableKeepFlow(
   };
   return {
     endsKept: (block) => tableEndsKept(block, flow),
+    keptBefore: (block) => block?.kind === 'paragraph' && !!block.keeps?.keepNext,
     opening: (block, columnWidth, pageHeight, deps) =>
       tableKeepOpening(block, { ...flow, width: columnWidth }, pageHeight, deps),
   };

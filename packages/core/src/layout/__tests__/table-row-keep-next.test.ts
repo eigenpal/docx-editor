@@ -7,139 +7,36 @@
 // Header rows keep with the first body rows the same way, and a keepNext paragraph before a
 // table moves with the table's header rows and that opening.
 //
-// The page shape is 350pt by 210pt with 20pt margins: a 170pt body that holds twelve exact
-// 14pt lines. Eight preamble lines leave four.
+// The page shape is in `table-row-keep-fixtures.ts`.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  serializeOoxmlPart,
-  TreeDocumentStore,
-  type OoxmlPart,
-} from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { serializeOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/core/store';
+import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';
-import { buildStyleCascadeTable } from '../style-cascade.ts';
-import { keptRowGroup, smallestOpening, type KeptRowSource } from '../table-row-keeps.ts';
-import type { BlockFragmentRecord, SemanticLayout } from '../semantic-records.ts';
+import {
+  keptRowGroup,
+  rowsOpening,
+  smallestOpening,
+  type KeptRowSource,
+} from '../table-row-keeps.ts';
 import type { SemanticTableRow } from '../semantic-table.ts';
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
-function read(xml: string, name: string): OoxmlPart {
-  const result = readOoxmlPart(xml, { name, contentType: 'app/xml' });
-  if (!result.ok) throw new Error(result.reason);
-  return result.part;
-}
-
-const SECT =
-  '<w:sectPr><w:pgSz w:w="7000" w:h="4200"/><w:pgMar w:top="400" w:bottom="400" ' +
-  'w:left="400" w:right="400" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
-const load = (body: string) =>
-  read(
-    `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
-    '/word/document.xml'
-  );
-
-// `Kept` inherits `w:keepNext` through `basedOn`; `KeepTable` states it in its table style.
-const styleCascade = buildStyleCascadeTable(
-  read(
-    `<w:styles xmlns:w="${W}">` +
-      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
-      '<w:style w:type="paragraph" w:styleId="KeepBase"><w:basedOn w:val="Normal"/>' +
-      '<w:pPr><w:keepNext/></w:pPr></w:style>' +
-      '<w:style w:type="paragraph" w:styleId="Kept"><w:basedOn w:val="KeepBase"/></w:style>' +
-      '<w:style w:type="table" w:styleId="KeepTable"><w:pPr><w:keepNext/></w:pPr></w:style>' +
-      '</w:styles>',
-    '/word/styles.xml'
-  ).root
-);
-
-const measurer = createFixedMeasurer(6, 14);
-const lay = (part: OoxmlPart, compatibilityMode = 15, extra: object = {}): SemanticLayout =>
-  layoutSemanticDocument(part, 1, { measurer, styleCascade, compatibilityMode, ...extra });
-
-interface ParaOptions {
-  readonly keep?: boolean | 'off';
-  readonly keepLines?: boolean;
-  readonly widow?: boolean;
-  readonly style?: string;
-}
-
-/** One paragraph of `count` lines named `${name}1` to `${name}N`, via hard breaks. */
-const para = (name: string, count = 1, options: ParaOptions = {}) => {
-  const pPr =
-    (options.style ? `<w:pStyle w:val="${options.style}"/>` : '') +
-    (options.keep === true
-      ? '<w:keepNext/>'
-      : options.keep === 'off'
-        ? '<w:keepNext w:val="0"/>'
-        : '') +
-    (options.keepLines ? '<w:keepLines/>' : '') +
-    (options.widow ? '' : '<w:widowControl w:val="0"/>') +
-    '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>';
-  const runs = Array.from({ length: count }, (_, i) => `<w:t>${name}${i + 1}</w:t>`);
-  return `<w:p><w:pPr>${pPr}</w:pPr><w:r>${runs.join('<w:br/>')}</w:r></w:p>`;
-};
-
-const cell = (content: string, tcPr = '') =>
-  `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/>${tcPr}</w:tcPr>${content}</w:tc>`;
-
-interface RowOptions {
-  /** Lines of the first cell's paragraph. */
-  readonly lines?: number;
-  /** `w:keepNext` on the first and second cell's paragraph. */
-  readonly keep?: readonly [boolean, boolean];
-  readonly cantSplit?: boolean;
-  readonly header?: boolean;
-  readonly exactTwips?: number;
-  /** Replaces the first cell's content. */
-  readonly first?: string;
-  readonly firstTcPr?: string;
-}
-
-const row = (name: string, options: RowOptions = {}) => {
-  const trPr =
-    (options.cantSplit ? '<w:cantSplit/>' : '') +
-    (options.header ? '<w:tblHeader/>' : '') +
-    (options.exactTwips ? `<w:trHeight w:val="${options.exactTwips}" w:hRule="exact"/>` : '');
-  const [keepFirst, keepSecond] = options.keep ?? [false, false];
-  const first = options.first ?? para(`${name}c1-`, options.lines ?? 1, { keep: keepFirst });
-  return (
-    `<w:tr>${trPr ? `<w:trPr>${trPr}</w:trPr>` : ''}` +
-    cell(first, options.firstTcPr) +
-    cell(para(`${name}c2-`, 1, { keep: keepSecond })) +
-    '</w:tr>'
-  );
-};
-
-const table = (rows: readonly string[], tblPr = '') =>
-  `<w:tbl><w:tblPr>${tblPr}<w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
-  '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>' +
-  '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
-  `<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>${rows.join('')}</w:tbl>`;
-
-const ALL = [true, true] as const;
-const FIRST = [true, false] as const;
-const LAST = [false, true] as const;
-const P8 = para('P', 8);
-const TAIL = para('TAIL');
-const R4 = row('R4', { lines: 2, cantSplit: true });
-
-/** Every line text of a block, in reading order: rows, then cells, then lines. */
-const blockText = (block: BlockFragmentRecord): string[] =>
-  block.kind === 'paragraph'
-    ? block.lines
-        .map((line) =>
-          line.spans
-            .map((span) => span.text)
-            .join('')
-            .trim()
-        )
-        .filter((text) => text !== '')
-    : block.rows.flatMap((placed) => placed.cells.flatMap((c) => c.blocks.flatMap(blockText)));
-const pages = (layout: SemanticLayout): string[] =>
-  layout.pages.map((page) => page.fragments.flatMap(blockText).join(' '));
+import {
+  read,
+  load,
+  styleCascade,
+  measurer,
+  lay,
+  para,
+  row,
+  table,
+  ALL,
+  FIRST,
+  LAST,
+  P8,
+  TAIL,
+  R4,
+  pages,
+} from './table-row-keep-fixtures.ts';
 
 const P = 'P1 P2 P3 P4 P5 P6 P7 P8';
 const R4_TAIL = 'R4c1-1 R4c1-2 R4c2-1 TAIL1';
@@ -219,18 +116,6 @@ const wordProbes: readonly (readonly [string, string, readonly string[]])[] = [
     [`${P} CAP1 Hc1-1 Hc2-1 R1c1-1 R1c1-2 R1c2-1`, 'Hc1-1 Hc2-1 R1c1-3 R2c1-1 R2c2-1 TAIL1'],
   ],
   [
-    'a caption, the header rows and a kept first row move as one group',
-    P8 +
-      para('CAP', 1, { keep: true }) +
-      table([
-        row('H', { header: true }),
-        row('R1', { keep: ALL }),
-        row('R2', { lines: 3, cantSplit: true }),
-      ]) +
-      TAIL,
-    [P, 'CAP1 Hc1-1 Hc2-1 R1c1-1 R1c2-1 R2c1-1 R2c1-2 R2c1-3 R2c2-1 TAIL1'],
-  ],
-  [
     'keepNext on the first paragraph of the first cell keeps the row',
     P8 +
       table([row('R1'), row('R3', { first: para('A', 1, { keep: true }) + para('B') }), R4]) +
@@ -264,6 +149,18 @@ const wordProbes: readonly (readonly [string, string, readonly string[]])[] = [
 
 // Probes captured in compatibility mode 15 only.
 const wordProbes15: readonly (readonly [string, string, readonly string[]])[] = [
+  [
+    'a caption, the header rows and a kept first row move as one group',
+    P8 +
+      para('CAP', 1, { keep: true }) +
+      table([
+        row('H', { header: true }),
+        row('R1', { keep: ALL }),
+        row('R2', { lines: 3, cantSplit: true }),
+      ]) +
+      TAIL,
+    [P, 'CAP1 Hc1-1 Hc2-1 R1c1-1 R1c2-1 R2c1-1 R2c1-2 R2c1-3 R2c2-1 TAIL1'],
+  ],
   [
     'a kept row moves when widow control keeps the next row from opening in one line',
     P8 +
@@ -519,9 +416,11 @@ describe('kept group pricing', () => {
   const source = (keeps: readonly number[], extra: Partial<KeptRowSource> = {}): KeptRowSource => ({
     rows,
     keepsAt: (index) => keeps.includes(index),
+    breaksAt: () => false,
     heightOf: () => 14,
     placesWhole: () => false,
     openingOf: () => 7,
+    opensWithin: (_, height) => height >= 7,
     following: () => 20,
     ...extra,
   });
@@ -539,6 +438,26 @@ describe('kept group pricing', () => {
     expect(keptRowGroup(source([11]), 11)).toEqual({ end: 11, kept: 14, successor: 20 });
     expect(keptRowGroup(source([11], { following: () => undefined }), 11)).toBeNull();
     expect(keptRowGroup(source([11], { following: () => null }), 11)).toBeNull();
+  });
+
+  test('ends a group at a row that starts a new page, with no successor height', () => {
+    const breaking = (at: number) => source([2, 3], { breaksAt: (index) => index === at });
+    const ends = { end: 2, kept: 14, successor: 0, breaksAfter: true };
+    expect(keptRowGroup(breaking(3), 2)).toEqual(ends);
+    expect(keptRowGroup(breaking(3), 3)).toEqual({ end: 3, kept: 14, successor: 7 });
+    expect(keptRowGroup(breaking(4), 2)).toEqual({ ...ends, end: 3, kept: 28 });
+    expect(rowsOpening(breaking(2), 2)).toBe(0);
+  });
+
+  test('prices the content after the table for the room the kept rows leave', () => {
+    const rooms: number[] = [];
+    const following = (room: number) => (rooms.push(room), 20);
+    expect(keptRowGroup(source([10, 11], { following }), 10, 40)).toEqual({
+      end: 11,
+      kept: 28,
+      successor: 20,
+    });
+    expect(rooms).toEqual([12]);
   });
 
   test('prices only at the head of a group', () => {
@@ -560,12 +479,20 @@ describe('kept group pricing', () => {
     });
   });
 
-  test('prices a next row that fits the room whole without searching its opening', () => {
+  test('prices a next row for the room with at most one probe and no search', () => {
     let searched = 0;
-    const counting = source([2], { openingOf: () => (searched += 1) });
+    const probed: number[] = [];
+    const counting = source([2], {
+      openingOf: () => (searched += 1),
+      opensWithin: (_, height) => (probed.push(height), height >= 7),
+    });
     expect(keptRowGroup(counting, 2, 28)).toEqual({ end: 2, kept: 14, successor: 14 });
+    expect(probed).toEqual([]);
+    expect(keptRowGroup(counting, 2, 22)).toEqual({ end: 2, kept: 14, successor: 8 });
+    expect(keptRowGroup(counting, 2, 20)).toEqual({ end: 2, kept: 14, successor: 14 });
+    expect(probed.map((height) => Math.round(height))).toEqual([8, 6]);
     expect(searched).toBe(0);
-    expect(keptRowGroup(counting, 2, 20)).toEqual({ end: 2, kept: 14, successor: 1 });
+    expect(keptRowGroup(counting, 2)).toEqual({ end: 2, kept: 14, successor: 1 });
   });
 
   test('finds the smallest opening height', () => {

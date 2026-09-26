@@ -18,7 +18,8 @@
 // table placer decides the cut before publishing lines; exact-height rows still clip.
 // Cross-paragraph keep chains remain body-flow decisions, while row atomicity is owned
 // by `w:cantSplit`. A body keep-next chain ends at a table, priced by the table's opening
-// (`tableKeepOpening` in `table-row-keeps.ts`) when the caller supplies one.
+// (`tableKeepOpening` in `table-row-keeps.ts`) when the caller supplies one. When the table's
+// kept rows run to its end, the chain goes on through them into the content after the table.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
@@ -182,8 +183,32 @@ export interface KeepNextLookahead {
   readonly skipBlock?: (index: number) => boolean;
   readonly breaksBefore?: (index: number) => boolean;
   readonly sumAdjacentSpacing?: boolean;
-  /** Height a table at `index` needs where it starts, or null when it cannot be priced. */
-  readonly tableOpening?: (index: number) => number | null;
+  /** What a table at `index` needs where it starts, or null when it cannot be priced. */
+  readonly tableOpening?: (index: number) => TableKeepOpening | null;
+  /**
+   * False inside the content after a table: a table reached there is priced by its own
+   * opening, never through its kept rows. This bounds a chain to one table's following content.
+   */
+  readonly throughTables?: boolean;
+}
+
+/** What a keep chain that reaches a table needs of it (`tableKeepOpening`). */
+export interface TableKeepOpening {
+  /** The table's first row starts a new page, so the chain ends before the table. */
+  readonly breaksPage?: boolean;
+  /**
+   * Word 2013 and later: the table's kept first rows go to the new page that the row after them
+   * starts, and a chain that keeps with them starts that page too.
+   */
+  readonly startsPage?: boolean;
+  /** Header rows and the opening of the body rows. */
+  readonly height: number;
+  /**
+   * Header rows and the body rows, when every body row from the first keeps with the next.
+   * The opening of the content after the table joins this height. When nothing can be priced
+   * there, {@link height} applies.
+   */
+  readonly throughHeight?: number;
 }
 
 /** A priced `w:keepNext` chain. */
@@ -192,6 +217,8 @@ export interface KeepNextPlan {
   readonly height: number;
   /** The last member that fits whole in the room before anything that does not, or -1. */
   readonly lastWhole: number;
+  /** The chain keeps with a table that starts a new page before it ({@link TableKeepOpening}). */
+  readonly startsPage?: true;
 }
 
 /**
@@ -242,8 +269,21 @@ export function keepNextPlan(
     if (block && look.skipBlock?.(index)) continue;
     // A table ends the chain. It has no space before; the member above keeps its after.
     if (block?.kind === 'table' && index > start) {
-      const opening = look.tableOpening?.(index) ?? null;
-      return opening === null ? null : { height: total + opening, lastWhole };
+      const table = look.tableOpening?.(index) ?? null;
+      if (table === null) return null;
+      if (table.breaksPage) return { height: total - after, lastWhole };
+      if (table.startsPage) {
+        // After a table the chain ends at the break; a chain head moves to the new page.
+        if (look.throughTables === false) return { height: total - after, lastWhole };
+        return { height: total + table.height, lastWhole, startsPage: true };
+      }
+      const through = table.throughHeight;
+      const following =
+        through === undefined || look.throughTables === false
+          ? undefined
+          : followingKeepOpening(look, index + 1, room - total - through);
+      const height = typeof following === 'number' ? through! + following : table.height;
+      return { height: total + height, lastWhole };
     }
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
     // A forced new page also discards the preceding paragraph's trailing spacing.
@@ -333,6 +373,8 @@ export function keepNextGroupNeed(look: KeepNextLookahead, at: KeepNextPlacement
   const here = at.contentHeight - at.cursorY - at.lead - at.topExtent;
   const group = plan(here);
   if (group === null) return null;
+  // The chain goes to the new page a kept table start takes, unless it already opens a page.
+  if (group.startsPage) return Number.POSITIVE_INFINITY;
   const need = group.height - at.pricedLead + at.lead + at.topExtent;
   if (at.cursorY + need <= at.contentHeight) return need;
   const fresh = plan(at.contentHeight - at.freshLead - at.topExtent);
@@ -362,7 +404,9 @@ export function keepNextTailLines(
 ): number {
   if (!isWord2013OrLaterMode(compatibilityMode)) return 0;
   const plan = keepNextPlan(look, room);
-  if (plan === null || plan.height <= room || plan.lastWhole !== look.start) return 0;
+  if (plan === null || plan.startsPage || plan.height <= room || plan.lastWhole !== look.start) {
+    return 0;
+  }
   const fresh = keepNextPlan(look, pageHeight);
   if (fresh === null || fresh.height > pageHeight) return 0;
   return splitTailLines(look, look.start);
@@ -385,11 +429,8 @@ export interface KeepNextChains {
    * first line goes, after its space before.
    */
   tailBreak(start: number, lineCount: number, cursorY: number, contentHeight: number): number;
-  /**
-   * Height the block at `start` needs where it opens after a table, with its own keep chain:
-   * `undefined` past the story end, null when it cannot be priced or breaks the page itself.
-   */
-  opening(start: number): number | null | undefined;
+  /** {@link followingKeepOpening} of the block at `start`, with `room` left beside it. */
+  opening(start: number, room: number): number | null | undefined;
 }
 
 /** Bind the keep-next lookahead of one layout pass. */
@@ -406,12 +447,26 @@ export function keepNextChains(
       const room = contentHeight - cursorY;
       return lineCount - keepNextTailLines(look, room, contentHeight, compatibilityMode);
     },
-    opening: (start) => {
-      if (start >= source.blocks.length) return undefined;
-      if (source.breaksBefore?.(start)) return null;
-      return keepNextPlan({ ...source, start, carry: 0 })?.height ?? null;
-    },
+    opening: (start, room) => followingKeepOpening(source, start, room),
   };
+}
+
+/**
+ * Height the block at `start` needs where it opens after a table, with its own keep chain:
+ * `undefined` past the story end, 0 when it starts a new page itself, and null when it cannot
+ * be priced. `room` is the height left after the table's kept rows; a kept member that cannot
+ * fit whole in it and may split ends the chain at its shortest opening ({@link keepNextPlan}).
+ * A table in this chain is priced by its own opening, never through its kept rows.
+ */
+export function followingKeepOpening(
+  source: KeepNextSource,
+  start: number,
+  room: number
+): number | null | undefined {
+  if (start >= source.blocks.length) return undefined;
+  if (source.breaksBefore?.(start)) return 0;
+  const look = { ...source, start, carry: 0, headLead: undefined, throughTables: false };
+  return keepNextPlan(look, room)?.height ?? null;
 }
 
 /** Lines a whole paragraph gives to the next page when it may split early, or 0. */
@@ -632,32 +687,47 @@ export function sectionMarkFlowKeys(keys: string[], endsWithSectionMark: boolean
  * trailing `.` records that the window reached the story's last block, whose position
  * decides whether it ends the chain and whether a section mark keeps its page break.
  *
- * Each key grows by at most {@link MAX_KEEP_NEXT_CHAIN} - 1 unfolded keys, so a document
+ * Tables (`tableAt`) keep when their last row keeps (`tableEndsKept`). Such a table prices
+ * the chain that starts after it, which reads one block more than a paragraph's own window.
+ * A chain ends at the first table it reaches, and a table whose last row keeps extends that
+ * chain with the window of what follows the table ({@link followingKeepOpening}).
+ *
+ * Each key grows by at most 2 * {@link MAX_KEEP_NEXT_CHAIN} unfolded keys, so a document
  * declaring `w:keepNext` on every paragraph costs work linear in its length, and no single
  * key grows with it.
  */
 export function keepNextFlowKeys(
   keys: string[],
   keepsNext: (index: number) => boolean,
-  skipBlock?: (index: number) => boolean
+  skipBlock?: (index: number) => boolean,
+  tableAt?: (index: number) => boolean
 ): string[] {
+  const window = (from: number, span: number, through: boolean): string => {
+    let folded = '';
+    let last = from - 1;
+    for (let at = from; at < keys.length && at - from < span; at += 1) {
+      last = at;
+      if (skipBlock?.(at)) {
+        folded += '-';
+        continue;
+      }
+      folded += `${keys[at]!.length}:${keys[at]}`;
+      if (tableAt?.(at)) {
+        if (through && keepsNext(at)) folded += `>${window(at + 1, MAX_KEEP_NEXT_CHAIN, false)}`;
+        break;
+      }
+      if (!keepsNext(at)) break;
+    }
+    return last === keys.length - 1 ? `${folded}.` : folded;
+  };
   let flow = keys;
   for (let index = 0; index < keys.length - 1; index += 1) {
     if (!keepsNext(index) || skipBlock?.(index)) continue;
-    let window = '';
-    let last = index;
-    for (let at = index + 1; at < keys.length && at - index < MAX_KEEP_NEXT_CHAIN; at += 1) {
-      last = at;
-      if (skipBlock?.(at)) {
-        window += '-';
-        continue;
-      }
-      window += `${keys[at]!.length}:${keys[at]}`;
-      if (!keepsNext(at)) break;
-    }
-    if (last === keys.length - 1) window += '.';
+    const folded = tableAt?.(index)
+      ? window(index + 1, MAX_KEEP_NEXT_CHAIN, false)
+      : window(index + 1, MAX_KEEP_NEXT_CHAIN - 1, true);
     if (flow === keys) flow = [...keys];
-    flow[index] = `${keys[index]}~kn~${window}`;
+    flow[index] = `${keys[index]}~kn~${folded}`;
   }
   return flow;
 }
@@ -683,7 +753,10 @@ export interface FlowKeyFoldInputs {
   /** Empty when the part has no TOC; the fold is then skipped outright. */
   readonly tocVerdicts: readonly string[];
   readonly markerTextAt: (index: number) => string | undefined;
+  /** A table keeps when its last row keeps with the content after the table. */
   readonly keepsNextAt: (index: number) => boolean;
+  /** The block is a table: a keep chain ends there and may read through its kept rows. */
+  readonly tableAt?: (index: number) => boolean;
   /** The last block is the paragraph that carries the section mark. */
   readonly endsWithSectionMark?: boolean;
   /** Positioned frames contribute neither flow height nor a keep-chain boundary. */
@@ -730,6 +803,7 @@ export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[]
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);
   flow = sectionMarkFlowKeys(flow, at.endsWithSectionMark === true);
-  flow = keepNextFlowKeys(flow, at.keepsNextAt, at.skipKeepNextAt); // LAST — see the doc comment above.
+  // LAST — see the doc comment above.
+  flow = keepNextFlowKeys(flow, at.keepsNextAt, at.skipKeepNextAt, at.tableAt);
   return flow;
 }

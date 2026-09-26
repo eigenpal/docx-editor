@@ -1191,6 +1191,7 @@ function layoutBlocksPass(
         tocVerdicts,
         markerTextAt: (index) => markerTexts[index],
         keepsNextAt: (index) => keepsNext[index]! || keptTables.endsKept(prepared[index]),
+        tableAt: (index) => prepared[index]?.kind === 'table',
         endsWithSectionMark:
           lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
         skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
@@ -1913,7 +1914,9 @@ function layoutBlocksPass(
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
       publishFragment: (fragment) => pageFragments.push(fragment),
-      followingKeepOpening: () => (next === undefined ? undefined : keepChains.opening(next)),
+      followingKeepOpening: (room) =>
+        next === undefined ? undefined : keepChains.opening(next, room),
+      keptBefore: next !== undefined && keptTables.keptBefore(prepared[next - 2]),
     };
     const result = paginateTableInFlow(table, flow);
     cursorY = result.outOfFlow ? savedCursorY : flow.cursorY;
