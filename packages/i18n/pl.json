@@ -74,8 +74,8 @@
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
-    "redo": "Ponów",
-    "redoShortcut": "Ponów (Ctrl+Y)",
+    "redo": "Wykonaj ponownie",
+    "redoShortcut": "Wykonaj ponownie (Ctrl+Y)",
     "bold": "Pogrubienie",
     "boldShortcut": "Pogrubienie (Ctrl+B)",
     "italic": "Kursywa",
@@ -474,8 +474,8 @@
     "menu": {
       "ariaLabel": "Opcje układu obrazu",
       "inLineWithText": "Równo z tekstem",
-      "squareLeft": "Kwadrat z lewej",
-      "squareRight": "Kwadrat z prawej"
+      "squareLeft": "Ramka z lewej",
+      "squareRight": "Ramka z prawej"
     },
     "square": "Ramka",
     "targets": {
@@ -486,11 +486,11 @@
       "squareLeft": "Ramka z lewej",
       "squareRight": "Ramka z prawej",
       "through": "Na wskroś",
-      "tight": "Przyległe",
+      "tight": "Przylegle",
       "topAndBottom": "Góra i dół"
     },
     "through": "Na wskroś",
-    "tight": "Przyległe"
+    "tight": "Przylegle"
   },
   "editor": {
     "showDocumentOutline": "Pokaż konspekt dokumentu",

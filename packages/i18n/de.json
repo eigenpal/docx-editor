@@ -403,7 +403,7 @@
     "deleteRow": "Zeile löschen",
     "deleteColumn": "Spalte löschen",
     "deleteTable": "Tabelle löschen",
-    "mergeCells": "Zellen zusammenführen",
+    "mergeCells": "Zellen verbinden",
     "splitCell": "Zelle teilen",
     "editingTools": "Tabellenbearbeitungswerkzeuge",
     "label": "Tabelle:",

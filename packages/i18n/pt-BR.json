@@ -140,9 +140,9 @@
     "normalText": "Texto normal",
     "title": "Título",
     "subtitle": "Subtítulo",
-    "heading1": "Cabeçalho 1",
-    "heading2": "Cabeçalho 2",
-    "heading3": "Cabeçalho 3"
+    "heading1": "Título 1",
+    "heading2": "Título 2",
+    "heading3": "Título 3"
   },
   "font": {
     "selectAriaLabel": "Selecionar família da fonte",
@@ -378,7 +378,7 @@
     "closeAriaLabel": "Fechar estrutura",
     "closeTitle": "Fechar estrutura",
     "title": "Estrutura",
-    "noHeadings": "Nenhum cabeçalho encontrado. Adicione cabeçalhos ao seu documento para vê-los aqui."
+    "noHeadings": "Nenhum título encontrado. Adicione títulos ao seu documento para vê-los aqui."
   },
   "titleBar": {
     "untitled": "Sem título",
@@ -464,16 +464,16 @@
     "flipVertical": "Espelhar verticalmente"
   },
   "imageWrap": {
-    "inline": "Em linha com o texto",
+    "inline": "Alinhado com o texto",
     "floatLeft": "Flutuar à esquerda (envolver à direita)",
     "floatRight": "Flutuar à direita (envolver à esquerda)",
-    "topAndBottom": "Acima e abaixo",
+    "topAndBottom": "Superior e inferior",
     "behindText": "Atrás do texto",
     "inFrontOfText": "Na frente do texto",
     "tooltipPrefix": "Quebra: {label}",
     "menu": {
       "ariaLabel": "Opções de layout de imagem",
-      "inLineWithText": "Em linha com o texto",
+      "inLineWithText": "Alinhado com o texto",
       "squareLeft": "Quadrado à esquerda",
       "squareRight": "Quadrado à direita"
     },
@@ -559,7 +559,7 @@
     "rightIndent": "Recuo direito",
     "topMargin": "Margem superior",
     "bottomMargin": "Margem inferior",
-    "hangingIndent": "Deslocamento"
+    "hangingIndent": "Recuo deslocado"
   },
   "loading": {
     "label": "Carregando"

@@ -83,7 +83,7 @@
     "underline": "Souligné",
     "underlineShortcut": "Souligné (Ctrl+U)",
     "strikethrough": "Barré",
-    "fontColor": "Couleur du texte",
+    "fontColor": "Couleur de police",
     "highlightColor": "Couleur de surbrillance",
     "insertLink": "Insérer un lien",
     "insertLinkShortcut": "Insérer un lien (Ctrl+K)",
@@ -120,8 +120,8 @@
     "indentationAriaLabel": "Retrait de la liste",
     "bulletList": "Liste à puces",
     "numberedList": "Liste numérotée",
-    "decreaseIndent": "Décaler à gauche",
-    "increaseIndent": "Décaler à droite"
+    "decreaseIndent": "Réduire le retrait",
+    "increaseIndent": "Augmenter le retrait"
   },
   "lineSpacing": {
     "single": "Simple",
@@ -155,7 +155,7 @@
   "fontSize": {
     "decrease": "Diminuer la taille de la police",
     "increase": "Augmenter la taille de la police",
-    "label": "Police",
+    "label": "Taille de police",
     "listLabel": "Tailles de police"
   },
   "zoom": {
@@ -213,9 +213,9 @@
   "dialogs": {
     "imageProperties": {
       "title": "Propriétés de l'image",
-      "altText": "Texte alternatif",
+      "altText": "Texte de remplacement",
       "altTextPlaceholder": "Décrivez l'image pour l'accessibilité...",
-      "textWrapping": "Retour à la ligne automatique",
+      "textWrapping": "Habillage du texte",
       "dimensions": "Dimensions",
       "widthLabel": "Largeur :",
       "heightLabel": "Hauteur :",
@@ -467,7 +467,7 @@
     "flipVertical": "Retourner verticalement"
   },
   "imageWrap": {
-    "inline": "En ligne avec le texte",
+    "inline": "Aligné sur le texte",
     "floatLeft": "Carré à gauche",
     "floatRight": "Carré à droite",
     "topAndBottom": "Haut et bas",
@@ -475,7 +475,7 @@
     "inFrontOfText": "Devant le texte",
     "tooltipPrefix": "Habillage : {label}",
     "menu": {
-      "inLineWithText": "En ligne avec le texte",
+      "inLineWithText": "Aligné sur le texte",
       "squareLeft": "Carré à gauche",
       "squareRight": "Carré à droite",
       "ariaLabel": "Options de disposition de l'image"
@@ -570,9 +570,9 @@
   "ruler": {
     "horizontal": "Règle horizontale",
     "vertical": "Règle verticale",
-    "firstLineIndent": "Indentation de première ligne",
-    "leftIndent": "Décalage à gauche",
-    "rightIndent": "Décalage à droite",
+    "firstLineIndent": "Retrait de la première ligne",
+    "leftIndent": "Retrait à gauche",
+    "rightIndent": "Retrait à droite",
     "topMargin": "Marge supérieure",
     "bottomMargin": "Marge inférieure",
     "hangingIndent": "Retrait négatif"
@@ -712,7 +712,7 @@
       "date": "Date",
       "dropdown": "Liste déroulante",
       "picture": "Image",
-      "plainText": "Texte",
+      "plainText": "Texte brut",
       "repeatingSection": "Section répétitive",
       "richText": "Texte enrichi",
       "buildingBlockGallery": null

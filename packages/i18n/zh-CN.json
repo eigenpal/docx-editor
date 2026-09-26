@@ -92,12 +92,12 @@
     "subscript": "下标",
     "subscriptShortcut": "下标(Ctrl+=)",
     "imageProperties": "图片属性",
-    "imagePropertiesShortcut": "图片属性(替代文本、边框)...",
+    "imagePropertiesShortcut": "图片属性(替代文字、边框)...",
     "clearFormatting": "清除格式",
     "commentsAndChanges": "批注和更改",
     "unavailableInPreview": "此预览版本中不可用",
     "more": "更多",
-    "altText": "替换文字",
+    "altText": "替代文字",
     "imageWrap": "环绕文字",
     "formatPainter": null,
     "formatPainterShortcut": null,
@@ -213,7 +213,7 @@
   "dialogs": {
     "imageProperties": {
       "title": "图片属性",
-      "altText": "替代文本",
+      "altText": "替代文字",
       "altTextPlaceholder": "描述图片内容以供无障碍访问...",
       "dimensions": "尺寸",
       "heightLabel": "高度:",
@@ -777,7 +777,7 @@
   },
   "imageAltText": {
     "description": "说明",
-    "panelTitle": "替换文字",
+    "panelTitle": "替代文字",
     "title": "标题"
   },
   "imageInsert": {

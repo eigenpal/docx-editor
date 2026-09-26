@@ -4,7 +4,7 @@
     "cancel": "İptal",
     "apply": "Uygula",
     "close": "Kapat",
-    "comment": "Yorum",
+    "comment": "Açıklama",
     "dismiss": "Kapat"
   },
   "toolbar": {
@@ -64,7 +64,7 @@
       "styles": "Stiller",
       "font": "Yazı tipi",
       "textFormatting": "Metin biçimlendirme",
-      "script": "Komut",
+      "script": "Üst simge/Alt simge",
       "alignment": "Hizalama",
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
@@ -78,12 +78,12 @@
     "redoShortcut": "Yinele (Ctrl+Y)",
     "bold": "Kalın",
     "boldShortcut": "Kalın (Ctrl+B)",
-    "italic": "Eğik",
-    "italicShortcut": "Eğik (Ctrl+I)",
+    "italic": "İtalik",
+    "italicShortcut": "İtalik (Ctrl+I)",
     "underline": "Altı çizili",
     "underlineShortcut": "Altı çizili (Ctrl+U)",
     "strikethrough": "Üstü çizili",
-    "fontColor": "Yazı rengi",
+    "fontColor": "Yazı tipi rengi",
     "highlightColor": "Vurgu rengi",
     "insertLink": "Bağlantı ekle",
     "insertLinkShortcut": "Bağlantı ekle (Ctrl+K)",
@@ -139,7 +139,7 @@
     "selectAriaLabel": "Paragraf stili seç",
     "normalText": "Normal metin",
     "title": "Başlık",
-    "subtitle": "Alt başlık",
+    "subtitle": "Altyazı",
     "heading1": "Başlık 1",
     "heading2": "Başlık 2",
     "heading3": "Başlık 3"
@@ -218,7 +218,7 @@
       "dimensions": "Boyutlar",
       "heightLabel": "Yükseklik:",
       "lockAspectRatio": "En boy oranını kilitle",
-      "textWrapping": "Metin sarma",
+      "textWrapping": "Metin kaydırma",
       "widthLabel": "Genişlik:"
     },
     "imagePosition": {
@@ -262,7 +262,7 @@
       "footnotes": "Dipnotlar",
       "endnotes": "Son notlar",
       "position": "Konum",
-      "numberFormat": "Numara biçimi",
+      "numberFormat": "Sayı biçimi",
       "numbering": "Numaralandırma",
       "footnotePositions": {
         "bottomOfPage": "Sayfa altı",
@@ -347,7 +347,7 @@
   },
   "comments": {
     "unknown": "Bilinmiyor",
-    "addComment": "Yorum ekle...",
+    "addComment": "Açıklama ekle...",
     "replyPlaceholder": "Yanıtla veya @ ile başkalarını ekle",
     "reopen": null,
     "resolve": null
@@ -467,15 +467,15 @@
     "flipVertical": "Dikey çevir"
   },
   "imageWrap": {
-    "inline": "Metinle aynı satırda",
+    "inline": "Metinle aynı hizaya",
     "floatLeft": "Sol kareleme",
     "floatRight": "Sağ kareleme",
     "topAndBottom": "Üst ve alt",
     "behindText": "Metnin arkasında",
     "inFrontOfText": "Metnin önünde",
-    "tooltipPrefix": "Sarma: {label}",
+    "tooltipPrefix": "Kaydırma: {label}",
     "menu": {
-      "inLineWithText": "Metinle aynı satırda",
+      "inLineWithText": "Metinle aynı hizaya",
       "squareLeft": "Sol kareleme",
       "squareRight": "Sağ kareleme",
       "ariaLabel": "Görsel düzeni seçenekleri"
@@ -484,15 +484,15 @@
     "targets": {
       "behind": "Metin arkasına",
       "inFront": "Metin önüne",
-      "inline": "Metinle aynı hizada",
+      "inline": "Metinle aynı hizaya",
       "square": "Kare",
       "squareLeft": "Kare (sol)",
       "squareRight": "Kare (sağ)",
-      "through": "İçinden",
+      "through": "Boyunca",
       "tight": "Sıkı",
       "topAndBottom": "Üst ve alt"
     },
-    "through": "İçinden",
+    "through": "Boyunca",
     "tight": "Sıkı"
   },
   "editor": {
