@@ -45,7 +45,7 @@ jobs:
   # config.json are not changesets.
   mode:
     name: Detect release mode
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
@@ -419,7 +419,7 @@ jobs:
     name: Notify Slack — workflow failed
     needs: [mode, checks, build, release]
     if: ${{ failure() }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     # Only curls the Slack webhook; needs no GITHUB_TOKEN access at all.
     permissions: {}

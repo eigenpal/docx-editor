@@ -14,7 +14,7 @@ jobs:
   source:
     # Never consume artifacts from a fork or a pull-request workflow.
     if: github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       published: ${{ steps.source.outputs.published }}
@@ -64,7 +64,7 @@ jobs:
     # Plain `needs` results, not reusable-workflow outputs: a rerun of the failed jobs keeps
     # the results of the jobs that passed.
     if: needs.source.outputs.published == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     permissions:
       contents: read
@@ -301,7 +301,7 @@ jobs:
     name: Report
     needs: [source, verify, downstream, announcements]
     if: always() && (needs.source.outputs.published == 'true' || failure())
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     permissions:
       actions: read
