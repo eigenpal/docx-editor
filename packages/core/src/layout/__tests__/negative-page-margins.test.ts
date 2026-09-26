@@ -54,6 +54,8 @@ interface DocOptions {
   readonly footnote?: string;
   /** `w:type` of the final section. */
   readonly breakType?: string;
+  /** `w:pgMar/@w:header` in twips; 720 when absent. */
+  readonly header?: number;
 }
 
 function lines(count: number, label: string): string {
@@ -63,7 +65,7 @@ function lines(count: number, label: string): string {
   ).join('');
 }
 
-function sectPr(top: number, bottom: number, extra = '', breakType?: string): string {
+function sectPr(top: number, bottom: number, extra = '', breakType?: string, header = 720): string {
   return (
     '<w:sectPr>' +
     (breakType ? `<w:type w:val="${breakType}"/>` : '') +
@@ -72,7 +74,7 @@ function sectPr(top: number, bottom: number, extra = '', breakType?: string): st
     '<w:footerReference w:type="default" r:id="rIdF1"/>' +
     '<w:pgSz w:w="12240" w:h="15840"/>' +
     `<w:pgMar w:top="${top}" w:right="720" w:bottom="${bottom}" w:left="2160"` +
-    ' w:header="720" w:footer="144" w:gutter="0"/>' +
+    ` w:header="${header}" w:footer="144" w:gutter="0"/>` +
     extra +
     '</w:sectPr>'
   );
@@ -126,7 +128,7 @@ function docBytes(options: DocOptions): Uint8Array {
       : {}),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${options.body}` +
-        sectPr(options.top, options.bottom, options.sectExtra, options.breakType) +
+        sectPr(options.top, options.bottom, options.sectExtra, options.breakType, options.header) +
         '</w:body></w:document>'
     ),
   });
@@ -297,6 +299,26 @@ describe('body flow with negative vertical margins and tall furniture', () => {
     const positive = layoutDoc({ top: 1296, bottom: 1152, body });
     expect(topInset(positive.pages[0]!)).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
     expect(positive.pages.length).toBeGreaterThan(negative.pages.length);
+  });
+
+  test('with no header or footer, the body still starts at |top| and ends at |bottom|', () => {
+    const { part } = load(docBytes({ top: -1296, bottom: -1152, body }));
+    const layout = layoutSemanticDocument(part, 1, { measurer, producer: 'test' });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    for (const page of layout.pages) {
+      expect(page.header).toBeUndefined();
+      expect(topInset(page)).toBeCloseTo(TOP, 6);
+      expect(bottomInset(page)).toBeCloseTo(BOTTOM, 6);
+    }
+  });
+
+  test('top -720 with header 1440 puts the text at 36pt and the header at 72pt', () => {
+    // The worked example of ECMA-376 Part 1, 17.6.11: the header sits below the text top.
+    const layout = layoutDoc({ top: -720, bottom: -1152, body, header: 1440 });
+    for (const page of layout.pages) {
+      expect(topInset(page)).toBeCloseTo(36, 6);
+      expect(page.header!.box.y - page.box.y).toBeCloseTo(72, 6);
+    }
   });
 
   test('an even-page header does not push the body either', () => {

@@ -290,7 +290,7 @@ export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boole
   return false;
 }
 
-function hitAnchoredDrawingAtPoint(
+export function hitAnchoredDrawingAtPoint(
   drawings: readonly AnchoredDrawingRecord[] | undefined,
   point: HitPoint,
   pageIndex: number,
