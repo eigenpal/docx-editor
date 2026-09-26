@@ -1140,10 +1140,9 @@ function buildFootnoteArea(
       break;
     }
     // Each note's budget ends at ITS reference's floor. Reserve mode sizes by that floor
-    // alone: across columns or beside a float a later reference can sit higher, and a
-    // reserve that reaches an earlier reference's line pushes that line on. Attach mode
-    // cannot move the body, so it also caps the room by every placed note's budget: the
-    // stack never enters the full box of a reference line whose note starts here.
+    // alone: a reserve reaching an earlier (lower, other-column) reference line pushes it on.
+    // Attach mode cannot move the body, so it also caps the room by every placed note's
+    // budget: the stack never enters the full box of a reference line whose note starts here.
     const band = options?.reserveBandOf?.(ref) ?? noteReferenceLineBandPt(page, ref);
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
@@ -2727,6 +2726,10 @@ export function layoutSemanticDocumentWithNotes<
     let strictReserves: ReadonlyMap<number, number> | null = null;
     let strictReasons: NotePaginationFallbackReason[] = [];
     let converged = false;
+    let stableReserves: ReadonlyMap<number, number> | null = null;
+    let phaseEnvelope: ReadonlyMap<number, number> = usedReserves;
+    const relayout = (reserves: ReadonlyMap<number, number>): SemanticLayout =>
+      runBody({ ...optionsWithLists, noteMarks, pageBottomReserves: reserves });
     let previousPageCount = bodyLayout.pages.length;
     // Scaled with the document: legitimate cold convergence of a large document can grow
     // the page count for more consecutive rounds than a small one (the settled prefix
@@ -2744,6 +2747,7 @@ export function layoutSemanticDocumentWithNotes<
         allowOrphanDeferral
       );
       fallbackReasons = [...computed.reasons];
+      if (computed.stable) stableReserves = usedReserves;
       // Published pages must reflect the reserves used to produce them — not a later map.
       if (computed.stable && footnoteReservesEqual(computed.reserves, usedReserves)) {
         // First settle same-page reference/note reservations. Relaxing orphan pairs
@@ -2761,6 +2765,7 @@ export function layoutSemanticDocumentWithNotes<
           if (notesMemo) notesMemo.orphanPolicyPart = part;
           appliedFingerprints.clear();
           appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
+          phaseEnvelope = usedReserves;
           continue;
         }
         converged = true;
@@ -2797,24 +2802,30 @@ export function layoutSemanticDocumentWithNotes<
       if (appliedFingerprints.has(nextFp)) {
         // Shrink↔grow cycle — lock to the monotonic envelope; stop if that is not new.
         next = growFootnoteReserves(usedReserves, computed.reserves);
-        const envelopeFp = footnoteReservesFingerprint(next);
-        if (footnoteReservesEqual(next, usedReserves) || appliedFingerprints.has(envelopeFp)) {
+        const tried = (map: ReadonlyMap<number, number>): boolean =>
+          footnoteReservesEqual(map, usedReserves) ||
+          appliedFingerprints.has(footnoteReservesFingerprint(map));
+        // An unstable layout would start notes after their references: cover every map this
+        // phase adopted, then fall back to the last map whose layout left the notes room.
+        if (!computed.stable && tried(next)) next = growFootnoteReserves(phaseEnvelope, next);
+        if (tried(next)) {
           fallbackReasons.push('note-reflow-exhausted');
+          if (!computed.stable && stableReserves && stableReserves !== usedReserves) {
+            usedReserves = stableReserves;
+            bodyLayout = relayout(stableReserves);
+          }
           break;
         }
       }
 
       usedReserves = next;
+      phaseEnvelope = growFootnoteReserves(phaseEnvelope, next);
       appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
       spent.adopted += 1;
       adoptedThisPass += 1;
       // Keep the caller's session: reserve changes alter the layout context key, so
       // checkpoints from a different reserve set are not resumed — they are replaced.
-      bodyLayout = runBody({
-        ...optionsWithLists,
-        noteMarks,
-        pageBottomReserves: usedReserves,
-      });
+      bodyLayout = relayout(usedReserves);
       consecutiveGrowth = bodyLayout.pages.length > previousPageCount ? consecutiveGrowth + 1 : 0;
       previousPageCount = bodyLayout.pages.length;
       if (attempt === attemptCap - 1) {
@@ -2831,11 +2842,7 @@ export function layoutSemanticDocumentWithNotes<
       usedReserves = strictReserves;
       fallbackReasons = [...strictReasons];
       if (refinementMoved) {
-        bodyLayout = runBody({
-          ...optionsWithLists,
-          noteMarks,
-          pageBottomReserves: usedReserves,
-        });
+        bodyLayout = relayout(usedReserves);
       }
       // Settled for this part identity: the refinement had its budget and did not beat the
       // strict answer, so later passes republish instead of re-spending it. An edit

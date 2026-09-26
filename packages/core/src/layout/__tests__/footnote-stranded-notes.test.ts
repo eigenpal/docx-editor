@@ -5,6 +5,8 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { normalizeParagraphIdentity } from '../../store/package/para-id.ts';
+import { TreePackageStore } from '../../store/store/tree-package-store.ts';
 import { collectNoteReferences, resolveNotesPart } from '../../store/package/note-references.ts';
 import {
   resolveEndnoteProperties,
@@ -327,5 +329,159 @@ describe('footnote attach floor across columns', () => {
     const { layout } = layoutProbe(probe, session);
     expect(strandedNotes(probe, layout)).toEqual([]);
     expect(settles(probe, session, layout)).toBe(true);
+  });
+});
+
+type TreeEdit = Record<string, unknown>;
+
+/** Notes with a continuation and no head on any page. */
+function headlessNotes(layout: SemanticLayout): number[] {
+  const heads = new Set<number>();
+  const continued = new Set<number>();
+  for (const page of layout.pages) {
+    for (const note of page.footnotes?.notes ?? []) {
+      (note.continuation ? continued : heads).add(note.noteId);
+    }
+  }
+  return [...continued].filter((noteId) => !heads.has(noteId));
+}
+
+/**
+ * Applies `edits` one by one to a retained session, laying the document out six times after
+ * each edit. Every published layout must start each note on some page, and the last two
+ * passes must agree.
+ */
+function expectRetainedPassesKeepHeads(probe: Probe, edits: readonly TreeEdit[]): void {
+  const loaded = readOoxmlPackage(probeDocx(probe));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const body = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main)).bodyStore();
+  const fn = resolveFootnoteProperties(undefined, undefined);
+  const en = resolveEndnoteProperties(undefined, undefined);
+  const measurer = createFixedMeasurer();
+  const notes: NotesLayoutInput = {
+    footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+    endnotesPart: null,
+    footnotePropsBySection: [fn],
+    endnotePropsBySection: [en],
+    documentFootnoteProps: fn,
+    documentEndnoteProps: en,
+    measurer,
+    producer: 'footnote-stranded-notes',
+  };
+  const session = createLayoutSession();
+  let revision = 1;
+  const shapes: string[] = [];
+  for (const edit of [null, ...edits]) {
+    if (edit) {
+      // The recorded edits are plain tree ops; `apply` validates each one.
+      const applied = body.transact((ctx) => ctx.apply(edit as Parameters<typeof ctx.apply>[0]));
+      expect(applied.ok).toBe(true);
+      revision += 1;
+    }
+    shapes.length = 0;
+    for (let pass = 0; pass < 6; pass += 1) {
+      const layout = layoutSemanticDocument(body.part, revision, { measurer, notes, session });
+      expect(headlessNotes(layout)).toEqual([]);
+      shapes.push(JSON.stringify(pages(layout)));
+    }
+  }
+  expect(shapes.at(-1)).toBe(shapes.at(-2));
+}
+
+describe('footnote reflow in a retained session', () => {
+  const id = (index: string) => `/word/document.xml#${index}`;
+  const exact = { after: '0', line: '480', lineRule: 'exact' };
+
+  // After the last edit the reserve maps of two passes alternate; one of them leaves the
+  // page before note 3's reference without a reserve. A pass that stopped on that map
+  // published note 3 without a head; the loop now republishes the last map that left room.
+  test('a two-map cycle republishes the map that leaves the notes room', () => {
+    expectRetainedPassesKeepHeads(
+      {
+        paragraphs: [
+          { lines: 45, spacing: 'w:after="0" w:line="480" w:lineRule="exact"' },
+          { lines: 30, widowControl: true },
+          { lines: 45, widowControl: true, spacing: 'w:after="0" w:line="480" w:lineRule="exact"' },
+          { lines: 1, widowControl: true },
+          {
+            lines: 1,
+            widowControl: true,
+            spacing: 'w:before="240" w:after="0" w:line="480" w:lineRule="auto"',
+          },
+          { lines: 1 },
+        ],
+        refs: { 12: [6], 51: [3], 55: [7], 66: [2], 86: [4], 88: [5], 115: [1] },
+        notes: { 1: 10, 2: 12, 3: 2, 4: 4, 5: 12, 6: 3, 7: 8 },
+      },
+      [
+        {
+          op: 'setParagraphProperties',
+          paragraphId: id('0.0.4'),
+          properties: [
+            {
+              localName: 'spacing',
+              attributes: { before: '240', after: '0', line: '480', lineRule: 'auto' },
+            },
+            { localName: 'keepLines' },
+          ],
+        },
+        { op: 'splitParagraph', paragraphId: id('0.0.3'), offset: 9 },
+        { op: 'splitParagraph', paragraphId: id('0.0.0'), offset: 9 },
+        {
+          op: 'setParagraphProperties',
+          paragraphId: id('0.0.2'),
+          properties: [
+            { localName: 'spacing', attributes: exact },
+            { localName: 'widowControl', attributes: { val: '0' } },
+          ],
+        },
+        { op: 'deleteText', paragraphId: id('0.0.2'), start: 0, end: 9 },
+        { op: 'insertText', paragraphId: id('0.0.5'), offset: 3, text: 'x' },
+        { op: 'setSectionProperties', marginBottomTwips: 1430 },
+        {
+          op: 'setParagraphProperties',
+          paragraphId: id('new:7'),
+          properties: [
+            { localName: 'widowControl', attributes: { val: '0' } },
+            { localName: 'spacing', attributes: exact },
+            { localName: 'keepLines' },
+          ],
+        },
+      ]
+    );
+  });
+
+  // The first pass after the split cycles through three maps, none of which leaves the
+  // notes room. The loop now grows the reserves over every map it adopted before stopping.
+  test('a three-map cycle grows over every map before it stops', () => {
+    expectRetainedPassesKeepHeads(
+      {
+        paragraphs: [
+          { lines: 3, widowControl: true, spacing: 'w:after="0" w:line="480" w:lineRule="exact"' },
+          { lines: 3, widowControl: true, spacing: 'w:after="0" w:line="360" w:lineRule="auto"' },
+          { lines: 2, spacing: 'w:after="0" w:line="360" w:lineRule="auto"' },
+        ],
+        refs: { 2: [7, 8], 4: [1], 6: [2, 5], 7: [3, 6], 8: [4] },
+        notes: { 1: 20, 2: 10, 3: 3, 4: 2, 5: 20, 6: 8, 7: 4, 8: 8 },
+      },
+      [
+        {
+          op: 'setParagraphProperties',
+          paragraphId: id('0.0.0'),
+          properties: [{ localName: 'spacing', attributes: exact }, { localName: 'keepLines' }],
+        },
+        {
+          op: 'setRunProperties',
+          paragraphId: id('0.0.2'),
+          start: 0,
+          end: 3,
+          properties: [{ localName: 'sz', attributes: { val: '26' } }],
+        },
+        { op: 'insertText', paragraphId: id('0.0.2'), offset: 3, text: 'x' },
+        { op: 'deleteText', paragraphId: id('0.0.2'), start: 0, end: 9 },
+        { op: 'splitParagraph', paragraphId: id('0.0.2'), offset: 9 },
+      ]
+    );
   });
 });
