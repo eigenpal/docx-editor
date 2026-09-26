@@ -278,6 +278,8 @@ export interface TableFlowDeps {
    * page it was admitted onto.
    */
   readonly measuringOnly?: boolean;
+  /** A kept row's successor opens with its whole `w:keepLines` paragraphs (`table-row-keeps.ts`). */
+  readonly keepLinesOpening?: boolean;
   /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
@@ -651,7 +653,10 @@ function placeCellParagraph(
       lines.length,
       // Cross-paragraph keeps remain a row-level decision. This cut only controls
       // how many lines of this paragraph remain on either side of the page edge.
-      { ...paragraphKeeps(props), keepLines: false },
+      {
+        ...paragraphKeeps(props),
+        keepLines: !!deps.keepLinesOpening && paragraphKeeps(props).keepLines,
+      },
       options?.aloneOnPage ?? true
     );
   }

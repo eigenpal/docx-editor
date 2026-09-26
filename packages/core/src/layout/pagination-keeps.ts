@@ -17,7 +17,8 @@
 // Modern-mode table paragraphs also use widow/orphan control when a row crosses pages. The
 // table placer decides the cut before publishing lines; exact-height rows still clip.
 // Cross-paragraph keep chains remain body-flow decisions, while row atomicity is owned
-// by `w:cantSplit`. A body keep-next chain cannot price a table and stops there.
+// by `w:cantSplit`. A body keep-next chain ends at a table, priced by the table's opening
+// (`tableKeepOpening` in `table-row-keeps.ts`) when the caller supplies one.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
@@ -181,6 +182,8 @@ export interface KeepNextLookahead {
   readonly skipBlock?: (index: number) => boolean;
   readonly breaksBefore?: (index: number) => boolean;
   readonly sumAdjacentSpacing?: boolean;
+  /** Height a table at `index` needs where it starts, or null when it cannot be priced. */
+  readonly tableOpening?: (index: number) => number | null;
 }
 
 /** A priced `w:keepNext` chain. */
@@ -200,11 +203,11 @@ export interface KeepNextPlan {
  * than four lines stays whole. A paragraph with keepLines also stays whole. Pricing a shorter
  * prefix lets the later break retreat move the paragraph away from its heading.
  *
- * Returns null for anything the lookahead cannot price — a table in the chain, a chain that
- * runs past {@link MAX_KEEP_NEXT_CHAIN} — and null means the caller places on ordinary fit
- * rules. Word abandons a keep it cannot honour rather than searching, and so does this: the
- * content is placed, just not moved. `linesFor` is asked for lazily, one block at a time,
- * so a chain that stops early never measures the blocks past its end.
+ * Returns null for anything the lookahead cannot price — a table without a priced opening,
+ * a chain that runs past {@link MAX_KEEP_NEXT_CHAIN} — and null means the caller places on
+ * ordinary fit rules. Word abandons a keep it cannot honour rather than searching, and so
+ * does this: the content is placed, just not moved. `linesFor` is asked for lazily, one
+ * block at a time, so a chain that stops early never measures the blocks past its end.
  *
  * Paragraph borders are deliberately NOT priced in. Under-estimating degrades to the
  * behaviour without the rule (the keep does not fire); over-estimating would move content to
@@ -237,6 +240,11 @@ export function keepNextPlan(
   for (let index = start; index - start < MAX_KEEP_NEXT_CHAIN; index += 1) {
     const block = blocks[index];
     if (block && look.skipBlock?.(index)) continue;
+    // A table ends the chain. It has no space before; the member above keeps its after.
+    if (block?.kind === 'table' && index > start) {
+      const opening = look.tableOpening?.(index) ?? null;
+      return opening === null ? null : { height: total + opening, lastWhole };
+    }
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
     // A forced new page also discards the preceding paragraph's trailing spacing.
     if (index > start && look.breaksBefore?.(index)) return { height: total - after, lastWhole };
@@ -377,6 +385,11 @@ export interface KeepNextChains {
    * first line goes, after its space before.
    */
   tailBreak(start: number, lineCount: number, cursorY: number, contentHeight: number): number;
+  /**
+   * Height the block at `start` needs where it opens after a table, with its own keep chain:
+   * `undefined` past the story end, null when it cannot be priced or breaks the page itself.
+   */
+  opening(start: number): number | null | undefined;
 }
 
 /** Bind the keep-next lookahead of one layout pass. */
@@ -392,6 +405,11 @@ export function keepNextChains(
       const look = { ...source, start, carry: 0, headLead: 0 };
       const room = contentHeight - cursorY;
       return lineCount - keepNextTailLines(look, room, contentHeight, compatibilityMode);
+    },
+    opening: (start) => {
+      if (start >= source.blocks.length) return undefined;
+      if (source.breaksBefore?.(start)) return null;
+      return keepNextPlan({ ...source, start, carry: 0 })?.height ?? null;
     },
   };
 }

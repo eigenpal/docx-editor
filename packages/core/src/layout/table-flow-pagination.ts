@@ -29,6 +29,7 @@ import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import { rowBreaksPageBefore } from './table-row-page-break.ts';
+import { keptRowGroup, rowsOpening, tableKeptRowSource } from './table-row-keeps.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
   type RepeatedHeaderBorderPlan,
@@ -103,6 +104,11 @@ export interface TableFlowCursor {
    * its fragments into an array nobody reads.
    */
   readonly publishFragment: (fragment: BlockFragmentRecord) => void;
+  /**
+   * Opening height of the body content after the table, which a kept last row needs beside
+   * it (`table-row-keeps.ts`). `undefined` when nothing follows; null when it cannot be priced.
+   */
+  readonly followingKeepOpening?: () => number | null | undefined;
 }
 
 export interface TableFlowPlacementResult {
@@ -443,6 +449,36 @@ export function paginateTableInFlow(
     if (repeatsEnabled) placeHeaderGroup(true, admitsBodyAfter);
   };
 
+  /** Kept-row pricing over `candidates` (`table-row-keeps.ts`); `first` overrides row 0's height. */
+  const keptSource = (candidates: readonly SemanticTableRow[], first?: [number, number]) => {
+    const heights = new Map<number, number>(first ? [first] : []);
+    return tableKeptRowSource({
+      structure,
+      rows: candidates,
+      left: tableLeft,
+      deps: tableDeps,
+      pageHeight: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
+      heightOf: (at) => {
+        let height = heights.get(at);
+        if (height === undefined) heights.set(at, (height = rowHeightOf(candidates[at]!)));
+        return height;
+      },
+      following: () => flow.followingKeepOpening?.(),
+    });
+  };
+  // Header rows keep with the body rows' opening: when both do not fit below content already
+  // on the page but do fit a page of their own, the table starts on the next one.
+  if (breaksPages && !initialHeaderGroupDegraded && headerRows.length > 0 && flow.cursorY > 0.001) {
+    const room = contentHeight() - flow.cursorY - headerGroupHeight;
+    const opening = rowsOpening(keptSource(structure.rows.slice(headerRows.length)), 0, room) ?? 0;
+    if (opening > room + 0.001 && headerGroupHeight + opening <= contentHeight() + 0.001) {
+      closeTableFragment();
+      advanceColumn();
+      tableLeft = originX();
+      fragmentTop = flow.cursorY;
+    }
+  }
+
   // Initial authored header group (not repeats) — atomic with body-row pagination below.
   if (!initialHeaderGroupDegraded) {
     if (floats) {
@@ -633,7 +669,24 @@ export function paginateTableInFlow(
       row !== structure.rows[0] &&
       rowBreaksPageBefore(row, styleCascade) &&
       (rows.some((placed) => !placed.isHeaderRepeat) || flow.pageHoldsContent(fragmentTop));
-    if (!forceBreak && !startsPage) tryTerminalFit();
+    // A kept group that does not fit with its successor's opening moves to the next page,
+    // unless only header rows would stay behind: the table start decided for those.
+    const keptGroup =
+      breaksPages &&
+      !forceBreak &&
+      !startsPage &&
+      !heldByOpenSpan &&
+      flow.cursorY > 0.001 &&
+      (rows.length === 0 || rows.some((placed) => !placed.isHeaderRow))
+        ? keptRowGroup(
+            keptSource(bodyRows, [bodyRowIndex, naturalHeight]),
+            bodyRowIndex,
+            contentHeight() - flow.cursorY
+          )
+        : null;
+    const keptMoves =
+      !!keptGroup && flow.cursorY + keptGroup.kept + keptGroup.successor > contentHeight() + 0.001;
+    if (!forceBreak && !startsPage && !keptMoves) tryTerminalFit();
 
     // Ordinary rows may break between lines, but their first fragment must have room
     // to start every cell. Otherwise a short label can be orphaned on the previous
@@ -641,6 +694,7 @@ export function paginateTableInFlow(
     if (
       startsPage ||
       forceBreak ||
+      keptMoves ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
         flow.cursorY + naturalHeight > contentHeight() + 0.001 &&

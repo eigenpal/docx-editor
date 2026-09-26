@@ -333,10 +333,11 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
     expect(linesPerPage(lay(fillers(4) + one('tail', '<w:keepNext/>')).pages)).toEqual([5]);
   });
 
-  test('a keepNext paragraph followed by a table is left alone — a table cannot be priced', () => {
+  test('a keepNext paragraph followed by a table moves with the table opening', () => {
+    // The table's first row has no room beside the heading, so both start the next page.
     const table = `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
     const layout = lay(fillers(4) + one('heading', '<w:keepNext/>') + table);
-    expect(linesPerPage(layout.pages)[0]).toBe(5);
+    expect(linesPerPage(layout.pages)[0]).toBe(4);
   });
 });
 

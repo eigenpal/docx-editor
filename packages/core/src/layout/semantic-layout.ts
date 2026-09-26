@@ -106,6 +106,7 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
+import { tableKeepFlow } from './table-row-keeps.ts';
 import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
@@ -176,15 +177,8 @@ import {
 } from './note-pagination.ts';
 import { passProducerOf, producerWithControlContext } from './pass-producer.ts';
 
-let exclusionLayoutPassObserverForTest: (() => void) | null = null;
-
-/** Observe exclusion-relay layout passes in deterministic tests. @internal */
-export function observeExclusionLayoutPassesForTest(observer: () => void): () => void {
-  exclusionLayoutPassObserverForTest = observer;
-  return () => {
-    if (exclusionLayoutPassObserverForTest === observer) exclusionLayoutPassObserverForTest = null;
-  };
-}
+import { noteExclusionLayoutPass } from './exclusion-pass-observer.ts';
+export { observeExclusionLayoutPassesForTest } from './exclusion-pass-observer.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
@@ -496,7 +490,7 @@ function layoutBlocksPass(
     let converged = false;
     const seenZoneTokens = new Set<string>();
     const layoutExclusionCandidate = (candidateOptions: BlockLayoutOptions): BlockLayoutResult => {
-      exclusionLayoutPassObserverForTest?.();
+      noteExclusionLayoutPass();
       return layoutBlocksWithGeometry(bodies, revision, candidateOptions);
     };
     const fallbackUnplaceableFrames = (candidate: BlockLayoutResult): BlockLayoutResult | null => {
@@ -692,6 +686,7 @@ function layoutBlocksPass(
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
   // enters an unequal-width later column; multi-column passes conservatively skip resume.
   const contentWidth = columns.widths[0]!;
+  const keptTables = tableKeepFlow(options, contentWidth, styleCascade);
 
   // PAGE FURNITURE. A header taller than the top-margin remainder pushes that page's content
   // area down (Word's behaviour), and the header a page shows is the one its OWN variant
@@ -1190,7 +1185,7 @@ function layoutBlocksPass(
         borderGroupKeyAt: (index) => borderGroupKeys[index]!,
         tocVerdicts,
         markerTextAt: (index) => markerTexts[index],
-        keepsNextAt: (index) => keepsNext[index]!,
+        keepsNextAt: (index) => keepsNext[index]! || keptTables.endsKept(prepared[index]),
         endsWithSectionMark:
           lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
         skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
@@ -1881,7 +1876,8 @@ function layoutBlocksPass(
   const layoutTableInFlow = (
     table: OoxmlElement,
     anchorY = cursorY,
-    positionTextTable = false
+    positionTextTable = false,
+    next?: number
   ): boolean => {
     const savedCursorY = cursorY;
     // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
@@ -1915,6 +1911,7 @@ function layoutBlocksPass(
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
       publishFragment: (fragment) => pageFragments.push(fragment),
+      followingKeepOpening: () => (next === undefined ? undefined : keepChains.opening(next)),
     };
     const result = paginateTableInFlow(table, flow);
     cursorY = result.outOfFlow ? savedCursorY : flow.cursorY;
@@ -1986,6 +1983,8 @@ function layoutBlocksPass(
         prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || collapsesSectionMark(at)),
       breaksBefore: (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
       sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
+      tableOpening: (at) =>
+        keptTables.opening(prepared[at], columnWidth(), contentHeight(), tableDeps),
     },
     options.compatibilityMode
   );
@@ -2116,7 +2115,7 @@ function layoutBlocksPass(
       }
       collectingCellBreakKeys = [];
       try {
-        const outOfFlow = layoutTableInFlow(entry.table);
+        const outOfFlow = layoutTableInFlow(entry.table, cursorY, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
       } finally {
