@@ -1,6 +1,7 @@
 // The hold-out reserve — the fixed point of a footnote eviction. Full account on
 // {@link holdOutReserveNeed}.
 
+import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
   bodyCursorBottomPt,
@@ -19,7 +20,7 @@ import {
   noteColumnBudgetPt,
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
-import { MAX_KEEP_NEXT_CHAIN } from './pagination-keeps.ts';
+import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps } from './pagination-keeps.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
 
@@ -83,7 +84,14 @@ export interface HoldOutArgs {
  *
  * The reference may open the next page behind a heading or a sibling line: the eviction
  * reserve names the reference's line, but widow/orphan control and `w:keepNext` move
- * companions with it, and the companions can only return together. The demand charges
+ * companions with it, and the companions can only return together. A block ahead of that
+ * `w:keepNext` group is no companion: it returns on its own, so the hold releases and lets
+ * it back. Holding would freeze the page at whatever height an earlier round left it, and
+ * content an upstream page pushes forward would pile up in front of the reference. If the
+ * reference line then returns too, the page's own eviction moves it out again, and the
+ * next round finds the group at the page top. The release applies only where both pages
+ * stack their blocks in one column; lines returning to a multi-column page may change
+ * column, which this test cannot predict, so those pages keep the hold. The demand charges
  * every pulled reference in the OWNING BLOCK, not just the frontier line's — a
  * citation-dense paragraph pulls all of its notes back together.
  *
@@ -135,17 +143,24 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // fragment. A table anywhere in that opening run, or a reference deeper than the scan
   // window, is a pull-back this reserve cannot reason about — fail open.
   let owningBlock: ParagraphFragmentRecord | undefined;
-  let scanned = 0;
-  for (const block of nextBody.fragments) {
+  let owningAt = 0;
+  for (const [index, block] of nextBody.fragments.entries()) {
     if (block.kind !== 'paragraph') return 0;
-    if (scanned >= MAX_HOLD_OUT_SCAN_BLOCKS) return 0;
-    scanned += 1;
+    if (index >= MAX_HOLD_OUT_SCAN_BLOCKS) return 0;
     if (fragmentOwnsPosition(block, frontierRef.paragraphId, frontierRef.atomOffset)) {
       owningBlock = block;
+      owningAt = index;
       break;
     }
   }
   if (!owningBlock) return 0;
+  if (
+    opensWithIndependentBlock(nextBody.fragments, owningAt) &&
+    stacksInOneColumn(bodyPage) &&
+    stacksInOneColumn(nextBody)
+  ) {
+    return 0;
+  }
   // Release a settled hold only when the preceding body plus this opening pair
   // actually fits beside its existing notes. The incoming second-line note can
   // continue, but this policy must never reclaim space occupied by earlier notes.
@@ -233,6 +248,41 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
   const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
   return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
+}
+
+/**
+ * Whether an in-flow block ahead of the owning block's `w:keepNext` group opens the page.
+ * Such a block is not tied to the reference: it can return to the previous page without
+ * the reference line, so a hold there would strand it on this page for nothing. The
+ * fragments before `owningAt` are paragraphs (the caller fails open on tables). Text
+ * frames and collapsed section marks take no flow height, so they neither return nor
+ * break a chain.
+ */
+function opensWithIndependentBlock(fragments: PageRecord['fragments'], owningAt: number): boolean {
+  for (let index = owningAt - 1; index >= 0; index -= 1) {
+    const block = fragments[index]!;
+    if (block.kind !== 'paragraph' || block.positionedFrame || block.outOfFlow) continue;
+    if (!paragraphKeeps(block.props).keepNext) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the page's body blocks stack in document order, as one column does. A block that
+ * starts above its predecessor's bottom sits in another column or beside a float; lines
+ * returning to such a page may change column, so the release above cannot predict them.
+ * A section that continues onto the next page fills every column of the earlier page, so
+ * checking both pages catches a next page that fills only its first column.
+ */
+function stacksInOneColumn(page: PageRecord): boolean {
+  let previousBottom = Number.NEGATIVE_INFINITY;
+  for (const fragment of page.fragments) {
+    if (isOutOfFlowFragment(fragment)) continue;
+    if (fragment.kind === 'paragraph' && fragment.positionedFrame) continue;
+    if (fragment.box.y < previousBottom - 0.001) return false;
+    previousBottom = fragment.box.y + fragment.box.height;
+  }
+  return true;
 }
 
 /**
