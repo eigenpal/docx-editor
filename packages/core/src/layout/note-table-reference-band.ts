@@ -12,18 +12,27 @@
 // - a reference in an authored header row, which moves with the table's opening rows;
 // - a reference in a vertically merged cell that spans rows here, whose content can sit
 //   in a lower row of the span;
-// - a row that keeps with the next one through a direct `w:keepNext` on the first
+// - a row that keeps with the next one through a resolved `w:keepNext` on the first
 //   paragraph of a cell, because pushing the next row would take this row with it;
 // - a reference line outside its row box (content an exact row height clips). Rotated
 //   cells lay out on a local axis, so their row box alone bounds them.
 // A vertical merge in ANOTHER cell does not disqualify the row: the paginator already
 // carries a merge across a page break between two of its rows.
 //
+// Inside the row, notes budget below the reference LINE when it is a direct horizontal cell
+// line. A splittable row then continues on the next page below that line, and its note
+// stays whole on the reference page. A row that places whole (`w:cantSplit`, an exact
+// height) cannot leave the line behind, so the body pass moves it with its note, and the
+// row hold-out keeps it there. An eviction always moves the whole row: `top` is the row's.
+// The reserve pass evicts a row only when its note would place fewer than two lines below
+// the reference ({@link evictsReferenceLine}); otherwise the note splits.
+//
 // `evictable` additionally needs the row to be movable as one unit to the next page without
-// recreating the same shape there: it must not continue a split row or be the last row of a
-// table that ends the page (possibly the head of a split row), a body row of this fragment
-// must precede it (a row under only header rows reopens the next page the same way), that
-// row must not keep with it, and the page's blocks must stack in one column.
+// recreating the same shape there: it must not continue a split row, a body row of this
+// fragment must precede it (a row under only header rows reopens the next page the same
+// way), that row must not keep with it, and the page's blocks must stack in one column. The
+// last row of a table that ends the page (`endsPage`) must also not be the head of a split
+// row, which only the next page shows ({@link rowContinuesOn}).
 
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentOwnsPosition, lineSegments, segmentOwnsAtomOffset } from './line-segments.ts';
@@ -42,7 +51,13 @@ interface NoteRefSite {
 }
 
 export interface TableReferenceRowBand {
+  /** The row's top: an eviction moves the whole row. */
   readonly top: number;
+  /**
+   * The reference line's bottom for a direct horizontal cell line, else the row's bottom.
+   * Notes budget below it; a splittable row continues on the next page below that line,
+   * and a row that places whole moves with its note.
+   */
   readonly bottom: number;
   /**
    * Where the row's content starts when it moves: the row's top minus the header rows that
@@ -50,6 +65,11 @@ export interface TableReferenceRowBand {
    */
   readonly blockTop: number;
   readonly evictable: boolean;
+  /**
+   * The row is the last row of a table that ends the page's flow, so it may be the head of
+   * a split row. The eviction guard reads the next page to decide ({@link rowContinuesOn}).
+   */
+  readonly endsPage: boolean;
   /** The referencing row fragment. */
   readonly row: TableRowFragmentRecord;
 }
@@ -80,16 +100,18 @@ export function tableReferenceRowBand(
       continue;
     }
     if (row.isHeaderRow || (cell.rowSpan ?? 1) > 1 || rowKeepsWithNext(row)) return 'table';
-    if (!lineInsideRow(cell, row, ref)) return 'table';
+    const lineBottom = referenceLineBottom(cell, row, ref);
+    if (lineBottom === null) return 'table';
     const top = row.box.y;
     const evictable =
       row.isContinuation !== true &&
       previous !== undefined &&
       !previous.isHeaderRow &&
       !rowKeepsWithNext(previous) &&
-      !mayContinue(page, table, row) &&
       stacksInOneColumn(page);
-    return { top, bottom: top + row.box.height, blockTop: top - headerHeight, evictable, row };
+    const bottom = lineBottom ?? top + row.box.height;
+    const endsPage = endsPageFlow(page, table, row);
+    return { top, bottom, blockTop: top - headerHeight, evictable, endsPage, row };
   }
   return null;
 }
@@ -117,11 +139,11 @@ export function stacksInOneColumn(page: PageRecord): boolean {
 }
 
 /**
- * Whether `row` may be the head of a row split onto the next page: the last row of a
- * table that ends the page's flow. Moving a split head moves the whole row, and at its
- * destination the rest of the row still fills the band below the reference.
+ * Whether `row` is the last row of a table that ends the page's flow. Such a row may be the
+ * head of a row split onto the next page. Moving a split head moves the whole row, and at
+ * its destination the rest of the row still fills the band below the reference.
  */
-function mayContinue(
+function endsPageFlow(
   page: PageRecord,
   table: TableFragmentRecord,
   row: TableRowFragmentRecord
@@ -135,6 +157,32 @@ function mayContinue(
     return false;
   }
   return true;
+}
+
+/**
+ * Whether `page` opens with the rest of the row `rowId`, split from the page before. Without
+ * a next page, a row that ends the page cannot be proven whole, so it counts as continuing.
+ */
+export function rowContinuesOn(page: PageRecord | undefined, rowId: string): boolean {
+  const opening = continuedRowId(page);
+  return opening === null || opening === rowId;
+}
+
+/**
+ * The id of the split row whose rest opens `page`: its first in-flow block is a table
+ * continuation whose first body row continues a row. `''` when the page opens otherwise,
+ * `null` without a page.
+ */
+export function continuedRowId(page: PageRecord | undefined): string | null {
+  if (!page) return null;
+  for (const fragment of page.fragments) {
+    if (isOutOfFlowFragment(fragment)) continue;
+    if (fragment.kind === 'paragraph' && fragment.positionedFrame) continue;
+    if (fragment.kind !== 'table') return '';
+    const first = fragment.rows.find((candidate) => !candidate.isHeaderRepeat);
+    return first?.isContinuation === true ? first.id : '';
+  }
+  return '';
 }
 
 function owningCell(row: TableRowFragmentRecord, ref: NoteRefSite): TableCellFragmentRecord | null {
@@ -162,8 +210,9 @@ function blocksOwn(blocks: readonly BlockFragmentRecord[], ref: NoteRefSite): bo
 
 /**
  * The row keeps with the next one (`table-row-keeps.ts`) when the first paragraph of its
- * first cell resolves `w:keepNext`. Fragment props carry only the direct `w:pPr`, so a
- * style-inherited keep is not seen here; any cell counts, which errs toward the table band.
+ * first cell resolves `w:keepNext`. Fragment props are the paragraph's resolved properties,
+ * so a keep from a paragraph style counts here as a direct one does. Any cell counts, which
+ * errs toward the table band.
  */
 export function rowKeepsWithNext(row: TableRowFragmentRecord): boolean {
   for (const cell of row.cells) {
@@ -174,29 +223,30 @@ export function rowKeepsWithNext(row: TableRowFragmentRecord): boolean {
 }
 
 /**
- * Whether the reference's line lies inside the row box. A direct cell paragraph in a
- * horizontal cell is laid out in page-content coordinates; nested tables and rotated
- * cells are bounded by the row box they are painted in.
+ * The bottom of the reference's line when it is a direct paragraph line of a horizontal
+ * cell, which is laid out in page-content coordinates; `undefined` when only the row box
+ * bounds the reference (nested tables, rotated cells); `null` when the line lies outside
+ * the row box (content an exact row height clips).
  */
-function lineInsideRow(
+function referenceLineBottom(
   cell: TableCellFragmentRecord,
   row: TableRowFragmentRecord,
   ref: NoteRefSite
-): boolean {
-  if (cell.textDirection) return true;
+): number | null | undefined {
+  if (cell.textDirection) return undefined;
   for (const block of cell.blocks) {
     if (block.kind !== 'paragraph') continue;
     if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
     for (const line of block.lines) {
       for (const segment of lineSegments(line)) {
         if (!segmentOwnsAtomOffset(segment, ref.paragraphId, ref.atomOffset)) continue;
-        return (
-          line.box.y >= row.box.y - 0.001 &&
-          line.box.y + line.box.height <= row.box.y + row.box.height + 0.001
-        );
+        const bottom = line.box.y + line.box.height;
+        const inside =
+          line.box.y >= row.box.y - 0.001 && bottom <= row.box.y + row.box.height + 0.001;
+        return inside ? bottom : null;
       }
     }
-    return false;
+    return null;
   }
-  return true;
+  return undefined;
 }

@@ -1,6 +1,8 @@
 // A footnote reference inside a body table row keeps the band of its ROW, not of the whole
-// table fragment. Notes of early rows stay on their reference page while later rows move,
-// and a row whose note cannot fit below it moves to the next page with the note.
+// table fragment. Notes of early rows stay on their reference page while later rows move.
+// A long note splits when at least two of its lines fit below the referencing row. With
+// room for fewer, the row moves to the next page with the note. Inside a row that can
+// split, the note budgets below the reference line, and the rest of the row continues.
 //
 // The page is 350pt by 210pt with 20pt margins: a 170pt body of exact 14pt lines. The
 // footnote separator and every note line are exact 14pt lines too.
@@ -21,6 +23,7 @@ import {
   type NotesLayoutInput,
 } from '../note-pagination.ts';
 import { footnoteReservesEqual } from '../note-reserves.ts';
+import { rowContinuesOn } from '../note-table-reference-band.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
 import { blockText, measurer, para, SECT, W } from './table-row-keep-fixtures.ts';
@@ -115,6 +118,8 @@ interface Laid {
   /** The published reserves reproduce themselves from the layout they produced. */
   readonly fixedPoint: boolean;
   readonly refs: ReturnType<typeof buildPageRefHits>;
+  /** The reserves the layout was laid under, by page index. */
+  readonly reserves: ReadonlyMap<number, number>;
 }
 
 function layoutProbe(
@@ -158,6 +163,7 @@ function layoutProbe(
   return {
     layout,
     refs,
+    reserves: used,
     fixedPoint: computed.stable && footnoteReservesEqual(computed.reserves, used),
   };
 }
@@ -171,6 +177,15 @@ function pages(layout: SemanticLayout): string[] {
     );
     return `${body} | ${notes.join(',')}`;
   });
+}
+
+/** Lines of footnote `noteId` on page `index`. */
+function noteLines(layout: SemanticLayout, index: number, noteId: number): number {
+  const note = layout.pages[index]?.footnotes?.notes.find((n) => n.noteId === noteId);
+  return (note?.fragments ?? []).reduce(
+    (sum, block) => sum + (block.kind === 'paragraph' ? block.lines.length : 0),
+    0
+  );
 }
 
 /** Every body line and note opening appears: no row or note is dropped or doubled. */
@@ -266,9 +281,9 @@ describe('footnote references in body table rows', () => {
   });
 });
 
-describe('a row whose note cannot fit below it', () => {
-  // Row 5 cites a four-line note. Below row 5 there is room for one note line, so the row
-  // moves to the next page, where its note fits whole. The hold-out keeps it there.
+describe('a row whose long note keeps two lines below it', () => {
+  // Row 5 cites a four-line note. Below row 5 there is room for three note lines. The row
+  // stays, and the note splits: widow control leaves two lines on each page.
   const refs = new Map([
     [1, 1],
     [5, 2],
@@ -277,26 +292,49 @@ describe('a row whose note cannot fit below it', () => {
     [1, 1],
     [2, 4],
   ]);
-  const expected = [
-    'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b | 1',
-    'R5a R5b2 R6a R6b R7a R7b R8a R8b TAIL | 2',
-  ];
 
-  test('moves with its note to the next page and stays there', () => {
+  test('stays, and its note continues on the next page', () => {
     const laid = layoutProbe(INTRO + tbl(rows(8, refs)) + TAIL, notes);
-    expect(pages(laid.layout)).toEqual(expected);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 R6a R6b | 1,2',
+      'R7a R7b R8a R8b TAIL | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
     expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...names(8), 'TAIL'], [1, 2]);
   });
 
-  test('a warm pass after an edit matches a clean layout', () => {
-    const session = createLayoutSession();
-    layoutProbe(INTRO + tbl(rows(8, refs)) + TAIL, notes, session, 1);
-    const edited = para('INTRO', 2).replace('INTRO1', 'INTROx1') + tbl(rows(8, refs)) + TAIL;
-    const warm = layoutProbe(edited, notes, session, 2);
-    const clean = layoutProbe(edited, notes);
-    expect(pages(warm.layout)).toEqual(pages(clean.layout));
-    expect(warm.fixedPoint).toBe(true);
+  test('two lines of room are enough', () => {
+    const laid = layoutProbe(para('INTRO', 3) + tbl(rows(8, refs)) + TAIL, notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 INTRO3 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 | 1,2',
+      'R6a R6b R7a R7b R8a R8b TAIL | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('the last row of a table keeps the content after the table in place', () => {
+    // The referencing row ends the table, and a three-line paragraph follows it. Moving
+    // the row would also move that paragraph and every page break after it.
+    const laid = layoutProbe(INTRO + tbl(rows(5, refs)) + para('TAIL', 3), notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 TAIL1 | 1,2',
+      'TAIL2 TAIL3 | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+    expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...names(5), 'TAIL1', 'TAIL2', 'TAIL3']);
+  });
+
+  test('a short table ending mid-page keeps its referencing row', () => {
+    const laid = layoutProbe(INTRO + tbl(rows(6, refs)) + para('TAIL', 3), notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 R6a R6b | 1,2',
+      'TAIL1 TAIL2 TAIL3 | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
   });
 
   test('a vertical merge in another cell does not keep the table band', () => {
@@ -308,8 +346,8 @@ describe('a row whose note cannot fit below it', () => {
     }));
     const laid = layoutProbe(INTRO + tbl(merged) + TAIL, notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 M R1b1 R2b R3b R4b | 1',
-      'R5b2 R6b R7b R8b TAIL | 2',
+      'INTRO1 INTRO2 M R1b1 R2b R3b R4b R5b2 R6b | 1,2',
+      'R7b R8b TAIL | 2c',
     ]);
     expect(laid.fixedPoint).toBe(true);
   });
@@ -320,13 +358,70 @@ describe('a row whose note cannot fit below it', () => {
     );
     const laid = layoutProbe(INTRO + tbl(nested) + TAIL, notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b | 1',
-      'R5a Na Nb2 R6a R6b R7a R7b R8a R8b TAIL | 2',
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a Na Nb2 | 1,2',
+      'R6a R6b R7a R7b R8a R8b TAIL | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(2);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});
+
+describe('a row with room for one note line below it', () => {
+  // Four introduction lines leave room for one line of the four-line note below row 5, so
+  // the row moves to the next page, where its note fits whole. The hold-out keeps it there.
+  const refs = new Map([
+    [1, 1],
+    [5, 2],
+  ]);
+  const notes = new Map([
+    [1, 1],
+    [2, 4],
+  ]);
+  const INTRO4 = para('INTRO', 4);
+  const intro = ['INTRO1', 'INTRO2', 'INTRO3', 'INTRO4'];
+
+  test('moves with its note to the next page and stays there', () => {
+    const laid = layoutProbe(INTRO4 + tbl(rows(8, refs)) + TAIL, notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 INTRO3 INTRO4 R1a R1b1 R2a R2b R3a R3b R4a R4b | 1',
+      'R5a R5b2 R6a R6b R7a R7b R8a R8b TAIL | 2',
     ]);
     expect(laid.fixedPoint).toBe(true);
+    expectComplete(laid.layout, [...intro, ...names(8), 'TAIL'], [1, 2]);
+  });
+
+  test('a warm pass after an edit matches a clean layout', () => {
+    const session = createLayoutSession();
+    layoutProbe(INTRO4 + tbl(rows(8, refs)) + TAIL, notes, session, 1);
+    const edited = INTRO4.replace('INTRO1', 'INTROx1') + tbl(rows(8, refs)) + TAIL;
+    const warm = layoutProbe(edited, notes, session, 2);
+    const clean = layoutProbe(edited, notes);
+    expect(pages(warm.layout)).toEqual(pages(clean.layout));
+    expect(warm.fixedPoint).toBe(true);
+  });
+
+  test('a whole row that ends the page moves with its note', () => {
+    // Row 8 ends page 1 and cites a two-line note with no room below it. The page after
+    // opens with the paragraph after the table, so row 8 is whole, not a split head.
+    const lastRefs = new Map([[8, 1]]);
+    const lastNotes = new Map([[1, 2]]);
+    const body = (intro: string) => intro + tbl(rows(8, lastRefs)) + TAIL;
+    const laid = layoutProbe(body(INTRO4), lastNotes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 INTRO3 INTRO4 R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b R6a R6b R7a R7b | ',
+      'R8a R8b1 TAIL | 1',
+    ]);
+    expect(laid.fixedPoint).toBe(true);
+    // A warm pass that reaches the same shape from a layout where row 8 had room agrees.
+    const session = createLayoutSession();
+    layoutProbe(body(INTRO), lastNotes, session, 1);
+    const warm = layoutProbe(body(INTRO4), lastNotes, session, 2);
+    expect(pages(warm.layout)).toEqual(pages(laid.layout));
+    expect(warm.fixedPoint).toBe(true);
   });
 
   test('a rotated referencing cell takes its row band', () => {
+    // The exact 35pt row leaves room for one note line below it.
     const rotated = rows(8, refs, (n, spec) =>
       n === 5
         ? {
@@ -337,7 +432,61 @@ describe('a row whose note cannot fit below it', () => {
         : spec
     );
     const laid = layoutProbe(INTRO + tbl(rotated) + TAIL, notes);
-    expect(pages(laid.layout)).toEqual(expected);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b | 1',
+      'R5a R5b2 R6a R6b R7a R7b R8a R8b TAIL | 2',
+    ]);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});
+
+describe('a multi-line referencing row', () => {
+  // Row 5's first cell holds three lines, and its second cell cites a two-line note from
+  // its only line. One note line fits below the row, and the whole note fits below the
+  // reference line.
+  const refs = new Map([
+    [1, 1],
+    [5, 2],
+  ]);
+  const notes = new Map([
+    [1, 1],
+    [2, 2],
+  ]);
+  const tall = (trPr?: string) =>
+    rows(8, refs, (n, spec) => (n === 5 ? { ...spec, trPr, first: para('R5a', 3) } : spec));
+  const lines = names(8).flatMap((name) => (name === 'R5a' ? ['R5a1', 'R5a2', 'R5a3'] : [name]));
+
+  test('continues on the next page below the reference line', () => {
+    const laid = layoutProbe(INTRO + tbl(tall()) + TAIL, notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b2 | 1,2',
+      'R5a3 R6a R6b R7a R7b R8a R8b TAIL | ',
+    ]);
+    const { band } = bandOf(laid, 2);
+    expect(band.bottom - band.top).toBeCloseTo(14, 3);
+    expect(laid.fixedPoint).toBe(true);
+    expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...lines, 'TAIL'], [1, 2]);
+  });
+
+  test('moves whole with its note when it cannot split', () => {
+    const laid = layoutProbe(INTRO + tbl(tall('<w:cantSplit/>')) + TAIL, notes);
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b | 1',
+      'R5a1 R5a2 R5a3 R5b2 R6a R6b R7a R7b R8a R8b TAIL | 2',
+    ]);
+    expect(laid.fixedPoint).toBe(true);
+    expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...lines, 'TAIL'], [1, 2]);
+  });
+
+  test('a row that the body alone moves publishes no hold', () => {
+    // Nine introduction lines leave 16pt, and the row that cannot split needs 56pt. It
+    // moves for body reasons, so the page before it reserves nothing to keep it out.
+    const pushed = rows(4, new Map([[3, 1]]), (n, spec) =>
+      n === 3 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R3a', 4) } : spec
+    );
+    const laid = layoutProbe(para('INTRO', 9) + tbl(pushed) + TAIL, new Map([[1, 1]]));
+    expect(pages(laid.layout)[1]).toStartWith('R3a1 R3a2 R3a3 R3a4 R3b1');
+    expect(laid.reserves.get(0) ?? 0).toBe(0);
     expect(laid.fixedPoint).toBe(true);
   });
 });
@@ -417,14 +566,16 @@ describe('rows that take the row band but do not move', () => {
     );
     // The row's head stays on page 1 with its reference: a split head is not moved to the
     // next page, where the rest of the row would fill the band below the reference again.
-    // The note has no room below the head, so it continues on page 2 (unchanged here).
-    expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...lines, 'TAIL']);
+    // The note budgets below the reference line, so the row continues on page 2 below it.
+    expectComplete(laid.layout, ['INTRO1', 'INTRO2', ...lines, 'TAIL'], [1]);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b R2a R2b R3a R3b T1 T2 T3 T4 T5 T6 T7 R4b1 | ',
-      'T8 T9 T10 T11 T12 T13 T14 T15 T16 | 1c',
+      'INTRO1 INTRO2 R1a R1b R2a R2b R3a R3b T1 T2 T3 T4 R4b1 | 1',
+      'T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 | ',
       'T17 T18 T19 T20 R5a R5b R6a R6b TAIL | ',
     ]);
-    expect(bandOf(laid, 1).band.evictable).toBe(false);
+    const { band } = bandOf(laid, 1);
+    expect(band.endsPageRowId).toBeDefined();
+    expect(rowContinuesOn(bodyOnlyPage(laid.layout.pages[1]!), band.endsPageRowId!)).toBe(true);
     expect(laid.fixedPoint).toBe(true);
   });
 

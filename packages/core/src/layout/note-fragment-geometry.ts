@@ -193,9 +193,10 @@ export function firstBodyContentTopPt(page: PageRecord): number {
  *
  * A ref inside a body table takes its ROW's band ({@link tableReferenceRowBand}): the row
  * box is in page-content coordinates and the row moves to the next page as one unit, with
- * `blockTop` above it by the header rows that repeat there. Where the row cannot be proven
- * the band ({@link tableReferenceRowBand} lists the cases), the band is the TABLE
- * fragment's box.
+ * `blockTop` above it by the header rows that repeat there. The bottom is the reference
+ * line's own bottom where the line is a direct horizontal cell line, so the rest of a
+ * splittable row can continue on the next page. Where the row cannot be proven the band
+ * ({@link tableReferenceRowBand} lists the cases), the band is the TABLE fragment's box.
  *
  * `evictable` is false when the geometry cannot support that move: a table ref outside a
  * provably movable row (evicting a whole table for one note is not the conservative
@@ -212,6 +213,13 @@ export interface NoteReferenceLineBand {
   readonly evictable: boolean;
   /** Retain the opening orphan pair even when its second line's note must start later. */
   readonly preserveOrphanLine?: boolean;
+  /**
+   * The band of a body-table row ({@link tableReferenceRowBand}). The row moves only when
+   * its note would place fewer than two lines below the reference; otherwise the note splits.
+   */
+  readonly tableRow?: true;
+  /** The referencing row's id when that row ends the page's flow (`endsPage`). */
+  readonly endsPageRowId?: string;
 }
 
 /**
@@ -268,6 +276,8 @@ function computeReferenceLineBand(
   let blockTop = 0;
   let evictable = false;
   let preserveOrphanLine = false;
+  let tableRow = false;
+  let endsPageRowId: string | undefined;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
       if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
@@ -285,6 +295,8 @@ function computeReferenceLineBand(
         // A split-capable paragraph needs two opening lines on this page. Its note
         // may continue before sacrificing that pair; explicit keepLines and short
         // unsplittable paragraphs still move together with their references.
+        tableRow = false;
+        endsPageRowId = undefined;
         preserveOrphanLine =
           evictable &&
           line?.index === 1 &&
@@ -307,6 +319,8 @@ function computeReferenceLineBand(
       blockTop = band.blockTop;
       evictable = band.evictable;
       preserveOrphanLine = false;
+      tableRow = row !== 'table';
+      endsPageRowId = row !== 'table' && row.endsPage ? row.row.id : undefined;
     }
   }
   const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
@@ -321,6 +335,8 @@ function computeReferenceLineBand(
     // would be zero, and the reference's note would be neither placed nor carried.
     evictable: evictable && clampedBottom > clampedTop,
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
+    ...(tableRow ? { tableRow: true } : {}),
+    ...(endsPageRowId !== undefined ? { endsPageRowId } : {}),
   };
 }
 
