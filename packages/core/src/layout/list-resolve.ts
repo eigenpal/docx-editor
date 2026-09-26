@@ -346,7 +346,8 @@ function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
 }
 
 /**
- * The effective indent of a list paragraph: STYLE, then the numbering LEVEL, then DIRECT.
+ * The effective indent of a list paragraph: `inherited`, then the numbering LEVEL, then
+ * `direct`, per attribute.
  *
  * Word applies a level's `w:pPr/w:ind` between the paragraph style and the paragraph's own
  * formatting, per attribute — and the ordering matters on real documents. A converted
@@ -356,8 +357,11 @@ function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
  * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
  * indent step to the left of where Word puts it.
  *
- * `inherited` is the cascade WITHOUT the paragraph's own `w:pPr` (defaults, table cell style,
- * style chain); `direct` is that `w:pPr` alone.
+ * For directly applied numbering, `inherited` is the cascade WITHOUT the paragraph's own
+ * `w:pPr` (defaults, table cell style, style chain) and `direct` is that `w:pPr` alone. When
+ * the paragraph inherits its numbering from its style, the style chain moves to `direct`:
+ * the numbered style's own `w:ind` then outranks the level, and the level fills only what
+ * the chain leaves unstated.
  */
 export function mergeListIndent(
   levelIndent: NumberingLevelIndent,
@@ -464,8 +468,9 @@ export function walkStoryParagraphs(
 interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
-  readonly inheritedParagraphProperties: readonly OoxmlProperty[];
-  readonly directProps: readonly OoxmlProperty[];
+  /** Paragraph properties the numbering level outranks, and those that outrank it. */
+  readonly belowLevel: readonly OoxmlProperty[];
+  readonly aboveLevel: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
   readonly perLevel: WeakMap<
     object,
@@ -484,11 +489,21 @@ function paragraphListPrelude(
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+  const directProps = propertiesOf(pPr);
+  const inherited = cascaded?.inheritedParagraphProperties ?? [];
+  // The level sits where the paragraph cascade puts it. Numbering applied in the paragraph's
+  // own `w:pPr` outranks the whole style chain. Numbering the paragraph inherits from its
+  // style sits below that chain and above the document defaults, so the numbered style's
+  // own `w:ind` wins. `inherited` is the defaults followed by the chain: this cascade has no
+  // table cell style and no numbering in it.
+  const fromStyle =
+    styleCascade !== undefined && !directProps.some((property) => property.localName === 'numPr');
+  const defaults = fromStyle ? styleCascade.docDefaultsParagraph.length : inherited.length;
   const prelude: ParagraphListPrelude = {
     styleCascade,
     numPr: readNumPr(nodes),
-    inheritedParagraphProperties: cascaded?.inheritedParagraphProperties ?? [],
-    directProps: propertiesOf(pPr),
+    belowLevel: inherited.slice(0, defaults),
+    aboveLevel: [...inherited.slice(defaults), ...directProps],
     inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
     perLevel: new WeakMap(),
   };
@@ -525,13 +540,8 @@ export function resolveStoryListItems(
 
     let levelDerived = prelude.perLevel.get(advanced.level);
     if (!levelDerived) {
-      // Split, not flattened: the level's indent outranks the STYLE's and is outranked by
-      // the paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
-      const indent = mergeListIndent(
-        advanced.level.indent,
-        prelude.inheritedParagraphProperties,
-        prelude.directProps
-      );
+      // Split, not flattened: the merge needs the tiers below and above the level apart.
+      const indent = mergeListIndent(advanced.level.indent, prelude.belowLevel, prelude.aboveLevel);
       const markerProps = cascadeRunProperties(
         prelude.inheritedMarkProps,
         advanced.level.runProperties,

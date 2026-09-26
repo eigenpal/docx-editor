@@ -147,8 +147,8 @@ export interface CascadedParagraphFormatting {
   /**
    * The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits.
    *
-   * Numbering needs the two tiers apart: a level's `w:pPr/w:ind` outranks the style's and is
-   * outranked by the paragraph's own, and a flattened list cannot say which is which.
+   * Numbering needs the tiers apart: a level's `w:pPr/w:ind` sits between them, below the
+   * paragraph's own and, unless the paragraph applies the numbering directly, below the style's.
    */
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
