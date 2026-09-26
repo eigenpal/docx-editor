@@ -1454,41 +1454,38 @@ export function breakParagraph(
       // Word tests a centred colon's natural advance before applying the shared
       // bearing on its destination line. Keep the compressed advance for paint.
       const fitWidth = opticalFit ? width : (colonNaturalWidths.get(piece) ?? width);
-      if (
-        (!opensWord && penLeftWord()) ||
-        (!hangs &&
-          // A space after a word that borrowed inter-word space hangs on its line.
-          !(lineEndWhitespace && flow?.justifySpaceShrink) &&
-          line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
-          !(
-            flow?.justifySpaceShrink &&
-            // A word split across source runs overflows on a later piece than the one
-            // that opened it, where the open decision is `continues`. The shrink test
-            // still applies to the whole word: `wordStartSpan` says where it began.
-            (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
-            !flow.paragraphRtl &&
-            !flow.pageExclusionZones?.length &&
-            sameParagraphAnchorStarts.length === 0 &&
-            line.drawings.length === 0 &&
-            (placeableSuffixes[pieceIndex]![boundary] === 1 ||
-              endsParagraph(pieceIndex, boundary)) &&
-            fitsWithSpaceShrink(
-              line.spans,
-              candidate,
-              faceStyle,
-              measurer,
-              line.width,
-              lineAvailable(),
-              opensWord ? line.spans.length : wordStartSpan,
-              opensWord ? line.width : wordStartWidth,
-              endsParagraph(pieceIndex, boundary) ||
-                (boundary < piece.text.length
-                  ? !layoutOwned && piece.text[boundary] === ' '
-                  : opensWithHangingSpace(pieces[pieceIndex + 1]))
-            )
-          ) &&
-          holdsContent())
-      ) {
+      const overflows =
+        !hangs &&
+        // A space after a word that borrowed inter-word space hangs on its line.
+        !(lineEndWhitespace && flow?.justifySpaceShrink) &&
+        line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+      const borrowsSpace =
+        overflows &&
+        flow?.justifySpaceShrink === true &&
+        // A word split across source runs overflows on a later piece than the one
+        // that opened it, where the open decision is `continues`. The shrink test
+        // still applies to the whole word: `wordStartSpan` says where it began.
+        (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
+        !flow.paragraphRtl &&
+        !flow.pageExclusionZones?.length &&
+        sameParagraphAnchorStarts.length === 0 &&
+        line.drawings.length === 0 &&
+        (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
+        fitsWithSpaceShrink(
+          line.spans,
+          candidate,
+          faceStyle,
+          measurer,
+          line.width,
+          lineAvailable(),
+          opensWord ? line.spans.length : wordStartSpan,
+          opensWord ? line.width : wordStartWidth,
+          endsParagraph(pieceIndex, boundary) ||
+            (boundary < piece.text.length
+              ? !layoutOwned && piece.text[boundary] === ' '
+              : opensWithHangingSpace(pieces[pieceIndex + 1]))
+        );
+      if ((!opensWord && penLeftWord()) || (overflows && !borrowsSpace && holdsContent())) {
         // Trailing spaces hang at a line end, so only the word's ink needs room where it goes.
         const inkWidth =
           clipsWordEnd && !opticalFit
@@ -1528,6 +1525,9 @@ export function breakParagraph(
         }
       } else if (!holdsContent() && fitWidth > lineAvailable() + 0.001) {
         if (!ensurePlacementWidth(fitWidth)) continue;
+      } else if (borrowsSpace && endsParagraph(pieceIndex, boundary)) {
+        // Only this admission may compress the paragraph's last line when it is aligned.
+        line.spaceShrink = true;
       }
       // Overflow can close the previous line after the clearance check above.
       // Recheck the newly opened line before placing this candidate, including

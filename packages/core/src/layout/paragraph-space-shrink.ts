@@ -124,22 +124,6 @@ export function paragraphEndAt(
 }
 
 /**
- * Whether the last line of a justified paragraph may compress its spaces. Only a final
- * plain word admitted by {@link fitsWithSpaceShrink} makes that line overflow, so the line
- * keeps the same guards: no tab, float passage advance or equation, and a final span of
- * ordinary text. Any other overflow keeps its natural widths. A last line never expands.
- */
-export function lastLineMayShrink(spans: readonly StyleSpanRecord[], slotEnd: number): boolean {
-  const last = spans[slotEnd];
-  return (
-    last !== undefined &&
-    !last.projected &&
-    /^[^\s]+ *$/u.test(last.text) &&
-    !spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
-  );
-}
-
-/**
  * True when `piece` opens with a U+0020 that can hang at a line end. Only a plain text
  * piece splits into candidates; a projected field result, positional tab, or reserved
  * measure is laid out whole, so its leading space would open the next line instead.

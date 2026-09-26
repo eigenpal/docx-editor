@@ -39,6 +39,12 @@ export interface PendingLine {
   columnBreakAfter?: boolean;
   /** An authored line break (`w:br` textWrapping or `w:cr`), never an automatic wrap. */
   manualBreakAfter?: true;
+  /**
+   * The flow kept the paragraph's last word on this line by borrowing inter-word space.
+   * Alignment compresses a paragraph's last line only when this is set, never for another
+   * overflow such as hanging punctuation.
+   */
+  spaceShrink?: true;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
@@ -325,6 +331,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
+    ...(line.spaceShrink ? { spaceShrink: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
     ...(line.firstLineOffset ? { firstLineOffset: line.firstLineOffset } : {}),

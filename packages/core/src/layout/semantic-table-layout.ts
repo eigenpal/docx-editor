@@ -679,7 +679,8 @@ function placeCellParagraph(
       isLastLine,
       alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
       rtl,
-      options?.inTableCell === true
+      options?.inTableCell === true,
+      pendingLine.spaceShrink === true
     );
     const alignOffset = lineAlignOffset(
       placedSpans,

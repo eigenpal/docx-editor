@@ -2803,7 +2803,9 @@ function layoutBlocksPass(
         alignment,
         isLastLine,
         alignment === 'center' || alignment === 'right' ? measure.used : undefined,
-        rtl
+        rtl,
+        false,
+        pendingLine.spaceShrink === true
       );
       const alignOffset = lineAlignOffset(
         placedSpans,

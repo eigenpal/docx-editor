@@ -1,4 +1,4 @@
-import { lastLineMayShrink, shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
+import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -114,7 +114,8 @@ function alignLogicalSpans(
   isLastLine: boolean,
   lineUsedWidth: number | undefined,
   paragraphRtl: boolean,
-  pageBreaksIgnored: boolean
+  pageBreaksIgnored: boolean,
+  lastLineShrinks: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -130,7 +131,8 @@ function alignLogicalSpans(
         isLastLine,
         lineUsedWidth,
         paragraphRtl,
-        false
+        false,
+        lastLineShrinks
       )
     );
     if (aligned) return aligned;
@@ -239,10 +241,15 @@ function alignLogicalSpans(
     if (paragraphRtl) rtlTrailingAdvance = trailing;
   }
   const slack = available - used;
-  const slotEnd = hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1;
-  // The paragraph's last word may borrow inter-word space too, so its line compresses.
-  if (slack < -0.001 && alignment === 'both' && (!isLastLine || lastLineMayShrink(spans, slotEnd)))
-    return shrinkJustifiedSpans(spans, -slack, measurer, slotEnd);
+  // A last line compresses only when the flow kept the paragraph's last word by borrowing
+  // inter-word space. Hanging punctuation also overflows a line, and keeps its spacing.
+  if (slack < -0.001 && alignment === 'both' && (!isLastLine || lastLineShrinks))
+    return shrinkJustifiedSpans(
+      spans,
+      -slack,
+      measurer,
+      hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
+    );
   if (slack <= 0) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.
@@ -272,6 +279,10 @@ function alignLogicalSpans(
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
 }
 
+/**
+ * Align one line. `lastLineShrinks` is the line's `PendingLine.spaceShrink`: without
+ * it, a justified last line that overflows keeps its natural spacing.
+ */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
   measurer: TextMeasurer,
@@ -281,7 +292,8 @@ export function alignSpans(
   isLastLine: boolean,
   lineUsedWidth?: number,
   paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
-  pageBreaksIgnored = false
+  pageBreaksIgnored = false,
+  lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
   return reorderBidiSpans(
@@ -294,7 +306,8 @@ export function alignSpans(
       isLastLine,
       lineUsedWidth,
       paragraphRtl,
-      pageBreaksIgnored
+      pageBreaksIgnored,
+      lastLineShrinks
     ),
     paragraphRtl,
     pageBreaksIgnored

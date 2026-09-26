@@ -161,6 +161,14 @@ test('retained layout publishes the same last-line geometry as a fresh one', () 
     expect(
       boxes(layoutSemanticDocument(body, revision, { ...options, compatibilityMode: 15 }))
     ).toEqual(fresh);
+  // Without a session, the second pass reads the frozen cached lines, which keep the admission.
+  const frozen = createParagraphLayoutCache<readonly PendingLine[]>();
+  for (const revision of [1, 2])
+    expect(
+      boxes(
+        layoutSemanticDocument(body, revision, { measurer, cache: frozen, compatibilityMode: 15 })
+      )
+    ).toEqual(fresh);
 });
 
 test('the caret follows the compressed last line', () => {
@@ -173,28 +181,23 @@ test('the caret follows the compressed last line', () => {
   expect(x(8) - x(0)).toBeCloseTo(66, 6);
 });
 
-// Alignment cannot see why a last line overflows, so it compresses only a line the flow
-// could have admitted: text words to the end, no tab, no field result as the last word.
-test('a last line that overflows for another reason keeps its natural widths', () => {
-  const span = (
-    text: string,
-    x: number,
-    extra: Partial<StyleSpanRecord> = {}
-  ): StyleSpanRecord => ({
+// Alignment never guesses from the spans why a last line overflows: only the flow's
+// admission of the paragraph's last word, carried on the line, lets it compress.
+test('a last line compresses only when the flow admitted its last word', () => {
+  const span = (text: string, x: number): StyleSpanRecord => ({
     range: { paragraphId: 'p', start: x, end: x + text.length },
     text,
     props: [],
     style: DEFAULT_RUN_STYLE,
     box: { x, y: 0, width: measurer.measure(text, DEFAULT_RUN_STYLE), height: 14 },
-    ...extra,
   });
   const words = [span('aa ', 0), span('bb ', 24), span('cc', 48)];
-  const shrunk = alignSpans(words, measurer, 0, 66, 'both', true);
+  const align = (lastLineShrinks: boolean) =>
+    alignSpans(words, measurer, 0, 66, 'both', true, undefined, false, false, lastLineShrinks);
+  expect(align(false)).toEqual(words);
+  const shrunk = align(true);
   expect(shrunk.at(-1)!.box.x + shrunk.at(-1)!.box.width).toBeCloseTo(66, 6);
-  // Each overflow is within the line's space budget, so only the guard keeps it natural.
-  for (const [line, available] of [
-    [[span('aa ', 0), span('\t', 24), span('cc', 34)], 53],
-    [[span('aa ', 0), span('bb ', 24), span('cc', 48, { projected: true })], 66],
-  ] as const)
-    expect(alignSpans(line, measurer, 0, available, 'both', true)).toEqual(line);
+  // A line that is not the paragraph's last compresses whenever it overflows, as before.
+  const middle = alignSpans(words, measurer, 0, 66, 'both', false);
+  expect(middle.at(-1)!.box.x + middle.at(-1)!.box.width).toBeCloseTo(66, 6);
 });
