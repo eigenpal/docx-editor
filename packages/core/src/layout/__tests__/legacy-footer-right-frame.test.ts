@@ -267,7 +267,13 @@ describe('structures that keep the ordinary flow', () => {
     expect(inFlow(framedParagraph + long)).toBe(true);
   });
 
-  test('a header', () => {
-    expect(inFlow(body, 'hdr')).toBe(true);
+  test('a header, which the header frame lane places instead', () => {
+    const story = lay(body, cascade(), 'hdr');
+    const { framed, anchor } = paragraphs(story);
+    // The footer lane shares the text paragraph's top spacing; the header lane keeps the
+    // anchor exactly where it lays out alone, and the frame from that paragraph's top.
+    expect(anchor.box.y).toBe(0);
+    expect(framed.box.y).toBeCloseTo(0.05, 6);
+    expect(inkRight(framed)).toBeCloseTo(WIDTH, 6);
   });
 });

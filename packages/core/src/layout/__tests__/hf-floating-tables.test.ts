@@ -77,6 +77,25 @@ function header(
 // A top-level `tblpPr` table in a header sits at its anchor position, and the blocks after it
 // start where the table would have started.
 describe('floating tables in a header', () => {
+  test('a header frame beside a floating table keeps its ordinary-flow fallback', () => {
+    const framePr =
+      '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="inside" w:y="1"/>';
+    const frame = `<w:p><w:pPr>${framePr}</w:pPr><w:r><w:t>1</w:t></w:r></w:p>`;
+    const running = '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Head</w:t></w:r></w:p>';
+    const source = frame + running + table(PAGE_ANCHOR);
+    const candidate = header(source);
+    const control = header(source.replace(framePr, ''));
+    const paragraphBoxes = (story: typeof candidate.story) =>
+      story.fragments
+        .filter((fragment) => fragment.kind === 'paragraph')
+        .map((fragment) => fragment.box);
+    expect(candidate.story.flowHeight).toBe(control.story.flowHeight);
+    expect(paragraphBoxes(candidate.story)).toEqual(paragraphBoxes(control.story));
+    expect(candidate.tables).toHaveLength(1);
+    expect(candidate.table.box).toEqual(control.table.box);
+    expect((candidate.table as { outOfFlow?: true }).outOfFlow).toBe(true);
+  });
+
   test('a page-anchored table sits at its page position, outside the header flow', () => {
     const { story, table: placed, title } = header(table(PAGE_ANCHOR));
     // Story coordinates: x from the left margin, y from the header top at 36pt.

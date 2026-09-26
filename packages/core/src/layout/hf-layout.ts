@@ -58,6 +58,7 @@ import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
 import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
+import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -272,7 +273,11 @@ export function layoutHeaderFooterStory(
 ): HeaderFooterStoryLayout {
   if (inputs?.showFieldCodes) producer += '|field-codes';
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
-  const needs = detectStoryPageFields(part.root);
+  const pageFrame = readHeaderPageFrame(part);
+  const detected = detectStoryPageFields(part.root);
+  // An `inside`/`outside` frame moves with the page number's parity, so the story needs a
+  // page context even when no page field is detected in it.
+  const needs = pageFrame?.parity ? { ...detected, hasPageParity: true } : detected;
   const contextCache = createBoundedContextCache(
     maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
   );
@@ -295,6 +300,8 @@ export function layoutHeaderFooterStory(
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
+  // Whether the header frame lane holds, decided once by the layout without a page context.
+  let frameAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
@@ -502,45 +509,71 @@ export function layoutHeaderFooterStory(
           : {}),
     });
 
-    if (inlineDrawingLayout) {
-      let converged = false;
-      for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
-        pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
-        lineCounter = 0;
-        flow = flowBlocksInBox(
-          flowBlocks,
-          0,
-          Math.max(1, contentWidth),
-          0,
-          0,
-          drawingDeps(collect)
-        );
-        const nextZones = collectExclusionZonesFromDrawings(
-          pendingAnchoredDrawings,
-          inlineDrawingLayout,
-          0,
-          contentWidth
-        );
-        if (nextZones.length === 0) {
-          converged = true;
+    const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
+      exclusionZones = Object.freeze([]);
+      if (inlineDrawingLayout) {
+        let converged = false;
+        for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+          pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
+          lineCounter = firstLine;
+          flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
+          const nextZones = collectExclusionZonesFromDrawings(
+            pendingAnchoredDrawings,
+            inlineDrawingLayout,
+            0,
+            contentWidth
+          );
+          if (nextZones.length === 0) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
+          if (
+            pass > 0 &&
+            exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)
+          ) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
           exclusionZones = nextZones;
-          break;
         }
-        if (pass > 0 && exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)) {
-          converged = true;
-          exclusionZones = nextZones;
-          break;
+        if (!converged) {
+          throw new DrawingExclusionConvergenceError(
+            `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
+          );
         }
-        exclusionZones = nextZones;
+      } else {
+        lineCounter = firstLine;
+        flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, plainDeps());
       }
-      if (!converged) {
-        throw new DrawingExclusionConvergenceError(
-          `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
-        );
-      }
-    } else {
-      flow = flowBlocksInBox(flowBlocks, 0, Math.max(1, contentWidth), 0, 0, plainDeps());
+    };
+
+    // The frame lays out alone, first, so its line keeps the first line id of the story.
+    const frameBlock =
+      floatingSplit.floating.length === 0 &&
+      pageFrame &&
+      flowBlocks[0]?.id === pageFrame.frameId &&
+      flowBlocks[1]?.id === pageFrame.anchorId
+        ? flowBlocks[0]
+        : undefined;
+    let placed: typeof flow | null = null;
+    const decideFrame = effectiveCtx === undefined;
+    if (frameBlock && !decideFrame && frameAdmitted === undefined) layoutOnce(undefined);
+    if (pageFrame && frameBlock && (decideFrame || frameAdmitted)) {
+      flowStory([frameBlock], 0);
+      const framed = flow;
+      flowStory(flowBlocks.slice(1), lineCounter);
+      // An anchored drawing wraps the story around its own exclusion, which the frame laid out
+      // alone never saw. Keep the ordinary flow rather than guess at that interaction.
+      placed =
+        pendingAnchoredDrawings.length === 0
+          ? placeHeaderPageFrame(pageFrame, framed, flow, contentWidth, pageNumber, decideFrame)
+          : null;
+      if (decideFrame) frameAdmitted = placed !== null;
     }
+    if (placed) flow = placed;
+    else flowStory(flowBlocks, 0);
 
     if (floatingGeometry) {
       // A footer's top edge depends on its own flow height, which the floating tables leave.

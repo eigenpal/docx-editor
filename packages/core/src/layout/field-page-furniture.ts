@@ -169,9 +169,11 @@ export interface PageFieldSource {
   readonly format?: string;
 }
 
-/** True when any allowlisted page field is present. */
+/** True when any allowlisted page field is present, or the story places by page parity. */
 export function storyNeedsPageFields(needs: StoryPageFieldNeeds): boolean {
-  return needs.hasPage || needs.hasNumPages || needs.hasSectionPages;
+  return (
+    needs.hasPage || needs.hasNumPages || needs.hasSectionPages || needs.hasPageParity === true
+  );
 }
 
 /**
@@ -195,6 +197,8 @@ export function fieldPageContextToken(
   }
   if (needs.hasNumPages) parts.push(`n${context.pageCount}`);
   if (needs.hasSectionPages) parts.push(`s${context.sectionPageCount ?? context.pageCount}`);
+  // The page number already separates the parities when the story reads PAGE.
+  if (needs.hasPageParity && !needs.hasPage) parts.push(`o${context.pageNumber & 1}`);
   return `|fld:${parts.join('/')}`;
 }
 
