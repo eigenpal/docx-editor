@@ -1166,13 +1166,13 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.i18n',
-    name: 'Editor UI in 10 languages',
+    name: 'Editor UI in 11 languages',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'de, en, fr, he, hi, id, pl, pt-BR, tr, and zh-CN via @docx-editor.dev/i18n.',
+    notes: 'de, en, es, fr, he, hi, id, pl, pt-BR, tr, and zh-CN via @docx-editor.dev/i18n.',
     docsLink: '/docs/2.x/i18n',
   },
   {

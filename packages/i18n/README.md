@@ -14,7 +14,7 @@
 
 # @docx-editor.dev/i18n
 
-Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides ten languages and falls back to English for missing translations.
+Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides eleven languages and falls back to English for missing translations.
 
 ## Quick start
 
@@ -65,6 +65,7 @@ Keys set to `null` in any locale fall back to English.
 | ------- | ------ | ------------------- |
 | `en`    | `en`   | English (source)    |
 | `de`    | `de`   | German              |
+| `es`    | `es`   | Spanish             |
 | `fr`    | `fr`   | French              |
 | `he`    | `he`   | Hebrew              |
 | `hi`    | `hi`   | Hindi               |
@@ -101,7 +102,7 @@ For on-demand loading, use a dynamic import instead:
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/es`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
 

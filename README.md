@@ -159,6 +159,7 @@ See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor Licens
 | ------- | -------------------- |
 | `en`    | English              |
 | `de`    | German               |
+| `es`    | Spanish              |
 | `fr`    | French               |
 | `he`    | Hebrew               |
 | `hi`    | Hindi                |
@@ -171,7 +172,7 @@ See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor Licens
 To add a locale, see the [i18n contribution guide](docs/i18n.md).
 
 ```bash
-bun run i18n:new es      # Scaffold a Spanish locale.
+bun run i18n:new it      # Scaffold an Italian locale.
 bun run i18n:status      # check translation coverage
 ```
 

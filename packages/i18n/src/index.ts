@@ -34,6 +34,7 @@
 
 import enJson from '../en.json';
 import deJson from '../de.json';
+import esJson from '../es.json';
 import frJson from '../fr.json';
 import heJson from '../he.json';
 import hiJson from '../hi.json';
@@ -60,13 +61,17 @@ export type LocaleStrings = typeof enJson;
  *
  * @public
  */
-export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+// prettier-ignore
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;
 
 /** German (`de`). Community-maintained; null leaves fall back to English. @public */
 export const de: PartialLocaleStrings = deJson;
+
+/** Spanish (`es`). Community-maintained; null leaves fall back to English. @public */
+export const es: PartialLocaleStrings = esJson;
 
 /** French (`fr`). Community-maintained; null leaves fall back to English. @public */
 export const fr: PartialLocaleStrings = frJson;
@@ -109,6 +114,7 @@ export const zhCN: PartialLocaleStrings = zhCNJson;
 export const locales: Record<LocaleCode, PartialLocaleStrings> = {
   en,
   de,
+  es,
   fr,
   he,
   hi,
