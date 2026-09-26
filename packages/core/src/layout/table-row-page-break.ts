@@ -7,6 +7,9 @@
 // manual page break inside any cell. Only the body flow asks: a nested table's rows never
 // break the page. Positioned (`w:tblpPr`) tables do not yet support this row-break rule.
 //
+// From Word 2013 layout on, a row whose previous row keeps with the next (`w:keepNext`,
+// `table-row-keeps.ts`) does not start a new page: `rowStartsPage` there decides.
+//
 // Limit: a row that continues a vertical merge in ANY column ignores the property. Splitting
 // a merged cell's text across the page break is not supported, so such a row keeps the
 // placement it had without the property. A merge head row and a row after a merge ends

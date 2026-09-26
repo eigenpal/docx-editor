@@ -1,8 +1,9 @@
 // Keep chains that cross table rows (§17.3.1.15, §17.3.1.23).
 //
 // A table whose first row starts a new page ends a keep chain: the caption before it needs no
-// room for it. A row that starts a new page ends the kept group above it. Before Word 2013 the
-// group stays on its page; from Word 2013 on it goes to the new page with that row.
+// room for it. Before Word 2013, a row that starts a new page ends the kept group above it,
+// and the group stays on its page. From Word 2013 on, a row after a kept row does not start a
+// new page: it is the group's next row, and the group moves only when it does not fit.
 //
 // A `w:keepNext` paragraph before a table whose body rows all keep goes on through those rows
 // to the content after the table, so it moves with them. Before Word 2013, header rows do not
@@ -12,8 +13,7 @@
 // A kept last row prices a following keep chain for the room the row leaves, and a retained
 // layout re-places the table and the caption when any block that pricing reads changes.
 //
-// The page shapes come from captured probes in compatibility modes 14 and 15, except where a
-// case says it is inferred.
+// The page shapes come from captured probes in compatibility modes 14 and 15.
 
 import { describe, expect, test } from 'bun:test';
 import { TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -24,6 +24,8 @@ import {
   ALL,
   lay,
   load,
+  read,
+  SECT,
   measurer,
   P8,
   pages,
@@ -85,13 +87,13 @@ describe('a row or table that starts a new page ends the keep before it', () => 
       [`${P} R1c1-1 R1c2-1 R2c1-1 R2c2-1 R3c1-1 R3c2-1`, 'R4c1-1 R4c1-2 R4c2-1 TAIL1'],
     ],
     [
-      'a kept row goes to the new page that the next row starts',
+      'a kept row and the next row move together when they do not fit',
       [15],
       breakingSuccessor,
       [`${P} R1c1-1 R1c2-1 R2c1-1 R2c2-1`, 'R3c1-1 R3c2-1 R4c1-1 R4c1-2 R4c2-1 TAIL1'],
     ],
     [
-      'a kept row goes to the new page that a kept row after it starts',
+      'a kept row moves with a later kept row that asks for a new page',
       [15],
       P8 +
         table([
@@ -122,17 +124,10 @@ describe('a row or table that starts a new page ends the keep before it', () => 
       ['P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 CAP1', 'Hc1-1 Hc2-1 R1c1-1 R1c2-1 R2c1-1 R2c2-1 TAIL1'],
     ],
     [
-      'a caption goes with kept first rows to the page the next row starts',
+      'a caption moves with kept first rows and the next row when they do not fit',
       [15],
       keptFirstThenBreak,
       ['P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11', 'CAP1 R1c1-1 R1c2-1 R2c1-1 R2c2-1 TAIL1'],
-    ],
-    // Inferred from the shape above: the chain start takes the page break, not the fit.
-    [
-      'a caption that fits beside kept first rows still goes with them to the new page',
-      [15],
-      keptFirstThenBreak.replace(para('P', 11), para('P', 10)),
-      ['P1 P2 P3 P4 P5 P6 P7 P8 P9 P10', 'CAP1 R1c1-1 R1c2-1 R2c1-1 R2c2-1 TAIL1'],
     ],
     [
       'a caption moves with a kept first row, and the next row starts a new page',
@@ -150,6 +145,199 @@ describe('a row or table that starts a new page ends the keep before it', () => 
       ['P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 R1c1-1 R1c2-1 R2c1-1 R2c2-1', 'Q1 Q2 TAIL1'],
     ],
   ]);
+});
+
+const breakingRow = (name: string) =>
+  row(name, { first: para(`${name}c1-`, 1, { pageBreakBefore: true }) });
+/** A kept first row, a row that asks for a new page, and a plain row. */
+const KB = [row('R1', { keep: ALL }), breakingRow('R2'), row('R3')];
+const KB_ROWS = 'R1c1-1 R1c2-1 R2c1-1 R2c2-1 R3c1-1 R3c2-1';
+const keptParas = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => para(`K${from + i}-`, 1, { keep: true })).join(
+    ''
+  );
+const K_PARAS = 'K1-1 K2-1 K3-1 K4-1 K5-1 K6-1 K7-1 K8-1 K9-1';
+const plainRows = (count: number) => Array.from({ length: count }, (_, i) => row(`S${i + 1}`));
+const S_ROWS = Array.from({ length: 11 }, (_, i) => `S${i + 1}c1-1 S${i + 1}c2-1`).join(' ');
+const HARD_BREAK =
+  '<w:p><w:pPr><w:keepNext/><w:widowControl w:val="0"/>' +
+  '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>' +
+  '<w:r><w:t>X1</w:t><w:br w:type="page"/><w:t>X2</w:t></w:r></w:p>';
+const lastRowThenTable = (between: string) =>
+  para('P', 7) +
+  table([row('R0'), row('R1', { keep: ALL })]) +
+  between +
+  table([row('S1', { keep: ALL }), breakingRow('S2')]) +
+  TAIL;
+const SEVEN_R = 'P1 P2 P3 P4 P5 P6 P7 R0c1-1 R0c2-1 R1c1-1 R1c2-1 M1 S1c1-1 S1c2-1 S2c1-1 S2c2-1';
+
+describe('from Word 2013 on, a row after a kept row does not start a new page', () => {
+  run([
+    [
+      'the rows stay below a plain paragraph when they fit',
+      [15],
+      para('P', 2) + para('CAP') + table(KB) + TAIL,
+      [`P1 P2 CAP1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'the row starts a new page before Word 2013',
+      [14],
+      para('P', 2) + para('CAP') + table(KB) + TAIL,
+      ['P1 P2 CAP1 R1c1-1 R1c2-1', 'R2c1-1 R2c2-1 R3c1-1 R3c2-1 TAIL1'],
+    ],
+    [
+      'the rows and a keepNext caption stay when they fit',
+      [15],
+      para('P', 2) + CAP + table(KB) + TAIL,
+      [`P1 P2 CAP1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'the rows and header rows stay when they fit',
+      [15],
+      para('P', 2) + table([row('H', { header: true }), ...KB]) + TAIL,
+      [`P1 P2 Hc1-1 Hc2-1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'the rows, header rows and a keepNext caption stay when they fit',
+      [15],
+      para('P', 2) + CAP + table([row('H', { header: true }), ...KB]) + TAIL,
+      [`P1 P2 CAP1 Hc1-1 Hc2-1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'the rows stay after a long keep chain, and later rows go on',
+      [15],
+      para('P') + keptParas(1, 9) + table(KB) + TAIL,
+      [`P1 ${K_PARAS} R1c1-1 R1c2-1 R2c1-1 R2c2-1`, 'R3c1-1 R3c2-1 TAIL1'],
+    ],
+    [
+      'the row starts a new page after a long keep chain before Word 2013',
+      [14],
+      para('P') + keptParas(1, 9) + table(KB) + TAIL,
+      [`P1 ${K_PARAS} R1c1-1 R1c2-1`, 'R2c1-1 R2c2-1 R3c1-1 R3c2-1 TAIL1'],
+    ],
+    [
+      'the rows stay after a keep chain whose last member does not keep',
+      [15],
+      para('P') + keptParas(1, 8) + para('K9-') + table(KB) + TAIL,
+      [`P1 ${K_PARAS} R1c1-1 R1c2-1 R2c1-1 R2c2-1`, 'R3c1-1 R3c2-1 TAIL1'],
+    ],
+    [
+      'a kept last row keeps with a keepNext paragraph and the rows of the next table',
+      [15],
+      lastRowThenTable(para('M', 1, { keep: true })),
+      [SEVEN_R, 'TAIL1'],
+    ],
+    [
+      'a kept last row keeps with a plain paragraph, and the next table fits',
+      [15],
+      lastRowThenTable(para('M')),
+      [SEVEN_R, 'TAIL1'],
+    ],
+    [
+      'a caption follows the last lines of a split keepNext paragraph',
+      [15],
+      P8 + para('Q', 6, { keep: true, widow: true }) + CAP + table(KB) + TAIL,
+      [`${P} Q1 Q2 Q3 Q4`, `Q5 Q6 CAP1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'a caption follows a paragraph that ends with a page break',
+      [15],
+      para('P', 3) + HARD_BREAK + CAP + table(KB) + TAIL,
+      ['P1 P2 P3 X1', `X2 CAP1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'a table at the top of the document stays on one page',
+      [15],
+      table(KB) + TAIL,
+      [`${KB_ROWS} TAIL1`],
+    ],
+    [
+      'a table at the top of the document breaks before Word 2013',
+      [14],
+      table(KB) + TAIL,
+      ['R1c1-1 R1c2-1', 'R2c1-1 R2c2-1 R3c1-1 R3c2-1 TAIL1'],
+    ],
+    [
+      'a caption at the top of the document keeps the rows on its page',
+      [15],
+      CAP + table(KB) + TAIL,
+      [`CAP1 ${KB_ROWS} TAIL1`],
+    ],
+    [
+      'a kept row that starts a page keeps the next row below it',
+      [15],
+      para('P') +
+        table([...plainRows(11), row('K', { keep: ALL }), breakingRow('B'), row('Z')]) +
+        TAIL,
+      [`P1 ${S_ROWS}`, 'Kc1-1 Kc2-1 Bc1-1 Bc2-1 Zc1-1 Zc2-1 TAIL1'],
+    ],
+    [
+      'a kept row below repeated header rows keeps the next row below it',
+      [15],
+      table([
+        row('H', { header: true }),
+        ...plainRows(11),
+        row('K', { keep: ALL }),
+        breakingRow('B'),
+        row('Z'),
+      ]) + TAIL,
+      [`Hc1-1 Hc2-1 ${S_ROWS}`, 'Hc1-1 Hc2-1 Kc1-1 Kc2-1 Bc1-1 Bc2-1 Zc1-1 Zc2-1 TAIL1'],
+    ],
+    [
+      'a kept group taller than a page moves, and the next row follows its last row',
+      [15],
+      para('P', 3) +
+        table([
+          row('R0'),
+          ...[1, 2, 3, 4, 5].map((i) => row(`K${i}`, { lines: 3, keep: ALL })),
+          breakingRow('B'),
+          row('Z'),
+        ]) +
+        TAIL,
+      [
+        'P1 P2 P3 R0c1-1 R0c2-1',
+        [1, 2, 3, 4].map((i) => `K${i}c1-1 K${i}c1-2 K${i}c1-3 K${i}c2-1`).join(' '),
+        'K5c1-1 K5c1-2 K5c1-3 K5c2-1 Bc1-1 Bc2-1 Zc1-1 Zc2-1 TAIL1',
+      ],
+    ],
+    [
+      'a kept group longer than the lookahead moves when it cannot fit',
+      [15],
+      para('P', 3) +
+        table([
+          row('R0'),
+          ...Array.from({ length: 12 }, (_, i) => row(`K${i + 1}`, { keep: ALL })),
+          breakingRow('B'),
+          row('Z'),
+        ]) +
+        TAIL,
+      [
+        'P1 P2 P3 R0c1-1 R0c2-1',
+        Array.from({ length: 12 }, (_, i) => `K${i + 1}c1-1 K${i + 1}c2-1`).join(' '),
+        'Bc1-1 Bc2-1 Zc1-1 Zc2-1 TAIL1',
+      ],
+    ],
+  ]);
+
+  test('mode 15: a caption and the rows stay in the first of two columns when they fit', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const twoColumns = SECT.replace('w:w="7000"', 'w:w="9000"').replace(
+      '</w:sectPr>',
+      '<w:cols w:num="2" w:space="200"/></w:sectPr>'
+    );
+    const narrow = table(KB)
+      .replace('w:w="6000"', 'w:w="4000"')
+      .replaceAll('<w:gridCol w:w="3000"/>', '<w:gridCol w:w="2000"/>')
+      .replaceAll('<w:tcW w:w="3000"', '<w:tcW w:w="2000"');
+    const body = para('P', 3) + CAP + narrow + TAIL;
+    const part = read(
+      `<w:document xmlns:w="${W}"><w:body>${body}${twoColumns}</w:body></w:document>`,
+      '/word/document.xml'
+    );
+    const layout = lay(part, 15);
+    expect(pages(layout)).toEqual([`P1 P2 P3 CAP1 ${KB_ROWS} TAIL1`]);
+    expect(layout.pages[0]!.fragments.every((fragment) => fragment.box.x < 100)).toBe(true);
+  });
 });
 
 const keptHeaderBody =
@@ -361,6 +549,86 @@ describe('retained layout re-places what a table keep reads', () => {
           if (capPage(first) !== capPage(cold)) moved += 1;
         }
         expect(moved).toBeGreaterThan(0);
+      });
+    }
+  }
+});
+
+describe('retained layout re-places rows whose page break a kept row drops', () => {
+  type Node = { readonly kind: string; readonly id?: string; readonly children?: readonly Node[] };
+  /** The id of the paragraph, at any depth, whose text holds `text`. */
+  const paragraphId = (node: Node, text: string): string | undefined => {
+    if (node.kind === 'paragraph' && JSON.stringify(node).includes(`"${text}`)) return node.id;
+    for (const child of node.children ?? []) {
+      const found = paragraphId(child, text);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  const SPACING = [
+    { localName: 'widowControl', attributes: { val: '0' } },
+    {
+      localName: 'spacing',
+      attributes: { before: '0', after: '0', line: '280', lineRule: 'exact' },
+    },
+  ];
+  /** Cell paragraph text, the property toggled, and whether it starts on. Retained layout
+   * must equal cold layout after each edit, for captions at every height of the page. */
+  const edits = [
+    ['R1c1-1', 'keepNext', true],
+    ['R1c1-1', 'keepNext', false],
+    ['R2c1-1', 'pageBreakBefore', true],
+    ['R2c1-1', 'pageBreakBefore', false],
+  ] as const;
+  for (const mode of [14, 15]) {
+    for (const [text, property, on] of edits) {
+      test(`mode ${mode}: turning ${property} ${on ? 'off' : 'on'} in ${text}`, () => {
+        let moved = 0;
+        for (let filler = 1; filler <= 11; filler += 1) {
+          // The toggled property starts `on`; the other one is always set.
+          const body =
+            para('P', filler) +
+            CAP +
+            table([
+              row('R1', {
+                first: para('R1c1-', 1, { keep: property === 'keepNext' ? on : true }),
+              }),
+              row('R2', {
+                first: para('R2c1-', 1, {
+                  pageBreakBefore: property === 'pageBreakBefore' ? on : true,
+                }),
+              }),
+              row('R3'),
+            ]) +
+            TAIL;
+          const store = new TreeDocumentStore(load(body));
+          const session = createLayoutSession();
+          const before = pages(lay(store.part, mode, { session }));
+          const id = paragraphId(store.part.root as Node, text);
+          if (!id) throw new Error(`The fixture has no ${text}.`);
+          const result = store.transact((tx) => {
+            tx.apply({
+              op: 'setParagraphProperties',
+              paragraphId: id,
+              properties: on ? SPACING : [{ localName: property }, ...SPACING],
+            });
+          });
+          expect(result.ok).toBe(true);
+          const retained = pages(
+            layoutSemanticDocument(store.part, 2, {
+              measurer,
+              styleCascade,
+              compatibilityMode: mode,
+              session,
+            })
+          );
+          const cold = pages(lay(structuredClone(store.part), mode));
+          expect(retained).toEqual(cold);
+          if (JSON.stringify(before) !== JSON.stringify(cold)) moved += 1;
+        }
+        // From Word 2013 on, the kept row decides whether the row's break applies, and a break
+        // under a kept row changes nothing. Before Word 2013 the break always applies.
+        expect(moved > 0).toBe((mode === 15) === (property === 'keepNext'));
       });
     }
   }

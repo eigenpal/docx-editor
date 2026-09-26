@@ -442,7 +442,7 @@ describe('kept group pricing', () => {
 
   test('ends a group at a row that starts a new page, with no successor height', () => {
     const breaking = (at: number) => source([2, 3], { breaksAt: (index) => index === at });
-    const ends = { end: 2, kept: 14, successor: 0, breaksAfter: true };
+    const ends = { end: 2, kept: 14, successor: 0 };
     expect(keptRowGroup(breaking(3), 2)).toEqual(ends);
     expect(keptRowGroup(breaking(3), 3)).toEqual({ end: 3, kept: 14, successor: 7 });
     expect(keptRowGroup(breaking(4), 2)).toEqual({ ...ends, end: 3, kept: 28 });
@@ -465,7 +465,7 @@ describe('kept group pricing', () => {
     expect(keptRowGroup(source([2]), 1)).toBeNull();
   });
 
-  test('prices at most eight kept rows, as a lower bound without a successor', () => {
+  test('prices at most eight kept rows, and the next kept row whole as a lower bound', () => {
     expect(keptRowGroup(source([0, 1, 2, 3, 4, 5, 6, 7]), 0)).toEqual({
       end: 7,
       kept: 112,
@@ -474,7 +474,7 @@ describe('kept group pricing', () => {
     expect(keptRowGroup(source([0, 1, 2, 3, 4, 5, 6, 7, 8]), 0)).toEqual({
       end: 7,
       kept: 112,
-      successor: 0,
+      successor: 14,
       truncated: true,
     });
   });

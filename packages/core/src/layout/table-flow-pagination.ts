@@ -28,8 +28,7 @@ import { prepareTerminalBorderPlan, sameTerminalContent } from './table-terminal
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
-import { rowBreaksPageBefore } from './table-row-page-break.ts';
-import { keptRowGroup, rowsOpening, tableKeptRowSource } from './table-row-keeps.ts';
+import { keptRowGroup, rowsOpening, rowStartsPage, tableKeptRowSource } from './table-row-keeps.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
@@ -111,11 +110,6 @@ export interface TableFlowCursor {
    * nothing follows; null when it cannot be priced.
    */
   readonly followingKeepOpening?: (room: number) => number | null | undefined;
-  /**
-   * The paragraph before the table keeps with it. Its chain already took the page break that
-   * kept first rows would take (`startsPage` in `pagination-keeps.ts`).
-   */
-  readonly keptBefore?: boolean;
 }
 
 export interface TableFlowPlacementResult {
@@ -176,7 +170,7 @@ export function paginateTableInFlow(
   const breaksPages = structure.float === undefined;
   if (
     breaksPages &&
-    rowBreaksPageBefore(structure.rows[0]!, styleCascade) &&
+    rowStartsPage(structure, 0, styleCascade, flow.compatibilityMode) &&
     flow.pageHoldsContent(flow.cursorY)
   ) {
     flow.advancePage();
@@ -258,8 +252,6 @@ export function paginateTableInFlow(
   let occurrenceInsets = new Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>();
   const completeSourceRows = new Set(structure.rows);
   let forceNextFragment = false;
-  // Word 2013 and later: the body row whose page break a kept group above it already took.
-  let breakTakenAt = -1;
   const laterLayout = isWord2013OrLaterMode(flow.compatibilityMode);
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
@@ -682,23 +674,27 @@ export function paginateTableInFlow(
       forceNextFragment = true;
     };
     // Repeated headers at the page top are not content above the row; the authored ones are.
-    const holdsContent =
-      rows.some((placed) => !placed.isHeaderRepeat) || flow.pageHoldsContent(fragmentTop);
+    // From Word 2013 on, a row after a kept row does not start a page (`rowStartsPage`).
     const startsPage =
       breaksPages &&
       row !== structure.rows[0] &&
-      bodyRowIndex !== breakTakenAt &&
-      rowBreaksPageBefore(row, styleCascade) &&
-      holdsContent;
+      rowStartsPage(
+        structure,
+        structure.rows.length - bodyRows.length + bodyRowIndex,
+        styleCascade,
+        flow.compatibilityMode
+      ) &&
+      (rows.some((placed) => !placed.isHeaderRepeat) || flow.pageHoldsContent(fragmentTop));
     // A kept group that does not fit with its successor's opening moves to the next page. From
-    // Word 2013 on, the table start decided for header rows above it, and a group whose next
-    // row starts a new page starts that page itself. Before, the header rows placed with the
-    // table stay behind and repeat. A group below repeated header rows is not priced.
+    // Word 2013 on, the table start decided for header rows above it. Before, the header rows
+    // placed with the table stay behind and repeat. A group below repeated header rows is not
+    // priced.
     const keptGroup =
       breaksPages &&
       !forceBreak &&
       !startsPage &&
       !heldByOpenSpan &&
+      flow.cursorY > 0.001 &&
       (rows.length === 0 ||
         rows.some((placed) => !placed.isHeaderRow) ||
         (!laterLayout && !rows.some((placed) => placed.isHeaderRepeat)))
@@ -708,14 +704,8 @@ export function paginateTableInFlow(
             contentHeight() - flow.cursorY
           )
         : null;
-    const pullsBreak = laterLayout && keptGroup?.breaksAfter === true;
-    if (pullsBreak) breakTakenAt = keptGroup!.end + 1;
     const keptMoves =
-      !!keptGroup &&
-      flow.cursorY > 0.001 &&
-      (pullsBreak
-        ? holdsContent && !(rows.length === 0 && bodyRowIndex === 0 && flow.keptBefore === true)
-        : flow.cursorY + keptGroup.kept + keptGroup.successor > contentHeight() + 0.001);
+      !!keptGroup && flow.cursorY + keptGroup.kept + keptGroup.successor > contentHeight() + 0.001;
     if (!forceBreak && !startsPage && !keptMoves) tryTerminalFit();
 
     // Ordinary rows may break between lines, but their first fragment must have room
@@ -745,7 +735,7 @@ export function paginateTableInFlow(
             { requireEveryCell: true }
           )))
     ) {
-      breakForContinuation(admitsRepeatedHeaders, startsPage || (keptMoves && pullsBreak));
+      breakForContinuation(admitsRepeatedHeaders, startsPage);
       movedToFreshPage = true;
       // A merge that did not fit the band it was offered in may fit this fresh page.
       admitSpans(bodyRowIndex);

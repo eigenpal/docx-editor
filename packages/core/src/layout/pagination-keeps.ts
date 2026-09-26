@@ -196,11 +196,6 @@ export interface KeepNextLookahead {
 export interface TableKeepOpening {
   /** The table's first row starts a new page, so the chain ends before the table. */
   readonly breaksPage?: boolean;
-  /**
-   * Word 2013 and later: the table's kept first rows go to the new page that the row after them
-   * starts, and a chain that keeps with them starts that page too.
-   */
-  readonly startsPage?: boolean;
   /** Header rows and the opening of the body rows. */
   readonly height: number;
   /**
@@ -217,8 +212,6 @@ export interface KeepNextPlan {
   readonly height: number;
   /** The last member that fits whole in the room before anything that does not, or -1. */
   readonly lastWhole: number;
-  /** The chain keeps with a table that starts a new page before it ({@link TableKeepOpening}). */
-  readonly startsPage?: true;
 }
 
 /**
@@ -272,11 +265,6 @@ export function keepNextPlan(
       const table = look.tableOpening?.(index) ?? null;
       if (table === null) return null;
       if (table.breaksPage) return { height: total - after, lastWhole };
-      if (table.startsPage) {
-        // After a table the chain ends at the break; a chain head moves to the new page.
-        if (look.throughTables === false) return { height: total - after, lastWhole };
-        return { height: total + table.height, lastWhole, startsPage: true };
-      }
       const through = table.throughHeight;
       const following =
         through === undefined || look.throughTables === false
@@ -373,8 +361,6 @@ export function keepNextGroupNeed(look: KeepNextLookahead, at: KeepNextPlacement
   const here = at.contentHeight - at.cursorY - at.lead - at.topExtent;
   const group = plan(here);
   if (group === null) return null;
-  // The chain goes to the new page a kept table start takes, unless it already opens a page.
-  if (group.startsPage) return Number.POSITIVE_INFINITY;
   const need = group.height - at.pricedLead + at.lead + at.topExtent;
   if (at.cursorY + need <= at.contentHeight) return need;
   const fresh = plan(at.contentHeight - at.freshLead - at.topExtent);
@@ -404,9 +390,7 @@ export function keepNextTailLines(
 ): number {
   if (!isWord2013OrLaterMode(compatibilityMode)) return 0;
   const plan = keepNextPlan(look, room);
-  if (plan === null || plan.startsPage || plan.height <= room || plan.lastWhole !== look.start) {
-    return 0;
-  }
+  if (plan === null || plan.height <= room || plan.lastWhole !== look.start) return 0;
   const fresh = keepNextPlan(look, pageHeight);
   if (fresh === null || fresh.height > pageHeight) return 0;
   return splitTailLines(look, look.start);

@@ -11,10 +11,11 @@
 // paragraphs' own widow and `w:keepLines` rules; after the last row, the opening of the
 // next body paragraph. When the group and that opening do not fit below the content already
 // on the page, the group moves to the next page, even when it cannot fit there either.
-// A row that starts a new page (`w:pageBreakBefore`) ends the group and needs no room beside
-// it, as a page break ends a paragraph keep chain. In Word 2013 and later layout, the kept
-// rows before that row go to the new page with it: the break starts the page before them.
-// Before Word 2013, header rows do not keep with the body rows.
+// Before Word 2013 layout, a row that starts a new page (`w:pageBreakBefore`) ends the group
+// and needs no room beside it, as a page break ends a paragraph keep chain. From Word 2013
+// on, a row after a kept row does not start a new page (`rowStartsPage`): it is the group's
+// next row, and the group moves only when it does not fit. Before Word 2013, header rows do
+// not keep with the body rows.
 //
 // Header rows keep with the first body row in the same way, and a `w:keepNext` paragraph
 // before a table keeps with the header rows and that opening (`tableKeepOpening`). When
@@ -22,7 +23,7 @@
 //
 // Limits, each placed by the ordinary row rules instead:
 // - The lookahead stops after `MAX_KEEP_NEXT_CHAIN` kept rows. A longer group moves only
-//   when those rows alone do not fit.
+//   when those rows and the whole next kept row do not fit.
 // - A vertical merge that crosses the group, or a first cell that continues a merge.
 // - A keep chain reads through the kept rows of one table only (`followingKeepOpening`).
 // - A first cell that opens with a nested table.
@@ -69,6 +70,27 @@ function rowBreaksPage(row: SemanticTableRow, styleCascade: StyleCascadeTable | 
   return breaks;
 }
 
+/**
+ * Whether row `index` of `structure` starts a new page (`w:pageBreakBefore`,
+ * `table-row-page-break.ts`). From Word 2013 on, a row does not start a page when the row
+ * before it keeps with it: it stays that row's next row, placed by the ordinary fit rules.
+ */
+export function rowStartsPage(
+  structure: SemanticTableStructure,
+  index: number,
+  styleCascade: StyleCascadeTable | undefined,
+  compatibilityMode: number | undefined
+): boolean {
+  const row = structure.rows[index];
+  if (!row || !rowBreaksPage(row, styleCascade)) return false;
+  const previous = index > 0 ? structure.rows[index - 1] : undefined;
+  return !(
+    previous &&
+    isWord2013OrLaterMode(compatibilityMode) &&
+    rowKeepsWithNext(previous, styleCascade)
+  );
+}
+
 /** Whether `row` keeps with the row or paragraph after it. */
 export function rowKeepsWithNext(
   row: SemanticTableRow,
@@ -98,7 +120,7 @@ function resolveRowKeep(row: SemanticTableRow, styleCascade: StyleCascadeTable |
 export interface KeptRowSource {
   readonly rows: readonly SemanticTableRow[];
   readonly keepsAt: (index: number) => boolean;
-  /** The row starts a new page (`w:pageBreakBefore`). */
+  /** The row starts a new page ({@link rowStartsPage}). */
   readonly breaksAt: (index: number) => boolean;
   /** The row's whole height where the group would stand. */
   readonly heightOf: (index: number) => number;
@@ -124,15 +146,10 @@ export interface KeptRowGroup {
   /** Height the group needs beside it: the opening of what follows the kept rows. */
   readonly successor: number;
   /**
-   * The group runs past {@link MAX_KEEP_NEXT_CHAIN} rows. Only that many are priced, with
-   * no successor, so the height is a lower bound on what the group needs.
+   * The group runs past {@link MAX_KEEP_NEXT_CHAIN} rows. Only that many are priced, and the
+   * next kept row whole as the successor, so the height is a lower bound on what it needs.
    */
   readonly truncated?: true;
-  /**
-   * The row after the group starts a new page, so the group needs no successor height. In
-   * Word 2013 and later layout, that page break starts the page before the group instead.
-   */
-  readonly breaksAfter?: true;
 }
 
 /**
@@ -172,11 +189,11 @@ export function keptRowGroup(
   }
   let kept = 0;
   for (let index = start; index <= end; index += 1) kept += source.heightOf(index);
-  if (truncated) return { end, kept, successor: 0, truncated: true };
+  // A kept row places whole, so the next kept row counts whole in the lower bound.
+  if (truncated) return { end, kept, successor: source.heightOf(end + 1), truncated: true };
   let successor: number | null | undefined;
   if (next < rows.length) {
-    if (source.breaksAt(next)) return { end, kept, successor: 0, breaksAfter: true };
-    successor = rowOpening(source, next, room - kept);
+    successor = source.breaksAt(next) ? 0 : rowOpening(source, next, room - kept);
   } else {
     successor = source.following(room - kept);
     if (successor === undefined) return null;
@@ -280,7 +297,14 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
   return {
     rows,
     keepsAt,
-    breaksAt: (index) => rowBreaksPage(rows[index]!, deps.styleCascade),
+    // `rows` is a suffix of the table's rows: the body rows, or all rows.
+    breaksAt: (index) =>
+      rowStartsPage(
+        structure,
+        structure.rows.length - rows.length + index,
+        deps.styleCascade,
+        deps.compatibilityMode
+      ),
     heightOf,
     placesWhole: (index) => {
       const row = rows[index]!;
@@ -303,13 +327,7 @@ export interface TableKeepFlow {
 }
 
 /** A body flow block: a table is priced, anything else is not. */
-type FlowBlock =
-  | {
-      readonly kind: string;
-      readonly table?: OoxmlElement;
-      readonly keeps?: { readonly keepNext: boolean };
-    }
-  | undefined;
+type FlowBlock = { readonly kind: string; readonly table?: OoxmlElement } | undefined;
 
 const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
   readTableStructure(
@@ -345,9 +363,8 @@ const openings = new WeakMap<OoxmlElement, OpeningMemo>();
  *
  * When the kept rows run from the first body row to the table's end, `throughHeight` is the
  * header and those rows: the chain goes on with the content after the table. A first row that
- * starts a new page ends the chain before the table (`breaksPage`). Kept first rows that go
- * to such a page with the row after them take the chain there too (`startsPage`, Word 2013 and
- * later). Before Word 2013 the chain ends at the header rows of a table that has them.
+ * starts a new page ends the chain before the table (`breaksPage`). Before Word 2013 the
+ * chain ends at the header rows of a table that has them.
  */
 export function tableKeepOpening(
   block: FlowBlock,
@@ -430,10 +447,6 @@ function measureTableKeepOpening(
     },
   });
   const height = header + (rowsOpening(source, 0) ?? 0);
-  // From Word 2013 on, kept first rows go to the page a following row's break starts.
-  if (laterLayout && headerRows.length === 0 && keptRowGroup(source, 0)?.breaksAfter) {
-    return { startsPage: true, height };
-  }
   if (!reachesEnd) return { height };
   // `following` is read only when the first group reaches the end, so this group is priced.
   const group = keptRowGroup({ ...source, following: () => 0 }, 0);
@@ -444,8 +457,6 @@ function measureTableKeepOpening(
 export interface TableKeepDecisions {
   /** {@link tableEndsKept} at the flow's first column width. */
   endsKept(block: FlowBlock): boolean;
-  /** Whether `block` is a paragraph that keeps with the table after it. */
-  keptBefore(block: FlowBlock): boolean;
   /** {@link tableKeepOpening} at the width of the column being filled. */
   opening(
     block: FlowBlock,
@@ -474,7 +485,6 @@ export function tableKeepFlow(
   };
   return {
     endsKept: (block) => tableEndsKept(block, flow),
-    keptBefore: (block) => block?.kind === 'paragraph' && !!block.keeps?.keepNext,
     opening: (block, columnWidth, pageHeight, deps) =>
       tableKeepOpening(block, { ...flow, width: columnWidth }, pageHeight, deps),
   };

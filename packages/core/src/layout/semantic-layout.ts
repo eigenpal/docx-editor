@@ -1916,7 +1916,6 @@ function layoutBlocksPass(
       publishFragment: (fragment) => pageFragments.push(fragment),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
-      keptBefore: next !== undefined && keptTables.keptBefore(prepared[next - 2]),
     };
     const result = paginateTableInFlow(table, flow);
     cursorY = result.outOfFlow ? savedCursorY : flow.cursorY;
