@@ -77,13 +77,15 @@ export function createLineExclusionClearance(context: {
   emptyStyle: ResolvedRunStyle;
   measurer: TextMeasurer;
   lineSpacing: ParagraphLineSpacing;
+  /** Whether the line holds content; see {@link lineHoldsContent}. */
+  holdsContent: () => boolean;
 }) {
   let appliedLine: PendingLine | undefined;
   /** The line whose only skip is the estimate taken before it had content. */
   let estimatedLine: PendingLine | undefined;
   const applyTopAndBottomSkipIfNeeded = (): void => {
     const line = context.line();
-    if (appliedLine === line || line.spans.length > 0 || line.drawings.length > 0) return;
+    if (appliedLine === line || context.holdsContent()) return;
     const zones = context.zones();
     if (zones.length === 0) return;
     const metrics = context.measurer.lineMetrics(context.emptyStyle);
@@ -101,7 +103,7 @@ export function createLineExclusionClearance(context: {
   };
   const applyNarrowWrapSkipIfNeeded = (text: string, style: ResolvedRunStyle): void => {
     const line = context.line();
-    if (line.spans.length > 0 || line.drawings.length > 0) return;
+    if (context.holdsContent()) return;
     applyTopAndBottomSkipIfNeeded();
     const zones = context.zones();
     if (zones.length === 0) return;
@@ -128,7 +130,7 @@ export function createLineExclusionClearance(context: {
   };
   const applyInlineObjectSkipIfNeeded = (width: number, height: number): void => {
     const line = context.line();
-    const hasContent = line.spans.length > 0 || line.drawings.length > 0;
+    const hasContent = context.holdsContent();
     applyTopAndBottomSkipIfNeeded();
     const zones = context.zones();
     if (zones.length === 0) return;

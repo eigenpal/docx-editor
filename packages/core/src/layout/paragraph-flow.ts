@@ -1,6 +1,11 @@
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
-import { markPendingLineWrapAdvances, growPendingLineDrawingExtent } from './pending-line.ts';
+import {
+  growPendingLineDrawingExtent,
+  lineHoldsContent,
+  markPendingLineWrapAdvances,
+  placeLeadingIgnoredBreaks,
+} from './pending-line.ts';
 import {
   paragraphMarkSampleText,
   shouldIncludeParagraphMarkHeight,
@@ -585,6 +590,7 @@ export function breakParagraph(
   // so a run of leading breaks costs one check per break line.
   let firstLineOpen = true;
   const opensFirstLine = (): boolean => firstLineOpen;
+  const holdsContent = (): boolean => lineHoldsContent(line, pageBreaksIgnored);
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
@@ -616,6 +622,7 @@ export function breakParagraph(
     emptyStyle: lineStartStyle,
     measurer,
     lineSpacing,
+    holdsContent,
   });
 
   // Where the line will actually sit. A band that pushed this line down has already been
@@ -792,7 +799,7 @@ export function breakParagraph(
     // paragraph a line of its own: a paragraph-final whitespace run became a phantom blank
     // line, and an ordinary second run broke mid-sentence at the run seam.
     const opensAfterAnchor = zones.some((zone) => line.start < zone.anchorModelStart);
-    if (opensAfterAnchor && (line.spans.length > 0 || line.drawings.length > 0)) closeLine();
+    if (opensAfterAnchor && holdsContent()) closeLine();
     applyTopAndBottomSkipIfNeeded();
   };
 
@@ -800,14 +807,14 @@ export function breakParagraph(
     if (depth > 64) return remainingLineWidth() >= width;
     applyTopAndBottomSkipIfNeeded();
     if (!snapLineToAvailableInterval()) {
-      if (line.spans.length > 0 || line.drawings.length > 0) {
+      if (holdsContent()) {
         closeLine();
         return ensurePlacementWidth(width, depth + 1);
       }
       return true;
     }
     if (width <= remainingLineWidth() + 0.001) return true;
-    if (line.spans.length > 0 || line.drawings.length > 0) {
+    if (holdsContent()) {
       if (tryAdvanceToNextPassage() && width <= remainingLineWidth() + 0.001) return true;
       closeLine();
       return ensurePlacementWidth(width, depth + 1);
@@ -927,7 +934,7 @@ export function breakParagraph(
 
   const syncDrawingBaselinesBeforeSpacing = (): void => {
     if (line.drawings.length === 0) return;
-    if (line.spans.length === 0) {
+    if (line.spans.every((span) => pageBreaksIgnored && span.text === PAGE_BREAK_CHAR)) {
       line.baseline = Math.max(
         line.baseline,
         ...line.drawings.map((drawing) => drawing.y + drawing.height)
@@ -948,6 +955,7 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
+    placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
     const metrics = measurer.lineMetrics(empty ? emptyStyle : growthStyle);
@@ -1042,7 +1050,13 @@ export function breakParagraph(
 
   /** Whether the last thing placed was a line break, so the paragraph ends on a fresh line. */
   let trailingLineBreak = false;
-  const holdsContent = (): boolean => line.spans.length > 0 || line.drawings.length > 0;
+  /** Whether nothing but ignored page breaks precedes the word being placed on its line. */
+  const wordOpensLine = (): boolean => {
+    for (let index = 0; index < wordStartSpan; index += 1) {
+      if (!pageBreaksIgnored || line.spans[index]!.text !== PAGE_BREAK_CHAR) return false;
+    }
+    return wordStartSpan >= 0;
+  };
   /** Whether the pen snapped past a float after the word's last span, which splits the word. */
   const penLeftWord = (): boolean => {
     if (wordStartSpan < 0 || line.spans.length <= wordStartSpan) return false;
@@ -1093,8 +1107,7 @@ export function breakParagraph(
     if (piece.equation) {
       const equation = equationLayoutOf(piece)!;
       const atomWidth = equation.geometry.box.width;
-      const hasContent = line.spans.length > 0 || line.drawings.length > 0;
-      if (hasContent && line.width + atomWidth > lineAvailable()) closeLine();
+      if (holdsContent() && line.width + atomWidth > lineAvailable()) closeLine();
       exclusionProbe.setMetrics(
         {
           height: equation.geometry.box.height,
@@ -1161,8 +1174,7 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      const hasContent = line.spans.length > 0 || line.drawings.length > 0;
-      if (hasContent && line.width + atomWidth > lineAvailable()) closeLine();
+      if (holdsContent() && line.width + atomWidth > lineAvailable()) closeLine();
       exclusionProbe.setMetrics(
         {
           height: measure.lineContribution,
@@ -1294,7 +1306,7 @@ export function breakParagraph(
         // TRAILING: a tab with nothing placeable after it ends the line rather than
         // starting one, exactly as a trailing space does.
         if (
-          (line.spans.length > 0 || line.drawings.length > 0) &&
+          holdsContent() &&
           line.width >= lineAvailable() &&
           placeableSuffixes[pieceIndex]![boundary] === 1
         )
@@ -1479,7 +1491,7 @@ export function breakParagraph(
             lineEndSpaces.endsWordAcrossIgnoredBreaks(pieces, pieceIndex, candidate, lastEmitted)
           )) ||
           (!layoutOwned &&
-            (line.spans.length > 0 || line.drawings.length > 0) &&
+            holdsContent() &&
             line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT));
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
@@ -1518,9 +1530,9 @@ export function breakParagraph(
                 : opensWithHangingSpace(pieces[pieceIndex + 1])
             )
           ) &&
-          (line.spans.length > 0 || line.drawings.length > 0))
+          holdsContent())
       ) {
-        if (openDecision === 'forbidden' && wordStartSpan <= 0) {
+        if (openDecision === 'forbidden' && (wordStartSpan < 0 || wordOpensLine())) {
           // Keep the protected seam on this line. The chop below may still use later safe
           // cuts inside an oversized Latin word; only its leading fragment must stay here.
         } else if (opensWord || wordStartSpan < 0) {
@@ -1547,11 +1559,7 @@ export function breakParagraph(
           wordStartEnd = start.end;
           wordStartMetrics = { height: start.height, baseline: start.baseline };
         }
-      } else if (
-        line.spans.length === 0 &&
-        line.drawings.length === 0 &&
-        fitWidth > lineAvailable() + 0.001
-      ) {
+      } else if (!holdsContent() && fitWidth > lineAvailable() + 0.001) {
         if (!ensurePlacementWidth(fitWidth)) continue;
       }
       // Overflow can close the previous line after the clearance check above.
@@ -1568,12 +1576,12 @@ export function breakParagraph(
       if (
         canChopWord &&
         !hangs &&
-        (line.spans.length === 0 || (!opensWord && wordStartSpan === 0)) &&
+        (!holdsContent() || (!opensWord && wordOpensLine())) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
       ) {
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
           remainingLineWidth,
-          lineHasText: () => line.spans.length > 0,
+          lineHasText: holdsContent,
           measureText: (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
           appendPrefix: (prefix) => {
             const metrics = measurer.lineMetrics(faceStyle, displayText(prefix.text, faceStyle));

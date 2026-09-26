@@ -37,14 +37,16 @@ const squareAnchor =
   '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
   '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
   '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
-/** A 10 x 8 pt inline picture. */
-const smallInline =
-  '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="127000" cy="101600"/>' +
+/** An inline picture, `cx` x `cy` EMU. */
+const inlinePicture = (cx: number, cy: number) =>
+  `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
   '<wp:docPr id="2" name="inline"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
   '<pic:nvPicPr><pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
   '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-  '<pic:spPr><a:xfrm><a:ext cx="127000" cy="101600"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+  `<pic:spPr><a:xfrm><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>` +
   '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+/** A 10 x 8 pt inline picture. */
+const smallInline = inlinePicture(127000, 101600);
 
 function part(body: string) {
   const result = readOoxmlPart(`<w:document ${NAMESPACES}><w:body>${body}</w:body></w:document>`, {
@@ -79,6 +81,15 @@ function textPlacement(result: SemanticLayout) {
     const spans = line.spans.filter((span) => span.text !== '\f');
     const last = spans.at(-1)!;
     return [spans.map((span) => span.text).join(''), spans[0]!.box.x, last.box.x + last.box.width];
+  });
+}
+/** Per line, without break spans: text, first x, y, height, baseline, and clearance. */
+function lineGeometry(result: SemanticLayout) {
+  return cellParagraph(result).lines.map((line) => {
+    const spans = line.spans.filter((span) => span.text !== '\f');
+    const text = spans.map((span) => span.text).join('');
+    const clearance = line.exclusionSkipBefore ?? 0;
+    return [text, spans[0]?.box.x, line.box.y, line.box.height, line.baseline, clearance];
   });
 }
 function lineEndX(result: SemanticLayout) {
@@ -177,6 +188,60 @@ describe('manual page breaks inside table cells', () => {
       return first.lines[0]!.box.height;
     };
     expect(body(run(pageBreak, largeFont))).toBeGreaterThan(body(run(pageBreak)));
+  });
+
+  test('breaks that open a cell paragraph add no line before a word that moves', () => {
+    const bigBreak = run(pageBreak, largeFont);
+    // The first word spans two runs and does not fit beside the break, or does not fit at all.
+    for (const [content, twips] of [
+      [run(text('Alpha')) + run(text('BetaGam sit')), 1000],
+      [run(text('AlphaBetaGammaDelta sit')), 1000],
+      [squareAnchor + run(text('Alpha')) + run(text('BetaGam sit')), 2600],
+    ] as const) {
+      const drawings = content.startsWith(squareAnchor);
+      const control = layout(table(`<w:p>${content}</w:p>`, twips), drawings);
+      for (const breaks of [bigBreak, run(pageBreak + pageBreak)]) {
+        const leading = drawings
+          ? squareAnchor + breaks + content.slice(squareAnchor.length)
+          : breaks + content;
+        const result = layout(table(`<w:p>${leading}</w:p>`, twips), drawings);
+        expect(lineGeometry(result)).toEqual(lineGeometry(control));
+        expect(cellParagraph(result).box.height).toBe(cellParagraph(control).box.height);
+        // The breaks stay on the first line, where the text starts.
+        const first = cellParagraph(result).lines[0]!.spans;
+        const textX = first.find((span) => span.text !== '\f')!.box.x;
+        const breakXs = first.filter((span) => span.text === '\f').map((span) => span.box.x);
+        expect(breakXs).toEqual(breaks === bigBreak ? [textX] : [textX, textX]);
+      }
+    }
+  });
+
+  test('a break that opens a line beside a float keeps the clearance and caret of the text', () => {
+    // 102 pt and 105 pt cells leave a passage narrower than one glyph beside the 100 pt
+    // picture; 160 pt leaves a passage for the words.
+    for (const twips of [2040, 2100, 3200]) {
+      const words = run(text('Alpha BetaKappaLambda sit ametconsectetur'));
+      const control = layout(table(`<w:p>${squareAnchor}${words}</w:p>`, twips), true);
+      const result = layout(
+        table(`<w:p>${squareAnchor}${run(pageBreak, largeFont)}${words}</w:p>`, twips),
+        true
+      );
+      expect(lineGeometry(result)).toEqual(lineGeometry(control));
+      const [before, expected] = [cellCaret(result, 1), cellCaret(control, 1)];
+      expect([before.x, before.y]).toEqual([expected.x, expected.y]);
+      expect(cellCaret(result, 2)).toMatchObject({ x: expected.x, y: expected.y });
+    }
+  });
+
+  test('a break that opens a cell paragraph adds no line before a wide inline picture', () => {
+    const picture = inlinePicture(120 * 12700, 10 * 12700);
+    const control = layout(table(`<w:p>${picture}${run(text(' sit'))}</w:p>`, 2000), true);
+    const result = layout(
+      table(`<w:p>${run(pageBreak)}${picture}${run(text(' sit'))}</w:p>`, 2000),
+      true
+    );
+    expect(lineGeometry(result)).toEqual(lineGeometry(control));
+    expect(cellParagraph(result).box.height).toBe(cellParagraph(control).box.height);
   });
 
   test('an ignored break is not a wrap opportunity', () => {

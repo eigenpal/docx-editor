@@ -90,6 +90,38 @@ export function onlyPageBreaksBefore(
   return seen;
 }
 
+/**
+ * Whether a line holds anything that the next word must follow. A page break that a table
+ * cell ignores has no extent, so a line that holds only such breaks is still at its start.
+ */
+export function lineHoldsContent(
+  line: Pick<PendingLine, 'spans' | 'drawings'>,
+  pageBreaksIgnored: boolean
+): boolean {
+  if (line.drawings.length > 0 || (line.spans.length > 0 && !pageBreaksIgnored)) return true;
+  return line.spans.some((span) => span.text !== PAGE_BREAK_CHAR);
+}
+
+/**
+ * Ignored page breaks before a line's first content sit where that content starts, after
+ * the float passages and clearances the pen took to reach it. They stay put on a line that
+ * holds nothing else.
+ */
+export function placeLeadingIgnoredBreaks(line: PendingLine, pageBreaksIgnored: boolean): void {
+  if (!pageBreaksIgnored || line.spans[0]?.text !== PAGE_BREAK_CHAR) return;
+  const text = line.spans.find((span) => span.text !== PAGE_BREAK_CHAR);
+  let start = text?.range.start ?? Infinity;
+  let x = text?.box.x;
+  for (const drawing of line.drawings) {
+    if (drawing.start < start) [start, x] = [drawing.start, drawing.advanceStart];
+  }
+  if (x === undefined) return;
+  for (let index = 0; line.spans[index]?.text === PAGE_BREAK_CHAR; index += 1) {
+    const span = line.spans[index]!;
+    if (span.range.start < start) line.spans[index] = { ...span, box: { ...span.box, x } };
+  }
+}
+
 /** Whether a line holds nothing but the page break that ends it. */
 export function holdsOnlyPageBreak(line: PendingLine): boolean {
   return (
