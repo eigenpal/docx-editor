@@ -191,17 +191,6 @@ describe('lines that still move to the next sheet', () => {
     expect(pageTexts(layout)).toEqual([lastFill(14), 'lead', 'after']);
   });
 
-  const decorated: [string, string][] = [
-    ['shading', '<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>'],
-    ['a border', '<w:pBdr><w:top w:val="single" w:sz="4" w:space="1" w:color="auto"/></w:pBdr>'],
-  ];
-  for (const [label, property] of decorated) {
-    test(`a paragraph with ${label} keeps the ordinary fit`, () => {
-      const layout = lay(load(fill(14) + leading('after', property + exact) + sect));
-      expect(pageTexts(layout)).toEqual([lastFill(14), '', 'after']);
-    });
-  }
-
   test('a paragraph with nothing after its break keeps the ordinary fit', () => {
     // Out of scope for this rule: the break line still takes the next sheet.
     const breakOnly = `<w:p><w:pPr>${exact}</w:pPr>${br}</w:p>`;

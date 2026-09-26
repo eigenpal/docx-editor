@@ -67,7 +67,6 @@ import {
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
-  paragraphBorderStrokeWidthPt,
   collapsedSpaceBefore,
   paragraphBreaksBefore,
 } from './paragraph-style.ts';
@@ -88,12 +87,17 @@ import {
 import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
+import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
+import { holdsOnlyPageBreak } from './pending-line.ts';
+import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { joinsBorderGroup, leadingBreakGroupFlowKeys } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
 import * as frameWrap from './paragraph-frame-exclusion.ts';
 import {
   bodyAnchorFrameBase,
+  atKeptBreakY,
   opensWithPageBreak,
   paragraphHoldsNothing,
   paragraphPaintsNothing,
@@ -186,8 +190,6 @@ import {
   type LayoutBox,
   type LineRecord,
   type PageRecord,
-  type ParagraphBorderStrokeRecord,
-  type ParagraphBottomBorderRecord,
   type SemanticLayout,
 } from './semantic-records.ts';
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
@@ -1175,8 +1177,11 @@ function layoutBlocksPass(
 
     const lastBlock = prepared.at(-1);
     const flow = composeFlowKeys(
-      listAutoSpacingFlowKeys(
-        paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
+      leadingBreakGroupFlowKeys(
+        listAutoSpacingFlowKeys(
+          paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
+          prepared
+        ),
         prepared
       ),
       {
@@ -1675,10 +1680,7 @@ function layoutBlocksPass(
         entry.styleId !== null &&
         flowNeighbourStyle(entry.paragraph, -1, previous, styleCascade) === entry.styleId;
       const before = entry.contextualSpacing && sameStyle ? 0 : entry.spacing.before;
-      const continuesBorder =
-        entry.borderGroupKey !== '' &&
-        previous?.kind === 'paragraph' &&
-        previous.borderGroupKey === entry.borderGroupKey;
+      const continuesBorder = joinsBorderGroup(previous, entry);
       paragraphSpaceBefore = appliedSpaceBefore(
         before,
         previousSpaceAfter,
@@ -2148,13 +2150,9 @@ function layoutBlocksPass(
     // bordered block in Word — the box opens above the first and closes below the last, and
     // each interior boundary carries `w:between` or nothing. Applying a box to three selected
     // paragraphs in Word draws one box, not three, and this is why.
-    const borderGroupKey = entry.borderGroupKey;
-    const inSameBorderGroup = (other: PreparedBlock | undefined): boolean =>
-      borderGroupKey !== '' &&
-      other?.kind === 'paragraph' &&
-      other.borderGroupKey === borderGroupKey;
-    const continuesAbove = inSameBorderGroup(previousEntry);
-    const continuesBelow = inSameBorderGroup(nextEntry);
+    // A paragraph that opens with a page break leaves the group: its text opens a new box.
+    const continuesAbove = joinsBorderGroup(previousEntry, entry);
+    const continuesBelow = joinsBorderGroup(entry, nextEntry);
     const topEdge = continuesAbove ? undefined : borders.top;
     // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
     const closingEdge = continuesBelow ? borders.between : borders.bottom;
@@ -2310,17 +2308,22 @@ function layoutBlocksPass(
     }
 
     const atTopOfPage = cursorY === 0 && !regionHasFragments();
-    const appliedBefore = appliedSpaceBefore(
-      spacing.before,
-      previousSpaceAfter,
-      frame ? false : atTopOfPage,
-      frame ? false : firstParagraphOfSection || breaksBeforeAt(index, entry)
-    );
+    // Lines holding only a leading page break take no space before and draw no rule. Both
+    // open the text after the breaks, on its own sheet.
+    let breakLinesOnly = !frame && leadingBreak();
+    const appliedBefore = breakLinesOnly
+      ? 0
+      : appliedSpaceBefore(
+          spacing.before,
+          previousSpaceAfter,
+          frame ? false : atTopOfPage,
+          frame ? false : firstParagraphOfSection || breaksBeforeAt(index, entry)
+        );
     if (appliedBefore > 0) cursorY += appliedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom
     // rule is flow height below the last — pagination has to see both or a boxed paragraph
     // overhangs the bottom margin by the height of its own frame.
-    if (topExtent > 0) cursorY += topExtent;
+    if (topExtent > 0 && !breakLinesOnly) cursorY += topExtent;
     firstParagraphOfSection = false;
     // A kept paragraph that splits early breaks before this line; any other break clears it.
     let keepTailAt = keepChains.tailBreak(index, lines.length, cursorY, contentHeight());
@@ -2332,10 +2335,12 @@ function layoutBlocksPass(
     let fragmentBefore = appliedBefore;
     // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
     // once, the same way it closes once.
-    let fragmentTopExtent = topExtent;
+    let fragmentTopExtent = breakLinesOnly ? 0 : topExtent;
     let endedWithPageBreak = false;
     /** The fragment is a leading page break's empty line, kept out of flow on a full page. */
     let keptBreakLine = false;
+    /** Where that kept line would sit unclamped: its shading fills there, past the band. */
+    let keptBreakY = 0;
     let fragmentParagraphStartY = cursorY;
     /** Clearance applied above the fragment's first placed line, for anchor framing. */
     let fragmentFirstLineSkip = 0;
@@ -2372,105 +2377,36 @@ function layoutBlocksPass(
       const linesBottom =
         pending[pending.length - 1]!.box.y + pending[pending.length - 1]!.box.height;
       const appliedAfter = isLast ? spacing.after : 0;
-      const strokes: ParagraphBorderStrokeRecord[] = [];
-      let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
-      let contentTop = linesTop;
-      let contentBottom = linesBottom;
-      // THE FOUR EDGES ARE ONE BOX. The side rules sit outside the text column by their own
-      // `w:space`, so a top rule drawn only across the column stops short of them and the
-      // frame reads as two horizontal rules with two detached vertical bars beside it —
-      // which is what a callout looked like. Word closes the rectangle, so the horizontal
-      // rules span from the left rule's outer edge to the right rule's.
-      // Stroke thickness uses the inflated compound band for `double`/etc. so thin authored
-      // doubles still publish a box paint can draw as two lines (shared with table borders).
-      const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
-      const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
-      const boxLeft = borders.left
-        ? regionX + indent.left - borders.left.spacePt - leftStroke
-        : regionX + indent.left;
-      const boxRight = borders.right
-        ? regionX + indent.left + available + borders.right.spacePt + rightStroke
-        : regionX + indent.left + available;
-      const boxWidth = Math.max(boxRight - boxLeft, 0);
-      if (fragmentTopExtent > 0 && topEdge) {
-        const topStroke = paragraphBorderStrokeWidthPt(topEdge);
-        const ruleY = linesTop - topEdge.spacePt - topStroke;
-        strokes.push({
-          side: 'top',
-          edge: topEdge,
-          box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
-        });
-        contentTop = ruleY;
-      }
-      // Inside a text frame the paragraph's space after lies INSIDE the frame, above its
-      // bottom edge, and Word draws a bottom border at that edge: below the spacing, not
-      // below the text. A contents heading framed with `w:after="2200"` and a bottom rule
-      // shows its rule 110pt under the heading, just above the entries. A free paragraph
-      // keeps the rule under its text and its space after below the rule.
-      const afterInsideBorder = frame && closingEdge && !continuesBelow ? appliedAfter : 0;
-      if (isLast && closingEdge) {
-        const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
-        const ruleY = linesBottom + afterInsideBorder + closingEdge.spacePt;
-        const box = {
-          x: boxLeft,
-          y: ruleY,
-          width: boxWidth,
-          height: closeStroke,
-        };
-        strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
-        // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
-        // paragraph is a different edge, and a consumer reading it as the box's bottom would
-        // draw the block's frame at every interior boundary.
-        if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
-        contentBottom = ruleY + closeStroke;
-      }
-      const afterBelowBorder = appliedAfter - afterInsideBorder;
-      if (isLast) cursorY = Math.max(cursorY, contentBottom + afterBelowBorder);
-      const height = Math.max(contentBottom + afterBelowBorder - top, 0);
-      // Side rules run the height of the bordered block, and inside a group they run THROUGH
-      // the inter-paragraph gap so the box reads as one outline rather than a ladder.
-      const sideTop = continuesAbove && fragmentIndex === 0 ? top : contentTop;
-      const sideBottom = continuesBelow && isLast ? top + height : contentBottom;
-      const sideHeight = Math.max(sideBottom - sideTop, 0);
-      if (borders.left) {
-        strokes.push({
-          side: 'left',
-          edge: borders.left,
-          box: {
-            x: regionX + indent.left - borders.left.spacePt - leftStroke,
-            y: sideTop,
-            width: leftStroke,
-            height: sideHeight,
-          },
-        });
-      }
-      if (borders.right) {
-        strokes.push({
-          side: 'right',
-          edge: borders.right,
-          box: {
-            x: regionX + indent.left + available + borders.right.spacePt,
-            y: sideTop,
-            width: rightStroke,
-            height: sideHeight,
-          },
-        });
-      }
-      // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not
-      // to the block, so it neither opens nor closes with the group.
-      if (borders.bar) {
-        const barStroke = paragraphBorderStrokeWidthPt(borders.bar);
-        strokes.push({
-          side: 'bar',
-          edge: borders.bar,
-          box: {
-            x: regionX + indent.left - borders.bar.spacePt - barStroke,
-            y: linesTop,
-            width: barStroke,
-            height: Math.max(linesBottom - linesTop, 0),
-          },
-        });
-      }
+      const {
+        strokes,
+        bottomBorder: bottomBorderRecord,
+        contentTop,
+        contentBottom,
+        boxLeft,
+        boxWidth,
+        bottom,
+        height,
+      } = paragraphFragmentBorders({
+        borders,
+        // Only text after leading break lines opens a later fragment: with its own top rule.
+        topEdge: fragmentIndex === 0 ? topEdge : borders.top,
+        closingEdge,
+        continuesAbove,
+        continuesBelow,
+        inFrame: Boolean(frame),
+        isLast,
+        fragmentIndex,
+        topExtent: fragmentTopExtent,
+        appliedAfter,
+        top,
+        linesTop,
+        linesBottom,
+        regionX,
+        indentLeft: indent.left,
+        available,
+        drawn: !breakLinesOnly,
+      });
+      if (isLast) cursorY = Math.max(cursorY, bottom);
       // A resolved view lays a run of paragraphs out as one. The layout is what the document
       // becomes; the identity has to stay what the document HAS, or an edit in the merged half
       // addresses a position the store does not hold.
@@ -2539,7 +2475,7 @@ function layoutBlocksPass(
               // Gated on a real FRAME — a side rule is what makes the fill a box. A heading
               // with only `w:bottom` is the common single-edge case, and widening its fill
               // down to the rule would be a silent change in the opposite direction.
-              shadingBox:
+              shadingBox: atKeptBreakY(
                 borders.left || borders.right
                   ? {
                       x: boxLeft,
@@ -2548,6 +2484,8 @@ function layoutBlocksPass(
                       height: Math.max(contentBottom - contentTop, 0),
                     }
                   : paragraphShadingBox(pending, regionX + indent.left, available)!,
+                keptBreakLine ? { y: keptBreakY, clip: pageContentClip() } : undefined
+              ),
             }),
         tabStops: entry.tabStops,
         ...(marker ? { marker } : {}),
@@ -2779,6 +2717,7 @@ function layoutBlocksPass(
       cursorY += skipBefore;
       // Inside the band, so the page's notes and furniture still see the body where it ends.
       if (keptBreakLine) {
+        keptBreakY = cursorY;
         cursorY = Math.min(cursorY, Math.max(0, contentHeight() - pendingLine.height));
       }
       const firstLineOffset = pendingLine.firstLineOffset ?? 0;
@@ -2884,6 +2823,13 @@ function layoutBlocksPass(
         } else flushPage();
         fragmentBefore = 0;
         fragmentTopExtent = 0;
+        if (breakLinesOnly && !isLastLine && !holdsOnlyPageBreak(lines[lineIndex + 1]!)) {
+          // The text opens here: space before (2013+ modes only), then its own top rule.
+          breakLinesOnly = false;
+          fragmentBefore = isWord2013OrLaterMode(options.compatibilityMode) ? spacing.before : 0;
+          fragmentTopExtent = paragraphBorderExtentPt(borders.top);
+          cursorY += fragmentBefore + fragmentTopExtent;
+        }
         endedWithPageBreak = true;
         if (!isLastLine && (priorPageHadExclusions || pageExclusionZones().length > 0)) {
           rebreakInCurrentColumn(pendingLine.end, cursorY);

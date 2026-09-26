@@ -190,11 +190,11 @@ describe('a numbered paragraph that opens with a page break', () => {
     expect(pageMarkers(layout)).toEqual([[], ['1.']]);
   });
 
-  test('keeps the ordinary fit with shading, and the marker with its text', () => {
+  test('keeps its marker with its text when the paragraph is shaded', () => {
     const shading = '<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>';
     const layout = lay(load(fill(14) + numbered('heading', 1, 1, shading) + sect));
-    expect(pageTexts(layout)).toEqual([lastFill(14), '', 'heading']);
-    expect(pageMarkers(layout)).toEqual([[], [], ['1.']]);
+    expect(pageTexts(layout)).toEqual([lastFill(14), 'heading']);
+    expect(pageMarkers(layout)).toEqual([[], ['1.']]);
   });
 
   test('moves with a floating table it anchors, and keeps the marker with its text', () => {
