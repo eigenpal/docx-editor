@@ -59,6 +59,7 @@ export function appliedSpaceBefore(before: number, previousAfter: number, atTopO
 export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: number, naturalBaseline: number): {
     baseline: number;
     height: number;
+    trailing?: number;
 };
 
 // @public
@@ -2445,6 +2446,7 @@ export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right",
 
 // @public
 export interface ParagraphAutoSpacingContext {
+    readonly fixedAutoSpacing?: boolean;
     readonly inList?: boolean;
     readonly inTableCell?: boolean;
     readonly lineUnitPt?: number;
@@ -2656,6 +2658,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    readonly gridPitch?: number;
     readonly preserveExactBaseline?: true;
     // (undocumented)
     readonly rule: LineSpacingRule;
@@ -4184,6 +4187,7 @@ export interface StrikeoutStrokePt {
 
 // @public
 export interface StyleCascadeTable {
+    readonly adjustLineHeightInTable?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
@@ -4196,6 +4200,7 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
     readonly doNotBreakWrappedTables?: true;
+    readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;

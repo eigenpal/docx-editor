@@ -7,6 +7,7 @@ import {
 } from './drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import { holdsOnlyPageBreak } from './pending-line.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
 
 type BodyAnchorFrameBase = Omit<
@@ -102,9 +103,9 @@ const lineHoldsContent = (line: PendingLine): boolean =>
  * nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
  * the page it starts on, and the break then starts the content on the next sheet.
  *
- * A list marker, border, shading, or anchored drawing is content on the first line, so those
- * paragraphs keep the ordinary fit rule. So does a paragraph with nothing after the break.
- * Layout also keeps that rule when the paragraph anchors floating tables or text frames.
+ * A list marker is not content there: it moves to the first line after the break. A border,
+ * shading, or anchored drawing is, so those paragraphs keep the ordinary fit rule. So does a
+ * paragraph with nothing after the break, and one that anchors floating tables or text frames.
  */
 export function opensWithPageBreak(
   entry: PaintableParagraph,
@@ -115,9 +116,8 @@ export function opensWithPageBreak(
   return (
     first !== undefined &&
     first.start === 0 &&
-    first.pageBreakAfter === true &&
-    !lineHoldsContent(first) &&
+    holdsOnlyPageBreak(first) &&
     lines.some((line, index) => index > 0 && lineHoldsContent(line)) &&
-    paragraphPaintsNothing(entry, [], drawingContext)
+    paragraphPaintsNothing({ ...entry, listItem: undefined }, [], drawingContext)
   );
 }

@@ -27,7 +27,7 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import { measuringFlowDeps } from './table-probe-deps.ts';
+import { measuringFlowDeps, withoutAnchorSinks } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
@@ -114,7 +114,12 @@ import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
-import { blockInlineEnd, bottomToTopLineEnd } from './table-cell-text-direction.ts';
+import {
+  cellFlowBox,
+  layOutWaitingBottomToTopCells,
+  rememberBottomToTopRelayouts,
+  waitsForRowHeight,
+} from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
@@ -988,7 +993,7 @@ function placeCellParagraph(
   return {
     fragment,
     bottom,
-    spaceAfter: appliedAfter,
+    spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
     nextLineIndex: priorLineCount + nextLineIndex,
     nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
     complete,
@@ -1333,20 +1338,23 @@ export function layoutRowFragmentBounded(
     readonly complete: boolean;
     readonly fitted: boolean;
     readonly nestedSplitBlocked: boolean;
+    readonly flowTo?: (
+      right: number,
+      relayout?: boolean
+    ) => ReturnType<typeof flowBlocksInBoxBounded>;
   }
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Continuation cells paint no content and size no row: an ordinary cell beside one owns
-  // the height on its own. A row where EVERY cell continues a merge has nothing left to
-  // size it, and then its end-of-cell paragraph does — see `cellContinuationHeight`.
-  const continuationOnlyRow =
-    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue);
+  // Continuation and waiting `btLr` cells size no row; alone, their end marks do.
+  const waits = waitsForRowHeight;
+  const markSizedRow =
+    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
-    const cursor = cursors[cellIndex] ?? initialCellCursor();
+    const cursor: CellPlaceCursor = cursors[cellIndex] ?? initialCellCursor();
     // The reader resolves gridBefore and bounds the total span before border-grid walks.
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
@@ -1369,42 +1377,14 @@ export function layoutRowFragmentBounded(
       ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
       : flowMaxBottom;
     const vertical = cell.textDirection === 'btLr';
-    const flowLeft = vertical ? cellX + insets.bottom : cellX + insets.left;
-    const contentTop = vertical ? rowTop + insets.left : rowTop + topInset;
-    const contentMaxBottom = vertical
-      ? rowTop + cellW - insets.right
-      : cellMaxBottom - insets.bottom;
-    const flowTo = (right: number, withDeps: TableFlowDeps, markBottom?: number) =>
-      flowBlocksInBoxBounded(
-        cell.blocks,
-        flowLeft,
-        right,
-        contentTop,
-        contentMaxBottom,
-        depth,
-        withDeps,
-        cursor,
-        cell.styleFormatting,
-        true,
-        markBottom,
-        cell.hideEndMark,
-        // Fixed cell boxes clip; their bottom is not a paragraph page break.
-        !vertical && (isDetached || exactHeightPt === undefined)
-      );
-    const flowRight = !vertical
-      ? cellX + cellW - insets.right
-      : bottomToTopLineEnd(
-          flowLeft,
-          cellX + Math.max(0, cellMaxBottom - rowTop) - topInset,
-          exactHeightPt !== undefined || isDetached || cell.vMergeContinue,
-          (right) => flowTo(right, measuringFlowDeps(flowDeps, true)).blocks
-        );
+    const box = cellFlowBox(vertical, cellX, cellW, rowTop, cellMaxBottom, insets);
+    const { flowLeft, flowRight, contentTop, contentMaxBottom } = box;
 
     const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
       cell,
       flowRight - flowLeft,
       flowDeps,
-      { vertical, continuationOnlyRow }
+      { vertical, markSizedRow }
     );
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1412,18 +1392,31 @@ export function layoutRowFragmentBounded(
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
+    const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
+      flowBlocksInBoxBounded(
+        cell.blocks,
+        flowLeft,
+        right,
+        contentTop,
+        contentMaxBottom,
+        depth,
+        relayout ? withoutAnchorSinks(flowDeps) : flowDeps,
+        cursor,
+        cell.styleFormatting,
+        true,
+        vertical
+          ? undefined
+          : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
+        cell.hideEndMark,
+        // Fixed cell boxes clip; their bottom is not a paragraph page break.
+        !vertical && (isDetached || exactHeightPt === undefined)
+      );
 
-    if (!cell.vMergeContinue) {
+    if (!cell.vMergeContinue && !waits(cell)) {
       if (contentMaxBottom < contentTop - 0.001) {
         complete = cursor.blockIndex >= cell.blocks.length;
       } else {
-        const flow = flowTo(
-          flowRight,
-          flowDeps,
-          vertical
-            ? undefined
-            : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom
-        );
+        const flow = flowTo(flowRight);
         blocks = flow.blocks;
         contentBottom = flow.bottom;
         nextCursor = flow.cursor;
@@ -1445,15 +1438,13 @@ export function layoutRowFragmentBounded(
       cellMaxBottom,
       Math.max(
         rowTop + appliedMarkFloor,
-        cell.vMergeContinue
+        cell.vMergeContinue || waits(cell)
           ? continuationPt > 0
             ? rowTop + topInset + continuationPt + insets.bottom
             : rowTop
-          : vertical && fitted
-            ? rowTop + topInset + (blockInlineEnd(blocks, flowLeft) - flowLeft) + insets.bottom
-            : fitted
-              ? contentBottom + insets.bottom
-              : rowTop + topInset + defaultLineHeight + insets.bottom
+          : fitted
+            ? contentBottom + insets.bottom
+            : rowTop + topInset + defaultLineHeight + insets.bottom
       )
     );
     if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
@@ -1472,6 +1463,7 @@ export function layoutRowFragmentBounded(
       complete: cell.vMergeContinue ? true : complete,
       fitted,
       nestedSplitBlocked,
+      ...(waits(cell) ? { flowTo } : {}),
     });
   }
 
@@ -1530,6 +1522,7 @@ export function layoutRowFragmentBounded(
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
+  if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;
@@ -1577,6 +1570,7 @@ export function layoutRowFragmentBounded(
       : flowed.map((entry) => entry.nextCursor);
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
+  rememberBottomToTopRelayouts(flowed, cells);
   flushDeferred(cells, rowTop, rowHeight);
 
   return {

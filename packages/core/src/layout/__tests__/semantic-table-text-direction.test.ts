@@ -136,7 +136,7 @@ describe('bottom-to-top table cell text', () => {
     }
   });
 
-  describe('rows sized by their bottom-to-top text', () => {
+  describe('bottom-to-top text in auto, minimum, and exact rows', () => {
     const upright = (jc: string, text: string): string =>
       `<w:p><w:pPr><w:ind w:left="6" w:right="6"/><w:jc w:val="${jc}"/></w:pPr>` +
       (text ? `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>` : '') +
@@ -186,10 +186,12 @@ describe('bottom-to-top table cell text', () => {
       expect(before).toBeCloseTo(after, 3);
     });
 
-    test('an auto-height row is as tall as its turned text, whatever the alignment', () => {
+    test('an auto-height row keeps one height for turned text, whatever the alignment', () => {
       const heights = ['left', 'center', 'right', 'both'].map((jc) => {
+        // The turned text never sizes the row, so the neighbour gives it room for the label.
+        const side = ['side', 'b', 'c'].map((text) => paragraph(text)).join('');
         const result = layout(
-          table(`<w:tr>${cell(turned, upright(jc, 'label'))}${cell('', paragraph('side'))}</w:tr>`)
+          table(`<w:tr>${cell(turned, upright(jc, 'label'))}${cell('', side)}</w:tr>`)
         );
         expect(finite(firstTable(result))).toBe(true);
         const line = turnedParagraph(result).lines[0]!;
@@ -198,26 +200,6 @@ describe('bottom-to-top table cell text', () => {
       });
       expect(new Set(heights).size).toBe(1);
       expect(heights[0]).toBeLessThan(50);
-    });
-
-    test('a minimum that exceeds page room does not enlarge the turned line', () => {
-      const filler = Array.from({ length: 40 }, () => paragraph('filler')).join('');
-      for (const alignment of ['left', 'center', 'right']) {
-        const result = layout(
-          filler +
-            table(
-              `<w:tr><w:trPr><w:trHeight w:val="4000" w:hRule="atLeast"/></w:trPr>` +
-                `${cell(turned, upright(alignment, 'label'))}${cell('', paragraph('side'))}</w:tr>`
-            )
-        );
-        const fragment = result.pages[0]!.fragments.find((item) => item.kind === 'table');
-        if (fragment?.kind !== 'table') throw new Error('expected table on first page');
-        const row = fragment.rows[0]!;
-        const block = row.cells[0]!.blocks[0]!;
-        if (block.kind !== 'paragraph') throw new Error('expected turned paragraph');
-        expect(block.lines[0]!.box.width).toBeLessThanOrEqual(row.cells[0]!.box.height + 0.001);
-        expect(row.box.height).toBeLessThan(30);
-      }
     });
 
     test('an incomplete row keeps the turned line inside its cell for every alignment', () => {
@@ -270,7 +252,7 @@ describe('bottom-to-top table cell text', () => {
           const result = layout(
             table(
               `<w:tr>${cell(turned + (merged ? '<w:vMerge w:val="restart"/>' : ''), content)}` +
-                `${cell('', paragraph('side'))}</w:tr>` +
+                `${cell('', ['a', 'b', 'c', 'd'].map((text) => paragraph(text)).join(''))}</w:tr>` +
                 (merged
                   ? `<w:tr>${cell(turned + '<w:vMerge/>', paragraph(''))}${cell('', paragraph('next'))}</w:tr>`
                   : '')
@@ -302,7 +284,7 @@ describe('bottom-to-top table cell text', () => {
       expect(line.box.x + line.box.width).toBeCloseTo(span.box.x + span.box.width, 3);
     });
 
-    test('turned text longer than the page still wraps at the page and keeps every word', () => {
+    test('turned text longer than its row wraps and keeps the row on the page', () => {
       const words = Array.from({ length: 120 }, (_, index) => `word${index}`).join(' ');
       const result = layout(
         table(

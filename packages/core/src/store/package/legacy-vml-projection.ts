@@ -25,6 +25,7 @@ import {
   styleOf,
   VML,
   WORD_VML,
+  wrapDistancePoints,
 } from './legacy-vml-values.ts';
 export type { LegacyGraphicProjection } from './legacy-vml-shapes.ts';
 
@@ -244,8 +245,8 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   }
   const distances: Record<'top' | 'right' | 'bottom' | 'left', number> = { ...emptyEdges };
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-    const value = points(style.get('mso-wrap-distance-' + side) ?? '0');
-    if (!Number.isFinite(value) || value < 0 || value > 1000) return null;
+    const value = wrapDistancePoints(style.get('mso-wrap-distance-' + side) ?? '0');
+    if (!Number.isFinite(value) || value > 1000) return null;
     distances[side] = Math.round(value * 12700);
   }
   const photo =

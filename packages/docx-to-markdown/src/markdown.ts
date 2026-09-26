@@ -377,7 +377,9 @@ function paragraphMarkdown(
     context.listIndentByParagraphId.get(first.paragraphId) ?? (marker?.level ?? 0) * 4
   );
   let projected: MappedMarkdown;
-  if (!logical && first.fragmentIndex > 0) {
+  // A page's fragment without its own marker continues the item. That includes the line of a
+  // page break that opens the item, whose marker layout publishes with the text after it.
+  if (!logical && !first.marker && (first.fragmentIndex > 0 || marker)) {
     if (!marker) projected = body;
     else {
       const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;

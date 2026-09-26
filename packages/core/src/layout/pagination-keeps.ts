@@ -177,6 +177,10 @@ export interface KeepNextBlock {
  * Paragraph borders are deliberately NOT priced in. Under-estimating degrades to the
  * behaviour without the rule (the keep does not fire); over-estimating would move content to
  * a page it never needed to be on, which is a visible fidelity regression.
+ *
+ * `sumAdjacentSpacing` adds each member's before-spacing to the after-spacing above it rather
+ * than collapsing the two, for documents with `w:doNotUseHTMLParagraphAutoSpacing`. `carry`
+ * is then already zero, because the flow cursor carries no collapsible after-spacing.
  */
 export function keepNextGroupHeight(
   blocks: readonly KeepNextBlock[],
@@ -188,7 +192,8 @@ export function keepNextGroupHeight(
     readonly columnBreakAfter?: boolean;
   }[],
   skipBlock?: (index: number) => boolean,
-  breaksBefore?: (index: number) => boolean
+  breaksBefore?: (index: number) => boolean,
+  sumAdjacentSpacing = false
 ): number | null {
   let total = 0;
   let after = carry;
@@ -198,8 +203,10 @@ export function keepNextGroupHeight(
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
     // A forced new page also discards the preceding paragraph's trailing spacing.
     if (index > start && breaksBefore?.(index)) return total - after;
-    // Adjacent before/after collapse to the larger gap rather than summing (Word).
-    total += Math.max(block.spacing.before, after) - after;
+    // Adjacent before/after collapse to the larger gap unless the document sums them.
+    total += sumAdjacentSpacing
+      ? block.spacing.before
+      : Math.max(block.spacing.before, after) - after;
     const lines = linesFor(index);
     const hardBreak = lines.findIndex((line) => line.pageBreakAfter || line.columnBreakAfter);
     const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;

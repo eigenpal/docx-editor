@@ -104,10 +104,11 @@ test.each([
   ],
   [
     'a shaded paragraph in an auto-height turned cell',
+    // The turned text never sizes the row, so the neighbour gives it room for the label.
     turnedTable(
       '<w:tr>' +
         turnedCell('', 'Shaded', '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>') +
-        `<w:tc><w:tcPr><w:tcW w:w="850" w:type="dxa"/></w:tcPr>${paragraph('Flat')}</w:tc>` +
+        `<w:tc><w:tcPr><w:tcW w:w="850" w:type="dxa"/></w:tcPr>${['Flat', 'a', 'b', 'c', 'd'].map((text) => paragraph(text)).join('')}</w:tc>` +
         '</w:tr>'
     ),
     ['Shaded', 'Flat'],

@@ -68,6 +68,10 @@ export function prepareParagraphBreakInputs(
       ...inputs.inheritedRunProperties,
       ...inputs.markRunProperties,
       { localName: 'tabStops', attributes: { token } },
+      // The line grid comes from the SECTION, not the paragraph, so its props cannot name it.
+      ...(inputs.lineSpacing.gridPitch !== undefined
+        ? [{ localName: 'lineGrid', attributes: { pitch: String(inputs.lineSpacing.gridPitch) } }]
+        : []),
       ...(dependencies.listToken !== undefined
         ? [{ localName: 'list', attributes: { token: dependencies.listToken } }]
         : []),

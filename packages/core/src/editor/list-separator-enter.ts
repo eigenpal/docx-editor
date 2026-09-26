@@ -14,7 +14,7 @@ import {
   type SemanticLayout,
   type SemanticPosition,
 } from '@docx-editor.dev/core/layout';
-import { fragmentHolding } from '../layout/line-segments.ts';
+import { markerHolding } from '../layout/line-segments.ts';
 import { readNumPr } from '../layout/list-resolve.ts';
 import { propertyElement } from '../store/store/tree-op-properties.ts';
 import type { RevisionAttributionInput } from '../store/store/tree-op-types.ts';
@@ -36,11 +36,11 @@ export function listSeparatorEnter(
   const [previous, gap] = previousListParagraphs(part, paragraph);
   if (gap?.kind !== 'paragraph' || previous?.kind !== 'paragraph') return null;
   if (!isBlankListSeparator(gap)) return null;
-  const marker = fragmentHolding(layout, paragraph.id)?.marker;
-  const priorMarker = fragmentHolding(layout, previous.id)?.marker;
+  const marker = markerHolding(layout, paragraph.id);
+  const priorMarker = markerHolding(layout, previous.id);
   if (!marker || marker.numId !== priorMarker?.numId || marker.level !== priorMarker.level)
     return null;
-  if (fragmentHolding(layout, gap.id)?.marker) return null;
+  if (markerHolding(layout, gap.id)) return null;
 
   const element = (
     id: string,

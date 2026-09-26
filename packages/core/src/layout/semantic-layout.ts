@@ -85,7 +85,7 @@ import {
   breakPreparedParagraph,
   createParagraphBreakRetention,
 } from './paragraph-break-request.ts';
-import { resolveParagraphLayoutInputs } from './style-cascade.ts';
+import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -163,6 +163,7 @@ import {
   enumerateDocumentSectionsFromBlocks,
   geometryOfSection,
   paragraphSectionNode,
+  sectionLineGridPt,
 } from './section-properties.ts';
 import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
 import { resolveSectionColumns } from './section-columns.ts';
@@ -196,7 +197,7 @@ import {
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
-import { createListFirstLineMetrics, publishListMarker } from './list-marker.ts';
+import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
@@ -351,7 +352,7 @@ export function layoutSemanticDocument(
       ...opts,
       geometry,
       furniture,
-      paragraphLineUnitPt: (section?.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(section?.properties),
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(section?.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
@@ -915,18 +916,18 @@ function layoutBlocksPass(
             options.drawingLayoutToken ||
             ''
           : options.drawingLayoutToken || '';
-    const projectionToken =
+    const projectionToken = `${
       block.kind === 'paragraph'
         ? (options.projectionTokenForParagraph?.(block) ?? '')
         : block.kind === 'table' && options.projectionTokenForParagraph
           ? (options.projectionTokenForTable?.(block) ??
             aggregateParagraphTokensForTableBlock(block, options.projectionTokenForParagraph))
-          : '';
+          : ''
+    }|${options.paragraphLineUnitPt ?? '-'}`;
     // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
     // list that continues inside a table cell has its markers there — so reading the table's
     // own id gave an empty token, and a renumbering that left the table's flow key untouched
-    // reused the cell markers verbatim. The drawing token aggregates the same way, for the
-    // same reason.
+    // reused the cell markers verbatim. The drawing token aggregates for the same reason.
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
@@ -983,7 +984,7 @@ function layoutBlocksPass(
           width: availableWidth,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
+          projectionToken,
         }),
       };
     } else {
@@ -1066,7 +1067,7 @@ function layoutBlocksPass(
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
-          projectionToken: `${projectionToken ?? ''}|${options.paragraphLineUnitPt ?? 12}`,
+          projectionToken,
         }),
       };
     }
@@ -1104,7 +1105,7 @@ function layoutBlocksPass(
       : (options.projectionEpoch ?? '');
   const framePolicy =
     sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
-    `|${options.paragraphLineUnitPt ?? 12}`;
+    `|${options.paragraphLineUnitPt ?? '-'}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
   const prepassInputsValid =
     prepassMemo != null &&
@@ -1635,7 +1636,7 @@ function layoutBlocksPass(
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
-  const { firstLineOffsetOf, firstLineFloorOf } = createListFirstLineMetrics(listItems, measurer);
+  const firstLineSlotOf = createListFirstLineMetrics(listItems, measurer);
 
   const { rememberBreakKey, releasePlacedBreaks } = createParagraphBreakRetention(cache);
 
@@ -1750,8 +1751,7 @@ function layoutBlocksPass(
       styleCascade,
       tabStops: entry.tabStops,
       flow: {
-        firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
-        ...(startOffset === 0 ? firstLineFloorOf(entry) : {}),
+        ...firstLineSlotOf(entry),
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
@@ -2102,7 +2102,6 @@ function layoutBlocksPass(
     // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
     // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
     // the next tab stop past an overflowing one (§17.9.30).
-    let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
     // bordered block in Word — the box opens above the first and closes below the last, and
@@ -2154,6 +2153,7 @@ function layoutBlocksPass(
     // A blank paragraph-level `w:sectPr` is the section break, not content. It cannot open a
     // sheet merely because its line misses the bottom; the next section's break owns that.
     const sectionMark = paragraphSectionNode(paragraph) !== undefined;
+    const markerStart = markerLineStart(lines);
     const marksSectionBreak = sectionMark && paintsNothing(entry, lines);
     const collapsedMark = sectionMark && !frame && collapsesSectionMark(index, lines);
     const holdsSheet = (): boolean =>
@@ -2180,7 +2180,6 @@ function layoutBlocksPass(
       alignment = next.alignment;
       available = next.available;
       markRunProperties = next.markRunProperties;
-      firstLineOffset = startOffset === 0 ? firstLineOffsetOf(next) : 0;
       // Export caches release superseded suffixes; live caches retain their normal
       // memo policy. Otherwise a long paragraph keeps a full pending-line tree for
       // every page it crosses, even after those lines have been published.
@@ -2199,7 +2198,7 @@ function layoutBlocksPass(
       : null;
     if (frameStart) {
       cursorY = frameStart.cursorY;
-      previousSpaceAfter = frameStart.previousSpaceAfter;
+      previousSpaceAfter = collapsingSpaceAfter(frameStart.previousSpaceAfter, styleCascade);
     }
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
@@ -2268,7 +2267,8 @@ function layoutBlocksPass(
           (at) =>
             prepared[at]?.kind === 'paragraph' &&
             (!!prepared[at].frame || collapsesSectionMark(at)),
-          (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at])
+          (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
+          styleCascade?.fixedParagraphSpacing
         );
         // Natural page movement suppresses the head's before spacing. Price that
         // destination separately from the space needed beside the current content.
@@ -2453,17 +2453,18 @@ function layoutBlocksPass(
       // becomes; the identity has to stay what the document HAS, or an edit in the merged half
       // addresses a position the store does not hold.
       const mergedLines = mergeBoundaries ? remapMergedLines(pending, mergeBoundaries) : null;
-      const rawMarker =
-        fragmentIndex === 0
-          ? publishListMarker(
-              listItem,
-              measurer,
-              pending[0],
-              0,
-              rtl ? indent.left + available + indent.right : undefined,
-              options.inlineDrawingLayout?.pictureBulletResource
-            )
-          : undefined;
+      const holdsMarker =
+        markerStart === undefined ? fragmentIndex === 0 : pending[0]!.range.start === markerStart;
+      const rawMarker = holdsMarker
+        ? publishListMarker(
+            listItem,
+            measurer,
+            pending[0],
+            0,
+            rtl ? indent.left + available + indent.right : undefined,
+            options.inlineDrawingLayout?.pictureBulletResource
+          )
+        : undefined;
       const marker = rawMarker
         ? { ...rawMarker, box: { ...rawMarker.box, x: rawMarker.box.x + regionX } }
         : undefined;
@@ -2780,14 +2781,15 @@ function layoutBlocksPass(
       if (keptBreakLine) {
         cursorY = Math.min(cursorY, Math.max(0, contentHeight() - pendingLine.height));
       }
-      const lineIndent = columnX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
-      const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+      const firstLineOffset = pendingLine.firstLineOffset ?? 0;
+      const lineIndent = columnX + indent.left + (rtl ? 0 : firstLineOffset);
+      const lineAvailableWidth = Math.max(1, available - firstLineOffset);
       const placedSpans = pendingLine.spans.map((span) => ({
         ...span,
         range: { ...span.range, paragraphId },
         box: {
           ...span.box,
-          x: span.box.x + columnX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
+          x: span.box.x + columnX - (rtl ? firstLineOffset : 0),
           y: cursorY,
         },
       }));
@@ -2897,7 +2899,7 @@ function layoutBlocksPass(
     }
     flushFragment(true);
     releasePlacedBreaks(paragraphId);
-    previousSpaceAfter = endedWithPageBreak ? 0 : spacing.after;
+    previousSpaceAfter = collapsingSpaceAfter(endedWithPageBreak ? 0 : spacing.after, styleCascade);
     if (savedFrameFlow) {
       cursorY = savedFrameFlow.cursorY;
       previousSpaceAfter = savedFrameFlow.previousSpaceAfter;
