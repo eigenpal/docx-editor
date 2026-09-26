@@ -64,6 +64,7 @@ import {
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
 import {
+  appendHeaderFooterHoverChrome,
   applyHeaderFooterPaintChrome,
   headerFooterBandHeightPt,
   headerFooterBandIsActive,
@@ -2212,24 +2213,8 @@ function paintPage(
       active
     );
     element.append(container);
-    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
-    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
-    // A SIBLING, not a child: the `+` selector needs the pill right after the band, and
-    // keeping it out of the band keeps band content from sitting under the pill.
-    // Adjacency is load-bearing — keep this append right here.
-    const hint = document.createElement('div');
-    hint.className = 'docx-hf-edit-hint';
-    hint.dataset.docxHfHint = story.kind;
-    hint.setAttribute('contenteditable', 'false');
-    hint.style.position = 'absolute';
-    hint.style.left = container.style.left;
-    hint.style.width = container.style.width;
-    hint.style.top =
-      story.kind === 'header'
-        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
-        : `${(story.box.y - page.box.y) * options.scale}px`;
-    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
-    element.append(hint);
+    // Hover tint target and edit pill. Adjacency is load-bearing: keep this right after the band.
+    appendHeaderFooterHoverChrome(document, element, container, page, story, options.scale);
     appendHfPageRelativeDrawingLayer(
       document,
       element,

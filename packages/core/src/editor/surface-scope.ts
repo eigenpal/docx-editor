@@ -574,7 +574,9 @@ export function findStoryAtSheetPoint(
  * the content box. Inside the content box, a closed story takes the press only on its own
  * glyphs or anchored drawings with no body glyph under the point. The open story also keeps
  * its whitespace, so a press beside its text still places the caret there. A body anchored
- * drawing counts as body content, a behind-text one included.
+ * drawing counts as body content, a behind-text one included. Footnote and endnote text in
+ * the page's note area counts as body content too, so an open footer over a note gives the
+ * press to the note.
  */
 export function storyHitYieldsToBody(
   layout: SemanticLayout,
@@ -598,7 +600,11 @@ export function storyHitYieldsToBody(
   if (storyIsActive && onStory) return false;
   // The page walk answers a text-free page from a neighbour's geometry; that is not on glyphs here.
   const bodyHit = hitTestPage(layout, page.index, { x, y }, options);
-  const onBody = bodyHit?.onGlyphs === true && bodyHit.pageIndex === page.index;
+  const note = findNoteAtSheetPoint(layout, sheet, pageOffsetX);
+  const onBody =
+    (bodyHit?.onGlyphs === true && bodyHit.pageIndex === page.index) ||
+    (note?.pageIndex === page.index &&
+      hitTestFragments(layout, page.index, note.fragments, note.local, options)?.onGlyphs === true);
   return storyIsActive ? onBody : onBody || !onStory;
 }
 

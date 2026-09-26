@@ -1,13 +1,14 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Layout read a negative w:pgMar top or bottom as a small inset that any header or footer exceeded, so tall page furniture pushed the text down. Page setup writes that kept an authored negative margin checked the signed sum against the page height. A double click on body text under an overlapping header or footer opened that header or footer.",
-  "after": "Layout reads a negative w:pgMar top or bottom as an exact inset of its absolute value that page furniture does not move. Page setup writes check the absolute values, so a write the read side would treat as a page with no text area is refused. Inside the text area, body text takes a press before an overlapping header or footer; the header or footer still opens from its margin band or from its own content where no body text is under the pointer.",
+  "before": "Layout read a negative w:pgMar top or bottom as a small inset that any header or footer exceeded, so tall page furniture pushed the text down. Page setup writes that kept an authored negative margin checked the signed sum against the page height. A double click on body text under an overlapping header or footer opened that header or footer. A closed header or footer over body lines took every pointer event there, so body links, note references, pictures, and form fields under it did not respond.",
+  "after": "Layout reads a negative w:pgMar top or bottom as an exact inset of its absolute value that page furniture does not move. Page setup writes check the absolute values, so a write the read side would treat as a page with no text area is refused. Inside the text area, body text takes a press before an overlapping header or footer; the header or footer still opens from its margin band or from its own content where no body text is under the pointer. A closed header or footer over body lines lets pointer events through to the body and the notes, and its hover highlight covers only its part in the page margin.",
   "reason": "The change reads existing section XML differently during layout and tightens one local validation check. It adds no shared state, operations, snapshot fields, or protocol messages, and it does not change any saved attribute value. The pointer change is local to one editor view and sends nothing to other clients.",
   "tests": [
     "packages/core/src/layout/__tests__/negative-page-margins.test.ts",
     "packages/core/src/store/__tests__/tree-ops.test.ts",
-    "packages/core/src/editor/__tests__/overlapping-furniture-pointer.test.ts"
+    "packages/core/src/editor/__tests__/overlapping-furniture-pointer.test.ts",
+    "packages/core/src/editor/__tests__/overlapping-furniture-dom-target.test.ts"
   ],
   "changeset": "negative-page-margins",
   "migration": null
