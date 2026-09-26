@@ -1,4 +1,5 @@
-import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
+import type { SemanticTableCell, SemanticTableRow, TableAlignment } from './semantic-table.ts';
+import type { PreferredWidthType } from './table-widths.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
 
@@ -54,4 +55,40 @@ export function withLegacyTableSideRules(
   rows: readonly SemanticTableRow[]
 ): readonly SemanticTableRow[] {
   return mapCells(rows, (cell) => ({ ...cell, centeredSideRules: true as const }));
+}
+
+/** The table-level facts that decide whether its side rules share the grid line. */
+export interface SideRuleTableShape {
+  readonly compatibilityMode: number | undefined;
+  readonly depth: number;
+  readonly bidiVisual: boolean;
+  readonly floating: boolean;
+  readonly cellSpacingPt: number;
+  readonly widthType: PreferredWidthType;
+  readonly alignment: TableAlignment;
+}
+
+/**
+ * Admit simple collapsed side rules to the shared-grid-line geometry.
+ *
+ * Modes 11, 12 and 14 (and an absent mode) take it for every top-level, collapsed, unpositioned
+ * left-to-right table. Mode 15 takes it only for the shape its captured controls cover: a
+ * centred `dxa` table. Fixed-layout controls at 0.5, 1.5, 3 and 6pt strokes with 0 and 5.4pt
+ * margins, and one measured autofit table, put text and strokes at the mode-14 positions:
+ * the stroke centred on the grid line and the margin measured from that centre. Other
+ * mode-15 shapes (left or right aligned, `auto` or `pct` width) and mode 16 keep the
+ * full-stroke inset until controls cover them.
+ */
+export function withSharedGridLineSideRules(
+  rows: readonly SemanticTableRow[],
+  table: SideRuleTableShape
+): readonly SemanticTableRow[] {
+  const { compatibilityMode: mode } = table;
+  if (table.depth !== 0 || table.bidiVisual || table.floating || table.cellSpacingPt !== 0)
+    return rows;
+  const legacyMode = mode === undefined || [11, 12, 14].includes(mode);
+  const modernCentredDxa = mode === 15 && table.widthType === 'dxa' && table.alignment === 'center';
+  if (!legacyMode && !modernCentredDxa) return rows;
+  const painted = withCentredSideRulePaint(rows);
+  return table.widthType === 'dxa' ? withLegacyTableSideRules(painted) : painted;
 }

@@ -458,7 +458,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them.',
+      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip. A rule that two cells share paints once, centered on the boundary between them. Simple single side rules of a top-level, unpositioned, left-to-right table without cell spacing are centered on the grid line. If that table has an absolute width, its side cell margins start at the center of the rule. In documents that use Word 2013 layout (compatibility mode 15), both apply only to centered tables with an absolute width. Other tables start the side margins at the inner edge of the rule.',
   },
   {
     id: 'tables.merge',

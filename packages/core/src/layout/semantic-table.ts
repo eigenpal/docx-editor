@@ -1,4 +1,4 @@
-import { withCentredSideRulePaint, withLegacyTableSideRules } from './legacy-table-side-rules.ts';
+import { withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
@@ -1055,15 +1055,15 @@ function readTableStructureUncached(
     columnWidthsPt.length,
     cellSpacingPt === 0
   );
-  const sharedGridLineRules =
-    (compatibilityMode === undefined || [11, 12, 14].includes(compatibilityMode)) &&
-    depth === 0 &&
-    !bidiVisual &&
-    !float &&
-    cellSpacingPt === 0;
-  if (sharedGridLineRules) contentRows = withCentredSideRulePaint(contentRows);
-  if (sharedGridLineRules && tableWidth.type === 'dxa')
-    contentRows = withLegacyTableSideRules(contentRows);
+  contentRows = withSharedGridLineSideRules(contentRows, {
+    compatibilityMode,
+    depth,
+    bidiVisual,
+    floating: float !== undefined,
+    cellSpacingPt,
+    widthType: tableWidth.type,
+    alignment,
+  });
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
