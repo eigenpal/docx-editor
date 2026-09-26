@@ -587,6 +587,22 @@ describe('legal breaks inside a multi-line referencing row', () => {
     ]);
     expect(laid.fixedPoint).toBe(true);
   });
+
+  test('in compatibility mode 14 a cell paragraph that keeps its lines breaks anywhere', () => {
+    const laid = layoutProbe(
+      body(para('R5a', 3, { keepLines: true })),
+      notes,
+      createLayoutSession(),
+      1,
+      14
+    );
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5b1 | 1',
+      'R5a3 R6a R6b R7a R7b R8a R8b TAIL | ',
+    ]);
+    expect(noteLines(laid.layout, 0, 1)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
 });
 
 describe('a row that cannot continue below its reference line', () => {

@@ -226,8 +226,8 @@ export interface NoteReferenceLineBand {
  * Memoized per fragments-array identity and ref object identity: the reserve pass asks for
  * the same page's bands as `bodyPage` and again as the previous page's hold-out neighbour,
  * every reflow round, and both the fragment arrays and the ref objects are identity-stable
- * across rounds. One memo per cell split rule: table bands read cell widow control only in
- * compatibility mode 15 and later, as the table paginator does.
+ * across rounds. One memo per cell split rule: table bands read cell widow control and
+ * `w:keepLines` only in compatibility mode 15 and later.
  */
 const referenceLineBandMemos = [false, true].map(
   () => new WeakMap<readonly BlockFragmentRecord[], WeakMap<object, NoteReferenceLineBand>>()

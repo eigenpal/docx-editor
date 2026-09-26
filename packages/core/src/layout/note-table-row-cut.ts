@@ -26,14 +26,14 @@ export function referenceRowCut(
   lineBottom: number,
   compatibilityMode?: number
 ): number | null {
-  const cellWidowControl = (compatibilityMode ?? 0) >= 15;
+  const cellKeeps = (compatibilityMode ?? 0) >= 15;
   if (row.placesWhole === true && row.isContinuation !== true) return null;
   let head = lineBottom;
   let contentEnd = 0;
   for (const cell of row.cells) {
     if (cell.textDirection) return null;
     if (cell.vMergeContinue || (cell.rowSpan ?? 1) > 1) continue;
-    const cuts = legalCuts(cell, cellWidowControl);
+    const cuts = legalCuts(cell, cellKeeps);
     if (cuts.length === 0) continue;
     contentEnd = Math.max(contentEnd, cuts[cuts.length - 1]!);
     const opening =
@@ -49,9 +49,10 @@ export function referenceRowCut(
  * content's end. A paragraph breaks between lines only where widow control allows
  * ({@link adjustedBreakIndex}), never inside `w:keepLines`, and not after itself when it keeps
  * with a following block of the cell. A nested table breaks only below itself. Widow control
- * binds cell paragraphs only in compatibility mode 15 and later, as in the table paginator.
+ * and `w:keepLines` bind cell paragraphs only in compatibility mode 15 and later; earlier modes
+ * break a cell paragraph at any line.
  */
-function legalCuts(cell: TableCellFragmentRecord, cellWidowControl: boolean): number[] {
+function legalCuts(cell: TableCellFragmentRecord, cellKeeps: boolean): number[] {
   const cuts: number[] = [];
   cell.blocks.forEach((block, index) => {
     if (block.kind !== 'paragraph' || block.lines.length === 0) {
@@ -59,7 +60,11 @@ function legalCuts(cell: TableCellFragmentRecord, cellWidowControl: boolean): nu
       return;
     }
     const authored = paragraphKeeps(block.props);
-    const keeps = { ...authored, widowControl: authored.widowControl && cellWidowControl };
+    const keeps = {
+      ...authored,
+      widowControl: authored.widowControl && cellKeeps,
+      keepLines: authored.keepLines && cellKeeps,
+    };
     const count = block.lines.length;
     const followed = index < cell.blocks.length - 1;
     for (let lines = 1; lines <= count; lines += 1) {
