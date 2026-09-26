@@ -453,6 +453,15 @@ export function paginateTableInFlow(
   // `w:vMerge` heights, planned over the BODY rows: a merged cell is as tall as the rows
   // it covers, so its own row must not swallow the whole merged height.
   const bodyRows = structure.rows.slice(initialHeaderGroupDegraded ? 0 : headerRows.length);
+  // A detached head must not paint through a later row's explicit page break.
+  // Prefix counts keep this check constant-time for each admitted merge.
+  const rowBreakCounts = [0];
+  for (const row of bodyRows) {
+    rowBreakCounts.push(
+      rowBreakCounts[rowBreakCounts.length - 1]! +
+        (breaksPages && rowBreaksPageBefore(row, styleCascade) ? 1 : 0)
+    );
+  }
   // `tableLeft` is read through a getter, not captured: `placeHeaderGroup` and
   // `breakForContinuation` both re-derive it, and a positioned probe localizes wrap bands
   // against it — a stale left measures the head against a band that does not cross it.
@@ -472,7 +481,13 @@ export function paginateTableInFlow(
     const row = probeRow ?? bodyRows[bodyRowIndex]!;
     if (rows.length === 0) fragmentFirstRows.add(row.id);
     else fragmentFirstRows.delete(row.id);
-    vMerge = admitVMergeSpansAt(vMergePlan, bodyRowIndex, flow.cursorY, contentHeight());
+    vMerge = admitVMergeSpansAt(
+      vMergePlan,
+      bodyRowIndex,
+      flow.cursorY,
+      contentHeight(),
+      (span) => rowBreakCounts[span.endRow + 1] === rowBreakCounts[span.headRow + 1]
+    );
     // Keep ordinary admission separate from the repeated border override, and
     // remeasure at the current Y after moving through wrapping exclusions.
     baselineBodyHeight =

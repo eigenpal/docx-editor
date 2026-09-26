@@ -5,7 +5,7 @@
 // paragraph style chain, then direct formatting, last value winning. The same property on a
 // later paragraph of that cell or on another cell's paragraph does nothing, and so does a
 // manual page break inside any cell. Only the body flow asks: a nested table's rows never
-// break the page, and a positioned (`w:tblpPr`) table stays on its anchor sheet.
+// break the page. Positioned (`w:tblpPr`) tables do not yet support this row-break rule.
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import { propertiesOf } from './paragraph-flow.ts';
@@ -16,8 +16,8 @@ import { findParagraphProperties } from './style-definition-reader.ts';
 /**
  * Whether `row` asks to start on a new page.
  *
- * A vertically merged continuation cell has no content of its own, so its paragraph never
- * asks; neither does a first cell that opens with a nested table instead of a paragraph.
+ * This rule does not yet read the property from a vertically merged continuation cell.
+ * It also excludes a first cell that opens with a nested table instead of a paragraph.
  */
 export function rowBreaksPageBefore(
   row: SemanticTableRow,

@@ -224,3 +224,72 @@ describe('retained layout of a row page break before', () => {
     expect(pageTexts(removed.warm)).toEqual(['lead a1 b1 a2 b2 tail']);
   });
 });
+
+describe('row page breaks across vertical merges', () => {
+  const mergedGrid = (breakAt: number) => {
+    const rows: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const content =
+        index === 0
+          ? Array.from({ length: 6 }, (_, line) => paragraph(`Label${line}`)).join('')
+          : paragraph('');
+      const merged = cell(content).replace(
+        '</w:tcPr>',
+        `${index === 0 ? '<w:vMerge w:val="restart"/>' : '<w:vMerge/>'}</w:tcPr>`
+      );
+      rows.push(row(cell(paragraph(`Row${index}`, index === breakAt ? breakBefore : '')) + merged));
+    }
+    return table(rows.join(''));
+  };
+
+  test('keeps merged text within its fragment when a later row starts a new page', () => {
+    const layout = lay(mergedGrid(2) + sect());
+    expect(layout.pages).toHaveLength(2);
+    for (const page of layout.pages) {
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'table') continue;
+        for (const placed of fragment.rows) {
+          for (const merged of placed.cells) {
+            for (const block of merged.blocks) {
+              if (block.kind !== 'paragraph') continue;
+              for (const line of block.lines) {
+                expect(line.box.y + line.box.height).toBeLessThanOrEqual(
+                  merged.box.y + merged.box.height + 0.001
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(pageTexts(layout)).toEqual([
+      'Row0 Label0 Label1 Label2 Label3 Label4 Label5 Row1',
+      'Row2 Row3 Row4 Row5',
+    ]);
+  });
+
+  test('still shares row heights when only the merge head starts a new page', () => {
+    const layout = lay(paragraph('lead') + mergedGrid(0) + sect());
+    expect(layout.pages).toHaveLength(2);
+    const fragment = layout.pages[1]!.fragments.find((block) => block.kind === 'table');
+    expect(fragment?.kind).toBe('table');
+    if (fragment?.kind !== 'table') throw new Error('Missing table');
+    expect(fragment.rows[0]!.box.height).toBeLessThan(20);
+  });
+});
+
+test('table style paragraph properties can start each row on a new page', () => {
+  const tableStyle = buildStyleCascadeTable(
+    read(
+      `<w:styles xmlns:w="${W}"><w:style w:type="table" w:styleId="RowBreak">` +
+        '<w:pPr><w:pageBreakBefore/></w:pPr></w:style></w:styles>',
+      '/word/styles.xml'
+    ).root
+  );
+  const body =
+    paragraph('lead') +
+    grid().replace('<w:tblPr>', '<w:tblPr><w:tblStyle w:val="RowBreak"/>') +
+    sect();
+  const layout = layoutSemanticDocument(load(body), 1, options({ styleCascade: tableStyle }));
+  expect(pageTexts(layout)).toEqual(['lead', 'a1 b1', 'a2 b2']);
+});

@@ -743,9 +743,12 @@ export function admitVMergeSpansAt(
   plan: VMergeRowHeights | null,
   rowIndex: number,
   rowTopPt: number,
-  contentBottomPt: number
+  contentBottomPt: number,
+  /** An explicit row break ends the fragment even when its remaining space is sufficient. */
+  staysInFragment?: (span: VMergeSpan) => boolean
 ): RowVMergeLayoutOptions | undefined {
   for (const span of plan?.spansAt(rowIndex) ?? []) {
+    if (staysInFragment && !staysInFragment(span)) continue;
     if (rowTopPt + plan!.heightOf(span, rowTopPt) > contentBottomPt + EPSILON_PT) continue;
     plan!.accept(span, rowTopPt);
   }
