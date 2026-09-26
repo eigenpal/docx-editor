@@ -2821,8 +2821,7 @@ function layoutBlocksPass(
       const pageClip = Object.freeze({
         x: 0,
         y: 0,
-        // Inline records are already placed in page-content coordinates. In a multi-column
-        // section `contentWidth` is only column zero; clipping to it erases later columns.
+        // Use page width: column-zero width would erase drawings in later columns.
         width: contentWidthForReflow,
         height: contentHeight(),
       });
@@ -2883,8 +2882,7 @@ function layoutBlocksPass(
       } else if (pendingLine.pageBreakAfter) {
         const priorPageHadExclusions = pageExclusionZones().length > 0;
         flushFragment(isLastLine);
-        // The empty mark after this break, before a section that opens its own sheet, stays
-        // here: the break and the mark advance one sheet together.
+        // Keep the empty section mark with its break when the next section opens a sheet.
         if (isLastLine && options.markJoinsBreakSheet && !frame && emptySectionMarkAt(index + 1)) {
           markOnBreakSheet = index + 1;
         } else flushPage();
