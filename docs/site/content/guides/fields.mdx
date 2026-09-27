@@ -39,11 +39,11 @@ Generated TOC rows are read-only. Ordinary text before or after the field remain
 
 Header `STYLEREF` fields use text with the named character style applied directly. A derived style does not match its base style. Use the style's display name, not its internal identifier.
 
-The default result uses the first occurrence on the page. The `\\l` switch uses the last occurrence. A page without a match uses the last preceding occurrence. If none precedes it, the result uses the first following occurrence.
+The default result uses the first occurrence on the page. The `\l` switch uses the last occurrence. A page without a match uses the last preceding occurrence. If none precedes it, the result uses the first following occurrence.
 
 Visible body text supplies these results. Hidden text and field instructions do not supply results. Revision display settings control which inserted and deleted text supplies results. Header height adjusts for each page's result. During pagination, each page retains its largest live header reserve that controls its body inset. The painted header keeps its current result and height. Saved results do not establish that reserve. A continued section’s header does not enlarge the sheet it shares with the previous section. Exact negative top margins do not reserve header height.
 
-The `\\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Paragraph styles and style aliases are not supported.
+The `\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Paragraph styles and style aliases are not supported.
 
 The layout checks bounded document scans and pagination passes. Exceeded scan or pagination bounds stop layout with an error. Save preserves instructions and saved results.
 

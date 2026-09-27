@@ -2038,6 +2038,7 @@ export function normalNotesOf(part: OoxmlPart | null | undefined): readonly Ooxm
 export interface NoteAreaRecord {
     // (undocumented)
     readonly box: LayoutBox;
+    readonly continuationNotice?: NonNullable<NoteAreaRecord['separator']>;
     // (undocumented)
     readonly fallbackReason?: string;
     // (undocumented)
@@ -2049,7 +2050,7 @@ export interface NoteAreaRecord {
     readonly separator?: {
         readonly box: LayoutBox;
         readonly fragments: readonly BlockFragmentRecord[];
-        readonly kind: 'separator' | 'continuationSeparator';
+        readonly kind: 'separator' | 'continuationSeparator' | 'continuationNotice';
         readonly ruleColor?: string | null;
         readonly ruleStyle?: 'single' | 'double';
         readonly synthetic: boolean;
@@ -2070,7 +2071,7 @@ export function noteDisplayMarkMap(marks: readonly NoteDisplayMark[]): ReadonlyM
 // @public
 export type NoteLayoutFallbackReason = 'note-count-limit' | 'note-fragment-limit' | 'note-reflow-exhausted' | 'note-height-cap'
 /** Authored separator/continuationSeparator taller than the content column. */
-| 'note-separator-height-cap' | 'missing-note-body' | 'dangling-note-reference';
+| 'note-separator-height-cap' | 'note-continuation-notice-height-cap' | 'missing-note-body' | 'dangling-note-reference';
 
 // @public
 export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
@@ -4217,6 +4218,8 @@ export interface StyleDefinition {
     readonly basedOn: string | null;
     // (undocumented)
     readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
+    // (undocumented)
+    readonly name?: string;
     readonly next: string | null;
     // (undocumented)
     readonly outlineLevel: number | null;

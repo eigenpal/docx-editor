@@ -142,3 +142,54 @@ test('labels a held-over note normally on its first rendered page', async () => 
   expect(result.pages[1]?.markdown).not.toContain('(continued)');
   expect(result.pages[2]?.markdown).toContain('Footnote 1 (continued)');
 });
+
+test('omits authored continuation notices while retaining split note text', async () => {
+  const scopeId = 'footnote:continued';
+  const reference = paragraph('notice-reference', '');
+  const referenceSpan = reference.lines[0]!.spans[0]! as { noteNav?: unknown };
+  referenceSpan.noteNav = { direction: 'to-note', scopeId };
+  const noticeText = 'Authored continuation notice';
+  const layout = {
+    revision: 1,
+    displayMode: 'original',
+    pages: [
+      {
+        index: 0,
+        fragments: [reference],
+        footnotes: {
+          notes: [{ scopeId, fragments: [paragraph('note-opening', 'Opening note text')] }],
+          continuationNotice: {
+            kind: 'continuationNotice',
+            box: { x: 0, y: 100, width: 200, height: 10 },
+            fragments: [paragraph('notice', noticeText)],
+            synthetic: false,
+          },
+        },
+      },
+      {
+        index: 1,
+        fragments: [],
+        footnotes: {
+          notes: [{ scopeId, fragments: [paragraph('note-ending', 'Remaining note text')] }],
+        },
+      },
+    ],
+  } as unknown as SemanticLayout;
+  const exportLayout = layout as ExportSemanticLayout;
+  const session: ExportSession = {
+    layout: async () => exportLayout,
+    layoutFor: async () => exportLayout,
+    validatedImageBytes: () => null,
+    dispose: () => {},
+  };
+
+  const result = await exportMarkdownFrom(session);
+
+  expect(result.markdown).toContain('Opening note text');
+  expect(result.markdown).toContain('Remaining note text');
+  expect(result.markdown).not.toContain(noticeText);
+  expect(result.pages[0]?.markdown).toContain('[^1]: Opening note text');
+  expect(result.pages[1]?.markdown).toContain('Footnote 1 (continued)');
+  expect(result.pages[1]?.markdown).toContain('Remaining note text');
+  for (const page of result.pages) expect(page.markdown).not.toContain(noticeText);
+});

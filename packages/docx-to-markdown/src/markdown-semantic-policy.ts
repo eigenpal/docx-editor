@@ -360,6 +360,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     placement: 'layout-only',
     box: 'layout-only',
     separator: 'explicitly-omitted',
+    continuationNotice: 'explicitly-omitted',
     notes: 'represented',
     fallbackReason: 'explicitly-omitted',
   } satisfies Record<keyof NoteAreaRecord, MarkdownFieldPolicy>,
