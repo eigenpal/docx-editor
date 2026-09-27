@@ -1,3 +1,4 @@
+import { shouldReplayCellTab, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
@@ -64,7 +65,6 @@ import {
 import { resolveCjkTypography, type CjkParagraphTypography } from './cjk-typography.ts';
 import {
   EMPTY_TAB_STOPS,
-  nextTabDestination,
   tabAdvanceWidth,
   TAB_LEADER_GLYPH,
   type ResolvedTabStops,
@@ -1271,13 +1271,19 @@ export function breakParagraph(
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
-        // A tab that cannot advance on this line wraps first, then reapplies — matching
-        // Word's "tab past the right margin starts a new line" behaviour. Unless it is
-        // TRAILING: a tab with nothing placeable after it ends the line rather than
-        // starting one, exactly as a trailing space does.
+        // Nontrailing tabs at the edge wrap once; cell tabs also replay an unreachable stop.
+        const pastCellEdge = shouldReplayCellTab(
+          flow?.cellAnchorScope,
+          paragraphRtl,
+          Boolean(piece.positionalTab),
+          activeExclusionZones().length,
+          tabStops,
+          lineOrigin() + line.width,
+          rightEdge
+        );
         if (
           holdsContent() &&
-          line.width >= lineAvailable() &&
+          (line.width >= lineAvailable() || pastCellEdge) &&
           placeableSuffixes[pieceIndex]![boundary] === 1
         )
           closeLine();
@@ -1311,19 +1317,15 @@ export function breakParagraph(
           activeExclusionZones().length === 0
             ? Math.max(stopRight, flow?.marginExtent?.right ?? stopRight)
             : stopRight;
-        const authored = nextTabDestination(tabStops, stopX, tabEdge);
-        const destination =
-          positional === null
-            ? authored.alignment === 'left'
-              ? nextTabDestination(tabStops, stopX, stopRight)
-              : authored
-            : Number.isFinite(positional.positionPt) && positional.positionPt > currentX
-              ? positional
-              : {
-                  // The stop changes; the LEADER is the element's own and survives it.
-                  ...nextTabDestination(tabStops, currentX, rightEdge),
-                  ...(positional.leader ? { leader: positional.leader } : {}),
-                };
+        const destination = tabDestinationForFlow(
+          tabStops,
+          stopX,
+          stopRight,
+          tabEdge,
+          currentX,
+          rightEdge,
+          positional
+        );
         if (destination.alignment !== 'left' && !paragraphRtl) {
           alignedTabRight = Math.max(alignedTabRight, Math.min(destination.positionPt, tabEdge));
         }

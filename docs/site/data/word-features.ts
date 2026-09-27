@@ -339,7 +339,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. In left-to-right text without adjacent floating objects, opening words wrap after leading left-aligned tabs without adding a blank line. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honored, in the body and in headers and footers. The Paragraph dialog sets, clears, and replaces tab stops, including clearing one that a style supplies. Bar tabs are preserved on save but aren't drawn or editable.",
+      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. In left-to-right text without adjacent floating objects, opening words wrap after leading left-aligned tabs without adding a blank line. In table cells, an ordinary left tab whose next stop exceeds the line edge moves to the next line before following text. Trailing tabs keep their line. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honored, in the body and in headers and footers. The Paragraph dialog sets, clears, and replaces tab stops, including clearing one that a style supplies. Bar tabs are preserved on save but aren't drawn or editable.",
   },
   {
     id: 'paragraphs.frames',
