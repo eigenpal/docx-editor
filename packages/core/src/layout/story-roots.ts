@@ -417,13 +417,6 @@ function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
  */
 const storyBlocksCache = createRecentRootCache<Map<string, OoxmlElement[]>>(16);
 
-/**
- * The story's blocks — paragraphs and tables — in document order, flattening through
- * block-level content-control wrappers under the shared nesting budget.
- *
- * Repeated calls with the same part and display mode return the SAME array instance,
- * shared by every caller — treat it as read-only; mutating it corrupts later callers.
- */
 const numberingIdentities = new WeakMap<NumberingIndex, number>();
 let nextNumberingIdentity = 1;
 function numberingIdentity(index?: NumberingIndex): number {
@@ -435,6 +428,13 @@ function numberingIdentity(index?: NumberingIndex): number {
   }
   return id;
 }
+/**
+ * Return story blocks in document order, flattening block-level content controls.
+ * Compatible hidden paragraph marks join in body stories using the supplied styles and numbering.
+ * Repeated calls with the same part and projection inputs share one array. Treat it as read-only.
+ *
+ * @public
+ */
 export function storyBlocks(
   part: OoxmlPart,
   displayMode: RevisionDisplayMode = 'all-markup',

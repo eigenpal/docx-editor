@@ -34,7 +34,6 @@ export function hasVisibleSeparatorText(
       if (resolveRunStyle(cascadeRunProperties(inherited, direct, styles)).hidden) return false;
       return node.children.some(
         (child) =>
-          child.kind !== 'textValue' &&
           child.namespaceUri === WML_NAMESPACE_URI &&
           child.localName === 't' &&
           child.children.some((value) => value.kind === 'textValue' && /\S/u.test(value.value))

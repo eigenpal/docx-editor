@@ -57,10 +57,13 @@ export interface PositionedHeaderFrame {
   readonly paragraphs: readonly OoxmlElement[];
 }
 
-const isW = (node: OoxmlNode, name: string): node is OoxmlElement =>
+const isW = (node: OoxmlNode, name: string): boolean =>
   node.kind !== 'textValue' && node.namespaceUri === W && node.localName === name;
-const elements = (node: OoxmlElement): OoxmlElement[] =>
-  node.children.filter((child): child is OoxmlElement => child.kind !== 'textValue');
+function elements(node: OoxmlElement): OoxmlElement[] {
+  const result: OoxmlElement[] = [];
+  for (const child of node.children) if (child.kind !== 'textValue') result.push(child);
+  return result;
+}
 
 function frameCount(part: OoxmlPart): number | null {
   const pending = [{ node: part.root as OoxmlNode, depth: 0 }];

@@ -112,7 +112,7 @@ Assign an empty string to remove a hyperlink from an eligible text span. Ordinar
 
 The layout supports a bounded subset of style separators in the document body. Each joined mark must enable `w:vanish` after style resolution. The paragraph must contain ordinary visible text unless its mark also enables `w:specVanish`. Adjacent members must share continuation indents, alignment, line spacing, ordinary tabs, borders, shading, and keep constraints. Paragraph direction and paragraph line-breaking settings must also agree. The first member supplies numbering, first-line geometry, and before-spacing. The last member supplies after-spacing and final paragraph-mark formatting. Each member keeps its inherited text formatting and source offsets. Paragraph formatting edits still address the original source paragraph.
 
-Mixed geometry, contextual spacing, tracked content, section boundaries, cross-paragraph fields, and chains above 64 members remain separate. Table cells, notes, headers, footers, and text boxes do not use this display join. `w:vanish` alone also remains outside this subset. Export reports `unsupported-style-separator` when visible-content hidden marks cannot use this join. The source content stays preserved on save.
+Mixed geometry, contextual spacing, tracked content, section boundaries, cross-paragraph fields, and chains above 64 members remain separate. Table cells, notes, headers, footers, and text boxes do not use this display join. Export reports `unsupported-style-separator` when visible-content hidden marks cannot use this join. The source content stays preserved on save.
 
 ## Next steps
 

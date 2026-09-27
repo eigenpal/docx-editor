@@ -47,7 +47,7 @@ export interface ExportAdmittedFontIdentity {
 
 // @public
 export interface ExportContentWarning {
-    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit' | 'unsupported-style-separator';
     readonly partName: string;
 }
 
