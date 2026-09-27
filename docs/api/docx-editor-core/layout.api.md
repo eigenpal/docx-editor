@@ -4145,7 +4145,7 @@ export function spansInCells(layout: SemanticLayout, cellIds: readonly string[])
 export function spansInSelection(layout: SemanticLayout, selection: SemanticSelection,
 order: readonly string[]): StyleSpanRecord[];
 
-// @public (undocumented)
+// @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, styles?: StyleCascadeTable, numberingIndex?: NumberingIndex): OoxmlElement[];
 
 // @public
