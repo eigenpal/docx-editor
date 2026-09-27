@@ -29,7 +29,7 @@ export function readLegacyPageField(
     allowDecoration = false,
   }: {
     readonly leadingTab?: boolean;
-    readonly allowDecoration?: boolean;
+    readonly allowDecoration?: boolean | 'text';
   } = {}
 ): string | undefined {
   let state = 0,
@@ -39,6 +39,28 @@ export function readLegacyPageField(
     tabs = 0;
   for (const run of elements(paragraph)) {
     if (isW(run, 'pPr')) continue;
+    if (allowDecoration === 'text' && isW(run, 'fldSimple') && state === 0) {
+      if (
+        allowlistedPageField(attr(run, 'instr') ?? '') !== 'PAGE' ||
+        elements(run).some(
+          (item) =>
+            !isW(item, 'r') ||
+            elements(item).some(
+              (child) =>
+                !isW(child, 'rPr') &&
+                (!isW(child, 't') ||
+                  child.children.some(isElement) ||
+                  child.children.some(
+                    (value) => value.kind === 'textValue' && !/^\d*$/.test(value.value)
+                  ))
+            )
+        )
+      )
+        return undefined;
+      instruction = attr(run, 'instr')!;
+      state = 3;
+      continue;
+    }
     if (!isW(run, 'r')) return undefined;
     for (const node of elements(run)) {
       if (isW(node, 'rPr')) continue;
@@ -75,7 +97,7 @@ export function readLegacyPageField(
   return state === 3 &&
     allowlistedPageField(instruction) === 'PAGE' &&
     tabs === Number(leadingTab) &&
-    ((!prefix && !suffix) || (prefix === '- ' && suffix === ' -'))
+    (allowDecoration === 'text' || (!prefix && !suffix) || (prefix === '- ' && suffix === ' -'))
     ? prefix + suffix
     : undefined;
 }

@@ -87,7 +87,7 @@ test('re-evaluates and re-centers multi-digit PAGE results per page', () => {
 
 test('leaves other frame structures in ordinary flow', () => {
   const samples = [
-    body.replace('w:xAlign="center"', 'w:xAlign="right"'),
+    body.replace('w:xAlign="center"', 'w:xAlign="left"'),
     body.replace('w:y="1"', 'w:y="200"'),
     body.replace('w:y="1"', 'w:y="1" w:w="200"'),
     body.replace(' PAGE ', ' NUMPAGES '),

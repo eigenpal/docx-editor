@@ -609,7 +609,13 @@ export function layoutHeaderFooterStory(
         bottom: flow.bottom,
       };
     }
-    flow = positionLegacyFooterPageFrame(part, flow, contentWidth, hfPageContext);
+    flow = positionLegacyFooterPageFrame(
+      part,
+      flow,
+      contentWidth,
+      hfPageContext,
+      styleCascade?.fixedParagraphSpacing
+    );
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,
