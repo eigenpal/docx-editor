@@ -776,9 +776,10 @@ function mimeClassesMismatch(
   sniffed: RenderableImageMime | PreservedImageMime | 'unknown'
 ): boolean {
   if (claimed === 'unknown' || sniffed === 'unknown') return false;
-  // A declared type that disagrees with the signature is a spoof, whether it crosses
-  // classes (TIFF claimed, SVG on the wire) or stays inside one (PNG claimed, GIF).
+  // Class changes can select a different processing path.
   if (imageMimeClass(claimed) !== imageMimeClass(sniffed)) return true;
+  // Raster signatures control validation, decoding, and the published MIME type.
+  if (imageMimeClass(sniffed) === 'raster') return false;
   return claimed !== sniffed;
 }
 

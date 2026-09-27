@@ -543,17 +543,48 @@ describe('image resource validation and cache (task 4)', () => {
       }
     );
 
-    test('content-type spoofing yields signature-mismatch', async () => {
-      const loaded = buildPackage({ media: { 'word/media/image1.png': JPEG_1X1 } });
+    // Word and LibreOffice decode mislabeled rasters from their signatures.
+    test.each([
+      ['declared png, jpeg bytes', 'png', JPEG_1X1, 'image/jpeg', 1, 1],
+      ['declared png, gif bytes', 'png', GIF_1X1, 'image/gif', 1, 1],
+      ['declared gif, png bytes', 'gif', PNG_1X1, 'image/png', 1, 1],
+      ['declared jpg, bmp bytes', 'jpg', bmp24(4, 3), 'image/bmp', 4, 3],
+      ['declared bmp, webp bytes', 'bmp', webpLossless(16, 8), 'image/webp', 16, 8],
+    ] as const)(
+      'intra-raster mismatch renders from the signature: %s',
+      async (_label, extension, bytes, sniffed, width, height) => {
+        const loaded = buildPackage({
+          includeDefaultMedia: false,
+          media: { [`word/media/image1.${extension}`]: bytes },
+          docRels:
+            `<Relationships xmlns="${REL_NS}">` +
+            `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.${extension}"/>` +
+            '</Relationships>',
+        });
+        if (!loaded.ok) throw new Error(loaded.reason);
+        const cache = imageResourceLookupFor(loaded.package, { decodePort: mockDecodePort() });
+        const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+        expect(state.kind).toBe('ready');
+        if (state.kind !== 'ready') return;
+        expect(state.mime).toBe(sniffed);
+        expect(state.pixelWidth).toBe(width);
+        expect(state.pixelHeight).toBe(height);
+      }
+    );
+
+    test('declared png with unsniffable bytes stays a signature mismatch', async () => {
+      const loaded = buildPackage({ media: { 'word/media/image1.png': XML_NOT_SVG } });
       if (!loaded.ok) throw new Error(loaded.reason);
       const decode = mockDecodePort();
-      const cache = createImageResourceCache(loaded.package, { decodePort: decode });
+      const cache = imageResourceLookupFor(loaded.package, { decodePort: decode });
       const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
-      expect(state.kind).toBe('unrenderable');
-      if (state.kind === 'unrenderable') {
-        expect(state.reason).toBe('signature-mismatch');
-        expect(state.mime).toBe('image/jpeg');
-      }
+      expect(state).toEqual(
+        expect.objectContaining({
+          kind: 'unrenderable',
+          reason: 'signature-mismatch',
+          mime: 'image/png',
+        })
+      );
       expect(decode.calls).toBe(0);
     });
 
@@ -586,6 +617,7 @@ describe('image resource validation and cache (task 4)', () => {
       ['declared png, wmf bytes', 'word/media/image1.png', WMF_MIN, 'image/png', 'image/x-wmf'],
       ['declared svg, png bytes', 'word/media/image.svg', PNG_1X1, 'image/svg+xml', 'image/png'],
       ['declared tiff, jpeg bytes', 'word/media/image.tif', JPEG_1X1, 'image/tiff', 'image/jpeg'],
+      ['declared tiff, emf bytes', 'word/media/image.tif', EMF_MIN, 'image/tiff', 'image/x-emf'],
     ] as const)(
       'MIME mismatch table: %s → signature-mismatch before unsupported-format',
       async (_label, path, bytes, _claimed, sniffedMime) => {

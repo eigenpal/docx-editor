@@ -19,7 +19,7 @@
 ## 2. Media, resources, and security
 
 - [x] 2.1 Resolve `r:embed` through the existing safe-target rules; refuse a target containing `..` or a leading `/`
-- [x] 2.2 Validate decoded bytes against the declared content type; placeholder on mismatch
+- [x] 2.2 Use the byte signature for supported raster mismatches; refuse unknown signatures and format-class mismatches
 - [x] 2.3 Enforce dimension and byte-size bounds in `store/runtime/limits.ts` **before** any allocation sized by a file-supplied number
 - [x] 2.4 **Never fetch** `r:link` or a `TargetMode="External"` image relationship at load, layout, paint, or save. Add the test that asserts zero network requests for such a document
 - [x] 2.5 Explicit-gesture path for loading an external image, with scheme allowlisting
