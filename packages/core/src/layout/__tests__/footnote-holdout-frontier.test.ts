@@ -111,6 +111,41 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
     expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBe(0);
   });
 
+  test('a returning reference without a positive note budget keeps its unjoined demand', () => {
+    const input = args(
+      paragraph('body', 0, 40, { end: false }),
+      [paragraph('body', 0, 7, { start: 400, continuation: true })],
+      [{ noteId: 1, paragraphId: 'body', atomOffset: 451 }],
+      [1],
+      14
+    );
+    // The joined reference ends at 644pt. The separator and minimum body band take 28pt.
+    for (const height of [648, 672]) {
+      const bodyPage = { ...input.bodyPage, contentBox: { ...input.bodyPage.contentBox, height } };
+      const nextPage = {
+        ...input.nextPage!,
+        contentBox: { ...input.nextPage!.contentBox, height },
+      };
+      for (const usedReservePt of [undefined, height - 560 - 0.5]) {
+        const hold = holdOutReserveNeed({ ...input, bodyPage, nextPage, usedReservePt });
+        expect(hold).toBeCloseTo(height - 560 - 0.5, 6);
+      }
+    }
+    // A positive budget can require splitting a taller note; retain that existing release.
+    const height = 682;
+    expect(
+      holdOutReserveNeed({
+        ...input,
+        bodyPage: { ...input.bodyPage, contentBox: { ...input.bodyPage.contentBox, height } },
+        nextPage: { ...input.nextPage!, contentBox: { ...input.nextPage!.contentBox, height } },
+      })
+    ).toBe(0);
+    // Note growth that exceeds even the unjoined budget must still use the split policy.
+    expect(
+      holdOutReserveNeed({ ...input, footnotesPart: notes([50]), noteLayoutCache: new Map() })
+    ).toBe(0);
+  });
+
   test('an unrelated earlier paragraph does not extend the reference paragraph', () => {
     const input = args(
       paragraph('earlier', 112, 8),

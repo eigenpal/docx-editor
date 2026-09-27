@@ -287,10 +287,15 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     // projected offsets, `evictable: false`) spans the whole block and would over-subtract
     // it; the guard never evicts those, so the bare column is their complement.
     const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
+    const blockOffset = band.bottom - band.blockTop;
+    const joinedOffset =
+      blockOffset + (ref.paragraphId === owningBlock.paragraphId ? returningPrefix : 0);
+    // A reference beyond the note column cannot start a note on this page. Keep its
+    // unjoined demand rather than treating a negative note budget as permission to split.
     const inBlockOffset = band.evictable
-      ? band.bottom -
-        band.blockTop +
-        (ref.paragraphId === owningBlock.paragraphId ? returningPrefix : 0)
+      ? joinedOffset < columnBudget
+        ? joinedOffset
+        : blockOffset
       : 0;
     if (laid.flowHeight > columnBudget - inBlockOffset + 0.001) continue;
     pulledNotesHeight += laid.flowHeight;
