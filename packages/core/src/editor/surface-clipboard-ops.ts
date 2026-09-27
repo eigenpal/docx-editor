@@ -1,4 +1,5 @@
 import { selectionContainsClipboardObject } from './clipboard-object-selection.ts';
+import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -225,7 +226,11 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       ])
     );
     const copyScope = deps.storyScope();
-    const copyPart = copyScope.kind === 'body' ? session.part() : session.partFor(copyScope);
+    // Clipboard preflight reads the selected part without retaining a story-store slot.
+    const copyPart =
+      copyScope.kind === 'body'
+        ? session.part()
+        : partOfNodeId(session, selected[0] ?? range.from.paragraphId);
     if (copyPart && selectionContainsClipboardObject(copyPart, ranges)) {
       deps.commit(
         () =>
