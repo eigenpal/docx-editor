@@ -115,7 +115,7 @@ interface TableOptions {
   readonly width?: number;
   readonly headerRow?: boolean;
   readonly cantSplit?: boolean;
-  /** One-line paragraphs in each row's first cell. */
+  /** One-line paragraphs in each body row's first cell. */
   readonly linesPerRow?: number;
   /** First and last body row of a vertical merge in the second column. */
   readonly merge?: readonly [number, number];
@@ -128,7 +128,7 @@ function table(options: TableOptions): string {
     const properties =
       (header ? '<w:tblHeader/>' : '') + (options.cantSplit && !header ? '<w:cantSplit/>' : '');
     const label = header ? 'head' : `r${index}`;
-    const lines = Array.from({ length: options.linesPerRow ?? 1 }, () => label);
+    const lines = Array.from({ length: header ? 1 : (options.linesPerRow ?? 1) }, () => label);
     const [first, last] = options.merge ?? [0, -1];
     const merged = !header && index >= first && index <= last;
     const mergeXml = merged ? `<w:vMerge${index === first ? ' w:val="restart"' : ''}/>` : '';
@@ -355,6 +355,51 @@ describe('a table below a body float', () => {
     expect(fragment!.box.y).toBeLessThan(20);
     expect(fragment!.rows).toHaveLength(30);
     expectContiguous(fragment!);
+  });
+});
+
+describe('a kept row taller than a page below a header picture', () => {
+  // 70 lines of 12.727pt: taller than the 648pt page, so the row splits wherever it starts.
+  const overTall = (headerRow: boolean) =>
+    table({ rows: 2, cantSplit: true, linesPerRow: 70, headerRow });
+
+  test('starts below the picture on the first page and splits there', () => {
+    const layout = lay(overTall(false), pictureHeader(RIGHT_LOGO));
+    const [first] = tablesOn(layout, 0);
+    expect(first!.rows[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    expect(first!.rows[0]!.hasContinuation).toBe(true);
+    const [rest] = tablesOn(layout, 1);
+    expect(rest!.rows[0]!.isContinuation).toBe(true);
+    expect(rest!.rows[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+  });
+
+  test('below an authored header row, leaves the header row alone on the first page', () => {
+    const layout = lay(overTall(true), pictureHeader(RIGHT_LOGO));
+    const [first] = tablesOn(layout, 0);
+    expect(first!.rows).toHaveLength(1);
+    expect(first!.rows[0]!.isHeaderRow).toBe(true);
+    expect(first!.rows[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    const body = tablesOn(layout, 1)[0]!.rows.find((row) => !row.isHeaderRow)!;
+    expect(body.isContinuation ?? false).toBe(false);
+    expect(body.hasContinuation).toBe(true);
+  });
+});
+
+describe('a header picture in the middle of the page', () => {
+  // Page y 400..500 is content y 328..428.
+  const MIDDLE: Picture = { x: 390, y: 400, size: 100 };
+
+  test('starts every fragment below it until the rest of the table ends above it', () => {
+    const layout = lay(table({ rows: 60 }), pictureHeader(MIDDLE));
+    expect(layout.pages).toHaveLength(4);
+    for (let page = 0; page < 3; page += 1) {
+      const [fragment] = tablesOn(layout, page);
+      expect(fragment!.box.y).toBeCloseTo(428, 3);
+      expectContiguous(fragment!);
+    }
+    const [last] = tablesOn(layout, 3);
+    expect(last!.box.y).toBeCloseTo(0, 3);
+    expect(last!.box.y + last!.box.height).toBeLessThan(328);
   });
 });
 

@@ -33,8 +33,35 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
-import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+} from './semantic-records.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
+
+/**
+ * A complete table fragment moved by `dy`, with the anchored drawings its cell paragraphs
+ * already published moved along through `shiftAnchor`.
+ */
+export function shiftTableFragment(
+  fragment: TableFragmentRecord,
+  dy: number,
+  shiftAnchor: (paragraphId: string, dy: number) => void
+): TableFragmentRecord {
+  const shifted = shiftBlocks([fragment], dy)[0] as TableFragmentRecord;
+  if (Math.abs(dy) <= 0.001) return shifted;
+  const shiftParagraphAnchors = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') shiftAnchor(block.paragraphId, dy);
+      else
+        for (const row of block.rows)
+          for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+    }
+  };
+  for (const row of fragment.rows) for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+  return shifted;
+}
 
 export function shiftBlocks(
   blocks: readonly BlockFragmentRecord[],

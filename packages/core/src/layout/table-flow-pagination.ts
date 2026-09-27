@@ -46,16 +46,12 @@ import {
   type TableAnchorFrames,
 } from './semantic-table.ts';
 import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
-import { shiftBlocks } from './table-fragment-finalize.ts';
+import { shiftTableFragment } from './table-fragment-finalize.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import type {
-  BlockFragmentRecord,
-  TableFragmentRecord,
-  TableRowFragmentRecord,
-} from './semantic-records.ts';
+import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 
 /** The body flow a table is placed into: the cursor it moves, and what it publishes to. */
 export interface TableFlowCursor {
@@ -251,6 +247,8 @@ export function paginateTableInFlow(
   let repeatsEnabled = !initialHeaderGroupDegraded;
   let fragmentIndex = 0;
   let fragmentTop = flow.cursorY;
+  // Where a fragment opened below a band on a page it opens: that page's top for its rows.
+  let bandTop = 0;
   let rows: TableRowFragmentRecord[] = [];
   const rowOrdinals = new Map<string, number>();
   // Authored rows backing the open fragment (includes header repeats) for finalize.
@@ -268,8 +266,10 @@ export function paginateTableInFlow(
           bottom: contentHeight,
           opensPage: () =>
             rows.every((placed) => placed.isHeaderRepeat) && !flow.pageHoldsContent(fragmentTop),
-          moved: (top) => {
-            if (rows.length === 0) fragmentTop = top;
+          moved: (top, opensPage) => {
+            if (rows.length > 0) return;
+            fragmentTop = top;
+            bandTop = opensPage ? top : 0;
           },
           heightOf: (row, top) => rowHeightOf(row, top),
         });
@@ -287,6 +287,7 @@ export function paginateTableInFlow(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   const closeTableFragment = (): void => {
+    bandTop = 0;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
     // waits for this fragment's finalize, which republishes its floats through the pin.
     if (rows.length === 0) {
@@ -357,27 +358,16 @@ export function paginateTableInFlow(
       0,
       rowOrdinals
     );
-    let positionedFragment: TableFragmentRecord = fragment;
-    if (outOfFlow && structure.float && verticalFrames) {
-      const top = tableFloatOriginY(structure.float, fragment.box.height, verticalFrames);
-      const dy = top - fragment.box.y;
-      positionedFragment = shiftBlocks([fragment], dy)[0] as TableFragmentRecord;
-      if (Math.abs(dy) > 0.001) {
-        const shiftParagraphAnchors = (blocks: readonly BlockFragmentRecord[]): void => {
-          for (const block of blocks) {
-            if (block.kind === 'paragraph') shiftAnchor(block.paragraphId, dy);
-            else {
-              for (const row of block.rows) {
-                for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
-              }
-            }
-          }
-        };
-        for (const row of fragment.rows) {
-          for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
-        }
-      }
-    }
+    // A positioned table's alignment needs its final height, so it moves once complete.
+    const positionedFragment =
+      outOfFlow && structure.float && verticalFrames
+        ? shiftTableFragment(
+            fragment,
+            tableFloatOriginY(structure.float, fragment.box.height, verticalFrames) -
+              fragment.box.y,
+            shiftAnchor
+          )
+        : fragment;
     publishFragment(positionedFragment);
     floats?.end();
     fragmentIndex += 1;
@@ -865,12 +855,12 @@ export function paginateTableInFlow(
         const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
         // A row that splits anyway gains no room by leaving header rows that already open
         // the page: repeats, or the authored group at the page top. Moving would strand them
-        // above an empty band. Header rows that start lower on the page still move with it.
+        // above an empty band. Header rows that start lower, below a float's band too, move.
         const belowTopHeadersOnly =
           rows.length > 0 &&
           rows.every((placed) => placed.isHeaderRow) &&
           (fragmentTop <= 0.001 || rows.every((placed) => placed.isHeaderRepeat));
-        if (flow.cursorY > 0 && !movedToFreshPage && !(splitsAnyway && belowTopHeadersOnly)) {
+        if (flow.cursorY > bandTop && !movedToFreshPage && !(splitsAnyway && belowTopHeadersOnly)) {
           breakForContinuation(admitsRepeatedHeaders);
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a

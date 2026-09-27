@@ -53,8 +53,11 @@ export interface TableFloatClearanceHost {
   readonly bottom: () => number;
   /** Whether only repeated header rows precede the cursor on the page being filled. */
   readonly opensPage: () => boolean;
-  /** The cursor moved to `top`; the fragment, which has no rows yet, opens there. */
-  readonly moved: (top: number) => void;
+  /**
+   * The cursor moved to `top`, where the fragment, which has no rows yet, opens. `opensPage`
+   * tells that nothing but the band is above it on its page.
+   */
+  readonly moved: (top: number, opensPage: boolean) => void;
   /** One row's natural height at `top`. */
   readonly heightOf: (row: SemanticTableRow, top: number) => number;
 }
@@ -221,9 +224,10 @@ export function tableFloatClearance(
       const top = host.flow.cursorY;
       const cleared = clearedTop(top, fragment);
       if (cleared <= top + EPSILON || cleared >= host.bottom() - EPSILON) return false;
-      if (host.opensPage() && !fragment.fitsAt(cleared)) return false;
+      const opensPage = host.opensPage();
+      if (opensPage && !fragment.fitsAt(cleared)) return false;
       host.flow.cursorY = cleared;
-      host.moved(cleared);
+      host.moved(cleared, opensPage);
       return true;
     },
     clearPending(repeat) {
