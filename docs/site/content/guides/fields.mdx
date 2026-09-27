@@ -41,7 +41,7 @@ Header `STYLEREF` fields use text with the named character style applied directl
 
 The default result uses the first occurrence on the page. The `\\l` switch uses the last occurrence. A page without a match uses the last preceding occurrence. If none precedes it, the result uses the first following occurrence.
 
-Visible body text supplies these results. Hidden text and field instructions do not supply results. Revision display settings control which inserted and deleted text supplies results. Header height adjusts for each page's result. During pagination, each page retains its largest measured live header reserve. The painted header keeps its current result and height. Saved results do not establish that reserve.
+Visible body text supplies these results. Hidden text and field instructions do not supply results. Revision display settings control which inserted and deleted text supplies results. Header height adjusts for each page's result. During pagination, each page retains its largest live header reserve that controls its body inset. The painted header keeps its current result and height. Saved results do not establish that reserve. A continued section’s header does not enlarge the sheet it shares with the previous section. Exact negative top margins do not reserve header height.
 
 The `\\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Paragraph styles and style aliases are not supported.
 

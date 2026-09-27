@@ -143,11 +143,14 @@ export function createPageContentInsets(
     const key = furniture && characterHeaderPageToken(furniture) ? `${variant}:${index}` : variant;
     const cached = memo.get(key);
     if (cached) return cached;
+    const header = headerStoryForPage(furniture, variant, inputs.pageIndexStart + index);
     const top = edge(
       inputs.headerDistance,
-      headerStoryForPage(furniture, variant, inputs.pageIndexStart + index),
+      header,
       marginTop,
-      characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
+      header && !marginIgnoresFurniture(marginTop)
+        ? characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
+        : 0
     );
     const bottom = edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom);
     const insets: PageContentInsets = Object.freeze({

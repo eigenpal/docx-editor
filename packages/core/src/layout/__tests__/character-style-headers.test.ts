@@ -1,3 +1,12 @@
+import type { SemanticLayoutOptions } from '../semantic-layout-options.ts';
+import { createPageContentInsets } from '../page-furniture-insets.ts';
+import { registerCharacterHeaderPages } from '../character-header-pages.ts';
+import { layoutWithCharacterHeaders } from '../character-header-layout.ts';
+import {
+  headerStoryForPage,
+  characterHeaderReserveHeight,
+  characterHeaderPageToken,
+} from '../character-header-pages.ts';
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
@@ -376,4 +385,182 @@ test('page geometry edits reset live header reserves', () => {
   const cold = layoutSemanticDocument(initial.main, 2, options);
   expect(warm.pages).toEqual(cold.pages);
   expect(warm.pages[0]!.contentBox.y).toBe(15);
+});
+
+for (const value of ['Alpha', 'Alpha Beta Gamma Delta Epsilon Zeta']) {
+  test(`stable live header avoids a reserve-only repeat: ${value}`, () => {
+    const f = fixture(p(value, 'Base'));
+    const session = createLayoutSession();
+    const options = { ...f.options, session };
+    let calls = 0;
+    const tokens: string[] = [];
+    const run = (input: SemanticLayoutOptions) => {
+      calls += 1;
+      tokens.push(characterHeaderPageToken(input.furniture!));
+      headerStoryForPage(input.furniture, 'default', 0);
+      characterHeaderReserveHeight(input.furniture, 0);
+      return f.laid;
+    };
+    layoutWithCharacterHeaders(f.main, options, run);
+    expect(calls).toBe(2);
+    const lastToken = tokens.at(-1);
+    layoutWithCharacterHeaders(f.main, options, run);
+    expect(calls).toBe(3);
+    expect(tokens.at(-1)).toBe(lastToken);
+  });
+}
+
+test('a projected header without an inset read does not reserve the shared page', () => {
+  const f = fixture(p('Alpha Beta Gamma Delta Epsilon Zeta', 'Base'));
+  let calls = 0;
+  layoutWithCharacterHeaders(f.main, f.options, (input) => {
+    calls += 1;
+    // A continued section shares the sheet. Simulate its late story resolution
+    // after an earlier section already consumed that sheet's inset.
+    characterHeaderReserveHeight(input.furniture, 0);
+    headerStoryForPage(input.furniture, 'default', 0);
+    return f.laid;
+  });
+  expect(calls).toBe(2);
+});
+
+test('continuous sections share a page without losing warm header geometry', () => {
+  const f = fixture(p('Alpha', 'Base'));
+  const section = (continuous: boolean) =>
+    `<w:sectPr>${continuous ? '<w:type w:val="continuous"/>' : ''}<w:pgSz w:w="2400" w:h="2800"/><w:pgMar w:top="300" w:bottom="300" w:left="200" w:right="200" w:header="100"/></w:sectPr>`;
+  const main = part(
+    `<w:document xmlns:w="${W}"><w:body>${p('Alpha', 'Base')}${p('Line').repeat(9)}<w:p><w:pPr>${section(false)}</w:pPr></w:p>${p('')}${section(true)}</w:body></w:document>`,
+    '/word/document.xml'
+  );
+  const second = {
+    ...f.options.furniture,
+    headers: new Map([
+      [
+        'default' as const,
+        layoutHeaderFooterStory(
+          part(
+            `<w:hdr xmlns:w="${W}"><w:p>${run('Second header with several words that occupies many separate lines ')}${field('Header Source')}</w:p></w:hdr>`,
+            '/word/header2.xml'
+          ),
+          100,
+          measurer,
+          'test',
+          undefined,
+          styles
+        ),
+      ],
+    ]),
+  };
+  const options = {
+    ...f.options,
+    sectionFurniture: [f.options.furniture, second],
+    session: createLayoutSession(),
+  };
+  const cold = layoutSemanticDocument(main, 1, options);
+  const warm = layoutSemanticDocument(main, 1, options);
+  expect(cold.pages).toHaveLength(1);
+  expect(warm.pages[0]).toEqual(cold.pages[0]);
+  expect(text(warm)).toEqual(text(cold));
+});
+
+test('an exact negative margin never admits an ignored header reserve', () => {
+  const f = fixture(p('Alpha', 'Base'));
+  const furniture = { ...f.options.furniture };
+  let reads = 0;
+  registerCharacterHeaderPages(furniture, {
+    token: 'negative-margin-control',
+    reserveHeight: () => {
+      reads += 1;
+      return 50;
+    },
+    resolve: (variant) => furniture.headers.get(variant),
+  });
+  const inset = createPageContentInsets({
+    furniture,
+    pageHeight: 140,
+    marginTop: -15,
+    marginBottom: 15,
+    headerDistance: 5,
+    footerDistance: 5,
+    pageIndexStart: 0,
+  })(0);
+  expect(inset.top).toBe(15);
+  expect(reads).toBe(0);
+});
+
+test('an absent header never admits a reserve', () => {
+  const furniture = {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map(),
+    footers: new Map(),
+  };
+  let reads = 0;
+  registerCharacterHeaderPages(furniture, {
+    token: 'absent-header-control',
+    reserveHeight: () => {
+      reads += 1;
+      return 50;
+    },
+    resolve: () => undefined,
+  });
+  expect(
+    createPageContentInsets({
+      furniture,
+      pageHeight: 140,
+      marginTop: 15,
+      marginBottom: 15,
+      headerDistance: 5,
+      footerDistance: 5,
+      pageIndexStart: 0,
+    })(0).top
+  ).toBe(15);
+  expect(reads).toBe(0);
+});
+
+test('an ignored tall header does not enlarge a following shared-page inset', () => {
+  const f = fixture(p('Alpha', 'Base'));
+  const tall = {
+    ...f.options.furniture,
+    headers: new Map([
+      [
+        'default' as const,
+        layoutHeaderFooterStory(
+          part(
+            `<w:hdr xmlns:w="${W}"><w:p>${run('A much longer header with enough words to wrap across several lines ')}${field('Header Source')}</w:p></w:hdr>`,
+            '/word/tall-header.xml'
+          ),
+          100,
+          measurer,
+          'test',
+          undefined,
+          styles
+        ),
+      ],
+    ]),
+  };
+  let positiveInset = 0;
+  layoutWithCharacterHeaders(
+    f.main,
+    { ...f.options, sectionFurniture: [tall, f.options.furniture] },
+    (input) => {
+      const common = {
+        pageHeight: 140,
+        marginBottom: 15,
+        headerDistance: 5,
+        footerDistance: 5,
+        pageIndexStart: 0,
+      };
+      createPageContentInsets({ ...common, marginTop: -15, furniture: input.sectionFurniture![0] })(
+        0
+      );
+      positiveInset = createPageContentInsets({
+        ...common,
+        marginTop: 15,
+        furniture: input.sectionFurniture![1],
+      })(0).top;
+      return f.laid;
+    }
+  );
+  expect(positiveInset).toBe(15);
 });

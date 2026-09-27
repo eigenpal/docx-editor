@@ -16,6 +16,7 @@ const sessionSeeds = new WeakMap<
   object,
   {
     index: object;
+    cacheToken: string;
     options: SemanticLayoutOptions;
     reserves: readonly number[];
     values: readonly ReadonlyMap<string, string>[];
@@ -83,22 +84,36 @@ export function layoutWithCharacterHeaders(
       : undefined;
   // Only live projections enter this history. A stale saved result is not a reserve floor.
   const reserves: number[] = seed ? [...seed.reserves] : [];
+  let admittedReserves: number[] = seed ? [...seed.reserves] : [];
   const project = (
     values: readonly ReadonlyMap<string, string>[],
     contexts: readonly FieldPageContext[],
-    token: string
+    token: string,
+    warm = false
   ): SemanticLayoutOptions => {
+    if (!warm) admittedReserves = [];
     const replacements = new Map<PageFurniture, PageFurniture>();
     for (const original of furniture) {
       const replacement: PageFurniture = { ...original };
       const cache = new Map<string, HeaderFooterStoryLayout>();
+      const projectedHeights = new Map<number, number>();
       registerCharacterHeaderPages(replacement, {
         token,
-        reserveHeight: (page) => reserves[page] ?? 0,
+        reserveHeight: (page) => {
+          // A continued section can project its header without owning the sheet's
+          // inset. Only an inset read admits its live height into reserve history.
+          const height = Math.max(reserves[page] ?? 0, projectedHeights.get(page) ?? 0);
+          reserves[page] = height;
+          admittedReserves[page] = height;
+          return height;
+        },
         resolve(variant, page) {
           const story = original.headers.get(variant);
           const selected = values[page];
-          if (!story || !dynamic.has(story) || !selected?.size) return story;
+          if (!story || !dynamic.has(story) || !selected?.size) {
+            projectedHeights.delete(page);
+            return story;
+          }
           const key = `${variant}:${page}`;
           let projected = cache.get(key);
           if (!projected) {
@@ -107,8 +122,8 @@ export function layoutWithCharacterHeaders(
               characterStyleValues: selected,
             });
             cache.set(key, projected);
-            reserves[page] = Math.max(reserves[page] ?? 0, projected.flowHeight);
           }
+          projectedHeights.set(page, projected.flowHeight);
           return projected;
         },
       });
@@ -125,14 +140,15 @@ export function layoutWithCharacterHeaders(
   const textTokens = new Map<string, string>();
   const tokenOf = (
     values: readonly ReadonlyMap<string, string>[],
-    contexts: readonly FieldPageContext[]
+    contexts: readonly FieldPageContext[],
+    includeReserves = true
   ) =>
     stableHash(
       JSON.stringify(
         values.map((value, page) => [
           characterStyleValuesToken(value, textTokens),
           contexts[page],
-          reserves[page] ?? 0,
+          includeReserves ? (reserves[page] ?? 0) : 0,
         ])
       )
     );
@@ -144,9 +160,10 @@ export function layoutWithCharacterHeaders(
       format: page.pageFieldSource?.format,
       sheetNumber: page.index + 1,
     }));
-  let previousToken = seed?.index === index ? tokenOf(seed.values, seed.contexts) : '';
+  let previousToken = seed?.cacheToken ?? '';
+  let previousValuesToken = seed ? tokenOf(seed.values, seed.contexts, false) : '';
   let current = run(
-    seed?.index === index ? project(seed.values, seed.contexts, previousToken) : options
+    seed?.index === index ? project(seed.values, seed.contexts, previousToken, true) : options
   );
   const seen = new Set<string>();
   if (previousToken) seen.add(previousToken);
@@ -155,10 +172,17 @@ export function layoutWithCharacterHeaders(
     if (pass === 0 && !previousToken && values.every((value) => value.size === 0)) return current;
     const contexts = contextsOf(current);
     const token = tokenOf(values, contexts);
-    if (token === previousToken) {
+    const valuesToken = tokenOf(values, contexts, false);
+    // The inset reader raises and consumes the reserve together. Do not
+    // repeat that admitted layout merely to encode the larger reserve in a token.
+    const reservesWereAdmitted = current.pages.every(
+      (_, page) => (admittedReserves[page] ?? 0) === (reserves[page] ?? 0)
+    );
+    if (token === previousToken || (valuesToken === previousValuesToken && reservesWereAdmitted)) {
       if (options.session)
         sessionSeeds.set(options.session, {
           index,
+          cacheToken: previousToken,
           options,
           reserves: [...reserves],
           values,
@@ -169,6 +193,7 @@ export function layoutWithCharacterHeaders(
     if (seen.has(token)) throw new Error('character-style header layout did not converge');
     seen.add(token);
     previousToken = token;
+    previousValuesToken = valuesToken;
     current = run(project(values, contexts, token));
   }
   throw new Error('character-style header layout exceeded its pass limit');
