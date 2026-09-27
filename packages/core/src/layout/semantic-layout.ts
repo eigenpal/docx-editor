@@ -14,8 +14,7 @@ import {
   continuedPageFurnitureZones,
   furnitureDrawingExclusionsForPage,
   hasFurnitureDrawingExclusions,
-  HiddenFurnitureNoRoomError,
-  isHiddenFurnitureZone,
+  refusalYieldsHiddenFurniture,
 } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
@@ -227,7 +226,7 @@ export type { SectionPrepass } from './section-prepass-types.ts';
 type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
   readonly disabledParagraphFrameIds?: ReadonlySet<string>;
   readonly paragraphFrameFallbackRound?: number;
-  /** Set by the one retry after {@link HiddenFurnitureNoRoomError}: hidden furniture yields. */
+  /** Set by the one retry of `layoutBlocksWithGeometry`: hidden furniture zones yield. */
   readonly yieldHiddenFurnitureZones?: boolean;
 };
 
@@ -796,7 +795,8 @@ function layoutBlocksPass(
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 
   const furnitureHasWrap =
-    hasFurnitureDrawingExclusions(furniture) || (continuedZones?.length ?? 0) > 0;
+    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones) ||
+    (continuedZones?.length ?? 0) > 0;
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
   const pageExclusionZones = (): readonly ExclusionZone[] => {
@@ -2677,12 +2677,6 @@ function layoutBlocksPass(
           pageExclusionZones().some((zone) => zone.sourceKind === 'furniture') &&
           ++emptyFurnitureAdvances > MAX_DRAWING_EXCLUSION_REFLOW_PASSES * columnCount
         ) {
-          // Hidden footprints yield once (see `layoutBlocksWithGeometry`); visible ones refuse.
-          if (
-            !options.yieldHiddenFurnitureZones &&
-            pageExclusionZones().some(isHiddenFurnitureZone)
-          )
-            throw new HiddenFurnitureNoRoomError();
           throw new DrawingExclusionConvergenceError(
             'wrapping page furniture leaves no room for body content'
           );
@@ -3014,11 +3008,8 @@ function layoutBlocksWithGeometry(
   try {
     return layoutBlocksWithColumnBalance(bodies, revision, options, layoutBlocksPass);
   } catch (error) {
-    // Only the outermost call retries, once, cold, and keyed apart; a candidate pass rethrows.
-    const outermost =
-      options.drawingExclusionPass === undefined && !options.drawingExclusionConverged;
-    if (!(error instanceof HiddenFurnitureNoRoomError) || !outermost) throw error;
-    if (options.yieldHiddenFurnitureZones) throw error;
+    // One cold retry without hidden furniture zones; see `refusalYieldsHiddenFurniture`.
+    if (!refusalYieldsHiddenFurniture(error, options)) throw error;
     const coldSession = options.session ? createLayoutSession() : undefined;
     const result = layoutBlocksWithColumnBalance(
       bodies,

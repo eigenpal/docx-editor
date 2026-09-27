@@ -8,50 +8,89 @@ import {
 } from './drawing-exclusion.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
-import type { PageRecord } from './semantic-records.ts';
+import { TablePaginationError } from './semantic-table-layout.ts';
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import type { HeaderFooterStoryRecord, PageRecord } from './semantic-records.ts';
 
 const projectionsByPart = new WeakMap<
   OoxmlPart,
   ReturnType<typeof indexInlineDrawingProjectionsInPart>
 >();
 
-export function hasFurnitureDrawingExclusions(furniture: PageFurniture | undefined): boolean {
+// Keep this check aligned with `exclusionZoneFromAnchoredDrawing`.
+const wraps = (drawing: AnchoredDrawingRecord): boolean =>
+  !['inline', 'behind', 'inFront'].includes(drawing.wrap);
+
+function anyFurnitureDrawing(
+  furniture: PageFurniture | undefined,
+  test: (drawing: AnchoredDrawingRecord) => boolean
+): boolean {
   if (!furniture) return false;
   for (const stories of [furniture.headers, furniture.footers])
-    for (const story of stories.values())
-      if (
-        // Keep this check aligned with `exclusionZoneFromAnchoredDrawing`.
-        story.anchoredDrawings?.some((d) => !['inline', 'behind', 'inFront'].includes(d.wrap))
-      )
-        return true;
+    for (const story of stories.values()) if (story.anchoredDrawings?.some(test)) return true;
   return false;
 }
 
-// Zones that come from hidden records (MC wrap footprints of payloads that cannot paint).
-const hiddenZones = new WeakSet<ExclusionZone>();
+/** Whether any header or footer variant wraps body text; `omitHidden` skips hidden records. */
+export function hasFurnitureDrawingExclusions(
+  furniture: PageFurniture | undefined,
+  omitHidden = false
+): boolean {
+  return anyFurnitureDrawing(
+    furniture,
+    (drawing) => wraps(drawing) && !(omitHidden && drawing.accessibility.hidden)
+  );
+}
 
-/** Whether `zone` is the wrap area of a hidden header or footer record. */
-export function isHiddenFurnitureZone(zone: ExclusionZone): boolean {
-  return hiddenZones.has(zone);
+const hiddenWrap = (drawing: AnchoredDrawingRecord): boolean =>
+  drawing.accessibility.hidden && wraps(drawing);
+
+/**
+ * Whether a hidden record (the wrap footprint of a payload that cannot paint) wraps body text
+ * in any header or footer variant of the section, or on the host sheet it continues on.
+ *
+ * A hidden payload must never make a document refuse to lay out. When a flow with such a
+ * record refuses, the block layout lays it out once more without hidden furniture zones.
+ */
+export function furnitureHasHiddenWrap(
+  furniture: PageFurniture | undefined,
+  host: ContinuedPageFurniture | undefined
+): boolean {
+  if (anyFurnitureDrawing(furniture, hiddenWrap)) return true;
+  const stories: readonly (HeaderFooterStoryRecord | undefined)[] = [host?.header, host?.footer];
+  return stories.some((story) => story?.anchoredDrawings?.some(hiddenWrap) ?? false);
 }
 
 /**
- * Raised when hidden header or footer footprints take part in leaving no room for body text.
+ * Whether a refused flow lays out once more without hidden header and footer zones.
  *
- * A hidden payload must never make a document refuse to lay out. The block layout catches
- * this once and lays the flow out again without hidden furniture zones; visible zones stay,
- * so a visible drawing that leaves no room still raises the ordinary error.
+ * Only a layout refusal (wrap exclusion, table pagination) of the outermost call, not yet
+ * yielding, with a hidden wrapping record in its furniture. Visible zones stay in the retry,
+ * so a refusal they cause repeats and propagates; any other error propagates at once.
  */
-export class HiddenFurnitureNoRoomError extends DrawingExclusionConvergenceError {
-  constructor() {
-    super('hidden page furniture footprints leave no room for body content');
+export function refusalYieldsHiddenFurniture(
+  error: unknown,
+  options: {
+    readonly drawingExclusionPass?: number;
+    readonly drawingExclusionConverged?: boolean;
+    readonly yieldHiddenFurnitureZones?: boolean;
+    readonly furniture?: PageFurniture;
+    readonly continuedPageFurniture?: ContinuedPageFurniture;
   }
+): boolean {
+  return (
+    (error instanceof DrawingExclusionConvergenceError || error instanceof TablePaginationError) &&
+    options.drawingExclusionPass === undefined &&
+    !options.drawingExclusionConverged &&
+    !options.yieldHiddenFurnitureZones &&
+    furnitureHasHiddenWrap(options.furniture, options.continuedPageFurniture)
+  );
 }
 
 /** Wrapping furniture affects body flow without changing the header/footer story's own height. */
 export function furnitureDrawingExclusionsForPage(
   page: Pick<PageRecord, 'header' | 'footer' | 'box' | 'contentBox'>,
-  /** Leave out hidden records: the bounded fallback after {@link HiddenFurnitureNoRoomError}. */
+  /** Leave out hidden records: the bounded retry of {@link refusalYieldsHiddenFurniture}. */
   omitHidden = false
 ): readonly ExclusionZone[] {
   const added: ExclusionZone[] = [];
@@ -87,14 +126,14 @@ export function furnitureDrawingExclusionsForPage(
         localized.verticalBand.y + localized.verticalBand.height <= 0
       )
         continue;
-      const furnitureZone: ExclusionZone = Object.freeze({
-        ...localized,
-        sourceKind: 'furniture',
-        drawingNodeId: `${story.partName}:${drawing.drawingNodeId}`,
-        anchorParagraphId: `${story.partName}:${drawing.anchorParagraphId}`,
-      });
-      if (drawing.accessibility.hidden) hiddenZones.add(furnitureZone);
-      added.push(furnitureZone);
+      added.push(
+        Object.freeze({
+          ...localized,
+          sourceKind: 'furniture',
+          drawingNodeId: `${story.partName}:${drawing.drawingNodeId}`,
+          anchorParagraphId: `${story.partName}:${drawing.anchorParagraphId}`,
+        })
+      );
     }
   }
   return Object.freeze(added);
