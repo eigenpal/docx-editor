@@ -1,19 +1,27 @@
-// Rows of a top-level table that meet a wrapping float.
+// Table fragments that meet a wrapping float.
 //
-// A table row does not wrap its cell text beside a float that crosses the table. The row moves
-// below the float's wrap band, and the rows after it follow. This holds for a picture in the
-// page header as well as for a body float anchored before the table, and on every page the
-// table continues onto. A float that stays clear of the table's horizontal extent does not
-// move it, and paragraphs keep wrapping beside every float as before.
+// A table does not wrap its cell text beside a float that crosses it. When a fragment of a
+// top-level table opens on a page (the table start, or its continuation after a break), and
+// its rows would reach a crossing float's wrap band, the whole fragment starts below the band.
+// A table that ends above the band stays where it is. Rows never move inside a fragment that
+// is already open, so a fragment never gets a gap between its rows.
+//
+// Obstacles are pictures in the page header or footer, and body pictures anchored before the
+// table in document order. In a multi-column section a body picture reaches only its own
+// column. A picture clear of the table's horizontal extent, wrap distances included, does not
+// move it. Paragraphs keep wrapping beside every float as before.
 //
 // The band is the float's wrap outline: a tight or through outline ends at its polygon, not
-// at the picture's extent, plus the bottom wrap distance. Floats anchored inside the table
-// keep their own rules (`table-out-of-cell-floats.ts`, cell flow), and floats anchored after
-// the table cannot reach back to it. Floating tables and frames are not obstacles here.
+// at the picture's extent, plus the wrap distances. Floats anchored inside the table keep
+// their own rules (`table-out-of-cell-floats.ts`, cell flow), and floats anchored after the
+// table cannot reach back to it. Floating tables and frames are not obstacles here.
+//
+// Known difference: a `w:cantSplit` row that fits a page, but not the room below the band on
+// the page it opens, keeps its place under the band instead of starting below it and splitting.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { squareExclusionBounds } from './drawing-wrap.ts';
-import type { SemanticTableStructure } from './semantic-table.ts';
+import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 
 const EPSILON = 0.001;
@@ -27,32 +35,75 @@ interface CollisionBand {
   readonly right: number;
 }
 
-/** A row, or rows, about to be placed: its height and whether it can start at a top. */
-export interface PendingTableBand {
-  readonly heightAt: (top: number) => number;
+/**
+ * Whether a fragment opened at `top` extends below `limit`, and whether its first row can
+ * start at a given top. Both describe the rows the fragment opens with.
+ */
+export interface PendingTableFragment {
+  readonly reaches: (top: number, limit: number) => boolean;
   readonly fitsAt: (top: number) => boolean;
 }
 
 /** What the clearance reads from, and moves, in the paginator that owns the table. */
 export interface TableFloatClearanceHost {
-  readonly flow: { cursorY: number };
+  readonly flow: { cursorY: number; readonly flowColumn?: () => number | undefined };
   /** Left edge of the table in page-content points, which moves between fragments. */
   readonly left: () => number;
   /** Bottom of the band the page being filled offers the table. */
   readonly bottom: () => number;
   /** Whether only repeated header rows precede the cursor on the page being filled. */
   readonly opensPage: () => boolean;
-  /** The cursor moved to `top`; a fragment without rows opens there. */
+  /** The cursor moved to `top`; the fragment, which has no rows yet, opens there. */
   readonly moved: (top: number) => void;
+  /** One row's natural height at `top`. */
+  readonly heightOf: (row: SemanticTableRow, top: number) => number;
 }
 
 export interface TableFloatClearance {
   /** The body row being placed, which a page break carries to its next fragment. */
-  pending: PendingTableBand | undefined;
-  /** Moves the cursor below every float the band crosses; true when it moved. */
-  clear(heightAt: PendingTableBand['heightAt'], fitsAt: PendingTableBand['fitsAt']): boolean;
-  /** Clears the pending row below `repeat` points of repeated header rows. */
+  pending: PendingTableFragment | undefined;
+  /**
+   * Opens the fragment below every band it would reach; true when the cursor moved. Call it
+   * only while the fragment holds no rows.
+   */
+  clear(fragment: PendingTableFragment): boolean;
+  /** Opens a continuation fragment for the pending row below `repeat` points of header rows. */
   clearPending(repeat: number): void;
+  /** The fragment that opens with table row `from`; see {@link tableFragmentReach}. */
+  fragment(
+    from: number,
+    fitsAt: (top: number) => boolean,
+    lead?: (top: number) => number,
+    continued?: () => boolean
+  ): PendingTableFragment;
+}
+
+/**
+ * Whether rows `from` onward, placed at `top` after `lead(top)` points of header rows, extend
+ * below `limit`. A continued first row counts as 1 point: only its remainder is left.
+ */
+export function tableFragmentReach(
+  rows: readonly SemanticTableRow[],
+  from: number,
+  heightOf: (row: SemanticTableRow, top: number) => number,
+  lead: (top: number) => number = () => 0,
+  continued: () => boolean = () => false
+): (top: number, limit: number) => boolean {
+  return (top, limit) => {
+    if (limit <= top + EPSILON) return true;
+    let y = top + lead(top);
+    let index = from;
+    if (continued()) {
+      y += 1;
+      index += 1;
+    }
+    if (y > limit + EPSILON) return true;
+    for (; index < rows.length; index += 1) {
+      y += heightOf(rows[index]!, y);
+      if (y > limit + EPSILON) return true;
+    }
+    return false;
+  };
 }
 
 function collisionBand(zone: ExclusionZone): CollisionBand {
@@ -105,12 +156,12 @@ function tableStartOrder(
 }
 
 /**
- * Clearance for an in-flow table's rows, or null when the flow publishes no wrap zones. Zones
- * are read per call: each page the table reaches has its own.
+ * Clearance for an in-flow table's fragments, or null when the flow publishes no wrap zones.
+ * Zones are read per call: each page the table reaches has its own.
  *
- * On a page the table opens, a band that cannot start below the float keeps its place, so a
- * float taller than the room it leaves never pushes a row from page to page. A float whose
- * band reaches the page bottom moves nothing.
+ * Bounds: a band that reaches the page bottom is not an obstacle. On a page the table opens,
+ * a fragment whose first row cannot start below the band keeps its place, so no band pushes
+ * a fragment from page to page.
  */
 export function tableFloatClearance(
   structure: SemanticTableStructure,
@@ -124,47 +175,53 @@ export function tableFloatClearance(
   const start = orderOf ? tableStartOrder(structure, orderOf) : undefined;
   const ownPrefix = `${tableId}.`;
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const reaches = (zone: ExclusionZone): boolean => {
+  const reaches = (zone: ExclusionZone, column: number | undefined): boolean => {
     if (zone.sourceKind === 'furniture') return true;
     if (zone.sourceKind !== undefined || start === undefined || !orderOf) return false;
+    if (column !== undefined && zone.columnIndex !== column) return false;
     if (zone.anchorParagraphId.startsWith(ownPrefix)) return false;
     const order = orderOf(zone.anchorParagraphId);
     return order !== undefined && order < start;
   };
   let bandsFor: readonly ExclusionZone[] | undefined;
+  let bandsColumn: number | undefined;
   let bands: readonly CollisionBand[] = [];
-  const clearedTop = (top: number, heightAt: (top: number) => number): number => {
+  const clearedTop = (top: number, fragment: PendingTableFragment): number => {
     const zones = zonesOf();
-    if (zones !== bandsFor) {
+    const column = host.flow.flowColumn?.();
+    if (zones !== bandsFor || column !== bandsColumn) {
       bandsFor = zones;
-      bands = zones.filter(reaches).map(collisionBand);
+      bandsColumn = column;
+      bands = zones
+        .filter((zone) => reaches(zone, column))
+        .map(collisionBand)
+        .sort((a, b) => a.top - b.top);
     }
     const left = host.left();
+    const bottom = host.bottom();
     const crossing = bands.filter(
-      (band) => band.left < left + width - EPSILON && band.right > left + EPSILON
+      (band) =>
+        band.bottom < bottom - EPSILON &&
+        band.left < left + width - EPSILON &&
+        band.right > left + EPSILON
     );
     let y = top;
     for (let step = 0; step < MAX_CLEARANCE_STEPS; step += 1) {
-      const below = crossing.filter((band) => band.bottom > y + EPSILON);
-      if (below.length === 0) return y;
-      const bottom = y + heightAt(y);
-      let next = y;
-      for (const band of below) {
-        if (band.top < bottom - EPSILON) next = Math.max(next, band.bottom);
-      }
-      if (next <= y + EPSILON) return y;
-      y = next;
+      // Sorted by top: when the fragment does not reach the first band still below it, it
+      // reaches none of the later ones.
+      const band = crossing.find((candidate) => candidate.bottom > y + EPSILON);
+      if (!band || !fragment.reaches(y, band.top)) return y;
+      y = band.bottom;
     }
     return y;
   };
   const clearance: TableFloatClearance = {
     pending: undefined,
-    clear(heightAt, fitsAt) {
+    clear(fragment) {
       const top = host.flow.cursorY;
-      const cleared = clearedTop(top, heightAt);
-      // A band reaching the page bottom keeps the row in place rather than emptying the page.
+      const cleared = clearedTop(top, fragment);
       if (cleared <= top + EPSILON || cleared >= host.bottom() - EPSILON) return false;
-      if (host.opensPage() && !fitsAt(cleared)) return false;
+      if (host.opensPage() && !fragment.fitsAt(cleared)) return false;
       host.flow.cursorY = cleared;
       host.moved(cleared);
       return true;
@@ -172,11 +229,15 @@ export function tableFloatClearance(
     clearPending(repeat) {
       const pending = clearance.pending;
       if (!pending) return;
-      clearance.clear(
-        (top) => repeat + pending.heightAt(top + repeat),
-        (top) => pending.fitsAt(top + repeat)
-      );
+      clearance.clear({
+        reaches: (top, limit) => limit <= top + EPSILON || pending.reaches(top + repeat, limit),
+        fitsAt: (top) => pending.fitsAt(top + repeat),
+      });
     },
+    fragment: (from, fitsAt, lead, continued) => ({
+      reaches: tableFragmentReach(structure.rows, from, host.heightOf, lead, continued),
+      fitsAt,
+    }),
   };
   return clearance;
 }

@@ -35,6 +35,7 @@ interface Picture {
   readonly size: number;
   readonly wrap?: 'square' | 'topAndBottom' | 'none' | 'tightTopHalf';
   readonly distB?: number;
+  readonly distL?: number;
 }
 
 /** A header whose only content is one picture anchored to page coordinates. */
@@ -55,6 +56,8 @@ function pictureHeader(picture: Picture): Story {
     .replaceAll('cy="914400"', `cy="${picture.size * EMU_PER_PT}"`);
   if (picture.distB !== undefined)
     xml = xml.replaceAll('distB="0" distL="0"', `distB="${picture.distB * EMU_PER_PT}" distL="0"`);
+  if (picture.distL !== undefined)
+    xml = xml.replaceAll('distL="0"', `distL="${picture.distL * EMU_PER_PT}"`);
   if (picture.wrap === 'topAndBottom')
     xml = xml.replace(/<wp:wrapSquare [^>]*\/>/, '<wp:wrapTopAndBottom/>');
   if (picture.wrap === 'none') xml = xml.replace(/<wp:wrapSquare [^>]*\/>/, '<wp:wrapNone/>');
@@ -96,12 +99,15 @@ const SECT =
   '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
   '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>' +
   '</w:sectPr>';
+/** Two 216pt columns with a 36pt gap. */
+const TWO_COLUMNS = SECT.replace('</w:sectPr>', '<w:cols w:num="2" w:space="720"/></w:sectPr>');
 
 const paragraph = (text: string) =>
   `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const cell = (width: number, texts: readonly string[]) =>
-  `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>${texts.map(paragraph).join('')}</w:tc>`;
+const cell = (width: number, texts: readonly string[], properties = '') =>
+  `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${properties}</w:tcPr>` +
+  `${texts.map(paragraph).join('')}</w:tc>`;
 
 interface TableOptions {
   readonly rows: number;
@@ -111,6 +117,8 @@ interface TableOptions {
   readonly cantSplit?: boolean;
   /** One-line paragraphs in each row's first cell. */
   readonly linesPerRow?: number;
+  /** First and last body row of a vertical merge in the second column. */
+  readonly merge?: readonly [number, number];
 }
 
 function table(options: TableOptions): string {
@@ -121,10 +129,13 @@ function table(options: TableOptions): string {
       (header ? '<w:tblHeader/>' : '') + (options.cantSplit && !header ? '<w:cantSplit/>' : '');
     const label = header ? 'head' : `r${index}`;
     const lines = Array.from({ length: options.linesPerRow ?? 1 }, () => label);
+    const [first, last] = options.merge ?? [0, -1];
+    const merged = !header && index >= first && index <= last;
+    const mergeXml = merged ? `<w:vMerge${index === first ? ' w:val="restart"' : ''}/>` : '';
     return (
       `<w:tr>${properties ? `<w:trPr>${properties}</w:trPr>` : ''}` +
       cell(half, lines) +
-      cell(half, [label]) +
+      cell(half, merged && index !== first ? [''] : [label], mergeXml) +
       '</w:tr>'
     );
   };
@@ -147,20 +158,32 @@ function load(body: string): OoxmlPart {
   return result.part;
 }
 
-function lay(body: string, header?: Story): SemanticLayout {
+function lay(body: string, header?: Story, compatibilityMode?: number): SemanticLayout {
   const furniture: PageFurniture = {
     titlePage: false,
     evenAndOddHeaders: false,
     headers: new Map(header ? [['default', header]] : []) as PageFurniture['headers'],
     footers: new Map(),
   };
-  return layoutSemanticDocument(load(body), 1, { measurer, sectionFurniture: [furniture] });
+  return layoutSemanticDocument(load(body), 1, {
+    measurer,
+    sectionFurniture: [furniture],
+    ...(compatibilityMode ? { compatibilityMode } : {}),
+  });
 }
 
 function tablesOn(layout: SemanticLayout, page: number): TableFragment[] {
   return layout.pages[page]!.fragments.filter(
     (fragment): fragment is TableFragment => fragment.kind === 'table'
   );
+}
+
+/** Rows follow each other with no gap inside the fragment. */
+function expectContiguous(fragment: TableFragment): void {
+  for (let index = 1; index < fragment.rows.length; index += 1) {
+    const above = fragment.rows[index - 1]!.box;
+    expect(fragment.rows[index]!.box.y).toBeCloseTo(above.y + above.height, 3);
+  }
 }
 
 /** The one square picture every case uses: page x 390..540, page y 20..170 (content -52..98). */
@@ -213,20 +236,55 @@ describe('a table that crosses a wrapping float', () => {
     expect(tablesOn(layout, 0)[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
   });
 
-  test('moves only the rows that reach the band below a paragraph', () => {
+  test('moves the table below the band when its first row after paragraphs reaches it', () => {
     // Five 14pt lines end at 70; the first row (70..84) crosses the band that ends at 98.
     const body = [1, 2, 3, 4, 5].map((index) => paragraph(`p${index}`)).join('');
     const layout = lay(body + table({ rows: 10 }), pictureHeader(RIGHT_LOGO));
     expect(tablesOn(layout, 0)[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
   });
+
+  for (const mode of [undefined, 14, 15])
+    test(`moves an authored header row that advances a page below the picture (mode ${mode})`, () => {
+      // 49 lines of 12.727pt leave 24.4pt, and the two-line header row needs 25.5pt.
+      const filler = Array.from({ length: 49 }, (_unused, index) => paragraph(`f${index}`));
+      const body =
+        filler.join('') +
+        table({ rows: 20, headerRow: true }).replace(
+          '<w:tblHeader/></w:trPr><w:tc><w:tcPr><w:tcW w:w="4680" w:type="dxa"/></w:tcPr>' +
+            paragraph('head'),
+          '<w:tblHeader/></w:trPr><w:tc><w:tcPr><w:tcW w:w="4680" w:type="dxa"/></w:tcPr>' +
+            paragraph('head') +
+            paragraph('head')
+        );
+      const layout = lay(body, pictureHeader(RIGHT_LOGO), mode);
+      expect(tablesOn(layout, 0)).toHaveLength(0);
+      const [fragment] = tablesOn(layout, 1);
+      expect(fragment!.rows[0]!.isHeaderRow).toBe(true);
+      expect(fragment!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+      expect(fragment!.rows[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+      expectContiguous(fragment!);
+    });
+
+  test('counts the wrap distance beside the picture', () => {
+    // 6200 twips = 310pt ends 8pt left of the picture, inside an 18pt left wrap distance.
+    const near = table({ rows: 10, width: 6200 });
+    const layout = lay(near, pictureHeader({ ...RIGHT_LOGO, distL: 18 }));
+    expect(tablesOn(layout, 0)[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    const clear = lay(near, pictureHeader(RIGHT_LOGO));
+    expect(tablesOn(clear, 0)[0]!.box.y).toBeCloseTo(0, 3);
+  });
 });
 
 describe('a table below a body float', () => {
   /** A paragraph with a 144pt by 72pt square picture at content x 0, then `after`. */
-  function withBodyFloat(after: string): SemanticLayout {
-    const xml = squareAnchorAtLeft({ text: 'lead' }).replace(
+  function withBodyFloat(
+    after: string,
+    mutate: (xml: string) => string = (xml) => xml,
+    sect = SECT
+  ): SemanticLayout {
+    const xml = mutate(squareAnchorAtLeft({ text: 'lead' })).replace(
       '</w:body>',
-      `${after}${SECT}</w:body>`
+      `${after}${sect}</w:body>`
     );
     const part = loadDrawingPart(xml);
     return layoutSemanticDocument(part, 1, { measurer, inlineDrawingLayout: layoutContext(part) });
@@ -245,6 +303,59 @@ describe('a table below a body float', () => {
     const layout = withBodyFloat(narrow);
     expect(tablesOn(layout, 0)[0]!.box.y).toBeLessThan(72);
   });
+
+  /** The picture 60pt below its paragraph top: content y 60..132. */
+  const lower = (xml: string) =>
+    xml.replace(
+      'relativeFrom="paragraph"><wp:posOffset>0',
+      `relativeFrom="paragraph"><wp:posOffset>${60 * EMU_PER_PT}`
+    );
+
+  test('moves the whole table below a float that its later rows reach', () => {
+    const layout = withBodyFloat(table({ rows: 20 }), lower);
+    const [fragment] = tablesOn(layout, 0);
+    expect(fragment!.box.y).toBeCloseTo(132, 3);
+    expect(fragment!.rows).toHaveLength(20);
+    expectContiguous(fragment!);
+  });
+
+  test('keeps a table that ends above the float in place', () => {
+    const layout = withBodyFloat(table({ rows: 2 }), lower);
+    const [fragment] = tablesOn(layout, 0);
+    expect(fragment!.box.y).toBeLessThan(20);
+    expect(fragment!.box.y + fragment!.box.height).toBeLessThan(60);
+  });
+
+  test('moves a table with a vertical merge as one piece', () => {
+    const layout = withBodyFloat(table({ rows: 10, merge: [2, 6] }), lower);
+    const [fragment] = tablesOn(layout, 0);
+    expect(fragment!.box.y).toBeCloseTo(132, 3);
+    expectContiguous(fragment!);
+  });
+
+  test('a picture in the first column does not move a table in the second', () => {
+    // A 100pt by 72pt top-and-bottom picture at page y 300 (content 228..300) in column 1.
+    const inColumnOne = (xml: string) =>
+      xml
+        .replace(/<wp:wrapSquare [^>]*\/>/, '<wp:wrapTopAndBottom/>')
+        .replace(
+          'relativeFrom="paragraph"><wp:posOffset>0',
+          `relativeFrom="page"><wp:posOffset>${300 * EMU_PER_PT}`
+        )
+        .replaceAll('cx="1828800"', `cx="${100 * EMU_PER_PT}"`);
+    const columnBreak =
+      '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:br w:type="column"/></w:r></w:p>';
+    const layout = withBodyFloat(
+      columnBreak + table({ rows: 30, width: 3000 }),
+      inColumnOne,
+      TWO_COLUMNS
+    );
+    const [fragment] = tablesOn(layout, 0);
+    expect(fragment!.box.x).toBeGreaterThan(216);
+    expect(fragment!.box.y).toBeLessThan(20);
+    expect(fragment!.rows).toHaveLength(30);
+    expectContiguous(fragment!);
+  });
 });
 
 describe('bounded clearance', () => {
@@ -259,7 +370,9 @@ describe('bounded clearance', () => {
     expect(tablesOn(layout, 0)[0]!.box.y).toBeCloseTo(0, 3);
   });
 
-  test('a kept row that fits a page but not below the picture keeps its place', () => {
+  // Known difference, pinned so a change is deliberate: the row keeps its place under the
+  // picture. The intended behavior starts it below the picture and splits it there.
+  test('known difference: a kept row too tall for the room below the picture stays under it', () => {
     // 45 lines of 12.727pt exceed the 550pt below the picture but fit the 648pt page.
     const layout = lay(
       table({ rows: 3, cantSplit: true, linesPerRow: 45 }),

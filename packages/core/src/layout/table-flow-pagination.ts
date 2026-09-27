@@ -63,6 +63,8 @@ export interface TableFlowCursor {
   readonly positionTextTable?: boolean;
   /** Points down the page content box. The paginator both reads and advances it. */
   cursorY: number;
+  /** Column being filled in a multi-column section; absent with a single column. */
+  readonly flowColumn?: () => number | undefined;
   /** Width of the column being filled. */
   readonly columnWidth: () => number;
   /** Left edge of the column being filled, in page-content coordinates. */
@@ -269,7 +271,15 @@ export function paginateTableInFlow(
           moved: (top) => {
             if (rows.length === 0) fragmentTop = top;
           },
+          heightOf: (row, top) => rowHeightOf(row, top),
         });
+  // The authored header rows open the first fragment, with the body rows after them.
+  const clearAuthoredHeader = (): void => {
+    const groupAt = (top: number) =>
+      headerMerged ? headerPlanAt(top).heightPt : headerGroupHeight;
+    const fits = (top: number) => top + groupAt(top) <= contentHeight() + 0.001;
+    clearance?.clear(clearance.fragment(headerRows.length, fits, groupAt));
+  };
   const laterLayout = isWord2013OrLaterMode(flow.compatibilityMode);
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
@@ -405,6 +415,7 @@ export function paginateTableInFlow(
       // (a continuous section shares its sheet), and a fragment box anchored at 0 would
       // stretch over whatever the earlier section already painted above the region.
       fragmentTop = flow.cursorY;
+      clearAuthoredHeader();
       plan = planAt();
       groupHeight = plan?.heightPt ?? groupHeight;
     }
@@ -519,10 +530,7 @@ export function paginateTableInFlow(
       );
       fragmentTop = flow.cursorY;
     }
-    const groupAt = (top: number) =>
-      headerMerged ? headerPlanAt(top).heightPt : headerGroupHeight;
-    if (headerRows.length > 0)
-      clearance?.clear(groupAt, (top) => top + groupAt(top) <= contentHeight() + 0.001);
+    if (headerRows.length > 0) clearAuthoredHeader();
     placeHeaderGroup(false);
   }
 
@@ -673,10 +681,13 @@ export function paginateTableInFlow(
       );
     };
 
-    // A continued row clears only floats at its fragment top: its own height is not known.
-    const heightAt = (top: number) => (isContinuation ? 1 : rowHeightOf(row, top));
-    if (clearance) clearance.pending = { heightAt, fitsAt: admitsRepeatedHeaders };
-    if (clearance?.clear(heightAt, admitsRepeatedHeaders)) admitSpans(bodyRowIndex, row);
+    if (clearance) {
+      const from = structure.rows.length - bodyRows.length + bodyRowIndex;
+      const continued = () => isContinuation;
+      clearance.pending = clearance.fragment(from, admitsRepeatedHeaders, undefined, continued);
+      // Only a fragment without rows opens below a band: an open fragment never gets a gap.
+      if (rows.length === 0 && clearance.clear(clearance.pending)) admitSpans(bodyRowIndex, row);
+    }
 
     const tryTerminalFit = (): void => {
       if (

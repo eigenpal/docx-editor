@@ -1889,6 +1889,7 @@ function layoutBlocksPass(
       cursorY: anchorY,
       columnWidth,
       columnLeft,
+      flowColumn: () => (columns.count > 1 ? flowColumnIndex : undefined),
       contentHeight,
       unreservedContentHeight,
       advanceColumn: () => {
