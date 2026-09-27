@@ -52,7 +52,7 @@ test('joined display retains both paragraph owners and inherited run styles', ()
     [0, 6],
   ]);
 });
-for (const mark of ['', '<w:specVanish/>', '<w:vanish/>', '<w:vanish/><w:specVanish w:val="0"/>'])
+for (const mark of ['', '<w:specVanish/>', '<w:vanish w:val="0"/>'])
   test(`unsupported or disabled mark keeps its break ${mark}`, () => {
     expect(linesOf(layout(paragraph('Lead', mark) + paragraph('Body')).result)).toHaveLength(2);
   });
@@ -94,13 +94,14 @@ test('a content-control boundary is not a style separator join', () => {
   const xml = `<w:sdt><w:sdtContent>${paragraph('Lead', both)}</w:sdtContent></w:sdt>${paragraph('Body')}`;
   expect(linesOf(layout(xml).result)).toHaveLength(2);
 });
-test('balanced fields retain atomic source ownership across a display seam', () => {
-  const field = '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p>';
-  const { result } = layout(paragraph('Lead', both) + field);
-  const line = linesOf(result)[0]!;
-  expect(lineSegments(line)).toHaveLength(2);
-  expect(line.spans.at(-1)!.range).toMatchObject({ start: 0, end: 1 });
-});
+for (const mark of [both, '<w:vanish/>'])
+  test(`balanced fields retain atomic source ownership across a display seam ${mark}`, () => {
+    const field = '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p>';
+    const { result } = layout(paragraph('Lead', mark) + field);
+    const line = linesOf(result)[0]!;
+    expect(lineSegments(line)).toHaveLength(2);
+    expect(line.spans.at(-1)!.range).toMatchObject({ start: 0, end: 1 });
+  });
 test('matching continuation geometry keeps first before and last after spacing', () => {
   const p = (text: string, mark: string, space: string) =>
     `<w:p><w:pPr><w:spacing ${space}/><w:rPr>${mark}</w:rPr></w:pPr>${run(text)}</w:p>`;
@@ -204,42 +205,45 @@ test('tracked content and section boundaries keep authored paragraph ownership',
   expect(linesOf(layout(paragraph('Lead', both) + section).result)).toHaveLength(2);
 });
 
-test('both seam caret positions remain addressable', () => {
-  const { result } = layout(paragraph('Lead', both) + paragraph(' Body'));
-  const segments = lineSegments(linesOf(result)[0]!);
-  const before = caretAt(result, { paragraphId: segments[0]!.paragraphId, offset: 4 }, measurer);
-  const after = caretAt(result, { paragraphId: segments[1]!.paragraphId, offset: 0 }, measurer);
-  expect(before).not.toBeNull();
-  expect(after).not.toBeNull();
-  expect(before?.x).toBe(after?.x);
-});
-test('a note in a later member retains its source reference and warm geometry', () => {
-  const part = loadBody(
-    paragraph('Lead', both) + `<w:p>${run(' Body')}<w:r><w:footnoteReference w:id="1"/></w:r></w:p>`
-  );
-  const parsed = readOoxmlPart(
-    `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${paragraph('Note text')}</w:footnote></w:footnotes>`,
-    { name: '/word/footnotes.xml', contentType: 'application/xml' }
-  );
-  if (!parsed.ok) throw Error(parsed.reason);
-  const notes = {
-    footnotesPart: parsed.part,
-    endnotesPart: null,
-    documentFootnoteProps: DEFAULT_FOOTNOTE_PROPERTIES,
-    footnotePropsBySection: [DEFAULT_FOOTNOTE_PROPERTIES],
-    documentEndnoteProps: DEFAULT_ENDNOTE_PROPERTIES,
-    endnotePropsBySection: [DEFAULT_ENDNOTE_PROPERTIES],
-    measurer,
-    producer: 'separator-note',
-  };
-  const session = createLayoutSession();
-  const options = { measurer, geometry, notes, styleCascade: styles() };
-  const first = layoutSemanticDocument(part, 1, { ...options, session });
-  expect(first.pages[0]!.footnotes?.notes).toHaveLength(1);
-  expect(lineSegments(linesOf(first)[0]!)).toHaveLength(2);
-  expect(layoutSemanticDocument(part, 1, { ...options, session }).pages[0]).toBe(first.pages[0]);
-  expect(first.pages).toEqual(layoutSemanticDocument(part, 1, options).pages);
-});
+for (const mark of [both, '<w:vanish/>'])
+  test(`both seam caret positions remain addressable ${mark}`, () => {
+    const { result } = layout(paragraph('Lead', mark) + paragraph(' Body'));
+    const segments = lineSegments(linesOf(result)[0]!);
+    const before = caretAt(result, { paragraphId: segments[0]!.paragraphId, offset: 4 }, measurer);
+    const after = caretAt(result, { paragraphId: segments[1]!.paragraphId, offset: 0 }, measurer);
+    expect(before).not.toBeNull();
+    expect(after).not.toBeNull();
+    expect(before?.x).toBe(after?.x);
+  });
+for (const mark of [both, '<w:vanish/>'])
+  test(`a note in a later member retains its source reference and warm geometry ${mark}`, () => {
+    const part = loadBody(
+      paragraph('Lead', mark) +
+        `<w:p>${run(' Body')}<w:r><w:footnoteReference w:id="1"/></w:r></w:p>`
+    );
+    const parsed = readOoxmlPart(
+      `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${paragraph('Note text')}</w:footnote></w:footnotes>`,
+      { name: '/word/footnotes.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw Error(parsed.reason);
+    const notes = {
+      footnotesPart: parsed.part,
+      endnotesPart: null,
+      documentFootnoteProps: DEFAULT_FOOTNOTE_PROPERTIES,
+      footnotePropsBySection: [DEFAULT_FOOTNOTE_PROPERTIES],
+      documentEndnoteProps: DEFAULT_ENDNOTE_PROPERTIES,
+      endnotePropsBySection: [DEFAULT_ENDNOTE_PROPERTIES],
+      measurer,
+      producer: 'separator-note',
+    };
+    const session = createLayoutSession();
+    const options = { measurer, geometry, notes, styleCascade: styles() };
+    const first = layoutSemanticDocument(part, 1, { ...options, session });
+    expect(first.pages[0]!.footnotes?.notes).toHaveLength(1);
+    expect(lineSegments(linesOf(first)[0]!)).toHaveLength(2);
+    expect(layoutSemanticDocument(part, 1, { ...options, session }).pages[0]).toBe(first.pages[0]);
+    expect(first.pages).toEqual(layoutSemanticDocument(part, 1, options).pages);
+  });
 test('later member REF refreshes after unrelated bookmark target edit', () => {
   let part = loadBody(
     '<w:p><w:bookmarkStart w:id="1" w:name="term"/><w:r><w:t>Alpha</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p><w:p><w:pPr><w:rPr><w:vanish/><w:specVanish/></w:rPr></w:pPr><w:r><w:t>Lead</w:t></w:r></w:p><w:p><w:fldSimple w:instr=" REF term "><w:r><w:t>Alpha</w:t></w:r></w:fldSimple></w:p>'
@@ -361,3 +365,91 @@ for (const ending of ['', '<w:r><w:br/></w:r>'])
       linesOf(expected).map((line) => line.box.height)
     );
   });
+
+for (const mark of ['<w:vanish/>', '<w:vanish/><w:specVanish w:val="0"/>'])
+  test(`visible hidden-mark joins retain source ranges ${mark}`, () => {
+    const { part, result } = layout(paragraph('Lead', mark) + paragraph('. Body'));
+    expect(linesOf(result)).toHaveLength(1);
+    const segments = lineSegments(linesOf(result)[0]!);
+    expect(segments.map((s) => paragraphTextOf(part, s.paragraphId))).toEqual(['Lead', '. Body']);
+    expect(segments.map((s) => [s.start, s.end])).toEqual([
+      [0, 4],
+      [0, 6],
+    ]);
+  });
+test('an unsupported extension preserves the accepted special prefix', () => {
+  const follower = '<w:p><w:pPr><w:ind w:left="720"/></w:pPr>' + run('Follower') + '</w:p>';
+  const result = layout(paragraph('Lead', both) + paragraph('.', '<w:vanish/>') + follower).result;
+  expect(linesOf(result).map((l) => l.spans.map((s) => s.text).join(''))).toEqual([
+    'Lead.',
+    'Follower',
+  ]);
+  expect(lineSegments(linesOf(result)[0]!)).toHaveLength(2);
+});
+test('a compatible extended chain retains all source owners', () => {
+  const result = layout(
+    paragraph('Lead', both) + paragraph('.', '<w:vanish/>') + paragraph(' Body')
+  ).result;
+  expect(linesOf(result)).toHaveLength(1);
+  expect(lineSegments(linesOf(result)[0]!)).toHaveLength(3);
+});
+test('a final visible hidden mark retains its line', () => {
+  expect(linesOf(layout(paragraph('Lead') + paragraph('End', '<w:vanish/>')).result)).toHaveLength(
+    2
+  );
+});
+test('visible direct overrides admit an inherited hidden mark', () => {
+  const xml =
+    '<w:p><w:pPr><w:pStyle w:val="Lead"/><w:rPr><w:specVanish w:val="0"/></w:rPr></w:pPr><w:r><w:rPr><w:vanish w:val="0"/></w:rPr><w:t>Lead</w:t></w:r></w:p>' +
+    paragraph(' Body');
+  expect(linesOf(layout(xml, styles(true)).result)).toHaveLength(1);
+});
+test('hidden-mark edits preserve cold geometry and source offsets', () => {
+  let part = loadBody(paragraph('Lead', '<w:vanish/>') + paragraph(' Body'));
+  const session = createLayoutSession();
+  const options = { measurer, geometry, styleCascade: styles() };
+  let warm = layoutSemanticDocument(part, 1, { ...options, session });
+  const segment = lineSegments(linesOf(warm)[0]!)[0]!;
+  for (const hidden of [true, false]) {
+    const changed = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: segment.paragraphId,
+      offset: 0,
+      text: hidden ? 'A' : 'B',
+    });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    part = changed.part;
+    warm = layoutSemanticDocument(part, hidden ? 2 : 3, { ...options, session });
+    expect(warm.pages).toEqual(layoutSemanticDocument(part, hidden ? 2 : 3, options).pages);
+    expect(layoutSemanticDocument(part, hidden ? 2 : 3, { ...options, session }).pages[0]).toBe(
+      warm.pages[0]
+    );
+  }
+});
+
+test('mark visibility changes retain warm and cold geometry', () => {
+  const session = createLayoutSession();
+  const options = { measurer, geometry, styleCascade: styles() };
+  for (const mark of ['<w:vanish/>', '<w:vanish w:val="0"/>', '<w:vanish/>']) {
+    const part = loadBody(paragraph('Lead', mark) + paragraph(' Body'));
+    const warm = layoutSemanticDocument(part, 1, { ...options, session });
+    expect(warm.pages).toEqual(layoutSemanticDocument(part, 1, options).pages);
+    expect(linesOf(warm)).toHaveLength(mark.includes('val=') ? 2 : 1);
+  }
+});
+test('hidden-only and empty marks preserve the empty paragraph path', () => {
+  for (const content of ['', '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden</w:t></w:r>']) {
+    const part = loadBody(
+      '<w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr>' + content + '</w:p>' + paragraph('Body')
+    );
+    const result = layoutSemanticDocument(part, 1, { measurer, geometry });
+    expect(linesOf(result)).toHaveLength(1);
+    expect(lineSegments(linesOf(result)[0]!)).toHaveLength(1);
+    expect(
+      linesOf(result)[0]!
+        .spans.map((s) => s.text)
+        .join('')
+    ).toBe('Body');
+  }
+});

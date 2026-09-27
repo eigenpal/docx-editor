@@ -1,3 +1,4 @@
+import { hasVisibleSeparatorText } from './style-separator-visible.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
@@ -10,7 +11,11 @@ import {
   resolveParagraphLayoutInputs,
   type StyleCascadeTable,
 } from './style-cascade.ts';
-import { registerStyleSeparatorGroup, type StyleSeparatorMember } from './style-separator-group.ts';
+import {
+  registerStyleSeparatorGroup,
+  styleSeparatorMembersOf,
+  type StyleSeparatorMember,
+} from './style-separator-group.ts';
 
 import { resolveStoryListItems } from './list-resolve.ts';
 import { EMPTY_NUMBERING_INDEX, type NumberingIndex } from './numbering-index.ts';
@@ -122,20 +127,17 @@ function continuationToken(input: ReturnType<typeof resolveParagraphLayoutInputs
 }
 
 /** Display-only body groups. Structural and tracked-mark merges remain separate. */
-export function withStyleSeparatorParagraphs(
+function groupParagraphs(
   entries: readonly Entry[],
   styles: StyleCascadeTable | undefined,
   numberingIndex: NumberingIndex | undefined,
   excludedParagraphs: ReadonlySet<string> | undefined,
   addressable: (paragraph: OoxmlElement) => boolean,
   alreadyMerged: (paragraph: OoxmlElement) => boolean,
-  register: (merged: OoxmlElement, members: readonly OoxmlElement[]) => void
+  register: (merged: OoxmlElement, members: readonly OoxmlElement[]) => void,
+  joinsMark: (paragraph: OoxmlElement) => boolean
 ): readonly Entry[] {
-  if (
-    !entries.some(
-      (entry) => entry.block.kind === 'paragraph' && hiddenStyleSeparatorMark(entry.block, styles)
-    )
-  )
+  if (!entries.some((entry) => entry.block.kind === 'paragraph' && joinsMark(entry.block)))
     return entries;
   const listItems = resolveStoryListItems(
     entries.map((entry) => entry.block),
@@ -224,7 +226,7 @@ export function withStyleSeparatorParagraphs(
       result.push(entry);
       continue;
     }
-    const joins = hiddenStyleSeparatorMark(paragraph, styles);
+    const joins = joinsMark(paragraph);
     if (refusing) {
       result.push(entry);
       refusing = joins;
@@ -253,5 +255,69 @@ export function withStyleSeparatorParagraphs(
     } else result.push(entry);
   }
   flush(false);
+  return result;
+}
+
+/** Preserve accepted special groups when a larger hidden-mark chain is unsupported. */
+export function withStyleSeparatorParagraphs(
+  entries: readonly Entry[],
+  styles: StyleCascadeTable | undefined,
+  numberingIndex: NumberingIndex | undefined,
+  excludedParagraphs: ReadonlySet<string> | undefined,
+  addressable: (paragraph: OoxmlElement) => boolean,
+  alreadyMerged: (paragraph: OoxmlElement) => boolean,
+  register: (merged: OoxmlElement, members: readonly OoxmlElement[]) => void
+): readonly Entry[] {
+  const special = (paragraph: OoxmlElement) => hiddenStyleSeparatorMark(paragraph, styles);
+  const baseline = groupParagraphs(
+    entries,
+    styles,
+    numberingIndex,
+    excludedParagraphs,
+    addressable,
+    alreadyMerged,
+    register,
+    special
+  );
+  const additional = new Set<OoxmlElement>();
+  for (const { block } of entries) {
+    if (
+      block.kind === 'paragraph' &&
+      !special(block) &&
+      hiddenStyleSeparatorMark(block, styles, false) &&
+      hasVisibleSeparatorText(block, styles)
+    )
+      additional.add(block);
+  }
+  if (!additional.size) return baseline;
+  const expanded = groupParagraphs(
+    entries,
+    styles,
+    numberingIndex,
+    excludedParagraphs,
+    addressable,
+    alreadyMerged,
+    register,
+    (paragraph) => special(paragraph) || additional.has(paragraph)
+  );
+  const previousGroups = new Map<OoxmlElement, Entry>();
+  for (const entry of baseline) {
+    const members = styleSeparatorMembersOf(entry.block);
+    if (members) previousGroups.set(members[0]!.paragraph, entry);
+  }
+  const result: Entry[] = [];
+  for (let index = 0; index < expanded.length; index++) {
+    const entry = expanded[index]!;
+    const previous = previousGroups.get(entry.block);
+    const members = previous && styleSeparatorMembersOf(previous.block);
+    if (
+      previous &&
+      members &&
+      members.every((member, offset) => expanded[index + offset]?.block === member.paragraph)
+    ) {
+      result.push(previous);
+      index += members.length - 1;
+    } else result.push(entry);
+  }
   return result;
 }

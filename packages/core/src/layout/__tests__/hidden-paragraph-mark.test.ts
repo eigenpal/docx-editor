@@ -133,8 +133,7 @@ describe('paragraphs that keep their line', () => {
   test('visible text before a hidden mark stays on the page', () => {
     kept(`${para(text('a'))}${para(text('kept'), `<w:rPr>${HIDDEN}</w:rPr>`)}${para(text('b'))}`, [
       'a',
-      'kept',
-      'b',
+      'keptb',
     ]);
   });
 
