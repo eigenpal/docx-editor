@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Fixed legacy tables place their grid edge at the table indent.",
+  "after": "Supported fixed legacy tables place their leading content edge at the table indent.",
+  "reason": "Only derived layout geometry changes. Canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/legacy-fixed-table-content.test.ts"],
+  "changeset": "legacy-fixed-table-content",
+  "migration": null
+}

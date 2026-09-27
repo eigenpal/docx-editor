@@ -38,6 +38,7 @@ export function positionedTableOriginX(
  * limited to the remaining width. Centered and right-aligned left-to-right tables use the
  * remaining width and ignore the indent. `outerRuleOffsetPt` then moves the grid inward by
  * half the outer side rule where the table puts that rule's outer edge on the aligned edge.
+ * For a supported mode-14 fixed table, that offset instead aligns the first cell's content.
  * A verified legacy content-aligned table instead aligns the leading cell's content edge
  * with the text column, without changing its indent.
  */

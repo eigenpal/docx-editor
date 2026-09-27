@@ -202,9 +202,8 @@ describe('readTableIndentPt', () => {
 });
 
 describe('captured controls: a signed indent moves only a left-aligned table', () => {
-  // Text left edge from the margin in the captured controls, rounded to 0.01pt. Mode 14
-  // fixed-width tables here also carry an unrelated 5.4pt offset, so only their indent deltas
-  // are compared.
+  // Text left edge from the margin in the captured controls, rounded to 0.01pt.
+  // Mode 14 aligns the first cell's content, and retains the signed indent deltas.
   const MODE_15_LEFT: Record<number, number> = { [-200]: -3.08, 0: 7.0, 200: 16.84 };
   const MODE_15_CENTER = 20.44;
   const MODE_15_RIGHT = 33.88;
@@ -240,9 +239,8 @@ describe('captured controls: a signed indent moves only a left-aligned table', (
 
 describe('follow-up captured controls', () => {
   // Same page as the first set. Mode 15 values are the captured text left edges from the
-  // margin; mode 14 compares deltas against a stated zero because its fixed tables carry the
-  // unrelated 5.4pt offset. An invalid indent type in mode 14 has no stated indent, and its
-  // captured edge (5.32pt) is where that offset is absent.
+  // margin; mode 14 compares deltas against a stated zero. Invalid indentation keeps its
+  // separate edge-based placement, whose captured text edge is 5.32pt.
   const style = (id: string, w: string) =>
     `<w:style w:type="table" w:styleId="${id}"><w:name w:val="${id}"/>` +
     `<w:tblPr>${indent(w)}</w:tblPr></w:style>`;
@@ -337,7 +335,7 @@ describe('an over-wide left table', () => {
   test('keeps a negative indent and its rule offset when fixed', () => {
     const part = documentPart(tableXml({ ...wide, indent: indent('-900') }));
     expect(firstTable(layout(part, 15, createLayoutSession(), 0, geometry)).box.x).toBe(-45 + 0.25);
-    expect(firstTable(layout(part, 14, createLayoutSession(), 0, geometry)).box.x).toBe(-45);
+    expect(firstTable(layout(part, 14, createLayoutSession(), 0, geometry)).box.x).toBe(-45 - 5.4);
   });
 
   test('applies a positive indent too', () => {
@@ -350,7 +348,7 @@ describe('an over-wide left table', () => {
 
   test('a positive indent past the slack of a narrower table applies in full', () => {
     const s = structure(tableXml({ indent: indent('2000') }), { mode: 14 });
-    expect(tableOriginX(s, 330)).toBe(100);
+    expect(tableOriginX(s, 330)).toBe(100 - 5.4);
   });
 });
 
@@ -465,7 +463,7 @@ describe('warm and cold layouts agree', () => {
     const part = documentPart(tableXml({ indent: indent('-999999999') }));
     const fragment = firstTable(layout(part, 14));
     expect(Number.isFinite(fragment.box.x)).toBe(true);
-    expect(fragment.box.x).toBe(-LIMIT);
+    expect(fragment.box.x).toBe(-LIMIT - 5.4);
     for (const cell of fragment.rows[0]!.cells) expect(Number.isFinite(cell.box.x)).toBe(true);
   });
 });

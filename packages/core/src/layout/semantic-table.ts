@@ -74,6 +74,8 @@ import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vert
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
 import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
+import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
+import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
@@ -278,6 +280,7 @@ export interface SemanticTableStructure {
   readonly legacyContentAlignment?: true;
   /**
    * Derived, never serialized: how far the grid moves from the aligned table edge, in points.
+   * A supported mode-14 fixed table shifts by its leading cell margin in the other direction.
    * A compatibility-mode-15 left- or right-aligned table puts the outer edge of its side rule
    * on that edge, so its first grid line sits half a rule inward. Positive moves right.
    */
@@ -876,7 +879,7 @@ function readTableStructureUncached(
     columnWidthsPt.length,
     cellSpacingPt === 0
   );
-  const sideRules = withSharedGridLineSideRules(contentRows, {
+  const sideRuleShape = {
     compatibilityMode,
     depth,
     bidiVisual,
@@ -888,9 +891,19 @@ function readTableStructureUncached(
     indentPt,
     columnWidthsPt,
     containerWidthPt: contentWidthPt,
-  });
-  contentRows = sideRules.rows;
-  const { outerRuleOffsetPt } = sideRules;
+  };
+  const sideRules = withSharedGridLineSideRules(contentRows, sideRuleShape);
+  const contentOffset = legacyFixedTableContentOffset(
+    table,
+    tableStyle.tablePropertyNodes,
+    contentRows,
+    sideRuleShape
+  );
+  contentRows =
+    contentOffset !== undefined && tableWidth.type === 'auto'
+      ? withLegacyTableSideRules(sideRules.rows)
+      : sideRules.rows;
+  const outerRuleOffsetPt = contentOffset ?? sideRules.outerRuleOffsetPt;
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,

@@ -222,12 +222,14 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
   expect(contentEdges(layout(part, 15)).left).toBeCloseTo(6.9, 8);
 });
 
-test('other modes and centred tables take no grid offset', () => {
-  for (const mode of [undefined, 11, 12, 14, 16]) {
+test('unsupported modes and centred tables take no grid offset', () => {
+  for (const mode of [undefined, 11, 12, 16]) {
     const { part, table } = source();
     expect(read(table, mode).outerRuleOffsetPt).toBeUndefined();
     expect(firstTable(layout(part, mode)).box.x).toBe(0);
   }
+  expect(read(source().table, 14).outerRuleOffsetPt).toBe(-5.4);
+  expect(firstTable(layout(source().part, 14)).box.x).toBe(-5.4);
   expect(read(source({ jc: 'center' }).table, 15).outerRuleOffsetPt).toBeUndefined();
   expect(firstTable(layout(source({ jc: 'center' }).part, 15)).box.x).toBe(78);
 });
