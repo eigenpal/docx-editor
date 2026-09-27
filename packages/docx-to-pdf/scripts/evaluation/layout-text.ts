@@ -9,7 +9,7 @@ import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
 /** Logical text evidence, not PDF extraction or final painted geometry. */
 export function recordLayoutText(layout: ExportSemanticLayout) {
   const pages = layout.pages.map(() => ({ lines: [] as Line[] }));
-  const groups = layout.pages.map(() => new Map<object, Map<string, Line>>());
+  const groups = layout.pages.map(() => new Map<object, Line>());
   let characters = 0;
   let spans = 0;
   forEachSemanticSpan(layout, (visit) => {
@@ -19,18 +19,19 @@ export function recordLayoutText(layout: ExportSemanticLayout) {
       throw new Error('Layout text exceeds evidence limit');
     const page = pages[visit.page.index]!;
     const groupsOnPage = groups[visit.page.index]!;
-    let paragraphs = groupsOnPage.get(visit.line);
-    if (!paragraphs) groupsOnPage.set(visit.line, (paragraphs = new Map()));
-    let line = paragraphs.get(visit.paragraphId);
+    let line = groupsOnPage.get(visit.line);
     if (!line) {
-      const marker = visit.paragraph.lines[0] === visit.line ? visit.paragraph.marker?.text : '';
+      const marker =
+        visit.paragraph.lines[0] === visit.line && !visit.paragraph.marker?.style.hidden
+          ? visit.paragraph.marker?.text
+          : '';
       line = {
         text: marker ? marker + ' ' : '',
         story: visit.story,
         paragraphId: visit.paragraphId,
         spans: [],
       };
-      paragraphs.set(visit.paragraphId, line);
+      groupsOnPage.set(visit.line, line);
       page.lines.push(line);
     }
     line.text += text;
