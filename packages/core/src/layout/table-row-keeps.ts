@@ -22,9 +22,9 @@
 // every body row keeps, the paragraph keeps through them with what follows the table.
 //
 // Limits, each placed by the ordinary row rules instead:
-// - The lookahead stops after `MAX_KEEP_NEXT_CHAIN` kept rows. A longer group moves only
+// - The lookahead stops after `MAX_TABLE_KEEP_ROWS` kept rows. A longer group moves only
 //   when those rows and the whole next kept row do not fit.
-// - A vertical merge that crosses the group, or a first cell that continues a merge.
+// - A vertical merge that enters or leaves the measured group.
 // - A keep chain reads through the kept rows of one table only (`followingKeepOpening`).
 // - A first cell that opens with a nested table.
 // - Nested tables and positioned (`w:tblpPr`) tables never keep their rows.
@@ -42,7 +42,7 @@ import {
 } from './revision-projection.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { propertiesOf } from './paragraph-flow.ts';
-import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps, type TableKeepOpening } from './pagination-keeps.ts';
+import { paragraphKeeps, type TableKeepOpening } from './pagination-keeps.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from './style-cascade.ts';
 import { findParagraphProperties } from './style-definition-reader.ts';
 import {
@@ -54,7 +54,11 @@ import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { rowMinimumOpeningPt } from './table-row-minimum-fit.ts';
 import { rowBreaksPageBefore } from './table-row-page-break.ts';
 import { planHeaderGroup } from './table-header-vmerge.ts';
+import { measureKeptMergeRows } from './table-kept-merge-measure.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+
+/** Maximum rows measured for one table keep decision; paragraph lookahead is independent. */
+const MAX_TABLE_KEEP_ROWS = 256;
 
 // Rows come from `readTableStructure`, which is memoized per style cascade, so one row
 // object always resolves against the same cascade.
@@ -107,7 +111,7 @@ export function rowKeepsWithNext(
 
 function resolveRowKeep(row: SemanticTableRow, styleCascade: StyleCascadeTable | undefined) {
   const cell = row.cells[0];
-  if (!cell || cell.vMergeContinue) return false;
+  if (!cell) return false;
   const first = cell.blocks[0];
   if (first?.kind !== 'paragraph') return false;
   const pPr = findParagraphProperties(first);
@@ -125,6 +129,8 @@ export interface KeptRowSource {
   readonly breaksAt: (index: number) => boolean;
   /** The row's whole height where the group would stand. */
   readonly heightOf: (index: number) => number;
+  /** Price a closed merge group, including its successor row. */
+  readonly mergedHeights?: (start: number, end: number) => readonly number[] | null;
   /** Whether the row must place whole: `w:cantSplit`, an exact height, bottom-to-top text. */
   readonly placesWhole: (index: number) => boolean;
   /** Smallest height that starts every cell of a row that may split. */
@@ -147,7 +153,7 @@ export interface KeptRowGroup {
   /** Height the group needs beside it: the opening of what follows the kept rows. */
   readonly successor: number;
   /**
-   * The group runs past {@link MAX_KEEP_NEXT_CHAIN} rows. Only that many are priced, and the
+   * The group runs past {@link MAX_TABLE_KEEP_ROWS} rows. Only that many are priced, and the
    * next kept row whole as the successor, so the height is a lower bound on what it needs.
    */
   readonly truncated?: true;
@@ -157,7 +163,7 @@ export interface KeptRowGroup {
  * The kept group that starts at `start`, or null when the rule does not apply there.
  *
  * `start` must open the group: it keeps, and the row before it does not keep or it starts a
- * new page. Null for a group whose rows or successor row continue a vertical merge, a kept
+ * new page. Null for a group with an unmeasured crossing merge, a kept
  * last row with nothing after the table, and following content that cannot be priced.
  * A successor row that starts a new page ends the group with no successor height.
  *
@@ -178,23 +184,32 @@ export function keptRowGroup(
   let end = start;
   let truncated = false;
   while (end + 1 < rows.length && source.keepsAt(end + 1) && !source.breaksAt(end + 1)) {
-    if (end + 1 - start >= MAX_KEEP_NEXT_CHAIN) {
+    if (end + 1 - start >= MAX_TABLE_KEEP_ROWS) {
       truncated = true;
       break;
     }
     end += 1;
   }
   const next = truncated ? end : end + 1;
-  for (let index = start; index <= Math.min(next, rows.length - 1); index += 1) {
-    if (rows[index]!.cells.some((cell) => cell.vMergeContinue)) return null;
+  const last = Math.min(next, rows.length - 1);
+  let crossesMerge = false;
+  for (let index = start; index <= last; index += 1) {
+    if (rows[index]!.cells.some((cell) => cell.vMergeContinue)) crossesMerge = true;
   }
+  const merged = crossesMerge ? source.mergedHeights?.(start, last) : undefined;
+  if (crossesMerge && !merged) return null;
+  const heightOf = (index: number) => merged?.[index - start] ?? source.heightOf(index);
   let kept = 0;
-  for (let index = start; index <= end; index += 1) kept += source.heightOf(index);
+  for (let index = start; index <= end; index += 1) kept += heightOf(index);
   // A kept row places whole, so the next kept row counts whole in the lower bound.
   if (truncated) return { end, kept, successor: source.heightOf(end + 1), truncated: true };
   let successor: number | null | undefined;
   if (next < rows.length) {
-    successor = source.breaksAt(next) ? 0 : rowOpening(source, next, room - kept);
+    successor = source.breaksAt(next)
+      ? 0
+      : merged && rows[next]!.cells.some((cell) => cell.vMergeContinue)
+        ? heightOf(next)
+        : rowOpening(source, next, room - kept);
   } else {
     successor = source.following(room - kept);
     if (successor === undefined) return null;
@@ -310,6 +325,8 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
         deps.compatibilityMode
       ),
     heightOf,
+    mergedHeights: (start, end) =>
+      measureKeptMergeRows(structure, rows, start, end, left, deps, heightOf),
     placesWhole: (index) => {
       const row = rows[index]!;
       if (row.height.rule === 'exact') return true;

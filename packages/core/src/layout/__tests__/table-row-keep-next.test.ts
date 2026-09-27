@@ -212,7 +212,7 @@ const wordProbes15: readonly (readonly [string, string, readonly string[]])[] = 
     ],
   ],
   [
-    'ten kept rows move, although only eight are priced',
+    'ten kept rows move as one group',
     P8 +
       table([
         row('R0'),
@@ -465,17 +465,16 @@ describe('kept group pricing', () => {
     expect(keptRowGroup(source([2]), 1)).toBeNull();
   });
 
-  test('prices at most eight kept rows, and the next kept row whole as a lower bound', () => {
+  test('prices all nine kept rows before their successor', () => {
     expect(keptRowGroup(source([0, 1, 2, 3, 4, 5, 6, 7]), 0)).toEqual({
       end: 7,
       kept: 112,
       successor: 7,
     });
     expect(keptRowGroup(source([0, 1, 2, 3, 4, 5, 6, 7, 8]), 0)).toEqual({
-      end: 7,
-      kept: 112,
-      successor: 14,
-      truncated: true,
+      end: 8,
+      kept: 126,
+      successor: 7,
     });
   });
 

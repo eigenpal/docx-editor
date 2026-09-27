@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Table keep decisions excluded vertical merges and measured eight kept rows.",
+  "after": "Table keep decisions measure closed merge groups and longer bounded row chains.",
+  "reason": "Only derived pagination changes. Canonical content, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-merged-keep-groups.test.ts"
+  ],
+  "changeset": "merged-table-keep-groups",
+  "migration": null
+}
