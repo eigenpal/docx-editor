@@ -8,6 +8,7 @@ import { sanitizeHref } from './sinks.ts';
 import { readDistances } from './drawing-distances.ts';
 import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
+import { wrapFootprintProjection } from './drawing-wrap-footprint.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
@@ -233,6 +234,8 @@ export interface DrawingProjection {
   readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
+  /** Layout-only wrap area of an MC payload that cannot paint (`wrapFootprintProjection`). */
+  readonly footprintOnly?: true;
 }
 
 export interface DrawingAccessibility {
@@ -1362,7 +1365,8 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
         ? projection.title
         : null;
   return Object.freeze({
-    hidden: projection.hidden,
+    // A wrap footprint reserves space only: no output paints, selects or exports it.
+    hidden: projection.hidden || projection.footprintOnly === true,
     decorative: label === null,
     label,
   });
@@ -1573,6 +1577,8 @@ export function projectRunLevelMcDrawing(
     resolveRelationship?: RelationshipTargetResolver;
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+    /** Answer an anchored payload that cannot paint with its wrap footprint (layout index). */
+    retainWrapFootprint?: boolean;
   }>
 ): DrawingProjection | null {
   const atom = resolveRunLevelMcAtom(
@@ -1590,14 +1596,14 @@ export function projectRunLevelMcDrawing(
   // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, unsupported
   // groups) stays invisible like its VML fallback always was — a labelled placeholder card over
   // letterhead furniture would be noisier than what either branch renders today. Text boxes
-  // carry a renderable story and pass through.
+  // carry a renderable story and pass through. Layout still reserves the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
     projection.groupPicture === null &&
     projection.textboxStory === null
   ) {
-    return null;
+    return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
   // Layout applies the same rule to a group picture whose resource fails.
   if (projection.groupPicture) {
@@ -1705,9 +1711,10 @@ function collectDrawingsInPartBounded(
         resolveRelationship: ctx.resolveRelationship,
         resolveSchemeColor: ctx.resolveSchemeColor,
         resolveStyleMatrixReference: ctx.resolveStyleMatrixReference,
+        retainWrapFootprint: atomIndex !== undefined,
       });
       if (projected) {
-        out.push(projected);
+        if (!projected.footprintOnly) out.push(projected);
         atomIndex?.set(frame.node.id, projected);
       }
       if (projected?.textboxStory) {

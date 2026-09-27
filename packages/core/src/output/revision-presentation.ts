@@ -543,6 +543,8 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
     ]) {
       if (!anchored) continue;
       for (const drawing of anchored) {
+        // A hidden record (an MC wrap footprint) paints no revision cue, so it names no author.
+        if (drawing.accessibility.hidden) continue;
         // The anchored drawing's own tracked change, then any story inside it.
         const revisions = drawing.revisions;
         if (revisions !== undefined) {

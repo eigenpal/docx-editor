@@ -43,6 +43,10 @@ interface GroupInput {
   readonly relationships?: string;
   /** The bytes of `word/media/image1.png`, or null to leave the part out. */
   readonly media?: Uint8Array | null;
+  /** Replaces `wp:wrapNone`; a wrapping mode also puts the group in front of the text. */
+  readonly wrap?: string;
+  /** Paragraphs after the anchor paragraph. */
+  readonly bodyLines?: number;
 }
 
 /** Move the picture to a valid GIF part: ready in the editor, but not embeddable in PDF. */
@@ -86,7 +90,11 @@ function input(members: string, options: GroupInput = {}): Uint8Array {
       : `<w:r><mc:AlternateContent ${NAMESPACES}><mc:Choice Requires="wpg">${drawing}</mc:Choice>
       <mc:Fallback><w:pict><v:group id="Group"/></w:pict></mc:Fallback></mc:AlternateContent></w:r>`;
   const media = options.media === undefined ? PNG_1X1 : options.media;
-  return docx(`<w:p>${run}<w:r><w:t>Text</w:t></w:r></w:p>`, {
+  const wrapped = options.wrap
+    ? run.replace('<wp:wrapNone/>', options.wrap).replace('behindDoc="1"', 'behindDoc="0"')
+    : run;
+  const body = '<w:p><w:r><w:t>Line</w:t></w:r></w:p>'.repeat(options.bodyLines ?? 0);
+  return docx(`<w:p>${wrapped}<w:r><w:t>Text</w:t></w:r></w:p>${body}`, {
     'word/_rels/document.xml.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
       options.relationships ??
       `<Relationship Id="rIdImg" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>`
@@ -222,5 +230,25 @@ test('a picture offset far outside the group exports under both policies', async
   const { imageCount } = await pageCommands(bare, 'best-effort', [
     { code: 'drawing', severity: 'unsupported', message: 'Unsupported drawing: graphic' },
   ]);
+  expect(imageCount).toBe(0);
+});
+
+const TEXTBOX_MEMBER =
+  '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="1270000"/>' +
+  '<a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+  '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
+  '</wps:txbx><wps:bodyPr/></wps:wsp>';
+
+test('an MC group that cannot paint keeps its wrap band and exports nothing of it', async () => {
+  // A picture beside a text box member: no part of the group paints, and the strict export
+  // reports nothing. The 200pt top-and-bottom band still moves the lines after it.
+  const members = pictureMember(0) + TEXTBOX_MEMBER;
+  const pages = async (options: GroupInput) =>
+    (await exportPdf(input(members, { bodyLines: 46, ...options }), { useSystemFonts: false }))
+      .pageCount;
+  expect(await pages({})).toBe(1);
+  expect(await pages({ wrap: '<wp:wrapTopAndBottom/>' })).toBe(2);
+  // Strict, with no diagnostic expected: the hidden record is not an unsupported drawing.
+  const { imageCount } = await pageCommands(input(members, { wrap: '<wp:wrapTopAndBottom/>' }));
   expect(imageCount).toBe(0);
 });

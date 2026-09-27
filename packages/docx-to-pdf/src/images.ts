@@ -161,6 +161,8 @@ export class ImageWriter {
   async paint(visit: SemanticDrawingVisit, page: PDFPage): Promise<string> {
     await this.work.yield();
     const d = visit.drawing;
+    // A hidden record (an MC wrap footprint) reserves layout space and draws nothing.
+    if (d.accessibility.hidden) return '';
     const report = (message: string): string => {
       this.work.report('drawing', message, visit.page.index);
       return '';

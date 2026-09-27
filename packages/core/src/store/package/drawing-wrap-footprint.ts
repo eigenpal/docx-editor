@@ -1,0 +1,54 @@
+// The wrap footprint of an anchored `mc:AlternateContent` payload the engine cannot draw.
+//
+// Such a payload (a shape group with a text box member, a group whose picture resource
+// fails) stays invisible: no placeholder card, no partial group. Its anchor still states an
+// extent, a position and a wrap, and text flows around that area whether or not the graphic
+// paints. The footprint keeps exactly those layout facts and removes every paint payload, so
+// layout reserves the space and every output sees a hidden record with nothing to draw.
+
+import type { DrawingProjection, ImageWrapTarget } from './drawing-projection.ts';
+
+/**
+ * Wraps that move text. `wrapNone` resolves to `inFront` or `behind` (from `behindDoc`), and
+ * neither reserves space; `behindDoc` with a wrapping mode wraps as a picture does.
+ */
+const FOOTPRINT_WRAPS: ReadonlySet<ImageWrapTarget> = new Set([
+  'square',
+  'squareLeft',
+  'squareRight',
+  'tight',
+  'through',
+  'topAndBottom',
+]);
+
+// Keyed by the source projection, so every read of one atom answers the same object and
+// layout caches keyed by projection identity keep hitting.
+const footprints = new WeakMap<DrawingProjection, DrawingProjection | null>();
+
+/**
+ * The layout-only stand-in for `projection`, or null when its wrap reserves no space.
+ *
+ * The result is anchored, carries `footprintOnly: true`, and has no picture, group picture,
+ * vector shape, text box story or hyperlink. Its geometry is the authored anchor, already
+ * bounded by the projection's extent and offset reads.
+ */
+export function wrapFootprintProjection(projection: DrawingProjection): DrawingProjection | null {
+  const cached = footprints.get(projection);
+  if (cached !== undefined) return cached;
+  const footprint =
+    projection.kind === 'anchored' && !projection.hidden && FOOTPRINT_WRAPS.has(projection.wrap)
+      ? Object.freeze({
+          ...projection,
+          relationshipId: null,
+          hyperlinkHref: null,
+          picture: null,
+          vectorShape: null,
+          groupPicture: null,
+          textboxStory: null,
+          legacyGraphic: undefined,
+          footprintOnly: true as const,
+        })
+      : null;
+  footprints.set(projection, footprint);
+  return footprint;
+}

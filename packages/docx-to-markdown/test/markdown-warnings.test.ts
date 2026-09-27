@@ -93,6 +93,45 @@ test('ignores inactive legacy branches when the selected branch has no drawing',
   expect(result.warnings).toEqual([]);
 });
 
+test('an MC group that cannot paint reserves space without an omission warning', async () => {
+  // Layout keeps this group's wrap band as a hidden record. It has no content to omit, so it
+  // reports nothing, as it did when layout left it out entirely.
+  const namespaces =
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"';
+  const group =
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+    'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="1270000" cy="635000"/><wp:wrapTopAndBottom/><wp:docPr id="1" name="Group"/>' +
+    '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
+    '<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/>' +
+    '<a:ext cx="1270000" cy="635000"/><a:chOff x="0" y="0"/><a:chExt cx="1270000" cy="635000"/>' +
+    '</a:xfrm></wpg:grpSpPr><pic:pic><pic:nvPicPr><pic:cNvPr id="2" name="Picture"/>' +
+    '<pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip/><a:stretch><a:fillRect/></a:stretch>' +
+    '</pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="635000" cy="635000"/>' +
+    '</a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>' +
+    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="635000" y="0"/>' +
+    '<a:ext cx="635000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+    '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p>' +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></wpg:wgp></a:graphicData></a:graphic>' +
+    '</wp:anchor>';
+  const result = await exportMarkdown(
+    docx(
+      `<w:p><w:r><mc:AlternateContent ${namespaces}><mc:Choice Requires="wpg"><w:drawing>` +
+        `${group}</w:drawing></mc:Choice><mc:Fallback/></mc:AlternateContent></w:r>` +
+        '<w:r><w:t>Body</w:t></w:r></w:p>'
+    )
+  );
+  expect(result.markdown).toBe('Body');
+  expect(result.warnings).toEqual([]);
+});
+
 test('reports both supported and unsupported legacy images without duplicate source warnings', async () => {
   for (const rotation of ['', ';rotation:15']) {
     const entries = unzipSync(

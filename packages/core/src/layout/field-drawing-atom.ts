@@ -49,7 +49,8 @@ export function runDrawingAtomPlan(options: {
   if (!projection || projection.kind !== 'inline') {
     // The marker only for a drawing that will actually PUBLISH: hidden anchors and failed
     // projections paint nothing, so they must cue no change bar either.
-    const anchored = projection?.kind === 'anchored' && !projection.hidden;
+    const anchored =
+      projection?.kind === 'anchored' && !projection.hidden && !projection.footprintOnly;
     return anchored
       ? { recordDeleted: false, emit: true, extras: { anchoredAtom: true } }
       : { recordDeleted: false, emit: true };

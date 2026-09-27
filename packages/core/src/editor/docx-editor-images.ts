@@ -78,10 +78,12 @@ export type ImageMutationPreconditions = Readonly<{
  * caller can never address the rest.
  */
 function drawingAnswersTo(
-  drawing: { readonly drawingNodeId: string; readonly start: number },
+  drawing: Pick<InlineDrawingRecord, 'drawingNodeId' | 'start' | 'accessibility'>,
   offset: number,
   wanted: string | null
 ): boolean {
+  // A hidden record (an MC wrap footprint) holds layout space only; nothing can select it.
+  if (drawing.accessibility.hidden) return false;
   if (wanted !== null && drawing.drawingNodeId !== wanted) return false;
   return drawing.start === offset || drawing.start + 1 === offset;
 }

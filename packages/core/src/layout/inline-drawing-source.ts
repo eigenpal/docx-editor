@@ -37,6 +37,7 @@ import {
   type ValidatedImageBytesReleaseToken,
 } from '../store/package/validated-image-bytes.ts';
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
+import { wrapFootprintProjection } from '../store/package/drawing-wrap-footprint.ts';
 import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -74,6 +75,13 @@ export interface CreateInlineDrawingLayoutBundleOptions {
   /** Test-only override; production creates one independently disposable lookup per bundle. */
   readonly resourceLookup?: ImageResourceLookup;
 }
+
+const FOOTPRINT_RESOURCE: ImageResourceState = Object.freeze({
+  kind: 'unrenderable',
+  partName: null,
+  mime: 'unknown',
+  reason: 'non-picture-graphic',
+});
 
 function pendingResourceKey(projection: DrawingProjection): string {
   const picture = projection.picture ?? projection.groupPicture;
@@ -278,6 +286,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     wrap: projection.wrap,
     textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
     compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
+    footprintOnly: projection.footprintOnly ? 'footprint' : '',
     anchor: anchor
       ? framedTokenJoin([
           String(anchor.simplePos),
@@ -492,6 +501,8 @@ function createPartDrawingContextSlot(options: {
   };
 
   const resourceOf = (projection: DrawingProjection): ImageResourceState => {
+    // A wrap footprint has nothing to resolve, and must never start a decode or a fetch.
+    if (projection.footprintOnly) return FOOTPRINT_RESOURCE;
     const key = pendingResourceKey(projection);
     const cached = resourceByKey.get(key);
     if (cached) return cached;
@@ -516,17 +527,19 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  // An MC-wrapped group whose picture cannot render lays out as nothing, the same as an MC
-  // payload the projection cannot draw (`projectRunLevelMcDrawing`). A linked picture settles
-  // at once; an embedded one counts only after its decode settles, so a pending group keeps
-  // its frame and paints its vector members.
+  // An MC-wrapped group whose picture cannot render paints nothing, the same as an MC
+  // payload the projection cannot draw (`projectRunLevelMcDrawing`), and keeps only its wrap
+  // footprint. A linked picture settles at once; an embedded one counts only after its decode
+  // settles, so a pending group keeps its frame and paints its vector members.
   const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
     const projection = atomProjections.get(atomNodeId) ?? null;
     if (!projection?.groupPicture?.alternateContent) return projection;
     const state = projection.groupPicture.linkedRelationshipId
       ? resourceOf(projection)
       : resourceByKey.get(pendingResourceKey(projection));
-    return state && state.kind !== 'ready' && state.kind !== 'pending' ? null : projection;
+    return state && state.kind !== 'ready' && state.kind !== 'pending'
+      ? wrapFootprintProjection(projection)
+      : projection;
   };
 
   const context: InlineDrawingLayoutContext = Object.freeze({

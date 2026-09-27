@@ -611,6 +611,7 @@ function hitBoundsContainDrawing(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   point: HitPoint
 ): boolean {
+  if (drawing.accessibility.hidden) return false;
   const box = drawing.hitBounds;
   if (
     point.x < box.x ||
@@ -1236,7 +1237,7 @@ function overlayFrameOf(
   record: InlineDrawingRecord | AnchoredDrawingRecord
 ): DrawingOverlayFrame | null {
   const bounds = record.paintBounds;
-  if (bounds.width <= 0 || bounds.height <= 0) return null;
+  if (bounds.width <= 0 || bounds.height <= 0 || record.accessibility.hidden) return null;
   return Object.freeze({
     pageIndex,
     x: bounds.x,
@@ -1312,7 +1313,7 @@ export function findDrawingOverlayFrameInLayout(
       for (const drawing of story.anchoredDrawings ?? []) {
         if (drawing.drawingNodeId !== drawingNodeId) continue;
         const bounds = drawing.paintBounds;
-        if (bounds.width <= 0 || bounds.height <= 0) return null;
+        if (bounds.width <= 0 || bounds.height <= 0 || drawing.accessibility.hidden) return null;
         return Object.freeze({
           pageIndex: page.index,
           x: story.box.x + bounds.x - page.contentBox.x,
