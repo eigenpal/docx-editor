@@ -333,3 +333,60 @@ test('minimum frame height extends final spacing inside the border without chang
   expect(first.borders!.find((border) => border.side === 'left')!.box.x).toBe(first.box.x - 3.5);
   expect(first.borders!.find((border) => border.side === 'right')!.box.x).toBe(first.box.x + 202.5);
 });
+
+test('live ordinary fields cannot change group admission after body reservation', () => {
+  const narrow =
+    '<w:p><w:pPr><w:framePr w:x="1600" w:y="600" w:w="400" w:hAnchor="page" w:vAnchor="page"/></w:pPr><w:r><w:t>A</w:t></w:r></w:p>';
+  const field = '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>';
+  const source = part(narrow + field);
+  const fixed = {
+    measure: (value: string) => value.length * 5,
+    lineMetrics: () => ({ height: 12, baseline: 9 }),
+  };
+  const story = layoutHeaderFooterStory(
+    source,
+    460,
+    fixed,
+    'live-frame-field',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    'proposed',
+    undefined,
+    undefined,
+    undefined,
+    { ...page, marginTop: 40 }
+  );
+  const larger = story.withPageContext({
+    pageNumber: 100,
+    pageCount: 100,
+    sectionPageCount: 100,
+    storyTop: 30,
+  });
+  expect(larger.flowHeight).toBe(story.flowHeight);
+  expect(paragraphs(story).some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  const body = part(
+    '<w:body>' +
+      text('BODY') +
+      '<w:sectPr><w:pgSz w:w="12000" w:h="16000"/><w:pgMar w:top="800" w:left="1400" w:right="1400" w:bottom="1440" w:header="600"/><w:pgNumType w:start="100"/></w:sectPr></w:body>',
+    'document'
+  );
+  const result = layoutSemanticDocument(body, 1, {
+    measurer: fixed,
+    sectionFurniture: [
+      {
+        titlePage: false,
+        evenAndOddHeaders: false,
+        headers: new Map([['default', story]]),
+        footers: new Map(),
+      },
+    ],
+  });
+  expect(result.pages[0]!.contentBox.y).toBeGreaterThanOrEqual(30 + larger.flowHeight);
+  expect(readPositionedHeaderFrames(source)).toBeNull();
+  const complex =
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> STYLEREF "Heading" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Title</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+  expect(readPositionedHeaderFrames(part(narrow + complex))).toBeNull();
+});

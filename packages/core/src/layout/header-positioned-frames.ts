@@ -75,6 +75,12 @@ function frameCount(part: OoxmlPart): number | null {
       ['ins', 'del', 'moveFrom', 'moveTo', 'pPrChange', 'rPrChange'].includes(node.localName)
     )
       return null;
+    // A later page value must not change admission after the body consumed the header reserve.
+    if (
+      node.namespaceUri === W &&
+      ['fldSimple', 'fldChar', 'instrText', 'delInstrText'].includes(node.localName)
+    )
+      return null;
     if (isW(node, 'framePr')) count++;
     if (visited + pending.length + node.children.length > MAX_NODES) return null;
     for (const child of node.children) pending.push({ node: child, depth: depth + 1 });
