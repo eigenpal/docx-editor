@@ -7,6 +7,12 @@
 // row starts and splits as any other row. A continuation fragment has no minimum. A
 // `w:keepNext` paragraph before the table prices the same height, so it moves with the row.
 //
+// A wrap band is not content. When a fragment opens below a band in a column that holds
+// nothing else (`table-float-collision.ts`), only the band and repeated header rows sit above
+// the row, and the row starts there. The room a fresh column offers does not deduct a band
+// that repeats there, so a row with content above it moves even when the next page leaves it
+// the same room below that band.
+//
 // Limits, each placed by the ordinary row rules instead:
 // - A minimum taller than a fresh column below the repeated header rows. The row splits where
 //   it stands.
@@ -51,6 +57,8 @@ export interface RowMinimumPlace {
   readonly band: number;
   /** Height of the header rows a fresh page repeats above the row. */
   readonly repeat: number;
+  /** Only a wrap band and repeated header rows sit above the row in its column. */
+  readonly belowBandOnly?: boolean;
 }
 
 /**
@@ -63,7 +71,7 @@ export function rowMinimumMoves(
   cellSpacingPt: number,
   at: RowMinimumPlace
 ): boolean {
-  if (at.top <= at.columnTop + 0.001) return false;
+  if (at.belowBandOnly || at.top <= at.columnTop + 0.001) return false;
   const fresh = at.band - at.columnTop - at.repeat;
   const minimum = rowMinimumOpeningPt(row, deps, cellSpacingPt, fresh);
   return minimum !== undefined && minimum > at.bottom - at.top + 0.001;

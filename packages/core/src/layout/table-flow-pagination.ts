@@ -682,6 +682,10 @@ export function paginateTableInFlow(
           bottom: contentHeight(),
           band: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
           repeat: repeatsEnabled ? headerGroupHeight : 0,
+          belowBandOnly:
+            bandTop > 0 &&
+            fragmentTop <= bandTop + 0.001 &&
+            rows.every((placed) => placed.isHeaderRepeat),
         })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
