@@ -42,6 +42,8 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
  * own space is then a complete word: a space in its own run, or one split off by East
  * Asian break rules, hangs at the line end exactly as a space inside the candidate would,
  * and the paragraph's last word borrows space as any other word does.
+ * `followingWidth` measures the remainder of that same word in later plain-text pieces.
+ * It lets an overflowing opening fragment use the complete word's fit decision.
  */
 export function fitsWithSpaceShrink(
   spans: readonly StyleSpanRecord[],
@@ -52,7 +54,8 @@ export function fitsWithSpaceShrink(
   available: number,
   wordStart: number = spans.length,
   wordStartWidth: number = lineWidth,
-  wordEnds = false
+  wordEnds = false,
+  followingWidth = 0
 ): boolean {
   const ownSpace = /^[^\s]+ $/u.test(candidate);
   if (
@@ -65,7 +68,7 @@ export function fitsWithSpaceShrink(
     style,
     measurer
   );
-  const needed = lineWidth + visible - available;
+  const needed = lineWidth + visible + followingWidth - available;
   const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
   if (needed <= 0 || needed > budget + 0.001) return false;
   const spaceWidth = budget * 4;

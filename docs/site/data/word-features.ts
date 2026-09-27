@@ -259,7 +259,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Justified East Asian lines distribute inter-character spacing. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
+      'Justified East Asian lines distribute inter-character spacing. Modern Latin justification measures complete words across formatting runs before compressing spaces. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
   },
   {
     id: 'paragraphs.east-asian-typography',

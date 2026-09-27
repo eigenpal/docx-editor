@@ -520,7 +520,9 @@ export function reorderBidiSpans(
             shaping: {
               ...span.style.shaping,
               direction,
-              ...(wordSpacingPt > 0 ? { wordSpacingPt } : {}),
+              ...(wordSpacingPt > 0
+                ? { wordSpacingPt: (span.style.shaping.wordSpacingPt ?? 0) + wordSpacingPt }
+                : {}),
             },
           }
         : span.style,

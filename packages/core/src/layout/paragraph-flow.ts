@@ -6,6 +6,7 @@ import {
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
 } from './pending-line.ts';
+import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { scriptLineFloor } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -1044,6 +1045,7 @@ export function breakParagraph(
     setProbeWidth: (width) => exclusionProbe.setWidth(width),
   };
 
+  const shrinkTail = spaceShrinkWordTail(pieces, measurer);
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
     if (piece.breakKind === 'column') {
@@ -1476,6 +1478,8 @@ export function breakParagraph(
         // A space after a word that borrowed inter-word space hangs on its line.
         !(lineEndWhitespace && flow?.justifySpaceShrink) &&
         line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+      const followingWidth =
+        overflows && flow?.justifySpaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
       const borrowsSpace =
         overflows &&
         flow?.justifySpaceShrink === true &&
@@ -1497,10 +1501,12 @@ export function breakParagraph(
           lineAvailable(),
           opensWord ? line.spans.length : wordStartSpan,
           opensWord ? line.width : wordStartWidth,
-          endsParagraph(pieceIndex, boundary) ||
+          followingWidth !== undefined ||
+            endsParagraph(pieceIndex, boundary) ||
             (boundary < piece.text.length
               ? !layoutOwned && piece.text[boundary] === ' '
-              : opensWithHangingSpace(pieces[pieceIndex + 1]))
+              : opensWithHangingSpace(pieces[pieceIndex + 1])),
+          followingWidth ?? 0
         );
       if ((!opensWord && penLeftWord()) || (overflows && !borrowsSpace && holdsContent())) {
         // Trailing spaces hang at a line end, so only the word's ink needs room where it goes.
