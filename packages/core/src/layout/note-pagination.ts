@@ -60,6 +60,7 @@ import {
   type LayoutNoteStoryOptions,
 } from './note-layout.ts';
 import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
+import { noteBodyGeometryChanged, resetNoteReserveSearch } from './note-body-geometry.ts';
 import {
   compactFootnoteReserves,
   footnoteReservesEqual,
@@ -2664,7 +2665,7 @@ export function layoutSemanticDocumentWithNotes<
   const notesMemo = notesMemoState.memo;
   const allHits = notesMemoState.allHits;
   const noteMarks = notesMemo?.provisionalMarks ?? provisionalNoteMarks(allHits, notesInput);
-  const seeded = optionsWithLists.session?.notePageBottomReserves;
+  let seeded = optionsWithLists.session?.notePageBottomReserves;
   let usedReserves: ReadonlyMap<number, number> = seeded
     ? compactFootnoteReserves(seeded)
     : new Map();
@@ -2674,6 +2675,12 @@ export function layoutSemanticDocumentWithNotes<
     noteMarks,
     pageBottomReserves: usedReserves,
   });
+  if (noteBodyGeometryChanged(optionsWithLists.session, bodyLayout)) {
+    seeded = undefined;
+    usedReserves = new Map();
+    resetNoteReserveSearch(notesMemo);
+    bodyLayout = runBody({ ...optionsWithLists, noteMarks, pageBottomReserves: usedReserves });
+  }
   let allowOrphanDeferral = notesMemo?.orphanPolicyPart === part;
   const seedFingerprint = footnoteReservesFingerprint(usedReserves);
   // An unchanged document seeded with the answer it settled on republishes it: the loop
@@ -2861,6 +2868,7 @@ export function layoutSemanticDocumentWithNotes<
     }
   }
 
+  noteBodyGeometryChanged(optionsWithLists.session, bodyLayout);
   const attached = attachNotesToLayout(bodyLayout, allHits, notesInput, {
     fallbackReasons,
     paragraphSectionIndex,
