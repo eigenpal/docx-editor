@@ -1857,6 +1857,7 @@ export interface PaginatedSurface {
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
     copyFlavours(): {
         readonly html: string | null;
+        readonly reason?: 'unsupported-content';
         readonly text: string;
     };
     currentPage(mode?: 'viewport' | 'caret'): number;

@@ -1529,7 +1529,7 @@ export interface FragmentCoverage {
 }
 
 // @public (undocumented)
-export type FragmentExtractRejection = 'unknown-part' | 'empty-range' | 'trim-refused' | 'resource-limit';
+export type FragmentExtractRejection = 'unknown-part' | 'empty-range' | 'trim-refused' | 'resource-limit' | 'unsupported-content';
 
 // @public (undocumented)
 export type FragmentExtractResult = {
@@ -1545,7 +1545,7 @@ export type FragmentExtractResult = {
 };
 
 // @public (undocumented)
-export type FragmentMergeRejection = 'no-fragment-document' | 'no-target-part' | 'merge-refused';
+export type FragmentMergeRejection = 'no-fragment-document' | 'no-target-part' | 'merge-refused' | 'unsupported-content';
 
 // @public (undocumented)
 export type FragmentMergeResult = {
