@@ -453,3 +453,38 @@ test('hidden-only and empty marks preserve the empty paragraph path', () => {
     ).toBe('Body');
   }
 });
+
+test('a numbered hidden heading joins a compatible empty successor and keeps its final spacing', () => {
+  const parsed = readOoxmlPart(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`,
+    { name: '/word/numbering.xml', contentType: 'application/xml' }
+  );
+  if (!parsed.ok) throw Error(parsed.reason);
+  const part = loadBody(
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="480"/><w:rPr><w:vanish/></w:rPr></w:pPr>${run('Heading')}</w:p>` +
+      '<w:p><w:pPr><w:spacing w:after="200"/><w:ind w:left="360"/></w:pPr></w:p>' +
+      paragraph('Following body')
+  );
+  const session = createLayoutSession();
+  const options = {
+    measurer,
+    geometry,
+    styleCascade: styles(),
+    numberingIndex: buildNumberingIndex(parsed.part.root),
+  };
+  const result = layoutSemanticDocument(part, 1, { ...options, session });
+  const lines = linesOf(result);
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    'Heading',
+    'Following body',
+  ]);
+  expect(lines[1]!.box.y - lines[0]!.box.y).toBe(22);
+  const markers = result.pages.flatMap((page) =>
+    page.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' && fragment.marker ? [fragment.marker.text] : []
+    )
+  );
+  expect(markers).toEqual(['1.']);
+  expect(result.pages).toEqual(layoutSemanticDocument(part, 1, options).pages);
+  expect(layoutSemanticDocument(part, 1, { ...options, session }).pages[0]).toBe(result.pages[0]);
+});
