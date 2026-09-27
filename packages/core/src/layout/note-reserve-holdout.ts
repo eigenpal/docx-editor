@@ -15,6 +15,7 @@ import {
   fragmentFlowBottom,
   fragmentCursorBottomPt,
   noteReferenceLineBandPt,
+  type NoteReferenceLineBand,
 } from './note-fragment-geometry.ts';
 import { splitNoteFragments } from './note-splitting.ts';
 import {
@@ -141,7 +142,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   }
 
   // The EARLIEST reference line on the next page is the pull-back frontier.
-  let frontier: { readonly top: number; readonly bottom: number } | undefined;
+  let frontier: NoteReferenceLineBand | undefined;
   let frontierRef: HoldOutRef | undefined;
   for (const ref of candidates) {
     const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
