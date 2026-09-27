@@ -305,21 +305,20 @@ describe('a merged header head under a wrap band', () => {
       const part = loadBody(body());
       const first = layoutWithoutFloat(part, ROOMY).pages[0]!.fragments[0]!;
       if (first.kind !== 'paragraph') throw new Error('expected a leading paragraph');
-      const zones = new Map([
-        [
-          0,
-          [
-            squareWrapZone({
-              anchorParagraphId: first.paragraphId,
-              top,
-              height,
-              left: 0,
-              width: 100,
-              contentWidth: 280,
-            }),
-          ],
-        ],
-      ]);
+      // A floating table's band: cell text still wraps beside it. A picture's band would move
+      // the rows below it instead (`table-float-collision.ts`).
+      const band = {
+        ...squareWrapZone({
+          anchorParagraphId: first.paragraphId,
+          top,
+          height,
+          left: 0,
+          width: 100,
+          contentWidth: 280,
+        }),
+        sourceKind: 'table' as const,
+      };
+      const zones = new Map([[0, [band]]]);
       const layout = layoutUnderFloat(part, zones, ROOMY);
       const table = tablesOn(layout, 0)[0]!;
       // The band wraps the head to four lines where two fit without it. The head is measured

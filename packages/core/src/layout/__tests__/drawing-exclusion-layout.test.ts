@@ -914,7 +914,7 @@ describe('header and footer drawing exclusions in body flow', () => {
     expect(lines.map((l) => l.spans.map((s) => s.text).join('')).join('')).toBe(text);
     for (const line of lines) expect(line.box.y + line.box.height).toBeLessThanOrEqual(100.001);
   });
-  test('a partial-width header float also wraps body table cells', () => {
+  test('a partial-width header float moves a crossing body table below it', () => {
     const table =
       '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
       '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
@@ -923,10 +923,13 @@ describe('header and footer drawing exclusions in body flow', () => {
       '</w:tc></w:tr></w:tbl>';
     const layout = render(body(table), 'header', furnitureStory('header', 80));
     const fragment = layout.pages[0]!.fragments.find((f) => f.kind === 'table')!;
+    // The picture covers content y -10..50 at content x 0..80; the row starts below it
+    // and its cell text keeps the full cell width.
+    expect(fragment.box.y).toBeCloseTo(50, 3);
     const cellParagraph = fragment.rows[0]!.cells[0]!.blocks[0]!;
     expect(cellParagraph.kind).toBe('paragraph');
     if (cellParagraph.kind !== 'paragraph') throw new Error('expected paragraph');
-    expect(cellParagraph.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
+    expect(cellParagraph.lines[0]!.spans[0]!.box.x).toBeCloseTo(0, 3);
   });
   test('new tail pages receive their footer exclusion immediately in a long document', () => {
     const text = 'Body text '.repeat(1200);

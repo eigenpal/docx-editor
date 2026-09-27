@@ -48,6 +48,7 @@ import {
 import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
 import { shiftBlocks } from './table-fragment-finalize.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
+import { tableFloatClearance } from './table-float-collision.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type {
@@ -255,6 +256,20 @@ export function paginateTableInFlow(
   let occurrenceInsets = new Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>();
   const completeSourceRows = new Set(structure.rows);
   let forceNextFragment = false;
+  // Rows clear a wrapping float that crosses the table; see `table-float-collision.ts`.
+  const clearance =
+    outOfFlow || structure.float
+      ? null
+      : tableFloatClearance(structure, table.id, tableDeps, {
+          flow,
+          left: () => tableLeft,
+          bottom: contentHeight,
+          opensPage: () =>
+            rows.every((placed) => placed.isHeaderRepeat) && !flow.pageHoldsContent(fragmentTop),
+          moved: (top) => {
+            if (rows.length === 0) fragmentTop = top;
+          },
+        });
   const laterLayout = isWord2013OrLaterMode(flow.compatibilityMode);
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
@@ -451,6 +466,7 @@ export function paginateTableInFlow(
     // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
     // column region top on a shared sheet and 0 only when a fresh page was opened.
     fragmentTop = flow.cursorY;
+    clearance?.clearPending(repeatsEnabled && headerRows.length > 0 ? headerGroupHeight : 0);
     if (repeatsEnabled) placeHeaderGroup(true, admitsBodyAfter);
   };
 
@@ -503,6 +519,10 @@ export function paginateTableInFlow(
       );
       fragmentTop = flow.cursorY;
     }
+    const groupAt = (top: number) =>
+      headerMerged ? headerPlanAt(top).heightPt : headerGroupHeight;
+    if (headerRows.length > 0)
+      clearance?.clear(groupAt, (top) => top + groupAt(top) <= contentHeight() + 0.001);
     placeHeaderGroup(false);
   }
 
@@ -652,6 +672,11 @@ export function paginateTableInFlow(
         { requireEveryCell: !isContinuation && naturalHeight <= pageBottom + 0.001 }
       );
     };
+
+    // A continued row clears only floats at its fragment top: its own height is not known.
+    const heightAt = (top: number) => (isContinuation ? 1 : rowHeightOf(row, top));
+    if (clearance) clearance.pending = { heightAt, fitsAt: admitsRepeatedHeaders };
+    if (clearance?.clear(heightAt, admitsRepeatedHeaders)) admitSpans(bodyRowIndex, row);
 
     const tryTerminalFit = (): void => {
       if (
