@@ -1,4 +1,8 @@
-import { headerStoryForPage, characterHeaderPageToken } from './character-header-pages.ts';
+import {
+  headerStoryForPage,
+  characterHeaderPageToken,
+  characterHeaderReserveHeight,
+} from './character-header-pages.ts';
 // Per-page content-box insets, derived from the header and footer variant THAT page shows.
 //
 // Word resolves the variant page by page (`w:titlePg` 17.6.55, `w:evenAndOddHeaders` 17.10.1)
@@ -117,7 +121,12 @@ export function createPageContentInsets(
   const { furniture, pageHeight, marginTop, marginBottom } = inputs;
   const cap = pageHeight * FURNITURE_INSET_FRACTION;
   const memo = new Map<string, PageContentInsets>();
-  const edge = (distance: number, story: HeaderFooterStoryLayout | undefined, margin: number) =>
+  const edge = (
+    distance: number,
+    story: HeaderFooterStoryLayout | undefined,
+    margin: number,
+    reserveHeight = 0
+  ) =>
     // A negative margin is exact (§17.6.11): the header or footer overlaps the body instead of
     // pushing it. An absent variant reserves nothing: the page has no furniture on that edge
     // at all, so the authored margin is the whole inset. The cap bounds both cases.
@@ -125,7 +134,7 @@ export function createPageContentInsets(
       cap,
       marginIgnoresFurniture(margin)
         ? marginInset(margin)
-        : Math.max(margin, story ? distance + story.flowHeight : 0)
+        : Math.max(margin, story ? distance + Math.max(story.flowHeight, reserveHeight) : 0)
     );
   return (index: number): PageContentInsets => {
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
@@ -137,7 +146,8 @@ export function createPageContentInsets(
     const top = edge(
       inputs.headerDistance,
       headerStoryForPage(furniture, variant, inputs.pageIndexStart + index),
-      marginTop
+      marginTop,
+      characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
     );
     const bottom = edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom);
     const insets: PageContentInsets = Object.freeze({

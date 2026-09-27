@@ -4,6 +4,7 @@ import type { PageFurniture, HeaderFooterVariantName } from './page-furniture-in
 
 interface HeaderPages {
   readonly token: string;
+  readonly reserveHeight: (index: number) => number;
   readonly resolve: (
     variant: HeaderFooterVariantName,
     index: number
@@ -24,4 +25,12 @@ export function headerStoryForPage(
   return (
     furniture && (pages.get(furniture)?.resolve(variant, index) ?? furniture.headers.get(variant))
   );
+}
+
+/** Largest live header height admitted on this sheet during repagination. */
+export function characterHeaderReserveHeight(
+  furniture: PageFurniture | undefined,
+  index: number
+): number {
+  return furniture ? (pages.get(furniture)?.reserveHeight(index) ?? 0) : 0;
 }

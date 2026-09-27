@@ -247,15 +247,18 @@ test('nested PAGE stays live inside an otherwise recognized character-style fiel
     'cached 2',
   ]);
 });
-test('a cyclic header-height boundary fails with an explicit convergence error', () => {
+test('a shrinking live header retains its page reserve and settles', () => {
   const body =
     p('Prior', 'Base') +
     Array.from({ length: 7 }, () => p('filler')).join('') +
     '<w:p><w:pPr><w:keepLines/></w:pPr>' +
     run('A long styled title with enough words to fill three lines', 'Base') +
     '</w:p>';
-  expect(() => fixture(body, field('Header Source', '\\l'))).toThrow(
-    'character-style header layout'
+  const { laid } = fixture(body, field('Header Source', '\\l'));
+  expect(laid.pages).toHaveLength(2);
+  expect(text(laid)[0]).toBe('Prior');
+  expect(laid.pages[0]!.contentBox.y).toBeGreaterThan(
+    laid.pages[0]!.header!.box.y + laid.pages[0]!.header!.box.height
   );
 });
 
@@ -324,4 +327,53 @@ test('a visible merged paragraph retains the second paragraph style occurrence',
     '</w:p>' +
     p('Merged title', 'Base');
   expect(text(fixture(body, field('Header Source'), 'proposed').laid)).toEqual(['Merged title']);
+});
+
+test('a stale long saved result does not become a live header reserve', () => {
+  const cached = field('Header Source').replace(
+    'cached',
+    'Saved text with enough words to fill many header lines'
+  );
+  const { laid } = fixture(p('Short', 'Base'), cached);
+  expect(text(laid)).toEqual(['Short']);
+  expect(laid.pages[0]!.contentBox.y).toBe(15);
+});
+
+test('furniture edits reset the live reserve history in a warm session', () => {
+  const body =
+    p('Prior', 'Base') +
+    Array.from({ length: 7 }, () => p('filler')).join('') +
+    '<w:p><w:pPr><w:keepLines/></w:pPr>' +
+    run('A long styled title with enough words to fill three lines', 'Base') +
+    '</w:p>';
+  const initial = fixture(body, field('Header Source', '\\l'));
+  const hdr = part(
+    `<w:hdr xmlns:w="${W}"><w:p>${field('Header Source')}</w:p></w:hdr>`,
+    '/word/header1.xml'
+  );
+  const story = layoutHeaderFooterStory(hdr, 100, measurer, 'test', undefined, styles);
+  const options = {
+    ...initial.options,
+    furniture: { ...initial.options.furniture, headers: new Map([['default' as const, story]]) },
+  };
+  const warm = layoutSemanticDocument(initial.main, 2, { ...options, session: initial.session });
+  const cold = layoutSemanticDocument(initial.main, 2, options);
+  expect(warm.pages).toEqual(cold.pages);
+  expect(warm.pages[0]!.contentBox.y).toBe(15);
+  expect(warm.pages[0]!.contentBox.y).toBeLessThan(initial.laid.pages[0]!.contentBox.y);
+});
+
+test('page geometry edits reset live header reserves', () => {
+  const body =
+    p('Prior', 'Base') +
+    Array.from({ length: 7 }, () => p('filler')).join('') +
+    '<w:p><w:pPr><w:keepLines/></w:pPr>' +
+    run('A long styled title with enough words to fill three lines', 'Base') +
+    '</w:p>';
+  const initial = fixture(body, field('Header Source', '\\l'));
+  const options = { ...initial.options, geometry: { ...initial.options.geometry, height: 100 } };
+  const warm = layoutSemanticDocument(initial.main, 2, { ...options, session: initial.session });
+  const cold = layoutSemanticDocument(initial.main, 2, options);
+  expect(warm.pages).toEqual(cold.pages);
+  expect(warm.pages[0]!.contentBox.y).toBe(15);
 });

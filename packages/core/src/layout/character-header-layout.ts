@@ -16,6 +16,8 @@ const sessionSeeds = new WeakMap<
   object,
   {
     index: object;
+    options: SemanticLayoutOptions;
+    reserves: readonly number[];
     values: readonly ReadonlyMap<string, string>[];
     contexts: readonly FieldPageContext[];
   }
@@ -61,6 +63,26 @@ export function layoutWithCharacterHeaders(
   if (queries.size > 128) throw new Error('character-style header queries exceed their bound');
   const index = characterStyleIndex(part, options);
   if (!index) return run(options);
+  const candidateSeed = options.session ? sessionSeeds.get(options.session) : undefined;
+  const sameOptions = (previous: SemanticLayoutOptions): boolean => {
+    const keys = new Set([...Object.keys(previous), ...Object.keys(options)]);
+    for (const key of keys) {
+      if (key === 'session') continue;
+      const before = previous[key as keyof SemanticLayoutOptions];
+      const after = options[key as keyof SemanticLayoutOptions];
+      if (key === 'sectionFurniture' && Array.isArray(before) && Array.isArray(after)) {
+        if (before.length !== after.length || before.some((value, i) => value !== after[i]))
+          return false;
+      } else if (before !== after) return false;
+    }
+    return true;
+  };
+  const seed =
+    candidateSeed?.index === index && sameOptions(candidateSeed.options)
+      ? candidateSeed
+      : undefined;
+  // Only live projections enter this history. A stale saved result is not a reserve floor.
+  const reserves: number[] = seed ? [...seed.reserves] : [];
   const project = (
     values: readonly ReadonlyMap<string, string>[],
     contexts: readonly FieldPageContext[],
@@ -72,6 +94,7 @@ export function layoutWithCharacterHeaders(
       const cache = new Map<string, HeaderFooterStoryLayout>();
       registerCharacterHeaderPages(replacement, {
         token,
+        reserveHeight: (page) => reserves[page] ?? 0,
         resolve(variant, page) {
           const story = original.headers.get(variant);
           const selected = values[page];
@@ -84,6 +107,7 @@ export function layoutWithCharacterHeaders(
               characterStyleValues: selected,
             });
             cache.set(key, projected);
+            reserves[page] = Math.max(reserves[page] ?? 0, projected.flowHeight);
           }
           return projected;
         },
@@ -105,7 +129,11 @@ export function layoutWithCharacterHeaders(
   ) =>
     stableHash(
       JSON.stringify(
-        values.map((value, page) => [characterStyleValuesToken(value, textTokens), contexts[page]])
+        values.map((value, page) => [
+          characterStyleValuesToken(value, textTokens),
+          contexts[page],
+          reserves[page] ?? 0,
+        ])
       )
     );
   const contextsOf = (layout: SemanticLayout): readonly FieldPageContext[] =>
@@ -116,7 +144,6 @@ export function layoutWithCharacterHeaders(
       format: page.pageFieldSource?.format,
       sheetNumber: page.index + 1,
     }));
-  const seed = options.session ? sessionSeeds.get(options.session) : undefined;
   let previousToken = seed?.index === index ? tokenOf(seed.values, seed.contexts) : '';
   let current = run(
     seed?.index === index ? project(seed.values, seed.contexts, previousToken) : options
@@ -129,7 +156,14 @@ export function layoutWithCharacterHeaders(
     const contexts = contextsOf(current);
     const token = tokenOf(values, contexts);
     if (token === previousToken) {
-      if (options.session) sessionSeeds.set(options.session, { index, values, contexts });
+      if (options.session)
+        sessionSeeds.set(options.session, {
+          index,
+          options,
+          reserves: [...reserves],
+          values,
+          contexts,
+        });
       return current;
     }
     if (seen.has(token)) throw new Error('character-style header layout did not converge');
