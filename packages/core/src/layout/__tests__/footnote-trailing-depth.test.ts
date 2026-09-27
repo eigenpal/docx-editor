@@ -110,7 +110,10 @@ function probeDocx(probe: Probe): Uint8Array {
   });
 }
 
-function layoutProbe(probe: Probe): { layout: SemanticLayout; fixedPoint: boolean } {
+function layoutProbe(
+  probe: Probe,
+  session = createLayoutSession()
+): { layout: SemanticLayout; fixedPoint: boolean } {
   const loaded = readOoxmlPackage(probeDocx(probe));
   if (!loaded.ok) throw new Error(loaded.reason);
   const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
@@ -127,7 +130,6 @@ function layoutProbe(probe: Probe): { layout: SemanticLayout; fixedPoint: boolea
     measurer,
     producer: 'footnote-trailing-depth',
   };
-  const session = createLayoutSession();
   const layout = layoutSemanticDocument(part, 1, {
     measurer,
     notes,
@@ -224,9 +226,8 @@ describe('footnote area beside the last line trailing spacing', () => {
   });
 
   test('the hold-out measures a returning line below the full box of the line above it', () => {
-    // A line that returns to page 1 starts below L03's whole box, trailing depth included.
-    // Measuring from L03's glyph band instead holds room the returning line cannot use,
-    // and the reserve map never reproduces itself.
+    // Returning lines start below the preceding full box, including trailing depth.
+    // The resulting note split must preserve that clearance and a stable reserve map.
     const { layout, fixedPoint } = layoutProbe({
       paragraphs: [
         {
@@ -239,7 +240,45 @@ describe('footnote area beside the last line trailing spacing', () => {
       refs: { 1: [2], 4: [4], 5: [1], 6: [3] },
       notes: { 1: 20, 2: 2, 3: 1, 4: 16 },
     });
-    expect(pages(layout)).toEqual(['L01..L03 | 2', 'L04..L06 | 4 1 3']);
+    expect(pages(layout)).toEqual(['L01..L05 | 2 4 1', 'L06..L06 | 1c 3']);
+    const first = layout.pages[0]!;
+    const lastLine = pageLines(first).at(-1)!;
+    expect(areaTop(first)).toBeGreaterThanOrEqual(lastLine.box.y + lastLine.box.height);
+    const noteLines = (page: PageRecord) =>
+      page
+        .footnotes!.notes.filter((note) => note.noteId === 1)
+        .flatMap((note) => note.fragments)
+        .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []));
+    expect(noteLines(first)).toHaveLength(18);
+    expect(noteLines(layout.pages[1]!)).toHaveLength(2);
     expect(fixedPoint).toBe(true);
   });
+});
+
+test('continuation openings retain cold geometry after body and reference edits', () => {
+  const session = createLayoutSession();
+  for (const [count, reference] of [
+    [5, 4],
+    [5, 3],
+    [6, 4],
+    [5, 4],
+  ]) {
+    const probe: Probe = {
+      paragraphs: [
+        {
+          lines: count!,
+          widowControl: true,
+          spacing: 'w:before="120" w:after="240" w:line="480" w:lineRule="auto"',
+        },
+        { lines: 1, spacing: 'w:after="160" w:line="259" w:lineRule="auto"' },
+      ],
+      refs: { 1: [2], [reference!]: [4], 5: [1], 6: [3] },
+      notes: { 1: 20, 2: 2, 3: 1, 4: 16 },
+    };
+    const warm = layoutProbe(probe, session);
+    const cold = layoutProbe(probe);
+    expect(warm.layout.pages).toEqual(cold.layout.pages);
+    expect(warm.fixedPoint).toBe(true);
+    expect(cold.fixedPoint).toBe(true);
+  }
 });

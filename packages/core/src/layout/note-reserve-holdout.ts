@@ -277,6 +277,58 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
       : 0;
   const paragraphSplitsAllowed =
     paragraphNoteSplitsAllowed(bodyPage) && paragraphNoteSplitsAllowed(nextBody);
+  // A splittable continuation can return only its required opening. Later references
+  // in that paragraph do not require their notes until their own body lines return.
+  // Price complete notes here; split notes and kept successors retain the existing policy.
+  const keeps = paragraphKeeps(owningBlock.props);
+  if (
+    returningPrefix > 0 &&
+    paragraphSplitsAllowed &&
+    !keeps.keepLines &&
+    !keeps.keepNext &&
+    (args.opts.compatibilityMode === undefined ||
+      args.opts.compatibilityMode === 14 ||
+      args.opts.compatibilityMode === 15)
+  ) {
+    const openingBottom = noteReferenceOpeningBottom(nextBody, frontierRef, frontier);
+    let demand = args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
+    let complete = true;
+    let count = 0;
+    for (const ref of pulled) {
+      const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
+      if (band.bottom > openingBottom + 0.001) continue;
+      const joinedOffset = band.bottom - band.blockTop + returningPrefix;
+      const laid = layoutNoteCached(
+        args.footnotesPart,
+        ref.noteId,
+        contentWidth,
+        args.opts,
+        args.noteLayoutCache
+      );
+      if (
+        !band.evictable ||
+        !laid ||
+        joinedOffset >= columnBudget ||
+        laid.flowHeight > columnBudget - joinedOffset + 0.001
+      ) {
+        complete = false;
+        break;
+      }
+      demand += laid.flowHeight;
+      count++;
+    }
+    if (
+      complete &&
+      count > 0 &&
+      Math.max(bodyBottom, fragmentFlowBottom(bodyPage.fragments)) +
+        openingBottom -
+        firstContentTop +
+        demand <=
+        contentHeight + 0.001
+    ) {
+      return 0;
+    }
+  }
   let pulledNotesHeight = 0;
   let admitsSplit = false;
   let splitOpeningHeight = lineBandHeight;

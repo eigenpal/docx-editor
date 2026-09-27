@@ -257,3 +257,48 @@ test('a split opening does not release a later unsatisfied note in the same pull
   expect(holdOutReserveNeed(input)).toBeCloseTo(157.5, 6);
   expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBeCloseTo(157.5, 6);
 });
+
+test('a settled continuation admits its complete reference opening before later notes', () => {
+  const input = args(
+    paragraph('body', 480, 3, { end: false }),
+    [paragraph('body', 0, 10, { start: 30, continuation: true })],
+    [
+      { noteId: 1, paragraphId: 'body', atomOffset: 51 },
+      { noteId: 2, paragraphId: 'body', atomOffset: 61 },
+      { noteId: 3, paragraphId: 'body', atomOffset: 91 },
+      { noteId: 4, paragraphId: 'body', atomOffset: 92 },
+      { noteId: 5, paragraphId: 'body', atomOffset: 93 },
+    ],
+    [2, 2, 2, 2, 2],
+    14
+  );
+  expect(holdOutReserveNeed(input)).toBe(0);
+  expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBe(0);
+  expect(
+    holdOutReserveNeed({ ...input, opts: { ...input.opts, compatibilityMode: 12 } })
+  ).toBeGreaterThan(0);
+  const owner = input.nextPage!.fragments[0] as ParagraphFragmentRecord;
+  for (const localName of ['keepLines', 'keepNext']) {
+    const kept = {
+      ...owner,
+      props: [{ kind: 'generic', localName, attributes: {}, children: [] }],
+    } as ParagraphFragmentRecord;
+    expect(holdOutReserveNeed({ ...input, nextPage: page(1, [kept]) })).toBeGreaterThan(0);
+  }
+  // A fresh note layout after growth must make the same refusal as a cold calculation.
+  const grown = {
+    ...input,
+    footnotesPart: notes([8, 2, 2, 2, 2], true),
+    noteLayoutCache: new Map(),
+  };
+  expect(holdOutReserveNeed(grown)).toBeGreaterThan(0);
+  expect(holdOutReserveNeed(grown)).toBe(
+    holdOutReserveNeed({ ...grown, noteLayoutCache: new Map() })
+  );
+  // Every note on the returning line must fit, even after a reserve settles.
+  const sameLine = input.pageBottomRefsOf(input.nextPage!).map((ref) => ({
+    ...ref,
+    atomOffset: 51,
+  }));
+  expect(holdOutReserveNeed({ ...input, pageBottomRefsOf: () => sameLine })).toBeGreaterThan(0);
+});
