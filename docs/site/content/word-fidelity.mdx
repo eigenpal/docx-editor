@@ -45,6 +45,8 @@ The matrix reports three separate support axes.
 
 <FeatureMatrix category="paragraphs" />
 
+In left-to-right text, an opening word wraps within the space after leading left-aligned tabs. The tabs retain their advances and do not add a blank line. This applies to ordinary text without floating objects beside it, including table cells.
+
 A paragraph with `w:keepNext` stays with the opening lines that the following paragraph must keep together. With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the entire following paragraph together when the group fits on a page.
 
 Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored positions. Text wraps inside the frame width and remains selectable and editable. Adjacent paragraphs with identical `w:framePr` attributes share one frame. Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Following text wraps around frames; `none` and `notBeside` move that text below the frame.

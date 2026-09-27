@@ -7,6 +7,7 @@ import {
   placeLeadingIgnoredBreaks,
 } from './pending-line.ts';
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
+import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { scriptLineFloor } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -1508,7 +1509,21 @@ export function breakParagraph(
               : opensWithHangingSpace(pieces[pieceIndex + 1])),
           followingWidth ?? 0
         );
-      if ((!opensWord && penLeftWord()) || (overflows && !borrowsSpace && holdsContent())) {
+      // Leading tabs define the opening word's remaining measure. Chop the word
+      // there instead of closing a line that contains only those tabs.
+      const chopsAfterLeadingTabs =
+        overflows &&
+        !layoutOwned &&
+        piece.measureText === undefined &&
+        !paragraphRtl &&
+        alignedTabRight === 0 &&
+        !flow?.pageExclusionZones?.length &&
+        sameParagraphAnchorStarts.length === 0 &&
+        wordFollowsOnlyTabs(line, wordStartSpan);
+      if (
+        (!opensWord && penLeftWord()) ||
+        (overflows && !borrowsSpace && holdsContent() && !chopsAfterLeadingTabs)
+      ) {
         // Trailing spaces hang at a line end, so only the word's ink needs room where it goes.
         const inkWidth =
           clipsWordEnd && !opticalFit
@@ -1566,7 +1581,7 @@ export function breakParagraph(
       if (
         canChopWord &&
         !hangs &&
-        (!holdsContent() || (!opensWord && wordOpensLine())) &&
+        (!holdsContent() || (!opensWord && wordOpensLine()) || chopsAfterLeadingTabs) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
       ) {
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
