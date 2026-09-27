@@ -771,7 +771,6 @@ export interface DocumentStyleDependencies {
 export interface DrawingAccessibility {
     // (undocumented)
     readonly decorative: boolean;
-    // (undocumented)
     readonly hidden: boolean;
     // (undocumented)
     readonly label: string | null;

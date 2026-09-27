@@ -14,6 +14,8 @@ import {
   continuedPageFurnitureZones,
   furnitureDrawingExclusionsForPage,
   hasFurnitureDrawingExclusions,
+  HiddenFurnitureNoRoomError,
+  isHiddenFurnitureZone,
 } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
@@ -225,6 +227,8 @@ export type { SectionPrepass } from './section-prepass-types.ts';
 type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
   readonly disabledParagraphFrameIds?: ReadonlySet<string>;
   readonly paragraphFrameFallbackRound?: number;
+  /** Set by the one retry after {@link HiddenFurnitureNoRoomError}: hidden furniture yields. */
+  readonly yieldHiddenFurnitureZones?: boolean;
 };
 
 interface PreparedBlockMemo {
@@ -744,7 +748,8 @@ function layoutBlocksPass(
           options.continuedPageFurniture,
           continuedInsets,
           geometry.margin.left,
-          contentWidthForReflow
+          contentWidthForReflow,
+          options.yieldHiddenFurnitureZones
         )
       : undefined;
   const contextFor = layoutPassContextKey({
@@ -809,17 +814,20 @@ function layoutBlocksPass(
       // Resolve furniture on the page being filled, including newly minted pages.
       // Waiting for the previous reflow's page list would leave each new tail page
       // unwrapped and make long documents exceed the drawing convergence budget.
-      const zones = furnitureDrawingExclusionsForPage({
-        box,
-        contentBox: {
-          x: box.x + geometry.margin.left,
-          y: box.y + insets.top,
-          width: contentWidthForReflow,
-          height: insets.height,
+      const zones = furnitureDrawingExclusionsForPage(
+        {
+          box,
+          contentBox: {
+            x: box.x + geometry.margin.left,
+            y: box.y + insets.top,
+            width: contentWidthForReflow,
+            height: insets.height,
+          },
+          header: furnitureFor('header', index, box),
+          footer: furnitureFor('footer', index, box),
         },
-        header: furnitureFor('header', index, box),
-        footer: furnitureFor('footer', index, box),
-      });
+        options.yieldHiddenFurnitureZones
+      );
       if (zones.length) currentPageZones = Object.freeze([...bodyZones, ...zones]);
     }
     return currentPageZones;
@@ -2669,6 +2677,12 @@ function layoutBlocksPass(
           pageExclusionZones().some((zone) => zone.sourceKind === 'furniture') &&
           ++emptyFurnitureAdvances > MAX_DRAWING_EXCLUSION_REFLOW_PASSES * columnCount
         ) {
+          // Hidden footprints yield once (see `layoutBlocksWithGeometry`); visible ones refuse.
+          if (
+            !options.yieldHiddenFurnitureZones &&
+            pageExclusionZones().some(isHiddenFurnitureZone)
+          )
+            throw new HiddenFurnitureNoRoomError();
           throw new DrawingExclusionConvergenceError(
             'wrapping page furniture leaves no room for body content'
           );
@@ -2997,7 +3011,29 @@ function layoutBlocksWithGeometry(
   revision: number,
   options: BlockLayoutOptions
 ): BlockLayoutResult {
-  return layoutBlocksWithColumnBalance(bodies, revision, options, layoutBlocksPass);
+  try {
+    return layoutBlocksWithColumnBalance(bodies, revision, options, layoutBlocksPass);
+  } catch (error) {
+    // Only the outermost call retries, once, cold, and keyed apart; a candidate pass rethrows.
+    const outermost =
+      options.drawingExclusionPass === undefined && !options.drawingExclusionConverged;
+    if (!(error instanceof HiddenFurnitureNoRoomError) || !outermost) throw error;
+    if (options.yieldHiddenFurnitureZones) throw error;
+    const coldSession = options.session ? createLayoutSession() : undefined;
+    const result = layoutBlocksWithColumnBalance(
+      bodies,
+      revision,
+      {
+        ...options,
+        session: coldSession,
+        producer: framedTokenJoin([options.producer ?? '', 'hidden-furniture-yields']),
+        yieldHiddenFurnitureZones: true,
+      },
+      layoutBlocksPass
+    );
+    if (options.session && coldSession) replaceLayoutSession(options.session, coldSession);
+    return result;
+  }
 }
 
 export { createFixedMeasurer } from './fixed-measurer.ts';

@@ -239,6 +239,10 @@ export interface DrawingProjection {
 }
 
 export interface DrawingAccessibility {
+  /**
+   * The record takes part in layout only, for example the wrap area of a payload that cannot
+   * paint. Outputs must not paint, hit-test, select, link, or export it.
+   */
   readonly hidden: boolean;
   readonly decorative: boolean;
   readonly label: string | null;

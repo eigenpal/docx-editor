@@ -1,6 +1,7 @@
 import { indexInlineDrawingProjectionsInPart } from '../store/package/drawing-projection.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
+  DrawingExclusionConvergenceError,
   exclusionZoneFromAnchoredDrawing,
   localizeExclusionZones,
   type ExclusionZone,
@@ -26,9 +27,32 @@ export function hasFurnitureDrawingExclusions(furniture: PageFurniture | undefin
   return false;
 }
 
+// Zones that come from hidden records (MC wrap footprints of payloads that cannot paint).
+const hiddenZones = new WeakSet<ExclusionZone>();
+
+/** Whether `zone` is the wrap area of a hidden header or footer record. */
+export function isHiddenFurnitureZone(zone: ExclusionZone): boolean {
+  return hiddenZones.has(zone);
+}
+
+/**
+ * Raised when hidden header or footer footprints take part in leaving no room for body text.
+ *
+ * A hidden payload must never make a document refuse to lay out. The block layout catches
+ * this once and lays the flow out again without hidden furniture zones; visible zones stay,
+ * so a visible drawing that leaves no room still raises the ordinary error.
+ */
+export class HiddenFurnitureNoRoomError extends DrawingExclusionConvergenceError {
+  constructor() {
+    super('hidden page furniture footprints leave no room for body content');
+  }
+}
+
 /** Wrapping furniture affects body flow without changing the header/footer story's own height. */
 export function furnitureDrawingExclusionsForPage(
-  page: Pick<PageRecord, 'header' | 'footer' | 'box' | 'contentBox'>
+  page: Pick<PageRecord, 'header' | 'footer' | 'box' | 'contentBox'>,
+  /** Leave out hidden records: the bounded fallback after {@link HiddenFurnitureNoRoomError}. */
+  omitHidden = false
 ): readonly ExclusionZone[] {
   const added: ExclusionZone[] = [];
   for (const story of [page.header, page.footer]) {
@@ -39,6 +63,7 @@ export function furnitureDrawingExclusionsForPage(
       projectionsByPart.set(story.part, projections);
     }
     for (const drawing of story.anchoredDrawings) {
+      if (omitHidden && drawing.accessibility.hidden) continue;
       const projection = projections.get(drawing.drawingNodeId);
       if (!projection) continue;
       const zone = exclusionZoneFromAnchoredDrawing({
@@ -62,14 +87,14 @@ export function furnitureDrawingExclusionsForPage(
         localized.verticalBand.y + localized.verticalBand.height <= 0
       )
         continue;
-      added.push(
-        Object.freeze({
-          ...localized,
-          sourceKind: 'furniture',
-          drawingNodeId: `${story.partName}:${drawing.drawingNodeId}`,
-          anchorParagraphId: `${story.partName}:${drawing.anchorParagraphId}`,
-        })
-      );
+      const furnitureZone: ExclusionZone = Object.freeze({
+        ...localized,
+        sourceKind: 'furniture',
+        drawingNodeId: `${story.partName}:${drawing.drawingNodeId}`,
+        anchorParagraphId: `${story.partName}:${drawing.anchorParagraphId}`,
+      });
+      if (drawing.accessibility.hidden) hiddenZones.add(furnitureZone);
+      added.push(furnitureZone);
     }
   }
   return Object.freeze(added);
@@ -90,17 +115,21 @@ export function continuedPageFurnitureZones(
   host: ContinuedPageFurniture,
   insets: { readonly top: number; readonly height: number },
   contentLeft: number,
-  contentWidth: number
+  contentWidth: number,
+  omitHidden = false
 ): readonly ExclusionZone[] {
-  return furnitureDrawingExclusionsForPage({
-    header: host.header,
-    footer: host.footer,
-    box: host.box,
-    contentBox: {
-      x: host.box.x + contentLeft,
-      y: host.box.y + insets.top,
-      width: contentWidth,
-      height: insets.height,
+  return furnitureDrawingExclusionsForPage(
+    {
+      header: host.header,
+      footer: host.footer,
+      box: host.box,
+      contentBox: {
+        x: host.box.x + contentLeft,
+        y: host.box.y + insets.top,
+        width: contentWidth,
+        height: insets.height,
+      },
     },
-  });
+    omitHidden
+  );
 }

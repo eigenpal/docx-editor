@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Layout left out an anchored mc:AlternateContent payload that cannot paint, such as a shape group with a text box member, so text did not flow around its wrap area. A group whose picture failed to load was left out the same way.",
+  "after": "Layout keeps the anchor extent, position, and wrap of such a payload as a hidden record. Text flows around it, and paint, hit testing, selection, links, revision cues, and exports skip it. If hidden header or footer footprints leave no room for body text, layout runs once more without them.",
+  "reason": "The change is a read-only layout projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it does not change the tree or saved XML. Peers on either version edit and save the same document; only local layout and paint differ.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-wrap-footprint.test.ts",
+    "packages/core/src/editor/__tests__/group-wrap-footprint.test.ts",
+    "packages/core/src/editor/__tests__/hidden-furniture-footprint.test.ts"
+  ],
+  "changeset": "hidden-group-wrap-footprint",
+  "migration": null
+}
