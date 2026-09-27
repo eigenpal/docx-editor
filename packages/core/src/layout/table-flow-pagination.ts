@@ -82,7 +82,7 @@ export interface TableFlowCursor {
   readonly advancePage: () => void;
   /** Whether the page being filled holds content above `top`, including earlier columns. */
   readonly pageHoldsContent: (top: number) => boolean;
-  /** Top of the column being filled. Absent means 0. */
+  /** Top of the column region a column advance opens at. Absent means 0. */
   readonly columnTop?: () => number;
   /** Frames a `w:tblpPr` table positions against. */
   readonly anchorFrames: () => TableAnchorFrames;
@@ -718,7 +718,8 @@ export function paginateTableInFlow(
       startsPage ||
       forceBreak ||
       keptMoves ||
-      (!heldByOpenSpan &&
+      (breaksPages &&
+        !heldByOpenSpan &&
         rowMinimumMoves(row, rowDeps(), structure.cellSpacingPt, {
           top: flow.cursorY,
           columnTop: flow.columnTop?.() ?? 0,

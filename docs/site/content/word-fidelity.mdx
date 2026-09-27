@@ -119,7 +119,7 @@ Known single-byte Symbol and Wingdings bullets use Unicode fallback when their f
 
 Bottom-to-top cell text does not make its row taller. The text wraps at the final row height, or along the merged cell height for a merge head, and is clipped at the cell width.
 
-A table row with a minimum height starts below other content only when the space left on the page holds that minimum. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If the minimum is taller than a page, the row splits where it stands.
+A table row with a minimum height starts below other content only when the space left on the page holds that minimum. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If the minimum does not fit on a new page below any repeated header rows, the row splits where it stands. Rows of positioned tables keep their existing placement.
 
 Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
 

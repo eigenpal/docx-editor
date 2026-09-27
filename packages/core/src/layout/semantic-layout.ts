@@ -1902,7 +1902,8 @@ function layoutBlocksPass(
         flow.cursorY = cursorY;
       },
       pageHoldsContent: (top) => pageFragments.length > 0 || top > 0,
-      columnTop: () => columnRegionTop,
+      // One column opens every continuation at the page top, and resumes only run there.
+      columnTop: () => (columns.count > 1 ? columnRegionTop : 0),
       anchorFrames,
       verticalAnchorFrames: () => tableVerticalFrames(anchorY),
       styleCascade,

@@ -1,7 +1,7 @@
 // A splittable row with an `atLeast` minimum height starts on a page only when that minimum
 // fits the room left there. Otherwise the row moves to the next page, and a `w:keepNext`
 // paragraph before the table moves with it. When the minimum fits, the row starts and splits
-// as any other row. Compatibility modes 14 and 15 and an absent mode give the same pages.
+// as any other row. Compatibility modes 14 and 15 give the same pages.
 //
 // The page is 400pt square with 50pt margins: a 300pt body. A filler line of 170pt or 210pt
 // and a 14pt caption leave 116pt or 76pt for the row. The row has one cell of nine exact
@@ -113,7 +113,8 @@ const expectPagesIn = (probe: Probe, pages: readonly number[]) => {
   expect(MARKERS.map((marker) => found[marker])).toEqual([...pages]);
 };
 
-// Captured controls. Widow control does not change the first page.
+// Captured probes in modes 14 and 15. Widow control does not change the first page. A document
+// without a compatibility mode takes the same rule; no probe captures that case.
 for (const mode of [undefined, 14, 15]) {
   describe(`an atLeast row starts only where its minimum fits (mode ${mode ?? 'absent'})`, () => {
     for (const keep of [false, true]) {

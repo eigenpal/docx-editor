@@ -7,8 +7,10 @@
 // row starts and splits as any other row. A continuation fragment has no minimum. A
 // `w:keepNext` paragraph before the table prices the same height, so it moves with the row.
 //
-// Limit: a minimum taller than a fresh column below the repeated header rows is left to the
-// ordinary row rules, which split the row where it stands.
+// Limits, each placed by the ordinary row rules instead:
+// - A minimum taller than a fresh column below the repeated header rows. The row splits where
+//   it stands.
+// - Positioned (`w:tblpPr`) tables.
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
