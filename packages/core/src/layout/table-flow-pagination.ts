@@ -38,6 +38,7 @@ import {
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
+import { deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
@@ -493,7 +494,11 @@ export function paginateTableInFlow(
         : baselineBodyHeight);
   };
 
-  for (const [bodyRowIndex, row] of bodyRows.entries()) {
+  // The next row, carrying merged text its head row left behind (`table-vmerge-boundary.ts`).
+  let carried: { readonly index: number; readonly row: SemanticTableRow } | null = null;
+  for (const [bodyRowIndex, authoredRow] of bodyRows.entries()) {
+    const row = carried?.index === bodyRowIndex ? carried.row : authoredRow;
+    carried = null;
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
     const forceBreak = forceNextFragment;
     forceNextFragment = false;
@@ -665,6 +670,26 @@ export function paginateTableInFlow(
         : null;
     const keptMoves =
       !!keptGroup && flow.cursorY + keptGroup.kept + keptGroup.successor > contentHeight() + 0.001;
+    const deferred =
+      forceBreak || startsPage || keptMoves || vMerge !== undefined || row !== authoredRow
+        ? null
+        : deferMergedTextPastHeadRow({
+            plan: vMergePlan,
+            rows: bodyRows,
+            rowIndex: bodyRowIndex,
+            structure,
+            left: tableLeft,
+            top: flow.cursorY,
+            contentBottom: contentHeight(),
+            deps: rowDeps(),
+            nextDeps: tableDeps,
+            compatibilityMode: flow.compatibilityMode,
+            positioned: (tableDeps.pageExclusionZones?.().length ?? 0) > 0,
+          });
+    if (deferred) {
+      vMerge = deferred.options;
+      naturalHeight = deferred.heightPt;
+    }
     if (!forceBreak && !startsPage && !keptMoves) tryTerminalFit();
 
     // Ordinary rows may break between lines, but their first fragment must have room
@@ -743,7 +768,7 @@ export function paginateTableInFlow(
       if (!isContinuation && naturalHeight <= remaining + 0.001) {
         const placementDeps = rowDeps();
         const placed = layoutRowFragment(
-          row,
+          deferred?.headRow ?? row,
           structure.columnWidthsPt,
           tableLeft,
           flow.cursorY,
@@ -763,6 +788,10 @@ export function paginateTableInFlow(
         // This placement is COMMITTED either way. It ran on the live deps, so it has
         // already published its anchored drawings and spent its line ids; throwing it away
         // to re-place would leave a float positioned by a layout that never happened.
+        if (deferred) {
+          carried = { index: bodyRowIndex + 1, row: deferred.nextRow };
+          forceNextFragment = true;
+        }
         const hasMore = placed.remainder !== null;
         const record = hasMore ? splitHead(placed.record) : placed.record;
         rows.push(record);
