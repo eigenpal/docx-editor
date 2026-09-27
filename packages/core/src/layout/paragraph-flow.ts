@@ -266,6 +266,7 @@ import {
   frozenLine,
   growLineMetrics,
   growLineMetricsForText,
+  positionedRunMetrics,
   holdsOnlyPageBreak,
   lineBandText,
   isHeightlessWhitespace,
@@ -1264,7 +1265,7 @@ export function breakParagraph(
         faceStyle,
         lineBandText(piece, displayText(candidate, faceStyle))
       );
-      exclusionProbe.setMetrics(metrics);
+      exclusionProbe.setMetrics(positionedRunMetrics(metrics, faceStyle));
       const spanRange = layoutOwned
         ? { paragraphId, start: piece.start, end: piece.end }
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
@@ -1360,14 +1361,10 @@ export function breakParagraph(
           ...paragraphSpanMetadata(piece),
         });
         line.width += width;
-        growLineMetricsForText(line, metrics, '\t');
+        growLineMetricsForText(line, metrics, '\t', faceStyle);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
-        // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
-        // previous word recorded here made the following text a CONTINUATION of it, and an
-        // overflow then took the mid-word path: the word before the tab was carried onto the
-        // next line together with the tab, whose advance was re-laid unchanged and no longer
-        // reached its stop — a heading split mid-phrase with its page number stranded in the
-        // middle of the line.
+        // A tab lets the next word open a line. Clear the previous word so overflow
+        // cannot carry it with the tab and replay the old advance from a new origin.
         lastEmitted = '\t';
         consumed = boundary;
         continue;
@@ -1612,7 +1609,7 @@ export function breakParagraph(
               ...paragraphSpanMetadata(piece),
             });
             line.width += prefix.width;
-            growLineMetricsForText(line, metrics, prefix.text);
+            growLineMetricsForText(line, metrics, prefix.text, faceStyle);
             line.end = prefix.modelStart + prefix.text.length;
           },
           closeLine,
@@ -1665,7 +1662,7 @@ export function breakParagraph(
         if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
-        growLineMetricsForText(line, metrics, remaining);
+        growLineMetricsForText(line, metrics, remaining, faceStyle);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
       }
       lastEmitted = candidate;

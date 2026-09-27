@@ -89,7 +89,7 @@ function relayWord(context: WordCarryContext, carried: readonly StyleSpanRecord[
     if (context.pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) continue;
     const style = styleForFontSlot(span.style, span.fontSlot);
     const text = lineBandText(span, displayText(span.text, style));
-    growLineMetricsForText(line, context.measurer.lineMetrics(style, text), span.text);
+    growLineMetricsForText(line, context.measurer.lineMetrics(style, text), span.text, style);
   }
 }
 

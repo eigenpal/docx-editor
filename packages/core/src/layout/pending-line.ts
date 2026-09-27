@@ -2,6 +2,7 @@
 // budgets, before placement publishes a LineRecord from it. Extracted from paragraph-flow
 // so the flow module stays under its line budget; paragraph-flow re-exports everything here.
 
+import { baselineShiftPtOf, type ResolvedRunStyle } from './run-style.ts';
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
@@ -146,13 +147,26 @@ export function isHeightlessWhitespace(text: string): boolean {
   return text.length > 0 && /^[ \t]+$/.test(text);
 }
 
+/** Face extents translated by an authored baseline position, without rescaling glyphs. */
+export function positionedRunMetrics(
+  metrics: { readonly height: number; readonly baseline: number },
+  style?: ResolvedRunStyle
+): { readonly height: number; readonly baseline: number } {
+  const shift = style?.baselineShiftPt ? baselineShiftPtOf(style) : 0;
+  return shift ? { height: metrics.height, baseline: metrics.baseline + shift } : metrics;
+}
+
 /** {@link growLineMetrics} for a placed span; {@link isHeightlessWhitespace} text leaves the box. */
 export function growLineMetricsForText(
   line: { height: number; baseline: number },
   metrics: { readonly height: number; readonly baseline: number },
-  text: string
+  text: string,
+  style?: ResolvedRunStyle
 ): void {
-  if (!isHeightlessWhitespace(text)) growLineMetrics(line, metrics);
+  if (isHeightlessWhitespace(text)) return;
+  // Face metrics already include script scaling. Only translate their baseline;
+  // paint keeps the original face box and applies the same glyph displacement.
+  growLineMetrics(line, positionedRunMetrics(metrics, style));
 }
 
 /**

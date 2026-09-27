@@ -1,4 +1,9 @@
-import { growLineMetrics, lineBandText, type PendingLine } from './pending-line.ts';
+import {
+  growLineMetrics,
+  lineBandText,
+  positionedRunMetrics,
+  type PendingLine,
+} from './pending-line.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -116,7 +121,7 @@ export function growRunBorderLineMetrics(
     const inset = edge.spacePt + borderStrokeWidthPt(edge.val, edge.widthPt);
     growLineMetrics(line, {
       height: metrics.height + 2 * inset,
-      baseline: metrics.baseline + inset,
+      baseline: positionedRunMetrics(metrics, span.style).baseline + inset,
     });
   }
 }
@@ -136,9 +141,12 @@ export function textBandHeightWithBorders(
     if (pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) continue;
     growLineMetrics(
       band,
-      measurer.lineMetrics(
-        styleForFontSlot(span.style, span.fontSlot),
-        lineBandText(span, span.text)
+      positionedRunMetrics(
+        measurer.lineMetrics(
+          styleForFontSlot(span.style, span.fontSlot),
+          lineBandText(span, span.text)
+        ),
+        span.style
       )
     );
   }
