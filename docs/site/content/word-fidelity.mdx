@@ -55,6 +55,8 @@ Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored posi
 
 This supports auto-height frames in single-column sections with page, margin, or text anchors. Drop caps, fixed heights, alignment-based positions, and frames containing drawings or notes retain ordinary layout. Upward text-relative offsets also retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page use ordinary layout. The editor preserves their properties on save. A following continuous section starts below the preceding frames. There is no interface for creating, moving, or resizing text frames.
 
+Headers also support bounded page-anchored text frames with numeric positions and widths. Adjacent paragraphs with identical direct frame properties share one frame. These frames retain paragraph borders and auto or minimum heights. They do not increase the header height that positions body text. Ordinary header content, including inline images, keeps its flow position. This subset requires a separate ordinary paragraph and clear space around the frame. Frames with exact heights, fields, revisions, negative positions, overlapping content, or unsupported properties retain ordinary flow. The editor preserves source paragraphs and their text positions.
+
 ### Lists and numbering
 
 <FeatureMatrix category="lists" />

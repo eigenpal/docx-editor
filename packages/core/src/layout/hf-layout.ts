@@ -1,3 +1,7 @@
+import {
+  readPositionedHeaderFrames,
+  placePositionedHeaderFrames,
+} from './header-positioned-frames.ts';
 import { characterStyleValuesToken } from './character-style-tokens.ts';
 import { characterHeaderPageToken } from './character-header-pages.ts';
 // Header/footer story layout (phase 2 of the legacy-lane retirement).
@@ -276,6 +280,7 @@ export function layoutHeaderFooterStory(
   if (inputs?.showFieldCodes) producer += '|field-codes';
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const pageFrame = readHeaderPageFrame(part);
+  const positionedFrames = readPositionedHeaderFrames(part);
   const detected = detectStoryPageFields(part.root);
   // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
   // context even when no page field is detected in it.
@@ -307,7 +312,10 @@ export function layoutHeaderFooterStory(
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx =
-      storyNeedsPageFields(needs) || inlineDrawingLayout || ctx?.characterStyleValues
+      storyNeedsPageFields(needs) ||
+      positionedFrames ||
+      inlineDrawingLayout ||
+      ctx?.characterStyleValues
         ? ctx
         : undefined;
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
@@ -319,6 +327,9 @@ export function layoutHeaderFooterStory(
         ? `|hf:${effectiveCtx.contentInsetTop},${effectiveCtx.contentInsetBottom},${effectiveCtx.storyTop}`
         : '';
     const token =
+      (positionedFrames
+        ? `|frames:${effectiveCtx?.storyTop ?? hfPageContext?.storyDistance ?? ''}`
+        : '') +
       fieldPageContextToken(effectiveCtx, needs) +
       (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
       anchorPageToken +
@@ -588,7 +599,32 @@ export function layoutHeaderFooterStory(
       if (decideFrame) frameAdmitted = placed !== null;
     }
     if (placed) flow = placed;
-    else flowStory(flowBlocks, 0);
+    else if (
+      positionedFrames &&
+      hfPageContext?.storyDistance !== undefined &&
+      !floatingSplit.floating.length
+    ) {
+      const framedIds = new Set(
+        positionedFrames.flatMap((group) => group.paragraphs.map((paragraph) => paragraph.id))
+      );
+      const ordinary = flowBlocks.filter((block) => !framedIds.has(block.id));
+      // A normal paragraph owns the header story, even when it is empty.
+      if (ordinary.some((block) => block.kind === 'paragraph')) {
+        flowStory(ordinary, 0);
+        if (pendingAnchoredDrawings.length === 0) {
+          placed = placePositionedHeaderFrames(
+            positionedFrames,
+            flowBlocks,
+            flow,
+            (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
+            hfPageContext,
+            effectiveCtx?.storyTop ?? hfPageContext.storyDistance
+          );
+        }
+      }
+      if (placed) flow = placed;
+      else flowStory(flowBlocks, 0);
+    } else flowStory(flowBlocks, 0);
 
     if (floatingGeometry) {
       // A footer's top edge depends on its own flow height, which the floating tables leave.
@@ -638,6 +674,7 @@ export function layoutHeaderFooterStory(
       withPageContext: (next) => {
         if (
           !storyNeedsPageFields(needs) &&
+          !positionedFrames &&
           !story.anchoredDrawings?.length &&
           !next.characterStyleValues &&
           !effectiveCtx?.characterStyleValues
