@@ -711,6 +711,14 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
       ...(area.separator
         ? { separator: { ...area.separator, box: shiftBox(area.separator.box) } }
         : {}),
+      ...(area.continuationNotice
+        ? {
+            continuationNotice: {
+              ...area.continuationNotice,
+              box: shiftBox(area.continuationNotice.box),
+            },
+          }
+        : {}),
       notes: area.notes.map((note) => ({ ...note, box: shiftBox(note.box) })),
     };
   };

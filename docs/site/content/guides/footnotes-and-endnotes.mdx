@@ -39,7 +39,7 @@ The Editing API can enumerate, read, navigate, and delete notes. Use `document.f
 
 The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
 
-A footnote starts with its reference line when a legal note opening fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect `w:keepLines` and `w:widowControl`. Without widow control, one note line can start below the reference. This split admission applies to compatibility modes 14 and 15, and documents without an explicit mode. Other modes, note keep-with-next groups, and notes containing tables retain whole-note admission.
+A footnote starts with its reference line when a legal note opening fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect `w:keepLines` and `w:widowControl`. Without widow control, one note line can start below the reference. This split admission applies to full-width, single-column body paragraphs in compatibility modes 14 and 15, and documents without an explicit mode. Other modes, note keep-with-next groups, and notes containing tables retain whole-note admission.
 
 The note area can use the space below the text of the last body line when that line uses `auto` or `atLeast` line spacing. A line whose footnote starts on the same page keeps its full line height above the note area, in every column.
 
@@ -48,6 +48,8 @@ A reference inside a table keeps its footnote with the table row that holds it. 
 When a reference line moves to the next page, paragraphs ahead of it return to the current page if they fit. Only paragraphs that keep with the reference paragraph move with it. In multi-column sections, the editor keeps the room on the current page instead. The editor also keeps the room when the reference is on the second line of a paragraph that uses widow control and its note could not start on the current page. If those first two lines already fit on the current page, they can stay there while the whole note starts on the next page.
 
 When a split paragraph returns to the previous page, its earlier fragment counts toward the space above each reference. If that reference leaves no note space, the editor retains the previous split decision. A reference paragraph that keeps with the next paragraph also reserves the notes in that paragraph's required opening. Later references in a long successor do not prevent the opening from returning. A successor opening without a reference does not add a footnote reserve.
+
+Footnotes that continue onto another page reserve an authored continuation notice below their text. Empty notice paragraphs reserve their measured height. Notices appear as noneditable page furniture. A notice that exceeds the available page height reports `note-continuation-notice-height-cap`; the note text still continues. Section-end and document-end notice placement remains unsupported.
 
 A note that exceeds a full note column still continues across pages. Split note pages keep separate rectangles for painting and pointer input.
 

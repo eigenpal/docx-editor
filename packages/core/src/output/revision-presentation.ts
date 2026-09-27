@@ -533,6 +533,7 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
       if (!area) continue;
       // The separator is an authored story too, and `paintPageNoteAreas` paints it.
       if (area.separator) fold(area.separator.fragments);
+      if (area.continuationNotice) fold(area.continuationNotice.fragments);
       for (const note of area.notes) fold(note.fragments);
     }
     // Text boxes: anchored on the page, and on the furniture stories that carry their own.

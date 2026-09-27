@@ -241,3 +241,19 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
     expect(holdOutReserveNeed(input)).toBe(0);
   });
 });
+
+test('a split opening does not release a later unsatisfied note in the same pulled band', () => {
+  const input = args(
+    paragraph('earlier', 0, 35),
+    [paragraph('next', 0, 1)],
+    [
+      { noteId: 1, paragraphId: 'next', atomOffset: 1 },
+      { noteId: 2, paragraphId: 'next', atomOffset: 2 },
+    ],
+    [30, 3],
+    14
+  );
+  // The first note can split. Its head leaves too little room for the second note.
+  expect(holdOutReserveNeed(input)).toBeCloseTo(157.5, 6);
+  expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBeCloseTo(157.5, 6);
+});

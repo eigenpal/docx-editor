@@ -1,3 +1,4 @@
+import { noticeFixture } from '../../layout/__tests__/note-continuation-fixture.ts';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
@@ -81,3 +82,24 @@ for (const separator of [
     }
   });
 }
+
+test('a continuation notice paints below the last note as noneditable furniture', () => {
+  const source = noticeFixture('Continued');
+  const layout = layoutSemanticDocument(source.document, 0, source.options);
+  const container = document.createElement('div');
+  paintSemanticLayout(container, layout, { scale: 1 });
+  const notices = container.querySelectorAll<HTMLElement>(
+    '[data-docx-note-separator="continuationNotice"]'
+  );
+  expect(notices).toHaveLength(1);
+  const notice = notices[0]!;
+  expect(notice.textContent).toBe('Continued');
+  expect(notice.getAttribute('contenteditable')).toBe('false');
+  expect(notice.closest('[data-docx-note-scope]')).toBeNull();
+  const area = layout.pages[0]!.footnotes!;
+  expect(Number.parseFloat(notice.style.top)).toBe(area.continuationNotice!.box.y - area.box.y);
+  paintSemanticLayout(container, layout, { scale: 1 });
+  expect(
+    container.querySelectorAll('[data-docx-note-separator="continuationNotice"]')
+  ).toHaveLength(1);
+});

@@ -1,3 +1,8 @@
+import {
+  noteReferenceOpeningBottom,
+  paragraphNoteSplitsAllowed,
+} from './note-reference-opening.ts';
+import { footnoteContinuationNotice } from './note-continuation-notice.ts';
 // The hold-out reserve — the fixed point of a footnote eviction. Full account on
 // {@link holdOutReserveNeed}.
 
@@ -47,6 +52,7 @@ export interface HoldOutArgs {
   readonly nextPage: PageRecord | undefined;
   /** Height of `bodyPage`'s existing note area (0 when it has none). */
   readonly existingAreaHeight: number;
+  readonly existingNoticeHeight?: number;
   /**
    * The reserve `bodyPage` needs for its own references, eviction included (defaults to
    * `existingAreaHeight`). A released hold leaves the page this reserve.
@@ -269,8 +275,11 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     !previous.paragraphEnd
       ? Math.max(0, bodyBottom - previous.box.y)
       : 0;
+  const paragraphSplitsAllowed =
+    paragraphNoteSplitsAllowed(bodyPage) && paragraphNoteSplitsAllowed(nextBody);
   let pulledNotesHeight = 0;
   let admitsSplit = false;
+  let splitOpeningHeight = lineBandHeight;
   const existingArea =
     args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
   for (const ref of pulled) {
@@ -300,17 +309,40 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
         : blockOffset
       : 0;
     if (laid.flowHeight > columnBudget - inBlockOffset + 0.001) continue;
-    const referenceOpening = Math.max(lineBandHeight, band.bottom - firstContentTop);
-    const room = contentHeight - bodyBottom - referenceOpening - existingArea - pulledNotesHeight;
+    const referenceOpening = Math.max(
+      lineBandHeight,
+      noteReferenceOpeningBottom(nextBody, ref, band) - firstContentTop
+    );
+    const remaining =
+      contentHeight - bodyBottom - referenceOpening - existingArea - pulledNotesHeight;
+    const noticeHeight =
+      admitsSplit || (args.existingNoticeHeight ?? 0) > 0
+        ? 0
+        : (footnoteContinuationNotice(
+            args.footnotesPart,
+            contentWidth,
+            contentHeight,
+            args.opts,
+            args.noteLayoutCache
+          )?.flowHeight ?? 0);
+    const room = remaining - noticeHeight;
     if (
+      paragraphSplitsAllowed &&
       band.evictable &&
       band.tableRow !== true &&
       joinedOffset < columnBudget &&
-      laid.flowHeight > room + 0.001 &&
-      splitNoteKeepsParagraphReference(laid, room, columnBudget, args.opts.compatibilityMode)
+      laid.flowHeight > remaining + 0.001 &&
+      splitNoteKeepsParagraphReference(
+        laid,
+        room,
+        columnBudget - noticeHeight,
+        args.opts.compatibilityMode
+      )
     ) {
-      pulledNotesHeight += splitNoteHead(laid, room, columnBudget).height;
+      pulledNotesHeight +=
+        splitNoteHead(laid, room, columnBudget - noticeHeight).height + noticeHeight;
       admitsSplit = true;
+      splitOpeningHeight = Math.max(splitOpeningHeight, referenceOpening);
     } else {
       pulledNotesHeight += laid.flowHeight;
     }
@@ -325,7 +357,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
   const hold = Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT);
   const fitsLineQuantum =
-    bodyBottom + lineBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;
+    bodyBottom + splitOpeningHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (!fitsLineQuantum) return hold;
   const fitsWholeBlock =
     bodyBottom + blockBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;

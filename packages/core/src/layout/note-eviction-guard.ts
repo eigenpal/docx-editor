@@ -23,6 +23,7 @@ export interface EvictionGuardContext {
   readonly fullNoteColumn: number;
   readonly evictionAllowed?: boolean;
   readonly compatibilityMode?: number;
+  readonly paragraphSplitAllowed?: boolean;
   readonly allowOrphanDeferral?: boolean;
   /** The page after this one, which shows whether a row ending this page continues there. */
   readonly nextPage?: PageRecord;
@@ -71,7 +72,8 @@ export function evictsReferenceLine(
     !(band.endsPageRowId !== undefined && rowContinuesOn(context.nextPage, band.endsPageRowId)) &&
     !(band.tableRow === true
       ? splitNoteKeepsTableRow(laid, room, context.fullNoteColumn)
-      : splitNoteKeepsParagraphReference(
+      : context.paragraphSplitAllowed !== false &&
+        splitNoteKeepsParagraphReference(
           laid,
           room,
           context.fullNoteColumn,

@@ -837,7 +837,7 @@ export interface NoteAreaRecord {
   readonly box: LayoutBox;
   /** Separator rule / authored separator story; absent when no notes on this page. */
   readonly separator?: {
-    readonly kind: 'separator' | 'continuationSeparator';
+    readonly kind: 'separator' | 'continuationSeparator' | 'continuationNotice';
     readonly box: LayoutBox;
     readonly fragments: readonly BlockFragmentRecord[];
     readonly synthetic: boolean;
@@ -846,6 +846,8 @@ export interface NoteAreaRecord {
     /** Resolved marker-run color; null/absent uses automatic black. */
     readonly ruleColor?: string | null;
   };
+  /** Authored furniture below a note that continues on the next page. */
+  readonly continuationNotice?: NonNullable<NoteAreaRecord['separator']>;
   readonly notes: readonly NoteStoryRecord[];
   readonly fallbackReason?: string;
 }

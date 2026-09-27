@@ -246,6 +246,12 @@ export async function paint(
         `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, height, true)} f`
       );
     for (const area of [record.footnotes, record.endnotes]) {
+      if (area?.fallbackReason === 'note-continuation-notice-height-cap')
+        work.report(
+          area.fallbackReason,
+          'Continuation notice exceeds the available page height',
+          record.index
+        );
       const sep = area?.separator;
       if (!sep || !(sep.ruleStyle || sep.synthetic)) continue;
       for (const offset of sep.ruleStyle === 'double' ? [0, 2] : [0])

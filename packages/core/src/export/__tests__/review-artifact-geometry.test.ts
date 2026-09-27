@@ -1,3 +1,5 @@
+import { noticeFixture } from '../../layout/__tests__/note-continuation-fixture.ts';
+import { layoutSemanticDocument } from '../../layout/semantic-layout.ts';
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import {
@@ -725,4 +727,46 @@ test('cross-paragraph review occurrences do not register geometry bindings', () 
   const enriched = attachReviewArtifactGeometry(layout, artifacts);
   expect(recorder.bindings).toBe(0);
   expect(enriched[0]?.occurrences[0]?.geometry).toBeUndefined();
+});
+
+test('continuation-notice review geometry uses its own story origin', () => {
+  const source = noticeFixture('Continued');
+  const layout = layoutSemanticDocument(source.document, 0, source.options);
+  const notice = layout.pages[0]!.footnotes!.continuationNotice!;
+  const paragraph = notice.fragments.find((fragment) => fragment.kind === 'paragraph')!;
+  const artifacts: readonly SemanticReviewArtifactRecord[] = [
+    {
+      kind: 'comment',
+      id: 'notice-review',
+      author: 'Reviewer',
+      initials: 'R',
+      text: 'Notice review',
+      resolved: false,
+      replyIds: [],
+      orphaned: false,
+      occurrences: [
+        {
+          pageIndex: 0,
+          physicalPageNumber: 1,
+          story: 'note-separator',
+          rootStory: 'note-separator',
+          textboxPath: [],
+          noteScopeId: null,
+          noteAreaKind: 'footnotes',
+          source: {
+            partName: '/word/footnotes.xml',
+            start: { paragraphId: paragraph.paragraphId, offset: 0 },
+            end: { paragraphId: paragraph.paragraphId, offset: 9 },
+          },
+        },
+      ],
+    },
+  ];
+  const rects = attachReviewArtifactGeometry(layout, artifacts)[0]!.occurrences[0]!.geometry!
+    .pageContent;
+  expect(rects.length).toBeGreaterThan(0);
+  expect(rects[0]!.y).toBeGreaterThanOrEqual(notice.box.y - layout.pages[0]!.contentBox.y);
+  expect(rects[0]!.y).toBeLessThan(
+    notice.box.y + notice.box.height - layout.pages[0]!.contentBox.y
+  );
 });

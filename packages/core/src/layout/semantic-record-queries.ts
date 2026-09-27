@@ -222,6 +222,7 @@ const NOTE_AREA_FIELD_ROLES = {
   box: 'metadata',
   separator: 'story',
   notes: 'story',
+  continuationNotice: 'story',
   fallbackReason: 'metadata',
 } as const satisfies Record<keyof NoteAreaRecord, StoryFieldRole>;
 
@@ -234,6 +235,7 @@ type NoteAreaStoryField = {
 const TRAVERSED_NOTE_AREA_STORY_FIELDS = {
   separator: true,
   notes: true,
+  continuationNotice: true,
 } as const satisfies Record<NoteAreaStoryField, true>;
 const NOTE_AREA_STORY_FIELDS = Object.freeze(
   Object.keys(TRAVERSED_NOTE_AREA_STORY_FIELDS) as NoteAreaStoryField[]
@@ -255,12 +257,13 @@ function forEachNoteAreaStory(
   for (const field of NOTE_AREA_STORY_FIELDS) {
     switch (field) {
       case 'separator':
-        if (area.separator) {
+      case 'continuationNotice':
+        if (area[field]) {
           visit({
             page,
             story: 'note-separator',
-            host: area.separator,
-            ...storyGeometry(area.separator.box),
+            host: area[field],
+            ...storyGeometry(area[field].box),
             noteScopeId: null,
             noteAreaKind,
           });

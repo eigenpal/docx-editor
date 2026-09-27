@@ -1,5 +1,5 @@
 ---
-"@docx-editor.dev/core": patch
+'@docx-editor.dev/core': minor
 ---
 
-Keep footnote references on the page when a legal note opening fits below them.
+Keep footnote references with legal note openings and reserve authored continuation notices.

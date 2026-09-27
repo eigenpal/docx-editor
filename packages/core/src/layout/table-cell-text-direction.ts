@@ -238,6 +238,7 @@ function bottomToTopLocations(
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       if (area.separator) visit(area.separator.fragments, page.index);
+      if (area.continuationNotice) visit(area.continuationNotice.fragments, page.index);
       for (const note of area.notes) visit(note.fragments, page.index);
     }
   }
