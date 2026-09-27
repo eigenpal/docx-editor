@@ -2,7 +2,10 @@ import type { SemanticLayout } from './semantic-records.ts';
 
 // Note reserves belong to the body box that admitted them. Header projections can
 // change that box while the body part and note stories keep their identities.
-const geometryBySession = new WeakMap<object, readonly string[]>();
+const geometryBySession = new WeakMap<
+  object,
+  { readonly part: object; readonly pages: readonly string[] }
+>();
 
 export function resetNoteReserveSearch(
   memo: { settledReserves: unknown; reflowSpent: unknown; orphanPolicyPart?: unknown } | null
@@ -15,7 +18,8 @@ export function resetNoteReserveSearch(
 
 export function noteBodyGeometryChanged(
   session: object | undefined,
-  layout: SemanticLayout
+  layout: SemanticLayout,
+  part: object
 ): boolean {
   if (!session) return false;
   const previous = geometryBySession.get(session);
@@ -29,11 +33,11 @@ export function noteBodyGeometryChanged(
       contentBox.height,
     ].join(',')
   );
-  geometryBySession.set(session, current);
+  geometryBySession.set(session, { part, pages: current });
+  // Tree edits already invalidate settlement by part identity. Preserve their
+  // reserve seed: it carries the established bounded search across edits.
+  if (previous?.part !== part) return false;
   // A changed page count alone is a result of note pagination, not a changed
   // constraint. Compare only sheets that already had a reserve context.
-  return (
-    previous !== undefined &&
-    current.some((value, i) => previous[i] !== undefined && previous[i] !== value)
-  );
+  return current.some((value, i) => previous.pages[i] !== undefined && previous.pages[i] !== value);
 }

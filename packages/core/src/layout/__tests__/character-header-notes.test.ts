@@ -16,7 +16,7 @@ function read(xml: string, name: string) {
 }
 const paragraph = (runs: string) =>
   `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr>${runs}</w:p>`;
-function fixture(count: number, notice: string | null = 'Continue') {
+function fixture(count: number, notice: string | null = 'Continue', titleWords = 45) {
   const note = noticeFixture(notice);
   const styleCascade = buildStyleCascadeTable(
     read(
@@ -25,7 +25,7 @@ function fixture(count: number, notice: string | null = 'Continue') {
     ).root
   );
   const title = paragraph(
-    `<w:r><w:rPr><w:rStyle w:val="Heading"/></w:rPr><w:t>${'Long '.repeat(45)}</w:t></w:r>`
+    `<w:r><w:rPr><w:rStyle w:val="Heading"/></w:rPr><w:t>${'Long '.repeat(titleWords)}</w:t></w:r>`
   );
   const body =
     title +
@@ -147,26 +147,66 @@ test('note geometry ignores page count and whole-page translation', () => {
   const { document, options } = fixture(42);
   const layout = layoutSemanticDocument(document, 1, { ...options, session: undefined });
   const session = {};
-  expect(noteBodyGeometryChanged(session, layout)).toBe(false);
+  expect(noteBodyGeometryChanged(session, layout, document)).toBe(false);
   const shifted = layout.pages.map((page) => ({
     ...page,
     box: { ...page.box, x: page.box.x + 40, y: page.box.y + 80 },
     contentBox: { ...page.contentBox, x: page.contentBox.x + 40, y: page.contentBox.y + 80 },
   }));
-  expect(noteBodyGeometryChanged(session, { ...layout, pages: shifted })).toBe(false);
-  expect(noteBodyGeometryChanged(session, { ...layout, pages: shifted.slice(0, 1) })).toBe(false);
-  expect(noteBodyGeometryChanged(session, { ...layout, pages: shifted })).toBe(false);
+  expect(noteBodyGeometryChanged(session, { ...layout, pages: shifted }, document)).toBe(false);
   expect(
-    noteBodyGeometryChanged(session, {
-      ...layout,
-      pages: shifted.map((page) => ({
-        ...page,
-        contentBox: {
-          ...page.contentBox,
-          y: page.contentBox.y + 12,
-          height: page.contentBox.height - 12,
-        },
-      })),
-    })
+    noteBodyGeometryChanged(session, { ...layout, pages: shifted.slice(0, 1) }, document)
+  ).toBe(false);
+  expect(noteBodyGeometryChanged(session, { ...layout, pages: shifted }, document)).toBe(false);
+  expect(
+    noteBodyGeometryChanged(
+      session,
+      {
+        ...layout,
+        pages: shifted.map((page) => ({
+          ...page,
+          contentBox: {
+            ...page.contentBox,
+            y: page.contentBox.y + 12,
+            height: page.contentBox.height - 12,
+          },
+        })),
+      },
+      document
+    )
   ).toBe(true);
+});
+
+test('body edits that change live header height retain cold geometry', () => {
+  const { document, options } = fixture(42);
+  layoutSemanticDocument(document, 1, options);
+  let revision = 1;
+  for (const titleWords of [65, 15, 45]) {
+    const edited = fixture(42, 'Continue', titleWords).document;
+    revision += 1;
+    const warm = layoutSemanticDocument(edited, revision, options);
+    const cold = layoutSemanticDocument(edited, revision, { ...options, session: undefined });
+    expect(geometry(warm)).toEqual(geometry(cold));
+    expect(noteLines(warm).reduce((sum, lines) => sum + lines, 0)).toBe(6);
+    const repeat = layoutSemanticDocument(edited, revision, options);
+    expect(geometry(repeat)).toEqual(geometry(cold));
+    expect(repeat.pages[0]!.fragments === warm.pages[0]!.fragments).toBe(true);
+  }
+});
+
+test('a replacement body part keeps the existing edit reserve policy', () => {
+  const { document, options } = fixture(42);
+  const layout = layoutSemanticDocument(document, 1, { ...options, session: undefined });
+  const session = {};
+  expect(noteBodyGeometryChanged(session, layout, document)).toBe(false);
+  const changed = {
+    ...layout,
+    pages: layout.pages.map((page) => ({
+      ...page,
+      contentBox: { ...page.contentBox, height: page.contentBox.height + 0.5 },
+    })),
+  };
+  const replacement = fixture(43).document;
+  expect(noteBodyGeometryChanged(session, changed, replacement)).toBe(false);
+  expect(noteBodyGeometryChanged(session, layout, replacement)).toBe(true);
 });

@@ -2675,7 +2675,7 @@ export function layoutSemanticDocumentWithNotes<
     noteMarks,
     pageBottomReserves: usedReserves,
   });
-  if (noteBodyGeometryChanged(optionsWithLists.session, bodyLayout)) {
+  if (noteBodyGeometryChanged(optionsWithLists.session, bodyLayout, part)) {
     seeded = undefined;
     usedReserves = new Map();
     resetNoteReserveSearch(notesMemo);
@@ -2868,7 +2868,7 @@ export function layoutSemanticDocumentWithNotes<
     }
   }
 
-  noteBodyGeometryChanged(optionsWithLists.session, bodyLayout);
+  noteBodyGeometryChanged(optionsWithLists.session, bodyLayout, part);
   const attached = attachNotesToLayout(bodyLayout, allHits, notesInput, {
     fallbackReasons,
     paragraphSectionIndex,
