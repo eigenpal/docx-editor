@@ -215,6 +215,8 @@ Previews are read-only. Saving preserves the original VML, media, and relationsh
 
 The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
 
+An inline standalone photo can have a picture border (`w10:border*`) when all four sides use one `single` line with the same width and color. The photo keeps its authored size and crop, and the border line surrounds it. The drawing grows by the line width on each side. Other border combinations, and borders on floating, color-keyed, or grouped photos, prevent the preview.
+
 Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the normal image validation and decode limits; an external or missing member never triggers a fetch or a misleading partial group preview.
 
 ## Next steps

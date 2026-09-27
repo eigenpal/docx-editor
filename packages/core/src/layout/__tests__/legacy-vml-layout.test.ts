@@ -315,3 +315,30 @@ test('model-only WordArt text and geometry edits invalidate the drawing cache an
     bundle.dispose();
   }
 });
+
+test('an outlined VML picture reserves its picture size plus the outline on each side', () => {
+  const O = 'urn:schemas-microsoft-com:office:office';
+  const W10 = 'urn:schemas-microsoft-com:office:word';
+  const shape = (sides: readonly string[]) =>
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:w10="${W10}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>A</w:t><w:pict><v:shape type="#_x0000_t75" style="width:100pt;height:80pt"${sides.map((side) => ` o:border${side}color="black"`).join('')}><v:imagedata r:id="rPhoto" o:title=""/>${sides.map((side) => `<w10:border${side} type="single" width="8"/>`).join('')}</v:shape></w:pict><w:t>Z</w:t></w:r></w:p></w:body></w:document>`;
+  const outlined = setup(shape(['top', 'left', 'bottom', 'right']));
+  try {
+    const result = layoutSemanticDocument(outlined.reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: outlined.bundle.bodyContext,
+    });
+    const drawing = linesOf(result)[0]!.drawings![0]!;
+    expect(drawing).toMatchObject({ start: 1, width: 102, height: 82 });
+    expect(drawing.groupPicture).toBeDefined();
+    expect(drawing.vectorShape?.components[0]?.strokeWidthEmu).toBe(12700);
+  } finally {
+    outlined.bundle.dispose();
+  }
+  // One side is not a supported outline: the drawing stays refused, not drawn without it.
+  const partial = setup(shape(['top']));
+  try {
+    expect(drawingAtomIdentities(partial.reader.part())?.size ?? 0).toBe(0);
+  } finally {
+    partial.bundle.dispose();
+  }
+});

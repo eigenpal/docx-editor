@@ -534,3 +534,155 @@ describe('derived legacy graphics resources', () => {
     }
   });
 });
+
+const W10 = 'urn:schemas-microsoft-com:office:word';
+const SIDES = ['top', 'left', 'bottom', 'right'] as const;
+
+function borderedPhoto(
+  options: {
+    sides?: readonly string[];
+    width?: (side: string) => string;
+    color?: (side: string) => string | null;
+    extra?: string;
+    style?: string;
+  } = {}
+): string {
+  const sides = options.sides ?? SIDES;
+  const colors = sides
+    .map((side) => {
+      const value = options.color ? options.color(side) : 'black';
+      return value === null ? '' : ` o:border${side}color="${value}"`;
+    })
+    .join('');
+  const borders = sides
+    .map(
+      (side) =>
+        `<w10:border${side} type="single" width="${options.width ? options.width(side) : '8'}"${options.extra ?? ''}/>`
+    )
+    .join('');
+  return `<w:pict>${photo(options.style)
+    .replace('id="photo"', `id="photo" xmlns:w10="${W10}"${colors}`)
+    .replace('</v:shape>', `${borders}</v:shape>`)}</w:pict>`;
+}
+
+describe('legacy VML picture borders', () => {
+  test('widens the drawing by the outline and keeps the authored picture frame and crop', () => {
+    const part = parse(borderedPhoto().replace('o:title="photo"', 'cropleft="8192f"'));
+    const before = serializeOoxmlPart(part);
+    const projection = onlyProjection(part);
+    expect(projection.kind).toBe('inline');
+    expect(projection.extentEmu).toEqual({ cx: 74 * 12700, cy: 38 * 12700 });
+    expect(projection.picture).toBeNull();
+    expect(projection.legacyGraphic).toBeUndefined();
+    expect(projection.groupPicture).toMatchObject({
+      embeddedRelationshipId: 'rPhoto',
+      linkedRelationshipId: null,
+      crop: { left: 0.125, top: 0, right: 0, bottom: 0 },
+      frameEmu: { x: 12700, y: 12700, cx: 914400, cy: 457200 },
+      alternateContent: false,
+    });
+    const outline = projection.vectorShape!;
+    expect(outline.extentEmu).toEqual({ cx: 74 * 12700, cy: 38 * 12700 });
+    expect(outline.components).toHaveLength(1);
+    expect(outline.components[0]).toMatchObject({
+      fillHex: null,
+      strokeHex: '000000',
+      strokeWidthEmu: 12700,
+      subpathsClosed: [true],
+      subpathsEmu: [
+        [
+          { x: 6350, y: 6350 },
+          { x: 74 * 12700 - 6350, y: 6350 },
+          { x: 74 * 12700 - 6350, y: 38 * 12700 - 6350 },
+          { x: 6350, y: 38 * 12700 - 6350 },
+        ],
+      ],
+    });
+    // One drawing atom between the two text characters, as for an unbordered picture.
+    expect(paragraphLength(firstParagraph(part))).toBe(3);
+    expect(paragraphLength(firstParagraph(parse(borderedPhoto({ sides: ['top'] }))))).toBe(2);
+    expect(serializeOoxmlPart(part)).toBe(before);
+  });
+
+  test('reads the width in eighths of a point and a hex colour', () => {
+    const projection = onlyProjection(
+      parse(borderedPhoto({ width: () => '6', color: () => '#1F2E3D' }))
+    );
+    expect(projection.extentEmu).toEqual({ cx: 73.5 * 12700, cy: 37.5 * 12700 });
+    expect(projection.groupPicture?.frameEmu).toEqual({
+      x: 9525,
+      y: 9525,
+      cx: 914400,
+      cy: 457200,
+    });
+    expect(projection.vectorShape?.components[0]).toMatchObject({
+      strokeHex: '1F2E3D',
+      strokeWidthEmu: 9525,
+    });
+  });
+
+  test('refuses partial, mixed, unknown or unbounded border sides instead of dropping them', () => {
+    const samples = [
+      borderedPhoto({ sides: ['top'] }),
+      borderedPhoto({ sides: ['left'] }),
+      borderedPhoto({ sides: ['top', 'left', 'bottom'] }),
+      borderedPhoto().replace('</v:shape>', '<w10:bordertop type="single" width="8"/></v:shape>'),
+      borderedPhoto({ sides: ['top', 'left', 'bottom', 'middle'] }),
+      borderedPhoto({ width: (side) => (side === 'left' ? '6' : '8') }),
+      borderedPhoto({ color: (side) => (side === 'right' ? 'red' : 'black') }),
+      borderedPhoto({ color: (side) => (side === 'top' ? null : 'black') }),
+      borderedPhoto({ color: () => 'this' }),
+      borderedPhoto({ width: () => '0' }),
+      borderedPhoto({ width: () => '97' }),
+      borderedPhoto({ width: () => '1.5' }),
+      borderedPhoto({ width: () => '' }),
+      borderedPhoto({ extra: ' shadow="t"' }),
+      borderedPhoto().replaceAll('type="single"', 'type="double"'),
+      borderedPhoto().replace(
+        'type="single" width="8"/>',
+        'type="single" width="8"><w10:x/></w10:bordertop>'
+      ),
+      borderedPhoto({ style: 'position:absolute;width:72pt;height:36pt' }),
+      borderedPhoto().replace('o:title="photo"', 'chromakey="#ffffff"'),
+    ];
+    for (const sample of samples) {
+      const part = parse(sample);
+      const before = serializeOoxmlPart(part);
+      expect(projectDrawingsInPart(part)).toHaveLength(0);
+      expect(serializeOoxmlPart(part)).toBe(before);
+    }
+  });
+
+  test('keeps refusing outlines on shapes that are not a standalone picture', () => {
+    const borders = SIDES.map((side) => `<w10:border${side} type="single" width="8"/>`).join('');
+    const colors = SIDES.map((side) => ` o:border${side}color="black"`).join('');
+    const member = photo('left:200;top:250;width:500;height:250')
+      .replace('id="photo"', `id="photo" xmlns:w10="${W10}"${colors}`)
+      .replace('</v:shape>', `${borders}</v:shape>`);
+    const rect = `<w:pict><v:rect xmlns:w10="${W10}" style="width:72pt;height:36pt"${colors}>${borders}</v:rect></w:pict>`;
+    for (const sample of [
+      `<w:pict><v:group style="width:200pt;height:100pt" coordorigin="100,200" coordsize="1000,500">${member}</v:group></w:pict>`,
+      rect,
+      wordArt()
+        .replace('stroked="f">', `stroked="f" xmlns:w10="${W10}"${colors}>`)
+        .replace('</v:shape>', `${borders}</v:shape>`),
+    ])
+      expect(projectDrawingsInPart(parse(sample))).toHaveLength(0);
+  });
+
+  test('resolves the outlined picture through the validated raster path', async () => {
+    const pkg = packageOf(borderedPhoto());
+    const decode = decodePort();
+    const lookup = createImageResourceCache(pkg, { decodePort: decode });
+    try {
+      const projection = projectDrawingsInPackage(pkg)[0]!;
+      const state = await lookup.resolveForProjection(projection);
+      expect(state).toBe(await lookup.resolveEmbedded(projection.ownerPartName, 'rPhoto'));
+      expect(state.kind === 'ready' && state.mime).toBe('image/png');
+      expect(decode.calls).toBe(1);
+      expect(liveDrawingReferenceCount(pkg, '/word/media/photo.png')).toBe(1);
+    } finally {
+      lookup.dispose();
+    }
+  });
+});

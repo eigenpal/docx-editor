@@ -645,7 +645,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Standalone w:pict supports bounded unrotated photos and groups of photos, simple solid geometry, arrowed lines, and straight fit-to-box WordArt. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
+      'Standalone w:pict supports bounded unrotated photos and groups of photos, inline photos with one uniform single-line border on all four sides, simple solid geometry, arrowed lines, and straight fit-to-box WordArt. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
   },
   {
     id: 'images.crop',

@@ -7,10 +7,14 @@ import type {
   DrawingWrapProjection,
 } from './drawing-projection.ts';
 import {
+  legacyPictureBorder,
   legacyShapeFragment,
   type LegacyBox,
   type LegacyGraphicFragment,
+  type LegacyPictureBorder,
 } from './legacy-vml-shapes.ts';
+import type { VectorShapeProjection } from './drawing-shape-projection.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import {
   attribute as a,
   boundedVml,
@@ -146,6 +150,43 @@ function groupLayers(
   return true;
 }
 
+/** The outline stroke centred in the border band, which the picture sits inside. */
+function pictureOutline(
+  border: LegacyPictureBorder,
+  cx: number,
+  cy: number
+): VectorShapeProjection {
+  const weight = Math.round(border.weight * 12700),
+    half = weight / 2,
+    hex = border.color.slice(1).toUpperCase();
+  const component = freezeVectorShapeComponent({
+    subpathsEmu: [
+      [
+        { x: half, y: half },
+        { x: cx - half, y: half },
+        { x: cx - half, y: cy - half },
+        { x: half, y: cy - half },
+      ],
+    ],
+    subpathsClosed: [true],
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex: hex,
+    strokeAlpha: 1,
+    strokeWidthEmu: weight,
+  });
+  return Object.freeze({
+    extentEmu: Object.freeze({ cx, cy }),
+    subpathsEmu: component.subpathsEmu,
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex: hex,
+    strokeAlpha: 1,
+    strokeWidthEmu: weight,
+    components: Object.freeze([component]),
+  });
+}
+
 function readProjection(node: OoxmlElement): DrawingProjection | null {
   if (!boundedVml(node)) return null;
   const roots = children(node).filter((child) => !named(child, VML, 'shapetype'));
@@ -167,13 +208,26 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   const width = points(style.get('width')),
     height = points(style.get('height'));
   if (![width, height].every((n) => Number.isFinite(n) && n > 0 && n <= 10_000)) return null;
+  // A picture outline widens the drawing by its full weight on every side; the picture keeps
+  // its authored size inside it.
+  const border = root.localName === 'shape' ? legacyPictureBorder(root) : undefined;
+  if (border === null) return null;
+  const inset = border?.weight ?? 0,
+    outerWidth = width + 2 * inset,
+    outerHeight = height + 2 * inset;
   const fragments: LegacyGraphicFragment[] = [];
   const box = { x: 0, y: 0, width, height };
   if (root.localName === 'group') {
     if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
   } else {
-    const fragment = legacyShapeFragment(root, box);
+    const fragment = legacyShapeFragment(
+      root,
+      { x: inset, y: inset, width, height },
+      { x: 0, y: 0, width: outerWidth, height: outerHeight },
+      !!border
+    );
     if (fragment === null) return null;
+    if (border && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
     fragments.push(fragment);
   }
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
@@ -189,6 +243,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     style.has('mso-position-vertical-relative') ||
     !!anchorX ||
     !!anchorY;
+  if (border && floating) return null;
   const horizontal = new Map<string, DrawingHorizontalReferenceFrame>([
     ['text', 'column'],
     ['char', 'character'],
@@ -256,6 +311,8 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     fragments[0]?.nativeCrop
       ? fragments[0]
       : undefined;
+  const outerCx = Math.round(outerWidth * 12700),
+    outerCy = Math.round(outerHeight * 12700);
   return Object.freeze({
     drawingNodeId: node.id,
     ownerPartName: '',
@@ -267,7 +324,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     description: a(root, 'alt') ?? '',
     hyperlinkHref: null,
     hidden: style.get('visibility') === 'hidden',
-    extentEmu: Object.freeze({ cx: Math.round(width * 12700), cy: Math.round(height * 12700) }),
+    extentEmu: Object.freeze({ cx: outerCx, cy: outerCy }),
     effectExtentEmu: emptyEdges,
     inlineDistancesEmu: emptyEdges,
     wrap: floating
@@ -319,27 +376,43 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
           allowOverlap: true,
         })
       : null,
-    picture: photo
-      ? Object.freeze({
-          embeddedRelationshipId: photo.relationshipId,
-          linkedRelationshipId: null,
-          crop: photo.nativeCrop!,
-          fillMode: 'stretch' as const,
-          presetGeometry: null,
-          transform: Object.freeze({
-            rotationDegrees: 0,
-            flipHorizontal: false,
-            flipVertical: false,
-            offsetEmu: Object.freeze({ x: 0, y: 0 }),
-            extentEmu: Object.freeze({
+    picture:
+      photo && !border
+        ? Object.freeze({
+            embeddedRelationshipId: photo.relationshipId,
+            linkedRelationshipId: null,
+            crop: photo.nativeCrop!,
+            fillMode: 'stretch' as const,
+            presetGeometry: null,
+            transform: Object.freeze({
+              rotationDegrees: 0,
+              flipHorizontal: false,
+              flipVertical: false,
+              offsetEmu: Object.freeze({ x: 0, y: 0 }),
+              extentEmu: Object.freeze({
+                cx: Math.round(width * 12700),
+                cy: Math.round(height * 12700),
+              }),
+            }),
+          })
+        : null,
+    vectorShape: border ? pictureOutline(border, outerCx, outerCy) : null,
+    groupPicture:
+      photo && border
+        ? Object.freeze({
+            embeddedRelationshipId: photo.relationshipId,
+            linkedRelationshipId: null,
+            crop: photo.nativeCrop!,
+            frameEmu: Object.freeze({
+              x: Math.round(inset * 12700),
+              y: Math.round(inset * 12700),
               cx: Math.round(width * 12700),
               cy: Math.round(height * 12700),
             }),
-          }),
-        })
-      : null,
-    vectorShape: null,
-    groupPicture: null,
+            memberNodeId: children(root).find((n) => named(n, VML, 'imagedata'))!.id,
+            alternateContent: false,
+          })
+        : null,
     textboxStory: null,
     ...(!photo
       ? { legacyGraphic: Object.freeze({ width, height, fragments: Object.freeze(fragments) }) }
