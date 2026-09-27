@@ -3,30 +3,17 @@ import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 
-function plain(piece: FieldAwarePiece): boolean {
-  return !(
-    piece.projected ||
-    piece.positionalTab ||
-    piece.measureText !== undefined ||
-    piece.end - piece.start !== piece.text.length ||
-    piece.inlineDrawing ||
-    piece.anchoredAtom ||
-    piece.equation ||
-    piece.noteSeparator ||
-    piece.fieldAtom
-  );
-}
-
-/** Measure a complete ordinary word before deciding whether its opening fragment fits.
+/** Measure a complete word and stable body citations before testing its opening fragment.
  * Source-run seams retain their styles and model ranges. Cached tails make a word split
  * across many runs linear in its piece count, including tails that cannot borrow space.
  */
 export function spaceShrinkWordTail(pieces: readonly FieldAwarePiece[], measurer: TextMeasurer) {
   const cache = new Map<number, number | undefined>();
   const continues = (left: FieldAwarePiece, right: FieldAwarePiece) =>
-    plain(left) &&
-    plain(right) &&
+    isSpaceShrinkWordPiece(left) &&
+    isSpaceShrinkWordPiece(right) &&
     right.text.length > 0 &&
     lineOpenDecisionAt(left.text, right.text, false) === 'continues';
   return (pieceIndex: number, boundary: number): number | undefined => {
@@ -46,7 +33,7 @@ export function spaceShrinkWordTail(pieces: readonly FieldAwarePiece[], measurer
       const space = current.text.search(/\s/u);
       const word = space < 0 ? current.text : current.text.slice(0, space);
       if (
-        !plain(current) ||
+        !isSpaceShrinkWordPiece(current) ||
         !/^[\p{Script=Latin}\p{N}\p{P}]+$/u.test(word) ||
         wordBoundaries(word, true).length !== 1
       ) {
@@ -70,7 +57,7 @@ export function spaceShrinkWordTail(pieces: readonly FieldAwarePiece[], measurer
         tail = 0;
         break;
       }
-      if (plain(following) && following.text.startsWith(' ')) {
+      if (isSpaceShrinkWordPiece(following) && following.text.startsWith(' ')) {
         tail = 0;
         break;
       }

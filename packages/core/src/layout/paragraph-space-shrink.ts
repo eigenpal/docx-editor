@@ -8,6 +8,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
+import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
@@ -89,9 +90,10 @@ export function fitsWithSpaceShrink(
  * last word: only plain U+0020 spaces follow it, and they hang at the line end.
  *
  * One backward scan finds where that closing run of spaces begins. Any other piece (a
- * field result, positional tab, drawing, equation, note mark or anchor) ends the scan
+ * field result, positional tab, drawing, equation, reserved note mark or anchor) ends the scan
  * after itself, so no word before it is last. A tab, hard break or page break in plain
- * text is not a space either, and ends the scan the same way.
+ * text is not a space either, and ends the scan the same way. Stable body citations
+ * can complete the last word while retaining their atomic model ranges.
  */
 export function paragraphEndAt(
   pieces: readonly FieldAwarePiece[]
@@ -100,17 +102,7 @@ export function paragraphEndAt(
   let tailOffset = 0;
   for (let index = pieces.length - 1; index >= 0; index -= 1) {
     const piece = pieces[index]!;
-    if (
-      piece.projected ||
-      piece.positionalTab ||
-      piece.measureText !== undefined ||
-      piece.end - piece.start !== piece.text.length ||
-      piece.inlineDrawing ||
-      piece.anchoredAtom ||
-      piece.equation ||
-      piece.noteSeparator ||
-      piece.fieldAtom
-    ) {
+    if (!isSpaceShrinkWordPiece(piece)) {
       tailPiece = index + 1;
       break;
     }

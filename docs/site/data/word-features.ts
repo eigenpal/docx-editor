@@ -143,7 +143,8 @@ export const wordFeatures: WordFeature[] = [
   {
     id: 'text.sub-superscript',
     name: 'Subscript & superscript',
-    notes: 'Nonzero authored or inherited baseline positions contribute translated run extents to automatic and minimum line spacing, including positioned subscript and superscript text. Exact line spacing retains its authored height.',
+    notes:
+      'Nonzero authored or inherited baseline positions contribute translated run extents to automatic and minimum line spacing, including positioned subscript and superscript text. Exact line spacing retains its authored height.',
     category: 'text',
     editing: 'full',
     rendering: 'full',
@@ -260,7 +261,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Justified East Asian lines distribute inter-character spacing. Modern Latin justification measures complete words across formatting runs before compressing spaces. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
+      'Justified East Asian lines distribute inter-character spacing. Modern Latin justification measures complete words across formatting runs and terminal note citations before compressing spaces. Citations with reserved page-local widths retain their existing line-break behavior. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
   },
   {
     id: 'paragraphs.east-asian-typography',
