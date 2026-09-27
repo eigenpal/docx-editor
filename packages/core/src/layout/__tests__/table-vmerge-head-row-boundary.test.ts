@@ -1,19 +1,37 @@
 // A two-row vertical merge (17.4.85 `w:vMerge`) whose page break falls right after its head
 // row. From mode 15 on, when the merged text cannot place a line inside the head row's own
 // height, the head row keeps its own cells on the first page and the whole merged text starts
-// beside the continuation row on the next page. See `table-vmerge-boundary.ts`.
+// beside the continuation row on the next page. The text stays the head cell's text: every
+// reader of the layout finds it under the head cell and the head row. See
+// `table-vmerge-boundary.ts`.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import {
+  cellAddressAt,
+  cellSelectionBetween,
+  cellSelectionText,
+  paragraphsInCells,
+  tableAnchorAt,
+  tableContextAt,
+} from '../semantic-cell-selection.ts';
+import { hitTestPage } from '../semantic-hit-test.ts';
+import {
+  findTableInteractionAt,
+  pageContentToSheet,
+  tableInteractionIndex,
+} from '../semantic-table-interaction.ts';
+import { planTableCommand } from '../../editor/table-command-plan.ts';
 import type {
   BlockFragmentRecord,
   PageGeometry,
   SemanticLayout,
   TableCellFragmentRecord,
   TableFragmentRecord,
+  TableRowFragmentRecord,
 } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -41,6 +59,8 @@ interface Shape {
   readonly nextParagraphs?: number;
   /** Extra `w:pPr` content for the merged paragraph. */
   readonly mergedPPr?: string;
+  /** A repeated header row above the head row. */
+  readonly header?: boolean;
 }
 
 const spacing = (before: number) =>
@@ -64,7 +84,12 @@ function document(shape: Shape): string {
   const continued = (label: string, count = 1) =>
     `<w:tr>${trPr}${cell(1300, paragraph([]), CONTINUE)}${cell(1500, own(label, count).join(''))}` +
     `${cell(3000, paragraph([]), CONTINUE)}</w:tr>`;
+  const header = shape.header
+    ? `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cell(1300, paragraph(['HEADER']))}` +
+      `${cell(4500, paragraph(['HEADERB']), '<w:gridSpan w:val="2"/>')}</w:tr>`
+    : '';
   const rows =
+    header +
     `<w:tr>${trPr}${cell(1300, paragraph(['HEADA']), RESTART)}${cell(1500, paragraph(['ROWA']))}` +
     `${cell(3000, paragraph(merged, 120, shape.mergedPPr), RESTART)}</w:tr>` +
     continued('ROWB', shape.nextParagraphs) +
@@ -135,6 +160,8 @@ function expectEveryWordOnce(layout: SemanticLayout, shape: Shape): void {
     'TAIL',
   ];
   for (const word of expected) expect(painted.filter((seen) => seen === word)).toEqual([word]);
+  const known = new Set([...expected, 'HEADER', 'HEADERB']);
+  expect(painted.filter((word) => !known.has(word))).toEqual([]);
 }
 
 /** Element children of an OOXML node with this local name. */
@@ -158,15 +185,22 @@ describe('mode 15: the merged text moves whole past a break after its head row',
     expect(head.cells.map(cellText)).toEqual([['HEADA'], ['ROWA'], []]);
 
     const [second] = tablesOn(layout, 1);
-    const continuation = second!.rows[0]!;
-    expect(continuation.box.y).toBeCloseTo(0, 3);
+    // The head row continues at zero height, and its merged cell spans the continuation row.
+    const [headRest, continuation, after] = second!.rows;
+    expect(headRest!.id).toBe(head.id);
+    expect(headRest!.isContinuation).toBe(true);
+    expect(headRest!.box.height).toBeCloseTo(0, 3);
+    expect(continuation!.box.y).toBeCloseTo(0, 3);
     // The merged text keeps its space before, and the continuation row grows to hold it.
-    expect(continuation.box.height).toBeCloseTo(BEFORE + 5 * LINE, 3);
-    const merged = continuation.cells[2]!;
+    expect(continuation!.box.height).toBeCloseTo(BEFORE + 5 * LINE, 3);
+    const merged = headRest!.cells[2]!;
     expect(cellText(merged)).toEqual(['M1', 'M2', 'M3', 'M4', 'M5']);
+    expect(merged.rowSpan).toBe(2);
+    expect(merged.box.height).toBeCloseTo(BEFORE + 5 * LINE, 3);
     expect(linesOf(merged.blocks)[0]!.box.y).toBeCloseTo(BEFORE, 3);
-    expect(cellText(continuation.cells[1]!)).toEqual(['ROWB']);
-    expect(second!.rows[1]!.box.y).toBeCloseTo(BEFORE + 5 * LINE, 3);
+    expect(cellText(continuation!.cells[1]!)).toEqual(['ROWB']);
+    expect(continuation!.cells[2]!.paintInert).toBe(true);
+    expect(after!.box.y).toBeCloseTo(BEFORE + 5 * LINE, 3);
   });
 
   test('a merged text that would fit the page when the head row grows still moves', () => {
@@ -176,7 +210,7 @@ describe('mode 15: the merged text moves whole past a break after its head row',
     expectEveryWordOnce(layout, shape);
     expect(mergedPages(layout)).toEqual([1, 1]);
     expect(tablesOn(layout, 0)[0]!.rows[0]!.box.height).toBeCloseTo(ROW_MIN, 3);
-    expect(tablesOn(layout, 1)[0]!.rows[0]!.box.height).toBeCloseTo(BEFORE + 2 * LINE, 3);
+    expect(tablesOn(layout, 1)[0]!.rows[1]!.box.height).toBeCloseTo(BEFORE + 2 * LINE, 3);
   });
 
   test('the head row stays on the page when only its own height fits there', () => {
@@ -194,10 +228,10 @@ describe('mode 15: the merged text moves whole past a break after its head row',
     expectEveryWordOnce(layout, shape);
     expect(pageWords(layout)[0]).toContain('ROWA');
     expect(mergedPages(layout)).toEqual([1, 1, 1, 1, 1]);
-    expect(tablesOn(layout, 1)[0]!.rows[0]!.box.height).toBeCloseTo(BEFORE + 5 * LINE, 3);
+    expect(tablesOn(layout, 1)[0]!.rows[1]!.box.height).toBeCloseTo(BEFORE + 5 * LINE, 3);
   });
 
-  test('the carried text keeps the head paragraph and the continuation cell keeps its id', () => {
+  test('the carried text stays in the head cell of the head row', () => {
     const shape: Shape = { fill: 14, merged: 5 };
     const part = load(document(shape));
     const layout = layoutSemanticDocument(part, 1, {
@@ -215,12 +249,20 @@ describe('mode 15: the merged text moves whole past a break after its head row',
     expect(placedHead.id).toBe(headCell.id);
     expect(placedHead.blocks).toHaveLength(0);
 
-    const carried = tablesOn(layout, 1)[0]!.rows[0]!.cells[2]!;
-    expect(carried.id).toBe(continuationCell.id);
+    const [headRest, continuation] = tablesOn(layout, 1)[0]!.rows;
+    expect(headRest!.id).toBe(headRow!.id);
+    const carried = headRest!.cells[2]!;
+    expect(carried.id).toBe(headCell.id);
     expect(carried.vMergeContinue).toBe(false);
     expect(carried.paintInert).not.toBe(true);
     const paragraphIds = new Set(linesOf(carried.blocks).map((line) => line.range.paragraphId));
     expect([...paragraphIds]).toEqual([headParagraph.id]);
+
+    expect(continuation!.id).toBe(nextRow!.id);
+    const inert = continuation!.cells[2]!;
+    expect(inert.id).toBe(continuationCell.id);
+    expect(inert.vMergeContinue).toBe(true);
+    expect(inert.blocks).toHaveLength(0);
   });
 
   test('an incremental relayout reaches the same pages as a cold layout', () => {
@@ -243,6 +285,143 @@ describe('mode 15: the merged text moves whole past a break after its head row',
     const warm = layoutSemanticDocument(load(document(after)), 2, options);
     expect(shapeOf(warm)).toEqual(shapeOf(lay(after)));
     expect(mergedPages(warm)).toEqual([1, 1, 1, 1, 1]);
+  });
+});
+
+describe('the carried merged text', () => {
+  test('taller than a page splits across pages beside the continuation row', () => {
+    // 6pt + 18 lines is 222pt, taller than the 210pt page; the widow rule leaves two lines.
+    const shape: Shape = { fill: 14, merged: 18 };
+    const layout = lay(shape);
+    expectEveryWordOnce(layout, shape);
+    expect(mergedPages(layout)).toEqual([...Array<number>(16).fill(1), 2, 2]);
+    for (const pageIndex of [1, 2]) {
+      const [headRest, continuation] = tablesOn(layout, pageIndex)[0]!.rows;
+      expect(headRest!.isContinuation).toBe(true);
+      expect(headRest!.cells[2]!.box.height).toBeCloseTo(continuation!.box.height, 3);
+    }
+  });
+
+  test('below a repeated header row lays out on the next pages', () => {
+    const shape: Shape = { fill: 13, merged: 16, header: true };
+    const layout = lay(shape);
+    expectEveryWordOnce(layout, shape);
+    expect(mergedPages(layout)).toEqual([...Array<number>(14).fill(1), 2, 2]);
+    expect(pageWords(layout)[1]!.slice(0, 3)).toEqual(['HEADER', 'HEADERB', 'M1']);
+  });
+
+  test('an incremental relayout of the split text reaches the same pages as a cold layout', () => {
+    const shapeOf = (layout: SemanticLayout) =>
+      layout.pages.map((page) =>
+        tablesOn(layout, page.index).map((table) =>
+          table.rows.map((row) => [row.id, row.box.y, row.box.height, row.cells.map(cellText)])
+        )
+      );
+    const options = {
+      measurer,
+      geometry: GEOMETRY,
+      compatibilityMode: 15,
+      session: createLayoutSession(),
+      cache: createParagraphLayoutCache(),
+    };
+    layoutSemanticDocument(load(document({ fill: 14, merged: 5 })), 1, options);
+    const warm = layoutSemanticDocument(load(document({ fill: 14, merged: 18 })), 2, options);
+    expect(shapeOf(warm)).toEqual(shapeOf(lay({ fill: 14, merged: 18 })));
+  });
+
+  test('keeps document order on the page it is painted on', () => {
+    const layout = lay({ fill: 14, merged: 5, nextParagraphs: 2 });
+    expect(pageWords(layout)[1]!.slice(0, 8)).toEqual([
+      'M1',
+      'M2',
+      'M3',
+      'M4',
+      'M5',
+      'ROWB',
+      'ROWBx1',
+      'NEXT',
+    ]);
+  });
+});
+
+describe('readers of the carried merged text find the head cell', () => {
+  const shape: Shape = { fill: 14, merged: 5 };
+  const part = load(document(shape));
+  const layout = layoutSemanticDocument(part, 1, {
+    measurer,
+    geometry: GEOMETRY,
+    compatibilityMode: 15,
+  });
+  const headRow: TableRowFragmentRecord = tablesOn(layout, 0)[0]!.rows[0]!;
+  const headCell = headRow.cells[2]!;
+  const mergedParagraph = linesOf(tablesOn(layout, 1)[0]!.rows[0]!.cells[2]!.blocks)[0]!.range
+    .paragraphId;
+  const table = tablesOn(layout, 0)[0]!;
+  const address = (placed: TableCellFragmentRecord) => ({
+    tableId: table.tableId,
+    rowId: headRow.id,
+    cellId: placed.id,
+    rowIndex: 0,
+    gridColumn: placed.gridColumn,
+    gridSpan: placed.gridSpan,
+  });
+
+  test('table anchor, context and cell address name the head row and cell', () => {
+    expect(tableAnchorAt(layout, mergedParagraph)).toMatchObject({
+      rowId: headRow.id,
+      cellId: headCell.id,
+    });
+    expect(tableContextAt(layout, mergedParagraph)?.rowIndex).toBe(0);
+    expect(cellAddressAt(layout, mergedParagraph)).toMatchObject({
+      rowId: headRow.id,
+      cellId: headCell.id,
+      rowIndex: 0,
+    });
+  });
+
+  test('a row command with the caret in the merged text targets the head row', () => {
+    const at = { paragraphId: mergedParagraph, offset: 0 };
+    const plan = planTableCommand({
+      command: { type: 'insertRow', where: 'above' },
+      part,
+      layout,
+      storeRevision: layout.revision,
+      selection: { anchor: at, head: at },
+      cellSelection: null,
+      themeColors: [],
+      editable: true,
+      viewing: false,
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.ops[0]).toMatchObject({ op: 'insertTableRow', rowId: headRow.id });
+  });
+
+  test('a cell selection over the merged head takes the whole merge and its text', () => {
+    const selection = cellSelectionBetween(layout, address(headRow.cells[1]!), address(headCell))!;
+    expect(selection.rows).toEqual({ from: 0, to: 1 });
+    expect(paragraphsInCells(layout, selection.cellIds)).toContain(mergedParagraph);
+    const text = cellSelectionText(layout, selection);
+    expect(text.startsWith('ROWA\tM1')).toBe(true);
+    expect(text).toContain('M5');
+  });
+
+  test('a press on the merged text or on the empty head resolves into the merged text', () => {
+    const [headRest] = tablesOn(layout, 1)[0]!.rows;
+    const carried = headRest!.cells[2]!;
+    const onText = hitTestPage(layout, 1, { x: carried.box.x + 4, y: carried.box.y + 20 });
+    expect(onText?.position.paragraphId).toBe(mergedParagraph);
+    expect(onText?.cell).toMatchObject({ rowId: headRow.id, cellId: headCell.id });
+    const onHead = hitTestPage(layout, 0, { x: headCell.box.x + 4, y: headCell.box.y + 10 });
+    expect(onHead?.position.paragraphId).toBe(mergedParagraph);
+  });
+
+  test('the zero-height head row continuation offers no row handles at the page top', () => {
+    const [headRest] = tablesOn(layout, 1)[0]!.rows;
+    const sheet = pageContentToSheet(1, headRest!.box.x + 30, headRest!.box.y + 1, layout);
+    const hit = findTableInteractionAt(tableInteractionIndex(layout), sheet.x, sheet.y, layout);
+    expect(hit).not.toBeNull();
+    expect(hit && 'rowId' in hit ? hit.rowId : null).not.toBe(headRow.id);
   });
 });
 

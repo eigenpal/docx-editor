@@ -21,10 +21,14 @@
 // rows, an exact-height row, a row at the page top, an earlier compatibility mode, and
 // bottom-to-top text all keep the older path.
 //
-// The continuation row keeps its own identity: its cell id, grid slot, borders, margins and
-// alignment. It takes the head's blocks and table-style formatting, because the text it paints
-// is the head's text, broken as the head breaks it at the same width. Selection maps through
-// paragraph ids, so a caret placed in that text edits the head's paragraphs.
+// The merged text stays the head cell's text on every page. The next row is placed with the
+// head cell in its continuation's grid slot, so the text breaks as the head breaks it, and the
+// row grows or splits to hold it. Each fragment of that row is then published below a
+// zero-height continuation of the head row (`publishCarriedMergedText`): the head cell's copy
+// there holds the text and spans the row beside it, as any merge whose head continues onto a
+// later page does, and the continuation cell stays an inert continuation. Every reader of
+// cell records (selection, table commands, hit testing, Markdown, paint) then finds the text
+// under the head cell and the head row, in document order.
 
 import {
   initialCellCursors,
@@ -39,9 +43,11 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
+import type { TableCellFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 const EPSILON_PT = 0.001;
@@ -54,8 +60,13 @@ export interface DeferredMergedText {
   readonly options: RowVMergeLayoutOptions;
   /** The head row's height without its merged text. */
   readonly heightPt: number;
-  /** The next row, with the deferred text in its continuation cells. */
+  /** The next row to place, with each deferred head in its continuation's slot. */
   readonly nextRow: SemanticTableRow;
+  /** The authored continuation cell each deferred head stands in for, by head cell id. */
+  readonly continuations: ReadonlyMap<string, SemanticTableCell>;
+  /** The authored head and next rows. */
+  readonly headSource: SemanticTableRow;
+  readonly nextSource: SemanticTableRow;
 }
 
 export interface DeferMergedTextInput {
@@ -115,16 +126,17 @@ function deferredHeads(
 }
 
 /**
- * The head row with each deferred head emptied, and the continuation row with that head's
- * text moved into its own cell. The text moves before either row is placed, so no placement
- * can leave it behind: the head row finishes, and the next row owns every line.
+ * The head row with each deferred head emptied, and the next row with each deferred head in
+ * its continuation's slot. The text moves before either row is placed, so no placement can
+ * leave it behind: the head row finishes, and the next row places every line.
  */
 function carriedRows(
   head: SemanticTableRow,
   next: SemanticTableRow,
   deferred: ReadonlySet<string>
-): { readonly headRow: SemanticTableRow; readonly nextRow: SemanticTableRow } {
+): Pick<DeferredMergedText, 'headRow' | 'nextRow' | 'continuations'> {
   const heads = head.cells.filter((cell) => deferred.has(cell.id));
+  const continuations = new Map<string, SemanticTableCell>();
   const headRow = {
     ...head,
     cells: head.cells.map((cell) => (deferred.has(cell.id) ? { ...cell, blocks: [] } : cell)),
@@ -136,16 +148,11 @@ function carriedRows(
         ? heads.find((candidate) => candidate.gridColumn === cell.gridColumn)
         : undefined;
       if (source === undefined) return cell;
-      return {
-        ...cell,
-        vMergeContinue: false,
-        blocks: source.blocks,
-        styleFormatting: source.styleFormatting,
-        hideEndMark: source.hideEndMark,
-      };
+      continuations.set(source.id, cell);
+      return source;
     }),
   };
-  return { headRow, nextRow };
+  return { headRow, nextRow, continuations };
 }
 
 /**
@@ -252,5 +259,171 @@ export function deferMergedTextPastHeadRow(input: DeferMergedTextInput): Deferre
   );
   const deferred = deferredHeads(row, headIds, probed);
   if (deferred === null || deferred.size === 0) return null;
-  return { ...carriedRows(row, next, deferred), options, heightPt };
+  return {
+    ...carriedRows(row, next, deferred),
+    options,
+    heightPt,
+    headSource: row,
+    nextSource: next,
+  };
+}
+
+/** The head row as placed on its page, and what its next row carries. */
+interface CarriedMergedText {
+  readonly deferred: DeferredMergedText;
+  /** The head row's record on its own page, before the fragment is finalized. */
+  readonly headRecord: TableRowFragmentRecord;
+}
+
+/** The inert continuation a carried head stood in for, in the slot the head was placed in. */
+function continuationRecord(
+  placed: TableCellFragmentRecord,
+  authored: SemanticTableCell
+): TableCellFragmentRecord {
+  return {
+    id: authored.id,
+    gridColumn: placed.gridColumn,
+    ...(placed.logicalGridColumn === undefined
+      ? {}
+      : { logicalGridColumn: placed.logicalGridColumn }),
+    ...(authored.gridColumnId ? { gridColumnId: authored.gridColumnId } : {}),
+    gridSpan: placed.gridSpan,
+    vMergeContinue: true,
+    paintInert: true,
+    rowSpan: 1,
+    ...(authored.shading === undefined ? {} : { shading: authored.shading }),
+    blocks: [],
+    box: placed.box,
+  };
+}
+
+/** A zero-height cell without the bottom edge it shares with the row below. */
+function withoutZeroHeightBottomEdge(cell: TableCellFragmentRecord): TableCellFragmentRecord {
+  const borders = cell.borders;
+  if (cell.box.height > 0 || !borders) return cell;
+  const { bottom: _bottom, ...kept } = borders;
+  return {
+    ...cell,
+    borders: {
+      ...kept,
+      ...(borders.edgeSegments
+        ? { edgeSegments: borders.edgeSegments.filter((segment) => segment.side !== 'bottom') }
+        : {}),
+      ...(borders.strokes
+        ? { strokes: borders.strokes.filter((stroke) => stroke.side !== 'bottom') }
+        : {}),
+    },
+  };
+}
+
+/**
+ * Publish each fragment of the carrying row below a zero-height continuation of the head row.
+ *
+ * The head cell's copy moves into that continuation, where it heads the merge over the row
+ * beside it (`finalizeTableRows` gives it the row's height), and the carrying row gets its
+ * authored continuation cell back. The other head-row cells are empty and zero-height. Rows
+ * and their authored sources stay parallel, and both records reuse the carrying record's
+ * content insets. Run after the terminal border step, which reads the carrying row's clone.
+ */
+function publishCarriedMergedText(
+  carries: ReadonlyMap<string, CarriedMergedText>,
+  rows: readonly TableRowFragmentRecord[],
+  sources: readonly SemanticTableRow[],
+  insets: Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
+): { rows: TableRowFragmentRecord[]; sources: SemanticTableRow[] } {
+  const outRows: TableRowFragmentRecord[] = [];
+  const outSources: SemanticTableRow[] = [];
+  for (const [index, record] of rows.entries()) {
+    const carry = record.isHeaderRepeat ? undefined : carries.get(record.id);
+    const carried = carry
+      ? record.cells.filter((cell) => carry.deferred.continuations.has(cell.id))
+      : [];
+    if (!carry || carried.length === 0) {
+      outRows.push(record);
+      outSources.push(sources[index]!);
+      continue;
+    }
+    const { deferred, headRecord } = carry;
+    const top = record.box.y;
+    const head: TableRowFragmentRecord = {
+      ...headRecord,
+      isContinuation: true,
+      ...(record.hasContinuation ? { hasContinuation: true } : {}),
+      box: { ...headRecord.box, y: top, height: 0 },
+      cells: headRecord.cells.map(
+        (cell) =>
+          carried.find((candidate) => candidate.id === cell.id) ?? {
+            ...cell,
+            blocks: [],
+            box: { ...cell.box, y: top, height: 0 },
+          }
+      ),
+    };
+    const next: TableRowFragmentRecord = {
+      ...record,
+      cells: record.cells.map((cell) => {
+        const authored = deferred.continuations.get(cell.id);
+        return authored ? continuationRecord(cell, authored) : cell;
+      }),
+    };
+    const recordInsets = insets.get(record);
+    if (recordInsets) {
+      insets.set(head, recordInsets);
+      insets.set(next, recordInsets);
+    }
+    outRows.push(head, next);
+    outSources.push(deferred.headSource, deferred.nextSource);
+  }
+  return { rows: outRows, sources: outSources };
+}
+
+/** A table's carried merged text, from the head row's placement to the last fragment. */
+export interface MergedTextCarry {
+  /** The row to place at `index`: the authored row, or the next row carrying merged text. */
+  rowAt(index: number, authored: SemanticTableRow): SemanticTableRow;
+  /** Record a head row placed without its merged text; the next row carries it. */
+  commit(index: number, deferred: DeferredMergedText, headRecord: TableRowFragmentRecord): void;
+  /**
+   * A finalized fragment whose zero-height head-row continuations draw only their top edge.
+   * Their bottom edge is the carrying row's top, and at the top of a fragment that edge is
+   * the table's top rule, which the continuation already draws; an inside rule drawn over it
+   * would add a line a table without a top border does not have.
+   */
+  finish(rows: TableRowFragmentRecord[]): TableRowFragmentRecord[];
+  /** One fragment's rows and sources, with every carrying row published under its head row. */
+  publish(
+    rows: TableRowFragmentRecord[],
+    sources: SemanticTableRow[],
+    insets: Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
+  ): { rows: TableRowFragmentRecord[]; sources: SemanticTableRow[] };
+}
+
+export function createMergedTextCarry(): MergedTextCarry {
+  // By the id of the row that carries the text.
+  const carries = new Map<string, CarriedMergedText>();
+  let pending: { readonly index: number; readonly row: SemanticTableRow } | null = null;
+  return {
+    rowAt(index, authored) {
+      const row = pending?.index === index ? pending.row : authored;
+      pending = null;
+      return row;
+    },
+    commit(index, deferred, headRecord) {
+      pending = { index: index + 1, row: deferred.nextRow };
+      carries.set(deferred.nextRow.id, { deferred, headRecord });
+    },
+    finish(rows) {
+      if (carries.size === 0) return rows;
+      return rows.map((row) =>
+        row.isContinuation && row.box.height <= 0
+          ? { ...row, cells: row.cells.map(withoutZeroHeightBottomEdge) }
+          : row
+      );
+    },
+    publish(rows, sources, insets) {
+      return carries.size === 0
+        ? { rows, sources }
+        : publishCarriedMergedText(carries, rows, sources, insets);
+    },
+  };
 }

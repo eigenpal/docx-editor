@@ -208,6 +208,9 @@ export function tableInteractionIndex(layout: SemanticLayout): TableInteractionI
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
     const take = (occ: TableInteractionOccurrence): void => {
+      // A zero-height row continuation has no band to resize or insert beside; its edges are
+      // the next row's top.
+      if (occ.row.isContinuation && occ.row.box.height <= 0) return;
       occurrences.push(occ);
     };
     visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, take);

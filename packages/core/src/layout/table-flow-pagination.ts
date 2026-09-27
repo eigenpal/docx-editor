@@ -38,7 +38,7 @@ import {
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
-import { deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
+import { createMergedTextCarry, deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
@@ -185,6 +185,8 @@ export function paginateTableInFlow(
   // Authored rows backing the open fragment (includes header repeats) for finalize.
   let sourceRows: (typeof structure.rows)[number][] = [];
   let occurrenceInsets = new Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>();
+  // Merged text a head row left to its next row (`table-vmerge-boundary.ts`).
+  const carry = createMergedTextCarry();
   const completeSourceRows = new Set(structure.rows);
   let forceNextFragment = false;
   // Rows clear a wrapping float that crosses the table; see `table-float-collision.ts`.
@@ -258,16 +260,19 @@ export function paginateTableInFlow(
         flow.cursorY += terminal.height - record.box.height;
       }
     }
-    const finalized = finalizeTableRows(
-      rows,
-      structure,
-      sourceRows,
-      tableDeps.borderOwnershipBudget,
-      tableDeps.vMergeResolveBudget,
-      undefined,
-      shiftAnchor,
-      tableDeps,
-      occurrenceInsets
+    ({ rows, sources: sourceRows } = carry.publish(rows, sourceRows, occurrenceInsets));
+    const finalized = carry.finish(
+      finalizeTableRows(
+        rows,
+        structure,
+        sourceRows,
+        tableDeps.borderOwnershipBudget,
+        tableDeps.vMergeResolveBudget,
+        undefined,
+        shiftAnchor,
+        tableDeps,
+        occurrenceInsets
+      )
     );
     const last = finalized[finalized.length - 1]!;
     const fragment = annotateTableFragmentGeometry(
@@ -494,11 +499,8 @@ export function paginateTableInFlow(
         : baselineBodyHeight);
   };
 
-  // The next row, carrying merged text its head row left behind (`table-vmerge-boundary.ts`).
-  let carried: { readonly index: number; readonly row: SemanticTableRow } | null = null;
   for (const [bodyRowIndex, authoredRow] of bodyRows.entries()) {
-    const row = carried?.index === bodyRowIndex ? carried.row : authoredRow;
-    carried = null;
+    const row = carry.rowAt(bodyRowIndex, authoredRow);
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
     const forceBreak = forceNextFragment;
     forceNextFragment = false;
@@ -735,7 +737,7 @@ export function paginateTableInFlow(
       breakForContinuation(admitsRepeatedHeaders, startsPage);
       movedToFreshPage = true;
       // A merge that did not fit the band it was offered in may fit this fresh page.
-      admitSpans(bodyRowIndex);
+      admitSpans(bodyRowIndex, row);
     }
 
     for (;;) {
@@ -758,7 +760,7 @@ export function paginateTableInFlow(
         }
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex);
+        admitSpans(bodyRowIndex, row);
         continue;
       }
 
@@ -789,7 +791,7 @@ export function paginateTableInFlow(
         // already published its anchored drawings and spent its line ids; throwing it away
         // to re-place would leave a float positioned by a layout that never happened.
         if (deferred) {
-          carried = { index: bodyRowIndex + 1, row: deferred.nextRow };
+          carry.commit(bodyRowIndex, deferred, placed.record);
           forceNextFragment = true;
         }
         const hasMore = placed.remainder !== null;
@@ -829,7 +831,7 @@ export function paginateTableInFlow(
           // Re-offered like every other break that retries this row: a merge starting on a
           // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh
           // page it just moved to, which is the whole point of deciding where a row lands.
-          admitSpans(bodyRowIndex);
+          admitSpans(bodyRowIndex, row);
           continue;
         }
         // A fresh page whose band is shrunk by a footnote reserve still owns the full
@@ -896,7 +898,7 @@ export function paginateTableInFlow(
       if (!placed.fitted && flow.cursorY > 0 && !movedToFreshPage) {
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex);
+        admitSpans(bodyRowIndex, row);
         continue;
       }
 
@@ -912,7 +914,7 @@ export function paginateTableInFlow(
       ) {
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex);
+        admitSpans(bodyRowIndex, row);
         continue;
       }
 
