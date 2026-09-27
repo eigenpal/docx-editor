@@ -82,12 +82,39 @@ test('warm caches follow cap width edits and unsupported/terminal caps retain or
   }
   for (const source of [
     read(cap()),
-    read(cap('D', 'w:hAnchor="page"') + p('word '.repeat(20))),
+    read(cap('D', 'w:hAnchor="invalid"') + p('word '.repeat(20))),
     read(cap('D'.repeat(33)) + p('body')),
   ]) {
     const layout = layoutSemanticDocument(source, 0, options);
     expect(paras(layout).every((block) => !block.positionedFrame)).toBe(true);
   }
+});
+
+test('a margin drop cap sits outside the text column without displacing body lines', () => {
+  const marginCap = cap('M', 'w:hSpace="100"').replace('w:dropCap="drop"', 'w:dropCap="margin"');
+  const [letter, body] = paras(
+    layoutSemanticDocument(read(marginCap + p('word '.repeat(20))), 0, options)
+  );
+  expect(letter!.positionedFrame?.dropCapLines).toBe(3);
+  expect(letter!.positionedFrame!.box.x + letter!.positionedFrame!.box.width + 5).toBeCloseTo(0, 5);
+  expect(body!.lines.slice(0, 3).every((line) => line.contentX === 0)).toBe(true);
+  const rtlCap = marginCap.replace(
+    '<w:ind w:firstLine="200"/>',
+    '<w:ind w:firstLine="200"/><w:bidi/>'
+  );
+  const rtlLetter = paras(layoutSemanticDocument(read(rtlCap + p('body')), 0, options))[0]!;
+  expect(rtlLetter.positionedFrame!.box.x).toBeCloseTo(205, 5);
+});
+
+test('drop-cap line sizing supersedes bounded frame geometry attributes', () => {
+  const decorated = cap(
+    'D',
+    'w:w="1000" w:h="1200" w:hRule="exact" w:x="-200" w:y="400" ' +
+      'w:xAlign="right" w:yAlign="bottom" w:hAnchor="page" w:vAnchor="margin"'
+  );
+  const letter = paras(layoutSemanticDocument(read(decorated + p('body')), 0, options))[0]!;
+  expect(letter.positionedFrame?.box.height).toBe(30);
+  expect(letter.positionedFrame?.box.width).toBeCloseTo(34.001, 5);
 });
 
 test('overheight and competing caps fall back without overlapping body ink', () => {

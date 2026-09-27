@@ -2,12 +2,47 @@ import { alignDropCap } from './paragraph-drop-cap.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
+  paragraphFrameOrigin,
   positionParagraphFrame,
   type ParagraphFrame,
   type ParagraphFrameOrigins,
 } from './paragraph-frame.ts';
 import { fragmentSignature } from './semantic-fragment-signature.ts';
 import type { LineRecord, ParagraphFragmentRecord } from './semantic-records.ts';
+
+function shiftFragmentX(
+  fragment: ParagraphFragmentRecord,
+  dx: number,
+  width: number
+): ParagraphFragmentRecord {
+  const move = <T extends { readonly x: number }>(box: T): T => ({ ...box, x: box.x + dx });
+  return {
+    ...fragment,
+    box: { ...fragment.box, width },
+    ...(fragment.shadingBox
+      ? {
+          shadingBox: { ...fragment.shadingBox, width: Math.max(fragment.shadingBox.width, width) },
+        }
+      : {}),
+    ...(fragment.marker
+      ? {
+          marker: {
+            ...fragment.marker,
+            box: move(fragment.marker.box),
+            ...(fragment.marker.picture
+              ? { picture: { ...fragment.marker.picture, box: move(fragment.marker.picture.box) } }
+              : {}),
+          },
+        }
+      : {}),
+    lines: fragment.lines.map((line) => ({
+      ...line,
+      box: { ...line.box, width },
+      contentX: line.contentX + dx,
+      spans: line.spans.map((span) => ({ ...span, box: move(span.box) })),
+    })),
+  };
+}
 
 export interface PendingParagraphFrame {
   readonly frame: ParagraphFrame;
@@ -132,39 +167,72 @@ export class ParagraphFrameFlow {
     origins: ParagraphFrameOrigins,
     anchorId: string,
     columnIndex: number,
-    anchorLines: readonly LineRecord[] = []
+    anchorLines: readonly LineRecord[] = [],
+    onPageParityRead?: () => void
   ): ParagraphFragmentRecord[] {
     if (!this.pending) return [];
     const pending = new Array<PendingParagraphFrame>(this.pending.length);
     for (let node: PendingParagraphFrames | undefined = this.pending; node; node = node.previous)
       pending[node.length - 1] = node.item;
+    if (pending.some(({ frame }) => frame.xAlign === 'inside' || frame.xAlign === 'outside')) {
+      onPageParityRead?.();
+    }
+    const locals = pending.map((item) => ({
+      item,
+      fragment: item.frame.dropCapLines
+        ? alignDropCap(item.fragment, item.frame.dropCapLines, anchorLines, origins.text.y).fragment
+        : item.fragment,
+    }));
+    const localGroups = new Map<
+      string,
+      {
+        frame: ParagraphFrame;
+        width: number;
+        contentHeight: number;
+        height: number;
+      }
+    >();
+    for (const { item, fragment } of locals) {
+      const group = localGroups.get(item.groupId);
+      const bottom = fragment.box.y + fragment.box.height;
+      if (group) {
+        group.width = Math.max(group.width, item.frame.width);
+        group.contentHeight = Math.max(group.contentHeight, bottom);
+      } else {
+        localGroups.set(item.groupId, {
+          frame: item.frame,
+          width: item.frame.width,
+          contentHeight: bottom,
+          height: 0,
+        });
+      }
+    }
     const groups = new Map<string, { x: number; y: number; width: number; height: number }>();
-    const positioned = pending.map((item) => {
-      const cap = item.frame.dropCapLines
-        ? alignDropCap(item.fragment, item.frame.dropCapLines, anchorLines, origins.text.y)
-        : undefined;
-      const fragment = positionParagraphFrame(cap?.fragment ?? item.fragment, item.frame, origins);
-      const frameBox = {
-        x: origins[item.frame.horizontalAnchor].x + item.frame.x,
-        y: fragment.box.y,
-        width: item.frame.width,
-        height: cap?.height ?? fragment.box.height,
-      };
-      const box = groups.get(item.groupId);
-      if (box) {
-        const right = Math.max(box.x + box.width, frameBox.x + frameBox.width);
-        const bottom = Math.max(box.y + box.height, frameBox.y + frameBox.height);
-        box.x = Math.min(box.x, frameBox.x);
-        box.y = Math.min(box.y, frameBox.y);
-        box.width = right - box.x;
-        box.height = bottom - box.y;
-      } else groups.set(item.groupId, frameBox);
+    for (const [groupId, group] of localGroups) {
+      group.height =
+        group.frame.heightRule === 'exact'
+          ? group.frame.height!
+          : group.frame.heightRule === 'atLeast'
+            ? Math.max(group.contentHeight, group.frame.height ?? 0)
+            : group.contentHeight;
+      const origin = paragraphFrameOrigin(group.frame, origins, group);
+      groups.set(groupId, { ...origin, width: group.width, height: group.height });
+    }
+    const positioned = locals.map(({ item, fragment: source }) => {
+      const group = localGroups.get(item.groupId)!;
+      let local = source;
+      if (item.frame.autoWidth && group.width > item.frame.width) {
+        const extra = group.width - item.frame.width;
+        const dx =
+          local.alignment === 'right' ? extra : local.alignment === 'center' ? extra / 2 : 0;
+        local = shiftFragmentX(local, dx, local.box.width + extra);
+      }
+      const fragment = positionParagraphFrame(local, item.frame, origins, group);
       return { item, fragment };
     });
     this.pending = undefined;
-    return positioned.map(({ item, fragment }) => ({
-      ...fragment,
-      positionedFrame: {
+    return positioned.map(({ item, fragment }) => {
+      const positionedFrame = {
         anchorId,
         columnIndex,
         groupId: item.groupId,
@@ -174,7 +242,24 @@ export class ParagraphFrameFlow {
         hSpace: item.frame.hSpace,
         vSpace: item.frame.vSpace,
         box: groups.get(item.groupId)!,
-      },
-    }));
+      };
+      if (item.frame.heightRule !== 'exact') return { ...fragment, positionedFrame };
+      const top = Math.max(fragment.box.y, positionedFrame.box.y);
+      const bottom = Math.min(
+        fragment.box.y + fragment.box.height,
+        positionedFrame.box.y + positionedFrame.box.height
+      );
+      return {
+        ...fragment,
+        clipToBox: true,
+        box: {
+          x: positionedFrame.box.x,
+          y: Math.min(top, positionedFrame.box.y + positionedFrame.box.height),
+          width: positionedFrame.box.width,
+          height: Math.max(0, bottom - top),
+        },
+        positionedFrame,
+      };
+    });
   }
 }

@@ -2545,7 +2545,7 @@ export interface ParagraphFragmentRecord {
         readonly hSpace: number;
         readonly sourceOrder: number;
         readonly vSpace: number;
-        readonly wrap: 'around' | 'none' | 'notBeside';
+        readonly wrap: 'auto' | 'around' | 'tight' | 'through' | 'none' | 'notBeside';
     };
     // (undocumented)
     readonly props: readonly OoxmlProperty[];

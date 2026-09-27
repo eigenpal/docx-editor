@@ -434,7 +434,7 @@ export interface ParagraphFragmentRecord {
     readonly columnIndex: number;
     readonly groupId: string;
     readonly sourceOrder: number;
-    readonly wrap: 'around' | 'none' | 'notBeside';
+    readonly wrap: 'auto' | 'around' | 'tight' | 'through' | 'none' | 'notBeside';
     readonly hSpace: number;
     readonly vSpace: number;
     readonly box: LayoutBox;

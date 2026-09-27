@@ -21,6 +21,46 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:contextualSpacing`, any `w:pBdr` edge, inline page breaks, or per-section geometry occur in the paragraph fixture
 - **THEN** page, fragment, line, and style-span output reflects each property with stable source ranges
 
+#### Scenario: Consecutive paragraphs share an exact-height positioned frame
+- **WHEN** consecutive body paragraphs declare identical bounded `w:framePr` values with numeric page, margin, or text anchors and `w:h` paired with `w:hRule="exact"`
+- **THEN** layout stacks their content in one positioned frame, uses the authored width and height for wrapping exclusion, clips painted content to that frame, and preserves every paragraph identity and source range
+
+#### Scenario: Invalid or unsupported frame data is encountered
+- **WHEN** `w:framePr` contains an out-of-range value, an unknown enumeration value, unsupported nested content, or a frame group that cannot leave usable room on a fresh sheet
+- **THEN** semantic layout refuses the positioned-frame projection and keeps the paragraph in ordinary flow without approximating the frame
+
+#### Scenario: Frame height rules are resolved
+- **WHEN** a bounded paragraph frame uses omitted or explicit `hRule="auto"`, `hRule="atLeast"`, or `hRule="exact"`
+- **THEN** layout respectively uses content height, the greater of content and authored height, or the authored clipped height, and ignores `w:h` when the rule is `auto`
+
+#### Scenario: Frame width is automatic
+- **WHEN** consecutive matching frame paragraphs omit `w:w`
+- **THEN** layout uses their maximum bounded content-line width as one shared frame width and applies paragraph alignment inside that width
+
+#### Scenario: Frame alignment supersedes offsets
+- **WHEN** `xAlign` or a permitted `yAlign` is present
+- **THEN** layout aligns the complete frame within its page, margin, or text anchor box and ignores the corresponding numeric offset
+
+#### Scenario: Inside and outside alignment follows the sheet
+- **WHEN** a frame uses horizontal `inside` or `outside`
+- **THEN** layout selects the binding or outer edge from the physical page parity
+
+#### Scenario: Every frame wrap value is resolved
+- **WHEN** a frame uses `auto`, `around`, `tight`, `through`, `none`, or `notBeside`
+- **THEN** layout applies deterministic rectangular scanline exclusion, with `auto` using `around` and `none`, `notBeside`, or vertical `inline` alignment preventing beside wrapping
+
+#### Scenario: Margin drop cap is positioned outside the text column
+- **WHEN** a bounded simple frame declares `dropCap="margin"` and a valid line count
+- **THEN** layout sizes it from its content, aligns its baseline to the requested anchor-line band, and places it outside the text column in the paragraph direction
+
+#### Scenario: Locked frame survives supported edits
+- **WHEN** a frame declares `anchorLock` and supported text, property, split, or join operations edit its frame or anchor paragraphs
+- **THEN** the canonical order and normalized save keep the frame directly before the same logical anchor, and unsupported frame movement is not approximated
+
+#### Scenario: Negative text-relative frame position stays bounded
+- **WHEN** a frame declares a bounded negative text-relative `w:y`
+- **THEN** layout positions and excludes it on its anchor sheet without changing canonical paragraph order
+
 #### Scenario: Inline page break splits a paragraph across pages
 - **WHEN** a paragraph contains `w:br w:type="page"` between inline content
 - **THEN** layout places content before the break on the current page and content after the break on the next page while preserving one paragraph identity

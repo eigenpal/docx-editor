@@ -47,9 +47,13 @@ The matrix reports three separate support axes.
 
 A paragraph with `w:keepNext` stays with the opening lines that the following paragraph must keep together. With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the entire following paragraph together when the group fits on a page.
 
-Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored positions. Text wraps inside the frame width and remains selectable and editable. Adjacent paragraphs with identical `w:framePr` attributes share one frame. Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Following text wraps around frames; `none` and `notBeside` move that text below the frame.
+Body text frames retain numeric and relative page, margin, or text positions. The engine supports fixed and automatic width. It supports `auto`, `atLeast`, and `exact` height rules. Exact-height frames clip content to the authored rectangle. Adjacent paragraphs with identical `w:framePr` attributes share one frame.
 
-This supports auto-height frames in single-column sections with page, margin, or text anchors. Drop caps, fixed heights, alignment-based positions, and frames containing drawings or notes retain ordinary layout. Upward text-relative offsets also retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page use ordinary layout. The editor preserves their properties on save. A following continuous section starts below the preceding frames. There is no interface for creating, moving, or resizing text frames.
+All `ST_Wrap` values use the frame's rectangular contour. `auto` uses the default `around` behavior. `none`, `notBeside`, and vertical `inline` alignment move following text below the frame. Dropped caps use the requested body-line band. Margin caps sit outside the text column.
+
+Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Bounded negative text offsets remain on the anchor sheet. Locked anchors remain attached during supported text, property, split, and join edits. A following continuous section starts below the preceding frames.
+
+This support applies to single-column sections. Frames containing unsupported drawings, notes, or revision structures retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page also retain ordinary layout. The editor preserves all frame properties on save. There is no interface for creating, moving, or resizing text frames.
 
 ### Lists and numbering
 

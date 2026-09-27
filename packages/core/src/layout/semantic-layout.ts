@@ -21,7 +21,7 @@ import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
-import { positionedFrameBottom } from './paragraph-frame.ts';
+import { frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
 import { ParagraphFrameFlow, paragraphFrameFlowKeys } from './paragraph-frame-flow.ts';
 // Semantic paragraph layout over the canonical tree (tasks 7.1, 7.3).
 //
@@ -1405,14 +1405,16 @@ function layoutBlocksPass(
   ): void => {
     const inset = insetsFor(pages.length).top;
     for (const fragment of paragraphFrames.publish(
-      {
-        page: { x: -geometry.margin.left, y: -inset },
-        margin: { x: 0, y: geometry.margin.top - inset },
-        text: { x: columnLeft(), y: anchorY },
-      },
+      frameOrigins(pageIndexStart + pages.length + 1, geometry, inset, {
+        x: columnLeft(),
+        y: anchorY,
+        width: columnWidth(),
+        height: contentHeight() - anchorY,
+      }),
       anchorId,
       flowColumnIndex,
-      anchorLines
+      anchorLines,
+      markPageParityRead
     ))
       pageFragments.push(fragment);
   };

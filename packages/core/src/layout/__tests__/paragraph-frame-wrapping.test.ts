@@ -18,7 +18,7 @@ function render(wrap: string, extra = '', members = 1) {
 }
 
 test('wraps text beside numeric frames without an image layout port, including default around wrapping', () => {
-  for (const wrap of ['', 'around']) {
+  for (const wrap of ['', 'auto', 'around', 'tight', 'through']) {
     const { layout, frames, anchor } = render(wrap);
     expect(layout.pages).toHaveLength(1);
     expect(frames[0]!.box.y).toBe(0);
@@ -37,6 +37,12 @@ test('none and notBeside clear following text below the frame without moving its
     expect(anchor.lines[0]!.box.y).toBeCloseTo(25, 3);
     expect(anchor.lines[0]!.contentX).toBe(0);
   }
+  const { frames, anchor } = render('around', 'w:vAnchor="page" w:yAlign="inline"');
+  expect(frames[0]!.box.y).toBe(0);
+  expect(anchor.lines[0]!.box.y).toBe(20);
+  const textAnchored = render('around', 'w:yAlign="inline"');
+  expect(textAnchored.frames[0]!.box.y).toBe(0);
+  expect(textAnchored.anchor.lines[0]!.box.y).toBe(20);
 });
 
 test('applies horizontal text distance and wraps around the complete shared frame', () => {

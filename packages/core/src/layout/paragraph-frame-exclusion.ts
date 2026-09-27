@@ -65,6 +65,20 @@ export function addParagraphFrameExclusions(
       };
       const fullWidth =
         box.x - frame.hSpace <= left && box.x + box.width + frame.hSpace >= left + width;
+      const beside =
+        frame.wrap === 'auto' ||
+        frame.wrap === 'around' ||
+        frame.wrap === 'tight' ||
+        frame.wrap === 'through';
+      const polygon =
+        frame.wrap === 'tight' || frame.wrap === 'through'
+          ? [
+              { x: box.x, y: box.y },
+              { x: box.x + box.width, y: box.y },
+              { x: box.x + box.width, y: box.y + box.height },
+              { x: box.x, y: box.y + box.height },
+            ]
+          : null;
       const zone: ExclusionZone = {
         sourceKind: 'frame',
         sourceOrder: frame.sourceOrder,
@@ -84,11 +98,15 @@ export function addParagraphFrameExclusions(
         },
         input: {
           mode:
-            frame.wrap === 'none' || frame.wrap === 'notBeside' || fullWidth
+            !beside || fullWidth
               ? 'topAndBottom'
-              : 'square',
+              : frame.wrap === 'tight'
+                ? 'tight'
+                : frame.wrap === 'through'
+                  ? 'through'
+                  : 'square',
           contentBounds: box,
-          polygon: null,
+          polygon,
           clipPolygon: null,
           wrapDistances: distances,
           effectInsets: { left: 0, right: 0, top: 0, bottom: 0 },
@@ -129,7 +147,7 @@ export function unplaceableParagraphFrameIds(
         capsByAnchor.set(frame.anchorId, frame.groupId);
       }
       const blocking =
-        frame.wrap !== 'around' ||
+        !['auto', 'around', 'tight', 'through'].includes(frame.wrap) ||
         (frame.box.x - frame.hSpace <= 0 &&
           frame.box.x + frame.box.width + frame.hSpace >= page.contentBox.width);
       const top = frame.box.y - frame.vSpace;

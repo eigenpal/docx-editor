@@ -219,6 +219,39 @@ React and Vue render thin controls over the same core commands, enabled state, a
 
 Alternative rejected: reviving the retired ProseMirror resize contract (`readColumnWidths`, `commitColumnResize`, adapter-owned gesture FSMs). That path made adapters geometry authorities and could not target canonical tree identities across pagination and nested tables.
 
+### D15: Exact-height paragraph frames stay a bounded layout projection
+
+Consecutive paragraphs with identical numeric `w:framePr` values form one positioned frame. The supported fixed-height subset requires a positive bounded `w:h` and `w:hRule="exact"`. Layout uses that authored rectangle for text clipping and wrapping exclusion while retaining each paragraph's canonical identity and source ranges. Other height rules, alignment-based placement, and drop caps remain unsupported and fall back to ordinary flow.
+
+Alternative rejected: treating `w:h` as content height or ignoring it. Both choices change the authored frame rectangle and can hide page-anchored document information.
+
+### D16: Complete bounded `w:framePr` geometry uses the shared float model
+
+General paragraph frames accept the complete `CT_FramePr` attribute vocabulary. Height follows
+`auto`, `atLeast`, and `exact`; omitted width uses a bounded content-width probe; `xAlign` and
+`yAlign` supersede numeric offsets; and every `ST_Wrap` value receives deterministic scanline
+behavior. A text frame has a rectangular contour, so `around`, `tight`, and `through` use the
+same outer rectangle. `through` retains the even-odd fill rule for consistency with drawing
+exclusions. The schema-defined application choice `wrap="auto"` uses the default `around`
+behavior.
+
+Horizontal `inside` and `outside` follow physical page parity. Vertical `inside` and `outside`
+map to the top and bottom edges of the selected anchor box. `yAlign` is ignored for
+`vAnchor="text"` as required by ECMA-376. `yAlign="inline"` places the frame at the text anchor
+and prevents beside wrapping. Negative bounded text-relative offsets remain on the anchor
+sheet and participate in that sheet's exclusion pass.
+
+`dropCap="drop"` and `dropCap="margin"` share one bounded content probe. A dropped cap occupies
+the authored anchor-line band. A margin cap moves before the text column in left-to-right
+paragraphs and after it in right-to-left paragraphs. `anchorLock` is retained as an explicit
+semantic property. The supported operation vocabulary does not move paragraphs or frames, so
+split, join, and text/property edits preserve the locked frame immediately before its existing
+anchor. A future paragraph-move operation must either adjust the frame or refuse the move.
+
+Alternative rejected: separate frame-only alignment and wrapping implementations. Floating
+tables and drawings already own the bounded anchor-box and scanline rules, and another copy
+would drift.
+
 ## Risks / Trade-offs
 
 - [Normalized serialization changes lexical XML details] → Require both the D9 namespace-aware canonical tree fingerprint and save/reopen semantic digest.

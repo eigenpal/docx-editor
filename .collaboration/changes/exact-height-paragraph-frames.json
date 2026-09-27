@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph frames supported numeric positions, fixed width, automatic height, and three wrapping modes. Other schema-defined frame geometry remained in ordinary flow.",
+  "after": "Bounded paragraph frames render all schema height rules, automatic width, relative alignment, rectangular wrapping modes, dropped and margin caps, negative offsets, and locked anchors. Canonical OOXML and collaboration state remain unchanged.",
+  "reason": "This reads existing OOXML into derived layout records. It adds no stored fields, operations, journal primitives, or wire-format changes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-frame.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-frame-admission.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-frame-wrapping.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-drop-cap.test.ts",
+    "packages/core/src/output/__tests__/paragraph-frame-clip.test.ts"
+  ],
+  "changeset": "fixed-height-frames",
+  "migration": null
+}

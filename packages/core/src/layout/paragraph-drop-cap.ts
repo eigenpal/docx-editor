@@ -9,6 +9,14 @@ import { paragraphIsRtl } from './rtl-paragraph.ts';
 import type { LineRecord, ParagraphFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.ts';
 
+function ignoredFrameMeasureIsValid(raw: string | undefined, signed: boolean): boolean {
+  if (raw === undefined) return true;
+  const pattern = signed ? /^-?\d{1,8}$/ : /^\d{1,8}$/;
+  if (!pattern.test(raw)) return false;
+  const points = Number(raw) / 20;
+  return Number.isFinite(points) && Math.abs(points) <= 1584;
+}
+
 /** Resolve auto-width drop caps only when their authored size and line band are explicit. */
 export function resolveParagraphFrame(
   paragraph: OoxmlElement,
@@ -17,13 +25,18 @@ export function resolveParagraphFrame(
   styles: StyleCascadeTable | undefined
 ): ParagraphFrame | undefined {
   const ordinary = readParagraphFrame(inputs.props);
-  if (ordinary) return supportsParagraphFrameContent(paragraph) ? ordinary : undefined;
+  if (ordinary) {
+    if (!supportsParagraphFrameContent(paragraph)) return undefined;
+    if (!ordinary.autoWidth) return ordinary;
+    const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'frame-width-probe');
+    return width === undefined ? undefined : { ...ordinary, width };
+  }
   let attributes: OoxmlProperty['attributes'];
   for (const property of inputs.props)
     if (property.localName === 'framePr') attributes = property.attributes;
   if (
     !attributes ||
-    attributes.dropCap !== 'drop' ||
+    !['drop', 'margin'].includes(attributes.dropCap ?? '') ||
     inputs.lineSpacing.rule !== 'exact' ||
     inputs.lineSpacing.value <= 0 ||
     inputs.lineSpacing.value > 1584 ||
@@ -31,27 +44,53 @@ export function resolveParagraphFrame(
     inputs.spacing.before !== 0 ||
     inputs.spacing.after !== 0 ||
     inputs.shading !== undefined ||
-    Object.values(inputs.borders).some(Boolean) ||
-    inputs.alignment !== 'left' ||
-    paragraphIsRtl(inputs.props)
+    Object.values(inputs.borders).some(Boolean)
   )
     return undefined;
-  const count = Number(attributes.lines);
+  const count = Number(attributes.lines ?? '1');
   if (
     !Number.isInteger(count) ||
-    count < 2 ||
-    count > 10 ||
+    count < 1 ||
+    count > 100 ||
     !supportsParagraphFrameContent(paragraph)
   )
     return undefined;
-  // Anchored/explicit-width frames and margin drop caps need different admission geometry.
   if (
     Object.keys(attributes).some(
-      (key) => !['dropCap', 'lines', 'wrap', 'hAnchor', 'vAnchor', 'hSpace'].includes(key)
+      (key) =>
+        ![
+          'dropCap',
+          'lines',
+          'wrap',
+          'hAnchor',
+          'vAnchor',
+          'hSpace',
+          'vSpace',
+          'anchorLock',
+          'w',
+          'h',
+          'hRule',
+          'x',
+          'y',
+          'xAlign',
+          'yAlign',
+        ].includes(key)
     ) ||
-    (attributes.wrap !== undefined && attributes.wrap !== 'around') ||
-    (attributes.hAnchor !== undefined && attributes.hAnchor !== 'text') ||
-    (attributes.vAnchor !== undefined && attributes.vAnchor !== 'text')
+    (attributes.wrap !== undefined &&
+      !['auto', 'around', 'tight', 'through', 'none', 'notBeside'].includes(attributes.wrap)) ||
+    (attributes.hAnchor !== undefined &&
+      !['page', 'margin', 'text'].includes(attributes.hAnchor)) ||
+    (attributes.vAnchor !== undefined &&
+      !['page', 'margin', 'text'].includes(attributes.vAnchor)) ||
+    (attributes.hRule !== undefined && !['auto', 'atLeast', 'exact'].includes(attributes.hRule)) ||
+    (attributes.xAlign !== undefined &&
+      !['left', 'center', 'right', 'inside', 'outside'].includes(attributes.xAlign)) ||
+    (attributes.yAlign !== undefined &&
+      !['inline', 'top', 'center', 'bottom', 'inside', 'outside'].includes(attributes.yAlign)) ||
+    ['x', 'y'].some((name) => !ignoredFrameMeasureIsValid(attributes[name], true)) ||
+    ['w', 'h'].some((name) => !ignoredFrameMeasureIsValid(attributes[name], false)) ||
+    (attributes.anchorLock !== undefined &&
+      !['0', '1', 'true', 'false', 'on', 'off'].includes(attributes.anchorLock))
   )
     return undefined;
   // Refuse long/complex frame stories before shaping them as an auto-width cap.
@@ -64,6 +103,41 @@ export function resolveParagraphFrame(
       if (characters > 32) return undefined;
     }
   }
+  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe');
+  if (width === undefined) return undefined;
+  const frame = readParagraphFrame([
+    {
+      localName: 'framePr',
+      attributes: {
+        x: '0',
+        y: '0',
+        w: String(Math.ceil(width * 20)),
+        hSpace: attributes.hSpace ?? '0',
+        vSpace: attributes.vSpace ?? '0',
+        wrap: attributes.wrap ?? 'around',
+        anchorLock: attributes.anchorLock ?? '0',
+      },
+    },
+  ]);
+  return frame
+    ? {
+        ...frame,
+        width,
+        dropCap: attributes.dropCap as 'drop' | 'margin',
+        dropCapRtl: paragraphIsRtl(inputs.props),
+        dropCapLines: count,
+        token: `drop-cap:${attributes.dropCap}:${paragraph.id}:${frame.token}`,
+      }
+    : undefined;
+}
+
+function intrinsicFrameWidth(
+  paragraph: OoxmlElement,
+  inputs: ParagraphLayoutInputs,
+  measurer: TextMeasurer,
+  styles: StyleCascadeTable | undefined,
+  producer: string
+): number | undefined {
   const lines = breakPreparedParagraph({
     paragraph,
     paragraphId: paragraph.id,
@@ -73,47 +147,32 @@ export function resolveParagraphFrame(
     cache: undefined,
     cacheKey: null,
     formatting: inputs,
-    producer: 'drop-cap-probe',
+    producer,
     styleCascade: styles,
     tabStops: inputs.tabStops,
     flow: { firstLineOffset: inputs.indent.firstLine - inputs.indent.hanging },
   });
-  const line = lines[0];
   if (
-    lines.length !== 1 ||
-    !line ||
-    line.spans.length === 0 ||
-    line.spans.some(
-      (span) =>
-        span.equation ||
-        span.projected ||
-        span.style.baselineShiftPt !== line.spans[0]!.style.baselineShiftPt
-    ) ||
-    line.spans.reduce((sum, span) => sum + span.text.length, 0) > 32
+    lines.length === 0 ||
+    lines.some((line) =>
+      line.spans.some(
+        (span) =>
+          span.equation ||
+          span.projected ||
+          span.style.baselineShiftPt !== line.spans[0]?.style.baselineShiftPt
+      )
+    )
   )
     return undefined;
-  const width =
-    Math.max(...line.spans.map((span) => span.box.x + span.box.width)) + inputs.indent.right;
-  if (!(width > 0) || width >= inputs.available || width > 1584) return undefined;
-  const frame = readParagraphFrame([
-    {
-      localName: 'framePr',
-      attributes: {
-        x: '0',
-        y: '0',
-        w: String(Math.ceil(width * 20)),
-        hSpace: attributes.hSpace ?? '0',
-      },
-    },
-  ]);
-  return frame
-    ? {
-        ...frame,
-        width: width + 0.001,
-        dropCapLines: count,
-        token: `drop-cap:${paragraph.id}:${frame.token}`,
-      }
-    : undefined;
+  let width = 0;
+  for (const line of lines) {
+    for (const span of line.spans)
+      width = Math.max(width, span.box.x + span.box.width + inputs.indent.right);
+  }
+  if (width === 0) width = Math.min(inputs.available, Math.max(0.001, inputs.indent.right));
+  width = Math.min(width, inputs.available);
+  if (!(width > 0) || width > 1584) return undefined;
+  return Math.min(inputs.available, width + 0.001);
 }
 
 /** The cap shares the baseline of the last occupied body line, independent of its font descent. */
