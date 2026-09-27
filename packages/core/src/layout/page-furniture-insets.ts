@@ -1,3 +1,4 @@
+import { headerStoryForPage, characterHeaderPageToken } from './character-header-pages.ts';
 // Per-page content-box insets, derived from the header and footer variant THAT page shows.
 //
 // Word resolves the variant page by page (`w:titlePg` 17.6.55, `w:evenAndOddHeaders` 17.10.1)
@@ -115,7 +116,7 @@ export function createPageContentInsets(
 ): (index: number) => PageContentInsets {
   const { furniture, pageHeight, marginTop, marginBottom } = inputs;
   const cap = pageHeight * FURNITURE_INSET_FRACTION;
-  const memo = new Map<HeaderFooterVariantName, PageContentInsets>();
+  const memo = new Map<string, PageContentInsets>();
   const edge = (distance: number, story: HeaderFooterStoryLayout | undefined, margin: number) =>
     // A negative margin is exact (§17.6.11): the header or footer overlaps the body instead of
     // pushing it. An absent variant reserves nothing: the page has no furniture on that edge
@@ -130,16 +131,21 @@ export function createPageContentInsets(
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
     if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
     const variant = headerFooterVariantFor(furniture, inputs.pageIndexStart, index);
-    const cached = memo.get(variant);
+    const key = furniture && characterHeaderPageToken(furniture) ? `${variant}:${index}` : variant;
+    const cached = memo.get(key);
     if (cached) return cached;
-    const top = edge(inputs.headerDistance, furniture?.headers.get(variant), marginTop);
+    const top = edge(
+      inputs.headerDistance,
+      headerStoryForPage(furniture, variant, inputs.pageIndexStart + index),
+      marginTop
+    );
     const bottom = edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom);
     const insets: PageContentInsets = Object.freeze({
       top,
       bottom,
       height: pageHeight - top - bottom,
     });
-    memo.set(variant, insets);
+    memo.set(key, insets);
     return insets;
   };
 }

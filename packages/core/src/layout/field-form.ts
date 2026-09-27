@@ -1,3 +1,4 @@
+import { parseCharacterStyleField, type CharacterStyleField } from './field-character-style.ts';
 // FORMCHECKBOX / FORMDROPDOWN legacy form fields (§17.16.5.22, §17.16.5.16).
 //
 // Their state lives in `w:ffData` under the begin `w:fldChar`, read once at the trust boundary
@@ -55,6 +56,7 @@ export function parseFormFieldInstruction(raw: string): FormFieldKind | null {
  * the walk's vocabulary.
  */
 export interface CapturedInstructionSpecs {
+  characterStyleSpec?: CharacterStyleField | null;
   symbolSpec: SymbolFieldSpec | null;
   linkSpec: HyperlinkFieldSpec | null;
   formSpec: FormFieldKind | null;
@@ -70,6 +72,7 @@ export interface CapturedInstructionSpecs {
  * mutually exclusive, so the first recognizer that hits wins and the rest stay null.
  */
 export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: string): void {
+  pending.characterStyleSpec = parseCharacterStyleField(raw);
   pending.symbolSpec = parseSymbolInstruction(raw);
   if (pending.symbolSpec) return;
   pending.linkSpec = parseHyperlinkInstruction(raw);

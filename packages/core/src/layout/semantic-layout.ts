@@ -1,3 +1,4 @@
+import { layoutWithCharacterHeaders } from './character-header-layout.ts';
 import {
   contextualFlowInputs,
   contextualParagraphSpacing,
@@ -408,7 +409,7 @@ export function layoutSemanticDocument(
       options.session.notes = null;
       options.session.notePageBottomReserves = null;
     }
-    return finish(runBody(optionsForBody));
+    return finish(layoutWithCharacterHeaders(part, optionsForBody, runBody));
   }
 
   // Notes inherit the body's projector seams and document properties (link, field link, doc
@@ -421,7 +422,9 @@ export function layoutSemanticDocument(
     refFields ? { ...options, refFields } : options
   );
   return finish(
-    layoutSemanticDocumentWithNotes(part, sections, optionsForBody, notesInput, runBody)
+    layoutWithCharacterHeaders(part, optionsForBody, (opts) =>
+      layoutSemanticDocumentWithNotes(part, sections, opts, notesInput, runBody)
+    )
   );
 }
 

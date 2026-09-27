@@ -493,6 +493,7 @@ export function piecesOfParagraphForDisplay(
       if (grand.kind === 'runProperties') continue;
 
       if (isFldChar(grand, 'begin')) {
+        if (pending?.atomic) pending.hasNestedField = true;
         const atomic = atomBeginIds.has(grand.id);
         onFldCharBegin(field);
         if (field.nesting === 1) {
@@ -852,6 +853,7 @@ export function piecesOfParagraphForDisplay(
    * still inside it here, unlike a complex field's deferred flush.
    */
   const projectSimpleField = (simple: OoxmlNode, depth: number): void => {
+    if (pending?.atomic) pending.hasNestedField = true;
     const start = offset;
     offset += 1;
     if (simple.kind === 'textValue') return;

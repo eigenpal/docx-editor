@@ -1,3 +1,4 @@
+import { headerStoryForPage } from './character-header-pages.ts';
 // The furniture one section's pages show, and the shell a sheet minted after layout gets.
 //
 // Extracted from the section pass so both live beside each other: what a page's header and
@@ -79,7 +80,10 @@ export function createSectionPageFurniture(
   ): HeaderFooterStoryRecord | undefined => {
     if (!furniture) return undefined;
     const variant = variantFor(index);
-    const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
+    const story =
+      kind === 'header'
+        ? headerStoryForPage(furniture, variant, pageIndexStart + index)
+        : furniture.footers.get(variant);
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
     const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {

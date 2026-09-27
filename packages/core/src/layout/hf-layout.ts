@@ -1,3 +1,5 @@
+import { characterStyleValuesToken } from './character-style-tokens.ts';
+import { characterHeaderPageToken } from './character-header-pages.ts';
 // Header/footer story layout (phase 2 of the legacy-lane retirement).
 //
 // A header or footer is a STORY laid out at the section's content width with no pagination:
@@ -304,7 +306,10 @@ export function layoutHeaderFooterStory(
   let frameAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
-    const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
+    const effectiveCtx =
+      storyNeedsPageFields(needs) || inlineDrawingLayout || ctx?.characterStyleValues
+        ? ctx
+        : undefined;
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
     const anchorPageToken =
       inlineDrawingLayout &&
@@ -316,7 +321,10 @@ export function layoutHeaderFooterStory(
     const token =
       fieldPageContextToken(effectiveCtx, needs) +
       (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
-      anchorPageToken;
+      anchorPageToken +
+      (effectiveCtx?.characterStyleValues
+        ? `|cs:${characterStyleValuesToken(effectiveCtx.characterStyleValues)}`
+        : '');
 
     if (token === '') {
       if (baseline) return baseline;
@@ -628,10 +636,18 @@ export function layoutHeaderFooterStory(
         ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
         : {}),
       withPageContext: (next) => {
-        if (!storyNeedsPageFields(needs) && !story.anchoredDrawings?.length) {
+        if (
+          !storyNeedsPageFields(needs) &&
+          !story.anchoredDrawings?.length &&
+          !next.characterStyleValues &&
+          !effectiveCtx?.characterStyleValues
+        ) {
           return baseline ?? story;
         }
-        return layoutOnce(next);
+        return layoutOnce({
+          ...next,
+          characterStyleValues: next.characterStyleValues ?? effectiveCtx?.characterStyleValues,
+        });
       },
     };
 
@@ -853,6 +869,10 @@ export function furnitureLayoutContext(
     );
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-    framedTokenJoin([stories('h', furniture.headers), stories('f', furniture.footers)])
+    framedTokenJoin([
+      stories('h', furniture.headers),
+      stories('f', furniture.footers),
+      characterHeaderPageToken(furniture),
+    ])
   );
 }

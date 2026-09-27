@@ -1,3 +1,8 @@
+import {
+  characterStyleFieldValue,
+  parseCharacterStyleField,
+  hasNestedCharacterResult,
+} from './field-character-style.ts';
 // Display-text collection for `w:fldSimple` results.
 //
 // The outer simple field is one model unit; this module only decides what glyphs that unit
@@ -382,6 +387,15 @@ function projectSimpleFieldDisplay(
   const instr = fldSimpleInstr(simple) ?? '';
   const props = display.resultProps ?? inheritedRunProperties;
 
+  const characterSpec = parseCharacterStyleField(instr);
+  const characterValue = characterStyleFieldValue(
+    characterSpec && !hasNestedCharacterResult(simple) ? characterSpec : null,
+    pageContext
+  );
+  if (characterValue !== undefined) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    return style.hidden ? null : { text: characterValue, props, style };
+  }
   const pageField = matchAllowlistedPageField(instr);
   if (pageField && pageContext) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);

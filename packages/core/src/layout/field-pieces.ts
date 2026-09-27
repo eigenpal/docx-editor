@@ -366,6 +366,8 @@ export interface PieceEmitExtras {
  * `piecesOfParagraph`.
  */
 export interface PendingFieldProjection {
+  hasNestedField?: boolean;
+  characterStyleSpec?: import('./field-character-style.ts').CharacterStyleField | null;
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
   /**

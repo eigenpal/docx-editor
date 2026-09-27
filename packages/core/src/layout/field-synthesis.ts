@@ -1,3 +1,4 @@
+import { characterStyleFieldValue } from './field-character-style.ts';
 // The synthesis dispatch for one committed atomic complex field: given the pending state and the
 // document-global context, decide the single glyph run the field's reserved model unit paints.
 //
@@ -86,6 +87,13 @@ export function synthesizeAtomicField(
   pending: PendingFieldProjection,
   ctx: AtomicSynthesisContext
 ): AtomicFieldSynthesis | null {
+  const characterValue = characterStyleFieldValue(
+    pending.hasNestedField ? null : pending.characterStyleSpec,
+    ctx.pageContext
+  );
+  if (characterValue !== undefined) {
+    return { text: characterValue, props: pending.props, style: pending.style };
+  }
   // SYMBOL renders from its instruction — Word never trusts a cached result for it.
   if (pending.symbolSpec) {
     const glyph = symbolFieldGlyph(pending.symbolSpec, pending.props, ctx.themeFonts);

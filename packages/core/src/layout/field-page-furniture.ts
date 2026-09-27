@@ -105,6 +105,8 @@ export function pageFieldPlaceholder(
  * contexts that differ in it as equal and keeps a reused story's stale text.
  */
 export interface FieldPageContext {
+  /** Local character-style results for one physical page. @internal */
+  readonly characterStyleValues?: ReadonlyMap<string, string>;
   readonly pageNumber: number;
   readonly pageCount: number;
   /** SECTIONPAGES; defaults to `pageCount` when omitted (single-section callers). */

@@ -980,6 +980,18 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/guides/fields',
   },
   {
+    id: 'fields.styleref',
+    name: 'Character-style header references',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'Header STYLEREF fields resolve directly applied character styles by display name. The default selects the first page occurrence; \\l selects the last. Pages without a match search backward, then forward. Visible revision text supplies results. Header height adjusts per page. Unsupported switches, missing matches, nested result fields, and oversized results keep saved values. Body, footer, paragraph-style, and style-alias references stay cached. Save preserves source fields.',
+    docsLink: '/docs/2.x/guides/fields',
+  },
+  {
     id: 'fields.other-codes',
     name: 'Other field codes (DATE, SEQ, MERGEFIELD...)',
     category: 'fields',
