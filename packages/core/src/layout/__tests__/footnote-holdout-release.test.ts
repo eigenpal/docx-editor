@@ -227,3 +227,42 @@ describe('footnote hold-out behind independent paragraphs', () => {
     expect(fixedPoint).toBe(true);
   });
 });
+
+test('notes in a kept reference opening settle equally after note growth', () => {
+  const before: Probe = {
+    paragraphs: 100,
+    refs: new Map([
+      [5, 1],
+      [65, 2],
+      [66, 3],
+      [67, 4],
+    ]),
+    notes: new Map([
+      [1, 300],
+      [2, 250],
+      [3, 600],
+      [4, 250],
+    ]),
+    keepNext: new Set([65, 66]),
+  };
+  const after = { ...before, notes: new Map(before.notes).set(2, 700) };
+  const session = createLayoutSession();
+  layoutProbe(before, session, 1);
+  const warm = layoutProbe(after, session, 2);
+  const cold = layoutProbe(after);
+  expect(pages(warm.layout)).toEqual(pages(cold.layout));
+  expect(warm.fixedPoint).toBe(true);
+  expect(cold.fixedPoint).toBe(true);
+  for (const [paragraph, noteId] of after.refs) {
+    const referencePage = warm.layout.pages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === 'paragraph' && fragment.paragraphId.endsWith(`.${paragraph}`)
+      )
+    );
+    const openingPage = warm.layout.pages.findIndex((page) =>
+      page.footnotes?.notes.some((note) => note.noteId === noteId && !note.continuation)
+    );
+    expect(openingPage).toBe(referencePage);
+  }
+});

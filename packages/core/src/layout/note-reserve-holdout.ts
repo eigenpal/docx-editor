@@ -221,8 +221,15 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   ) {
     return 0;
   }
+  const held = heldOpening(nextBody.fragments, owningAt, owningBlock, frontier.bottom);
   const pulled = candidates.filter((ref) =>
-    fragmentOwnsPosition(owningBlock, ref.paragraphId, ref.atomOffset)
+    held.blocks.some(
+      ({ block, bottom }) =>
+        fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset) &&
+        (block === owningBlock ||
+          noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode).bottom <=
+            bottom + 0.001)
+    )
   );
   if (pulled.length === 0) return 0;
 
@@ -231,11 +238,25 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // paragraph returns just its opening lines), the WHOLE-BLOCK one at the reference
   // paragraph's fit bottom (a `w:keepLines`/keep-with-next group returns only as one
   // piece). Which quantum the body pass actually uses is not readable off the fragments.
-  const lineBandHeight = Math.max(0, frontier.bottom - firstContentTop);
-  const blockBandHeight = Math.max(0, fragmentCursorBottomPt(owningBlock) - firstContentTop);
+  const lineBandHeight = Math.max(0, held.lineBottom - firstContentTop);
+  const blockBandHeight = Math.max(0, held.blockBottom - firstContentTop);
 
   const contentWidth = bodyPage.contentBox.width;
   const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
+  // A returning continuation rejoins the fragment already on this page. The eviction
+  // guard then measures its reference from that earlier fragment's top, not page two's top.
+  const previous = bodyPage.fragments.at(-1);
+  const returningPrefix =
+    owningAt === 0 &&
+    stacksInOneColumn(bodyPage) &&
+    stacksInOneColumn(nextBody) &&
+    previous?.kind === 'paragraph' &&
+    previous.paragraphId === owningBlock.paragraphId &&
+    previous.range.end === owningBlock.range.start &&
+    previous.box.x === owningBlock.box.x &&
+    !previous.paragraphEnd
+      ? Math.max(0, bodyBottom - previous.box.y)
+      : 0;
   let pulledNotesHeight = 0;
   for (const ref of pulled) {
     const laid = layoutNoteCached(
@@ -253,7 +274,11 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     // projected offsets, `evictable: false`) spans the whole block and would over-subtract
     // it; the guard never evicts those, so the bare column is their complement.
     const band = noteReferenceLineBandPt(nextBody, ref, args.opts.compatibilityMode);
-    const inBlockOffset = band.evictable ? band.bottom - band.blockTop : 0;
+    const inBlockOffset = band.evictable
+      ? band.bottom -
+        band.blockTop +
+        (ref.paragraphId === owningBlock.paragraphId ? returningPrefix : 0)
+      : 0;
     if (laid.flowHeight > columnBudget - inBlockOffset + 0.001) continue;
     pulledNotesHeight += laid.flowHeight;
   }
@@ -286,6 +311,65 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
   const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
   return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
+}
+
+/** The body opening that must return with a frontier reference. */
+function heldOpening(
+  fragments: PageRecord['fragments'],
+  owningAt: number,
+  owner: ParagraphFragmentRecord,
+  frontierBottom: number
+): {
+  readonly blocks: readonly { block: ParagraphFragmentRecord; bottom: number }[];
+  readonly lineBottom: number;
+  readonly blockBottom: number;
+} {
+  const blocks = [{ block: owner, bottom: fragmentCursorBottomPt(owner) }];
+  let lineBottom = frontierBottom;
+  let blockBottom = blocks[0]!.bottom;
+  let previous = owner;
+  // Completing a kept paragraph also returns its successor's opening. A long successor
+  // may split, so references beyond that opening must not hold this group off the page.
+  const last = owner.lines.at(-1);
+  const ownerKeeps = paragraphKeeps(owner.props);
+  const wholeOwner = owner.fragmentIndex === 0 && owner.paragraphEnd === true;
+  let completes =
+    owner.paragraphEnd === true &&
+    ((wholeOwner && ownerKeeps.keepLines) ||
+      (wholeOwner && ownerKeeps.widowControl && owner.lines.length < 4) ||
+      (last !== undefined &&
+        frontierBottom >= last.box.y + (ownerKeeps.widowControl ? 0 : last.box.height) - 0.001));
+  for (
+    let at = owningAt + 1;
+    at < fragments.length && at - owningAt < MAX_HOLD_OUT_SCAN_BLOCKS;
+    at++
+  ) {
+    if (!completes || !paragraphKeeps(previous.props).keepNext) break;
+    const block = fragments[at]!;
+    if (block.kind !== 'paragraph' || block.positionedFrame || block.outOfFlow) break;
+    const count = block.lines.length;
+    if (count === 0) break;
+    const keeps = paragraphKeeps(block.props);
+    const whole = block.fragmentIndex === 0 && block.paragraphEnd === true;
+    const take =
+      keeps.keepLines && whole
+        ? count
+        : keeps.widowControl && block.fragmentIndex === 0
+          ? whole && count < 4
+            ? count
+            : Math.min(2, count)
+          : keeps.widowControl && block.paragraphEnd && count < 3
+            ? count
+            : 1;
+    const end = block.lines[take - 1]!;
+    const bottom = end.box.y + end.box.height;
+    blocks.push({ block, bottom });
+    lineBottom = Math.max(lineBottom, bottom);
+    blockBottom = Math.max(blockBottom, bottom);
+    previous = block;
+    completes = take === count && block.paragraphEnd === true;
+  }
+  return { blocks, lineBottom, blockBottom };
 }
 
 /**

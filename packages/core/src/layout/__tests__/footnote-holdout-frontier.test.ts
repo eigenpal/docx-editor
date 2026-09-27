@@ -1,0 +1,179 @@
+import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { createFixedMeasurer } from '../fixed-measurer.ts';
+import { holdOutReserveNeed, type HoldOutArgs, type HoldOutRef } from '../note-reserve-holdout.ts';
+import type { PageRecord, ParagraphFragmentRecord } from '../semantic-records.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const LINE = 14;
+
+function notes(counts: readonly number[]) {
+  const xml = counts
+    .map(
+      (count, index) =>
+        `<w:footnote w:id="${index + 1}"><w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr>` +
+        Array.from(
+          { length: count },
+          (_, line) => `<w:r>${line ? '<w:br/>' : ''}<w:t>N${index + 1}-${line + 1}</w:t></w:r>`
+        ).join('') +
+        '</w:p></w:footnote>'
+    )
+    .join('');
+  const result = readOoxmlPart(`<w:footnotes xmlns:w="${W}">${xml}</w:footnotes>`, {
+    name: '/word/footnotes.xml',
+    contentType: 'application/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+function paragraph(
+  id: string,
+  top: number,
+  count: number,
+  options: { start?: number; continuation?: boolean; end?: boolean; keepNext?: boolean } = {}
+): ParagraphFragmentRecord {
+  const start = options.start ?? 0;
+  return {
+    kind: 'paragraph',
+    id: `${id}#${start}`,
+    paragraphId: id,
+    fragmentIndex: options.continuation ? 1 : 0,
+    paragraphEnd: options.end ?? true,
+    range: { start, end: start + count * 10 },
+    box: { x: 0, y: top, width: 468, height: count * LINE },
+    props: options.keepNext
+      ? [{ kind: 'generic', localName: 'keepNext', attributes: {}, children: [] }]
+      : [],
+    spacing: { before: 0, after: 0, line: null, lineRule: 'auto' },
+    indent: { start: 0, end: 0, firstLine: 0, hanging: 0 },
+    lines: Array.from({ length: count }, (_, index) => ({
+      id: `${id}-${start}-${index}`,
+      range: { paragraphId: id, start: start + index * 10, end: start + (index + 1) * 10 },
+      spans: [],
+      box: { x: 0, y: top + index * LINE, width: 468, height: LINE },
+      contentX: 0,
+      baseline: 11,
+      leading: 0,
+    })),
+  } as ParagraphFragmentRecord;
+}
+
+function page(index: number, fragments: readonly ParagraphFragmentRecord[]): PageRecord {
+  return {
+    id: `page-${index}`,
+    index,
+    box: { x: 0, y: 0, width: 612, height: 792 },
+    contentBox: { x: 72, y: 72, width: 468, height: 648 },
+    fragments,
+  };
+}
+
+function args(
+  body: ParagraphFragmentRecord,
+  next: readonly ParagraphFragmentRecord[],
+  refs: readonly HoldOutRef[],
+  counts: readonly number[],
+  area: number
+): HoldOutArgs {
+  return {
+    bodyPage: page(0, [body]),
+    nextPage: page(1, next),
+    existingAreaHeight: area,
+    ownReservePt: area,
+    usedReservePt: 648 - body.box.y - body.box.height - 0.5,
+    pageBottomRefsOf: () => refs,
+    footnotesPart: notes(counts),
+    opts: { measurer: createFixedMeasurer(6, 14), producer: 'note-frontier' },
+    plainSeparatorHeight: 14,
+    noteLayoutCache: new Map(),
+  };
+}
+
+describe('footnote hold-out uses the returning paragraph opening', () => {
+  test('a continuation prices later references from the earlier fragment top', () => {
+    const earlier = paragraph('body', 112, 8, { end: false });
+    const later = paragraph('body', 0, 9, { start: 80, continuation: true });
+    const input = args(
+      earlier,
+      [later],
+      [
+        { noteId: 1, paragraphId: 'body', atomOffset: 101 },
+        { noteId: 2, paragraphId: 'body', atomOffset: 161 },
+      ],
+      [3, 30],
+      56
+    );
+    // The short reference returns. The later note exceeds its new whole-note budget and
+    // may split there, so its whole height must not prevent the earlier reference returning.
+    expect(holdOutReserveNeed(input)).toBe(0);
+    expect(holdOutReserveNeed(input)).toBe(0);
+    expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBe(0);
+  });
+
+  test('an unrelated earlier paragraph does not extend the reference paragraph', () => {
+    const input = args(
+      paragraph('earlier', 112, 8),
+      [paragraph('body', 0, 9)],
+      [
+        { noteId: 1, paragraphId: 'body', atomOffset: 21 },
+        { noteId: 2, paragraphId: 'body', atomOffset: 81 },
+      ],
+      [3, 30],
+      56
+    );
+    expect(holdOutReserveNeed(input)).toBeGreaterThan(400);
+  });
+
+  test('a kept reference includes notes in its mandatory successor opening', () => {
+    const input = args(
+      paragraph('earlier', 128, 8),
+      [paragraph('head', 0, 1, { keepNext: true }), paragraph('next', 28, 4)],
+      [
+        { noteId: 1, paragraphId: 'head', atomOffset: 1 },
+        { noteId: 2, paragraphId: 'next', atomOffset: 11 },
+        { noteId: 3, paragraphId: 'next', atomOffset: 12 },
+      ],
+      [7, 6, 3],
+      122
+    );
+    expect(holdOutReserveNeed(input)).toBeCloseTo(407.5, 4);
+    expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBeCloseTo(407.5, 4);
+  });
+
+  test('a kept paragraph that can split before its last line does not pull its successor', () => {
+    const head = paragraph('head', 0, 2, { keepNext: true });
+    const splittable = {
+      ...head,
+      props: [
+        ...head.props,
+        { kind: 'generic', localName: 'widowControl', attributes: { val: '0' }, children: [] },
+      ],
+    } as ParagraphFragmentRecord;
+    const input = args(
+      paragraph('earlier', 128, 8),
+      [splittable, paragraph('next', 42, 4)],
+      [
+        { noteId: 1, paragraphId: 'head', atomOffset: 1 },
+        { noteId: 2, paragraphId: 'next', atomOffset: 11 },
+      ],
+      [7, 25],
+      122
+    );
+    expect(holdOutReserveNeed(input)).toBe(0);
+  });
+
+  test('later notes outside a long successor opening do not hold the kept head', () => {
+    const input = args(
+      paragraph('earlier', 128, 8),
+      [paragraph('head', 0, 1, { keepNext: true }), paragraph('next', 28, 12)],
+      [
+        { noteId: 1, paragraphId: 'head', atomOffset: 1 },
+        { noteId: 2, paragraphId: 'next', atomOffset: 111 },
+      ],
+      [3, 30],
+      56
+    );
+    expect(holdOutReserveNeed(input)).toBe(0);
+  });
+});
