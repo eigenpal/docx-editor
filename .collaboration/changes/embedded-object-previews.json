@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An inline w:object with a VML preview picture stayed opaque. It took no paragraph offset, reserved no layout space, and painted nothing. Copy kept the w:object with a relationship id that the fragment did not carry.",
+  "after": "VML projection reads the cached preview of an inline embedded w:object as one read-only drawing atom that takes one paragraph offset and reserves the preview size. The o:OLEObject relationship is never read. Picture operations refuse the atom. Copy and paste drop the object whole when its embedded part cannot travel.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. Each participant derives paragraph offsets from the shared tree locally. A published selection after such an object can differ by one offset between versions, as for other projection subset changes. Clipboard fragments are local and never replicated.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-object-preview.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts"
+  ],
+  "changeset": "embedded-object-previews",
+  "migration": null
+}

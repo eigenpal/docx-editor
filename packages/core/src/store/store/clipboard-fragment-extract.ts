@@ -652,9 +652,11 @@ export function extractFragmentPackage(
     droppable: ReadonlySet<string>
   ): OoxmlNode | null => {
     if (node.kind === 'textValue') return node;
+    // An embedded object's part never travels, so the object drops as a whole.
     if (
       node.kind === 'drawing' ||
-      (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'pict')
+      (node.namespaceUri === WML_NAMESPACE_URI &&
+        (node.localName === 'pict' || node.localName === 'object'))
     ) {
       const ids = new Set<string>();
       collectRelationshipIds([node], ids);

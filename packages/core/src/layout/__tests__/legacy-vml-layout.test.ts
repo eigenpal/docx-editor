@@ -342,3 +342,43 @@ test('an outlined VML picture reserves its picture size plus the outline on each
     partial.bundle.dispose();
   }
 });
+
+test('an embedded object reserves its cached preview height, as the same w:pict does', () => {
+  const O = 'urn:schemas-microsoft-com:office:office';
+  const picture =
+    '<v:shape id="_x0000_i1025" type="#_x0000_t75" style="width:100pt;height:28.5pt" o:ole=""><v:imagedata r:id="rPreview" o:title=""/></v:shape>';
+  const ole = (type: string) =>
+    `<o:OLEObject Type="${type}" ProgID="Package" ShapeID="_x0000_i1025" DrawAspect="Content" ObjectID="_1" r:id="rOle"/>`;
+  const source = (wrapped: string) =>
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>Before</w:t></w:r></w:p><w:p><w:r>${wrapped}</w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p></w:body></w:document>`;
+  const lineTops = (wrapped: string) => {
+    const { reader, bundle } = setup(source(wrapped));
+    try {
+      const result = layoutSemanticDocument(reader.part(), 1, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: bundle.bodyContext,
+      });
+      const lines = linesOf(result);
+      return {
+        tops: lines.map((line) => line.box.y),
+        drawings: lines.flatMap((line) => line.drawings ?? []),
+      };
+    } finally {
+      bundle.dispose();
+    }
+  };
+  const embedded = lineTops(
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Embed')}</w:object>`
+  );
+  const standalone = lineTops(`<w:pict>${picture.replace(' o:ole=""', '')}</w:pict>`);
+  expect(embedded.drawings).toHaveLength(1);
+  expect(embedded.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
+  expect(embedded.tops).toEqual(standalone.tops);
+  expect(embedded.tops[2]! - embedded.tops[1]!).toBeGreaterThanOrEqual(28.5);
+  // A linked object stays opaque: its paragraph is one empty text line and paints nothing.
+  const linked = lineTops(
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Link')}</w:object>`
+  );
+  expect(linked.drawings).toHaveLength(0);
+  expect(linked.tops[2]! - linked.tops[1]!).toBe(linked.tops[1]! - linked.tops[0]!);
+});

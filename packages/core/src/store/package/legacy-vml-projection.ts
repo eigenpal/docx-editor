@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { embeddedObjectPreview } from './legacy-vml-object.ts';
 import type {
   DrawingProjection,
   DrawingHorizontalReferenceFrame,
@@ -187,9 +188,13 @@ function pictureOutline(
   });
 }
 
-function readProjection(node: OoxmlElement): DrawingProjection | null {
-  if (!boundedVml(node)) return null;
-  const roots = children(node).filter((child) => !named(child, VML, 'shapetype'));
+/**
+ * `preview` is the validated cached-preview shape of a `w:object`. Its projection is a static
+ * read-only graphic: no picture member, so picture edits never reach the embedded object.
+ */
+function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProjection | null {
+  if (!boundedVml(preview ?? node)) return null;
+  const roots = preview ? [preview] : children(node).filter((c) => !named(c, VML, 'shapetype'));
   if (roots.length !== 1) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
   // templates may redefine geometry and are outside this bounded subset.
@@ -211,7 +216,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   // A picture outline widens the drawing by its full weight on every side; the picture keeps
   // its authored size inside it.
   const border = root.localName === 'shape' ? legacyPictureBorder(root) : undefined;
-  if (border === null) return null;
+  if (border === null || (preview && border)) return null;
   const inset = border?.weight ?? 0,
     outerWidth = width + 2 * inset,
     outerHeight = height + 2 * inset;
@@ -227,7 +232,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
       !!border
     );
     if (fragment === null) return null;
-    if (border && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
+    if ((border || preview) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
     fragments.push(fragment);
   }
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
@@ -243,7 +248,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     style.has('mso-position-vertical-relative') ||
     !!anchorX ||
     !!anchorY;
-  if (border && floating) return null;
+  if ((border || preview) && floating) return null;
   const horizontal = new Map<string, DrawingHorizontalReferenceFrame>([
     ['text', 'column'],
     ['char', 'character'],
@@ -305,6 +310,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     distances[side] = Math.round(value * 12700);
   }
   const photo =
+    !preview &&
     root.localName !== 'group' &&
     fragments.length === 1 &&
     typeof fragments[0] !== 'string' &&
@@ -424,10 +430,18 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   });
 }
 
-/** Supported standalone w:pict is one read-only drawing atom. Dead MC fallbacks are not visited. */
+/**
+ * Supported standalone w:pict, or the cached preview of a w:object, is one read-only drawing
+ * atom. Dead MC fallbacks are not visited.
+ */
 export function isLegacyVmlAtom(node: OoxmlNode): boolean {
-  if (!named(node, WML_NAMESPACE_URI, 'pict') || !element(node)) return false;
-  if (!memo.has(node)) memo.set(node, readProjection(node));
+  if (!element(node)) return false;
+  const object = named(node, WML_NAMESPACE_URI, 'object');
+  if (!object && !named(node, WML_NAMESPACE_URI, 'pict')) return false;
+  if (!memo.has(node)) {
+    const preview = object ? embeddedObjectPreview(node) : undefined;
+    memo.set(node, preview === null ? null : readProjection(node, preview));
+  }
   return memo.get(node) !== null;
 }
 export function projectLegacyVml(node: OoxmlNode, ownerPartName: string): DrawingProjection | null {

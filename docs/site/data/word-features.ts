@@ -1089,11 +1089,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'OLE & embedded objects',
     category: 'structure',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor never executes or renders OLE. OLE markup and embedded binaries are preserved through editing and save.',
+      'The editor never runs, loads, or updates OLE objects. An inline embedded object with a standard VML preview picture shows that cached picture read-only, and layout reserves its size. A WMF or EMF preview keeps its size and shows a placeholder when conversion is unavailable. Floating objects, linked objects, and objects with other content show no preview. Picture commands do not apply to a preview, and copy and paste leave the object out. OLE markup and embedded binaries are preserved through editing and save.',
   },
   {
     id: 'structure.protection',
