@@ -52,6 +52,17 @@ test('an explicitly sized drop cap wraps three lines and shares their last basel
   }
 });
 
+test('a right-to-left dropped cap falls back without overlapping its body text', () => {
+  const rtl = '<w:bidi/>';
+  const rtlCap = cap().replace('<w:ind w:firstLine="200"/>', `<w:ind w:firstLine="200"/>${rtl}`);
+  const [letter, body] = paras(
+    layoutSemanticDocument(read(rtlCap + p('word '.repeat(50), rtl)), 0, options)
+  );
+  expect(letter!.positionedFrame).toBeUndefined();
+  expect(body!.positionedFrame).toBeUndefined();
+  expect(body!.box.y).toBeGreaterThanOrEqual(letter!.box.y + letter!.box.height);
+});
+
 test('the occupied band moves with the anchor when only two body lines fit', () => {
   const source = read(
     p('Lead', '<w:spacing w:line="1500" w:lineRule="exact"/>') + cap() + p('word '.repeat(20))

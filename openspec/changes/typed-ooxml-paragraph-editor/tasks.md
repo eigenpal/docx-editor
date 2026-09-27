@@ -150,9 +150,9 @@ is still moving.
 
 - [x] 16.1 Type and parse every `CT_FramePr` attribute, including all height, alignment, wrap, drop-cap, and anchor-lock values.
 - [x] 16.2 Implement `auto`, `atLeast`, and `exact` height plus bounded automatic width for shared frame groups.
-- [x] 16.3 Implement numeric and relative page, margin, and text positioning, including sheet-relative inside/outside alignment and negative text offsets.
+- [x] 16.3 Implement numeric and relative page, margin, and text positioning, including sheet-relative inside/outside alignment and safe fallback for negative text-relative vertical offsets.
 - [x] 16.4 Implement all rectangular frame wrap modes through the shared exclusion scanline model.
-- [x] 16.5 Implement bounded dropped and margin drop caps and preserve locked-anchor behavior across supported edits.
+- [x] 16.5 Implement bounded left-to-right dropped caps, bidirectional margin drop caps, safe right-to-left dropped-cap fallback, and locked-anchor behavior across supported edits.
 - [x] 16.6 Add parser, layout, wrapping, drop-cap, edit, incremental, paint, and save/reopen coverage.
 - [x] 16.7 Update release and collaboration records and run focused and repository gates.
 

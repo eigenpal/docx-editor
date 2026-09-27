@@ -53,13 +53,17 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **WHEN** a bounded simple frame declares `dropCap="margin"` and a valid line count
 - **THEN** layout sizes it from its content, aligns its baseline to the requested anchor-line band, and places it outside the text column in the paragraph direction
 
+#### Scenario: Dropped cap respects the supported paragraph direction
+- **WHEN** a bounded simple frame declares `dropCap="drop"`
+- **THEN** layout places a left-to-right cap at the leading text edge and falls back to ordinary flow for a right-to-left cap
+
 #### Scenario: Locked frame survives supported edits
 - **WHEN** a frame declares `anchorLock` and supported text, property, split, or join operations edit its frame or anchor paragraphs
 - **THEN** the canonical order and normalized save keep the frame directly before the same logical anchor, and unsupported frame movement is not approximated
 
-#### Scenario: Negative text-relative frame position stays bounded
-- **WHEN** a frame declares a bounded negative text-relative `w:y`
-- **THEN** layout positions and excludes it on its anchor sheet without changing canonical paragraph order
+#### Scenario: Negative frame position avoids earlier-text overlap
+- **WHEN** a frame declares a bounded negative `w:y`
+- **THEN** layout retains page-relative and margin-relative positions, but a negative text-relative position falls back to ordinary flow
 
 #### Scenario: Inline page break splits a paragraph across pages
 - **WHEN** a paragraph contains `w:br w:type="page"` between inline content

@@ -49,9 +49,9 @@ A paragraph with `w:keepNext` stays with the opening lines that the following pa
 
 Body text frames retain numeric and relative page, margin, or text positions. The engine supports fixed and automatic width. It supports `auto`, `atLeast`, and `exact` height rules. Exact-height frames clip content to the authored rectangle. Adjacent paragraphs with identical `w:framePr` attributes share one frame.
 
-All `ST_Wrap` values use the frame's rectangular contour. `auto` uses the default `around` behavior. `none`, `notBeside`, and vertical `inline` alignment move following text below the frame. Dropped caps use the requested body-line band. Margin caps sit outside the text column.
+All `ST_Wrap` values use the frame's rectangular contour. `auto` uses the default `around` behavior. `none`, `notBeside`, and vertical `inline` alignment move following text below the frame. Left-to-right dropped caps use the requested body-line band. Right-to-left dropped caps retain ordinary flow. Margin caps sit outside the text column on either side.
 
-Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Bounded negative text offsets remain on the anchor sheet. Locked anchors remain attached during supported text, property, split, and join edits. A following continuous section starts below the preceding frames.
+Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Bounded negative page-relative and margin-relative offsets remain authored. Negative text-relative vertical offsets retain ordinary flow to prevent overlap with earlier text. Locked anchors remain attached during supported text, property, split, and join edits. A following continuous section starts below the preceding frames.
 
 This support applies to single-column sections. Frames containing unsupported drawings, notes, or revision structures retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page also retain ordinary layout. The editor preserves all frame properties on save. There is no interface for creating, moving, or resizing text frames.
 

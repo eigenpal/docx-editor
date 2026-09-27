@@ -85,8 +85,19 @@ test('tall side-wrapped frames remain positioned when they leave a usable text l
   expect(layout.pages).toHaveLength(1);
 });
 
-test('negative text-relative, page, and margin offsets remain authored', () => {
-  for (const anchor of ['text', 'page', 'margin']) {
+test('negative text-relative vertical offsets fall back without overlapping earlier text', () => {
+  const part = source('w:y="-400" w:w="1600" w:vAnchor="text"');
+  const before = serializeOoxmlPart(part);
+  const blocks = paragraphs(layoutSemanticDocument(part, 0, options));
+  const lead = blocks[0]!;
+  const framed = blocks[1]!;
+  expect(framed.outOfFlow).toBeFalsy();
+  expect(framed.box.y).toBeGreaterThanOrEqual(lead.box.y + lead.box.height);
+  expect(serializeOoxmlPart(part)).toBe(before);
+});
+
+test('negative page-relative and margin-relative offsets remain authored', () => {
+  for (const anchor of ['page', 'margin']) {
     const layout = layoutSemanticDocument(
       source(`w:y="-200" w:w="1600" w:vAnchor="${anchor}"`),
       0,
@@ -94,7 +105,7 @@ test('negative text-relative, page, and margin offsets remain authored', () => {
     );
     const framed = paragraphs(layout)[1]!;
     expect(framed.outOfFlow).toBe(true);
-    expect(framed.box.y).toBe(anchor === 'text' ? 10 : -10);
+    expect(framed.box.y).toBe(-10);
   }
 });
 

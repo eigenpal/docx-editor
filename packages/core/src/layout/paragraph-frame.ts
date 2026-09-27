@@ -146,6 +146,7 @@ export function readParagraphFrame(properties: readonly OoxmlProperty[]): Paragr
   const y = effectiveYAlign ? 0 : coordinate(attributes.y ?? '0');
   const width = attributes.w === undefined ? 0 : coordinate(attributes.w);
   if (x === null || y === null || width === null || width < 0) return null;
+  if (verticalAnchor === 'text' && y < 0) return null;
   const autoWidth = attributes.w === undefined;
   if (!autoWidth && width <= 0) return null;
 
@@ -229,7 +230,6 @@ export function paragraphFrameOrigin(
       : origins.text.x - frameSize.width - frame.hSpace;
     return { x, y: origins.text.y };
   }
-
   const horizontal = origins[frame.horizontalAnchor];
   const slackX = horizontal.width - frameSize.width;
   let x: number;

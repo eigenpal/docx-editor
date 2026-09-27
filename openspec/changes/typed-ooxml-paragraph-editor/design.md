@@ -238,15 +238,18 @@ behavior.
 Horizontal `inside` and `outside` follow physical page parity. Vertical `inside` and `outside`
 map to the top and bottom edges of the selected anchor box. `yAlign` is ignored for
 `vAnchor="text"` as required by ECMA-376. `yAlign="inline"` places the frame at the text anchor
-and prevents beside wrapping. Negative bounded text-relative offsets remain on the anchor
-sheet and participate in that sheet's exclusion pass.
+and prevents beside wrapping. Negative bounded page-relative and margin-relative offsets remain
+authored. Negative text-relative vertical offsets fall back to ordinary flow because the
+forward-only exclusion pass cannot reflow earlier paragraphs.
 
-`dropCap="drop"` and `dropCap="margin"` share one bounded content probe. A dropped cap occupies
-the authored anchor-line band. A margin cap moves before the text column in left-to-right
-paragraphs and after it in right-to-left paragraphs. `anchorLock` is retained as an explicit
-semantic property. The supported operation vocabulary does not move paragraphs or frames, so
-split, join, and text/property edits preserve the locked frame immediately before its existing
-anchor. A future paragraph-move operation must either adjust the frame or refuse the move.
+`dropCap="drop"` and `dropCap="margin"` share one bounded content probe. A left-to-right dropped
+cap occupies the authored anchor-line band at the leading text edge. A right-to-left dropped cap
+falls back to ordinary flow until bidirectional exclusion alignment can keep its body outside the
+cap. A margin cap moves before the text column in left-to-right paragraphs and after it in
+right-to-left paragraphs. `anchorLock` is retained as an explicit semantic property. The
+supported operation vocabulary does not move paragraphs or frames, so split, join, and
+text/property edits preserve the locked frame immediately before its existing anchor. A future
+paragraph-move operation must either adjust the frame or refuse the move.
 
 Alternative rejected: separate frame-only alignment and wrapping implementations. Floating
 tables and drawings already own the bounded anchor-box and scanline rules, and another copy

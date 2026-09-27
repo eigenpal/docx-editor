@@ -55,6 +55,8 @@ export function resolveParagraphFrame(
     !supportsParagraphFrameContent(paragraph)
   )
     return undefined;
+  const dropCapRtl = paragraphIsRtl(inputs.props);
+  if (attributes.dropCap === 'drop' && dropCapRtl) return undefined;
   if (
     Object.keys(attributes).some(
       (key) =>
@@ -124,7 +126,7 @@ export function resolveParagraphFrame(
         ...frame,
         width,
         dropCap: attributes.dropCap as 'drop' | 'margin',
-        dropCapRtl: paragraphIsRtl(inputs.props),
+        dropCapRtl,
         dropCapLines: count,
         token: `drop-cap:${attributes.dropCap}:${paragraph.id}:${frame.token}`,
       }
