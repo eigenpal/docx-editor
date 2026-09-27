@@ -141,6 +141,33 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
     expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBeCloseTo(407.5, 4);
   });
 
+  test('a kept successor without a reference does not create a note hold', () => {
+    const input = args(
+      paragraph('earlier', 128, 17),
+      [paragraph('head', 0, 1, { keepNext: true }), paragraph('next', 28, 4)],
+      [{ noteId: 1, paragraphId: 'head', atomOffset: 1 }],
+      [7],
+      122
+    );
+    expect(holdOutReserveNeed(input)).toBe(0);
+    expect(holdOutReserveNeed(input)).toBe(0);
+    expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBe(0);
+  });
+
+  test('a later successor reference outside its mandatory opening adds no opening demand', () => {
+    const input = args(
+      paragraph('earlier', 128, 17),
+      [paragraph('head', 0, 1, { keepNext: true }), paragraph('next', 28, 12)],
+      [
+        { noteId: 1, paragraphId: 'head', atomOffset: 1 },
+        { noteId: 2, paragraphId: 'next', atomOffset: 111 },
+      ],
+      [7, 3],
+      122
+    );
+    expect(holdOutReserveNeed(input)).toBe(0);
+  });
+
   test('a kept paragraph that can split before its last line does not pull its successor', () => {
     const head = paragraph('head', 0, 2, { keepNext: true });
     const splittable = {

@@ -238,8 +238,21 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // paragraph returns just its opening lines), the WHOLE-BLOCK one at the reference
   // paragraph's fit bottom (a `w:keepLines`/keep-with-next group returns only as one
   // piece). Which quantum the body pass actually uses is not readable off the fragments.
-  const lineBandHeight = Math.max(0, held.lineBottom - firstContentTop);
-  const blockBandHeight = Math.max(0, held.blockBottom - firstContentTop);
+  // A successor without a pulled reference adds no note demand. Keep the existing
+  // frontier fit in that case; the body pass already enforces its paragraph keeps.
+  const referenceOwner = owningBlock;
+  const pullsSuccessorReference = pulled.some(
+    (ref) => !fragmentOwnsPosition(referenceOwner, ref.paragraphId, ref.atomOffset)
+  );
+  const lineBandHeight = Math.max(
+    0,
+    (pullsSuccessorReference ? held.lineBottom : frontier.bottom) - firstContentTop
+  );
+  const blockBandHeight = Math.max(
+    0,
+    (pullsSuccessorReference ? held.blockBottom : fragmentCursorBottomPt(owningBlock)) -
+      firstContentTop
+  );
 
   const contentWidth = bodyPage.contentBox.width;
   const columnBudget = noteColumnBudgetPt(contentHeight, args.plainSeparatorHeight);
