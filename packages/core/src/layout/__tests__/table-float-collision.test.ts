@@ -149,23 +149,28 @@ function table(options: TableOptions): string {
   );
 }
 
-function load(body: string): OoxmlPart {
+function load(body: string, sect = SECT): OoxmlPart {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
+    `<w:document xmlns:w="${W}"><w:body>${body}${sect}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
 
-function lay(body: string, header?: Story, compatibilityMode?: number): SemanticLayout {
+function lay(
+  body: string,
+  header?: Story,
+  compatibilityMode?: number,
+  sect = SECT
+): SemanticLayout {
   const furniture: PageFurniture = {
     titlePage: false,
     evenAndOddHeaders: false,
     headers: new Map(header ? [['default', header]] : []) as PageFurniture['headers'],
     footers: new Map(),
   };
-  return layoutSemanticDocument(load(body), 1, {
+  return layoutSemanticDocument(load(body, sect), 1, {
     measurer,
     sectionFurniture: [furniture],
     ...(compatibilityMode ? { compatibilityMode } : {}),
@@ -426,6 +431,58 @@ describe('bounded clearance', () => {
     expect(layout.pages).toHaveLength(3);
     for (let page = 0; page < 3; page += 1)
       expect(tablesOn(layout, page)[0]!.rows[0]!.box.y).toBeCloseTo(0, 3);
+  });
+});
+
+describe('a table carried into the second column below a header picture', () => {
+  // Fifty lines fill the first column but for 11.6pt, so the table opens in the second one,
+  // whose top is as fresh as a page top. The picture crosses the second column only.
+  const filler = Array.from({ length: 50 }, (_unused, index) => paragraph(`f${index}`)).join('');
+  const carried = (tableXml: string) =>
+    lay(filler + tableXml, pictureHeader(RIGHT_LOGO), 15, TWO_COLUMNS);
+  const secondColumn = (layout: SemanticLayout) => {
+    const fragments = tablesOn(layout, 0);
+    expect(fragments).toHaveLength(1);
+    expect(fragments[0]!.box.x).toBeGreaterThan(216);
+    return fragments[0]!;
+  };
+
+  test('a kept row that fits the column but not the room below the picture keeps the column top', () => {
+    // 45 lines of 12.727pt: taller than the 550pt below the picture, shorter than the column.
+    const layout = carried(table({ rows: 1, width: 4000, cantSplit: true, linesPerRow: 45 }));
+    expect(layout.pages).toHaveLength(1);
+    const row = secondColumn(layout).rows[0]!;
+    expect(row.box.y).toBeCloseTo(0, 3);
+    expect(row.box.height).toBeCloseTo(572.7, 1);
+    expect(row.hasContinuation ?? false).toBe(false);
+  });
+
+  test('an exact-height row taller than the room below the picture keeps the column top', () => {
+    const exact = table({ rows: 3, width: 4000 }).replace(
+      '<w:tr><w:tc>',
+      '<w:tr><w:trPr><w:trHeight w:val="11200" w:hRule="exact"/></w:trPr><w:tc>'
+    );
+    const layout = carried(exact);
+    expect(layout.pages).toHaveLength(1);
+    const fragment = secondColumn(layout);
+    expect(fragment.rows).toHaveLength(3);
+    expect(fragment.rows[0]!.box.y).toBeCloseTo(0, 3);
+    expect(fragment.rows[0]!.box.height).toBeCloseTo(560, 3);
+    expectContiguous(fragment);
+  });
+
+  test('a kept row taller than a page starts below the picture and splits there', () => {
+    const layout = carried(table({ rows: 1, width: 4000, cantSplit: true, linesPerRow: 70 }));
+    const row = secondColumn(layout).rows[0]!;
+    expect(row.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    expect(row.hasContinuation).toBe(true);
+  });
+
+  test('ordinary rows start below the picture', () => {
+    const fragment = secondColumn(carried(table({ rows: 3, width: 4000 })));
+    expect(fragment.rows).toHaveLength(3);
+    expect(fragment.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    expectContiguous(fragment);
   });
 });
 

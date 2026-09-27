@@ -1905,6 +1905,11 @@ function layoutBlocksPass(
       pageHoldsContent: (top) => pageFragments.length > 0 || top > 0,
       // One column opens every continuation at the page top, and resumes only run there.
       columnTop: () => (columns.count > 1 ? columnRegionTop : 0),
+      // The first column keeps the page answer: a continuous section can open it below content.
+      regionHoldsContent: (top) =>
+        columnIndex > 0
+          ? regionHasFragments() || top > columnRegionTop
+          : flow.pageHoldsContent(top),
       anchorFrames,
       verticalAnchorFrames: () => tableVerticalFrames(anchorY),
       styleCascade,

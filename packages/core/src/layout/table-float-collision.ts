@@ -17,7 +17,8 @@
 // table cannot reach back to it. Floating tables and frames are not obstacles here.
 //
 // Known difference: a `w:cantSplit` row that fits a page, but not the room below the band on
-// the page it opens, keeps its place under the band instead of starting below it and splitting.
+// the page or column it opens, keeps its place under the band instead of starting below it and
+// splitting.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { squareExclusionBounds } from './drawing-wrap.ts';
@@ -51,13 +52,16 @@ export interface TableFloatClearanceHost {
   readonly left: () => number;
   /** Bottom of the band the page being filled offers the table. */
   readonly bottom: () => number;
-  /** Whether only repeated header rows precede the cursor on the page being filled. */
-  readonly opensPage: () => boolean;
   /**
-   * The cursor moved to `top`, where the fragment, which has no rows yet, opens. `opensPage`
-   * tells that nothing but the band is above it on its page.
+   * Whether only repeated header rows precede the cursor in the column being filled. A later
+   * column's top is as fresh as a page top, even with content in an earlier column.
    */
-  readonly moved: (top: number, opensPage: boolean) => void;
+  readonly opensRegion: () => boolean;
+  /**
+   * The cursor moved to `top`, where the fragment, which has no rows yet, opens. `opensRegion`
+   * tells that nothing but the band is above it in its column.
+   */
+  readonly moved: (top: number, opensRegion: boolean) => void;
   /** One row's natural height at `top`. */
   readonly heightOf: (row: SemanticTableRow, top: number) => number;
 }
@@ -162,9 +166,10 @@ function tableStartOrder(
  * Clearance for an in-flow table's fragments, or null when the flow publishes no wrap zones.
  * Zones are read per call: each page the table reaches has its own.
  *
- * Bounds: a band that reaches the page bottom is not an obstacle. On a page the table opens,
- * a fragment whose first row cannot start below the band keeps its place, so no band pushes
- * a fragment from page to page.
+ * Bounds: a band that reaches the page bottom is not an obstacle. On a page or column the
+ * table opens, a fragment whose first row cannot start below the band keeps its place: no band
+ * pushes a fragment from page to page, and a row that a break already carried to a fresh page
+ * or column, which cannot advance again, never moves below a band where it cannot start.
  */
 export function tableFloatClearance(
   structure: SemanticTableStructure,
@@ -224,10 +229,10 @@ export function tableFloatClearance(
       const top = host.flow.cursorY;
       const cleared = clearedTop(top, fragment);
       if (cleared <= top + EPSILON || cleared >= host.bottom() - EPSILON) return false;
-      const opensPage = host.opensPage();
-      if (opensPage && !fragment.fitsAt(cleared)) return false;
+      const opensRegion = host.opensRegion();
+      if (opensRegion && !fragment.fitsAt(cleared)) return false;
       host.flow.cursorY = cleared;
-      host.moved(cleared, opensPage);
+      host.moved(cleared, opensRegion);
       return true;
     },
     clearPending(repeat) {

@@ -83,6 +83,8 @@ export interface TableFlowCursor {
   readonly pageHoldsContent: (top: number) => boolean;
   /** Top of the column region a column advance opens at. Absent means 0. */
   readonly columnTop?: () => number;
+  /** Whether the column being filled holds content above `top`. */
+  readonly regionHoldsContent: (top: number) => boolean;
   /** Frames a `w:tblpPr` table positions against. */
   readonly anchorFrames: () => TableAnchorFrames;
   /** Vertical frames a `w:tblpPr` table positions against. */
@@ -247,7 +249,7 @@ export function paginateTableInFlow(
   let repeatsEnabled = !initialHeaderGroupDegraded;
   let fragmentIndex = 0;
   let fragmentTop = flow.cursorY;
-  // Where a fragment opened below a band on a page it opens: that page's top for its rows.
+  // Where a fragment opened below a band in a column it opens: that column's top for its rows.
   let bandTop = 0;
   let rows: TableRowFragmentRecord[] = [];
   const rowOrdinals = new Map<string, number>();
@@ -264,12 +266,12 @@ export function paginateTableInFlow(
           flow,
           left: () => tableLeft,
           bottom: contentHeight,
-          opensPage: () =>
-            rows.every((placed) => placed.isHeaderRepeat) && !flow.pageHoldsContent(fragmentTop),
-          moved: (top, opensPage) => {
+          opensRegion: () =>
+            rows.every((placed) => placed.isHeaderRepeat) && !flow.regionHoldsContent(fragmentTop),
+          moved: (top, opensRegion) => {
             if (rows.length > 0) return;
             fragmentTop = top;
-            bandTop = opensPage ? top : 0;
+            bandTop = opensRegion ? top : 0;
           },
           heightOf: (row, top) => rowHeightOf(row, top),
         });
