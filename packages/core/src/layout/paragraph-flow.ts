@@ -1,4 +1,8 @@
-import { shouldReplayCellTab, tabDestinationForFlow } from './paragraph-tab-flow.ts';
+import {
+  cellTabReplayScope,
+  shouldReplayCellTab,
+  tabDestinationForFlow,
+} from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
@@ -408,6 +412,7 @@ export function breakParagraph(
     canFitCjkOptically(allPieces);
   const opticalCompression = opticalParagraph && !preserveColonAdvances;
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
+  const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
   const endsParagraph = paragraphEndAt(pieces);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const fitCjkOptically = createCjkOpticalFitter(
@@ -1271,9 +1276,8 @@ export function breakParagraph(
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
-        // Nontrailing tabs at the edge wrap once; cell tabs also replay an unreachable stop.
         const pastCellEdge = shouldReplayCellTab(
-          flow?.cellAnchorScope,
+          replayScope,
           paragraphRtl,
           Boolean(piece.positionalTab),
           activeExclusionZones().length,
@@ -1288,10 +1292,7 @@ export function breakParagraph(
         )
           closeLine();
         const currentX = lineOrigin() + line.width;
-        // Tab stops count from the LEADING margin. A right-to-left line is placed later by
-        // bidi reordering and alignment, so its stop arithmetic runs in leading-edge
-        // coordinates: the pen stands its leading indent plus the text so far from the
-        // right margin, and the far edge is the leading indent plus the available width.
+        // RTL stops use leading-edge coordinates before bidi placement and alignment.
         const leading = paragraphRtl ? rtlLeadingIndent : 0;
         const stopX = paragraphRtl ? leading + lineOffset() + line.width : currentX;
         const stopRight = paragraphRtl ? leading + available : rightEdge;

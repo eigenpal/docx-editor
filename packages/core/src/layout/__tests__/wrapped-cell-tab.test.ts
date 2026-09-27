@@ -27,11 +27,17 @@ function document(
     split?: boolean;
     stop?: number;
     indent?: string;
+    repeated?: boolean;
+    repeatedSplit?: boolean;
   } = {}
 ) {
-  const tab = options.positional
-    ? '<w:ptab w:alignment="left" w:relativeTo="margin" w:leader="none"/>'
-    : '<w:tab/>';
+  const tab = options.repeated
+    ? options.repeatedSplit
+      ? '<w:tab/></w:r><w:r></w:r><w:r><w:tab/>'
+      : '<w:tab/><w:tab/>'
+    : options.positional
+      ? '<w:ptab w:alignment="left" w:relativeTo="margin" w:leader="none"/>'
+      : '<w:tab/>';
   const before = options.split
     ? '<w:r><w:t>ABCD</w:t></w:r><w:r><w:t>EFGHI</w:t></w:r>'
     : '<w:r><w:t>ABCDEFGHI</w:t></w:r>';
@@ -147,4 +153,64 @@ test('an active exclusion retains the earlier cell-tab policy', () => {
   );
   expect(lines[0]!.spans.at(-1)!.text).toBe('\t');
   expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(0);
+});
+
+test('consecutive tabs retain the prior policy across run boundaries', () => {
+  const projection = (result: ReturnType<typeof layout>) =>
+    linesOf(result).map((line) => ({
+      box: line.box,
+      spans: line.spans.map((span) => ({
+        text: span.text,
+        box: span.box,
+        start: span.range.start,
+        end: span.range.end,
+      })),
+    }));
+  for (const repeatedSplit of [false, true]) {
+    const part = document({ repeated: true, repeatedSplit });
+    const result = layout(part);
+    expect(projection(result)).toEqual(
+      projection(layout(document({ repeated: true, repeatedSplit, body: true })))
+    );
+    expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
+    const session = createLayoutSession();
+    const before = layout(document(), session, 0);
+    const warm = layout(part, session, 1);
+    expect(warm.pages).toEqual(result.pages);
+    expect(layout(part, session, 1).pages[0]).toBe(warm.pages[0]);
+    expect(textX(before)).toBe(10);
+    expect(
+      linesOf(result)
+        .flatMap((line) => line.spans)
+        .map((span) => span.text)
+        .join('')
+    ).toBe('ABCDEFGHI\t\tJ K');
+  }
+});
+
+test('a continuation retains the repeated-tab policy from earlier paragraph content', () => {
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:tab/><w:tab/><w:t>ABCDEFGHI</w:t><w:tab/><w:t>J K</w:t></w:r></w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw Error(parsed.reason);
+  const body = parsed.part.root.children.find((node) => node.kind === 'body') as OoxmlElement;
+  const paragraph = body.children[0]!;
+  const lines = breakParagraph(
+    paragraph,
+    paragraph.id,
+    0,
+    50,
+    measurer,
+    undefined,
+    null,
+    [],
+    { stops: [{ positionPt: 10, alignment: 'left' }], defaultIntervalPt: 36 },
+    undefined,
+    undefined,
+    { cellAnchorScope: LEGACY_CELL_ANCHOR_SCOPE, startOffset: 2 }
+  );
+  expect(lines[0]!.spans.at(-1)!.text).toBe('\t');
+  expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(0);
+  expect(lines[0]!.spans[0]!.range.start).toBe(2);
 });

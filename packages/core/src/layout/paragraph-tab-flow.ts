@@ -42,3 +42,20 @@ export function tabDestinationForFlow(
           ...(positional.leader ? { leader: positional.leader } : {}),
         };
 }
+
+/** Repeated tab sequences retain their existing placement across the whole paragraph. */
+export function cellTabReplayScope(
+  scope: CellAnchorScope | undefined,
+  pieces: readonly { readonly text: string }[]
+): CellAnchorScope | undefined {
+  if (!scope?.inTableCell) return undefined;
+  let previousTab = false;
+  for (const piece of pieces) {
+    for (let offset = 0; offset < piece.text.length; offset += 1) {
+      const tab = piece.text[offset] === '\t';
+      if (tab && previousTab) return undefined;
+      previousTab = tab;
+    }
+  }
+  return scope;
+}
