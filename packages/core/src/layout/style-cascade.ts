@@ -1,3 +1,4 @@
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
@@ -911,6 +912,19 @@ export function resolveParagraphLayoutInputs(
         firstLine,
       }
     : { left: baseIndent.left, right: baseIndent.right, hanging, firstLine };
+  const separatorMembers = styleSeparatorMembersOf(paragraph);
+  const lastMember = separatorMembers?.at(-1)?.paragraph;
+  const lastInputs = lastMember
+    ? resolveParagraphLayoutInputs(
+        lastMember,
+        contentWidth,
+        styleCascade,
+        undefined,
+        tableCellStyle,
+        inTableCell,
+        lineUnitPt
+      )
+    : undefined;
   const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   let outlineLevel: number | null = null;
@@ -943,12 +957,15 @@ export function resolveParagraphLayoutInputs(
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props, {
-      inList: listItem !== undefined,
-      inTableCell,
-      lineUnitPt,
-      fixedAutoSpacing: styleCascade?.fixedParagraphSpacing === true,
-    }),
+    spacing: {
+      ...paragraphSpacing(props, {
+        inList: listItem !== undefined,
+        inTableCell,
+        lineUnitPt,
+        fixedAutoSpacing: styleCascade?.fixedParagraphSpacing === true,
+      }),
+      ...(lastInputs ? { after: lastInputs.spacing.after } : {}),
+    },
     lineSpacing: withLineGrid(
       {
         ...paragraphLineSpacing(props),
@@ -968,7 +985,7 @@ export function resolveParagraphLayoutInputs(
     borders: cascadedParagraphBorders(nodes),
     shading: paragraphShading(props),
     inheritedRunProperties,
-    markRunProperties,
+    markRunProperties: lastInputs?.markRunProperties ?? markRunProperties,
     tabStops,
     tabStopsCacheToken: tabStopsFingerprint(tabStops),
     ...(listItem ? { listItem } : {}),

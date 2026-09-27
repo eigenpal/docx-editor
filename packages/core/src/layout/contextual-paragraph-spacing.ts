@@ -1,3 +1,4 @@
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ParagraphSpacing } from './paragraph-style.ts';
 import {
@@ -79,6 +80,9 @@ export function flowNeighbourStyle(
   const hidden = hiddenMarkNeighboursOf(paragraph);
   const removed = side < 0 ? hidden?.before : hidden?.after;
   if (removed) return neighbourParagraphStyle(removed, styles);
+  const members = adjacent?.paragraph ? styleSeparatorMembersOf(adjacent.paragraph) : undefined;
+  const member = side < 0 ? members?.at(-1) : members?.[0];
+  if (member) return neighbourParagraphStyle(member.paragraph, styles);
   return adjacent?.kind === 'paragraph' ? adjacent.styleId : undefined;
 }
 

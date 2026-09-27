@@ -253,3 +253,20 @@ test('source diagnostics report a framed object whose preview cannot be placed',
     { code: 'legacy-drawing', partName: '/word/document.xml' },
   ]);
 });
+
+test('source diagnostics identify hidden paragraph joins outside the supported subset', () => {
+  const p = (mark: string, align = 'left') =>
+    `<w:p><w:pPr><w:jc w:val="${align}"/><w:rPr>${mark}</w:rPr></w:pPr><w:r><w:t>Text</w:t></w:r></w:p>`;
+  for (const [body, unsupported] of [
+    [p('<w:vanish/><w:specVanish/>') + p(''), false],
+    [p('<w:vanish/><w:specVanish/>') + p('', 'right'), true],
+    [p('<w:vanish/>') + p(''), true],
+    [p('<w:specVanish/>') + p(''), false],
+  ] as const) {
+    const opened = openHeadlessDocument(docxBytes(body, false));
+    if (!opened.ok) throw new Error(opened.reason);
+    expect(collectExportContentWarnings(opened.view)).toEqual(
+      unsupported ? [{ code: 'unsupported-style-separator', partName: '/word/document.xml' }] : []
+    );
+  }
+});

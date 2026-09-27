@@ -2614,7 +2614,7 @@ function collectBodyNoteReferences(
  * falls through to a full pass without discarding the caller's session write-back.
  */
 export function layoutSemanticDocumentWithNotes<
-  Opts extends {
+  Opts extends Pick<NotesLayoutInput, 'styleCascade' | 'numberingIndex'> & {
     noteMarks?: NoteMarkContext;
     pageBottomReserves?: ReadonlyMap<number, number>;
     session?: {
@@ -2653,7 +2653,9 @@ export function layoutSemanticDocumentWithNotes<
     sections,
     displayMode,
     authorFilter,
-    optionsWithLists.session
+    optionsWithLists.session,
+    optionsWithLists.styleCascade,
+    optionsWithLists.numberingIndex
   );
   const builtHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
   // The session memo hands back the previous pass's hit array by identity when nothing

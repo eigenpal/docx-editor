@@ -1,3 +1,5 @@
+import { resolveBodyRefFields } from './style-separator-ref.ts';
+import { styleSeparatorRanges, styleSeparatorToken } from './style-separator-group.ts';
 import { layoutWithCharacterHeaders } from './character-header-layout.ts';
 import {
   contextualFlowInputs,
@@ -194,8 +196,7 @@ import {
   type SemanticLayout,
 } from './semantic-records.ts';
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
-import { noteRefNumberingFromNotes } from './field-noteref.ts';
-import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
+import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
@@ -283,7 +284,13 @@ export function layoutSemanticDocument(
   // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const authorFilter = options.revisionAuthorFilter;
-  const blocks = storyBlocks(part, displayMode, authorFilter);
+  const blocks = storyBlocks(
+    part,
+    displayMode,
+    authorFilter,
+    options.styleCascade,
+    options.numberingIndex
+  );
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
@@ -327,16 +334,7 @@ export function layoutSemanticDocument(
   // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
   // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
   // so field and area agree by construction.
-  const refFields = resolveStoryRefFieldsWithNoteNumbers(
-    blocks,
-    optionsWithLists.listItems,
-    options.notes
-      ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
-      : undefined,
-    options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined,
-    displayMode,
-    authorFilter
-  );
+  const refFields = resolveBodyRefFields(part, blocks, sections, optionsWithLists);
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
@@ -916,7 +914,9 @@ function layoutBlocksPass(
     // to the document-wide token.
     const paragraphDrawingToken =
       block.kind === 'paragraph'
-        ? options.drawingTokenForParagraph?.(block) || options.drawingLayoutToken || ''
+        ? styleSeparatorToken(block, options.drawingTokenForParagraph) ||
+          options.drawingLayoutToken ||
+          ''
         : block.kind === 'table' && options.drawingTokenForParagraph
           ? drawingTokenForTableBlockMemo(
               block,
@@ -928,7 +928,7 @@ function layoutBlocksPass(
           : options.drawingLayoutToken || '';
     const projectionToken = `${
       block.kind === 'paragraph'
-        ? (options.projectionTokenForParagraph?.(block) ?? '')
+        ? styleSeparatorToken(block, options.projectionTokenForParagraph)
         : block.kind === 'table' && options.projectionTokenForParagraph
           ? (options.projectionTokenForTable?.(block) ??
             aggregateParagraphTokensForTableBlock(block, options.projectionTokenForParagraph))
@@ -941,7 +941,7 @@ function layoutBlocksPass(
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
-    const hostedListToken = hostedStory?.hostedListTokenForParagraph?.(block) ?? '';
+    const hostedListToken = styleSeparatorToken(block, hostedStory?.hostedListTokenForParagraph);
     // Length-framed pair: both sides embed file-influenced marker text (and the table
     // aggregate itself contains NULs), so no separator join stays injective.
     const ownListToken =
@@ -959,7 +959,7 @@ function layoutBlocksPass(
         ? ''
         : block.kind === 'table'
           ? refTokenForTableBlock(block, refFields)
-          : refFields.tokenForParagraph(block.id);
+          : styleSeparatorToken(block, (member) => refFields.tokenForParagraph(member.id));
     const memo = preparedBlocks.get(block);
     if (
       memo &&
@@ -1761,8 +1761,8 @@ function layoutBlocksPass(
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         showFieldCodes: options.showFieldCodes,
-        fieldCodeRanges: options.fieldCodeRanges?.get(paragraphId),
-        tocLinkStyleRanges: options.tocLinkStyleRanges?.get(paragraphId),
+        fieldCodeRanges: styleSeparatorRanges(entry.paragraph, options.fieldCodeRanges),
+        tocLinkStyleRanges: styleSeparatorRanges(entry.paragraph, options.tocLinkStyleRanges),
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
         bodyPageFields: bodyPageFieldContext,

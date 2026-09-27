@@ -108,6 +108,12 @@ await context.sync();
 
 Assign an empty string to remove a hyperlink from an eligible text span. Ordinary partial spans inside an existing hyperlink support retargeting and unlinking. The unaffected linked text keeps its metadata and formatting. The runtime rejects collapsed ranges and complex or nested hyperlink wrappers. The runtime validates the URL and content boundaries. Failed edits leave unsupported or protected targets unchanged. There is no standalone `Hyperlink` or `HyperlinkCollection` object.
 
+## Hidden paragraph marks
+
+The layout supports a bounded subset of style separators in the document body. Each joined mark must enable both `w:vanish` and `w:specVanish` after style resolution. Adjacent members must share continuation indents, alignment, line spacing, ordinary tabs, borders, shading, and keep constraints. Paragraph direction and paragraph line-breaking settings must also agree. The first member supplies numbering, first-line geometry, and before-spacing. The last member supplies after-spacing and final paragraph-mark formatting. Each member keeps its inherited text formatting and source offsets. Paragraph formatting edits still address the original source paragraph.
+
+Mixed geometry, contextual spacing, tracked content, section boundaries, cross-paragraph fields, and chains above 64 members remain separate. Table cells, notes, headers, footers, and text boxes do not use this display join. `w:vanish` alone also remains outside this subset. Export reports `unsupported-style-separator` when visible-content hidden marks cannot use this join. The source content stays preserved on save.
+
 ## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for selecting the text target.

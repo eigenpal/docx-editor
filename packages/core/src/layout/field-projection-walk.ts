@@ -99,7 +99,7 @@ import {
 } from '../store/package/content-control-walk.ts';
 
 /** Internal view projection; the public field-reader signature stays unchanged. @internal */
-export function piecesOfParagraphForDisplay(
+export function unmergedPiecesOfParagraphForDisplay(
   paragraph: OoxmlNode,
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   pageContext?: FieldPageContext,
@@ -996,3 +996,5 @@ export function piecesOfParagraphForDisplay(
     themeFonts
   );
 }
+
+export { piecesOfParagraphForDisplay } from './field-projection-display.ts';

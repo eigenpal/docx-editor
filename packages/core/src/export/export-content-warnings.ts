@@ -1,3 +1,4 @@
+import { unsupportedStyleSeparator } from './style-separator-warnings.ts';
 import { objectPreviewFrameReader } from '../store/package/legacy-object-context.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 // Source diagnostics for content that never reaches a semantic layout record.
@@ -20,8 +21,8 @@ import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 
 /** Source content that cannot be certified by the layout snapshot. @public */
 export interface ExportContentWarning {
-  /** Legacy content is preserved in the DOCX but not laid out. */
-  readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
+  /** Content outside a supported layout subset stays preserved in the DOCX. */
+  readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit' | 'unsupported-style-separator';
   /** Package part containing the content, or where the bounded scan stopped. */
   readonly partName: string;
 }
@@ -127,9 +128,10 @@ export function collectExportContentWarnings(
   }
   return Object.freeze(
     [...parts].flatMap((part) =>
-      inspectPart(part, stylesPartOf(view.currentPackage())).map((code) =>
-        Object.freeze({ code, partName: part.name })
-      )
+      [
+        ...inspectPart(part, stylesPartOf(view.currentPackage())),
+        ...(unsupportedStyleSeparator(view, part) ? ['unsupported-style-separator' as const] : []),
+      ].map((code) => Object.freeze({ code, partName: part.name }))
     )
   );
 }

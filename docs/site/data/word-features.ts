@@ -226,7 +226,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The editor does not draw w:vanish runs or give them space, but preserves their text on save. There is no "show hidden text" option. A paragraph with no visible content collapses when its directly hidden mark precedes another paragraph in the same container. Collapsed paragraphs still advance list numbering. Paragraphs with section breaks follow the section layout rules instead. A mark hidden only through a style still occupies a line.',
+      'The editor does not draw w:vanish runs or give them space, but preserves their text on save. There is no "show hidden text" option. A paragraph with no visible content collapses when its directly hidden mark precedes another paragraph in the same container. Collapsed paragraphs still advance list numbering. Paragraphs with section breaks follow the section layout rules instead. Body paragraphs can share display flow when their resolved marks enable both w:vanish and w:specVanish. The bounded subset requires matching continuation geometry, paragraph direction, line-breaking settings, and keep constraints. It preserves source paragraphs, member text formatting, first numbering and before-spacing, and last after-spacing and paragraph-mark formatting. Mixed geometry, contextual spacing, tracked content, cross-paragraph fields, non-body stories, and chains above 64 members stay separate. Export reports unsupported-style-separator for preserved visible-content joins outside this subset.',
   },
   {
     id: 'text.math',

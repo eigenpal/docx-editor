@@ -1,3 +1,4 @@
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
 import {
   numberingParagraphProperties,
@@ -496,12 +497,21 @@ function paragraphListPrelude(
     numPr && styleCascade && cascaded
       ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
       : { below: [], above: propertiesOf(pPr) };
+  const markProps = cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun);
+  // An admitted separator hides its mark, not its heading number. Content and level
+  // visibility remain independent, so an actually hidden list keeps its hidden marker.
+  const inheritedMarkProps = styleSeparatorMembersOf(paragraph)
+    ? [
+        ...markProps.filter((property) => property.localName !== 'vanish'),
+        ...(cascaded?.runProperties.filter((property) => property.localName === 'vanish') ?? []),
+      ]
+    : markProps;
   const prelude: ParagraphListPrelude = {
     styleCascade,
     numPr,
     belowLevel: tiers.below,
     aboveLevel: tiers.above,
-    inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
+    inheritedMarkProps,
     perLevel: new WeakMap(),
   };
   paragraphListPreludes.set(paragraph, prelude);
