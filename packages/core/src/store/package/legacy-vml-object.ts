@@ -57,7 +57,7 @@ export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
     shapes.length !== 1 ||
     objects.length > 1 ||
     templates.length + shapes.length + objects.length !== list.length ||
-    templates.some((template) => !isStandardVmlTemplate(template) || !boundedVml(template))
+    templates.some((template) => !boundedVml(template) || !isStandardVmlTemplate(template))
   )
     return null;
   const shape = shapes[0]!;

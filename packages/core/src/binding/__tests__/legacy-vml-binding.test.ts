@@ -226,3 +226,14 @@ describe('native VML binding model offsets', () => {
     expect(paragraphTextOf(commit(part, changed), projected.attrs.nodeId)).toBe('B');
   });
 });
+
+test('editing text beside a framed object preserves the object atom', () => {
+  const object =
+    '<w:object xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><v:shape type="#_x0000_t75" style="width:10pt;height:56pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
+  const part = load(
+    `<w:p><w:pPr><w:framePr w:y="-854"/></w:pPr><w:r>${object}<w:t>A</w:t></w:r></w:p>`
+  );
+  const projected = treeToDoc(part).child(0);
+  const changed = document([paragraph(projected, [projected.child(0), treeSchema.text('B')])]);
+  expect(paragraphTextOf(commit(part, changed), projected.attrs.nodeId)).toBe('\ufffcB');
+});

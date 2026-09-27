@@ -330,7 +330,7 @@ describe('embedded object cached previews', () => {
     expect(canonicalOoxmlFingerprint(objectIn(store.part.root)!)).toBe(object);
   });
 
-  test('copy and paste drop the object whole, never with a dangling relationship id', () => {
+  test('copy and paste refuse embedded objects without changing either package', () => {
     // The embedded part is not media, so it cannot travel with a fragment. The preview alone
     // is not the object: the whole w:object degrades away and the text survives.
     const bytes = writeOoxmlPackage(packageOf(embeddedObject()));
@@ -347,15 +347,7 @@ describe('embedded object cached previews', () => {
       fullyCoveredBlockIds: [],
       lastMarkCovered: true,
     });
-    if (!extracted.ok) throw new Error('extraction refused');
-    const copied = readOoxmlPackage(extracted.bytes);
-    if (!copied.ok) throw new Error(copied.reason);
-    const copiedXml = serializeOoxmlPart(
-      copied.package.parts.get(copied.package.mainDocumentPart)!
-    );
-    expect(copiedXml).toContain('<w:t>A</w:t>');
-    expect(copiedXml).not.toContain('w:object');
-    expect(copiedXml).not.toContain('rOle');
+    expect(extracted).toEqual({ ok: false, reason: 'unsupported-content' });
 
     const target = readOoxmlPackage(
       zipSync({
@@ -384,12 +376,163 @@ describe('embedded object cached previews', () => {
         lastMarkCovered: true,
       }
     );
-    expect(pasted.ok).toBe(true);
+    expect(pasted.ok).toBe(false);
+    if (!pasted.ok) expect(pasted.detail).toContain('unsupported-content');
     const after = store.currentPackage();
     const pastedXml = serializeOoxmlPart(after.parts.get(after.mainDocumentPart)!);
-    expect(pastedXml).toContain('<w:t>A</w:t>');
+    expect(pastedXml).not.toContain('<w:t>A</w:t>');
     expect(pastedXml).not.toContain('w:object');
     expect(pastedXml).not.toContain('rOle');
     expect([...after.partBytes.keys()].some((name) => name.includes('/embeddings/'))).toBe(false);
   });
+});
+
+test('object-only and mixed cuts refuse before writing or deleting the source', async () => {
+  const { buildCopyFlavours } = await import('../../editor/clipboard-copy-payload.ts');
+  const { createClipboardHandlers } = await import('../../editor/surface-input.ts');
+  for (const [startOffset, endOffset] of [
+    [1, 2],
+    [0, 3],
+  ]) {
+    const pkg = packageOf(embeddedObject());
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const paragraph = firstParagraph(part);
+    const before = canonicalOoxmlFingerprint(part.root);
+    const flavours = buildCopyFlavours({
+      text: 'A\uFFFCZ',
+      cellRectangle: false,
+      pkg,
+      coverage: {
+        partName: part.name,
+        paragraphIds: [paragraph.id],
+        startOffset: startOffset!,
+        endOffset: endOffset!,
+        coveredParagraphIds: [paragraph.id],
+        fullyCoveredBlockIds: [],
+        lastMarkCovered: false,
+      },
+    });
+    expect(flavours.reason).toBe('unsupported-content');
+    let prevented = false;
+    const handlers = createClipboardHandlers({
+      copyFlavours: () => flavours,
+      deleteSelection: () => {
+        throw new Error('must not delete');
+      },
+    } as unknown as import('../../editor/paginated-surface-contract.ts').PaginatedSurface);
+    handlers.onCut({
+      clipboardData: {
+        setData: () => {
+          throw new Error('must not write');
+        },
+      },
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as ClipboardEvent);
+    expect(prevented).toBe(true);
+    expect(canonicalOoxmlFingerprint(part.root)).toBe(before);
+  }
+});
+
+test('object templates reject over-budget children before signature traversal', async () => {
+  const { embeddedObjectPreview } = await import('../package/legacy-vml-object.ts');
+  const object = objectIn(
+    parse(embeddedObject()).root
+  )! as import('../package/ooxml-tree.ts').OoxmlElement;
+  const template = object.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'shapetype'
+  )!;
+  const unvisited = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error('signature traversed rejected template');
+      },
+    }
+  );
+  const oversized = {
+    ...template,
+    children: Array(513).fill(unvisited),
+  } as import('../package/ooxml-tree.ts').OoxmlElement;
+  expect(
+    embeddedObjectPreview({
+      ...object,
+      children: object.children.map((node) => (node === template ? oversized : node)),
+    })
+  ).toBeNull();
+});
+
+test('a same-document object move refuses and rolls back its preceding deletion', () => {
+  const pkg = packageOf(embeddedObject());
+  const part = pkg.parts.get(pkg.mainDocumentPart)!;
+  const store = new TreePackageStore(pkg, part);
+  const before = serializeOoxmlPart(store.currentPackage().parts.get(part.name)!);
+  const paragraph = firstParagraph(part);
+  const result = store.applyFragmentPaste(
+    { kind: 'body' },
+    {
+      paragraphId: paragraph.id,
+      offset: 0,
+      fragmentBytes: writeOoxmlPackage(pkg),
+      lastMarkCovered: false,
+      priorOps: [{ op: 'deleteText', paragraphId: paragraph.id, start: 1, end: 2 }],
+    }
+  );
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.detail).toBe('fragment-merge:unsupported-content');
+  expect(serializeOoxmlPart(store.currentPackage().parts.get(part.name)!)).toBe(before);
+});
+
+test('object templates reject oversized attributes before normalizing their strings', async () => {
+  const { embeddedObjectPreview } = await import('../package/legacy-vml-object.ts');
+  const object = objectIn(
+    parse(embeddedObject()).root
+  )! as import('../package/ooxml-tree.ts').OoxmlElement;
+  const template = object.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'shapetype'
+  )! as import('../package/ooxml-tree.ts').OoxmlElement;
+  // A string stand-in exposes whether signature normalization runs after the size refusal.
+  const value = {
+    length: 8193,
+    trim() {
+      throw new Error('normalized an oversized attribute');
+    },
+  } as unknown as string;
+  const oversized = {
+    ...template,
+    attributes: [
+      ...template.attributes,
+      { kind: 'genericExtension' as const, namespaceUri: '', localName: 'extra', value },
+    ],
+  };
+  expect(
+    embeddedObjectPreview({
+      ...object,
+      children: object.children.map((node) => (node === template ? oversized : node)),
+    })
+  ).toBeNull();
+});
+
+test('a closed rich-paste lane refuses object fragments without a plain fallback', async () => {
+  const { routePaste } = await import('../../editor/clipboard-paste-router.ts');
+  const { wrapInteropHtml } = await import('../../editor/clipboard-fragment-codec.ts');
+  const html = wrapInteropHtml('<p>AZ</p>', {
+    bytes: writeOoxmlPackage(packageOf(embeddedObject())),
+    lastMarkCovered: true,
+  });
+  expect(
+    routePaste(
+      {
+        richLaneOpen: false,
+        pasteFragment: () => {
+          throw new Error('rich lane is closed');
+        },
+        insertPlainText: () => {
+          throw new Error('must not degrade');
+        },
+      },
+      { html, text: 'AZ', forcePlain: false }
+    )
+  ).toBe('unsupported-content');
 });

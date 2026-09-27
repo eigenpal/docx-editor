@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Inline embedded objects now show their cached preview picture as a read-only drawing and reserve its size in layout.
+Show cached previews for inline embedded objects outside paragraph frames, and refuse clipboard transfers that cannot preserve objects.

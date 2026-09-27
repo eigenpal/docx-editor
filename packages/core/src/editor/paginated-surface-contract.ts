@@ -734,12 +734,17 @@ export interface PaginatedSurface {
    * Every clipboard flavour for the current selection: plain text, and the interop HTML
    * carrying the embedded fragment when the selection is a body-story range. A cell
    * rectangle answers grid text plus a flattened table; `html` is null where only plain
-   * text should be written.
+   * text should be written. Unsupported object selections return a refusal reason.
    */
-  copyFlavours(): { readonly text: string; readonly html: string | null };
+  copyFlavours(): {
+    readonly text: string;
+    readonly html: string | null;
+    readonly reason?: 'unsupported-content';
+  };
   /**
    * Route one paste payload by fidelity: embedded fragment, then external HTML, then
-   * plain text — degrading on decode, read, or apply refusal. Suggesting mode, non-body
+   * plain text. Unsupported object fragments refuse without fallback. Other decode, read,
+   * or apply failures can degrade. Suggesting mode, non-body
    * stories and an armed force-plain all land on the plain lane. False when the payload
    * landed on no lane at all (nothing to insert).
    */

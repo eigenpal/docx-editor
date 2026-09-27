@@ -1,3 +1,5 @@
+import { objectPreviewFrameReader } from './legacy-object-context.ts';
+import { stylesPartOf } from './ooxml-indexes.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
@@ -319,6 +321,7 @@ const EMPTY_LOCKS: DrawingLocks = Object.freeze({
 const EMPTY_EFFECTS = Object.freeze({ grayscale: false, brightness: 0, contrast: 0 });
 
 interface ProjectionContext {
+  readonly stylesPart?: OoxmlPart;
   readonly ownerPartName: string;
   readonly supportedMcRequires: ReadonlySet<string>;
   readonly limits: DrawingProjectionLimits;
@@ -1634,6 +1637,7 @@ interface PartCollectFrame {
   readonly depth: number;
   /** Text-box stories entered on the path to this node. */
   readonly storyDepth: number;
+  readonly framed?: boolean;
 }
 
 function collectDrawingsInPartBounded(
@@ -1646,6 +1650,7 @@ function collectDrawingsInPartBounded(
   const stack: PartCollectFrame[] = [
     { node: root, namespaceScope: emptyNamespaceScope(), depth: 0, storyDepth: 0 },
   ];
+  const hasFrame = objectPreviewFrameReader(ctx.stylesPart);
   let visited = 0;
   // A drawing that hosts a text box is not a leaf: its story is ordinary WML that can hold
   // pictures of its own, and those need projections (and atom ids) like any other run-level
@@ -1673,6 +1678,7 @@ function collectDrawingsInPartBounded(
         namespaceScope: scope,
         depth: frame.depth + 1,
         storyDepth: frame.storyDepth + 1,
+        framed: frame.framed || hasFrame(frame.node),
       });
     }
   };
@@ -1689,6 +1695,15 @@ function collectDrawingsInPartBounded(
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
 
+    const framed = frame.framed || hasFrame(frame.node);
+    // Unsupported frame geometry must not turn an embedded preview into ordinary flow.
+    // Its model atom remains present for every editing and offset reader.
+    if (
+      framed &&
+      frame.node.namespaceUri === WML_NAMESPACE_URI &&
+      frame.node.localName === 'object'
+    )
+      continue;
     const legacy = projectLegacyVml(frame.node, ownerPartName);
     if (legacy) {
       out.push(legacy);
@@ -1742,6 +1757,7 @@ function collectDrawingsInPartBounded(
           namespaceScope: scope,
           depth: frame.depth + 1,
           storyDepth: frame.storyDepth,
+          framed,
         });
       }
     }
@@ -1750,18 +1766,13 @@ function collectDrawingsInPartBounded(
 
 export function projectDrawingsInPart(
   part: OoxmlPart,
-  context?: Partial<{
-    supportedMcRequires: ReadonlySet<string>;
-    limits: DrawingProjectionLimits;
-    resolveRelationship?: RelationshipTargetResolver;
-    resolveSchemeColor?: ShapeSchemeColorResolver;
-    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
-  }>
+  context?: Partial<Omit<ProjectionContext, 'ownerPartName'>>
 ): readonly DrawingProjection[] {
   const ctx: ProjectionContext = {
     ownerPartName: part.name,
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    stylesPart: context?.stylesPart,
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
@@ -1774,18 +1785,13 @@ export function projectDrawingsInPart(
 /** Run-level drawing / MC wrapper atom id → inline projection (namespace scope from part root). */
 export function indexInlineDrawingProjectionsInPart(
   part: OoxmlPart,
-  context?: Partial<{
-    supportedMcRequires: ReadonlySet<string>;
-    limits: DrawingProjectionLimits;
-    resolveRelationship?: RelationshipTargetResolver;
-    resolveSchemeColor?: ShapeSchemeColorResolver;
-    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
-  }>
+  context?: Partial<Omit<ProjectionContext, 'ownerPartName'>>
 ): ReadonlyMap<string, DrawingProjection> {
   const ctx: ProjectionContext = {
     ownerPartName: part.name,
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    stylesPart: context?.stylesPart,
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
@@ -1814,6 +1820,7 @@ export function projectDrawingsInPackage(
     // several hundred thousand arguments overflows the stack instead of being merely slow.
     const inPart = projectDrawingsInPart(part, {
       ...context,
+      stylesPart: stylesPartOf(pkg),
       resolveRelationship: createDrawingRelationshipResolver(pkg, partName),
       resolveSchemeColor: theme.resolveSchemeColor,
       resolveStyleMatrixReference: theme.resolveStyleMatrixReference,

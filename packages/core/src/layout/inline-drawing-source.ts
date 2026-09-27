@@ -1,3 +1,4 @@
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
 //
 // Precomputes run-level drawing / MC atom projections from a bounded part traversal with
@@ -458,12 +459,19 @@ function createPartDrawingContextSlot(options: {
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const theme = createPackageShapeThemeResolvers(pkg);
+  const stylesPart = stylesPartOf(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(part, {
+    stylesPart,
     resolveRelationship: resolveRelationshipTarget,
     resolveSchemeColor: theme.resolveSchemeColor,
     resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
   });
   const atomIdentities = drawingAtomIdentities(part);
+  const hasObjects = atomIdentities
+    ? Array.from(atomIdentities.values()).some(
+        (node) => node.kind !== 'textValue' && node.localName === 'object'
+      )
+    : true;
 
   const scheduleResolve = (projection: DrawingProjection, key: string): void => {
     if (disposed || inFlight.has(key)) return;
@@ -621,9 +629,14 @@ function createPartDrawingContextSlot(options: {
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
-      if (nextPart === part) return true;
+      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) return true;
       const nextAtomIdentities = drawingAtomIdentities(nextPart);
-      if (atomIdentities && nextAtomIdentities && atomIdentities.size === nextAtomIdentities.size) {
+      if (
+        !hasObjects &&
+        atomIdentities &&
+        nextAtomIdentities &&
+        atomIdentities.size === nextAtomIdentities.size
+      ) {
         let unchanged = true;
         for (const [id, node] of atomIdentities) {
           if (nextAtomIdentities.get(id) !== node) {
@@ -634,6 +647,7 @@ function createPartDrawingContextSlot(options: {
         if (unchanged) return true;
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
+        stylesPart: stylesPartOf(nextPkg),
         resolveRelationship: createDrawingRelationshipResolver(nextPkg, ownerPartName),
         resolveSchemeColor: nextTheme.resolveSchemeColor,
         resolveStyleMatrixReference: nextTheme.resolveStyleMatrixReference,

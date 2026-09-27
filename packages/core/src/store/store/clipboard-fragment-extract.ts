@@ -1,3 +1,4 @@
+import { containsClipboardObject } from './clipboard-object-policy.ts';
 // Clipboard fragment extraction: a semantic range becomes a minimal, valid
 // WordprocessingML package (rich-clipboard-fidelity tasks 1.2-1.6).
 //
@@ -88,7 +89,8 @@ export type FragmentExtractRejection =
   | 'unknown-part'
   | 'empty-range'
   | 'trim-refused'
-  | 'resource-limit';
+  | 'resource-limit'
+  | 'unsupported-content';
 
 export type FragmentExtractResult =
   | {
@@ -552,6 +554,10 @@ export function extractFragmentPackage(
   const footnotes = includedNotes(footnotesPart, 'footnote', footnoteIds);
   const endnotes = includedNotes(endnotesPart, 'endnote', endnoteIds);
   const noteBodies: OoxmlNode[] = [...footnotes, ...endnotes];
+
+  if (containsClipboardObject(blocks) || containsClipboardObject(noteBodies)) {
+    return { ok: false, reason: 'unsupported-content' };
+  }
 
   // Closure inputs: blocks plus note bodies.
   const closureNodes: OoxmlNode[] = [...blocks, ...noteBodies];
