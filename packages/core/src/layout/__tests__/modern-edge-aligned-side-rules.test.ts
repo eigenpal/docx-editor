@@ -155,6 +155,32 @@ test('the reclaimed rule width changes where a mode 15 left table wraps', () => 
   expect(contentEdges(layout(part, 16)).lines).toBe(2);
 });
 
+// Captured fixed-layout controls drawn with `w:tblW w:type="auto"` put text and strokes where
+// the matching `dxa` controls do, left and right aligned.
+test('mode 15 auto-width left and right tables take the edge-aligned geometry', () => {
+  for (const jc of [undefined, 'right']) {
+    const auto = source({ jc, cols: [1440, 1440], sz: 4, widthType: 'auto' });
+    const dxa = source({ jc, cols: [1440, 1440], sz: 4 });
+    const structure = read(auto.table, 15);
+    expect(structure.outerRuleOffsetPt).toBe(jc ? -0.25 : 0.25);
+    expect(structure.rows[0]!.cells[1]!.centeredSideRules).toBe(true);
+    const result = layout(auto.part, 15);
+    expect(firstTable(result).box).toEqual(firstTable(layout(dxa.part, 15)).box);
+    for (const index of [0, 1]) {
+      const edges = contentEdges(result, index);
+      expect(edges.left).toBeCloseTo(5.4, 8);
+      expect(edges.right).toBeCloseTo(5.4, 8);
+    }
+  }
+});
+
+test('the reclaimed rule width changes where a mode 15 auto-width table wraps', () => {
+  // The same 130.9pt line as the `dxa` case fits the 133.2pt budget, not the 130.2pt one.
+  const shape = { text: 'aaaaaaaaaaa aaaaaaaaaaaa', widthType: 'auto' };
+  expect(contentEdges(layout(source(shape).part, 15)).lines).toBe(1);
+  expect(contentEdges(layout(source(shape).part, 16)).lines).toBe(2);
+});
+
 test('a vertical merge continuation does not block the shared grid line', () => {
   const merged = (vMerge: string, text: string) =>
     `<w:tc><w:tcPr><w:tcW w:w="1440" w:type="dxa"/>${vMerge}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
@@ -173,7 +199,6 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
     { style: 'double', sz: 6 },
     { cols: [1440, 1440], outerSz: 48 },
     { cols: [1440, 1440], rows: gridBefore },
-    { widthType: 'auto' },
     { widthType: 'pct' },
     { jc: 'right', cols: [6000] },
     { fixed: false, cols: [5960] },

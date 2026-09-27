@@ -128,8 +128,7 @@ for (const fixed of [false, true]) {
 test('mode 15 keeps the full-stroke inset for shapes its controls do not cover', () => {
   // Left- and right-aligned `dxa` tables are covered in `modern-edge-aligned-side-rules.test.ts`.
   for (const table of [
-    source(0.5, '', 4, 'single', 'auto').table,
-    source(0.5, CENTRED, 4, 'single', 'auto').table,
+    source(0.5, '', 4, 'single', 'pct').table,
     source(0.5, CENTRED, 4, 'single', 'pct').table,
     source(0.5, CENTRED, 8).table,
     source(0.5, CENTRED, 4, 'double').table,
@@ -148,13 +147,35 @@ test('mode 15 keeps the full-stroke inset for shapes its controls do not cover',
     read(source(0.5, CENTRED).table, 15, 1).rows[0]!.cells[0]!.centeredSideRules
   ).toBeUndefined();
   expect(read(source(0.5, CENTRED).table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
-  const { part } = source(0, '', 4, 'single', 'auto');
+  const { part } = source(0, '', 4, 'single', 'pct');
   const inset = layout(part, 15).pages[0]!.fragments[0]!;
   if (inset.kind !== 'table') throw new Error('Expected table');
   const cell = inset.rows[0]!.cells[0]!;
   const paragraph = cell.blocks[0]!;
   if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
   expect(paragraph.lines[0]!.box.x - cell.box.x).toBe(0.5);
+});
+
+// Captured centred controls drawn with `w:tblW w:type="auto"` put text and strokes where the
+// matching `dxa` controls do, fixed or autofit.
+test('mode 15 centred auto-width table takes the centred dxa geometry', () => {
+  for (const extra of [CENTRED, `${CENTRED}<w:tblLayout w:type="fixed"/>`]) {
+    const auto = source(0, extra, 4, 'single', 'auto');
+    const cell = read(auto.table, 15).rows[0]!.cells[0]!;
+    expect(cell.centeredSideRules).toBe(true);
+    expect(cell.centeredSidePaint).toBe(true);
+    const geometry = (part: typeof auto.part) => {
+      const fragment = layout(part, 15).pages[0]!.fragments[0]!;
+      if (fragment.kind !== 'table') throw new Error('Expected table');
+      const painted = fragment.rows[0]!.cells[0]!;
+      const paragraph = painted.blocks[0]!;
+      if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+      return { table: fragment.box, cell: painted.box, line: paragraph.lines[0]!.box };
+    };
+    const shape = geometry(auto.part);
+    expect(shape).toEqual(geometry(source(0, extra).part));
+    expect(shape.line.x - shape.cell.x).toBe(0.25);
+  }
 });
 
 test('mode 15 admits a directly disabled bidiVisual flag', () => {

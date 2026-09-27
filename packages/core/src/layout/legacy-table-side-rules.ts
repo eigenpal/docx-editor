@@ -4,6 +4,16 @@ import type { PreferredWidthType } from './table-widths.ts';
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
 
 /**
+ * Mode-15 table width types that take one side-rule geometry.
+ *
+ * Captured left, right and centred fixed-layout controls, and centred autofit controls,
+ * drawn with `w:tblW w:type="auto"` put every stroke and text edge where the matching `dxa`
+ * control does. A wrapped cell line in an `auto` table confirms the reclaimed content width.
+ * A `pct` table stays outside until controls cover it.
+ */
+const MODERN_GRID_WIDTH_TYPES: readonly PreferredWidthType[] = ['dxa', 'auto'];
+
+/**
  * True when a cell's authored side rules are the shared-grid-line shape.
  *
  * ONE qualifying side is enough. Requiring both made the rule depend on whether the cell
@@ -38,11 +48,12 @@ function mapCells(
 /**
  * Centre the painted stroke on the grid line, without moving the content edge.
  *
- * The same captured control drawn with `w:tblW w:type="auto"` centres its rules exactly as
- * the `dxa` one does, so the width type does not decide where the reference paints. It does
- * decide the content budget: `centeredSideRules` also reclaims half the stroke as padding in
- * `table-cell-geometry.ts`, which changes line breaking. Paint follows the wider rule;
- * the content inset keeps the narrow one it was measured against.
+ * In the legacy modes, the same captured control drawn with `w:tblW w:type="auto"` centres
+ * its rules exactly as the `dxa` one does, so the width type does not decide where the
+ * reference paints. It does decide the legacy content budget: `centeredSideRules` also
+ * reclaims half the stroke as padding in `table-cell-geometry.ts`, which changes line
+ * breaking. Paint follows the wider rule; the content inset keeps the narrow one it was
+ * measured against. Mode 15 gives `auto` the whole `dxa` geometry instead.
  */
 export function withCentredSideRulePaint(
   rows: readonly SemanticTableRow[]
@@ -114,7 +125,7 @@ function uniformSimpleSideRuleWidth(
  * The mode-15 left- or right-aligned table whose captured controls cover it, as the offset
  * of its grid from the aligned edge; else `undefined`.
  *
- * Captured `dxa` controls put the OUTER edge of the leading (left) or trailing (right) rule
+ * Captured `dxa` and `auto` controls put the OUTER edge of the leading (left) or trailing (right) rule
  * on the aligned edge, so the grid moves inward by half the rule. Every rule is centred on
  * its grid line and the margin is measured from that centre, as in the centred shape. The
  * controls cover 0.5 to 6pt single rules, 3pt thick rules, 0 to 10.8pt margins, indents,
@@ -128,7 +139,8 @@ function modernEdgeAlignedOffsetPt(
   rows: readonly SemanticTableRow[],
   table: SideRuleTableShape
 ): number | undefined {
-  if (table.compatibilityMode !== 15 || table.widthType !== 'dxa') return undefined;
+  if (table.compatibilityMode !== 15 || !MODERN_GRID_WIDTH_TYPES.includes(table.widthType))
+    return undefined;
   if (table.alignment === 'center') return undefined;
   const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
   if (rule === undefined) return undefined;
@@ -144,17 +156,18 @@ function modernEdgeAlignedOffsetPt(
  * Admit simple collapsed side rules to the shared-grid-line geometry.
  *
  * Modes 11, 12 and 14 (and an absent mode) take it for every top-level, collapsed, unpositioned
- * left-to-right table. Mode 15 takes it only for the shapes its captured controls cover:
+ * left-to-right table. Mode 15 takes it only for the shapes its captured controls cover, with
+ * a `dxa` or `auto` width (`MODERN_GRID_WIDTH_TYPES`):
  *
- * - a centred `dxa` table. Fixed-layout controls at 0.5, 1.5, 3 and 6pt strokes with 0 and
+ * - a centred table. Fixed-layout controls at 0.5, 1.5, 3 and 6pt strokes with 0 and
  *   5.4pt margins, and autofit controls, put text and strokes at the mode-14 positions: the
  *   stroke centred on the grid line and the margin measured from that centre.
- * - a left- or right-aligned `dxa` table with one simple rule width on every cell side. It
+ * - a left- or right-aligned table with one simple rule width on every cell side. It
  *   takes the same cell geometry, and its grid moves inward by half the outer rule
  *   (`modernEdgeAlignedOffsetPt`). The two go together: the inset alone would move the text
  *   outward by half a rule.
  *
- * Other mode-15 shapes (`auto` or `pct` width, unequal or compound rules) and mode 16 keep
+ * Other mode-15 shapes (`pct` width, unequal or compound rules) and mode 16 keep
  * the full-stroke inset until controls cover them.
  */
 export function withSharedGridLineSideRules(
@@ -165,10 +178,12 @@ export function withSharedGridLineSideRules(
   if (table.depth !== 0 || table.bidiVisual || table.floating || table.cellSpacingPt !== 0)
     return { rows };
   const legacyMode = mode === undefined || [11, 12, 14].includes(mode);
-  const modernCentredDxa = mode === 15 && table.widthType === 'dxa' && table.alignment === 'center';
+  const modernGridWidth = mode === 15 && MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
+  const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
-  if (!legacyMode && !modernCentredDxa && outerRuleOffsetPt === undefined) return { rows };
+  if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return { rows };
   const painted = withCentredSideRulePaint(rows);
-  const shared = table.widthType === 'dxa' ? withLegacyTableSideRules(painted) : painted;
+  const shared =
+    table.widthType === 'dxa' || modernGridWidth ? withLegacyTableSideRules(painted) : painted;
   return outerRuleOffsetPt === undefined ? { rows: shared } : { rows: shared, outerRuleOffsetPt };
 }
