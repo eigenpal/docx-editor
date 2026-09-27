@@ -29,6 +29,7 @@ import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import { keptRowGroup, rowsOpening, rowStartsPage, tableKeptRowSource } from './table-row-keeps.ts';
+import { rowMinimumMoves } from './table-row-minimum-fit.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
@@ -81,6 +82,8 @@ export interface TableFlowCursor {
   readonly advancePage: () => void;
   /** Whether the page being filled holds content above `top`, including earlier columns. */
   readonly pageHoldsContent: (top: number) => boolean;
+  /** Top of the column being filled. Absent means 0. */
+  readonly columnTop?: () => number;
   /** Frames a `w:tblpPr` table positions against. */
   readonly anchorFrames: () => TableAnchorFrames;
   /** Vertical frames a `w:tblpPr` table positions against. */
@@ -715,6 +718,14 @@ export function paginateTableInFlow(
       startsPage ||
       forceBreak ||
       keptMoves ||
+      (!heldByOpenSpan &&
+        rowMinimumMoves(row, rowDeps(), structure.cellSpacingPt, {
+          top: flow.cursorY,
+          columnTop: flow.columnTop?.() ?? 0,
+          bottom: contentHeight(),
+          band: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
+          repeat: repeatsEnabled ? headerGroupHeight : 0,
+        })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
         flow.cursorY + naturalHeight > contentHeight() + 0.001 &&

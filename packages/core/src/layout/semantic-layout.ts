@@ -1902,6 +1902,7 @@ function layoutBlocksPass(
         flow.cursorY = cursorY;
       },
       pageHoldsContent: (top) => pageFragments.length > 0 || top > 0,
+      columnTop: () => columnRegionTop,
       anchorFrames,
       verticalAnchorFrames: () => tableVerticalFrames(anchorY),
       styleCascade,

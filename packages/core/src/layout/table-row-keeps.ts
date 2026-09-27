@@ -51,6 +51,7 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
+import { rowMinimumOpeningPt } from './table-row-minimum-fit.ts';
 import { rowBreaksPageBefore } from './table-row-page-break.ts';
 import { planHeaderGroup } from './table-header-vmerge.ts';
 import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
@@ -280,6 +281,9 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
   };
   const opensWithin = (index: number, height: number): boolean => {
     const row = rows[index]!;
+    // An `atLeast` minimum must fit before the row starts (`table-row-minimum-fit.ts`).
+    const minimum = rowMinimumOpeningPt(row, deps, structure.cellSpacingPt, measure.pageHeight);
+    if (minimum !== undefined && minimum > height + 0.001) return false;
     return probeRowFragmentProgress(
       row,
       structure.columnWidthsPt,
