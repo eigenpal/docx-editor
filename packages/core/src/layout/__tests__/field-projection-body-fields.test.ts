@@ -314,3 +314,50 @@ describe('field format ownership', () => {
     expect(runHasBold(findNode(applied.part, span.runId))).toBe(true);
   });
 });
+
+for (const simple of [false, true]) {
+  test(`${simple ? 'simple' : 'complex'} direction-prefix field formats its visible result`, () => {
+    const result =
+      '<w:r><w:rPr><w:rFonts w:cs="Control"/><w:cs/><w:szCs w:val="80"/></w:rPr><w:t>\u200e</w:t></w:r>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Visible" w:hAnsi="Visible"/><w:sz w:val="20"/></w:rPr><w:t>Result</w:t></w:r>';
+    const part = parse(
+      `<w:p>${simple ? `<w:fldSimple w:instr="REF missing">${result}</w:fldSimple>` : complexField('REF missing', result)}</w:p>`
+    );
+    const paragraph = paragraphOf(part);
+    const span = atomicFieldSpansOf(paragraph)[0]!;
+    expect(span.formatRunIds).toHaveLength(2);
+    const edits = runPropertyEdits(part, paragraph.id, 0, 1, {
+      localName: 'sz',
+      attributes: { val: '32' },
+    });
+    expect(new Set(edits.flatMap((edit) => edit.targetRunIds ?? []))).toEqual(
+      new Set(span.formatRunIds)
+    );
+    let current = part;
+    for (const edit of edits) {
+      const applied = applyTreeOp(current, {
+        op: 'setRunProperties',
+        paragraphId: paragraph.id,
+        start: edit.start,
+        end: edit.end,
+        properties: edit.properties,
+        ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
+      });
+      expect(applied.ok).toBe(true);
+      if (!applied.ok) return;
+      current = applied.part;
+    }
+    const changed = paragraphOf(current);
+    expect(piecesOfParagraph(changed)[0]).toMatchObject({
+      text: '\u200eResult',
+      style: { fontFamily: 'Visible', fontSizePt: 16 },
+    });
+    const plain = paragraphOf(
+      parse('<w:p><w:r><w:rPr><w:sz w:val="32"/></w:rPr><w:t>Result</w:t></w:r></w:p>')
+    );
+    expect(breakParagraph(changed, changed.id, 0, 400, measurer, undefined, null)[0]!.height).toBe(
+      breakParagraph(plain, plain.id, 0, 400, measurer, undefined, null)[0]!.height
+    );
+    expect(paragraphTextOf(current, changed.id)).toBe(FIELD_ATOM_CHAR);
+  });
+}

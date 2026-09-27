@@ -460,6 +460,8 @@ export interface PendingFieldProjection {
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;
   capturedResultStyle: boolean;
+  /** Direction-only style remains a fallback until visible result text arrives. */
+  capturedResultStyleIsDirectional?: boolean;
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
   /**

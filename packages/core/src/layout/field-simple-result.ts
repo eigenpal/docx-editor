@@ -1,3 +1,4 @@
+import { fieldResultIsDirectionOnly } from './field-result-style.ts';
 import {
   characterStyleFieldValue,
   parseCharacterStyleField,
@@ -134,6 +135,7 @@ export function collectSimpleFieldDisplay(args: {
   let text = '';
   let resultProps: readonly OoxmlProperty[] | undefined;
   let resultStyle: ResolvedRunStyle | undefined;
+  let resultStyleIsDirectional = false;
   let sawResultContent = false;
 
   const nested = createFieldParseState();
@@ -150,10 +152,16 @@ export function collectSimpleFieldDisplay(args: {
   let scopeDepth = 0;
   const displayed = (): boolean => scope === null || scope.visible();
 
-  const captureStyle = (props: readonly OoxmlProperty[], style: ResolvedRunStyle): void => {
-    if (resultProps) return;
+  const captureStyle = (
+    props: readonly OoxmlProperty[],
+    style: ResolvedRunStyle,
+    value?: string
+  ): void => {
+    const directionOnly = value !== undefined && fieldResultIsDirectionOnly(value);
+    if (resultProps && (!resultStyleIsDirectional || directionOnly)) return;
     resultProps = props;
     resultStyle = style;
+    resultStyleIsDirectional = directionOnly;
   };
 
   const collect = (node: OoxmlNode, nodeDepth: number, local: readonly RevisionAttribution[]) => {
@@ -242,11 +250,11 @@ export function collectSimpleFieldDisplay(args: {
           const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
             tracker.noteResult(!suppressed);
-            if (!suppressed) captureStyle(props, style);
+            if (!suppressed) captureStyle(props, style, value);
             continue;
           }
           if (suppressed) continue;
-          captureStyle(props, style);
+          captureStyle(props, style, value);
           text += value;
         }
         continue;
