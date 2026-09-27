@@ -260,7 +260,8 @@ test('source diagnostics identify hidden paragraph joins outside the supported s
   for (const [body, unsupported] of [
     [p('<w:vanish/><w:specVanish/>') + p(''), false],
     [p('<w:vanish/><w:specVanish/>') + p('', 'right'), true],
-    [p('<w:vanish/>') + p(''), true],
+    [p('<w:vanish/>') + p(''), false],
+    [p('<w:vanish/>') + p('', 'right'), true],
     [p('<w:specVanish/>') + p(''), false],
   ] as const) {
     const opened = openHeadlessDocument(docxBytes(body, false));
