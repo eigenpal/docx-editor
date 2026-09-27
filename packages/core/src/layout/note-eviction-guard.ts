@@ -1,9 +1,9 @@
-// The keep-whole eviction guard of the footnote reserve pass: when a note that does not fit
-// below its reference moves the reference forward instead of splitting.
+// Footnote admission: retain a legal split opening or move the reference with its note.
 
 import type { NoteReferenceLineBand } from './note-fragment-geometry.ts';
 import type { NoteStoryLayout } from './note-layout.ts';
 import { MIN_FOOTNOTE_BODY_BAND_PT } from './note-reserves.ts';
+import { paragraphKeeps } from './pagination-keeps.ts';
 import { splitNoteFragments } from './note-splitting.ts';
 import { rowContinuesOn } from './note-table-reference-band.ts';
 import type { PageRecord } from './semantic-records.ts';
@@ -22,6 +22,7 @@ export interface EvictionGuardContext {
   /** The whole note column below the separator, for the split's retreat rule. */
   readonly fullNoteColumn: number;
   readonly evictionAllowed?: boolean;
+  readonly compatibilityMode?: number;
   readonly allowOrphanDeferral?: boolean;
   /** The page after this one, which shows whether a row ending this page continues there. */
   readonly nextPage?: PageRecord;
@@ -31,10 +32,10 @@ export interface EvictionGuardContext {
  * Whether the reserve must reach `band.top` so the reference moves to the next page with
  * its whole note, instead of the note splitting below the reference.
  *
- * A note that cannot fit whole below its reference line, but could fit below it on the
- * NEXT page, does not split. The reference's LINE moves to the next page instead, so the
- * reserve must reach the line's TOP. The next reflow pass finds the reference there and
- * lays the note whole beside it. Splitting remains for the shapes the move cannot help:
+ * In supported paragraph layouts, a legal note opening keeps the reference on this page.
+ * Notes with keep-with-next boundaries or non-paragraph blocks retain whole-note admission.
+ * When no legal opening fits, the reference moves if its whole note fits the destination.
+ * Splitting remains available when moving cannot help:
  * - a note that does not fit the destination either, measured with the line's own BLOCK
  *   opening the next page (`band.bottom - band.blockTop` of content above the line),
  *   because a `w:keepLines` paragraph moves whole and a fixed column budget would re-evict
@@ -68,7 +69,14 @@ export function evictsReferenceLine(
     band.top > context.firstContentTop + 0.001 &&
     band.top >= MIN_FOOTNOTE_BODY_BAND_PT &&
     !(band.endsPageRowId !== undefined && rowContinuesOn(context.nextPage, band.endsPageRowId)) &&
-    !(band.tableRow === true && splitNoteKeepsTableRow(laid, room, context.fullNoteColumn))
+    !(band.tableRow === true
+      ? splitNoteKeepsTableRow(laid, room, context.fullNoteColumn)
+      : splitNoteKeepsParagraphReference(
+          laid,
+          room,
+          context.fullNoteColumn,
+          context.compatibilityMode
+        ))
   );
 }
 
@@ -95,4 +103,24 @@ export function splitNoteHead(
   let lines = 0;
   for (const block of split.head) lines += block.kind === 'paragraph' ? block.lines.length : 1;
   return { lines, height: split.headHeight };
+}
+
+/** Whether a paragraph reference can retain a legal note opening on this page. */
+export function splitNoteKeepsParagraphReference(
+  laid: NoteStoryLayout,
+  room: number,
+  fullNoteColumn: number,
+  compatibilityMode?: number
+): boolean {
+  if (compatibilityMode !== undefined && compatibilityMode !== 14 && compatibilityMode !== 15)
+    return false;
+  // Splitting does not yet enforce keep-with-next across note paragraphs. Preserve
+  // whole-note admission for those stories until their split boundaries support it.
+  if (
+    laid.fragments.some(
+      (block) => block.kind !== 'paragraph' || paragraphKeeps(block.props).keepNext
+    )
+  )
+    return false;
+  return splitNoteHead(laid, room, fullNoteColumn).lines > 0;
 }

@@ -1,6 +1,7 @@
 // The hold-out reserve — the fixed point of a footnote eviction. Full account on
 // {@link holdOutReserveNeed}.
 
+import { splitNoteHead, splitNoteKeepsParagraphReference } from './note-eviction-guard.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
@@ -71,10 +72,8 @@ export interface HoldOutArgs {
  * This is the fixed point of an eviction: once the body pass has pushed a reference line
  * forward, the source page's recomputed reserve no longer sees that reference — the
  * note-stack height alone under-claims, the next round pulls the line back, and the
- * reflow loop orbits the two placements forever. When the next page opens with a
- * reference whose note cannot return, the source page's assignment is final under Word's
- * rule (the note stays whole with its reference), so its reserve claims the remaining
- * slack and reproduces itself round over round.
+ * reflow loop orbits the two placements. A legal split opening can release the reference.
+ * Otherwise the reserve retains enough room to keep an unsatisfied reference out.
  *
  * Zero when there is nothing to hold out: no next page, a source page whose body ends with a
  * manual page break (nothing after the break can return across it), a next page in different
@@ -271,6 +270,9 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
       ? Math.max(0, bodyBottom - previous.box.y)
       : 0;
   let pulledNotesHeight = 0;
+  let admitsSplit = false;
+  const existingArea =
+    args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
   for (const ref of pulled) {
     const laid = layoutNoteCached(
       args.footnotesPart,
@@ -298,21 +300,35 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
         : blockOffset
       : 0;
     if (laid.flowHeight > columnBudget - inBlockOffset + 0.001) continue;
-    pulledNotesHeight += laid.flowHeight;
+    const referenceOpening = Math.max(lineBandHeight, band.bottom - firstContentTop);
+    const room = contentHeight - bodyBottom - referenceOpening - existingArea - pulledNotesHeight;
+    if (
+      band.evictable &&
+      band.tableRow !== true &&
+      joinedOffset < columnBudget &&
+      laid.flowHeight > room + 0.001 &&
+      splitNoteKeepsParagraphReference(laid, room, columnBudget, args.opts.compatibilityMode)
+    ) {
+      pulledNotesHeight += splitNoteHead(laid, room, columnBudget).height;
+      admitsSplit = true;
+    } else {
+      pulledNotesHeight += laid.flowHeight;
+    }
   }
   if (pulledNotesHeight <= 0) return 0;
 
-  const areaWithPulled =
-    (args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight) +
-    pulledNotesHeight;
+  const areaWithPulled = existingArea + pulledNotesHeight;
+  // A legal split consumes the measured remaining room. Extra speculative line headroom
+  // would reject every such split, including a valid single-line opening without widows.
+  const headroom = admitsSplit ? 0 : refLineHeight;
   // Backed off by half a point like the eviction reserve: the last kept body line's bottom
   // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
   const hold = Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT);
   const fitsLineQuantum =
-    bodyBottom + lineBandHeight + refLineHeight + areaWithPulled <= contentHeight + 0.001;
+    bodyBottom + lineBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (!fitsLineQuantum) return hold;
   const fitsWholeBlock =
-    bodyBottom + blockBandHeight + refLineHeight + areaWithPulled <= contentHeight + 0.001;
+    bodyBottom + blockBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (fitsWholeBlock) return 0;
   // The optimistic quantum fits but the whole block does not. Whether releasing is safe
   // depends on whether the block can SPLIT, which the body pass has already answered:

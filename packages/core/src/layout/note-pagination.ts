@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- note pagination seam: reservation, continuation, overflow pages */
 
 // Footnote / endnote pagination: reservation, split/continuation, sect/doc end collection.
-//
 // Body flow places references; this module lays referenced notes at content width, reserves
 // separator+note area (pageBottom / beneathText), bounds the reflow loop, and attaches
 // layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
@@ -1190,6 +1189,7 @@ function buildFootnoteArea(
       band &&
       evictsReferenceLine(band, laid, room, {
         keepWholeBudget,
+        compatibilityMode: opts.compatibilityMode,
         firstContentTop,
         fullNoteColumn,
         evictionAllowed: options?.evictionAllowed,

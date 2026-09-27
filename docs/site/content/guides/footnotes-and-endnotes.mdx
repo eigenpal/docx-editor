@@ -39,7 +39,7 @@ The Editing API can enumerate, read, navigate, and delete notes. Use `document.f
 
 The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
 
-A footnote stays with its reference line when both fit on one page. The editor moves that line when the note cannot fit below it.
+A footnote starts with its reference line when a legal note opening fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect `w:keepLines` and `w:widowControl`. Without widow control, one note line can start below the reference. This split admission applies to compatibility modes 14 and 15, and documents without an explicit mode. Other modes, note keep-with-next groups, and notes containing tables retain whole-note admission.
 
 The note area can use the space below the text of the last body line when that line uses `auto` or `atLeast` line spacing. A line whose footnote starts on the same page keeps its full line height above the note area, in every column.
 
@@ -49,7 +49,7 @@ When a reference line moves to the next page, paragraphs ahead of it return to t
 
 When a split paragraph returns to the previous page, its earlier fragment counts toward the space above each reference. If that reference leaves no note space, the editor retains the previous split decision. A reference paragraph that keeps with the next paragraph also reserves the notes in that paragraph's required opening. Later references in a long successor do not prevent the opening from returning. A successor opening without a reference does not add a footnote reserve.
 
-Outside tables, a note splits only when it is taller than the available note column. Split note pages keep separate rectangles for painting and pointer input.
+A note that exceeds a full note column still continues across pages. Split note pages keep separate rectangles for painting and pointer input.
 
 ## Limits
 

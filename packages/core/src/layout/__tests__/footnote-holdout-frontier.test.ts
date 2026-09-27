@@ -7,11 +7,11 @@ import type { PageRecord, ParagraphFragmentRecord } from '../semantic-records.ts
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LINE = 14;
 
-function notes(counts: readonly number[]) {
+function notes(counts: readonly number[], keepLines = false) {
   const xml = counts
     .map(
       (count, index) =>
-        `<w:footnote w:id="${index + 1}"><w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr>` +
+        `<w:footnote w:id="${index + 1}"><w:p><w:pPr>${keepLines ? '<w:keepLines/>' : ''}<w:spacing w:line="280" w:lineRule="exact"/></w:pPr>` +
         Array.from(
           { length: count },
           (_, line) => `<w:r>${line ? '<w:br/>' : ''}<w:t>N${index + 1}-${line + 1}</w:t></w:r>`
@@ -157,7 +157,9 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
       [3, 30],
       56
     );
-    expect(holdOutReserveNeed(input)).toBeGreaterThan(400);
+    expect(holdOutReserveNeed({ ...input, footnotesPart: notes([3, 30], true) })).toBeGreaterThan(
+      400
+    );
   });
 
   test('a kept reference includes notes in its mandatory successor opening', () => {

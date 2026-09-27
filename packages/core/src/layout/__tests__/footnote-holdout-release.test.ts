@@ -188,9 +188,8 @@ describe('footnote hold-out behind independent paragraphs', () => {
     expect(warm.fixedPoint).toBe(true);
   });
 
-  test('a keep-with-next chain in front of the reference stays out with it', () => {
-    // P78-P79 keep with the reference paragraph P80. The chain cannot return without the
-    // reference line, whose note does not fit on page 2, so page 2 keeps the room.
+  test('a keep-with-next chain returns together above a legal note split', () => {
+    // P78-P79 keep with P80. All three return together when the note can start below them.
     const chained: Probe = {
       paragraphs: 150,
       refs: new Map([
@@ -204,7 +203,7 @@ describe('footnote hold-out behind independent paragraphs', () => {
       keepNext: new Set([78, 79]),
     };
     const { layout, fixedPoint } = layoutProbe(chained);
-    expect(pages(layout)).toEqual(['0-44[1]', '45-77[]', '78-111[2]', '112-149[]']);
+    expect(pages(layout)).toEqual(['0-44[1]', '45-80[2]', '81-127[2c]', '128-149[]']);
     expect(fixedPoint).toBe(true);
   });
 
