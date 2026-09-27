@@ -5,13 +5,17 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 
-const child = (node: OoxmlElement | undefined, name: string): OoxmlElement | undefined =>
-  node?.children.find(
-    (item): item is OoxmlElement =>
+const child = (node: OoxmlElement | undefined, name: string): OoxmlElement | undefined => {
+  for (const item of node?.children ?? []) {
+    if (
       item.kind !== 'textValue' &&
       item.namespaceUri === WML_NAMESPACE_URI &&
       item.localName === name
-  );
+    )
+      return item;
+  }
+  return undefined;
+};
 const attr = (node: OoxmlElement | undefined, name: string): string | undefined =>
   node?.attributes.find(
     (item) => item.namespaceUri === WML_NAMESPACE_URI && item.localName === name
