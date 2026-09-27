@@ -78,13 +78,22 @@ export function refusalYieldsHiddenFurniture(
     readonly continuedPageFurniture?: ContinuedPageFurniture;
   }
 ): boolean {
-  return (
-    (error instanceof DrawingExclusionConvergenceError || error instanceof TablePaginationError) &&
-    options.drawingExclusionPass === undefined &&
-    !options.drawingExclusionConverged &&
-    !options.yieldHiddenFurnitureZones &&
-    furnitureHasHiddenWrap(options.furniture, options.continuedPageFurniture)
-  );
+  if (
+    options.drawingExclusionPass !== undefined ||
+    options.drawingExclusionConverged ||
+    options.yieldHiddenFurnitureZones ||
+    !furnitureHasHiddenWrap(options.furniture, options.continuedPageFurniture)
+  )
+    return false;
+  // Host callbacks can throw proxies whose prototype traps also throw. Preserve the
+  // original failure instead of replacing it with an error from retry classification.
+  try {
+    return (
+      error instanceof DrawingExclusionConvergenceError || error instanceof TablePaginationError
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Wrapping furniture affects body flow without changing the header/footer story's own height. */

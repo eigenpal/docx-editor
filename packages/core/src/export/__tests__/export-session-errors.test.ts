@@ -1,12 +1,25 @@
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
+import { refusalYieldsHiddenFurniture } from '../../layout/furniture-drawing-exclusion.ts';
 import { ExportResourceError, openDocumentForExport } from '../export-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+test('does not inspect a host failure when no hidden furniture can yield', () => {
+  let inspected = false;
+  const hostile = new Proxy(new Error('host failure'), {
+    getPrototypeOf() {
+      inspected = true;
+      throw new Error('prototype inspection');
+    },
+  });
+  expect(refusalYieldsHiddenFurniture(hostile, {})).toBe(false);
+  expect(inspected).toBe(false);
+});
 
 function docx(body: string): Uint8Array {
   return zipSync({

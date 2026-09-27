@@ -18,7 +18,8 @@ import {
   REL_NS,
   mountWithImages,
 } from './image-decode-harness.ts';
-import { openDocumentForExport } from '../../export/export-session.ts';
+import { ExportResourceError, openDocumentForExport } from '../../export/export-session.ts';
+import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
 import type { SemanticLayout } from '../../layout/semantic-records.ts';
 
 const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
@@ -216,6 +217,42 @@ describe('hidden header and footer footprints that leave no room', () => {
     expect(lines).toEqual(await mountedLines(docx([VISIBLE_BAND])));
     expect(lines).not.toEqual(await mountedLines(plain));
   });
+});
+
+test('hidden furniture does not retry or replace a hostile host failure', async () => {
+  const hostile = new Proxy(new Error('host failure'), {
+    get() {
+      throw new Error('property trap escaped');
+    },
+    getPrototypeOf() {
+      throw new Error('prototype trap escaped');
+    },
+  });
+  let failures = 0;
+  const fallback = createFixedMeasurer();
+  const opened = openDocumentForExport(docx([HIDDEN_BAND]), {
+    measurer: {
+      measure(text, style) {
+        if (text.includes('Body')) {
+          failures++;
+          throw hostile;
+        }
+        return fallback.measure(text, style);
+      },
+      lineMetrics: (style) => fallback.lineMetrics(style),
+    },
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const error = await opened.session.layout().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ExportResourceError);
+    expect(error).toMatchObject({ code: 'layoutFailed', message: 'Export layout failed' });
+    expect((error as Error).cause).toBe(hostile);
+    expect(failures).toBe(1);
+  } finally {
+    opened.session.dispose();
+  }
 });
 
 describe('visible header drawings that leave no room', () => {
