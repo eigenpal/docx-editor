@@ -4,13 +4,31 @@ import type { SideRuleTableShape } from './legacy-table-side-rules.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
 
-function hasOmittedGridCells(table: OoxmlElement): boolean {
+function hasUnsupportedRowGeometry(table: OoxmlElement): boolean {
   const pending = [...table.children];
   let visited = 0;
   while (pending.length > 0) {
     if (++visited > 100_000) return true;
     const node = pending.pop()!;
     if (node.kind === 'textValue' || node.kind === 'paragraph' || node.kind === 'table') continue;
+    // Row exceptions are preserved, but the structure reader does not resolve their geometry.
+    if (
+      node.localName === 'tblPrEx' &&
+      node.children.some(
+        (child) =>
+          child.kind !== 'textValue' &&
+          [
+            'tblW',
+            'jc',
+            'tblCellSpacing',
+            'tblInd',
+            'tblBorders',
+            'tblLayout',
+            'tblCellMar',
+          ].includes(child.localName)
+      )
+    )
+      return true;
     if (node.localName === 'gridBefore' || node.localName === 'gridAfter') {
       const value = node.attributes.find((attr) => attr.localName === 'val');
       if (
@@ -42,7 +60,7 @@ export function legacyFixedTableContentOffset(
     shape.alignment !== 'left' ||
     !['auto', 'dxa'].includes(shape.widthType) ||
     !hasSupportedLegacyTableMargins(table, propertyNodes) ||
-    hasOmittedGridCells(table)
+    hasUnsupportedRowGeometry(table)
   )
     return undefined;
   // Invalid indentation is not evidence for moving the grid outside its old origin.

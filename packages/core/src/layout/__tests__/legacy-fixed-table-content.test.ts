@@ -147,6 +147,21 @@ describe('legacy fixed table content edges', () => {
       ).toBeUndefined();
     }
   });
+  test('unresolved row geometry exceptions retain the original table origin', () => {
+    const xml = serializeOoxmlPart(document());
+    const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
+    for (const exception of [
+      '<w:tblCellSpacing w:w="240" w:type="dxa"/>',
+      '<w:tblCellMar><w:left w:w="360" w:type="dxa"/></w:tblCellMar>',
+      '<w:tblInd w:w="240" w:type="dxa"/>',
+      '<w:tblW w:w="4000" w:type="dxa"/>',
+    ]) {
+      const changed = row.replace('<w:tr>', `<w:tr><w:tblPrEx>${exception}</w:tblPrEx>`);
+      const s = structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>')));
+      expect(s.outerRuleOffsetPt).toBeUndefined();
+      expect(tableOriginX(s, 300)).toBe(5.4);
+    }
+  });
   test('vertical merge continuation keeps the same leading content edge', () => {
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
