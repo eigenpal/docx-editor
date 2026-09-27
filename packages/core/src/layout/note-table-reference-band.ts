@@ -17,7 +17,10 @@
 // - a reference line outside its row box (content an exact row height clips). Rotated
 //   cells lay out on a local axis, so their row box alone bounds them.
 // A vertical merge in ANOTHER cell does not disqualify the row: the paginator already
-// carries a merge across a page break between two of its rows.
+// carries a merge across a page break between two of its rows. Merged text carried past a
+// head-row break sits in a zero-height head-row record above the row it breaks with; that
+// record is neither a preceding row nor a split row, and its text counts as the carrying
+// row's content (`table-carried-head-row.ts`).
 //
 // Inside the row, notes budget below the reference LINE only when the row can continue on
 // the next page below that line: a direct horizontal cell line, in a row that does not place
@@ -41,6 +44,7 @@ import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentOwnsPosition, lineSegments, segmentOwnsAtomOffset } from './line-segments.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
 import { referenceRowCut } from './note-table-row-cut.ts';
+import { isCarriedHeadRow, withCarriedHeads } from './table-carried-head-row.ts';
 import type {
   BlockFragmentRecord,
   PageRecord,
@@ -95,6 +99,8 @@ export function tableReferenceRowBand(
   let headerHeight = 0;
   let leadingHeaders = true;
   let previous: TableRowFragmentRecord | undefined;
+  // A zero-height head-row continuation directly above: its carried text is this row's.
+  let carried: TableRowFragmentRecord | undefined;
   for (const row of table.rows) {
     leadingHeaders &&= row.isHeaderRepeat || row.isHeaderRow;
     if (leadingHeaders) headerHeight += row.box.height;
@@ -102,7 +108,9 @@ export function tableReferenceRowBand(
     if (row.isHeaderRepeat) continue;
     const cell = owningCell(row, ref);
     if (!cell) {
-      previous = row;
+      // The carried head row is part of the row below it, never a row that precedes it.
+      if (isCarriedHeadRow(row)) carried = row;
+      else [previous, carried] = [row, undefined];
       continue;
     }
     if (row.isHeaderRow || (cell.rowSpan ?? 1) > 1 || rowKeepsWithNext(row)) return 'table';
@@ -122,7 +130,7 @@ export function tableReferenceRowBand(
         ? null
         : row.hasContinuation === true
           ? lineBottom
-          : referenceRowCut(row, cell, lineBottom, compatibilityMode);
+          : referenceRowCut(withCarriedHeads(carried, row), cell, lineBottom, compatibilityMode);
     const bottom = cut ?? top + row.box.height;
     const endsPage = endsPageFlow(page, table, row);
     return { top, bottom, blockTop: top - headerHeight, evictable, endsPage, row };
@@ -193,7 +201,10 @@ export function continuedRowId(page: PageRecord | undefined): string | null {
     if (isOutOfFlowFragment(fragment)) continue;
     if (fragment.kind === 'paragraph' && fragment.positionedFrame) continue;
     if (fragment.kind !== 'table') return '';
-    const first = fragment.rows.find((candidate) => !candidate.isHeaderRepeat);
+    // A carried head row continues a merge, not a split row: its head row is complete.
+    const first = fragment.rows.find(
+      (candidate) => !candidate.isHeaderRepeat && !isCarriedHeadRow(candidate)
+    );
     return first?.isContinuation === true ? first.id : '';
   }
   return '';

@@ -12,6 +12,7 @@ import type {
   TableRowFragmentRecord,
 } from './semantic-records.ts';
 import { pageAtY } from './semantic-hit-test.ts';
+import { isCarriedHeadRow } from './table-carried-head-row.ts';
 
 /** Cumulative column boundary positions in table-local points. */
 export function columnEdgesFromWidths(columnWidthsPt: readonly number[]): readonly number[] {
@@ -208,9 +209,8 @@ export function tableInteractionIndex(layout: SemanticLayout): TableInteractionI
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
     const take = (occ: TableInteractionOccurrence): void => {
-      // A zero-height row continuation has no band to resize or insert beside; its edges are
-      // the next row's top.
-      if (occ.row.isContinuation && occ.row.box.height <= 0) return;
+      // A carried head row has zero height: no band to resize or insert beside.
+      if (isCarriedHeadRow(occ.row)) return;
       occurrences.push(occ);
     };
     visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, take);

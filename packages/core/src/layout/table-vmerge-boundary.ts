@@ -23,10 +23,12 @@
 //
 // The merged text stays the head cell's text on every page. The next row is placed with the
 // head cell in its continuation's grid slot, so the text breaks as the head breaks it, and the
-// row grows or splits to hold it. Each fragment of that row is then published below a
-// zero-height continuation of the head row (`publishCarriedMergedText`): the head cell's copy
-// there holds the text and spans the row beside it, as any merge whose head continues onto a
-// later page does, and the continuation cell stays an inert continuation. Every reader of
+// row grows or splits to hold it. The head's margins, borders and fill paint it; its vertical
+// alignment is the continuation cell's, the cell it is painted beside. Each fragment of that
+// row is then published below a zero-height continuation of the head row
+// (`publishCarriedMergedText`): the head cell's copy there holds the text and spans the row
+// beside it, as any merge whose head continues onto a later page does, and the continuation
+// cell stays an inert continuation (`table-carried-head-row.ts`). Every reader of
 // cell records (selection, table commands, hit testing, Markdown, paint) then finds the text
 // under the head cell and the head row, in document order.
 
@@ -48,6 +50,7 @@ import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
+import { isCarriedHeadRow } from './table-carried-head-row.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 const EPSILON_PT = 0.001;
@@ -64,8 +67,9 @@ export interface DeferredMergedText {
   readonly nextRow: SemanticTableRow;
   /** The authored continuation cell each deferred head stands in for, by head cell id. */
   readonly continuations: ReadonlyMap<string, SemanticTableCell>;
-  /** The authored head and next rows. */
+  /** The head row with each deferred head as placed beside the next row, for finalize. */
   readonly headSource: SemanticTableRow;
+  /** The authored next row. */
   readonly nextSource: SemanticTableRow;
 }
 
@@ -134,9 +138,10 @@ function carriedRows(
   head: SemanticTableRow,
   next: SemanticTableRow,
   deferred: ReadonlySet<string>
-): Pick<DeferredMergedText, 'headRow' | 'nextRow' | 'continuations'> {
+): Pick<DeferredMergedText, 'headRow' | 'nextRow' | 'continuations' | 'headSource'> {
   const heads = head.cells.filter((cell) => deferred.has(cell.id));
   const continuations = new Map<string, SemanticTableCell>();
+  const placedHeads = new Map<string, SemanticTableCell>();
   const headRow = {
     ...head,
     cells: head.cells.map((cell) => (deferred.has(cell.id) ? { ...cell, blocks: [] } : cell)),
@@ -149,10 +154,17 @@ function carriedRows(
         : undefined;
       if (source === undefined) return cell;
       continuations.set(source.id, cell);
-      return source;
+      // The text aligns vertically in the cell it is painted beside.
+      const placed = { ...source, vAlign: cell.vAlign };
+      placedHeads.set(source.id, placed);
+      return placed;
     }),
   };
-  return { headRow, nextRow, continuations };
+  const headSource = {
+    ...head,
+    cells: head.cells.map((cell) => placedHeads.get(cell.id) ?? cell),
+  };
+  return { headRow, nextRow, continuations, headSource };
 }
 
 /**
@@ -263,7 +275,6 @@ export function deferMergedTextPastHeadRow(input: DeferMergedTextInput): Deferre
     ...carriedRows(row, next, deferred),
     options,
     heightPt,
-    headSource: row,
     nextSource: next,
   };
 }
@@ -415,9 +426,7 @@ export function createMergedTextCarry(): MergedTextCarry {
     finish(rows) {
       if (carries.size === 0) return rows;
       return rows.map((row) =>
-        row.isContinuation && row.box.height <= 0
-          ? { ...row, cells: row.cells.map(withoutZeroHeightBottomEdge) }
-          : row
+        isCarriedHeadRow(row) ? { ...row, cells: row.cells.map(withoutZeroHeightBottomEdge) } : row
       );
     },
     publish(rows, sources, insets) {

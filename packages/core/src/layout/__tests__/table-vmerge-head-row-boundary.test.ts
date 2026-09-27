@@ -25,6 +25,7 @@ import {
   tableInteractionIndex,
 } from '../semantic-table-interaction.ts';
 import { planTableCommand } from '../../editor/table-command-plan.ts';
+import { collectPageChangeBars } from '../../output/semantic-paint-change-bars.ts';
 import type {
   BlockFragmentRecord,
   PageGeometry,
@@ -61,6 +62,11 @@ interface Shape {
   readonly mergedPPr?: string;
   /** A repeated header row above the head row. */
   readonly header?: boolean;
+  /** Extra `w:tcPr` content for the merged head cell, and for its continuation. */
+  readonly headTcPr?: string;
+  readonly continuationTcPr?: string;
+  /** Extra `w:trPr` content for the head row. */
+  readonly headTrPr?: string;
 }
 
 const spacing = (before: number) =>
@@ -83,15 +89,16 @@ function document(shape: Shape): string {
     Array.from({ length: count }, (_, index) => paragraph([index ? `${label}x${index}` : label]));
   const continued = (label: string, count = 1) =>
     `<w:tr>${trPr}${cell(1300, paragraph([]), CONTINUE)}${cell(1500, own(label, count).join(''))}` +
-    `${cell(3000, paragraph([]), CONTINUE)}</w:tr>`;
+    `${cell(3000, paragraph([]), CONTINUE + (shape.continuationTcPr ?? ''))}</w:tr>`;
   const header = shape.header
     ? `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cell(1300, paragraph(['HEADER']))}` +
       `${cell(4500, paragraph(['HEADERB']), '<w:gridSpan w:val="2"/>')}</w:tr>`
     : '';
   const rows =
     header +
-    `<w:tr>${trPr}${cell(1300, paragraph(['HEADA']), RESTART)}${cell(1500, paragraph(['ROWA']))}` +
-    `${cell(3000, paragraph(merged, 120, shape.mergedPPr), RESTART)}</w:tr>` +
+    `<w:tr>${shape.headTrPr ? trPr.replace('<w:trPr>', `<w:trPr>${shape.headTrPr}`) : trPr}` +
+    `${cell(1300, paragraph(['HEADA']), RESTART)}${cell(1500, paragraph(['ROWA']))}` +
+    `${cell(3000, paragraph(merged, 120, shape.mergedPPr), RESTART + (shape.headTcPr ?? ''))}</w:tr>` +
     continued('ROWB', shape.nextParagraphs) +
     (shape.threeRows ? continued('ROWC') : '') +
     `<w:tr>${cell(1300, paragraph(['NEXT']))}${cell(4500, paragraph(['AFTER']), '<w:gridSpan w:val="2"/>')}</w:tr>`;
@@ -341,6 +348,45 @@ describe('the carried merged text', () => {
       'ROWBx1',
       'NEXT',
     ]);
+  });
+});
+
+describe('painting the carried merged text', () => {
+  // Five one-line paragraphs make the continuation row 90pt; the carried text is 30pt.
+  const [first, second] = ['<w:vAlign w:val="center"/>', '<w:vAlign w:val="bottom"/>'];
+
+  test('aligns vertically by the cell it is painted beside', () => {
+    const layout = lay({ fill: 14, merged: 2, nextParagraphs: 5, headTcPr: first });
+    const [headRest, continuation] = tablesOn(layout, 1)[0]!.rows;
+    expect(continuation!.box.height).toBeCloseTo(5 * (BEFORE + LINE), 3);
+    expect(linesOf(headRest!.cells[2]!.blocks)[0]!.box.y).toBeCloseTo(BEFORE, 3);
+  });
+
+  test('takes the continuation cell alignment when it has one', () => {
+    const layout = lay({
+      fill: 14,
+      merged: 2,
+      nextParagraphs: 5,
+      headTcPr: first,
+      continuationTcPr: second,
+    });
+    const [headRest, continuation] = tablesOn(layout, 1)[0]!.rows;
+    const lines = linesOf(headRest!.cells[2]!.blocks);
+    expect(lines[lines.length - 1]!.box.y + LINE).toBeCloseTo(continuation!.box.height, 3);
+  });
+
+  test('a tracked head row marks the carried text with a change bar', () => {
+    const insert = '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"/>';
+    const layout = lay({ fill: 14, merged: 5, headTrPr: insert });
+    const page = layout.pages[1]!;
+    const bars = collectPageChangeBars(page, 1, 'all-markup');
+    const [, continuation] = tablesOn(layout, 1)[0]!.rows;
+    // Bars are in page coordinates; row boxes are in content coordinates.
+    const top = page.contentBox.y - page.box.y;
+    const bottom = top + continuation!.box.y + continuation!.box.height;
+    expect(bars.runs.some((run) => run.top <= top + 0.001 && run.bottom >= bottom - 0.001)).toBe(
+      true
+    );
   });
 });
 
