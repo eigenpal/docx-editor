@@ -28,17 +28,16 @@ import {
   noteColumnBudgetPt,
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
-import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps } from './pagination-keeps.ts';
+import { MAX_NOTE_KEEP_SCAN, paragraphKeeps } from './pagination-keeps.ts';
 import { tableRowHoldOutNeed } from './note-table-row-holdout.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
 
 /**
- * How many of the next page's opening blocks may sit above the pulled reference's line:
- * a full keep-with-next chain moves as one unit, and a window smaller than the chain
- * would give up on exactly the groups most likely to have been evicted together.
+ * Bound the note-reserve recovery scan on the next page. This scan is separate from
+ * paragraph keep-chain membership; references beyond this window retain normal placement.
  */
-const MAX_HOLD_OUT_SCAN_BLOCKS = MAX_KEEP_NEXT_CHAIN + 1;
+const MAX_HOLD_OUT_SCAN_BLOCKS = MAX_NOTE_KEEP_SCAN + 1;
 
 /** A page-bottom footnote reference site, pre-filtered by the caller. */
 export interface HoldOutRef {

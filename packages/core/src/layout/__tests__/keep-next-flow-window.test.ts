@@ -1,7 +1,7 @@
 // Incremental layout of long `w:keepNext` chains (§17.3.1.15).
 //
-// A kept paragraph's placement reads up to `MAX_KEEP_NEXT_CHAIN` blocks of its chain, and
-// whether the story ends inside them. Its flow key has to cover that whole window, or an
+// A kept paragraph reads every member of its chain and whether the story ends inside it.
+// Its flow key covers those dependencies, or an
 // edit to a member far down a long chain resumes after a block whose decision it changed.
 //
 // The page is 350pt by 210pt with 20pt margins: the body holds twelve exact 14pt lines.
@@ -10,7 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';
-import { keepNextFlowKeys, MAX_KEEP_NEXT_CHAIN } from '../pagination-keeps.ts';
+import { keepNextFlowKeys } from '../pagination-keeps.ts';
 import type { PageGeometry, PageRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -138,18 +138,17 @@ describe('an edit far down a long keep-next chain re-places the chain head', () 
   }
 });
 
-describe('keepNextFlowKeys covers each kept block pricing window', () => {
+describe('keepNextFlowKeys covers each complete keep chain', () => {
   const allKept = () => true;
 
   test('each kept block carries the raw keys of the members it prices', () => {
     const keys = Array.from({ length: 14 }, (_, i) => `<${i}>`);
     const flow = keepNextFlowKeys(keys, (index) => index < 12);
-    // A kept block reads at most MAX_KEEP_NEXT_CHAIN - 1 members after itself.
+    // Every member through the terminator contributes to the chain.
     for (let index = 0; index < 12; index += 1) {
       const window = flow[index]!;
       for (let member = index + 1; member < keys.length; member += 1) {
-        const inside = member < index + MAX_KEEP_NEXT_CHAIN;
-        expect(window.includes(`<${member}>`)).toBe(inside && member <= 12);
+        expect(window.includes(`<${member}>`)).toBe(member <= 12);
       }
     }
     // The tail keeps nothing and folds nothing.
@@ -157,25 +156,24 @@ describe('keepNextFlowKeys covers each kept block pricing window', () => {
     expect(flow[13]).toBe('<13>');
   });
 
-  test('an edit to any member in the window moves the key, and one past it does not', () => {
+  test('an edit to any member of a long chain changes the head key', () => {
     const keys = Array.from({ length: 20 }, (_, i) => `b${i}`);
     const base = keepNextFlowKeys(keys, allKept);
     for (let edited = 1; edited < keys.length; edited += 1) {
       const changed = keys.map((key, index) => (index === edited ? `${key}x` : key));
       const flow = keepNextFlowKeys(changed, allKept);
-      const inWindow = edited < MAX_KEEP_NEXT_CHAIN;
-      expect(flow[0] !== base[0]).toBe(inWindow);
+      expect(flow[0]).not.toBe(base[0]);
     }
   });
 
-  test('the window stops after the first block that keeps nothing', () => {
+  test('the dependency ends after the first block that keeps nothing', () => {
     const fold = (after: string) =>
       keepNextFlowKeys(['head', 'member', 'end', after], (index) => index < 2);
     expect(fold('x')[0]).toBe(fold('y')[0]);
     expect(fold('x')[0]).toBe('head~kn~6:member3:end');
   });
 
-  test('the key records when the window reaches the end of the story', () => {
+  test('the key records when the chain reaches the end of the story', () => {
     // The last block keeps with nothing, and a final section mark may drop its page break.
     const ends = keepNextFlowKeys(['head', 'end'], (index) => index === 0);
     const continues = keepNextFlowKeys(['head', 'end', 'more'], (index) => index === 0);
@@ -185,16 +183,14 @@ describe('keepNextFlowKeys covers each kept block pricing window', () => {
     expect(keepNextFlowKeys(['a', 'b'], allKept)).toEqual(['a~kn~1:b.', 'b']);
   });
 
-  test('a chain that reaches the cap records whether another block follows', () => {
-    const kept = Array.from({ length: MAX_KEEP_NEXT_CHAIN }, (_, i) => `b${i}`);
+  test('a long chain records whether another block follows', () => {
+    const kept = Array.from({ length: 32 }, (_, i) => `b${i}`);
     const atEnd = keepNextFlowKeys(kept, allKept);
     const more = keepNextFlowKeys([...kept, 'next'], allKept);
-    expect(atEnd[0]!.endsWith('.')).toBe(true);
-    expect(more[0]!.endsWith('.')).toBe(false);
-    expect(more[0]).not.toContain('next');
+    expect(atEnd[0]).not.toBe(more[0]);
   });
 
-  test('a positioned frame costs a window slot and folds only its skip marker', () => {
+  test('a positioned frame contributes only its skip marker', () => {
     const fold = (frame: string, keepsNextAt = (index: number) => index !== 3) =>
       keepNextFlowKeys(['head', frame, 'member', 'end'], keepsNextAt, (index) => index === 1);
     expect(fold('frame')[0]).toBe('head~kn~-6:member3:end.');
@@ -203,11 +199,11 @@ describe('keepNextFlowKeys covers each kept block pricing window', () => {
     expect(fold('edited')[0]).toBe(fold('frame')[0]);
   });
 
-  test('a long kept run grows each key by at most one bounded window', () => {
+  test('a long kept run adds bounded dependency storage to every key', () => {
     const count = 5000;
     const keys = Array.from({ length: count }, (_, i) => `key-${i}`.padEnd(40, '.'));
     const flow = keepNextFlowKeys(keys, allKept);
-    const bound = 40 + '~kn~'.length + (MAX_KEEP_NEXT_CHAIN - 1) * ('40:'.length + 40) + 1;
+    const bound = 40 + '~kn~'.length + 256;
     for (const key of flow) expect(key.length).toBeLessThanOrEqual(bound);
     expect(flow.reduce((sum, key) => sum + key.length, 0)).toBeLessThan(count * bound);
   });

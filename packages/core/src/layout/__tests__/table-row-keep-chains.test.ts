@@ -653,7 +653,7 @@ describe('keep-next flow keys around tables', () => {
     return read;
   };
 
-  test('a table whose last row keeps reads eight blocks after it', () => {
+  test('a table whose last row keeps reads the complete following chain', () => {
     const tables = new Set([2]);
     const flow = keepNextFlowKeys(
       keys,
@@ -661,7 +661,7 @@ describe('keep-next flow keys around tables', () => {
       undefined,
       (at) => tables.has(at)
     );
-    expect(reads(flow, 2)).toEqual(['b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'b10']);
+    expect(reads(flow, 2)).toEqual(keys.slice(3));
   });
 
   test('a caption reads through a kept table to what the table reads', () => {
@@ -672,7 +672,7 @@ describe('keep-next flow keys around tables', () => {
       undefined,
       (at) => tables.has(at)
     );
-    expect(reads(flow, 2)).toEqual(['b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11']);
+    expect(reads(flow, 2)).toEqual(keys.slice(3));
   });
 
   test('a chain stops at a table that does not keep, and reads through one table only', () => {

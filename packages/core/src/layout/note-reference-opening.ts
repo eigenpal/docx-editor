@@ -1,6 +1,6 @@
 import { fragmentOwnsPosition } from './line-segments.ts';
 import type { NoteReferenceLineBand } from './note-fragment-geometry.ts';
-import { MAX_KEEP_NEXT_CHAIN, paragraphKeeps } from './pagination-keeps.ts';
+import { MAX_NOTE_KEEP_SCAN, paragraphKeeps } from './pagination-keeps.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 /** The smallest body opening that can remain with a paragraph reference. */
@@ -18,7 +18,7 @@ export function noteReferenceOpeningBottom(
   if (owner?.kind !== 'paragraph') return band.bottom;
   let bottom = band.bottom;
   let previous: ParagraphFragmentRecord | undefined;
-  for (let at = index; at < page.fragments.length && at <= index + MAX_KEEP_NEXT_CHAIN; at++) {
+  for (let at = index; at < page.fragments.length && at <= index + MAX_NOTE_KEEP_SCAN; at++) {
     const block = page.fragments[at];
     if (block?.kind !== 'paragraph' || block.positionedFrame || block.outOfFlow) break;
     if (previous && !paragraphKeeps(previous.props).keepNext) break;
